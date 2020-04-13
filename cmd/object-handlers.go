@@ -196,7 +196,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		if offset < 0 {
 			isSuffixLength = true
 		}
-		rs := &HTTPRangeSpec{
+		rs := &xhttp.RangeSpec{
 			IsSuffixLength: isSuffixLength,
 			Start:          offset,
 			End:            offset + length,
@@ -335,10 +335,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get request range.
-	var rs *HTTPRangeSpec
+	var rs *xhttp.RangeSpec
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
+		if rs, err = xhttp.ParseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
 			// parse error and treat it as regular Get
 			// request like Amazon S3.
@@ -509,10 +509,10 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Get request range.
-	var rs *HTTPRangeSpec
+	var rs *xhttp.RangeSpec
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
+		if rs, err = xhttp.ParseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
 			// parse error and treat it as regular Get
 			// request like Amazon S3.
@@ -818,7 +818,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	getOpts.CheckCopyPrecondFn = checkCopyPrecondFn
 	srcOpts.CheckCopyPrecondFn = checkCopyPrecondFn
-	var rs *HTTPRangeSpec
+	var rs *xhttp.RangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
@@ -1694,7 +1694,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Get request range.
-	var rs *HTTPRangeSpec
+	var rs *xhttp.RangeSpec
 	rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange)
 	if rangeHeader != "" {
 		var parseRangeErr error

@@ -25,6 +25,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/sio"
 )
 
@@ -331,7 +332,7 @@ func TestDecryptETag(t *testing.T) {
 // Tests for issue reproduced when getting the right encrypted
 // offset of the object.
 func TestGetDecryptedRange_Issue50(t *testing.T) {
-	rs, err := parseRequestRangeSpec("bytes=594870256-594870263")
+	rs, err := xhttp.ParseRequestRangeSpec("bytes=594870256-594870263")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,7 +444,7 @@ func TestGetDecryptedRange(t *testing.T) {
 
 		if test.decSz >= 10 {
 			// first 10 bytes
-			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&HTTPRangeSpec{false, 0, 9})
+			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&xhttp.RangeSpec{false, 0, 9})
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
@@ -459,7 +460,7 @@ func TestGetDecryptedRange(t *testing.T) {
 		kb32 := int64(32) * humanize.KiByte
 		if test.decSz >= (64+32)*humanize.KiByte {
 			// Skip the first 32Kib, and read the next 64Kib
-			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&HTTPRangeSpec{false, kb32, 3*kb32 - 1})
+			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&xhttp.RangeSpec{false, kb32, 3*kb32 - 1})
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
@@ -474,7 +475,7 @@ func TestGetDecryptedRange(t *testing.T) {
 
 		if test.decSz >= (64*2+32)*humanize.KiByte {
 			// Skip the first 96Kib and read the next 64Kib
-			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&HTTPRangeSpec{false, 3 * kb32, 5*kb32 - 1})
+			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&xhttp.RangeSpec{false, 3 * kb32, 5*kb32 - 1})
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
@@ -632,7 +633,7 @@ func TestGetDecryptedRange(t *testing.T) {
 		// for the read.
 		if lsum(test.decSizes) >= 2*humanize.MiByte {
 			skipLen, readLen := int64(1)*humanize.MiByte, int64(1)*humanize.MiByte
-			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&HTTPRangeSpec{false, skipLen, skipLen + readLen - 1})
+			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&xhttp.RangeSpec{false, skipLen, skipLen + readLen - 1})
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}
@@ -651,7 +652,7 @@ func TestGetDecryptedRange(t *testing.T) {
 		// for the read.
 		readLen := int64(6)*humanize.MiByte + 1
 		if lsum(test.decSizes) >= readLen {
-			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&HTTPRangeSpec{true, -readLen, -1})
+			o, l, skip, sn, ps, err := test.oi.GetDecryptedRange(&xhttp.RangeSpec{true, -readLen, -1})
 			if err != nil {
 				t.Errorf("Case %d: unexpected err: %v", i, err)
 			}

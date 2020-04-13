@@ -445,7 +445,7 @@ func (n *hdfsObjects) DeleteObjects(ctx context.Context, bucket string, objects 
 	return errs, nil
 }
 
-func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
+func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.xhttp.RangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	objInfo, err := n.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, err

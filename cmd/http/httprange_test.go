@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package http
 
 import (
 	"testing"
@@ -37,7 +37,7 @@ func TestHTTPRequestRangeSpec(t *testing.T) {
 		{"bytes=-1000", 0, 10},
 	}
 	for i, testCase := range validRangeSpecs {
-		rs, err := parseRequestRangeSpec(testCase.spec)
+		rs, err := ParseRequestRangeSpec(testCase.spec)
 		if err != nil {
 			t.Errorf("unexpected err: %v", err)
 		}
@@ -67,7 +67,7 @@ func TestHTTPRequestRangeSpec(t *testing.T) {
 		"bytes=10-11,12-10", // Unsupported by S3/MinIO (valid in RFC)
 	}
 	for i, urs := range unparsableRangeSpecs {
-		rs, err := parseRequestRangeSpec(urs)
+		rs, err := ParseRequestRangeSpec(urs)
 		if err == nil {
 			t.Errorf("Case %d: Did not get an expected error - got %v", i, rs)
 		}
@@ -88,9 +88,9 @@ func TestHTTPRequestRangeSpec(t *testing.T) {
 	}
 	for i, irs := range invalidRangeSpecs {
 		var err1, err2 error
-		var rs *HTTPRangeSpec
+		var rs *RangeSpec
 		var o, l int64
-		rs, err1 = parseRequestRangeSpec(irs)
+		rs, err1 = ParseRequestRangeSpec(irs)
 		if err1 == nil {
 			o, l, err2 = rs.GetOffsetLength(resourceSize)
 		}

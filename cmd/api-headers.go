@@ -69,7 +69,7 @@ func encodeResponseJSON(response interface{}) []byte {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec) (err error) {
+func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *xhttp.RangeSpec) (err error) {
 	// set common headers
 	setCommonHeaders(w)
 

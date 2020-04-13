@@ -305,7 +305,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser
-func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, o minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
+func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.xhttp.RangeSpec, h http.Header, lockType minio.LockType, o minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {
 	var opts minio.ObjectOptions
 	if minio.GlobalGatewaySSE.SSEC() {
 		opts = o

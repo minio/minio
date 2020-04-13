@@ -20,6 +20,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // Writes S3 compatible copy part range error.
@@ -44,8 +46,8 @@ func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url
 // http://docs.aws.amazon.com/AmazonS3/latest/API/mpUploadUploadPartCopy.html
 // for full details. This function treats an empty rangeString as
 // referring to the whole resource.
-func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error) {
-	hrange, err = parseRequestRangeSpec(rangeString)
+func parseCopyPartRangeSpec(rangeString string) (hrange *xhttp.RangeSpec, err error) {
+	hrange, err = xhttp.ParseRequestRangeSpec(rangeString)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +60,7 @@ func parseCopyPartRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err erro
 // checkCopyPartRangeWithSize adds more check to the range string in case of
 // copy object part. This API requires having specific start and end  range values
 // e.g. 'bytes=3-10'. Other use cases will be rejected.
-func checkCopyPartRangeWithSize(rs *HTTPRangeSpec, resourceSize int64) (err error) {
+func checkCopyPartRangeWithSize(rs *xhttp.RangeSpec, resourceSize int64) (err error) {
 	if rs == nil {
 		return nil
 	}

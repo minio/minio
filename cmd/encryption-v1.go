@@ -33,6 +33,7 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
@@ -744,7 +745,7 @@ func tryDecryptETag(key []byte, encryptedETag string, ssec bool) string {
 // In addition we also compute the object part number for where the
 // requested range starts, along with the DARE sequence number within
 // that part. For single part objects, the partStart will be 0.
-func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, skipLen int64, seqNumber uint32, partStart int, err error) {
+func (o *ObjectInfo) GetDecryptedRange(rs *xhttp.RangeSpec) (encOff, encLength, skipLen int64, seqNumber uint32, partStart int, err error) {
 	if !crypto.IsEncrypted(o.UserDefined) {
 		err = errors.New("Object is not encrypted")
 		return

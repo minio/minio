@@ -384,7 +384,7 @@ func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (me
 }
 
 // statRange returns ObjectInfo and RangeInfo from disk cache
-func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *HTTPRangeSpec) (oi ObjectInfo, rngInfo RangeInfo, numHits int, err error) {
+func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec) (oi ObjectInfo, rngInfo RangeInfo, numHits int, err error) {
 	// Stat the file to get file size.
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	var meta *cacheMeta
@@ -454,7 +454,7 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 
 // saves object metadata to disk cache
 // incHitsOnly is true if metadata update is incrementing only the hit counter
-func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
+func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *xhttp.RangeSpec, rsFileName string, incHitsOnly bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cachedPath)
 	if err := cLock.GetLock(globalObjectTimeout); err != nil {
@@ -466,7 +466,7 @@ func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, met
 
 // saves object metadata to disk cache
 // incHitsOnly is true if metadata update is incrementing only the hit counter
-func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
+func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *xhttp.RangeSpec, rsFileName string, incHitsOnly bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	metaPath := pathJoin(cachedPath, cacheMetaJSONFile)
 	// Create cache directory if needed
@@ -611,7 +611,7 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 }
 
 // Caches the object to disk
-func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly bool) error {
+func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *xhttp.RangeSpec, opts ObjectOptions, incHitsOnly bool) error {
 	if c.diskUsageHigh() {
 		c.incGCCounter()
 		io.Copy(ioutil.Discard, data)
@@ -678,7 +678,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 }
 
 // Caches the range to disk
-func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions) error {
+func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *xhttp.RangeSpec, opts ObjectOptions) error {
 	rlen, err := rs.GetLength(size)
 	if err != nil {
 		return err
@@ -820,7 +820,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 }
 
 // Get returns ObjectInfo and reader for object from disk cache
-func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
+func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
 	if err := cLock.GetRLock(globalObjectTimeout); err != nil {

@@ -370,7 +370,7 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 
 }
 
-func (z *xlZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (z *xlZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	var nsUnlocker = func() {}
 
 	// Acquire lock

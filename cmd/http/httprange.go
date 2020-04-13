@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package http
 
 import (
 	"errors"
@@ -27,14 +27,14 @@ const (
 	byteRangePrefix = "bytes="
 )
 
-// HTTPRangeSpec represents a range specification as supported by S3 GET
+// RangeSpec represents a range specification as supported by S3 GET
 // object request.
 //
 // Case 1: Not present -> represented by a nil RangeSpec
 // Case 2: bytes=1-10 (absolute start and end offsets) -> RangeSpec{false, 1, 10}
 // Case 3: bytes=10- (absolute start offset with end offset unspecified) -> RangeSpec{false, 10, -1}
 // Case 4: bytes=-30 (suffix length specification) -> RangeSpec{true, -30, -1}
-type HTTPRangeSpec struct {
+type RangeSpec struct {
 	// Does the range spec refer to a suffix of the object?
 	IsSuffixLength bool
 
@@ -42,8 +42,10 @@ type HTTPRangeSpec struct {
 	Start, End int64
 }
 
+var errInvalidRange = fmt.Errorf("Invalid range")
+
 // GetLength - get length of range
-func (h *HTTPRangeSpec) GetLength(resourceSize int64) (rangeLength int64, err error) {
+func (h *RangeSpec) GetLength(resourceSize int64) (rangeLength int64, err error) {
 	switch {
 	case resourceSize < 0:
 		return 0, errors.New("Resource size cannot be negative")
@@ -80,7 +82,7 @@ func (h *HTTPRangeSpec) GetLength(resourceSize int64) (rangeLength int64, err er
 
 // GetOffsetLength computes the start offset and length of the range
 // given the size of the resource
-func (h *HTTPRangeSpec) GetOffsetLength(resourceSize int64) (start, length int64, err error) {
+func (h *RangeSpec) GetOffsetLength(resourceSize int64) (start, length int64, err error) {
 	if h == nil {
 		// No range specified, implies whole object.
 		return 0, resourceSize, nil
@@ -101,8 +103,8 @@ func (h *HTTPRangeSpec) GetOffsetLength(resourceSize int64) (start, length int64
 	return start, length, nil
 }
 
-// Parse a HTTP range header value into a HTTPRangeSpec
-func parseRequestRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error) {
+// ParseRequestRangeSpec - parses a HTTP range header value into a xhttp.RangeSpec
+func ParseRequestRangeSpec(rangeString string) (hrange *RangeSpec, err error) {
 	// Return error if given range string doesn't start with byte range prefix.
 	if !strings.HasPrefix(rangeString, byteRangePrefix) {
 		return nil, fmt.Errorf("'%s' does not start with '%s'", rangeString, byteRangePrefix)
@@ -148,14 +150,14 @@ func parseRequestRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error
 		if offsetBegin > offsetEnd {
 			return nil, errInvalidRange
 		}
-		return &HTTPRangeSpec{false, offsetBegin, offsetEnd}, nil
+		return &RangeSpec{false, offsetBegin, offsetEnd}, nil
 	case offsetBegin > -1:
-		return &HTTPRangeSpec{false, offsetBegin, -1}, nil
+		return &RangeSpec{false, offsetBegin, -1}, nil
 	case offsetEnd > -1:
 		if offsetEnd == 0 {
 			return nil, errInvalidRange
 		}
-		return &HTTPRangeSpec{true, -offsetEnd, -1}, nil
+		return &RangeSpec{true, -offsetEnd, -1}, nil
 	default:
 		// rangeString contains first and last byte positions missing. eg. "bytes=-"
 		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
@@ -163,7 +165,7 @@ func parseRequestRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error
 }
 
 // String returns stringified representation of range for a particular resource size.
-func (h *HTTPRangeSpec) String(resourceSize int64) string {
+func (h *RangeSpec) String(resourceSize int64) string {
 	if h == nil {
 		return ""
 	}

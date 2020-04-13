@@ -30,6 +30,7 @@ import (
 
 	"github.com/djherbis/atime"
 	"github.com/minio/minio/cmd/config/cache"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/color"
@@ -52,7 +53,7 @@ type CacheStorageInfo struct {
 // CacheObjectLayer implements primitives for cache object API layer.
 type CacheObjectLayer interface {
 	// Object operations.
-	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string) error
 	DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
@@ -79,7 +80,7 @@ type cacheObjects struct {
 	// Cache stats
 	cacheStats *CacheStats
 
-	GetObjectNInfoFn func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
+	GetObjectNInfoFn func(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectInfoFn  func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObjectFn   func(ctx context.Context, bucket, object string) error
 	DeleteObjectsFn  func(ctx context.Context, bucket string, objects []string) ([]error, error)
@@ -171,7 +172,7 @@ func (c *cacheObjects) incCacheStats(size int64) {
 	c.cacheStats.incBytesServed(size)
 }
 
-func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if c.isCacheExclude(bucket, object) || c.skipCache() {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -665,7 +666,7 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		GetObjectInfoFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 			return newObjectLayerFn().GetObjectInfo(ctx, bucket, object, opts)
 		},
-		GetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+		GetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *xhttp.RangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 			return newObjectLayerFn().GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		},
 		DeleteObjectFn: func(ctx context.Context, bucket, object string) error {

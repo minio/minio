@@ -755,9 +755,9 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		}
 
 		var off, length int64
-		var rs *HTTPRangeSpec
+		var rs *xhttp.RangeSpec
 		if byteRange != "" {
-			rs, err = parseRequestRangeSpec(byteRange)
+			rs, err = xhttp.ParseRequestRangeSpec(byteRange)
 			if err != nil {
 				t.Fatalf("Object: %s Case %d ByteRange: %s: Unexpected err: %v", object, i+1, byteRange, err)
 			}
