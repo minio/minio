@@ -807,6 +807,28 @@ Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jp
 
 ## Publish MinIO events via PostgreSQL
 
+> NOTE: Until release RELEASE.2020-04-10T03-34-42Z PostgreSQL notification used to support following options:
+>
+> ```
+> host                (hostname)           Postgres server hostname (used only if `connection_string` is empty)
+> port                (port)               Postgres server port, defaults to `5432` (used only if `connection_string` is empty)
+> username            (string)             database username (used only if `connection_string` is empty)
+> password            (string)             database password (used only if `connection_string` is empty)
+> database            (string)             database name (used only if `connection_string` is empty)
+> ```
+>
+> These are now deprecated, if you plan to upgrade to any releases after *RELEASE.2020-04-10T03-34-42Z* make sure
+> to migrate to only using *connection_string* option. To migrate, once you have upgraded all the servers use the
+> following command to update the existing notification targets.
+>
+> ```
+> mc admin config set myminio/ notify_postgres[:name] connection_string="host=hostname port=2832 username=psqluser password=psqlpass database=bucketevents"
+> ```
+>
+> Please make sure this step is carried out, without this step PostgreSQL notification targets will not work,
+> an error message will be shown on the console upon server upgrade/restart, make sure to follow the above
+> instructions appropriately. For further questions please join our https://slack.min.io
+
 Install [PostgreSQL](https://www.postgresql.org/) database server. For illustrative purposes, we have set the "postgres" user password as `password` and created a database called `minio_events` to store the events.
 
 This notification target supports two formats: _namespace_ and _access_.
@@ -913,6 +935,28 @@ key                 |                      value
 <a name="MySQL"></a>
 
 ## Publish MinIO events via MySQL
+
+> NOTE: Until release RELEASE.2020-04-10T03-34-42Z MySQL notification used to support following options:
+>
+> ```
+> host         (hostname)           MySQL server hostname (used only if `dsn_string` is empty)
+> port         (port)               MySQL server port (used only if `dsn_string` is empty)
+> username     (string)             database username (used only if `dsn_string` is empty)
+> password     (string)             database password (used only if `dsn_string` is empty)
+> database     (string)             database name (used only if `dsn_string` is empty)
+> ```
+>
+> These are now deprecated, if you plan to upgrade to any releases after *RELEASE.2020-04-10T03-34-42Z* make sure
+> to migrate to only using *dsn_string* option. To migrate, once you have upgraded all the servers use the
+> following command to update the existing notification targets.
+>
+> ```
+> mc admin config set myminio/ notify_mysql[:name] dsn_string="mysqluser:mysqlpass@tcp(localhost:2832)/bucketevents"
+> ```
+>
+> Please make sure this step is carried out, without this step MySQL notification targets will not work,
+> an error message will be shown on the console upon server upgrade/restart, make sure to follow the above
+> instructions appropriately. For further questions please join our https://slack.min.io
 
 Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
 
