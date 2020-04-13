@@ -1103,7 +1103,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 	if err != nil {
 		var aerr APIError
 		if err == errConfigNotFound {
-			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotFound)
 		} else {
 			aerr = toAPIError(ctx, err)
 		}
