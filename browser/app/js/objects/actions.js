@@ -230,6 +230,7 @@ export const shareObject = (object, days, hours, minutes) => {
     if (web.LoggedIn()) {
       return web
         .GetBucketPolicy({ bucketName: currentBucket, prefix: currentPrefix })
+        .catch(() => ({ policy: null }))
         .then(({ policy }) => {
           if (hasServerDomain && ['readonly', 'readwrite'].includes(policy)) {
             const domain = getServerInfo(getState()).info.domains[0]

@@ -94,7 +94,7 @@ export class ShareObjectModal extends React.Component {
               type="text"
               ref={node => (this.copyTextInput = node)}
               readOnly="readOnly"
-              value={`${window.location.protocol}//${shareObjectDetails.url}`}
+              value={url}
               onClick={() => this.copyTextInput.select()}
             />
           </div>
