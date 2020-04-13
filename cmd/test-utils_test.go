@@ -96,30 +96,13 @@ const testConcurrencyLevel = 10
 ///      (that are executed by other agents) or when customers pass requests through proxies, which may
 ///      modify the user-agent.
 ///
-///  Content-Length:
-///
-///      This is ignored from signing because generating a pre-signed URL should not provide a content-length
-///      constraint, specifically when vending a S3 pre-signed PUT URL. The corollary to this is that when
-///      sending regular requests (non-pre-signed), the signature contains a checksum of the body, which
-///      implicitly validates the payload length (since changing the number of bytes would change the checksum)
-///      and therefore this header is not valuable in the signature.
-///
-///  Content-Type:
-///
-///      Signing this header causes quite a number of problems in browser environments, where browsers
-///      like to modify and normalize the content-type header in different ways. There is more information
-///      on this in https://github.com/aws/aws-sdk-js/issues/244. Avoiding this field simplifies logic
-///      and reduces the possibility of future bugs
-///
 ///  Authorization:
 ///
 ///      Is skipped for obvious reasons
 ///
 var ignoredHeaders = map[string]bool{
-	"Authorization":  true,
-	"Content-Type":   true,
-	"Content-Length": true,
-	"User-Agent":     true,
+	"Authorization": true,
+	"User-Agent":    true,
 }
 
 // Headers to ignore in streaming v4
@@ -481,10 +464,6 @@ func resetGlobalIAMSys() {
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
-	// close any indefinitely running go-routines from previous
-	// tests.
-	cancelGlobalContext()
-	initGlobalContext()
 	// set globalObjectAPI to `nil`.
 	resetGlobalObjectAPI()
 	// Reset config path set.
