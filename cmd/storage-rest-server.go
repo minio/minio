@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"encoding/gob"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -139,7 +138,7 @@ func (s *storageRESTServer) UpdateBloomFilter(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 	var req bloomFilterRequest
-	dec := json.NewDecoder(r.Body)
+	dec := gob.NewDecoder(r.Body)
 	err := dec.Decode(&req)
 	if err != nil {
 		logger.LogIf(r.Context(), err)
@@ -155,7 +154,7 @@ func (s *storageRESTServer) UpdateBloomFilter(w http.ResponseWriter, r *http.Req
 		s.writeErrorResponse(w, err)
 		return
 	}
-	enc := json.NewEncoder(w)
+	enc := gob.NewEncoder(w)
 	err = enc.Encode(resp)
 
 	logger.LogIf(r.Context(), err)

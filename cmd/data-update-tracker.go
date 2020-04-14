@@ -109,27 +109,10 @@ func emptyBloomFilter() bloomFilter {
 // containsDir returns whether the bloom filter contains a directory.
 // Note that objects in XL mode are also considered directories.
 func (b bloomFilter) containsDir(in string) bool {
-	split := strings.Split(path.Clean(in), SlashSeparator)
+	split := splitPathDeterministic(path.Clean(in))
 
-	// Trim empty start/end
-	for len(split) > 0 {
-		if len(split[0]) > 0 {
-			break
-		}
-		split = split[1:]
-	}
-	for len(split) > 0 {
-		if len(split[len(split)-1]) > 0 {
-			break
-		}
-		split = split[:len(split)-1]
-	}
 	if len(split) == 0 {
-		return true
-	}
-	// No deeper than level 3
-	if len(split) > 3 {
-		split = split[:3]
+		return false
 	}
 	var tmp [dataUsageHashLen]byte
 	hashPath(path.Join(split...)).bytes(tmp[:])
@@ -144,7 +127,7 @@ func (b bloomFilter) bytes() []byte {
 	var buf bytes.Buffer
 	_, err := b.WriteTo(&buf)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(GlobalContext, err)
 		return nil
 	}
 	return buf.Bytes()
@@ -283,7 +266,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 // Caller should hold lock if d is expected to be shared.
 // If an error is returned, there will likely be partial data written to dst.
 func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
-	ctx := context.Background()
+	ctx := GlobalContext
 	var tmp [8]byte
 	o := bufio.NewWriter(dst)
 	defer func() {
@@ -355,7 +338,7 @@ func (d *dataUpdateTracker) serialize(dst io.Writer) (err error) {
 
 // deserialize will deserialize the supplied input if the input is newer than the supplied time.
 func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) error {
-	ctx := context.Background()
+	ctx := GlobalContext
 	var dst dataUpdateTracker
 	var tmp [8]byte
 
@@ -456,31 +439,12 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 				}
 				continue
 			}
-			split := strings.Split(in, SlashSeparator)
+			split := splitPathDeterministic(in)
 
-			// Trim empty start/end
-			for len(split) > 0 {
-				if len(split[0]) > 0 && split[0] != "." {
-					break
-				}
-				split = split[1:]
-			}
-			for len(split) > 0 {
-				if len(split[len(split)-1]) > 0 {
-					break
-				}
-				split = split[:len(split)-1]
-			}
-			if len(split) == 0 {
-				continue
-			}
-			if len(split) > 3 {
-				split = split[:3]
-			}
 			// Add all paths until level 3.
 			d.mu.Lock()
 			for i := range split {
-				if d.debug {
+				if d.debug && false {
 					logger.Info(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
 				}
 				hashPath(path.Join(split[:i+1]...)).bytes(tmp[:])
@@ -579,6 +543,34 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uin
 	}
 	d.History.removeOlderThan(oldest)
 	return d.filterFrom(ctx, oldest, current), nil
+}
+
+// splitPathDeterministic will split the provided path deterministically
+// and returns up to 3 parts.
+// Returns 0 length if no parts where found.
+func splitPathDeterministic(in string) []string {
+	split := strings.Split(in, SlashSeparator)
+
+	// Trim empty start/end
+	for len(split) > 0 {
+		if len(split[0]) > 0 && split[0] != "." {
+			break
+		}
+		split = split[1:]
+	}
+	for len(split) > 0 {
+		if len(split[len(split)-1]) > 0 {
+			break
+		}
+		split = split[:len(split)-1]
+	}
+	if len(split) == 0 {
+		return nil
+	}
+	if len(split) > 3 {
+		split = split[:3]
+	}
+	return split
 }
 
 // bloomFilterRequest request bloom filters.
