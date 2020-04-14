@@ -23,9 +23,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 // HTTPClientTarget - HTTP client target.
@@ -134,12 +134,12 @@ func (target *HTTPClientTarget) Close() error {
 }
 
 func getNewUUID() (string, error) {
-	uuid, err := uuid.New()
+	u, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
 
-	return uuid.String(), nil
+	return u.String(), nil
 }
 
 // NewHTTPClientTarget - creates new HTTP client target.
