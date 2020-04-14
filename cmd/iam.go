@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -764,24 +765,24 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 }
 
 // NewServiceAccount - create a new service account
-func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPolicy string) (auth.Credentials, error) {
+func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, sessionPolicy *iampolicy.Policy) (auth.Credentials, error) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
 		return auth.Credentials{}, errServerNotInitialized
 	}
 
-	if len(sessionPolicy) > 16*1024 {
-		return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
-	}
-
-	if len(sessionPolicy) > 0 {
-		policy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicy)))
+	var policyBuf []byte
+	if sessionPolicy != nil {
+		err := sessionPolicy.Validate()
 		if err != nil {
 			return auth.Credentials{}, err
 		}
-		// Version in policy must not be empty
-		if policy.Version == "" {
-			return auth.Credentials{}, fmt.Errorf("Invalid session policy version")
+		policyBuf, err = json.Marshal(sessionPolicy)
+		if err != nil {
+			return auth.Credentials{}, err
+		}
+		if len(policyBuf) > 16*1024 {
+			return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
 		}
 	}
 
@@ -808,8 +809,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	m := make(map[string]interface{})
 	m[parentClaim] = parentUser
 
-	if len(sessionPolicy) > 0 {
-		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
+	if len(policyBuf) > 0 {
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = "embedded-policy"
 	} else {
 		m[iamPolicyClaimNameSA()] = "inherited-policy"
@@ -831,32 +832,6 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	sys.iamUsersMap[u.Credentials.AccessKey] = u.Credentials
 
 	return cred, nil
-}
-
-// GetServiceAccount - returns the credentials of the given service account
-func (sys *IAMSys) GetServiceAccount(ctx context.Context, serviceAccountAccessKey string) (auth.Credentials, error) {
-	objectAPI := newObjectLayerWithoutSafeModeFn()
-	if objectAPI == nil || sys == nil || sys.store == nil {
-		return auth.Credentials{}, errServerNotInitialized
-	}
-
-	sys.store.lock()
-	defer sys.store.unlock()
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
-	cr, ok := sys.iamUsersMap[serviceAccountAccessKey]
-	if !ok {
-		return auth.Credentials{}, errNoSuchUser
-	}
-
-	if !cr.IsServiceAccount() {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
-	return cr, nil
 }
 
 // SetUser - set user credentials and policy.
@@ -1472,53 +1447,50 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 
 	parentArgs := args
 	parentArgs.AccountName = parent
-	if !combinedPolicy.IsAllowed(parentArgs) {
+
+	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
+	if !ok {
 		return false
 	}
 
-	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
-	if ok {
-		saPolicyClaimStr, ok := saPolicyClaim.(string)
-		if !ok {
-			// Sub policy if set, should be a string reject
-			// malformed/malicious requests.
-			return false
-		}
+	saPolicyClaimStr, ok := saPolicyClaim.(string)
+	if !ok {
+		// Sub policy if set, should be a string reject
+		// malformed/malicious requests.
+		return false
+	}
 
-		if saPolicyClaimStr == "inherited-policy" {
-			// Immediately returns true since at this stage, since
-			// parent user is allowed to do this action.
-			return true
-		}
+	if saPolicyClaimStr == "inherited-policy" {
+		return combinedPolicy.IsAllowed(parentArgs)
 	}
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
-	if ok {
-		spolicyStr, ok := spolicy.(string)
-		if !ok {
-			// Sub policy if set, should be a string reject
-			// malformed/malicious requests.
-			return false
-		}
-
-		// Check if policy is parseable.
-		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
-		if err != nil {
-			// Log any error in input session policy config.
-			logger.LogIf(context.Background(), err)
-			return false
-		}
-
-		// Policy without Version string value reject it.
-		if subPolicy.Version == "" {
-			return false
-		}
-
-		return subPolicy.IsAllowed(args)
+	if !ok {
+		return false
 	}
 
-	return false
+	spolicyStr, ok := spolicy.(string)
+	if !ok {
+		// Sub policy if set, should be a string reject
+		// malformed/malicious requests.
+		return false
+	}
+
+	// Check if policy is parseable.
+	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+	if err != nil {
+		// Log any error in input session policy config.
+		logger.LogIf(context.Background(), err)
+		return false
+	}
+
+	// Policy without Version string value reject it.
+	if subPolicy.Version == "" {
+		return false
+	}
+
+	return combinedPolicy.IsAllowed(parentArgs) && subPolicy.IsAllowed(parentArgs)
 }
 
 // IsAllowedSTS is meant for STS based temporary credentials,

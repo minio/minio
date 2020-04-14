@@ -942,7 +942,7 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				HTTPStatusCode: http.StatusNotFound,
 			}
 		} else {
-			apiErr = errorCodes.ToAPIErr(toAdminAPIErrCode(ctx, err))
+			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}
 	}
 	return apiErr

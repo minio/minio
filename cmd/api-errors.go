@@ -336,17 +336,25 @@ const (
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
 	ErrAddServiceAccountInvalidArgument
+	ErrAddServiceAccountInvalidParent
 	ErrPostPolicyConditionInvalidFormat
 )
 
 type errorCodeMap map[APIErrorCode]APIError
 
-func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError {
 	apiErr, ok := e[errCode]
 	if !ok {
-		return e[ErrInternalError]
+		apiErr = e[ErrInternalError]
+	}
+	if err != nil {
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
 	return apiErr
+}
+
+func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+	return e.ToAPIErrWithErr(errCode, nil)
 }
 
 // error code to APIError structure, these fields carry respective
@@ -1593,8 +1601,13 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrAddServiceAccountInvalidArgument: {
-		Code:           "XMinioInvalidArgument",
-		Description:    "New service accounts for admin access key is not allowed",
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "Creating service accounts for admin access key is not allowed",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAddServiceAccountInvalidParent: {
+		Code:           "XMinioInvalidIAMCredentialsParent",
+		Description:    "Creating service accounts for other users is not allowed",
 		HTTPStatusCode: http.StatusConflict,
 	},
 

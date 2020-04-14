@@ -102,7 +102,7 @@ func (cred Credentials) String() string {
 		s.WriteString("\n")
 		s.WriteString(cred.SessionToken)
 	}
-	if !cred.Expiration.IsZero() && cred.Expiration != timeSentinel {
+	if !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel) {
 		s.WriteString("\n")
 		s.WriteString(cred.Expiration.String())
 	}
@@ -111,7 +111,7 @@ func (cred Credentials) String() string {
 
 // IsExpired - returns whether Credential is expired or not.
 func (cred Credentials) IsExpired() bool {
-	if cred.Expiration.IsZero() || cred.Expiration == timeSentinel {
+	if cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel) {
 		return false
 	}
 
@@ -120,12 +120,12 @@ func (cred Credentials) IsExpired() bool {
 
 // IsTemp - returns whether credential is temporary or not.
 func (cred Credentials) IsTemp() bool {
-	return cred.SessionToken != "" && cred.ParentUser == ""
+	return cred.SessionToken != "" && cred.ParentUser == "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
 }
 
 // IsServiceAccount - returns whether credential is a service account or not
 func (cred Credentials) IsServiceAccount() bool {
-	return cred.ParentUser != ""
+	return cred.ParentUser != "" && (cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel))
 }
 
 // IsValid - returns whether credential is valid or not.
