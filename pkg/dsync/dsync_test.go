@@ -242,10 +242,14 @@ func HammerMutex(m *DRWMutex, loops int, cdone chan bool) {
 
 // Borrowed from mutex_test.go
 func TestMutex(t *testing.T) {
+	loops := 200
+	if testing.Short() {
+		loops = 5
+	}
 	c := make(chan bool)
 	m := NewDRWMutex(context.Background(), ds, "test")
 	for i := 0; i < 10; i++ {
-		go HammerMutex(m, 1000, c)
+		go HammerMutex(m, loops, c)
 	}
 	for i := 0; i < 10; i++ {
 		<-c

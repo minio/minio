@@ -240,7 +240,7 @@ func HammerRWMutex(gomaxprocs, numReaders, numIterations int) {
 // Borrowed from rwmutex_test.go
 func TestRWMutex(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(-1))
-	n := 1000
+	n := 100
 	if testing.Short() {
 		n = 5
 	}
