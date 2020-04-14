@@ -39,14 +39,11 @@ type adminXLTestBed struct {
 	xlDirs   []string
 	objLayer ObjectLayer
 	router   *mux.Router
-	ctx      context.Context
-	cancel   context.CancelFunc
 }
 
 // prepareAdminXLTestBed - helper function that setups a single-node
 // XL backend for admin-handler tests.
-func prepareAdminXLTestBed() (*adminXLTestBed, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+func prepareAdminXLTestBed(ctx context.Context) (*adminXLTestBed, error) {
 
 	// reset global variables to start afresh.
 	resetTestGlobals()
@@ -95,15 +92,12 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 		xlDirs:   xlDirs,
 		objLayer: objLayer,
 		router:   adminRouter,
-		ctx:      ctx,
-		cancel:   cancel,
 	}, nil
 }
 
 // TearDown - method that resets the test bed for subsequent unit
 // tests to start afresh.
 func (atb *adminXLTestBed) TearDown() {
-	atb.cancel()
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
 }
@@ -198,7 +192,10 @@ func getServiceCmdRequest(cmd cmdType, cred auth.Credentials) (*http.Request, er
 // testServicesCmdHandler - parametrizes service subcommand tests on
 // cmdType value.
 func testServicesCmdHandler(cmd cmdType, t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	adminTestBed, err := prepareAdminXLTestBed(ctx)
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
@@ -266,7 +263,10 @@ func buildAdminRequest(queryVal url.Values, method, path string,
 }
 
 func TestAdminServerInfo(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	adminTestBed, err := prepareAdminXLTestBed(ctx)
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
