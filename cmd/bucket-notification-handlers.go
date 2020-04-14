@@ -116,7 +116,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 			// With newer config disallowing changing / turning off
 			// notification targets without removing ARN in notification
 			// configuration we won't see this problem anymore.
-			if reflect.DeepEqual(queue.ARN, arnErr.ARN) {
+			if reflect.DeepEqual(queue.ARN, arnErr.ARN) && i < len(config.QueueList) {
 				config.QueueList = append(config.QueueList[:i],
 					config.QueueList[i+1:]...)
 			}
