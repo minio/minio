@@ -303,7 +303,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 		// err will be nil here as we already called this function
 		// earlier in this request.
-		claims, _ := getClaimsFromToken(r)
+		claims, _ := getClaimsFromToken(r, getSessionToken(r))
 		n := 0
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place

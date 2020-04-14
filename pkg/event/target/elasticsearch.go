@@ -82,10 +82,11 @@ func (a ElasticsearchArgs) Validate() error {
 
 // ElasticsearchTarget - Elasticsearch target.
 type ElasticsearchTarget struct {
-	id     event.TargetID
-	args   ElasticsearchArgs
-	client *elastic.Client
-	store  Store
+	id         event.TargetID
+	args       ElasticsearchArgs
+	client     *elastic.Client
+	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -252,38 +253,42 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 
 	var store Store
 
+	target := &ElasticsearchTarget{
+		id:         event.TargetID{ID: id, Name: "elasticsearch"},
+		args:       args,
+		loggerOnce: loggerOnce,
+	}
+
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return target, oErr
 		}
+		target.store = store
 	}
 
 	dErr := args.URL.DialHTTP(nil)
 	if dErr != nil {
 		if store == nil {
-			return nil, dErr
+			target.loggerOnce(context.Background(), dErr, target.ID())
+			return target, dErr
 		}
 	} else {
 		client, err = newClient(args)
 		if err != nil {
-			return nil, err
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
 		}
-	}
-
-	target := &ElasticsearchTarget{
-		id:     event.TargetID{ID: id, Name: "elasticsearch"},
-		args:   args,
-		client: client,
-		store:  store,
+		target.client = client
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil
