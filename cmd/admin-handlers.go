@@ -1173,22 +1173,23 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	if objectAPI == nil {
 		return
 	}
-	deadlinedCtx, cancel := context.WithDeadline(ctx, time.Now().Add(10*time.Minute))
+
+	vars := mux.Vars(r)
+	pulse := make(chan struct{})
+	obdDone := make(chan struct{})
 	obdInfo := madmin.OBDInfo{}
 
-	setCommonHeaders(w)
-	w.Header().Set(xhttp.ContentType, string(mimeJSON))
-	w.WriteHeader(http.StatusOK)
-
 	enc := json.NewEncoder(w)
-	partialWrite := func() {
+	doPartialWrite := func() {
 		logger.LogIf(ctx, enc.Encode(obdInfo))
 	}
 
+	partialWrite := func() {
+		pulse <- struct{}{}
+	}
+
 	finish := func() {
-		partialWrite()
-		w.(http.Flusher).Flush()
-		cancel()
+		obdDone <- struct{}{}
 	}
 
 	errResp := func(err error) {
@@ -1199,14 +1200,47 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		finish()
 	}
 
+	deadline := 3600 * time.Second
+	deadlineStr := r.URL.Query().Get("deadline")
+	if deadlineStr != "" {
+		var err error
+		deadline, err = time.ParseDuration(deadlineStr)
+		if err != nil {
+			errResp(err)
+			return
+		}
+	}
+	deadlinedCtx, cancel := context.WithDeadline(ctx, time.Now().Add(deadline))
+
+	setCommonHeaders(w)
+	w.Header().Set(xhttp.ContentType, string(mimeJSON))
+	w.WriteHeader(http.StatusOK)
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	go func() {
+	loop:
+		for {
+			select {
+			case <-ticker.C:
+				doPartialWrite()
+			case <-pulse:
+				doPartialWrite()
+			case <-obdDone:
+				break loop
+			}
+		}
+		w.(http.Flusher).Flush()
+		cancel()
+	}()
+
 	nsLock := objectAPI.NewNSLock(deadlinedCtx, minioMetaBucket, "obd-in-progress")
-	if err := nsLock.GetLock(newDynamicTimeout(10*time.Minute, 600*time.Second)); err != nil { // returns a locked lock
+	if err := nsLock.GetLock(newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return
 	}
 	defer nsLock.Unlock()
-
-	vars := mux.Vars(r)
 
 	if cpu, ok := vars["syscpu"]; ok && cpu == "true" {
 		cpuInfo := getLocalCPUOBDInfo(deadlinedCtx)
