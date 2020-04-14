@@ -82,6 +82,7 @@ type WebhookTarget struct {
 	args       WebhookArgs
 	httpClient *http.Client
 	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -195,28 +196,37 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 
 	var store Store
 
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if err := store.Open(); err != nil {
-			return nil, err
-		}
-	}
-
 	target := &WebhookTarget{
 		id:   event.TargetID{ID: id, Name: "webhook"},
 		args: args,
 		httpClient: &http.Client{
 			Transport: transport,
 		},
-		store: store,
+		loggerOnce: loggerOnce,
+	}
+
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := store.Open(); err != nil {
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
+		}
+		target.store = store
+	}
+
+	if _, err := target.IsActive(); err != nil {
+		if target.store == nil || err != errNotConnected {
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
+		}
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil
