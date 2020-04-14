@@ -197,11 +197,12 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 
 // NATSTarget - NATS target.
 type NATSTarget struct {
-	id       event.TargetID
-	args     NATSArgs
-	natsConn *nats.Conn
-	stanConn stan.Conn
-	store    Store
+	id         event.TargetID
+	args       NATSArgs
+	natsConn   *nats.Conn
+	stanConn   stan.Conn
+	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -328,14 +329,16 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 	var store Store
 
 	target := &NATSTarget{
-		id:   event.TargetID{ID: id, Name: "nats"},
-		args: args,
+		id:         event.TargetID{ID: id, Name: "nats"},
+		args:       args,
+		loggerOnce: loggerOnce,
 	}
 
-	if args.QueueDir != "" && !test {
+	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nats-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
 			return target, oErr
 		}
 		target.store = store
@@ -351,15 +354,16 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 
 	if err != nil {
 		if store == nil || err.Error() != nats.ErrNoServers.Error() {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

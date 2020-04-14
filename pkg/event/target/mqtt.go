@@ -254,19 +254,20 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 		}
 	}
 
-	if args.QueueDir != "" && !test {
+	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
 		target.store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := target.store.Open(); err != nil {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 
 		if !test {
 			go retryRegister()
 			// Replays the events from the store.
-			eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+			eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 			// Start replaying events from the store.
-			go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+			go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 		}
 	} else {
 		if token.Wait() && token.Error() != nil {

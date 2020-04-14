@@ -123,11 +123,12 @@ func (k KafkaArgs) Validate() error {
 
 // KafkaTarget - Kafka target.
 type KafkaTarget struct {
-	id       event.TargetID
-	args     KafkaArgs
-	producer sarama.SyncProducer
-	config   *sarama.Config
-	store    Store
+	id         event.TargetID
+	args       KafkaArgs
+	producer   sarama.SyncProducer
+	config     *sarama.Config
+	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -249,13 +250,15 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	config := sarama.NewConfig()
 
 	target := &KafkaTarget{
-		id:   event.TargetID{ID: id, Name: "kafka"},
-		args: args,
+		id:         event.TargetID{ID: id, Name: "kafka"},
+		args:       args,
+		loggerOnce: loggerOnce,
 	}
 
 	if args.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(args.Version)
 		if err != nil {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 		config.Version = kafkaVersion
@@ -278,6 +281,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	tlsConfig, err := saramatls.NewConfig(args.TLS.ClientTLSCert, args.TLS.ClientTLSKey)
 
 	if err != nil {
+		target.loggerOnce(context.Background(), err, target.ID())
 		return target, err
 	}
 
@@ -300,10 +304,11 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 
 	var store Store
 
-	if args.QueueDir != "" && !test {
+	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-kafka-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
 			return target, oErr
 		}
 		target.store = store
@@ -312,6 +317,7 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
 		if store == nil || err != sarama.ErrOutOfBrokers {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 	}
@@ -319,9 +325,9 @@ func NewKafkaTarget(id string, args KafkaArgs, doneCh <-chan struct{}, loggerOnc
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

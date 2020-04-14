@@ -17,8 +17,10 @@
 package notify
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,12 +39,16 @@ const (
 	formatAccess    = "access"
 )
 
+// ErrTargetsOffline - Indicates single/multiple target failures.
+var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
+
 // TestNotificationTargets is similar to GetNotificationTargets()
 // avoids explicit registration.
 func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
 	targetIDs []event.TargetID) error {
 	test := true
-	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
+	returnOnTargetError := true
+	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test, returnOnTargetError)
 	if err == nil {
 		// Close all targets since we are only testing connections.
 		for _, t := range targets.TargetMap() {
@@ -57,7 +63,8 @@ func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transpor
 // targets, returns error if any.
 func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
 	test := false
-	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test)
+	returnOnTargetError := false
+	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test, returnOnTargetError)
 }
 
 // RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
@@ -65,9 +72,9 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (*event.TargetList, error) {
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
 
-	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, true)
+	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, returnOnTargetError)
 	if err != nil {
 		return targetList, err
 	}
@@ -92,6 +99,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 // Else, the function will return a complete TargetList irrespective of errors
 func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool, returnOnTargetError bool) (_ *event.TargetList, err error) {
 	targetList := event.NewTargetList()
+	var targetsOffline bool
 
 	defer func() {
 		// Automatically close all connections to targets when an error occur
@@ -161,11 +169,18 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -174,12 +189,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
-
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -189,11 +209,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		}
 		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -203,11 +229,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		}
 		args.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -216,11 +248,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -229,11 +267,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -242,11 +286,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -255,11 +305,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -268,11 +324,17 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err = targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -281,12 +343,22 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport, test)
-		if err != nil && returnOnTargetError {
-			return nil, err
+		if err != nil {
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
-		if err := targetList.Add(newTarget); err != nil && returnOnTargetError {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
+	}
+
+	if targetsOffline {
+		return targetList, ErrTargetsOffline
 	}
 
 	return targetList, nil

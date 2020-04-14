@@ -177,6 +177,7 @@ type PostgreSQLTarget struct {
 	store      Store
 	firstPing  bool
 	connString string
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -376,6 +377,7 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 		args:       args,
 		firstPing:  false,
 		connString: connStr,
+		loggerOnce: loggerOnce,
 	}
 
 	db, err := sql.Open("postgres", connStr)
@@ -386,10 +388,11 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 
 	var store Store
 
-	if args.QueueDir != "" && !test {
+	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-postgresql-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
 			return target, oErr
 		}
 		target.store = store
@@ -398,10 +401,12 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 	err = target.db.Ping()
 	if err != nil {
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 	} else {
 		if err = target.executeStmts(); err != nil {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 		target.firstPing = true
@@ -409,9 +414,9 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

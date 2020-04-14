@@ -89,11 +89,12 @@ func (n NSQArgs) Validate() error {
 
 // NSQTarget - NSQ target.
 type NSQTarget struct {
-	id       event.TargetID
-	args     NSQArgs
-	producer *nsq.Producer
-	store    Store
-	config   *nsq.Config
+	id         event.TargetID
+	args       NSQArgs
+	producer   *nsq.Producer
+	store      Store
+	config     *nsq.Config
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -196,15 +197,17 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 	var store Store
 
 	target := &NSQTarget{
-		id:     event.TargetID{ID: id, Name: "nsq"},
-		args:   args,
-		config: config,
+		id:         event.TargetID{ID: id, Name: "nsq"},
+		args:       args,
+		config:     config,
+		loggerOnce: loggerOnce,
 	}
 
-	if args.QueueDir != "" && !test {
+	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nsq-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
 			return nil, oErr
 		}
 		target.store = store
@@ -212,6 +215,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 
 	producer, err := nsq.NewProducer(args.NSQDAddress.String(), config)
 	if err != nil {
+		target.loggerOnce(context.Background(), err, target.ID())
 		return target, err
 	}
 	target.producer = producer
@@ -219,15 +223,16 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return nil, err
 		}
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

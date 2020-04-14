@@ -178,6 +178,7 @@ type MySQLTarget struct {
 	db         *sql.DB
 	store      Store
 	firstPing  bool
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -367,23 +368,26 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 	}
 
 	target := &MySQLTarget{
-		id:        event.TargetID{ID: id, Name: "mysql"},
-		args:      args,
-		firstPing: false,
+		id:         event.TargetID{ID: id, Name: "mysql"},
+		args:       args,
+		firstPing:  false,
+		loggerOnce: loggerOnce,
 	}
 
 	db, err := sql.Open("mysql", args.DSN)
 	if err != nil {
+		target.loggerOnce(context.Background(), err, target.ID())
 		return target, err
 	}
 	target.db = db
 
 	var store Store
 
-	if args.QueueDir != "" && !test {
+	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
 			return target, oErr
 		}
 		target.store = store
@@ -392,10 +396,12 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 	err = target.db.Ping()
 	if err != nil {
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 	} else {
 		if err = target.executeStmts(); err != nil {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
 		target.firstPing = true
@@ -403,9 +409,9 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil
