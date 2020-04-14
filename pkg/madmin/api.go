@@ -36,8 +36,8 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/credentials"
-	"github.com/minio/minio-go/v6/pkg/s3signer"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/signer"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -482,7 +482,7 @@ func (adm AdminClient) newRequest(method string, reqData requestData) (req *http
 	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(reqData.content)))
 	req.Body = ioutil.NopCloser(bytes.NewReader(reqData.content))
 
-	req = s3signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)
+	req = signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)
 	return req, nil
 }
 
