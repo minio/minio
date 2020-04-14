@@ -199,10 +199,10 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 		f, err := os.Open(cacheFormatPath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return
+				continue
 			}
 			logger.LogIf(ctx, err)
-			return
+			continue
 		}
 		err = d.deserialize(f, d.Saved)
 		if err != nil {
