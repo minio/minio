@@ -379,50 +379,62 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// AddServiceAccount - PUT /minio/admin/v3/add-service-account?parentUser=<parent_user_accesskey>
+// AddServiceAccount - PUT /minio/admin/v3/add-service-account
 func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AddServiceAccount")
 
-	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.CreateUserAdminAction)
-	if objectAPI == nil {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
-	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
-		// More than maxConfigSize bytes were available
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
+	cred, _, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
 	}
 
 	password := cred.SecretKey
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
 
 	var createReq madmin.AddServiceAccountReq
 	if err = json.Unmarshal(configBytes, &createReq); err != nil {
-		logger.LogIf(ctx, err)
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
 
 	if createReq.Parent == "" {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
+		apiErr := APIError{
+			Code:           "XMinioAdminInvalidArgument",
+			Description:    "Service account parent cannot be empty",
+			HTTPStatusCode: http.StatusBadRequest,
+		}
+		writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 		return
 	}
 
-	// Disallow creating service accounts for the root user
+	// Disallow creating service accounts by root user as well.
 	if createReq.Parent == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddServiceAccountInvalidArgument), r.URL)
+		return
+	}
+
+	// Disallow creating service accounts by users who are not the requested parent.
+	// this restriction is not required for Owner account i.e root user.
+	if createReq.Parent != cred.AccessKey && !owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddServiceAccountInvalidParent), r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -441,45 +453,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	var createResp = madmin.AddServiceAccountResp{
-		Credentials: creds,
+		Credentials: auth.Credentials{
+			AccessKey: creds.AccessKey,
+			SecretKey: creds.SecretKey,
+		},
 	}
 
 	data, err := json.Marshal(createResp)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	econfigData, err := madmin.EncryptData(password, data)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	writeSuccessResponseJSON(w, econfigData)
-}
-
-// GetServiceAccount - GET /minio/admin/v3/get-service-account?accessKey=<access_key>
-func (a adminAPIHandlers) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetServiceAccount")
-
-	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.GetUserAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	vars := mux.Vars(r)
-	accessKey := vars["accessKey"]
-
-	password := cred.SecretKey
-
-	creds, err := globalIAMSys.GetServiceAccount(ctx, accessKey)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	data, err := json.Marshal(creds)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

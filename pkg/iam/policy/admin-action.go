@@ -62,6 +62,7 @@ const (
 
 	// CreateUserAdminAction - allow creating MinIO user
 	CreateUserAdminAction = "admin:CreateUser"
+
 	// DeleteUserAdminAction - allow deleting MinIO user
 	DeleteUserAdminAction = "admin:DeleteUser"
 	// ListUsersAdminAction - allow list users permission

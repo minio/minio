@@ -171,6 +171,27 @@ MINIO_ETCD_CLIENT_CERT_KEY  (path)      client cert key for mTLS authentication
 MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 
+### API
+
+By default, there is no limitation on the number of concurrents requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
+
+```
+KEY:
+api  manage global HTTP API call specific features, such as throttling, authentication types, etc.
+
+ARGS:
+requests_max       (number)     set the maximum number of concurrent requests
+requests_deadline  (duration)   set the deadline for API requests waiting to be processed
+```
+
+or environment variables
+
+```
+MINIO_API_REQUESTS_MAX        (number)     set the maximum number of concurrent requests
+MINIO_API_REQUESTS_DEADLINE   (duration)   set the deadline for API requests waiting to be processed
+
+```
+
 #### Notifications
 Notification targets supported by MinIO are in the following list. To configure individual targets please refer to more detailed documentation [here](https://docs.min.io/docs/minio-bucket-notification-guide.html)
 

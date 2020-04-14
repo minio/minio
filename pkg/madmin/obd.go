@@ -221,10 +221,13 @@ var OBDDataTypesList = []OBDDataType{
 
 // ServerOBDInfo - Connect to a minio server and call OBD Info Management API
 // to fetch server's information represented by OBDInfo structure
-func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDataType) <-chan OBDInfo {
+func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDataType, deadline time.Duration) <-chan OBDInfo {
 	respChan := make(chan OBDInfo)
 	go func() {
 		v := url.Values{}
+
+		v.Set("deadline",
+			deadline.Truncate(1*time.Second).String())
 
 		// start with all set to false
 		for _, d := range OBDDataTypesList {
