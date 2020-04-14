@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -38,11 +39,15 @@ type adminXLTestBed struct {
 	xlDirs   []string
 	objLayer ObjectLayer
 	router   *mux.Router
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // prepareAdminXLTestBed - helper function that setups a single-node
 // XL backend for admin-handler tests.
 func prepareAdminXLTestBed() (*adminXLTestBed, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// reset global variables to start afresh.
 	resetTestGlobals()
 
@@ -51,7 +56,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalIsXL = true
 
 	// Initializing objectLayer for HealFormatHandler.
-	objLayer, xlDirs, xlErr := initTestXLObjLayer()
+	objLayer, xlDirs, xlErr := initTestXLObjLayer(ctx)
 	if xlErr != nil {
 		return nil, xlErr
 	}
@@ -69,9 +74,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(GlobalContext, objLayer)
+	globalIAMSys.Init(ctx, objLayer)
 
-	buckets, err := objLayer.ListBuckets(GlobalContext)
+	buckets, err := objLayer.ListBuckets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -90,19 +95,22 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 		xlDirs:   xlDirs,
 		objLayer: objLayer,
 		router:   adminRouter,
+		ctx:      ctx,
+		cancel:   cancel,
 	}, nil
 }
 
 // TearDown - method that resets the test bed for subsequent unit
 // tests to start afresh.
 func (atb *adminXLTestBed) TearDown() {
+	atb.cancel()
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
 }
 
 // initTestObjLayer - Helper function to initialize an XL-based object
 // layer and set globalObjectAPI.
-func initTestXLObjLayer() (ObjectLayer, []string, error) {
+func initTestXLObjLayer(ctx context.Context) (ObjectLayer, []string, error) {
 	xlDirs, err := getRandomDisks(16)
 	if err != nil {
 		return nil, nil, err
@@ -115,7 +123,7 @@ func initTestXLObjLayer() (ObjectLayer, []string, error) {
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer, err := newXLSets(endpoints, storageDisks, format, 1, 16)
+	objLayer, err := newXLSets(ctx, endpoints, storageDisks, format, 1, 16)
 	if err != nil {
 		return nil, nil, err
 	}

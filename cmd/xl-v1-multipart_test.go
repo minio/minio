@@ -25,8 +25,11 @@ import (
 
 // Tests cleanup multipart uploads for erasure coded backend.
 func TestXLCleanupStaleMultipartUploads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL16()
+	obj, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,14 +43,11 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	objectName := "object"
 	var opts ObjectOptions
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	obj.MakeBucketWithLocation(ctx, bucketName, "")
 	uploadID, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-
-	// Create a context we can cancel.
-	ctx, cancel := context.WithCancel(GlobalContext)
 
 	var cleanupWg sync.WaitGroup
 	cleanupWg.Add(1)
@@ -65,7 +65,7 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	cleanupWg.Wait()
 
 	// Check if upload id was already purged.
-	if err = obj.AbortMultipartUpload(GlobalContext, bucketName, objectName, uploadID); err != nil {
+	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
