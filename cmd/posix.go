@@ -1612,6 +1612,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
 		}
+		return err
 	}
 
 	srcIsDir := HasSuffix(srcPath, SlashSeparator)

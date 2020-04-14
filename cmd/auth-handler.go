@@ -591,6 +591,15 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 		return s3Err
 	}
 
+	// Do not check for PutObjectRetentionAction permission,
+	// if mode and retain until date are not set.
+	// Can happen when bucket has default lock config set
+	if action == iampolicy.PutObjectRetentionAction &&
+		r.Header.Get(xhttp.AmzObjectLockMode) == "" &&
+		r.Header.Get(xhttp.AmzObjectLockRetainUntilDate) == "" {
+		return ErrNone
+	}
+
 	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,

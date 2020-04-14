@@ -32,6 +32,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -44,7 +45,6 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/wildcard"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const (
@@ -216,12 +216,12 @@ func pathJoin(elem ...string) string {
 
 // mustGetUUID - get a random UUID.
 func mustGetUUID() string {
-	uuid, err := uuid.New()
+	u, err := uuid.NewRandom()
 	if err != nil {
 		logger.CriticalIf(GlobalContext, err)
 	}
 
-	return uuid.String()
+	return u.String()
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.

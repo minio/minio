@@ -44,12 +44,10 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/cpu"
 	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/mem"
 	xnet "github.com/minio/minio/pkg/net"
 	trace "github.com/minio/minio/pkg/trace"
 )
@@ -376,155 +374,6 @@ func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *h
 	}
 
 	writeSuccessResponseJSON(w, usageInfoJSON)
-}
-
-// ServerCPULoadInfo holds informantion about cpu utilization
-// of one minio node. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerCPULoadInfo struct {
-	Addr         string     `json:"addr"`
-	Error        string     `json:"error,omitempty"`
-	Load         []cpu.Load `json:"load"`
-	HistoricLoad []cpu.Load `json:"historicLoad"`
-}
-
-// ServerMemUsageInfo holds informantion about memory utilization
-// of one minio node. It also reports any errors if encountered
-// while trying to reach this server.
-type ServerMemUsageInfo struct {
-	Addr          string      `json:"addr"`
-	Error         string      `json:"error,omitempty"`
-	Usage         []mem.Usage `json:"usage"`
-	HistoricUsage []mem.Usage `json:"historicUsage"`
-}
-
-// ServerNetReadPerfInfo network read performance information.
-type ServerNetReadPerfInfo struct {
-	Addr           string `json:"addr"`
-	ReadThroughput uint64 `json:"readThroughput"`
-	Error          string `json:"error,omitempty"`
-}
-
-// PerfInfoHandler - GET /minio/admin/v3/performance?perfType={perfType}
-// ----------
-// Get all performance information based on input type
-// Supported types = drive
-func (a adminAPIHandlers) PerfInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "PerfInfo")
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.PerfInfoAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	vars := mux.Vars(r)
-	switch perfType := vars["perfType"]; perfType {
-	case "net":
-		var size int64 = defaultNetPerfSize
-		if sizeStr, found := vars["size"]; found {
-			var err error
-			if size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil || size < 0 {
-				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
-				return
-			}
-		}
-
-		if !globalIsDistXL {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-			return
-		}
-
-		addr := r.Host
-		if globalIsDistXL {
-			addr = GetLocalPeer(globalEndpoints)
-		}
-
-		infos := map[string][]ServerNetReadPerfInfo{}
-		infos[addr] = globalNotificationSys.NetReadPerfInfo(size)
-		for peer, info := range globalNotificationSys.CollectNetPerfInfo(size) {
-			infos[peer] = info
-		}
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(infos)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Reply with performance information (across nodes in a
-		// distributed setup) as json.
-		writeSuccessResponseJSON(w, jsonBytes)
-
-	case "drive":
-		// Drive Perf is only implemented for Erasure coded backends
-		if !globalIsXL {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-			return
-		}
-
-		var size int64 = madmin.DefaultDrivePerfSize
-		if sizeStr, found := vars["size"]; found {
-			var err error
-			if size, err = strconv.ParseInt(sizeStr, 10, 64); err != nil || size <= 0 {
-				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
-				return
-			}
-		}
-		// Get drive performance details from local server's drive(s)
-		dp := getLocalDrivesPerf(globalEndpoints, size, r)
-
-		// Notify all other MinIO peers to report drive performance numbers
-		dps := globalNotificationSys.DrivePerfInfo(size)
-		dps = append(dps, dp)
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(dps)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Reply with performance information (across nodes in a
-		// distributed setup) as json.
-		writeSuccessResponseJSON(w, jsonBytes)
-	case "cpu":
-		// Get CPU load details from local server's cpu(s)
-		cpu := getLocalCPULoad(globalEndpoints, r)
-		// Notify all other MinIO peers to report cpu load numbers
-		cpus := globalNotificationSys.CPULoadInfo()
-		cpus = append(cpus, cpu)
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(cpus)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Reply with cpu load information (across nodes in a
-		// distributed setup) as json.
-		writeSuccessResponseJSON(w, jsonBytes)
-	case "mem":
-		// Get mem usage details from local server(s)
-		m := getLocalMemUsage(globalEndpoints, r)
-		// Notify all other MinIO peers to report mem usage numbers
-		mems := globalNotificationSys.MemUsageInfo()
-		mems = append(mems, m)
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(mems)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Reply with mem usage information (across nodes in a
-		// distributed setup) as json.
-		writeSuccessResponseJSON(w, jsonBytes)
-	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-	}
 }
 
 func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
@@ -1313,63 +1162,6 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
-}
-
-// ServerHardwareInfoHandler - GET /minio/admin/v3/hardwareinfo?Type={hwType}
-// ----------
-// Get all hardware information based on input type
-// Supported types = cpu
-func (a adminAPIHandlers) ServerHardwareInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "HardwareInfo")
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerHardwareInfoAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	vars := mux.Vars(r)
-	hardware := vars[madmin.HARDWARE]
-
-	switch madmin.HardwareType(hardware) {
-	case madmin.CPU:
-		// Get CPU hardware details from local server's cpu(s)
-		cpu := getLocalCPUInfo(globalEndpoints, r)
-		// Notify all other MinIO peers to report cpu hardware
-		cpus := globalNotificationSys.CPUInfo()
-		cpus = append(cpus, cpu)
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(cpus)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Reply with cpu hardware information (across nodes in a
-		// distributed setup) as json.
-		writeSuccessResponseJSON(w, jsonBytes)
-
-	case madmin.NETWORK:
-		// Get Network hardware details from local server's network(s)
-		network := getLocalNetworkInfo(globalEndpoints, r)
-		// Notify all other MinIO peers to report network hardware
-		networks := globalNotificationSys.NetworkInfo()
-		networks = append(networks, network)
-
-		// Marshal API response
-		jsonBytes, err := json.Marshal(networks)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		// Reply with cpu network information (across nodes in a
-		// distributed setup) as json.
-		writeSuccessResponseJSON(w, jsonBytes)
-
-	default:
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
-	}
 }
 
 // OBDInfoHandler - GET /minio/admin/v3/obdinfo

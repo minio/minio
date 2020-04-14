@@ -87,8 +87,13 @@ EXAMPLES:
 
 // Handler for 'minio gateway b2' command line.
 func b2GatewayMain(ctx *cli.Context) {
+	strictS3Compat := true
+	if ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat") {
+		strictS3Compat = false
+	}
+
 	minio.StartGateway(ctx, &B2{
-		strictS3Compat: ctx.IsSet("compat") || ctx.GlobalIsSet("compat"),
+		strictS3Compat: strictS3Compat,
 	})
 }
 

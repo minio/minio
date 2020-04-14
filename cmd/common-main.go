@@ -149,6 +149,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 		globalCLIContext.Addr = ctx.String("address")
 	}
 
+	// Check "no-compat" flag from command line argument.
+	globalCLIContext.StrictS3Compat = true
+	if ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat") {
+		globalCLIContext.StrictS3Compat = false
+	}
+
 	// Set all config, certs and CAs directories.
 	var configSet, certsSet bool
 	globalConfigDir, configSet = newConfigDirFromCtx(ctx, "config-dir", defaultConfigDir.Get)
@@ -164,9 +170,6 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
-
-	// Check "compat" flag from command line argument.
-	globalCLIContext.StrictS3Compat = ctx.IsSet("compat") || ctx.GlobalIsSet("compat")
 }
 
 func handleCommonEnvVars() {
