@@ -71,7 +71,7 @@ func (w WebhookArgs) Validate() error {
 		}
 	}
 	if w.QueueLimit > maxLimit {
-		return errors.New("queueLimit should not exceed " + maxLimit)
+		return errors.New("queueLimit should not exceed 1000000")
 	}
 	return nil
 }
