@@ -412,7 +412,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	newObject, err := newObjectLayer(globalEndpoints)
+	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
 		// Stop watching for any certificate changes.
@@ -479,12 +479,12 @@ func serverMain(ctx *cli.Context) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
+func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
 	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	return newXLZones(endpointZones)
+	return newXLZones(ctx, endpointZones)
 }

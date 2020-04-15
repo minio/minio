@@ -55,7 +55,7 @@ func (z *xlZones) quickHealBuckets(ctx context.Context) {
 }
 
 // Initialize new zone of erasure sets.
-func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
+func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, error) {
 	var (
 		deploymentID string
 		err          error
@@ -82,13 +82,13 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-		z.zones[i], err = newXLSets(ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
+		z.zones[i], err = newXLSets(ctx, ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if !z.SingleZone() {
-		z.quickHealBuckets(GlobalContext)
+		z.quickHealBuckets(ctx)
 	}
 	go intDataUpdateTracker.start(GlobalContext, localDrives...)
 

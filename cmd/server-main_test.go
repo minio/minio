@@ -17,12 +17,15 @@
 package cmd
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
 
 // Tests initializing new object layer.
 func TestNewObjectLayer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Tests for FS object layer.
 	nDisks := 1
 	disks, err := getRandomDisks(nDisks)
@@ -31,7 +34,7 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	obj, err := newObjectLayer(mustGetZoneEndpoints(disks...))
+	obj, err := newObjectLayer(ctx, mustGetZoneEndpoints(disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
@@ -50,7 +53,7 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	obj, err = newObjectLayer(mustGetZoneEndpoints(disks...))
+	obj, err = newObjectLayer(ctx, mustGetZoneEndpoints(disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}

@@ -293,7 +293,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
+func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
 	endpointStrings := make([]string, len(endpoints))
 	for i, endpoint := range endpoints {
 		if endpoint.IsLocal {
@@ -363,12 +363,12 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			mrfUploadCh: make(chan partialUpload, 10000),
 		}
 
-		go s.sets[i].cleanupStaleMultipartUploads(GlobalContext,
-			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
+		go s.sets[i].cleanupStaleMultipartUploads(ctx,
+			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, ctx.Done())
 	}
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
 
