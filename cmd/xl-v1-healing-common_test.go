@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -91,7 +92,10 @@ func TestCommonTime(t *testing.T) {
 // TestListOnlineDisks - checks if listOnlineDisks and outDatedDisks
 // are consistent with each other.
 func TestListOnlineDisks(t *testing.T) {
-	obj, disks, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, disks, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}
@@ -256,8 +260,9 @@ func TestListOnlineDisks(t *testing.T) {
 }
 
 func TestDisksWithAllParts(t *testing.T) {
-	ctx := GlobalContext
-	obj, disks, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	obj, disks, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}

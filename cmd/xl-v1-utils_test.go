@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
@@ -383,12 +384,15 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 }
 
 func TestShuffleDisks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	nDisks := 16
 	disks, err := getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(disks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)
@@ -428,12 +432,15 @@ func testShuffleDisks(t *testing.T, z *xlZones) {
 
 // TestEvalDisks tests the behavior of evalDisks
 func TestEvalDisks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	nDisks := 16
 	disks, err := getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(disks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)
