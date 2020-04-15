@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/minio/minio/cmd/config"
 )
 
 // Test if config v1 is purged
@@ -39,7 +41,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
+	globalConfigDir = &ConfigDir{path: rootPath}
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
@@ -77,7 +79,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	setConfigDir(rootPath)
+	globalConfigDir = &ConfigDir{path: rootPath}
 
 	if err := migrateV2ToV3(); err != nil {
 		t.Fatal("migrate v2 to v3 should succeed when no config file is found")
@@ -159,14 +161,15 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	}
 }
 
-// Test if a config migration from v2 to v30 is successfully done
-func TestServerConfigMigrateV2toV30(t *testing.T) {
+// Test if a config migration from v2 to v33 is successfully done
+func TestServerConfigMigrateV2toV33(t *testing.T) {
 	rootPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
+
+	globalConfigDir = &ConfigDir{path: rootPath}
 
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
@@ -174,7 +177,7 @@ func TestServerConfigMigrateV2toV30(t *testing.T) {
 	}
 	defer os.RemoveAll(fsDir)
 
-	configPath := rootPath + "/" + minioConfigFile
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\","), 0644); err != nil {
@@ -207,24 +210,24 @@ func TestServerConfigMigrateV2toV30(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	if err := migrateMinioSysConfigToKV(objLayer); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// Initialize server config and check again if everything is fine
 	if err := loadConfig(objLayer); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
-	// Check the version number in the upgraded config file
-	expectedVersion := serverConfigVersion
-	if globalServerConfig.Version != expectedVersion {
-		t.Fatalf("Expect version "+expectedVersion+", found: %v", globalServerConfig.Version)
-	}
-
 	// Check if accessKey and secretKey are not altered during migration
-	if globalServerConfig.Credential.AccessKey != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, globalServerConfig.Credential.AccessKey)
+	caccessKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.AccessKey)
+	if caccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, caccessKey)
 	}
 
-	if globalServerConfig.Credential.SecretKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, globalServerConfig.Credential.SecretKey)
+	csecretKey := globalServerConfig[config.CredentialsSubSys][config.Default].Get(config.SecretKey)
+	if csecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, csecretKey)
 	}
 }
 
@@ -235,8 +238,9 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
-	configPath := rootPath + "/" + minioConfigFile
+
+	globalConfigDir = &ConfigDir{path: rootPath}
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\", \"test\":"), 0644); err != nil {
@@ -331,8 +335,9 @@ func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(rootPath)
-	setConfigDir(rootPath)
-	configPath := rootPath + "/" + minioConfigFile
+
+	globalConfigDir = &ConfigDir{path: rootPath}
+	configPath := rootPath + SlashSeparator + minioConfigFile
 
 	for i := 3; i <= 17; i++ {
 		// Create a corrupted config file

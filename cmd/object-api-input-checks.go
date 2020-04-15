@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@ package cmd
 import (
 	"context"
 
+	"github.com/google/uuid"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 // Checks on GetObject arguments, bucket and object.
@@ -36,7 +37,7 @@ func checkDelObjArgs(ctx context.Context, bucket, object string) error {
 // Checks bucket and object name validity, returns nil if both are valid.
 func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
+	if !isMinioMetaBucketName(bucket) && s3utils.CheckValidBucketName(bucket) != nil {
 		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
 		return BucketNameInvalid{Bucket: bucket}
 	}
@@ -53,7 +54,7 @@ func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error
 }
 
 // Checks for all ListObjects arguments validity.
-func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter string, obj ObjectLayer) error {
+func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string, obj ObjectLayer) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
@@ -73,17 +74,8 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 			Object: prefix,
 		}
 	}
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashSeparator {
-		logger.LogIf(ctx, UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
-		return UnsupportedDelimiter{
-			Delimiter: delimiter,
-		}
-	}
 	// Verify if marker has prefix.
-	if marker != "" && !hasPrefix(marker, prefix) {
+	if marker != "" && !HasPrefix(marker, prefix) {
 		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
 			Marker: marker,
 			Prefix: prefix,
@@ -98,11 +90,11 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker, delimiter st
 
 // Checks for all ListMultipartUploads arguments validity.
 func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, obj ObjectLayer) error {
-	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, delimiter, obj); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, keyMarker, obj); err != nil {
 		return err
 	}
 	if uploadIDMarker != "" {
-		if hasSuffix(keyMarker, slashSeparator) {
+		if HasSuffix(keyMarker, SlashSeparator) {
 
 			logger.LogIf(ctx, InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
@@ -113,16 +105,8 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 				KeyMarker:      keyMarker,
 			}
 		}
-		id, err := uuid.Parse(uploadIDMarker)
-		if err != nil {
+		if _, err := uuid.Parse(uploadIDMarker); err != nil {
 			logger.LogIf(ctx, err)
-			return err
-		}
-		if id.IsZero() {
-			logger.LogIf(ctx, MalformedUploadID{
-				UploadID: uploadIDMarker,
-			})
-
 			return MalformedUploadID{
 				UploadID: uploadIDMarker,
 			}
@@ -166,18 +150,19 @@ func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer
 	if err := checkBucketExist(ctx, bucket, obj); err != nil {
 		return err
 	}
+
+	if err := checkObjectNameForLengthAndSlash(bucket, object); err != nil {
+		return err
+	}
+
 	// Validates object name validity after bucket exists.
 	if !IsValidObjectName(object) {
-		logger.LogIf(ctx, ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
-
 		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		}
 	}
+
 	return nil
 }
 
@@ -192,9 +177,11 @@ func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLa
 		return err
 	}
 
+	if err := checkObjectNameForLengthAndSlash(bucket, object); err != nil {
+		return err
+	}
 	if len(object) == 0 ||
-		hasPrefix(object, slashSeparator) ||
-		(hasSuffix(object, slashSeparator) && size != 0) ||
+		(HasSuffix(object, SlashSeparator) && size != 0) ||
 		!IsValidObjectPrefix(object) {
 		return ObjectNameInvalid{
 			Bucket: bucket,

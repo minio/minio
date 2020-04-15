@@ -1,4 +1,4 @@
-// Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,29 @@ import (
 	"sort"
 	"testing"
 )
+
+func TestIsRequested(t *testing.T) {
+	for i, test := range kmsIsRequestedTests {
+		if got := IsRequested(test.Header) && S3KMS.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-KMS: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+	for i, test := range s3IsRequestedTests {
+		if got := IsRequested(test.Header) && S3.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-S3: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+	for i, test := range ssecIsRequestedTests {
+		if got := IsRequested(test.Header) && SSEC.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+	for i, test := range ssecCopyIsRequestedTests {
+		if got := IsRequested(test.Header) && SSECopy.IsRequested(test.Header); got != test.Expected {
+			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+}
 
 var kmsIsRequestedTests = []struct {
 	Header   http.Header
@@ -50,6 +73,56 @@ func TestKMSIsRequested(t *testing.T) {
 	for i, test := range kmsIsRequestedTests {
 		if got := S3KMS.IsRequested(test.Header); got != test.Expected {
 			t.Errorf("Test %d: Wanted %v but got %v", i, test.Expected, got)
+		}
+	}
+}
+
+var kmsParseHTTPTests = []struct {
+	Header     http.Header
+	ShouldFail bool
+}{
+	{Header: http.Header{}, ShouldFail: true},                                                     // 0
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"aws:kms"}}, ShouldFail: false}, // 1
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+	}, ShouldFail: false}, // 2
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{}"},
+	}, ShouldFail: false}, // 3
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+	}, ShouldFail: false}, // 4
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+	}, ShouldFail: false}, // 5
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"AES256"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\"}"},
+	}, ShouldFail: true}, // 6
+	{Header: http.Header{
+		"X-Amz-Server-Side-Encryption":                []string{"aws:kms"},
+		"X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": []string{"s3-007-293847485-724784"},
+		"X-Amz-Server-Side-Encryption-Context":        []string{"{\"bucket\": \"some-bucket\""}, // invalid JSON
+	}, ShouldFail: true}, // 7
+
+}
+
+func TestKMSParseHTTP(t *testing.T) {
+	for i, test := range kmsParseHTTPTests {
+		_, _, err := S3KMS.ParseHTTP(test.Header)
+		if err == nil && test.ShouldFail {
+			t.Errorf("Test %d: should fail but succeeded", i)
+		}
+		if err != nil && !test.ShouldFail {
+			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
 	}
 }
@@ -95,7 +168,7 @@ var ssecIsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool
 }{
-	{Header: http.Header{}, Expected: false},                                                                                                     // 0
+	{Header: http.Header{}, Expected: false}, // 0
 	{Header: http.Header{"X-Amz-Server-Side-Encryption-Customer-Algorithm": []string{"AES256"}}, Expected: true},                                 // 1
 	{Header: http.Header{"X-Amz-Server-Side-Encryption-Customer-Key": []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="}}, Expected: true}, // 2
 	{Header: http.Header{"X-Amz-Server-Side-Encryption-Customer-Key-Md5": []string{"7PpPLAK26ONlVUGOWlusfg=="}}, Expected: true},                 // 3
@@ -137,7 +210,7 @@ var ssecCopyIsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool
 }{
-	{Header: http.Header{}, Expected: false},                                                                                                                 // 0
+	{Header: http.Header{}, Expected: false}, // 0
 	{Header: http.Header{"X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm": []string{"AES256"}}, Expected: true},                                 // 1
 	{Header: http.Header{"X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key": []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="}}, Expected: true}, // 2
 	{Header: http.Header{"X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-Md5": []string{"7PpPLAK26ONlVUGOWlusfg=="}}, Expected: true},                 // 3

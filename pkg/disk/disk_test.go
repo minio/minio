@@ -1,7 +1,7 @@
 // +build !netbsd,!solaris
 
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,18 +38,6 @@ func TestFree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if di.Total <= 0 {
-		t.Error("Unexpected Total", di.Total)
-	}
-	if di.Free <= 0 {
-		t.Error("Unexpected Free", di.Free)
-	}
-	if di.Files <= 0 {
-		t.Error("Unexpected Files", di.Files)
-	}
-	if di.Ffree <= 0 {
-		t.Error("Unexpected Ffree", di.Ffree)
-	}
 	if di.FSType == "UNKNOWN" {
 		t.Error("Unexpected FSType", di.FSType)
 	}

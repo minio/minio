@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -199,8 +199,7 @@ func TestQueueUnmarshalXML(t *testing.T) {
 }
 
 func TestQueueValidate(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <QueueConfiguration>
    <Id>1</Id>
    <Filter></Filter>
@@ -281,8 +280,7 @@ func TestQueueValidate(t *testing.T) {
 }
 
 func TestQueueSetRegion(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <QueueConfiguration>
    <Id>1</Id>
    <Filter></Filter>
@@ -341,8 +339,7 @@ func TestQueueSetRegion(t *testing.T) {
 }
 
 func TestQueueToRulesMap(t *testing.T) {
-	var data []byte
-	data = []byte(`
+	data := []byte(`
 <QueueConfiguration>
    <Id>1</Id>
    <Filter></Filter>
@@ -401,7 +398,7 @@ func TestQueueToRulesMap(t *testing.T) {
 
 func TestConfigUnmarshalXML(t *testing.T) {
 	dataCase1 := []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration   xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -414,88 +411,88 @@ func TestConfigUnmarshalXML(t *testing.T) {
 `)
 
 	dataCase2 := []byte(`
-<NotificationConfiguration>
-   <QueueConfiguration>
-      <Id>1</Id>
-       <Filter>
-           <S3Key>
-               <FilterRule>
-                   <Name>prefix</Name>
-                   <Value>images/</Value>
-               </FilterRule>
-               <FilterRule>
-                   <Name>suffix</Name>
-                   <Value>jpg</Value>
-               </FilterRule>
-           </S3Key>
-      </Filter>
-      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
-      <Event>s3:ObjectCreated:Put</Event>
-   </QueueConfiguration>
-</NotificationConfiguration>
-`)
+	<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	   <QueueConfiguration>
+	      <Id>1</Id>
+	       <Filter>
+	           <S3Key>
+	               <FilterRule>
+	                   <Name>prefix</Name>
+	                   <Value>images/</Value>
+	               </FilterRule>
+	               <FilterRule>
+	                   <Name>suffix</Name>
+	                   <Value>jpg</Value>
+	               </FilterRule>
+	           </S3Key>
+	      </Filter>
+	      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
+	      <Event>s3:ObjectCreated:Put</Event>
+	   </QueueConfiguration>
+	</NotificationConfiguration>
+	`)
 
 	dataCase3 := []byte(`
-<NotificationConfiguration>
-   <QueueConfiguration>
-      <Id>1</Id>
-      <Filter></Filter>
-      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
-      <Event>s3:ObjectAccessed:*</Event>
-      <Event>s3:ObjectCreated:*</Event>
-      <Event>s3:ObjectRemoved:*</Event>
-   </QueueConfiguration>
-   <QueueConfiguration>
-      <Id>2</Id>
-       <Filter>
-           <S3Key>
-               <FilterRule>
-                   <Name>prefix</Name>
-                   <Value>images/</Value>
-               </FilterRule>
-               <FilterRule>
-                   <Name>suffix</Name>
-                   <Value>jpg</Value>
-               </FilterRule>
-           </S3Key>
-      </Filter>
-      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
-      <Event>s3:ObjectCreated:Put</Event>
-   </QueueConfiguration>
-</NotificationConfiguration>
-`)
+	<NotificationConfiguration>
+	   <QueueConfiguration>
+	      <Id>1</Id>
+	      <Filter></Filter>
+	      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
+	      <Event>s3:ObjectAccessed:*</Event>
+	      <Event>s3:ObjectCreated:*</Event>
+	      <Event>s3:ObjectRemoved:*</Event>
+	   </QueueConfiguration>
+	   <QueueConfiguration>
+	      <Id>2</Id>
+	       <Filter>
+	           <S3Key>
+	               <FilterRule>
+	                   <Name>prefix</Name>
+	                   <Value>images/</Value>
+	               </FilterRule>
+	               <FilterRule>
+	                   <Name>suffix</Name>
+	                   <Value>jpg</Value>
+	               </FilterRule>
+	           </S3Key>
+	      </Filter>
+	      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
+	      <Event>s3:ObjectCreated:Put</Event>
+	   </QueueConfiguration>
+	</NotificationConfiguration>
+	`)
 
 	dataCase4 := []byte(`
-<NotificationConfiguration>
-   <QueueConfiguration>
-      <Id>1</Id>
-      <Filter></Filter>
-      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
-      <Event>s3:ObjectAccessed:*</Event>
-      <Event>s3:ObjectCreated:*</Event>
-      <Event>s3:ObjectRemoved:*</Event>
-   </QueueConfiguration>
-   <CloudFunctionConfiguration>
-      <Id>1</Id>
-      <Filter>
-             <S3Key>
-                 <FilterRule>
-                     <Name>suffix</Name>
-                     <Value>.jpg</Value>
-                 </FilterRule>
-             </S3Key>
-      </Filter>
-      <Cloudcode>arn:aws:lambda:us-west-2:444455556666:cloud-function-A</Cloudcode>
-      <Event>s3:ObjectCreated:Put</Event>
-   </CloudFunctionConfiguration>
-   <TopicConfiguration>
-      <Topic>arn:aws:sns:us-west-2:444455556666:sns-notification-one</Topic>
-      <Event>s3:ObjectCreated:*</Event>
-  </TopicConfiguration>
-</NotificationConfiguration>
-`)
+	<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+	   <QueueConfiguration>
+	      <Id>1</Id>
+	      <Filter></Filter>
+	      <Queue>arn:minio:sqs:us-east-1:1:webhook</Queue>
+	      <Event>s3:ObjectAccessed:*</Event>
+	      <Event>s3:ObjectCreated:*</Event>
+	      <Event>s3:ObjectRemoved:*</Event>
+	   </QueueConfiguration>
+	   <CloudFunctionConfiguration>
+	      <Id>1</Id>
+	      <Filter>
+	             <S3Key>
+	                 <FilterRule>
+	                     <Name>suffix</Name>
+	                     <Value>.jpg</Value>
+	                 </FilterRule>
+	             </S3Key>
+	      </Filter>
+	      <Cloudcode>arn:aws:lambda:us-west-2:444455556666:cloud-function-A</Cloudcode>
+	      <Event>s3:ObjectCreated:Put</Event>
+	   </CloudFunctionConfiguration>
+	   <TopicConfiguration>
+	      <Topic>arn:aws:sns:us-west-2:444455556666:sns-notification-one</Topic>
+	      <Event>s3:ObjectCreated:*</Event>
+	  </TopicConfiguration>
+	</NotificationConfiguration>
+	`)
 
-	dataCase5 := []byte(`<NotificationConfiguration></NotificationConfiguration>`)
+	dataCase5 := []byte(`<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/" ></NotificationConfiguration>`)
 
 	testCases := []struct {
 		data      []byte
@@ -520,9 +517,8 @@ func TestConfigUnmarshalXML(t *testing.T) {
 }
 
 func TestConfigValidate(t *testing.T) {
-	var data []byte
-	data = []byte(`
-<NotificationConfiguration>
+	data := []byte(`
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -539,7 +535,7 @@ func TestConfigValidate(t *testing.T) {
 	}
 
 	data = []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
        <Filter>
@@ -565,7 +561,7 @@ func TestConfigValidate(t *testing.T) {
 	}
 
 	data = []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -628,9 +624,8 @@ func TestConfigValidate(t *testing.T) {
 }
 
 func TestConfigSetRegion(t *testing.T) {
-	var data []byte
-	data = []byte(`
-<NotificationConfiguration>
+	data := []byte(`
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -647,7 +642,7 @@ func TestConfigSetRegion(t *testing.T) {
 	}
 
 	data = []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
        <Filter>
@@ -673,7 +668,7 @@ func TestConfigSetRegion(t *testing.T) {
 	}
 
 	data = []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -733,9 +728,8 @@ func TestConfigSetRegion(t *testing.T) {
 }
 
 func TestConfigToRulesMap(t *testing.T) {
-	var data []byte
-	data = []byte(`
-<NotificationConfiguration>
+	data := []byte(`
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -752,7 +746,7 @@ func TestConfigToRulesMap(t *testing.T) {
 	}
 
 	data = []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
        <Filter>
@@ -778,7 +772,7 @@ func TestConfigToRulesMap(t *testing.T) {
 	}
 
 	data = []byte(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -838,7 +832,7 @@ func TestConfigToRulesMap(t *testing.T) {
 
 func TestParseConfig(t *testing.T) {
 	reader1 := strings.NewReader(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -851,7 +845,7 @@ func TestParseConfig(t *testing.T) {
 `)
 
 	reader2 := strings.NewReader(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
        <Filter>
@@ -873,7 +867,7 @@ func TestParseConfig(t *testing.T) {
 `)
 
 	reader3 := strings.NewReader(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>
@@ -903,7 +897,7 @@ func TestParseConfig(t *testing.T) {
 `)
 
 	reader4 := strings.NewReader(`
-<NotificationConfiguration>
+<NotificationConfiguration  xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
    <QueueConfiguration>
       <Id>1</Id>
       <Filter></Filter>

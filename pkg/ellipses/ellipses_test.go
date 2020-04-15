@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ func TestHasEllipses(t *testing.T) {
 			true,
 		},
 		{
+
 			[]string{
 				"mydisk-{1...4}{1..2.}",
 			},
@@ -201,6 +202,11 @@ func TestFindEllipsesPatterns(t *testing.T) {
 			false,
 			0,
 		},
+		{
+			"{f...z}",
+			false,
+			0,
+		},
 		// Test for valid input.
 		{
 			"{1...64}",
@@ -221,6 +227,11 @@ func TestFindEllipsesPatterns(t *testing.T) {
 			"{001...036}",
 			true,
 			36,
+		},
+		{
+			"{1...a}",
+			true,
+			10,
 		},
 	}
 

@@ -1,7 +1,7 @@
-# Minio OSS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Minio Gateway adds Amazon S3 compatibility to Alibaba Cloud Object Storage Service (OSS).
+# MinIO OSS Gateway [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+MinIO Gateway adds Amazon S3 compatibility to Alibaba Cloud Object Storage Service (OSS).
 
-## Run Minio Gateway for OSS.
+## Run MinIO Gateway for OSS.
 
 ### Using Docker
 ```
@@ -18,12 +18,12 @@ export MINIO_SECRET_KEY=osssecretkey
 minio gateway oss
 ```
 
-## Test using Minio Browser
-Minio Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
+## Test using MinIO Browser
+MinIO Gateway comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
 ![Screenshot](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/minio-browser-gateway.png)
 
-## Test using Minio Client `mc`
+## Test using MinIO Client `mc`
 `mc` provides a modern alternative to UNIX commands such as ls, cat, cp, mirror, diff etc. It supports filesystems and Amazon S3 compatible cloud storage services.
 
 ### Configure `mc`
@@ -52,6 +52,6 @@ Other limitations:
 
 ## Explore Further
 
-- [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
-- [`minio-go` Go SDK](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
+- [`minio-go` Go SDK](https://docs.min.io/docs/golang-client-quickstart-guide)

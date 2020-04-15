@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ export const MainActions = ({
       <Dropdown dropup className="feb-actions" id="fe-action-toggle">
         <Dropdown.Toggle noCaret className="feba-toggle">
           <span>
-            <i className="fa fa-plus" />
+            <i className="fas fa-plus" />
           </span>
         </Dropdown.Toggle>
         <Dropdown.Menu>
@@ -63,7 +63,7 @@ export const MainActions = ({
               />
               <label htmlFor="file-input">
                 {" "}
-                <i className="fa fa-cloud-upload" />{" "}
+                <i className="fas fa-cloud-upload-alt" />{" "}
               </label>
             </a>
           </OverlayTrigger>
@@ -78,7 +78,7 @@ export const MainActions = ({
                   showMakeBucketModal()
                 }}
               >
-                <i className="fa fa-hdd-o" />
+                <i className="far fa-hdd" />
               </a>
             </OverlayTrigger>
           )}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,17 +32,15 @@ type Erasure struct {
 
 // NewErasure creates a new ErasureStorage.
 func NewErasure(ctx context.Context, dataBlocks, parityBlocks int, blockSize int64) (e Erasure, err error) {
-	shardsize := int(ceilFrac(blockSize, int64(dataBlocks)))
-	erasure, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(shardsize))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return e, err
-	}
 	e = Erasure{
-		encoder:      erasure,
 		dataBlocks:   dataBlocks,
 		parityBlocks: parityBlocks,
 		blockSize:    blockSize,
+	}
+	e.encoder, err = reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(int(e.ShardSize())))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return e, err
 	}
 	return
 }
@@ -79,10 +77,7 @@ func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	if !needsReconstruction {
 		return nil
 	}
-	if err := e.encoder.ReconstructData(data); err != nil {
-		return err
-	}
-	return nil
+	return e.encoder.ReconstructData(data)
 }
 
 // DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
@@ -93,4 +88,35 @@ func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) 
 		return err
 	}
 	return nil
+}
+
+// ShardSize - returns actual shared size from erasure blockSize.
+func (e *Erasure) ShardSize() int64 {
+	return ceilFrac(e.blockSize, int64(e.dataBlocks))
+}
+
+// ShardFileSize - returns final erasure size from original size.
+func (e *Erasure) ShardFileSize(totalLength int64) int64 {
+	if totalLength == 0 {
+		return 0
+	}
+	if totalLength == -1 {
+		return -1
+	}
+	numShards := totalLength / e.blockSize
+	lastBlockSize := totalLength % int64(e.blockSize)
+	lastShardSize := ceilFrac(lastBlockSize, int64(e.dataBlocks))
+	return numShards*e.ShardSize() + lastShardSize
+}
+
+// ShardFileTillOffset - returns the effectiv eoffset where erasure reading begins.
+func (e *Erasure) ShardFileTillOffset(startOffset, length, totalLength int64) int64 {
+	shardSize := e.ShardSize()
+	shardFileSize := e.ShardFileSize(totalLength)
+	endShard := (startOffset + int64(length)) / e.blockSize
+	tillOffset := endShard*shardSize + shardSize
+	if tillOffset > shardFileSize {
+		tillOffset = shardFileSize
+	}
+	return tillOffset
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 )
 
@@ -26,26 +27,43 @@ type StorageAPI interface {
 	String() string
 
 	// Storage operations.
-	IsOnline() bool // Returns true if disk is online.
-	LastError() error
+	IsOnline() bool   // Returns true if disk is online.
+	Hostname() string // Returns host name if remote host.
 	Close() error
+	GetDiskID() (string, error)
+	SetDiskID(id string)
 
 	DiskInfo() (info DiskInfo, err error)
+	CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(volume string) (err error)
+	MakeVolBulk(volumes ...string) (err error)
 	ListVols() (vols []VolInfo, err error)
 	StatVol(volume string) (vol VolInfo, err error)
-	DeleteVol(volume string) (err error)
+	DeleteVol(volume string, forceDelete bool) (err error)
+
+	// Walk in sorted order directly on disk.
+	Walk(volume, dirPath string, marker string, recursive bool, leafFile string,
+		readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error)
+	// Walk in sorted order directly on disk.
+	WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error)
 
 	// File operations.
-	ListDir(volume, dirPath string, count int) ([]string, error)
+	ListDir(volume, dirPath string, count int, leafFile string) ([]string, error)
 	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
-	PrepareFile(volume string, path string, len int64) (err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
+	CreateFile(volume, path string, size int64, reader io.Reader) error
+	ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
+	DeleteFileBulk(volume string, paths []string) (errs []error, err error)
+	DeletePrefixes(volume string, paths []string) (errs []error, err error)
+	VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error
+
+	// Write all data, syncs the data to disk.
+	WriteAll(volume string, path string, reader io.Reader) (err error)
 
 	// Read all.
 	ReadAll(volume string, path string) (buf []byte, err error)

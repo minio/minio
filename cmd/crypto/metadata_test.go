@@ -1,4 +1,4 @@
-// Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -125,15 +125,15 @@ var s3ParseMetadataTests = []struct {
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 1
 	{
-		ExpectedErr: Error{"The object metadata is missing the internal sealed key for SSE-S3"},
+		ExpectedErr: Errorf("The object metadata is missing the internal sealed key for SSE-S3"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: ""}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 2
 	{
-		ExpectedErr: Error{"The object metadata is missing the internal KMS key-ID for SSE-S3"},
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: ""}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
+		ExpectedErr: Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3"),
+		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSSealedKey: "IAAF0b=="}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 3
 	{
-		ExpectedErr: Error{"The object metadata is missing the internal sealed KMS data key for SSE-S3"},
+		ExpectedErr: Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSKeyID: ""},
 		DataKey:     []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 4
@@ -150,7 +150,7 @@ var s3ParseMetadataTests = []struct {
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 6
 	{
-		ExpectedErr: Error{"The internal sealed key for SSE-S3 is invalid"},
+		ExpectedErr: Errorf("The internal sealed key for SSE-S3 is invalid"),
 		Metadata: map[string]string{
 			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm, S3SealedKey: "",
 			S3KMSKeyID: "", S3KMSSealedKey: "",
@@ -158,7 +158,7 @@ var s3ParseMetadataTests = []struct {
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 7
 	{
-		ExpectedErr: Error{"The internal sealed KMS data key for SSE-S3 is invalid"},
+		ExpectedErr: Errorf("The internal sealed KMS data key for SSE-S3 is invalid"),
 		Metadata: map[string]string{
 			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm,
 			S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)), S3KMSKeyID: "key-1",
@@ -188,8 +188,16 @@ var s3ParseMetadataTests = []struct {
 func TestS3ParseMetadata(t *testing.T) {
 	for i, test := range s3ParseMetadataTests {
 		keyID, dataKey, sealedKey, err := S3.ParseMetadata(test.Metadata)
-		if err != test.ExpectedErr {
+		if err != nil && test.ExpectedErr == nil {
 			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err == nil && test.ExpectedErr != nil {
+			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err != nil && test.ExpectedErr != nil {
+			if err.Error() != test.ExpectedErr.Error() {
+				t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+			}
 		}
 		if !bytes.Equal(dataKey, test.DataKey) {
 			t.Errorf("Test %d: got data key '%v' - want data key '%v'", i, dataKey, test.DataKey)
@@ -218,7 +226,7 @@ var ssecParseMetadataTests = []struct {
 	{ExpectedErr: errMissingInternalIV, Metadata: map[string]string{}, SealedKey: SealedKey{}},                     // 0
 	{ExpectedErr: errMissingInternalSealAlgorithm, Metadata: map[string]string{SSEIV: ""}, SealedKey: SealedKey{}}, // 1
 	{
-		ExpectedErr: Error{"The object metadata is missing the internal sealed key for SSE-C"},
+		ExpectedErr: Errorf("The object metadata is missing the internal sealed key for SSE-C"),
 		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: ""}, SealedKey: SealedKey{},
 	}, // 2
 	{
@@ -233,7 +241,7 @@ var ssecParseMetadataTests = []struct {
 		SealedKey: SealedKey{},
 	}, // 4
 	{
-		ExpectedErr: Error{"The internal sealed key for SSE-C is invalid"},
+		ExpectedErr: Errorf("The internal sealed key for SSE-C is invalid"),
 		Metadata: map[string]string{
 			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm, SSECSealedKey: "",
 		},
@@ -267,8 +275,16 @@ func TestCreateMultipartMetadata(t *testing.T) {
 func TestSSECParseMetadata(t *testing.T) {
 	for i, test := range ssecParseMetadataTests {
 		sealedKey, err := SSEC.ParseMetadata(test.Metadata)
-		if err != test.ExpectedErr {
+		if err != nil && test.ExpectedErr == nil {
 			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err == nil && test.ExpectedErr != nil {
+			t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+		}
+		if err != nil && test.ExpectedErr != nil {
+			if err.Error() != test.ExpectedErr.Error() {
+				t.Errorf("Test %d: got error '%v' - want error '%v'", i, err, test.ExpectedErr)
+			}
 		}
 		if sealedKey.Algorithm != test.SealedKey.Algorithm {
 			t.Errorf("Test %d: got sealed key algorithm '%v' - want sealed key algorithm '%v'", i, sealedKey.Algorithm, test.SealedKey.Algorithm)
@@ -287,7 +303,9 @@ var s3CreateMetadataTests = []struct {
 	SealedDataKey []byte
 	SealedKey     SealedKey
 }{
-	{KeyID: "", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+
+	{KeyID: "", SealedDataKey: nil, SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "my-minio-key", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "deadbeef", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{IV: [32]byte{0xf7}, Key: [64]byte{0xea}, Algorithm: SealAlgorithm}},
 }
@@ -370,9 +388,9 @@ var isETagSealedTests = []struct {
 	ETag     string
 	IsSealed bool
 }{
-	{ETag: "", IsSealed: false},                                                                                                // 0
-	{ETag: "90682b8e8cc7609c4671e1d64c73fc30", IsSealed: false},                                                                // 1
-	{ETag: "f201040c9dc593e39ea004dc1323699bcd", IsSealed: true},                                                               // 2 not valid ciphertext but looks like sealed ETag
+	{ETag: "", IsSealed: false},                                  // 0
+	{ETag: "90682b8e8cc7609c4671e1d64c73fc30", IsSealed: false},  // 1
+	{ETag: "f201040c9dc593e39ea004dc1323699bcd", IsSealed: true}, // 2 not valid ciphertext but looks like sealed ETag
 	{ETag: "20000f00fba2ee2ae4845f725964eeb9e092edfabc7ab9f9239e8344341f769a51ce99b4801b0699b92b16a72fa94972", IsSealed: true}, // 3
 }
 

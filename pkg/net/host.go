@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ func (host Host) String() string {
 		return host.Name
 	}
 
-	return host.Name + ":" + host.Port.String()
+	return net.JoinHostPort(host.Name, host.Port.String())
 }
 
 // Equal - checks whether given host is equal or not.
@@ -81,9 +81,12 @@ func (host *Host) UnmarshalJSON(data []byte) (err error) {
 
 // ParseHost - parses string into Host
 func ParseHost(s string) (*Host, error) {
+	if s == "" {
+		return nil, errors.New("invalid argument")
+	}
 	isValidHost := func(host string) bool {
 		if host == "" {
-			return false
+			return true
 		}
 
 		if ip := net.ParseIP(host); ip != nil {
@@ -118,9 +121,7 @@ func ParseHost(s string) (*Host, error) {
 		if !strings.Contains(err.Error(), "missing port in address") {
 			return nil, err
 		}
-
 		host = s
-		portStr = ""
 	} else {
 		if port, err = ParsePort(portStr); err != nil {
 			return nil, err
@@ -129,7 +130,23 @@ func ParseHost(s string) (*Host, error) {
 		isPortSet = true
 	}
 
-	if !isValidHost(host) {
+	if host != "" {
+		host, err = trimIPv6(host)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// IPv6 requires a link-local address on every network interface.
+	// `%interface` should be preserved.
+	trimmedHost := host
+
+	if i := strings.LastIndex(trimmedHost, "%"); i > -1 {
+		// `%interface` can be skipped for validity check though.
+		trimmedHost = trimmedHost[:i]
+	}
+
+	if !isValidHost(trimmedHost) {
 		return nil, errors.New("invalid hostname")
 	}
 
@@ -138,4 +155,16 @@ func ParseHost(s string) (*Host, error) {
 		Port:      port,
 		IsPortSet: isPortSet,
 	}, nil
+}
+
+// IPv6 can be embedded with square brackets.
+func trimIPv6(host string) (string, error) {
+	// `missing ']' in host` error is already handled in `SplitHostPort`
+	if host[len(host)-1] == ']' {
+		if host[0] != '[' {
+			return "", errors.New("missing '[' in host")
+		}
+		return host[1:][:len(host)-2], nil
+	}
+	return host, nil
 }

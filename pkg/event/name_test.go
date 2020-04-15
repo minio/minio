@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,8 +28,8 @@ func TestNameExpand(t *testing.T) {
 		name           Name
 		expectedResult []Name
 	}{
-		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead}},
-		{ObjectCreatedAll, []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut}},
+		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}},
+		{ObjectCreatedAll, []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention, ObjectCreatedPutLegalHold}},
 		{ObjectRemovedAll, []Name{ObjectRemovedDelete}},
 		{ObjectAccessedHead, []Name{ObjectAccessedHead}},
 	}
@@ -38,7 +38,7 @@ func TestNameExpand(t *testing.T) {
 		result := testCase.name.Expand()
 
 		if !reflect.DeepEqual(result, testCase.expectedResult) {
-			t.Fatalf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+			t.Errorf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 		}
 	}
 }
@@ -60,6 +60,11 @@ func TestNameString(t *testing.T) {
 		{ObjectCreatedPut, "s3:ObjectCreated:Put"},
 		{ObjectRemovedAll, "s3:ObjectRemoved:*"},
 		{ObjectRemovedDelete, "s3:ObjectRemoved:Delete"},
+		{ObjectCreatedPutRetention, "s3:ObjectCreated:PutRetention"},
+		{ObjectCreatedPutLegalHold, "s3:ObjectCreated:PutLegalHold"},
+		{ObjectAccessedGetRetention, "s3:ObjectAccessed:GetRetention"},
+		{ObjectAccessedGetLegalHold, "s3:ObjectAccessed:GetLegalHold"},
+
 		{blankName, ""},
 	}
 

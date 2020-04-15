@@ -1,7 +1,7 @@
 // +build linux
 
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 package disk
 
 import (
+	"fmt"
 	"syscall"
 )
 
@@ -36,6 +37,13 @@ func GetInfo(path string) (info Info, err error) {
 		Files:  uint64(s.Files),
 		Ffree:  uint64(s.Ffree),
 		FSType: getFSType(int64(s.Type)),
+	}
+	// Check for overflows.
+	// https://github.com/minio/minio/issues/8035
+	// XFS can show wrong values at times error out
+	// in such scenarios.
+	if info.Free > info.Total {
+		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
 	}
 	return info, nil
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,143 +17,14 @@
 package http
 
 import (
-	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/minio/minio/cmd/logger"
 )
-
-var sslRequiredErrMsg = []byte("HTTP/1.0 403 Forbidden\r\n\r\nSSL required")
-
-var badRequestMsg = []byte("HTTP/1.0 400 Bad Request\r\n\r\n")
-
-// HTTP methods.
-var methods = []string{
-	http.MethodGet,
-	http.MethodHead,
-	http.MethodPost,
-	http.MethodPut,
-	http.MethodPatch,
-	http.MethodDelete,
-	http.MethodConnect,
-	http.MethodOptions,
-	http.MethodTrace,
-	"PRI", // HTTP 2 method
-}
-
-// maximum length of above methods + one space.
-var methodMaxLen = getMethodMaxLen() + 1
-
-func getMethodMaxLen() int {
-	maxLen := 0
-	for _, method := range methods {
-		if len(method) > maxLen {
-			maxLen = len(method)
-		}
-	}
-
-	return maxLen
-}
-
-func isHTTPMethod(s string) bool {
-	for _, method := range methods {
-		if s == method {
-			return true
-		}
-	}
-
-	return false
-}
-
-func getPlainText(bufConn *BufConn) (bool, error) {
-	defer bufConn.setReadTimeout()
-
-	if bufConn.canSetReadDeadline() {
-		// Set deadline such that we close the connection quickly
-		// of no data was received from the Peek()
-		bufConn.SetReadDeadline(time.Now().UTC().Add(time.Second * 3))
-	}
-	b, err := bufConn.Peek(1)
-	if err != nil {
-		return false, err
-	}
-	for _, method := range methods {
-		if b[0] == method[0] {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func getMethodResourceHost(bufConn *BufConn, maxHeaderBytes int) (method string, resource string, host string, err error) {
-	defer bufConn.setReadTimeout()
-
-	var data []byte
-	for dataLen := 1; dataLen < maxHeaderBytes; dataLen++ {
-		if bufConn.canSetReadDeadline() {
-			// Set deadline such that we close the connection quickly
-			// of no data was received from the Peek()
-			bufConn.SetReadDeadline(time.Now().UTC().Add(time.Second * 3))
-		}
-
-		data, err = bufConn.bufReader.Peek(dataLen)
-		if err != nil {
-			return "", "", "", err
-		}
-
-		tokens := strings.Split(string(data), "\n")
-		if len(tokens) < 2 {
-			continue
-		}
-
-		if method == "" && resource == "" {
-			if i := strings.IndexByte(tokens[0], ' '); i == -1 {
-				return "", "", "", fmt.Errorf("malformed HTTP request from '%s'", bufConn.LocalAddr())
-			}
-			httpTokens := strings.SplitN(tokens[0], " ", 3)
-			if len(httpTokens) < 3 {
-				return "", "", "", fmt.Errorf("malformed HTTP request from '%s'", bufConn.LocalAddr())
-			}
-			if !isHTTPMethod(httpTokens[0]) {
-				return "", "", "", fmt.Errorf("malformed HTTP request, invalid HTTP method '%s' from '%s'",
-					httpTokens[0], bufConn.LocalAddr())
-			}
-
-			method = httpTokens[0]
-			resource = httpTokens[1]
-		}
-
-		for _, token := range tokens[1:] {
-			if token == "" || !strings.HasSuffix(token, "\r") {
-				continue
-			}
-
-			// HTTP headers are case insensitive, so we should simply convert
-			// each tokens to their lower case form to match 'host' header.
-			token = strings.ToLower(token)
-			if strings.HasPrefix(token, "host: ") {
-				host = strings.TrimPrefix(strings.TrimSuffix(token, "\r"), "host: ")
-				return method, resource, host, nil
-			}
-		}
-
-		if tokens[len(tokens)-1] == "\r" {
-			break
-		}
-	}
-
-	return "", "", "", fmt.Errorf("malformed HTTP request from %s", bufConn.LocalAddr())
-}
 
 type acceptResult struct {
 	conn net.Conn
@@ -162,22 +33,19 @@ type acceptResult struct {
 
 // httpListener - HTTP listener capable of handling multiple server addresses.
 type httpListener struct {
-	mutex                  sync.Mutex         // to guard Close() method.
-	tcpListeners           []*net.TCPListener // underlaying TCP listeners.
-	acceptCh               chan acceptResult  // channel where all TCP listeners write accepted connection.
-	doneCh                 chan struct{}      // done channel for TCP listener goroutines.
-	tlsConfig              *tls.Config        // TLS configuration
-	tcpKeepAliveTimeout    time.Duration
-	readTimeout            time.Duration
-	writeTimeout           time.Duration
-	maxHeaderBytes         int
-	updateBytesReadFunc    func(*http.Request, int) // function to be called to update bytes read in BufConn.
-	updateBytesWrittenFunc func(*http.Request, int) // function to be called to update bytes written in BufConn.
+	mutex               sync.Mutex         // to guard Close() method.
+	tcpListeners        []*net.TCPListener // underlaying TCP listeners.
+	acceptCh            chan acceptResult  // channel where all TCP listeners write accepted connection.
+	doneCh              chan struct{}      // done channel for TCP listener goroutines.
+	tcpKeepAliveTimeout time.Duration
 }
 
 // isRoutineNetErr returns true if error is due to a network timeout,
 // connect reset or io.EOF and false otherwise
 func isRoutineNetErr(err error) bool {
+	if err == nil {
+		return false
+	}
 	if nErr, ok := err.(*net.OpError); ok {
 		// Check if the error is a tcp connection reset
 		if syscallErr, ok := nErr.Err.(*os.SyscallError); ok {
@@ -188,10 +56,11 @@ func isRoutineNetErr(err error) bool {
 		// Check if the error is a timeout
 		return nErr.Timeout()
 	}
-	return err == io.EOF
+	// check for io.EOF and also some times io.EOF is wrapped is another error type.
+	return err == io.EOF || err.Error() == "EOF"
 }
 
-// start - starts separate goroutine for each TCP listener.  A valid insecure/TLS HTTP new connection is passed to httpListener.acceptCh.
+// start - starts separate goroutine for each TCP listener.  A valid new connection is passed to httpListener.acceptCh.
 func (listener *httpListener) start() {
 	listener.acceptCh = make(chan acceptResult)
 	listener.doneCh = make(chan struct{})
@@ -218,79 +87,7 @@ func (listener *httpListener) start() {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(listener.tcpKeepAliveTimeout)
 
-		bufconn := newBufConn(tcpConn, listener.readTimeout, listener.writeTimeout)
-		if listener.tlsConfig != nil {
-			ok, err := getPlainText(bufconn)
-			if err != nil {
-				// Peek could fail legitimately when clients abruptly close
-				// connection. E.g. Chrome browser opens connections speculatively to
-				// speed up loading of a web page. Peek may also fail due to network
-				// saturation on a transport with read timeout set. All other kind of
-				// errors should be logged for further investigation. Thanks @brendanashworth.
-				if !isRoutineNetErr(err) {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-					reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-					ctx := logger.SetReqInfo(context.Background(), reqInfo)
-					logger.LogIf(ctx, err)
-				}
-				bufconn.Close()
-				return
-			}
-
-			if ok {
-				// As TLS is configured and we got plain text HTTP request,
-				// return 403 (forbidden) error.
-				bufconn.Write(sslRequiredErrMsg)
-				bufconn.Close()
-				return
-			}
-
-			// As the listener is configured with TLS, try to do TLS handshake, drop the connection if it fails.
-			tlsConn := tls.Server(bufconn, listener.tlsConfig)
-
-			if err := tlsConn.Handshake(); err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-				reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
-				logger.LogIf(ctx, err)
-				bufconn.Close()
-				return
-			}
-
-			bufconn = newBufConn(tlsConn, listener.readTimeout, listener.writeTimeout)
-		}
-
-		method, resource, host, err := getMethodResourceHost(bufconn, listener.maxHeaderBytes)
-		if err != nil {
-			// Peek could fail legitimately when clients abruptly close
-			// connection. E.g. Chrome browser opens connections speculatively to
-			// speed up loading of a web page. Peek may also fail due to network
-			// saturation on a transport with read timeout set. All other kind of
-			// errors should be logged for further investigation. Thanks @brendanashworth.
-			if !isRoutineNetErr(err) {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("remoteAddr", bufconn.RemoteAddr().String())
-				reqInfo.AppendTags("localAddr", bufconn.LocalAddr().String())
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
-				logger.LogIf(ctx, err)
-				bufconn.Write(badRequestMsg)
-			}
-			bufconn.Close()
-			return
-		}
-
-		header := make(http.Header)
-		if host != "" {
-			header.Add("Host", host)
-		}
-		bufconn.setRequest(&http.Request{
-			Method: method,
-			URL:    &url.URL{Path: resource},
-			Host:   bufconn.LocalAddr().String(),
-			Header: header,
-		})
-		bufconn.setUpdateFuncs(listener.updateBytesReadFunc, listener.updateBytesWrittenFunc)
-
-		send(acceptResult{bufconn, nil}, doneCh)
+		send(acceptResult{tcpConn, nil}, doneCh)
 	}
 
 	// Closure to handle TCPListener until done channel is closed.
@@ -371,13 +168,7 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 // * listen to multiple addresses
 // * controls incoming connections only doing HTTP protocol
 func newHTTPListener(serverAddrs []string,
-	tlsConfig *tls.Config,
-	tcpKeepAliveTimeout time.Duration,
-	readTimeout time.Duration,
-	writeTimeout time.Duration,
-	maxHeaderBytes int,
-	updateBytesReadFunc func(*http.Request, int),
-	updateBytesWrittenFunc func(*http.Request, int)) (listener *httpListener, err error) {
+	tcpKeepAliveTimeout time.Duration) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
 
@@ -395,8 +186,8 @@ func newHTTPListener(serverAddrs []string,
 
 	for _, serverAddr := range serverAddrs {
 		var l net.Listener
-		if l, err = listen("tcp4", serverAddr); err != nil {
-			if l, err = fallbackListen("tcp4", serverAddr); err != nil {
+		if l, err = listen("tcp", serverAddr); err != nil {
+			if l, err = fallbackListen("tcp", serverAddr); err != nil {
 				return nil, err
 			}
 		}
@@ -410,14 +201,8 @@ func newHTTPListener(serverAddrs []string,
 	}
 
 	listener = &httpListener{
-		tcpListeners:           tcpListeners,
-		tlsConfig:              tlsConfig,
-		tcpKeepAliveTimeout:    tcpKeepAliveTimeout,
-		readTimeout:            readTimeout,
-		writeTimeout:           writeTimeout,
-		maxHeaderBytes:         maxHeaderBytes,
-		updateBytesReadFunc:    updateBytesReadFunc,
-		updateBytesWrittenFunc: updateBytesWrittenFunc,
+		tcpListeners:        tcpListeners,
+		tcpKeepAliveTimeout: tcpKeepAliveTimeout,
 	}
 	listener.start()
 

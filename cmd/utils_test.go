@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,43 +29,6 @@ import (
 	"strings"
 	"testing"
 )
-
-// Tests http.Header clone.
-func TestCloneHeader(t *testing.T) {
-	headers := []http.Header{
-		{
-			"Content-Type":   {"text/html; charset=UTF-8"},
-			"Content-Length": {"0"},
-		},
-		{
-			"Content-Length": {"0", "1", "2"},
-		},
-		{
-			"Expires":          {"-1"},
-			"Content-Length":   {"0"},
-			"Content-Encoding": {"gzip"},
-		},
-	}
-	for i, header := range headers {
-		clonedHeader := cloneHeader(header)
-		if !reflect.DeepEqual(header, clonedHeader) {
-			t.Errorf("Test %d failed", i+1)
-		}
-	}
-}
-
-// Tests closing http tracing file.
-func TestStopHTTPTrace(t *testing.T) {
-	var err error
-	globalHTTPTraceFile, err = ioutil.TempFile("", "")
-	if err != nil {
-		defer os.Remove(globalHTTPTraceFile.Name())
-		stopHTTPTrace()
-		if globalHTTPTraceFile != nil {
-			t.Errorf("globalHTTPTraceFile is not nil, it is expected to be nil")
-		}
-	}
-}
 
 // Tests maximum object size.
 func TestMaxObjectSize(t *testing.T) {
@@ -144,91 +107,80 @@ func TestMaxPartID(t *testing.T) {
 	}
 }
 
-// Tests extracting bucket and objectname from various types of URL paths.
-func TestURL2BucketObjectName(t *testing.T) {
+// Tests extracting bucket and objectname from various types of paths.
+func TestPath2BucketObjectName(t *testing.T) {
 	testCases := []struct {
-		u              *url.URL
+		path           string
 		bucket, object string
 	}{
 		// Test case 1 normal case.
 		{
-			u: &url.URL{
-				Path: "/bucket/object",
-			},
+			path:   "/bucket/object",
 			bucket: "bucket",
 			object: "object",
 		},
 		// Test case 2 where url only has separator.
 		{
-			u: &url.URL{
-				Path: "/",
-			},
+			path:   SlashSeparator,
 			bucket: "",
 			object: "",
 		},
 		// Test case 3 only bucket is present.
 		{
-			u: &url.URL{
-				Path: "/bucket",
-			},
+			path:   "/bucket",
 			bucket: "bucket",
 			object: "",
 		},
 		// Test case 4 many separators and object is a directory.
 		{
-			u: &url.URL{
-				Path: "/bucket/object/1/",
-			},
+			path:   "/bucket/object/1/",
 			bucket: "bucket",
 			object: "object/1/",
 		},
 		// Test case 5 object has many trailing separators.
 		{
-			u: &url.URL{
-				Path: "/bucket/object/1///",
-			},
+			path:   "/bucket/object/1///",
 			bucket: "bucket",
 			object: "object/1///",
 		},
 		// Test case 6 object has only trailing separators.
 		{
-			u: &url.URL{
-				Path: "/bucket/object///////",
-			},
+			path:   "/bucket/object///////",
 			bucket: "bucket",
 			object: "object///////",
 		},
 		// Test case 7 object has preceding separators.
 		{
-			u: &url.URL{
-				Path: "/bucket////object////",
-			},
+			path:   "/bucket////object////",
 			bucket: "bucket",
 			object: "///object////",
 		},
-		// Test case 9 url path is empty.
+		// Test case 8 url path is empty.
 		{
-			u:      &url.URL{},
+			path:   "",
 			bucket: "",
 			object: "",
 		},
 	}
 
 	// Validate all test cases.
-	for i, testCase := range testCases {
-		bucketName, objectName := urlPath2BucketObjectName(testCase.u.Path)
-		if bucketName != testCase.bucket {
-			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.bucket, bucketName)
-		}
-		if objectName != testCase.object {
-			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.object, objectName)
-		}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			bucketName, objectName := path2BucketObject(testCase.path)
+			if bucketName != testCase.bucket {
+				t.Errorf("failed expected bucket name \"%s\", got \"%s\"", testCase.bucket, bucketName)
+			}
+			if objectName != testCase.object {
+				t.Errorf("failed expected bucket name \"%s\", got \"%s\"", testCase.object, objectName)
+			}
+		})
 	}
 }
 
 // Add tests for starting and stopping different profilers.
 func TestStartProfiler(t *testing.T) {
-	_, err := startProfiler("", "")
+	_, err := startProfiler("")
 	if err == nil {
 		t.Fatal("Expected a non nil error, but nil error returned for invalid profiler.")
 	}
@@ -491,4 +443,47 @@ func TestQueries(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestLCP(t *testing.T) {
+	var testCases = []struct {
+		prefixes     []string
+		commonPrefix string
+	}{
+		{[]string{"", ""}, ""},
+		{[]string{"a", "b"}, ""},
+		{[]string{"a", "a"}, "a"},
+		{[]string{"a/", "a/"}, "a/"},
+		{[]string{"abcd/", ""}, ""},
+		{[]string{"abcd/foo/", "abcd/bar/"}, "abcd/"},
+		{[]string{"abcd/foo/bar/", "abcd/foo/bar/zoo"}, "abcd/foo/bar/"},
+	}
+
+	for i, test := range testCases {
+		foundPrefix := lcp(test.prefixes)
+		if foundPrefix != test.commonPrefix {
+			t.Fatalf("Test %d: Common prefix found: `%v`, expected: `%v`", i+1, foundPrefix, test.commonPrefix)
+		}
+	}
+}
+
+func TestGetMinioMode(t *testing.T) {
+	testMinioMode := func(expected string) {
+		if mode := getMinioMode(); mode != expected {
+			t.Fatalf("Expected %s got %s", expected, mode)
+		}
+	}
+	globalIsDistXL = true
+	testMinioMode(globalMinioModeDistXL)
+
+	globalIsDistXL = false
+	globalIsXL = true
+	testMinioMode(globalMinioModeXL)
+
+	globalIsDistXL, globalIsXL = false, false
+	testMinioMode(globalMinioModeFS)
+
+	globalIsGateway, globalGatewayName = true, "azure"
+	testMinioMode(globalMinioModeGatewayPrefix + globalGatewayName)
+
 }

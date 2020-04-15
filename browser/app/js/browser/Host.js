@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016, 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import React from "react"
 
 export const Host = () => (
   <div className="fes-host">
-    <i className="fa fa-globe" />
+    <i className="fas fa-globe-americas" />
     <a href="/">{window.location.host}</a>
   </div>
 )

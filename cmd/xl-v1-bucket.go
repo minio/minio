@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,14 @@ package cmd
 import (
 	"context"
 	"sort"
-	"sync"
 
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/policy"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/policy"
+
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // list all errors that can be ignore in a bucket operation.
@@ -36,88 +40,75 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 // MakeBucket - make a bucket.
 func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
 	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		logger.LogIf(ctx, BucketNameInvalid{Bucket: bucket})
+	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	storageDisks := xl.getDisks()
 
-	// Initialize list of errors.
-	var dErrs = make([]error, len(xl.getDisks()))
+	g := errgroup.WithNErrs(len(storageDisks))
 
 	// Make a volume entry on all underlying storage disks.
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
-			dErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Make a volume inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			err := disk.MakeVol(bucket)
-			if err != nil {
-				if err != errVolumeExists {
-					logger.LogIf(ctx, err)
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] != nil {
+				if err := storageDisks[index].MakeVol(bucket); err != nil {
+					if err != errVolumeExists {
+						logger.LogIf(ctx, err)
+					}
+					return err
 				}
-				dErrs[index] = err
+				return nil
 			}
-		}(index, disk)
+			return errDiskNotFound
+		}, index)
 	}
 
-	// Wait for all make vol to finish.
-	wg.Wait()
-
-	writeQuorum := len(xl.getDisks())/2 + 1
-	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
+	writeQuorum := getWriteQuorum(len(storageDisks))
+	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
 	if err == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(xl.getDisks(), bucket)
+		undoMakeBucket(storageDisks, bucket)
 	}
 	return toObjectErr(err, bucket)
 }
 
-func (xl xlObjects) undoDeleteBucket(bucket string) {
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
+	g := errgroup.WithNErrs(len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
+	for index := range storageDisks {
+		if storageDisks[index] == nil {
 			continue
 		}
-		wg.Add(1)
-		// Delete a bucket inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_ = disk.MakeVol(bucket)
-		}(index, disk)
+		index := index
+		g.Go(func() error {
+			_ = storageDisks[index].MakeVol(bucket)
+			return nil
+		}, index)
 	}
 
 	// Wait for all make vol to finish.
-	wg.Wait()
+	g.Wait()
 }
 
 // undo make bucket operation upon quorum failure.
 func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
-	// Initialize sync waitgroup.
-	var wg = &sync.WaitGroup{}
+	g := errgroup.WithNErrs(len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
-	for index, disk := range storageDisks {
-		if disk == nil {
+	for index := range storageDisks {
+		if storageDisks[index] == nil {
 			continue
 		}
-		wg.Add(1)
-		// Delete a bucket inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			_ = disk.DeleteVol(bucket)
-		}(index, disk)
+		index := index
+		g.Go(func() error {
+			_ = storageDisks[index].DeleteVol(bucket, false)
+			return nil
+		}, index)
 	}
 
 	// Wait for all make vol to finish.
-	wg.Wait()
+	g.Wait()
 }
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
@@ -130,11 +121,7 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 		}
 		volInfo, serr := disk.StatVol(bucketName)
 		if serr == nil {
-			bucketInfo = BucketInfo{
-				Name:    volInfo.Name,
-				Created: volInfo.Created,
-			}
-			return bucketInfo, nil
+			return BucketInfo(volInfo), nil
 		}
 		err = serr
 		// For any reason disk went offline continue and pick the next one.
@@ -149,17 +136,12 @@ func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucke
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	readQuorum := len(xl.getDisks()) / 2
+	readQuorum := getReadQuorum(len(xl.getDisks()))
 	return BucketInfo{}, reduceReadQuorumErrs(ctx, bucketErrs, nil, readQuorum)
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
-	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
-		return bi, e
-	}
-	defer bucketLock.RUnlock()
 	bucketInfo, err := xl.getBucketInfo(ctx, bucket)
 	if err != nil {
 		return bi, toObjectErr(err, bucket)
@@ -182,13 +164,10 @@ func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, 
 			// should take care of this.
 			var bucketsInfo []BucketInfo
 			for _, volInfo := range volsInfo {
-				if isReservedOrInvalidBucket(volInfo.Name) {
+				if isReservedOrInvalidBucket(volInfo.Name, true) {
 					continue
 				}
-				bucketsInfo = append(bucketsInfo, BucketInfo{
-					Name:    volInfo.Name,
-					Created: volInfo.Created,
-				})
+				bucketsInfo = append(bucketsInfo, BucketInfo(volInfo))
 			}
 			// For buckets info empty, loop once again to check
 			// if we have, can happen if disks were down.
@@ -218,59 +197,81 @@ func (xl xlObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 	return bucketInfos, nil
 }
 
-// DeleteBucket - deletes a bucket.
-func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string) error {
-	bucketLock := xl.nsMutex.NewNSLock(bucket, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return err
-	}
-	defer bucketLock.Unlock()
+// Dangling buckets should be handled appropriately, in this following situation
+// we actually have quorum error to be `nil` but we have some disks where
+// the bucket delete returned `errVolumeNotEmpty` but this is not correct
+// can only happen if there are dangling objects in a bucket. Under such
+// a situation we simply attempt a full delete of the bucket including
+// the dangling objects. All of this happens under a lock and there
+// is no way a user can create buckets and sneak in objects into namespace,
+// so it is safer to do.
+func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs []error, bucket string) {
+	for index, err := range dErrs {
+		if err == errVolumeNotEmpty {
+			// Attempt to delete bucket again.
+			if derr := storageDisks[index].DeleteVol(bucket, false); derr == errVolumeNotEmpty {
+				_ = cleanupDir(ctx, storageDisks[index], bucket, "")
 
-	// Collect if all disks report volume not found.
-	var wg = &sync.WaitGroup{}
-	var dErrs = make([]error, len(xl.getDisks()))
+				_ = storageDisks[index].DeleteVol(bucket, false)
 
-	// Remove a volume entry on all underlying storage disks.
-	for index, disk := range xl.getDisks() {
-		if disk == nil {
-			dErrs[index] = errDiskNotFound
-			continue
+				// Cleanup all the previously incomplete multiparts.
+				_ = cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
+			}
 		}
-		wg.Add(1)
-		// Delete volume inside a go-routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			// Attempt to delete bucket.
-			err := disk.DeleteVol(bucket)
+	}
+}
 
-			if err != nil {
-				logger.LogIf(ctx, err)
-				dErrs[index] = err
-				return
-			}
-			// Cleanup all the previously incomplete multiparts.
-			err = cleanupDir(ctx, disk, minioMetaMultipartBucket, bucket)
+// DeleteBucket - deletes a bucket.
+func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+	// Collect if all disks report volume not found.
+	storageDisks := xl.getDisks()
 
-			if err != nil {
-				if err == errVolumeNotFound {
-					return
+	g := errgroup.WithNErrs(len(storageDisks))
+
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] != nil {
+				if err := storageDisks[index].DeleteVol(bucket, forceDelete); err != nil {
+					return err
 				}
-				dErrs[index] = err
+				err := cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
+				if err != nil && err != errVolumeNotFound {
+					return err
+				}
+				return nil
 			}
-		}(index, disk)
+			return errDiskNotFound
+		}, index)
 	}
 
 	// Wait for all the delete vols to finish.
-	wg.Wait()
+	dErrs := g.Wait()
 
-	writeQuorum := len(xl.getDisks())/2 + 1
+	if forceDelete {
+		for _, err := range dErrs {
+			if err != nil {
+				undoDeleteBucket(storageDisks, bucket)
+				return toObjectErr(err, bucket)
+			}
+		}
+
+		return nil
+	}
+
+	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if err == errXLWriteQuorum {
-		xl.undoDeleteBucket(bucket)
+		undoDeleteBucket(storageDisks, bucket)
 	}
 	if err != nil {
 		return toObjectErr(err, bucket)
 	}
+
+	// If we reduce quorum to nil, means we have deleted buckets properly
+	// on some servers in quorum, we should look for volumeNotEmpty errors
+	// and delete those buckets as well.
+	deleteDanglingBucket(ctx, storageDisks, dErrs, bucket)
 
 	return nil
 }
@@ -290,12 +291,47 @@ func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	return removePolicyConfig(ctx, xl, bucket)
 }
 
+// SetBucketLifecycle sets lifecycle on bucket
+func (xl xlObjects) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
+	return saveLifecycleConfig(ctx, xl, bucket, lifecycle)
+}
+
+// GetBucketLifecycle will get lifecycle on bucket
+func (xl xlObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
+	return getLifecycleConfig(xl, bucket)
+}
+
+// DeleteBucketLifecycle deletes all lifecycle on bucket
+func (xl xlObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
+	return removeLifecycleConfig(ctx, xl, bucket)
+}
+
+// GetBucketSSEConfig returns bucket encryption config on given bucket
+func (xl xlObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
+	return getBucketSSEConfig(xl, bucket)
+}
+
+// SetBucketSSEConfig sets bucket encryption config on given bucket
+func (xl xlObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
+	return saveBucketSSEConfig(ctx, xl, bucket, config)
+}
+
+// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
+func (xl xlObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
+	return removeBucketSSEConfig(ctx, xl, bucket)
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (xl xlObjects) IsNotificationSupported() bool {
 	return true
 }
 
-// IsEncryptionSupported returns whether server side encryption is applicable for this layer.
+// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
+func (xl xlObjects) IsListenBucketSupported() bool {
+	return true
+}
+
+// IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (xl xlObjects) IsEncryptionSupported() bool {
 	return true
 }

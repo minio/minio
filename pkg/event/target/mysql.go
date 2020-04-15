@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 //
 // * Namespace format
 //
-// On each create or update object event in Minio Object storage
+// On each create or update object event in MinIO Object storage
 // server, a row is created or updated in the table in MySQL. On each
 // object removal, the corresponding row is deleted from the table.
 //
@@ -54,10 +54,14 @@
 package target
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,17 +81,45 @@ const (
 	mysqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES (?, ?);`
 )
 
+// MySQL related constants
+const (
+	MySQLFormat     = "format"
+	MySQLDSNString  = "dsn_string"
+	MySQLTable      = "table"
+	MySQLHost       = "host"
+	MySQLPort       = "port"
+	MySQLUsername   = "username"
+	MySQLPassword   = "password"
+	MySQLDatabase   = "database"
+	MySQLQueueLimit = "queue_limit"
+	MySQLQueueDir   = "queue_dir"
+
+	EnvMySQLEnable     = "MINIO_NOTIFY_MYSQL_ENABLE"
+	EnvMySQLFormat     = "MINIO_NOTIFY_MYSQL_FORMAT"
+	EnvMySQLDSNString  = "MINIO_NOTIFY_MYSQL_DSN_STRING"
+	EnvMySQLTable      = "MINIO_NOTIFY_MYSQL_TABLE"
+	EnvMySQLHost       = "MINIO_NOTIFY_MYSQL_HOST"
+	EnvMySQLPort       = "MINIO_NOTIFY_MYSQL_PORT"
+	EnvMySQLUsername   = "MINIO_NOTIFY_MYSQL_USERNAME"
+	EnvMySQLPassword   = "MINIO_NOTIFY_MYSQL_PASSWORD"
+	EnvMySQLDatabase   = "MINIO_NOTIFY_MYSQL_DATABASE"
+	EnvMySQLQueueLimit = "MINIO_NOTIFY_MYSQL_QUEUE_LIMIT"
+	EnvMySQLQueueDir   = "MINIO_NOTIFY_MYSQL_QUEUE_DIR"
+)
+
 // MySQLArgs - MySQL target arguments.
 type MySQLArgs struct {
-	Enable   bool     `json:"enable"`
-	Format   string   `json:"format"`
-	DSN      string   `json:"dsnString"`
-	Table    string   `json:"table"`
-	Host     xnet.URL `json:"host"`
-	Port     string   `json:"port"`
-	User     string   `json:"user"`
-	Password string   `json:"password"`
-	Database string   `json:"database"`
+	Enable     bool     `json:"enable"`
+	Format     string   `json:"format"`
+	DSN        string   `json:"dsnString"`
+	Table      string   `json:"table"`
+	Host       xnet.URL `json:"host"`
+	Port       string   `json:"port"`
+	User       string   `json:"user"`
+	Password   string   `json:"password"`
+	Database   string   `json:"database"`
+	QueueDir   string   `json:"queueDir"`
+	QueueLimit uint64   `json:"queueLimit"`
 }
 
 // Validate MySQLArgs fields
@@ -123,6 +155,16 @@ func (m MySQLArgs) Validate() error {
 			return fmt.Errorf("database unspecified")
 		}
 	}
+
+	if m.QueueDir != "" {
+		if !filepath.IsAbs(m.QueueDir) {
+			return errors.New("queueDir path should be absolute")
+		}
+	}
+	if m.QueueLimit > 10000 {
+		return errors.New("queueLimit should not exceed 10000")
+	}
+
 	return nil
 }
 
@@ -134,6 +176,9 @@ type MySQLTarget struct {
 	deleteStmt *sql.Stmt
 	insertStmt *sql.Stmt
 	db         *sql.DB
+	store      Store
+	firstPing  bool
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -141,8 +186,38 @@ func (target *MySQLTarget) ID() event.TargetID {
 	return target.id
 }
 
-// Send - sends event to MySQL.
-func (target *MySQLTarget) Send(eventData event.Event) error {
+// IsActive - Return true if target is up and active
+func (target *MySQLTarget) IsActive() (bool, error) {
+	if target.db == nil {
+		db, sErr := sql.Open("mysql", target.args.DSN)
+		if sErr != nil {
+			return false, sErr
+		}
+		target.db = db
+	}
+	if err := target.db.Ping(); err != nil {
+		if IsConnErr(err) {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// Save - saves the events to the store which will be replayed when the SQL connection is active.
+func (target *MySQLTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+	_, err := target.IsActive()
+	if err != nil {
+		return err
+	}
+	return target.send(eventData)
+}
+
+// send - sends an event to the mysql.
+func (target *MySQLTarget) send(eventData event.Event) error {
 	if target.args.Format == event.NamespaceFormat {
 		objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 		if err != nil {
@@ -160,6 +235,7 @@ func (target *MySQLTarget) Send(eventData event.Event) error {
 
 			_, err = target.updateStmt.Exec(key, data)
 		}
+
 		return err
 	}
 
@@ -175,10 +251,49 @@ func (target *MySQLTarget) Send(eventData event.Event) error {
 		}
 
 		_, err = target.insertStmt.Exec(eventTime, data)
+
 		return err
 	}
 
 	return nil
+}
+
+// Send - reads an event from store and sends it to MySQL.
+func (target *MySQLTarget) Send(eventKey string) error {
+
+	_, err := target.IsActive()
+	if err != nil {
+		return err
+	}
+
+	if !target.firstPing {
+		if err := target.executeStmts(); err != nil {
+			if IsConnErr(err) {
+				return errNotConnected
+			}
+			return err
+		}
+	}
+
+	eventData, eErr := target.store.Get(eventKey)
+	if eErr != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(eErr) {
+			return nil
+		}
+		return eErr
+	}
+
+	if err := target.send(eventData); err != nil {
+		if IsConnErr(err) {
+			return errNotConnected
+		}
+		return err
+	}
+
+	// Delete the event from store.
+	return target.store.Del(eventKey)
 }
 
 // Close - closes underneath connections to MySQL database.
@@ -201,64 +316,103 @@ func (target *MySQLTarget) Close() error {
 	return target.db.Close()
 }
 
+// Executes the table creation statements.
+func (target *MySQLTarget) executeStmts() error {
+
+	_, err := target.db.Exec(fmt.Sprintf(mysqlTableExists, target.args.Table))
+	if err != nil {
+		createStmt := mysqlCreateNamespaceTable
+		if target.args.Format == event.AccessFormat {
+			createStmt = mysqlCreateAccessTable
+		}
+
+		if _, dbErr := target.db.Exec(fmt.Sprintf(createStmt, target.args.Table)); dbErr != nil {
+			return dbErr
+		}
+	}
+
+	switch target.args.Format {
+	case event.NamespaceFormat:
+		// insert or update statement
+		if target.updateStmt, err = target.db.Prepare(fmt.Sprintf(mysqlUpdateRow, target.args.Table)); err != nil {
+			return err
+		}
+		// delete statement
+		if target.deleteStmt, err = target.db.Prepare(fmt.Sprintf(mysqlDeleteRow, target.args.Table)); err != nil {
+			return err
+		}
+	case event.AccessFormat:
+		// insert statement
+		if target.insertStmt, err = target.db.Prepare(fmt.Sprintf(mysqlInsertRow, target.args.Table)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
 // NewMySQLTarget - creates new MySQL target.
-func NewMySQLTarget(id string, args MySQLArgs) (*MySQLTarget, error) {
+func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*MySQLTarget, error) {
 	if args.DSN == "" {
 		config := mysql.Config{
-			User:   args.User,
-			Passwd: args.Password,
-			Net:    "tcp",
-			Addr:   args.Host.String() + ":" + args.Port,
-			DBName: args.Database,
+			User:                 args.User,
+			Passwd:               args.Password,
+			Net:                  "tcp",
+			Addr:                 args.Host.String() + ":" + args.Port,
+			DBName:               args.Database,
+			AllowNativePasswords: true,
 		}
 
 		args.DSN = config.FormatDSN()
 	}
 
+	target := &MySQLTarget{
+		id:         event.TargetID{ID: id, Name: "mysql"},
+		args:       args,
+		firstPing:  false,
+		loggerOnce: loggerOnce,
+	}
+
 	db, err := sql.Open("mysql", args.DSN)
 	if err != nil {
-		return nil, err
+		target.loggerOnce(context.Background(), err, target.ID())
+		return target, err
+	}
+	target.db = db
+
+	var store Store
+
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mysql-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return target, oErr
+		}
+		target.store = store
 	}
 
-	if err = db.Ping(); err != nil {
-		return nil, err
+	err = target.db.Ping()
+	if err != nil {
+		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
+		}
+	} else {
+		if err = target.executeStmts(); err != nil {
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
+		}
+		target.firstPing = true
 	}
 
-	if _, err = db.Exec(fmt.Sprintf(mysqlTableExists, args.Table)); err != nil {
-		createStmt := mysqlCreateNamespaceTable
-		if args.Format == event.AccessFormat {
-			createStmt = mysqlCreateAccessTable
-		}
-
-		if _, err = db.Exec(fmt.Sprintf(createStmt, args.Table)); err != nil {
-			return nil, err
-		}
+	if target.store != nil && !test {
+		// Replays the events from the store.
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
+		// Start replaying events from the store.
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
-	var updateStmt, deleteStmt, insertStmt *sql.Stmt
-	switch args.Format {
-	case event.NamespaceFormat:
-		// insert or update statement
-		if updateStmt, err = db.Prepare(fmt.Sprintf(mysqlUpdateRow, args.Table)); err != nil {
-			return nil, err
-		}
-		// delete statement
-		if deleteStmt, err = db.Prepare(fmt.Sprintf(mysqlDeleteRow, args.Table)); err != nil {
-			return nil, err
-		}
-	case event.AccessFormat:
-		// insert statement
-		if insertStmt, err = db.Prepare(fmt.Sprintf(mysqlInsertRow, args.Table)); err != nil {
-			return nil, err
-		}
-	}
-
-	return &MySQLTarget{
-		id:         event.TargetID{id, "mysql"},
-		args:       args,
-		updateStmt: updateStmt,
-		deleteStmt: deleteStmt,
-		insertStmt: insertStmt,
-		db:         db,
-	}, nil
+	return target, nil
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/rand"
 	"io"
+	"os"
 	"testing"
 )
 
@@ -84,20 +85,21 @@ func TestErasureHeal(t *testing.T) {
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
-		writers := make([]*bitrotWriter, len(disks))
+		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
-			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", test.algorithm)
+			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
+		closeBitrotWriters(writers)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
-		readers := make([]*bitrotReader, len(disks))
+		readers := make([]io.ReaderAt, len(disks))
 		for i, disk := range disks {
-			shardFilesize := getErasureShardFileSize(test.blocksize, test.size, erasure.dataBlocks)
-			readers[i] = newBitrotReader(disk, "testbucket", "testobject", test.algorithm, shardFilesize, writers[i].Sum())
+			shardFilesize := erasure.ShardFileSize(test.size)
+			readers[i] = newBitrotReader(disk, "testbucket", "testobject", shardFilesize, test.algorithm, bitrotWriterSum(writers[i]), erasure.ShardSize())
 		}
 
 		// setup stale disks for the test case
@@ -111,22 +113,30 @@ func TestErasureHeal(t *testing.T) {
 			}
 		}
 		for j := 0; j < test.badDisks; j++ {
-			readers[test.offDisks+j].disk = badDisk{nil}
+			switch r := readers[test.offDisks+j].(type) {
+			case *streamingBitrotReader:
+				r.disk = badDisk{nil}
+			case *wholeBitrotReader:
+				r.disk = badDisk{nil}
+			}
 		}
 		for j := 0; j < test.badStaleDisks; j++ {
 			staleDisks[j] = badDisk{nil}
 		}
 
-		staleWriters := make([]*bitrotWriter, len(staleDisks))
+		staleWriters := make([]io.Writer, len(staleDisks))
 		for i, disk := range staleDisks {
 			if disk == nil {
 				continue
 			}
-			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", test.algorithm)
+			os.Remove(pathJoin(disk.String(), "testbucket", "testobject"))
+			staleWriters[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 
-		// test case setup is complete - now call Healfile()
+		// test case setup is complete - now call Heal()
 		err = erasure.Heal(context.Background(), readers, staleWriters, test.size)
+		closeBitrotReaders(readers)
+		closeBitrotWriters(staleWriters)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}
@@ -140,7 +150,7 @@ func TestErasureHeal(t *testing.T) {
 				if staleWriters[i] == nil {
 					continue
 				}
-				if !bytes.Equal(staleWriters[i].Sum(), writers[i].Sum()) {
+				if !bytes.Equal(bitrotWriterSum(staleWriters[i]), bitrotWriterSum(writers[i])) {
 					t.Errorf("Test %d: heal returned different bitrot checksums", i)
 				}
 			}

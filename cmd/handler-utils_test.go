@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/minio/minio/cmd/config"
 )
 
 // Tests validate bucket LocationConstraint.
@@ -39,48 +41,50 @@ func TestIsValidLocationContraint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Test with corrupted XML
+	// Corrupted XML
 	malformedReq := &http.Request{
 		Body:          ioutil.NopCloser(bytes.NewBuffer([]byte("<>"))),
 		ContentLength: int64(len("<>")),
 	}
-	if _, err := parseLocationConstraint(malformedReq); err != ErrMalformedXML {
-		t.Fatal("Unexpected error: ", err)
+
+	// Not an XML
+	badRequest := &http.Request{
+		Body:          ioutil.NopCloser(bytes.NewReader([]byte("garbage"))),
+		ContentLength: int64(len("garbage")),
 	}
 
 	// generates the input request with XML bucket configuration set to the request body.
-	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
+	createExpectedRequest := func(req *http.Request, location string) *http.Request {
 		createBucketConfig := createBucketLocationConfiguration{}
 		createBucketConfig.Location = location
-		var createBucketConfigBytes []byte
-		createBucketConfigBytes, e := xml.Marshal(createBucketConfig)
-		if e != nil {
-			return nil, e
-		}
+		createBucketConfigBytes, _ := xml.Marshal(createBucketConfig)
 		createBucketConfigBuffer := bytes.NewBuffer(createBucketConfigBytes)
 		req.Body = ioutil.NopCloser(createBucketConfigBuffer)
 		req.ContentLength = int64(createBucketConfigBuffer.Len())
-		return req, nil
+		return req
 	}
 
 	testCases := []struct {
-		locationForInputRequest string
-		serverConfigRegion      string
-		expectedCode            APIErrorCode
+		request            *http.Request
+		serverConfigRegion string
+		expectedCode       APIErrorCode
 	}{
 		// Test case - 1.
-		{globalMinioDefaultRegion, globalMinioDefaultRegion, ErrNone},
+		{createExpectedRequest(&http.Request{}, "eu-central-1"), globalMinioDefaultRegion, ErrNone},
 		// Test case - 2.
 		// In case of empty request body ErrNone is returned.
-		{"", globalMinioDefaultRegion, ErrNone},
+		{createExpectedRequest(&http.Request{}, ""), globalMinioDefaultRegion, ErrNone},
+		// Test case - 3
+		// In case of garbage request body ErrMalformedXML is returned.
+		{badRequest, globalMinioDefaultRegion, ErrMalformedXML},
+		// Test case - 4
+		// In case of invalid XML request body ErrMalformedXML is returned.
+		{malformedReq, globalMinioDefaultRegion, ErrMalformedXML},
 	}
+
 	for i, testCase := range testCases {
-		inputRequest, e := createExpectedRequest(&http.Request{}, testCase.locationForInputRequest)
-		if e != nil {
-			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
-		}
-		globalServerConfig.SetRegion(testCase.serverConfigRegion)
-		_, actualCode := parseLocationConstraint(inputRequest)
+		config.SetRegion(globalServerConfig, testCase.serverConfigRegion)
+		_, actualCode := parseLocationConstraint(testCase.request)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
 		}
@@ -172,6 +176,16 @@ func TestExtractMetadataHeaders(t *testing.T) {
 			},
 			shouldFail: false,
 		},
+		// Support multiple values
+		{
+			header: http.Header{
+				"x-amz-meta-key": []string{"amz-meta1", "amz-meta2"},
+			},
+			metadata: map[string]string{
+				"x-amz-meta-key": "amz-meta1,amz-meta2",
+			},
+			shouldFail: false,
+		},
 		// Empty header input returns empty metadata.
 		{
 			header:     nil,
@@ -201,15 +215,15 @@ func TestGetResource(t *testing.T) {
 	testCases := []struct {
 		p                string
 		host             string
-		domain           string
+		domains          []string
 		expectedResource string
 	}{
-		{"/a/b/c", "test.mydomain.com", "mydomain.com", "/test/a/b/c"},
-		{"/a/b/c", "test.mydomain.com", "notmydomain.com", "/a/b/c"},
-		{"/a/b/c", "test.mydomain.com", "", "/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", []string{"mydomain.com"}, "/test/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", []string{"notmydomain.com"}, "/a/b/c"},
+		{"/a/b/c", "test.mydomain.com", nil, "/a/b/c"},
 	}
 	for i, test := range testCases {
-		gotResource, err := getResource(test.p, test.host, test.domain)
+		gotResource, err := getResource(test.p, test.host, test.domains)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ type logOnceType struct {
 }
 
 // One log message per error.
-func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}) {
+func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
@@ -49,19 +49,18 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id interface{}) 
 	l.Unlock()
 
 	if shouldLog {
-		LogIf(ctx, err)
+		LogIf(ctx, err, errKind...)
 	}
 }
 
 // Cleanup the map every 30 minutes so that the log message is printed again for the user to notice.
 func (l *logOnceType) cleanupRoutine() {
 	for {
-		select {
-		case <-time.After(time.Minute * 30):
-			l.Lock()
-			l.IDMap = make(map[interface{}]error)
-			l.Unlock()
-		}
+		l.Lock()
+		l.IDMap = make(map[interface{}]error)
+		l.Unlock()
+
+		time.Sleep(30 * time.Minute)
 	}
 }
 
@@ -77,6 +76,6 @@ var logOnce = newLogOnceType()
 // LogOnceIf - Logs notification errors - once per error.
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
-func LogOnceIf(ctx context.Context, err error, id interface{}) {
-	logOnce.logOnceIf(ctx, err, id)
+func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+	logOnce.logOnceIf(ctx, err, id, errKind...)
 }

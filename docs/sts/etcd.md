@@ -1,4 +1,4 @@
-# etcd V3 Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# etcd V3 Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 etcd is a distributed key value store that provides a reliable way to store data across a cluster of machines.
 
 ## Get started
@@ -6,7 +6,7 @@ etcd is a distributed key value store that provides a reliable way to store data
 - Docker 18.03 or above, refer here for [installation](https://docs.docker.com/install/).
 
 ### 2. Start etcd
-etcd uses [gcr.io/etcd-development/etcd](gcr.io/etcd-development/etcd) as a primary container registry.
+etcd uses [gcr.io/etcd-development/etcd](https://console.cloud.google.com/gcr/images/etcd-development/GLOBAL/etcd) as a primary container registry.
 
 ```
 rm -rf /tmp/etcd-data.tmp && mkdir -p /tmp/etcd-data.tmp && \
@@ -29,17 +29,21 @@ rm -rf /tmp/etcd-data.tmp && mkdir -p /tmp/etcd-data.tmp && \
   --initial-cluster-state new
 ```
 
-### 3. Setup Minio with etcd
-Minio server expects environment variable for etcd as `MINIO_ETCD_ENDPOINTS`, this environment variable takes many comma separated entries.
+You may also setup etcd with TLS following this documentation [here](https://coreos.com/etcd/docs/latest/op-guide/security.html)
+
+### 3. Setup MinIO with etcd
+MinIO server expects environment variable for etcd as `MINIO_ETCD_ENDPOINTS`, this environment variable takes many comma separated entries.
 ```
-export MINIO_ETCD_ENDPOINTS=localhost:2379
+export MINIO_ETCD_ENDPOINTS=http://localhost:2379
 minio server /data
 ```
 
-### 5. Test with Minio STS API
-Assuming that you have configured Minio server to support STS API by following the doc [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://docs.minio.io/docs/wso2-quickstart-guide).
+NOTE: If `etcd` is configured with `Client-to-server authentication with HTTPS client certificates` then you need to use additional envs such as `MINIO_ETCD_CLIENT_CERT` pointing to path to `etcd-client.crt` and `MINIO_ETCD_CLIENT_CERT_KEY` path to `etcd-client.key` .
+
+### 4. Test with MinIO STS API
+Assuming that you have configured MinIO server to support STS API by following the doc [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/wso2.md).
 ```
-go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
+go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 
 ##### Credentials
 {
@@ -50,8 +54,8 @@ go run full-example.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOW
 }
 ```
 
-These credentials can now be used to perform Minio API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://docs.minio.io/docs/api-assume-role-with-client-grants).
+These credentials can now be used to perform MinIO API operations, these credentials automatically expire in 1hr. To understand more about credential expiry duration and client grants STS API read further [here](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md).
 
 ## Explore Further
-- [Minio STS Quickstart Guide](https://docs.minio.io/docs/minio-sts-quickstart-guide)
-- [The Minio documentation website](https://docs.minio.io)
+- [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide)
+- [The MinIO documentation website](https://docs.min.io)

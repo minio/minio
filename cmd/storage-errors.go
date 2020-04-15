@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,84 +16,84 @@
 
 package cmd
 
-import (
-	"errors"
-	"fmt"
-)
-
 // errUnexpected - unexpected error, requires manual intervention.
-var errUnexpected = errors.New("Unexpected error, please report this issue at https://github.com/minio/minio/issues")
+var errUnexpected = StorageErr("Unexpected error, please report this issue at https://github.com/minio/minio/issues")
 
 // errCorruptedFormat - corrupted backend format.
-var errCorruptedFormat = errors.New("corrupted backend format, please join https://slack.minio.io for assistance")
+var errCorruptedFormat = StorageErr("corrupted backend format, please join https://slack.min.io for assistance")
 
 // errUnformattedDisk - unformatted disk found.
-var errUnformattedDisk = errors.New("unformatted disk found")
+var errUnformattedDisk = StorageErr("unformatted disk found")
 
 // errDiskFull - cannot create volume or files when disk is full.
-var errDiskFull = errors.New("disk path full")
+var errDiskFull = StorageErr("disk path full")
 
 // errDiskNotFound - cannot find the underlying configured disk anymore.
-var errDiskNotFound = errors.New("disk not found")
+var errDiskNotFound = StorageErr("disk not found")
 
 // errFaultyRemoteDisk - remote disk is faulty.
-var errFaultyRemoteDisk = errors.New("remote disk is faulty")
+var errFaultyRemoteDisk = StorageErr("remote disk is faulty")
 
 // errFaultyDisk - disk is faulty.
-var errFaultyDisk = errors.New("disk is faulty")
+var errFaultyDisk = StorageErr("disk is faulty")
 
 // errDiskAccessDenied - we don't have write permissions on disk.
-var errDiskAccessDenied = errors.New("disk access denied")
+var errDiskAccessDenied = StorageErr("disk access denied")
 
 // errFileNotFound - cannot find the file.
-var errFileNotFound = errors.New("file not found")
+var errFileNotFound = StorageErr("file not found")
+
+// errTooManyOpenFiles - too many open files.
+var errTooManyOpenFiles = StorageErr("too many open files")
 
 // errFileNameTooLong - given file name is too long than supported length.
-var errFileNameTooLong = errors.New("file name too long")
+var errFileNameTooLong = StorageErr("file name too long")
 
 // errVolumeExists - cannot create same volume again.
-var errVolumeExists = errors.New("volume already exists")
+var errVolumeExists = StorageErr("volume already exists")
 
 // errIsNotRegular - not of regular file type.
-var errIsNotRegular = errors.New("not of regular file type")
+var errIsNotRegular = StorageErr("not of regular file type")
 
 // errVolumeNotFound - cannot find the volume.
-var errVolumeNotFound = errors.New("volume not found")
+var errVolumeNotFound = StorageErr("volume not found")
 
 // errVolumeNotEmpty - volume not empty.
-var errVolumeNotEmpty = errors.New("volume is not empty")
+var errVolumeNotEmpty = StorageErr("volume is not empty")
 
 // errVolumeAccessDenied - cannot access volume, insufficient permissions.
-var errVolumeAccessDenied = errors.New("volume access denied")
+var errVolumeAccessDenied = StorageErr("volume access denied")
 
-// errVolumeAccessDenied - cannot access file, insufficient permissions.
-var errFileAccessDenied = errors.New("file access denied")
+// errFileAccessDenied - cannot access file, insufficient permissions.
+var errFileAccessDenied = StorageErr("file access denied")
+
+// errFileCorrupt - file has an unexpected size, or is not readable
+var errFileCorrupt = StorageErr("file is corrupted")
+
+// errFileParentIsFile - cannot have overlapping objects, parent is already a file.
+var errFileParentIsFile = StorageErr("parent is a file")
 
 // errBitrotHashAlgoInvalid - the algo for bit-rot hash
 // verification is empty or invalid.
-var errBitrotHashAlgoInvalid = errors.New("bit-rot hash algorithm is invalid")
+var errBitrotHashAlgoInvalid = StorageErr("bit-rot hash algorithm is invalid")
 
 // errCrossDeviceLink - rename across devices not allowed.
-var errCrossDeviceLink = errors.New("Rename across devices not allowed, please fix your backend configuration")
+var errCrossDeviceLink = StorageErr("Rename across devices not allowed, please fix your backend configuration")
 
 // errMinDiskSize - cannot create volume or files when disk size is less than threshold.
-var errMinDiskSize = errors.New("The disk size is less than the minimum threshold")
+var errMinDiskSize = StorageErr("The disk size is less than the minimum threshold")
 
 // errLessData - returned when less data available than what was requested.
-var errLessData = errors.New("less data available than what was requested")
+var errLessData = StorageErr("less data available than what was requested")
 
-// hashMisMatchError - represents a bit-rot hash verification failure
-// error.
-type hashMismatchError struct {
-	expected string
-	computed string
-}
+// errMoreData = returned when more data was sent by the caller than what it was supposed to.
+var errMoreData = StorageErr("more data was sent than what was advertised")
 
-// error method for the hashMismatchError
-func (h hashMismatchError) Error() string {
-	return fmt.Sprintf(
-		"Bitrot verification mismatch - expected %v, received %v",
-		h.expected, h.computed)
+// StorageErr represents error generated by posix call.
+type StorageErr string
+
+func (h StorageErr) Error() string {
+	return string(h)
 }
 
 // Collection of basic errors.

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@
 
 var webpack = require('webpack')
 var path = require('path')
+var glob = require('glob-all')
 var CopyWebpackPlugin = require('copy-webpack-plugin')
-var purify = require("purifycss-webpack-plugin")
+var PurgecssPlugin = require('purgecss-webpack-plugin')
 
 var exports = {
   context: __dirname,
+  mode: 'development',
   entry: [
     path.resolve(__dirname, 'app/index.js')
   ],
@@ -72,7 +74,8 @@ var exports = {
     proxy: {
       '/minio/webrpc': {
 	target: 'http://localhost:9000',
-	secure: false
+  secure: false,
+  headers: {'Host': "localhost:9000"}
       },
       '/minio/upload/*': {
 	target: 'http://localhost:9000',
@@ -91,20 +94,21 @@ var exports = {
   plugins: [
     new CopyWebpackPlugin([
       {from: 'app/css/loader.css'},
-      {from: 'app/img/favicon.ico'},
       {from: 'app/img/browsers/chrome.png'},
       {from: 'app/img/browsers/firefox.png'},
       {from: 'app/img/browsers/safari.png'},
       {from: 'app/img/logo.svg'},
+      {from: 'app/img/favicon/favicon-16x16.png'},
+      {from: 'app/img/favicon/favicon-32x32.png'},
+      {from: 'app/img/favicon/favicon-96x96.png'},
       {from: 'app/index.html'}
     ]),
     new webpack.ContextReplacementPlugin(/moment[\\\/]locale$/, /^\.\/(en)$/),
-    new purify({
-        basePath: __dirname,
-        paths: [
-            "app/index.html",
-            "app/js/*.js"
-        ]
+    new PurgecssPlugin({
+      paths: glob.sync([
+        path.join(__dirname, 'app/index.html'),
+        path.join(__dirname, 'app/js/*.js')
+      ])
     })
   ]
 }

@@ -1,7 +1,7 @@
-# Minio GCS 网关 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Minio GCS网关将亚马逊S3兼容性添加到Google云存储。
+# MinIO GCS 网关 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+MinIO GCS网关将亚马逊S3兼容性添加到Google云存储。
 
-## 运行支持GCS的Minio 网关
+## 运行支持GCS的MinIO 网关
 ### 为GCS创建服务帐户密钥，并获取凭据文件
 1. 访问 [API控制台凭证页面](https://console.developers.google.com/project/_/apis/credentials).
 2. 选择您的项目或创建一个新项目， 记下你的项目ID。
@@ -31,12 +31,12 @@ export MINIO_SECRET_KEY=miniosecretkey
 minio gateway gcs yourprojectid
 ```
 
-## 使用Minio Browser验证
-Minio Gateway配有嵌入式网络对象浏览器。 将您的Web浏览器指向http://127.0.0.1:9000确保您的服务器已成功启动。
+## 使用MinIO Browser验证
+MinIO Gateway配有嵌入式网络对象浏览器。 将您的Web浏览器指向http://127.0.0.1:9000确保您的服务器已成功启动。
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
 
-##使用Minio客户端 `mc`验证
+## 使用MinIO客户端 `mc`验证
 `mc` 提供了诸如ls，cat，cp，mirror，diff等UNIX命令的替代方案。它支持文件系统和Amazon S3兼容的云存储服务。
 
 ### 配置  `mc`
@@ -52,12 +52,8 @@ mc ls mygcs
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
-### 已知的限制
-[限制](https://github.com/minio/minio/blob/master/docs/gateway/gcs-limitations.md)
-
 ## 了解更多
-- [`mc` 命令行接口](https://docs.minio.io/cn/minio-client-quickstart-guide)
-- [`aws` 命令行接口](https://docs.minio.io/cn/aws-cli-with-minio)
-- [`minfs` 文件系统接口](https://docs.minio.io/cn/minfs-quickstart-guide)
-- [`minio-go` Go SDK](https://docs.minio.io/cn/golang-client-quickstart-guide)
+- [`mc` 命令行接口](https://docs.min.io/cn/minio-client-quickstart-guide)
+- [`aws` 命令行接口](https://docs.min.io/cn/aws-cli-with-minio)
+- [`minio-go` Go SDK](https://docs.min.io/cn/golang-client-quickstart-guide)
 

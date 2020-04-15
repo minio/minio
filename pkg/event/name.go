@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +29,16 @@ type Name int
 const (
 	ObjectAccessedAll Name = 1 + iota
 	ObjectAccessedGet
+	ObjectAccessedGetRetention
+	ObjectAccessedGetLegalHold
 	ObjectAccessedHead
 	ObjectCreatedAll
 	ObjectCreatedCompleteMultipartUpload
 	ObjectCreatedCopy
 	ObjectCreatedPost
 	ObjectCreatedPut
+	ObjectCreatedPutRetention
+	ObjectCreatedPutLegalHold
 	ObjectRemovedAll
 	ObjectRemovedDelete
 )
@@ -43,9 +47,9 @@ const (
 func (name Name) Expand() []Name {
 	switch name {
 	case ObjectAccessedAll:
-		return []Name{ObjectAccessedGet, ObjectAccessedHead}
+		return []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}
 	case ObjectCreatedAll:
-		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut}
+		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention, ObjectCreatedPutLegalHold}
 	case ObjectRemovedAll:
 		return []Name{ObjectRemovedDelete}
 	default:
@@ -60,6 +64,10 @@ func (name Name) String() string {
 		return "s3:ObjectAccessed:*"
 	case ObjectAccessedGet:
 		return "s3:ObjectAccessed:Get"
+	case ObjectAccessedGetRetention:
+		return "s3:ObjectAccessed:GetRetention"
+	case ObjectAccessedGetLegalHold:
+		return "s3:ObjectAccessed:GetLegalHold"
 	case ObjectAccessedHead:
 		return "s3:ObjectAccessed:Head"
 	case ObjectCreatedAll:
@@ -72,6 +80,10 @@ func (name Name) String() string {
 		return "s3:ObjectCreated:Post"
 	case ObjectCreatedPut:
 		return "s3:ObjectCreated:Put"
+	case ObjectCreatedPutRetention:
+		return "s3:ObjectCreated:PutRetention"
+	case ObjectCreatedPutLegalHold:
+		return "s3:ObjectCreated:PutLegalHold"
 	case ObjectRemovedAll:
 		return "s3:ObjectRemoved:*"
 	case ObjectRemovedDelete:
@@ -130,6 +142,10 @@ func ParseName(s string) (Name, error) {
 		return ObjectAccessedAll, nil
 	case "s3:ObjectAccessed:Get":
 		return ObjectAccessedGet, nil
+	case "s3:ObjectAccessed:GetRetention":
+		return ObjectAccessedGetRetention, nil
+	case "s3:ObjectAccessed:GetLegalHold":
+		return ObjectAccessedGetLegalHold, nil
 	case "s3:ObjectAccessed:Head":
 		return ObjectAccessedHead, nil
 	case "s3:ObjectCreated:*":
@@ -142,6 +158,10 @@ func ParseName(s string) (Name, error) {
 		return ObjectCreatedPost, nil
 	case "s3:ObjectCreated:Put":
 		return ObjectCreatedPut, nil
+	case "s3:ObjectCreated:PutRetention":
+		return ObjectCreatedPutRetention, nil
+	case "s3:ObjectCreated:PutLegalHold":
+		return ObjectCreatedPutLegalHold, nil
 	case "s3:ObjectRemoved:*":
 		return ObjectRemovedAll, nil
 	case "s3:ObjectRemoved:Delete":

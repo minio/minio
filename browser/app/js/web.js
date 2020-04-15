@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016, 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ class Web {
         }
         if (err.status)
           throw new Error(`Server returned error [${err.status}]`)
-        throw new Error('Minio server is unreachable')
+        throw new Error('MinIO server is unreachable')
       })
       .then(res => {
         let json = JSON.parse(res.text)
@@ -72,6 +72,19 @@ class Web {
   Logout() {
     storage.removeItem('token')
   }
+  GetToken() {
+    return storage.getItem('token')
+  }
+  GetDiscoveryDoc() {
+    return this.makeCall("GetDiscoveryDoc")
+  }
+  LoginSTS(args) {
+    return this.makeCall('LoginSTS', args)
+      .then(res => {
+        storage.setItem('token', `${res.token}`)
+        return res
+      })
+  }
   ServerInfo() {
     return this.makeCall('ServerInfo')
   }
@@ -98,12 +111,6 @@ class Web {
   }
   RemoveObject(args) {
     return this.makeCall('RemoveObject', args)
-  }
-  GetAuth() {
-    return this.makeCall('GetAuth')
-  }
-  GenerateAuth() {
-    return this.makeCall('GenerateAuth')
   }
   SetAuth(args) {
     return this.makeCall('SetAuth', args)

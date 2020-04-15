@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,13 @@ export class StorageInfo extends React.Component {
   }
   render() {
     const { used } = this.props.storageInfo
+
+    if (!used) {
+      return <noscript />
+    }
+
+    const totalUsed = used.reduce((v1, v2) => v1 + v2, 0)
+
     return (
       <div className="feh-used">
         <div className="fehu-chart">
@@ -34,7 +41,7 @@ export class StorageInfo extends React.Component {
         <ul>
           <li>
             <span>Used: </span>
-            {humanize.filesize(used)}
+            {humanize.filesize(totalUsed)}
           </li>
         </ul>
       </div>
@@ -54,4 +61,7 @@ const mapDispatchToProps = dispatch => {
   }
 }
 
-export default connect(mapStateToProps, mapDispatchToProps)(StorageInfo)
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(StorageInfo)

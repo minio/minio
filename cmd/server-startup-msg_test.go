@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,14 +25,17 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
 	infoStorage := StorageInfo{}
 	infoStorage.Backend.Type = BackendErasure
-	infoStorage.Backend.OnlineDisks = 7
-	infoStorage.Backend.OfflineDisks = 1
+	infoStorage.Backend.OnlineDisks = madmin.BackendDisks{"127.0.0.1:9000": 4, "127.0.0.1:9001": 3}
+	infoStorage.Backend.OfflineDisks = madmin.BackendDisks{"127.0.0.1:9000": 0, "127.0.0.1:9001": 1}
 
 	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
 		t.Fatal("Unexpected storage info message, found:", msg)
@@ -53,8 +56,8 @@ func TestCertificateExpiryInfo(t *testing.T) {
 		},
 	}
 
-	expectedMsg := colorBlue("\nCertificate expiry info:\n") +
-		colorBold(fmt.Sprintf("#1 Test cert will expire on %s\n", expiredDate))
+	expectedMsg := color.Blue("\nCertificate expiry info:\n") +
+		color.Bold(fmt.Sprintf("#1 Test cert will expire on %s\n", expiredDate))
 
 	// When
 	msg := getCertificateChainMsg(fakeCerts)
@@ -100,7 +103,7 @@ func TestStripStandardPorts(t *testing.T) {
 
 	apiEndpoints = []string{"http://%%%%%:9000"}
 	newAPIEndpoints = stripStandardPorts(apiEndpoints)
-	if !reflect.DeepEqual(apiEndpoints, newAPIEndpoints) {
+	if !reflect.DeepEqual([]string{""}, newAPIEndpoints) {
 		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,32 +17,36 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"path"
 	"sort"
-	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/sha256-simd"
 )
 
 const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 
-// objectPartInfo Info of each part kept in the multipart metadata
+// ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
-type objectPartInfo struct {
+type ObjectPartInfo struct {
+	ETag       string `json:"etag,omitempty"`
 	Number     int    `json:"number"`
-	Name       string `json:"name"`
-	ETag       string `json:"etag"`
 	Size       int64  `json:"size"`
 	ActualSize int64  `json:"actualSize"`
 }
 
 // byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []objectPartInfo
+type byObjectPartNumber []ObjectPartInfo
 
 func (t byObjectPartNumber) Len() int           { return len(t) }
 func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
@@ -50,21 +54,21 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.
 type ChecksumInfo struct {
-	Name      string
-	Algorithm BitrotAlgorithm
-	Hash      []byte
+	PartNumber int
+	Algorithm  BitrotAlgorithm
+	Hash       []byte
 }
 
 type checksumInfoJSON struct {
 	Name      string `json:"name"`
 	Algorithm string `json:"algorithm"`
-	Hash      string `json:"hash"`
+	Hash      string `json:"hash,omitempty"`
 }
 
 // MarshalJSON marshals the ChecksumInfo struct
 func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 	info := checksumInfoJSON{
-		Name:      c.Name,
+		Name:      fmt.Sprintf("part.%d", c.PartNumber),
 		Algorithm: c.Algorithm.String(),
 		Hash:      hex.EncodeToString(c.Hash),
 	}
@@ -73,8 +77,8 @@ func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON - should never be called, instead xlMetaV1UnmarshalJSON() should be used.
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
-	logger.LogIf(context.Background(), errUnexpected)
 	var info checksumInfoJSON
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &info); err != nil {
 		return err
 	}
@@ -82,12 +86,14 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	c.Name = info.Name
 	c.Algorithm = BitrotAlgorithmFromString(info.Algorithm)
 	c.Hash = sum
+	if _, err = fmt.Sscanf(info.Name, "part.%d", &c.PartNumber); err != nil {
+		return err
+	}
 
 	if !c.Algorithm.Available() {
-		logger.LogIf(context.Background(), errBitrotHashAlgoInvalid)
+		logger.LogIf(GlobalContext, errBitrotHashAlgoInvalid)
 		return errBitrotHashAlgoInvalid
 	}
 	return nil
@@ -114,7 +120,7 @@ type ErasureInfo struct {
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 	for i, sum := range e.Checksums {
-		if sum.Name == ckSumInfo.Name {
+		if sum.PartNumber == ckSumInfo.PartNumber {
 			e.Checksums[i] = ckSumInfo
 			return
 		}
@@ -123,10 +129,10 @@ func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 }
 
 // GetChecksumInfo - get checksum of a part.
-func (e ErasureInfo) GetChecksumInfo(partName string) (ckSum ChecksumInfo) {
-	// Return the checksum.
+func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 	for _, sum := range e.Checksums {
-		if sum.Name == partName {
+		if sum.PartNumber == partNumber {
+			// Return the checksum
 			return sum
 		}
 	}
@@ -146,14 +152,14 @@ type xlMetaV1 struct {
 	Stat    statInfo `json:"stat"`    // Stat of the current object `xl.json`.
 	// Erasure coded info for the current object `xl.json`.
 	Erasure ErasureInfo `json:"erasure"`
-	// Minio release tag for current object `xl.json`.
+	// MinIO release tag for current object `xl.json`.
 	Minio struct {
 		Release string `json:"release"`
 	} `json:"minio"`
 	// Metadata map for current object `xl.json`.
 	Meta map[string]string `json:"meta,omitempty"`
 	// Captures all the individual object `xl.json`.
-	Parts []objectPartInfo `json:"parts,omitempty"`
+	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 
 // XL metadata constants.
@@ -183,6 +189,15 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 		BlockSize:    blockSizeV1,
 		Distribution: hashOrder(object, dataBlocks+parityBlocks),
 	}
+	return xlMeta
+}
+
+// Return a new xlMetaV1 initialized using the given xlMetaV1. Used in healing to make sure that we do not copy
+// over any part's checksum info which will differ for different disks.
+func newXLMetaFromXLMeta(meta xlMetaV1) xlMetaV1 {
+	xlMeta := meta
+	xlMeta.Erasure.Checksums = nil
+	xlMeta.Parts = nil
 	return xlMeta
 }
 
@@ -217,22 +232,35 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 		ContentType:     m.Meta["content-type"],
 		ContentEncoding: m.Meta["content-encoding"],
 	}
-
+	// Update expires
+	var (
+		t time.Time
+		e error
+	)
+	if exp, ok := m.Meta["expires"]; ok {
+		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
+			objInfo.Expires = t.UTC()
+		}
+	}
 	objInfo.backendType = BackendErasure
 
 	// Extract etag from metadata.
 	objInfo.ETag = extractETag(m.Meta)
 
+	// Add user tags to the object info
+	objInfo.UserTags = m.Meta[xhttp.AmzObjectTagging]
+
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
+	// Tags have also been extracted, we remove that as well.
 	objInfo.UserDefined = cleanMetadata(m.Meta)
 
 	// All the parts per object.
 	objInfo.Parts = m.Parts
 
 	// Update storage class
-	if sc, ok := m.Meta[amzStorageClass]; ok {
+	if sc, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		objInfo.StorageClass = sc
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
@@ -243,7 +271,7 @@ func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
 }
 
 // objectPartIndex - returns the index of matching object part number.
-func objectPartIndex(parts []objectPartInfo, partNumber int) int {
+func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 	for i, part := range parts {
 		if partNumber == part.Number {
 			return i
@@ -253,10 +281,9 @@ func objectPartIndex(parts []objectPartInfo, partNumber int) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag string, partSize int64, actualSize int64) {
-	partInfo := objectPartInfo{
+func (m *xlMetaV1) AddObjectPart(partNumber int, partETag string, partSize int64, actualSize int64) {
+	partInfo := ObjectPartInfo{
 		Number:     partNumber,
-		Name:       partName,
 		ETag:       partETag,
 		Size:       partSize,
 		ActualSize: actualSize,
@@ -304,8 +331,8 @@ func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Tim
 	for i, meta := range metaArr {
 		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
 			h := sha256.New()
-			for _, p := range meta.Parts {
-				h.Write([]byte(p.Name))
+			for _, part := range meta.Parts {
+				h.Write([]byte(fmt.Sprintf("part.%d", part.Number)))
 			}
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 		}
@@ -350,69 +377,6 @@ func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time,
 // list of all errors that can be ignored in a metadata operation.
 var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
-// readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
-func (xl xlObjects) readXLMetaParts(ctx context.Context, bucket, object string) (xlMetaParts []objectPartInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		xlMetaParts, xlMeta, err = readXLMetaParts(ctx, disk, bucket, object)
-		if err == nil {
-			return xlMetaParts, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return nil, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return nil, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
-
-// readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
-func (xl xlObjects) readXLMetaStat(ctx context.Context, bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		// parses only xlMetaV1.Meta and xlMeta.Stat
-		xlStat, xlMeta, err = readXLMetaStat(ctx, disk, bucket, object)
-		if err == nil {
-			return xlStat, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return statInfo{}, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return statInfo{}, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
-
-// deleteXLMetadata - deletes `xl.json` on a single disk.
-func deleteXLMetdata(ctx context.Context, disk StorageAPI, bucket, prefix string) error {
-	jsonFile := path.Join(prefix, xlMetaJSONFile)
-	err := disk.DeleteFile(bucket, jsonFile)
-	logger.LogIf(ctx, err)
-	return err
-}
-
 // writeXLMetadata - writes `xl.json` to a single disk.
 func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
 	jsonFile := path.Join(prefix, xlMetaJSONFile)
@@ -423,31 +387,11 @@ func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string
 		logger.LogIf(ctx, err)
 		return err
 	}
+
 	// Persist marshaled data.
-	err = disk.AppendFile(bucket, jsonFile, metadataBytes)
+	err = disk.WriteAll(bucket, jsonFile, bytes.NewReader(metadataBytes))
 	logger.LogIf(ctx, err)
 	return err
-}
-
-// deleteAllXLMetadata - deletes all partially written `xl.json` depending on errs.
-func deleteAllXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, errs []error) {
-	var wg = &sync.WaitGroup{}
-	// Delete all the `xl.json` left over.
-	for index, disk := range disks {
-		if disk == nil {
-			continue
-		}
-		// Undo rename object in parallel.
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			if errs[index] != nil {
-				return
-			}
-			_ = deleteXLMetdata(ctx, disk, bucket, prefix)
-		}(index, disk)
-	}
-	wg.Wait()
 }
 
 // Rename `xl.json` content to destination location for each disk in order.
@@ -460,76 +404,40 @@ func renameXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcEnt
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
 func writeUniqueXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) ([]StorageAPI, error) {
-	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(disks))
+	g := errgroup.WithNErrs(len(disks))
 
 	// Start writing `xl.json` to all disks in parallel.
-	for index, disk := range disks {
-		if disk == nil {
-			mErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Write `xl.json` in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
 			// Pick one xlMeta for a disk at index.
 			xlMetas[index].Erasure.Index = index + 1
-
-			// Write unique `xl.json` for a disk at index.
-			err := writeXLMetadata(ctx, disk, bucket, prefix, xlMetas[index])
-			if err != nil {
-				mErrs[index] = err
-			}
-		}(index, disk)
+			return writeXLMetadata(ctx, disks[index], bucket, prefix, xlMetas[index])
+		}, index)
 	}
 
 	// Wait for all the routines.
-	wg.Wait()
+	mErrs := g.Wait()
 
 	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, quorum)
-	if err == errXLWriteQuorum {
-		// Delete all `xl.json` successfully renamed.
-		deleteAllXLMetadata(ctx, disks, bucket, prefix, mErrs)
-	}
 	return evalDisks(disks, mErrs), err
 }
 
-// writeSameXLMetadata - write `xl.json` on all disks in order.
-func writeSameXLMetadata(ctx context.Context, disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum int) ([]StorageAPI, error) {
-	var wg = &sync.WaitGroup{}
-	var mErrs = make([]error, len(disks))
+// Returns per object readQuorum and writeQuorum
+// readQuorum is the min required disks to read data.
+// writeQuorum is the min required disks to write data.
+func objectQuorumFromMeta(ctx context.Context, xl xlObjects, partsMetaData []xlMetaV1, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
+	// get the latest updated Metadata and a count of all the latest updated xlMeta(s)
+	latestXLMeta, err := getLatestXLMeta(ctx, partsMetaData, errs)
 
-	// Start writing `xl.json` to all disks in parallel.
-	for index, disk := range disks {
-		if disk == nil {
-			mErrs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Write `xl.json` in a routine.
-		go func(index int, disk StorageAPI, metadata xlMetaV1) {
-			defer wg.Done()
-
-			// Save the disk order index.
-			metadata.Erasure.Index = index + 1
-
-			// Write xl metadata.
-			err := writeXLMetadata(ctx, disk, bucket, prefix, metadata)
-			if err != nil {
-				mErrs[index] = err
-			}
-		}(index, disk, xlMeta)
+	if err != nil {
+		return 0, 0, err
 	}
 
-	// Wait for all the routines.
-	wg.Wait()
-
-	err := reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
-		// Delete all `xl.json` successfully renamed.
-		deleteAllXLMetadata(ctx, disks, bucket, prefix, mErrs)
-	}
-	return evalDisks(disks, mErrs), err
+	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
+	// from latestXLMeta to get the quorum
+	return latestXLMeta.Erasure.DataBlocks, latestXLMeta.Erasure.DataBlocks + 1, nil
 }

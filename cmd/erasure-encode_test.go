@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,18 @@ func (a badDisk) String() string {
 
 func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
 	return errFaultyDisk
+}
+
+func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+	return nil, errFaultyDisk
+}
+
+func (a badDisk) CreateFile(volume, path string, size int64, reader io.Reader) error {
+	return errFaultyDisk
+}
+
+func (badDisk) Hostname() string {
+	return ""
 }
 
 const oneMiByte = 1 * humanize.MiByte
@@ -87,14 +99,15 @@ func TestErasureEncode(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to generate random test data: %v", i, err)
 		}
-		writers := make([]*bitrotWriter, len(disks))
+		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
 			if disk == OfflineDisk {
 				continue
 			}
-			writers[i] = newBitrotWriter(disk, "testbucket", "object", test.algorithm)
+			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize())
 		}
 		n, err := erasure.Encode(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, erasure.dataBlocks+1)
+		closeBitrotWriters(writers)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
@@ -110,20 +123,26 @@ func TestErasureEncode(t *testing.T) {
 			if length := int64(len(data[test.offset:])); n != length {
 				t.Errorf("Test %d: invalid number of bytes written: got: #%d want #%d", i, n, length)
 			}
-			writers := make([]*bitrotWriter, len(disks))
+			writers := make([]io.Writer, len(disks))
 			for i, disk := range disks {
 				if disk == nil {
 					continue
 				}
-				writers[i] = newBitrotWriter(disk, "testbucket", "object2", test.algorithm)
+				writers[i] = newBitrotWriter(disk, "testbucket", "object2", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize())
 			}
 			for j := range disks[:test.offDisks] {
-				writers[j].disk = badDisk{nil}
+				switch w := writers[j].(type) {
+				case *wholeBitrotWriter:
+					w.disk = badDisk{nil}
+				case *streamingBitrotWriter:
+					w.iow.CloseWithError(errFaultyDisk)
+				}
 			}
 			if test.offDisks > 0 {
 				writers[0] = nil
 			}
 			n, err = erasure.Encode(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, erasure.dataBlocks+1)
+			closeBitrotWriters(writers)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
 			}
@@ -167,14 +186,16 @@ func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, 
 	b.SetBytes(size)
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		writers := make([]*bitrotWriter, len(disks))
+		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
 			if disk == OfflineDisk {
 				continue
 			}
-			writers[i] = newBitrotWriter(disk, "testbucket", "object", DefaultBitrotAlgorithm)
+			disk.DeleteFile("testbucket", "object")
+			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		_, err := erasure.Encode(context.Background(), bytes.NewReader(content), writers, buffer, erasure.dataBlocks+1)
+		closeBitrotWriters(writers)
 		if err != nil {
 			panic(err)
 		}

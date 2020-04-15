@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -52,7 +53,7 @@ func getChunkSignature(cred auth.Credentials, seedSignature string, region strin
 		hashedChunk
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, date, region, serviceS3)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)
@@ -69,10 +70,10 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	req := *r
 
 	// Save authorization header.
-	v4Auth := req.Header.Get("Authorization")
+	v4Auth := req.Header.Get(xhttp.Authorization)
 
 	// Parse signature version '4' header.
-	signV4Values, errCode := parseSignV4(v4Auth, globalServerConfig.GetRegion())
+	signV4Values, errCode := parseSignV4(v4Auth, globalServerRegion, serviceS3)
 	if errCode != ErrNone {
 		return cred, "", "", time.Time{}, errCode
 	}
@@ -81,7 +82,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	payload := streamingContentSHA256
 
 	// Payload for STREAMING signature should be 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'
-	if payload != req.Header.Get("X-Amz-Content-Sha256") {
+	if payload != req.Header.Get(xhttp.AmzContentSha256) {
 		return cred, "", "", time.Time{}, ErrContentSHA256Mismatch
 	}
 
@@ -91,17 +92,9 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 		return cred, "", "", time.Time{}, errCode
 	}
 
-	cred = globalServerConfig.GetCredential()
-	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKey {
-		if globalIAMSys == nil {
-			return cred, "", "", time.Time{}, ErrInvalidAccessKeyID
-		}
-		var ok bool
-		cred, ok = globalIAMSys.GetUser(signV4Values.Credential.accessKey)
-		if !ok {
-			return cred, "", "", time.Time{}, ErrInvalidAccessKeyID
-		}
+	cred, _, errCode = checkKeyValid(signV4Values.Credential.accessKey)
+	if errCode != ErrNone {
+		return cred, "", "", time.Time{}, errCode
 	}
 
 	// Verify if region is valid.
@@ -109,11 +102,12 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 
 	// Extract date, if not present throw error.
 	var dateStr string
-	if dateStr = req.Header.Get(http.CanonicalHeaderKey("x-amz-date")); dateStr == "" {
+	if dateStr = req.Header.Get("x-amz-date"); dateStr == "" {
 		if dateStr = r.Header.Get("Date"); dateStr == "" {
 			return cred, "", "", time.Time{}, ErrMissingDateHeader
 		}
 	}
+
 	// Parse date header.
 	var err error
 	date, err = time.Parse(iso8601Format, dateStr)
@@ -131,7 +125,7 @@ func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature s
 	stringToSign := getStringToSign(canonicalRequest, date, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region, serviceS3)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

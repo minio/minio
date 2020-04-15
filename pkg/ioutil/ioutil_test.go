@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,5 +99,36 @@ func TestSkipReader(t *testing.T) {
 		if string(b) != testCase.expected {
 			t.Errorf("Case %d: Got wrong result: %v", i, string(b))
 		}
+	}
+}
+
+func TestSameFile(t *testing.T) {
+	f, err := goioutil.TempFile("", "")
+	if err != nil {
+		t.Errorf("Error creating tmp file: %v", err)
+	}
+	tmpFile := f.Name()
+	f.Close()
+	defer os.Remove(f.Name())
+	fi1, err := os.Stat(tmpFile)
+	if err != nil {
+		t.Fatalf("Error Stat(): %v", err)
+	}
+	fi2, err := os.Stat(tmpFile)
+	if err != nil {
+		t.Fatalf("Error Stat(): %v", err)
+	}
+	if !SameFile(fi1, fi2) {
+		t.Fatal("Expected the files to be same")
+	}
+	if err = goioutil.WriteFile(tmpFile, []byte("aaa"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	fi2, err = os.Stat(tmpFile)
+	if err != nil {
+		t.Fatalf("Error Stat(): %v", err)
+	}
+	if SameFile(fi1, fi2) {
+		t.Fatal("Expected the files not to be same")
 	}
 }

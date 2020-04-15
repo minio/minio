@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@
 package nas
 
 import (
+	"context"
+
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
@@ -37,44 +39,30 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 PATH:
-  Path to NAS mount point.
-
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of minimum 3 characters in length.
-     MINIO_SECRET_KEY: Password or secret key of minimum 8 characters in length.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
+  path to NAS mount point
 
 EXAMPLES:
-  1. Start minio gateway server for NAS backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}} /shared/nasvol
+  1. Start minio gateway server for NAS backend
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}} /shared/nasvol
 
-  2. Start minio gateway server for NAS with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}} /shared/nasvol
+  2. Start minio gateway server for NAS with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
+
+     {{.Prompt}} {{.HelpName}} /shared/nasvol
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               nasBackend,
-		Usage:              "Network-attached storage (NAS).",
+		Usage:              "Network-attached storage (NAS)",
 		Action:             nasGatewayMain,
 		CustomHelpTemplate: nasGatewayTemplate,
 		HideHelpCommand:    true,
@@ -108,7 +96,7 @@ func (g *NAS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if err != nil {
 		return nil, err
 	}
-	return &nasObjects{newObject.(*minio.FSObjects)}, nil
+	return &nasObjects{newObject}, nil
 }
 
 // Production - nas gateway is production ready.
@@ -116,17 +104,25 @@ func (g *NAS) Production() bool {
 	return true
 }
 
-// nasObjects implements gateway for Minio and S3 compatible object storage servers.
+// IsListenBucketSupported returns whether listen bucket notification is applicable for this gateway.
+func (n *nasObjects) IsListenBucketSupported() bool {
+	return false
+}
+
+func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
+	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
+	sinfo.Backend.GatewayOnline = sinfo.Backend.Type == minio.BackendFS
+	sinfo.Backend.Type = minio.BackendGateway
+	return sinfo
+}
+
+// nasObjects implements gateway for MinIO and S3 compatible object storage servers.
 type nasObjects struct {
-	*minio.FSObjects
+	minio.ObjectLayer
 }
 
-// IsNotificationSupported returns whether notifications are applicable for this layer.
-func (l *nasObjects) IsNotificationSupported() bool {
-	return false
-}
-
-// IsCompressionSupported returns whether compression is applicable for this layer.
-func (l *nasObjects) IsCompressionSupported() bool {
-	return false
+// IsReady returns whether the layer is ready to take requests.
+func (n *nasObjects) IsReady(ctx context.Context) bool {
+	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
+	return sinfo.Backend.Type == minio.BackendFS
 }

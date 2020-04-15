@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,43 @@
 
 package auth
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestExpToInt64(t *testing.T) {
+	testCases := []struct {
+		exp             interface{}
+		expectedFailure bool
+	}{
+		{"", true},
+		{"-1", true},
+		{"1574812326", false},
+		{1574812326, false},
+		{int64(1574812326), false},
+		{int(1574812326), false},
+		{uint(1574812326), false},
+		{uint64(1574812326), false},
+		{json.Number("1574812326"), false},
+		{1574812326.000, false},
+		{time.Duration(3) * time.Minute, false},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			_, err := ExpToInt64(testCase.exp)
+			if err != nil && !testCase.expectedFailure {
+				t.Errorf("Expected success but got failure %s", err)
+			}
+			if err == nil && testCase.expectedFailure {
+				t.Error("Expected failure but got success")
+			}
+		})
+	}
+}
 
 func TestIsAccessKeyValid(t *testing.T) {
 	testCases := []struct {
@@ -47,7 +83,7 @@ func TestIsSecretKeyValid(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		result := isSecretKeyValid(testCase.secretKey)
+		result := IsSecretKeyValid(testCase.secretKey)
 		if result != testCase.expectedResult {
 			t.Fatalf("test %v: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 		}

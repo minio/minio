@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ export const DeleteObjectConfirmModal = ({
 }) => (
   <ConfirmModal
     show={true}
-    icon="fa fa-exclamation-triangle mci-red"
+    icon="fas fa-exclamation-triangle mci-red"
     text="Are you sure you want to delete?"
     sub="This cannot be undone!"
     okText="Delete"

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"time"
 )
@@ -44,7 +46,13 @@ type DriveInfo HealDriveInfo
 
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	Used uint64 // Total used spaced per tenant.
+	Used []uint64 // Used total used per disk.
+
+	Total []uint64 // Total disk space per disk.
+
+	Available []uint64 // Total disk space available per disk.
+
+	MountPaths []string // Disk mountpoints
 
 	// Backend type.
 	Backend struct {
@@ -52,76 +60,156 @@ type StorageInfo struct {
 		Type BackendType
 
 		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks      int // Online disks during server startup.
-		OfflineDisks     int // Offline disks during server startup.
-		StandardSCData   int // Data disks for currently configured Standard storage class.
-		StandardSCParity int // Parity disks for currently configured Standard storage class.
-		RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
-		RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+		OnlineDisks      BackendDisks // Online disks during server startup.
+		OfflineDisks     BackendDisks // Offline disks during server startup.
+		StandardSCData   int          // Data disks for currently configured Standard storage class.
+		StandardSCParity int          // Parity disks for currently configured Standard storage class.
+		RRSCData         int          // Data disks for currently configured Reduced Redundancy storage class.
+		RRSCParity       int          // Parity disks for currently configured Reduced Redundancy storage class.
 
 		// List of all disk status, this is only meaningful if BackendType is Erasure.
 		Sets [][]DriveInfo
 	}
 }
 
-// ServerProperties holds some of the server's information such as uptime,
-// version, region, ..
-type ServerProperties struct {
-	Uptime   time.Duration `json:"uptime"`
-	Version  string        `json:"version"`
-	CommitID string        `json:"commitID"`
-	Region   string        `json:"region"`
-	SQSARN   []string      `json:"sqsARN"`
+// BackendDisks - represents the map of endpoint-disks.
+type BackendDisks map[string]int
+
+// Sum - Return the sum of the disks in the endpoint-disk map.
+func (d1 BackendDisks) Sum() (sum int) {
+	for _, count := range d1 {
+		sum += count
+	}
+	return sum
 }
 
-// ServerConnStats holds network information
-type ServerConnStats struct {
-	TotalInputBytes  uint64 `json:"transferred"`
-	TotalOutputBytes uint64 `json:"received"`
+// Merge - Reduces two endpoint-disk maps.
+func (d1 BackendDisks) Merge(d2 BackendDisks) BackendDisks {
+	if len(d2) == 0 {
+		d2 = make(BackendDisks)
+	}
+	for i1, v1 := range d1 {
+		if v2, ok := d2[i1]; ok {
+			d2[i1] = v2 + v1
+			continue
+		}
+		d2[i1] = v1
+	}
+	return d2
 }
 
-// ServerHTTPMethodStats holds total number of HTTP operations from/to the server,
-// including the average duration the call was spent.
-type ServerHTTPMethodStats struct {
-	Count       uint64 `json:"count"`
-	AvgDuration string `json:"avgDuration"`
+// StorageInfo - Connect to a minio server and call Storage Info Management API
+// to fetch server's information represented by StorageInfo structure
+func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/storageinfo"})
+	defer closeResponse(resp)
+	if err != nil {
+		return StorageInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return StorageInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var storageInfo StorageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return StorageInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &storageInfo)
+	if err != nil {
+		return StorageInfo{}, err
+	}
+
+	return storageInfo, nil
 }
 
-// ServerHTTPStats holds all type of http operations performed to/from the server
-// including their average execution time.
-type ServerHTTPStats struct {
-	TotalHEADStats     ServerHTTPMethodStats `json:"totalHEADs"`
-	SuccessHEADStats   ServerHTTPMethodStats `json:"successHEADs"`
-	TotalGETStats      ServerHTTPMethodStats `json:"totalGETs"`
-	SuccessGETStats    ServerHTTPMethodStats `json:"successGETs"`
-	TotalPUTStats      ServerHTTPMethodStats `json:"totalPUTs"`
-	SuccessPUTStats    ServerHTTPMethodStats `json:"successPUTs"`
-	TotalPOSTStats     ServerHTTPMethodStats `json:"totalPOSTs"`
-	SuccessPOSTStats   ServerHTTPMethodStats `json:"successPOSTs"`
-	TotalDELETEStats   ServerHTTPMethodStats `json:"totalDELETEs"`
-	SuccessDELETEStats ServerHTTPMethodStats `json:"successDELETEs"`
+type objectHistogramInterval struct {
+	name       string
+	start, end int64
 }
 
-// ServerInfoData holds storage, connections and other
-// information of a given server
-type ServerInfoData struct {
-	StorageInfo StorageInfo      `json:"storage"`
-	ConnStats   ServerConnStats  `json:"network"`
-	HTTPStats   ServerHTTPStats  `json:"http"`
-	Properties  ServerProperties `json:"server"`
+// ObjectsHistogramIntervals contains the list of intervals
+// of an histogram analysis of objects sizes.
+var ObjectsHistogramIntervals = []objectHistogramInterval{
+	{"LESS_THAN_1024_B", -1, 1024 - 1},
+	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
+	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
+	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
 }
 
-// ServerInfo holds server information result of one node
-type ServerInfo struct {
-	Error string          `json:"error"`
-	Addr  string          `json:"addr"`
-	Data  *ServerInfoData `json:"data"`
+// DataUsageInfo represents data usage of an Object API
+type DataUsageInfo struct {
+	// LastUpdate is the timestamp of when the data usage info was last updated.
+	// This does not indicate a full scan.
+	LastUpdate       time.Time `json:"lastUpdate"`
+	ObjectsCount     uint64    `json:"objectsCount"`
+	ObjectsTotalSize uint64    `json:"objectsTotalSize"`
+
+	// ObjectsSizesHistogram contains information on objects across all buckets.
+	// See ObjectsHistogramIntervals.
+	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
+
+	BucketsCount uint64 `json:"bucketsCount"`
+
+	// BucketsSizes is "bucket name" -> size.
+	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
-// ServerInfo - Connect to a minio server and call Server Info Management API
-// to fetch server's information represented by ServerInfo structure
-func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
-	resp, err := adm.executeMethod("GET", requestData{relPath: "/v1/info"})
+// DataUsageInfo - returns data usage of the current object API
+func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/datausageinfo"})
+	defer closeResponse(resp)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return DataUsageInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var dataUsageInfo DataUsageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &dataUsageInfo)
+	if err != nil {
+		return DataUsageInfo{}, err
+	}
+
+	return dataUsageInfo, nil
+}
+
+// AccountAccess contains information about
+type AccountAccess struct {
+	AccountName string `json:"accountName"`
+	Read        bool   `json:"read"`
+	Write       bool   `json:"write"`
+	Custom      bool   `json:"custom"`
+}
+
+// BucketAccountingUsage represents the accounting usage of a particular bucket
+type BucketAccountingUsage struct {
+	Size       uint64          `json:"size"`
+	AccessList []AccountAccess `json:"accessList"`
+}
+
+// AccountingUsageInfo returns the accounting usage info, currently it returns
+// the type of access of different accounts to the different buckets.
+func (adm *AdminClient) AccountingUsageInfo(ctx context.Context) (map[string]BucketAccountingUsage, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -133,17 +221,171 @@ func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
 	}
 
 	// Unmarshal the server's json response
-	var serversInfo []ServerInfo
+	var accountingUsageInfo map[string]BucketAccountingUsage
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	err = json.Unmarshal(respBytes, &serversInfo)
+	err = json.Unmarshal(respBytes, &accountingUsageInfo)
 	if err != nil {
 		return nil, err
 	}
 
-	return serversInfo, nil
+	return accountingUsageInfo, nil
+}
+
+// InfoMessage container to hold server admin related information.
+type InfoMessage struct {
+	Mode         string             `json:"mode,omitempty"`
+	Domain       []string           `json:"domain,omitempty"`
+	Region       string             `json:"region,omitempty"`
+	SQSARN       []string           `json:"sqsARN,omitempty"`
+	DeploymentID string             `json:"deploymentID,omitempty"`
+	Buckets      Buckets            `json:"buckets,omitempty"`
+	Objects      Objects            `json:"objects,omitempty"`
+	Usage        Usage              `json:"usage,omitempty"`
+	Services     Services           `json:"services,omitempty"`
+	Backend      interface{}        `json:"backend,omitempty"`
+	Servers      []ServerProperties `json:"servers,omitempty"`
+}
+
+// Services contains different services information
+type Services struct {
+	Vault         Vault                         `json:"vault,omitempty"`
+	LDAP          LDAP                          `json:"ldap,omitempty"`
+	Logger        []Logger                      `json:"logger,omitempty"`
+	Audit         []Audit                       `json:"audit,omitempty"`
+	Notifications []map[string][]TargetIDStatus `json:"notifications,omitempty"`
+}
+
+// Buckets contains the number of buckets
+type Buckets struct {
+	Count uint64 `json:"count,omitempty"`
+}
+
+// Objects contains the number of objects
+type Objects struct {
+	Count uint64 `json:"count,omitempty"`
+}
+
+// Usage contains the tottal size used
+type Usage struct {
+	Size uint64 `json:"size,omitempty"`
+}
+
+// Vault - Fetches the Vault status
+type Vault struct {
+	Status  string `json:"status,omitempty"`
+	Encrypt string `json:"encryp,omitempty"`
+	Decrypt string `json:"decrypt,omitempty"`
+}
+
+// LDAP contains ldap status
+type LDAP struct {
+	Status string `json:"status,omitempty"`
+}
+
+// Status of endpoint
+type Status struct {
+	Status string `json:"status,omitempty"`
+}
+
+// Audit contains audit logger status
+type Audit map[string]Status
+
+// Logger contains logger status
+type Logger map[string]Status
+
+// TargetIDStatus containsid and status
+type TargetIDStatus map[string]Status
+
+// backendType - indicates the type of backend storage
+type backendType string
+
+const (
+	// FsType - Backend is FS Type
+	FsType = backendType("FS")
+	// ErasureType - Backend is Erasure type
+	ErasureType = backendType("Erasure")
+)
+
+// FSBackend contains specific FS storage information
+type FSBackend struct {
+	Type backendType `json:"backendType,omitempty"`
+}
+
+// XLBackend contains specific erasure storage information
+type XLBackend struct {
+	Type         backendType `json:"backendType,omitempty"`
+	OnlineDisks  int         `json:"onlineDisks,omitempty"`
+	OfflineDisks int         `json:"offlineDisks,omitempty"`
+	// Data disks for currently configured Standard storage class.
+	StandardSCData int `json:"standardSCData,omitempty"`
+	// Parity disks for currently configured Standard storage class.
+	StandardSCParity int `json:"standardSCParity,omitempty"`
+	// Data disks for currently configured Reduced Redundancy storage class.
+	RRSCData int `json:"rrSCData,omitempty"`
+	// Parity disks for currently configured Reduced Redundancy storage class.
+	RRSCParity int `json:"rrSCParity,omitempty"`
+}
+
+// ServerProperties holds server information
+type ServerProperties struct {
+	State    string            `json:"state,omitempty"`
+	Endpoint string            `json:"endpoint,omitempty"`
+	Uptime   int64             `json:"uptime,omitempty"`
+	Version  string            `json:"version,omitempty"`
+	CommitID string            `json:"commitID,omitempty"`
+	Network  map[string]string `json:"network,omitempty"`
+	Disks    []Disk            `json:"disks,omitempty"`
+}
+
+// Disk holds Disk information
+type Disk struct {
+	DrivePath       string  `json:"path,omitempty"`
+	State           string  `json:"state,omitempty"`
+	UUID            string  `json:"uuid,omitempty"`
+	Model           string  `json:"model,omitempty"`
+	TotalSpace      uint64  `json:"totalspace,omitempty"`
+	UsedSpace       uint64  `json:"usedspace,omitempty"`
+	ReadThroughput  float64 `json:"readthroughput,omitempty"`
+	WriteThroughPut float64 `json:"writethroughput,omitempty"`
+	ReadLatency     float64 `json:"readlatency,omitempty"`
+	WriteLatency    float64 `json:"writelatency,omitempty"`
+	Utilization     float64 `json:"utilization,omitempty"`
+}
+
+// ServerInfo - Connect to a minio server and call Server Admin Info Management API
+// to fetch server's information represented by infoMessage structure
+func (adm *AdminClient) ServerInfo(ctx context.Context) (InfoMessage, error) {
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
+		requestData{relPath: adminAPIPrefix + "/info"},
+	)
+	defer closeResponse(resp)
+	if err != nil {
+		return InfoMessage{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return InfoMessage{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var message InfoMessage
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return InfoMessage{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &message)
+	if err != nil {
+		return InfoMessage{}, err
+	}
+
+	return message, nil
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,16 +26,18 @@ import (
 	"strings"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/dustin/go-humanize"
+	humanize "github.com/dustin/go-humanize"
 
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
 )
 
 const (
@@ -56,49 +58,29 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 ENDPOINT:
-  OSS server endpoint. Default ENDPOINT is https://oss.aliyuncs.com
-
-ENVIRONMENT VARIABLES:
-  ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of OSS storage.
-     MINIO_SECRET_KEY: Password or secret key of OSS storage.
-
-  BROWSER:
-     MINIO_BROWSER: To disable web browser access, set this value to "off".
-
-  DOMAIN:
-     MINIO_DOMAIN: To enable virtual-host-style requests, set this value to Minio host domain name.
-
-  CACHE:
-     MINIO_CACHE_DRIVES: List of mounted drives or directories delimited by ";".
-     MINIO_CACHE_EXCLUDE: List of cache exclusion patterns delimited by ";".
-     MINIO_CACHE_EXPIRY: Cache expiry duration in days.
-     MINIO_CACHE_MAXUSE: Maximum permitted usage of the cache in percentage (0-100).
+  oss server endpoint. Default ENDPOINT is https://oss.aliyuncs.com
 
 EXAMPLES:
-  1. Start minio gateway server for Aliyun OSS backend.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ {{.HelpName}}
+  1. Start minio gateway server for Aliyun OSS backend
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.HelpName}}
 
-  2. Start minio gateway server for Aliyun OSS backend on custom endpoint.
-     $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-     $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-     $ {{.HelpName}} https://oss.example.com
-
-  3. Start minio gateway server for Aliyun OSS backend with edge caching enabled.
-     $ export MINIO_ACCESS_KEY=accesskey
-     $ export MINIO_SECRET_KEY=secretkey
-     $ export MINIO_CACHE_DRIVES="/mnt/drive1;/mnt/drive2;/mnt/drive3;/mnt/drive4"
-     $ export MINIO_CACHE_EXCLUDE="bucket1/*;*.png"
-     $ export MINIO_CACHE_EXPIRY=40
-     $ export MINIO_CACHE_MAXUSE=80
-     $ {{.HelpName}}
+  2. Start minio gateway server for Aliyun OSS backend with edge caching enabled
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
+     {{.Prompt}} {{.HelpName}}
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
 		Name:               "oss",
-		Usage:              "Alibaba Cloud (Aliyun) Object Storage Service (OSS).",
+		Usage:              "Alibaba Cloud (Aliyun) Object Storage Service (OSS)",
 		Action:             ossGatewayMain,
 		CustomHelpTemplate: ossGatewayTemplate,
 		HideHelpCommand:    true,
@@ -143,7 +125,9 @@ func (g *OSS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	if err != nil {
 		return nil, err
 	}
-
+	client.HTTPClient = &http.Client{
+		Transport: minio.NewGatewayHTTPTransport(),
+	}
 	return &ossObjects{
 		Client: client,
 	}, nil
@@ -180,7 +164,7 @@ func appendS3MetaToOSSOptions(ctx context.Context, opts []oss.Option, s3Metadata
 		case k == "X-Amz-Acl":
 			// Valid values: public-read, private, and public-read-write
 			opts = append(opts, oss.ObjectACL(oss.ACLType(v)))
-		case k == "X-Amz-Server-Side​-Encryption":
+		case k == "X-Amz-Server-Side-Encryption":
 			opts = append(opts, oss.ServerSideEncryption(v))
 		case k == "X-Amz-Copy-Source-If-Match":
 			opts = append(opts, oss.CopySourceIfMatch(v))
@@ -338,8 +322,10 @@ func (l *ossObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to OSS backend.
-func (l *ossObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
-	return
+func (l *ossObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
+	return si
 }
 
 // ossIsValidBucketName verifies whether a bucket name is valid.
@@ -348,7 +334,7 @@ func ossIsValidBucketName(bucket string) bool {
 	if strings.Contains(bucket, ".") {
 		return false
 	}
-	if !minio.IsValidBucketName(bucket) {
+	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return false
 	}
 	return true
@@ -412,7 +398,7 @@ func (l *ossObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 }
 
 // DeleteBucket deletes a bucket on OSS.
-func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *ossObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	err := l.Client.DeleteBucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -431,7 +417,7 @@ func fromOSSClientObjectProperties(bucket string, o oss.ObjectProperties) minio.
 		Name:    o.Key,
 		ModTime: o.LastModified,
 		Size:    o.Size,
-		ETag:    minio.ToS3ETag(o.ETag),
+		ETag:    o.ETag,
 	}
 }
 
@@ -517,13 +503,13 @@ func (l *ossObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continua
 // length indicates the total length of the object.
 func ossGetObject(ctx context.Context, client *oss.Client, bucket, key string, startOffset, length int64, writer io.Writer, etag string) error {
 	if length < 0 && length != -1 {
-		logger.LogIf(ctx, fmt.Errorf("Invalid argument"))
+		logger.LogIf(ctx, fmt.Errorf("Invalid argument"), logger.Application)
 		return ossToObjectError(fmt.Errorf("Invalid argument"), bucket, key)
 	}
 
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, err, logger.Application)
 		return ossToObjectError(err, bucket, key)
 	}
 
@@ -568,7 +554,7 @@ func (l *ossObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, pipeCloser), nil
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
 }
 
 // GetObject reads an object on OSS. Supports additional
@@ -619,7 +605,7 @@ func ossGetObjectInfo(ctx context.Context, client *oss.Client, bucket, object st
 		Name:            object,
 		ModTime:         modTime,
 		Size:            size,
-		ETag:            minio.ToS3ETag(header.Get("ETag")),
+		ETag:            header.Get("ETag"),
 		UserDefined:     userDefined,
 		ContentType:     header.Get("Content-Type"),
 		ContentEncoding: header.Get("Content-Encoding"),
@@ -655,12 +641,17 @@ func ossPutObject(ctx context.Context, client *oss.Client, bucket, object string
 }
 
 // PutObject creates a new object with the incoming data.
-func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, data *hash.Reader, metadata map[string]string, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	return ossPutObject(ctx, l.Client, bucket, object, data, metadata)
+func (l *ossObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	data := r.Reader
+
+	return ossPutObject(ctx, l.Client, bucket, object, data, opts.UserDefined)
 }
 
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *ossObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
+	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+		return minio.ObjectInfo{}, minio.PreConditionFailed{}
+	}
 	bkt, err := l.Client.Bucket(srcBucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -701,6 +692,14 @@ func (l *ossObjects) DeleteObject(ctx context.Context, bucket, object string) er
 		return ossToObjectError(err, bucket, object)
 	}
 	return nil
+}
+
+func (l *ossObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+	errs := make([]error, len(objects))
+	for idx, object := range objects {
+		errs[idx] = l.DeleteObject(ctx, bucket, object)
+	}
+	return errs, nil
 }
 
 // fromOSSClientListMultipartsInfo converts oss ListMultipartUploadResult to ListMultipartsInfo
@@ -750,7 +749,7 @@ func (l *ossObjects) ListMultipartUploads(ctx context.Context, bucket, prefix, k
 }
 
 // NewMultipartUpload upload object in multiple parts.
-func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object string, metadata map[string]string, o minio.ObjectOptions) (uploadID string, err error) {
+func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -758,7 +757,7 @@ func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 	}
 
 	// Build OSS metadata
-	opts, err := appendS3MetaToOSSOptions(ctx, nil, metadata)
+	opts, err := appendS3MetaToOSSOptions(ctx, nil, o.UserDefined)
 	if err != nil {
 		return uploadID, ossToObjectError(err, bucket, object)
 	}
@@ -773,7 +772,8 @@ func (l *ossObjects) NewMultipartUpload(ctx context.Context, bucket, object stri
 }
 
 // PutObjectPart puts a part of object in bucket.
-func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *hash.Reader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjReader, opts minio.ObjectOptions) (pi minio.PartInfo, err error) {
+	data := r.Reader
 	bkt, err := l.Client.Bucket(bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -794,7 +794,7 @@ func (l *ossObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 
 	return minio.PartInfo{
 		Size: size,
-		ETag: minio.ToS3ETag(up.ETag),
+		ETag: up.ETag,
 		// NOTE(timonwong): LastModified is not supported
 		PartNumber: up.PartNumber,
 	}, nil
@@ -815,7 +815,7 @@ func fromOSSClientListPartsInfo(lupr oss.ListUploadedPartsResult, partNumberMark
 		parts[i] = minio.PartInfo{
 			PartNumber:   up.PartNumber,
 			LastModified: up.LastModified,
-			ETag:         minio.ToS3ETag(up.ETag),
+			ETag:         up.ETag,
 			Size:         int64(up.Size),
 		}
 	}
@@ -841,7 +841,7 @@ func ossListObjectParts(client *oss.Client, bucket, object, uploadID string, par
 	}
 
 	// always drain output (response body)
-	defer minio.CloseResponse(resp.Body)
+	defer xhttp.DrainBody(resp.Body)
 
 	err = xml.NewDecoder(resp.Body).Decode(&lupr)
 	if err != nil {
@@ -878,12 +878,12 @@ func (l *ossObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	p.PartNumber = completePart.PartNumber
-	p.ETag = minio.ToS3ETag(completePart.ETag)
+	p.ETag = completePart.ETag
 	return p, nil
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
-func (l *ossObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int) (lpi minio.ListPartsInfo, err error) {
+func (l *ossObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, err error) {
 	lupr, err := ossListObjectParts(l.Client, bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -914,7 +914,7 @@ func (l *ossObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object.
-func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart) (oi minio.ObjectInfo, err error) {
+func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []minio.CompletePart, opts minio.ObjectOptions) (oi minio.ObjectInfo, err error) {
 	client := l.Client
 	bkt, err := client.Bucket(bucket)
 	if err != nil {
@@ -947,12 +947,12 @@ func (l *ossObjects) CompleteMultipartUpload(ctx context.Context, bucket, object
 				logger.LogIf(ctx, minio.PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   int64(part.Size),
-					PartETag:   minio.ToS3ETag(part.ETag),
+					PartETag:   part.ETag,
 				})
 				return oi, minio.PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   int64(part.Size),
-					PartETag:   minio.ToS3ETag(part.ETag),
+					PartETag:   part.ETag,
 				}
 			}
 		}
@@ -1099,4 +1099,9 @@ func (l *ossObjects) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *ossObjects) IsCompressionSupported() bool {
 	return false
+}
+
+// IsReady returns whether the layer is ready to take requests.
+func (l *ossObjects) IsReady(ctx context.Context) bool {
+	return minio.IsBackendOnline(ctx, l.Client.HTTPClient, l.Client.Config.Endpoint)
 }

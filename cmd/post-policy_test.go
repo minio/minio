@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,10 +53,12 @@ func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey stri
 	dateConditionStr := fmt.Sprintf(`["eq", "$x-amz-date", "%s"]`, t.Format(iso8601DateFormat))
 	// Add the credential string, only accept the credential passed.
 	credentialConditionStr := fmt.Sprintf(`["eq", "$x-amz-credential", "%s"]`, credential)
+	// Add the meta-uuid string, set to 1234
+	uuidConditionStr := fmt.Sprintf(`["eq", "$x-amz-meta-uuid", "%s"]`, "1234")
 
 	// Combine all conditions into one string.
-	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s]`, bucketConditionStr,
-		keyConditionStr, contentLengthCondStr, algorithmConditionStr, dateConditionStr, credentialConditionStr)
+	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s, %s]`, bucketConditionStr,
+		keyConditionStr, contentLengthCondStr, algorithmConditionStr, dateConditionStr, credentialConditionStr, uuidConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
 	retStr = retStr + conditionStr
@@ -80,9 +82,11 @@ func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration t
 	dateConditionStr := fmt.Sprintf(`["eq", "$x-amz-date", "%s"]`, t.Format(iso8601DateFormat))
 	// Add the credential string, only accept the credential passed.
 	credentialConditionStr := fmt.Sprintf(`["eq", "$x-amz-credential", "%s"]`, credential)
+	// Add the meta-uuid string, set to 1234
+	uuidConditionStr := fmt.Sprintf(`["eq", "$x-amz-meta-uuid", "%s"]`, "1234")
 
 	// Combine all conditions into one string.
-	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s]`, bucketConditionStr, keyConditionStr, algorithmConditionStr, dateConditionStr, credentialConditionStr)
+	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s]`, bucketConditionStr, keyConditionStr, algorithmConditionStr, dateConditionStr, credentialConditionStr, uuidConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
 	retStr = retStr + conditionStr
@@ -128,7 +132,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
@@ -261,7 +265,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
-			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"],["eq", "$x-amz-meta-uuid", "1234"]]}`,
 		},
 		// Corrupted Base 64 result
 		{
@@ -300,7 +304,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTime.Add(-1 * time.Minute * 5).Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
@@ -310,7 +314,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
-			expectedRespStatus: http.StatusBadRequest,
+			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
@@ -442,7 +446,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
-	credentials := globalServerConfig.GetCredential()
+	credentials := globalActiveCred
 
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
@@ -457,7 +461,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	rec := httptest.NewRecorder()
 
 	dates := []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
-	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL.String() + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
+	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL.String() + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-meta-uuid", "1234"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
 
 	// Generate the final policy document
 	policy = fmt.Sprintf(policy, dates...)
@@ -499,7 +503,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 // postPresignSignatureV4 - presigned signature for PostPolicy requests.
 func postPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, location string) string {
 	// Get signining key.
-	signingkey := getSigningKey(secretAccessKey, t, location)
+	signingkey := getSigningKey(secretAccessKey, t, location, "s3")
 	// Calculate signature.
 	signature := getSignature(signingkey, policyBase64)
 	return signature

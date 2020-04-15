@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -50,75 +49,21 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 	return buffer.Bytes(), nil
 }
 
-func deleteConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
-	_, err := client.Delete(ctx, configFile)
-	return err
-}
-
 func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
 	return objAPI.DeleteObject(ctx, minioMetaBucket, configFile)
 }
 
-func saveConfigEtcd(ctx context.Context, client *etcd.Client, configFile string, data []byte) error {
-	_, err := client.Put(ctx, configFile, string(data))
-	return err
-}
-
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
-	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)))
+	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)), globalCLIContext.StrictS3Compat)
 	if err != nil {
 		return err
 	}
 
-	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, hashReader, nil, ObjectOptions{})
+	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader, nil, nil), ObjectOptions{})
 	return err
-}
-
-func readConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) ([]byte, error) {
-	resp, err := client.Get(ctx, configFile)
-	if err != nil {
-		return nil, err
-	}
-	if resp.Count == 0 {
-		return nil, errConfigNotFound
-	}
-	for _, ev := range resp.Kvs {
-		if string(ev.Key) == configFile {
-			return ev.Value, nil
-		}
-	}
-	return nil, errConfigNotFound
-}
-
-// watchConfig - watches for changes on `configFile` on etcd and loads them.
-func watchConfig(objAPI ObjectLayer, configFile string, loadCfgFn func(ObjectLayer) error) {
-	if globalEtcdClient != nil {
-		for watchResp := range globalEtcdClient.Watch(context.Background(), configFile) {
-			for _, event := range watchResp.Events {
-				if event.IsModify() || event.IsCreate() {
-					loadCfgFn(objAPI)
-				}
-			}
-		}
-	}
-}
-
-func checkConfigEtcd(ctx context.Context, client *etcd.Client, configFile string) error {
-	resp, err := globalEtcdClient.Get(ctx, configFile)
-	if err != nil {
-		return err
-	}
-	if resp.Count == 0 {
-		return errConfigNotFound
-	}
-	return nil
 }
 
 func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
-	if globalEtcdClient != nil {
-		return checkConfigEtcd(ctx, globalEtcdClient, configFile)
-	}
-
 	if _, err := objAPI.GetObjectInfo(ctx, minioMetaBucket, configFile, ObjectOptions{}); err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {

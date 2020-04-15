@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,6 @@ package cmd
 const (
 	// Format config file carries backend format specific details.
 	formatConfigFile = "format.json"
-
-	// Format config tmp file carries backend format.
-	formatConfigFileTmp = "format.json.tmp"
 )
 
 const (

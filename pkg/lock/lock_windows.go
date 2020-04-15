@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,6 +80,7 @@ func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, er
 	switch flag {
 	case syscall.O_RDONLY:
 		// https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-lockfileex
+		//lint:ignore SA4016 Reasons
 		lockType = lockFileFailImmediately | 0 // Set this to enable shared lock and fail immediately.
 	}
 	return lockedOpenFile(path, flag, perm, lockType)

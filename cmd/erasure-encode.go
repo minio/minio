@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,15 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-// Writes in parallel to bitrotWriters
+// Writes in parallel to writers
 type parallelWriter struct {
-	writers     []*bitrotWriter
+	writers     []io.Writer
 	writeQuorum int
 	errs        []error
 }
 
-// Append appends data to bitrotWriters in parallel.
-func (p *parallelWriter) Append(ctx context.Context, blocks [][]byte) error {
+// Write writes data to writers in parallel.
+func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 	var wg sync.WaitGroup
 
 	for i := range p.writers {
@@ -45,7 +45,7 @@ func (p *parallelWriter) Append(ctx context.Context, blocks [][]byte) error {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			p.errs[i] = p.writers[i].Append(blocks[i])
+			_, p.errs[i] = p.writers[i].Write(blocks[i])
 			if p.errs[i] != nil {
 				p.writers[i] = nil
 			}
@@ -70,7 +70,7 @@ func (p *parallelWriter) Append(ctx context.Context, blocks [][]byte) error {
 }
 
 // Encode reads from the reader, erasure-encodes the data and writes to the writers.
-func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []*bitrotWriter, buf []byte, quorum int) (total int64, err error) {
+func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer, buf []byte, quorum int) (total int64, err error) {
 	writer := &parallelWriter{
 		writers:     writers,
 		writeQuorum: quorum,
@@ -96,7 +96,7 @@ func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []*bitrotWr
 			return 0, err
 		}
 
-		if err = writer.Append(ctx, blocks); err != nil {
+		if err = writer.Write(ctx, blocks); err != nil {
 			logger.LogIf(ctx, err)
 			return 0, err
 		}

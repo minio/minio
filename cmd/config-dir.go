@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package cmd
 import (
 	"os"
 	"path/filepath"
-	"sync"
 
 	homedir "github.com/mitchellh/go-homedir"
 )
@@ -41,55 +40,9 @@ const (
 	privateKeyFile = "private.key"
 )
 
-// ConfigDir - configuration directory with locking.
+// ConfigDir - points to a user set directory.
 type ConfigDir struct {
-	sync.Mutex
-	dir string
-}
-
-// Set - saves given directory as configuration directory.
-func (config *ConfigDir) Set(dir string) {
-	config.Lock()
-	defer config.Unlock()
-
-	config.dir = dir
-}
-
-// Get - returns current configuration directory.
-func (config *ConfigDir) Get() string {
-	config.Lock()
-	defer config.Unlock()
-
-	return config.dir
-}
-
-func (config *ConfigDir) getCertsDir() string {
-	return filepath.Join(config.Get(), certsDir)
-}
-
-// GetCADir - returns certificate CA directory.
-func (config *ConfigDir) GetCADir() string {
-	return filepath.Join(config.getCertsDir(), certsCADir)
-}
-
-// Create - creates configuration directory tree.
-func (config *ConfigDir) Create() error {
-	return os.MkdirAll(config.GetCADir(), 0700)
-}
-
-// GetMinioConfigFile - returns absolute path of config.json file.
-func (config *ConfigDir) GetMinioConfigFile() string {
-	return filepath.Join(config.Get(), minioConfigFile)
-}
-
-// GetPublicCertFile - returns absolute path of public.crt file.
-func (config *ConfigDir) GetPublicCertFile() string {
-	return filepath.Join(config.getCertsDir(), publicCertFile)
-}
-
-// GetPrivateKeyFile - returns absolute path of private.key file.
-func (config *ConfigDir) GetPrivateKeyFile() string {
-	return filepath.Join(config.getCertsDir(), privateKeyFile)
+	path string
 }
 
 func getDefaultConfigDir() string {
@@ -101,32 +54,54 @@ func getDefaultConfigDir() string {
 	return filepath.Join(homeDir, defaultMinioConfigDir)
 }
 
-var configDir = &ConfigDir{dir: getDefaultConfigDir()}
-
-func setConfigDir(dir string) {
-	configDir.Set(dir)
+func getDefaultCertsDir() string {
+	return filepath.Join(getDefaultConfigDir(), certsDir)
 }
 
-func getConfigDir() string {
-	return configDir.Get()
+func getDefaultCertsCADir() string {
+	return filepath.Join(getDefaultCertsDir(), certsCADir)
 }
 
-func getCADir() string {
-	return configDir.GetCADir()
+var (
+	// Default config, certs and CA directories.
+	defaultConfigDir  = &ConfigDir{path: getDefaultConfigDir()}
+	defaultCertsDir   = &ConfigDir{path: getDefaultCertsDir()}
+	defaultCertsCADir = &ConfigDir{path: getDefaultCertsCADir()}
+
+	// Points to current configuration directory -- deprecated, to be removed in future.
+	globalConfigDir = defaultConfigDir
+	// Points to current certs directory set by user with --certs-dir
+	globalCertsDir = defaultCertsDir
+	// Points to relative path to certs directory and is <value-of-certs-dir>/CAs
+	globalCertsCADir = defaultCertsCADir
+)
+
+// Get - returns current directory.
+func (dir *ConfigDir) Get() string {
+	return dir.path
 }
 
-func createConfigDir() error {
-	return configDir.Create()
+// Attempts to create all directories, ignores any permission denied errors.
+func mkdirAllIgnorePerm(path string) error {
+	err := os.MkdirAll(path, 0700)
+	if err != nil {
+		// It is possible in kubernetes like deployments this directory
+		// is already mounted and is not writable, ignore any write errors.
+		if os.IsPermission(err) {
+			err = nil
+		}
+	}
+	return err
 }
 
 func getConfigFile() string {
-	return configDir.GetMinioConfigFile()
+	return filepath.Join(globalConfigDir.Get(), minioConfigFile)
 }
 
 func getPublicCertFile() string {
-	return configDir.GetPublicCertFile()
+	return filepath.Join(globalCertsDir.Get(), publicCertFile)
 }
 
 func getPrivateKeyFile() string {
-	return configDir.GetPrivateKeyFile()
+	return filepath.Join(globalCertsDir.Get(), privateKeyFile)
 }

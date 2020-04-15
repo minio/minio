@@ -1,28 +1,37 @@
-FROM alpine:3.7
+FROM golang:1.13-alpine
 
-LABEL maintainer="Minio Inc <dev@minio.io>"
+ENV GOPATH /go
+ENV CGO_ENABLED 0
+ENV GO111MODULE on
 
-COPY dockerscripts/docker-entrypoint.sh dockerscripts/healthcheck.sh /usr/bin/
+RUN  \
+     apk add --no-cache git && \
+     git clone https://github.com/minio/minio
+
+FROM alpine:3.10
+
+LABEL maintainer="MinIO Inc <dev@min.io>"
+
+COPY dockerscripts/docker-entrypoint.sh /usr/bin/
+COPY CREDITS /third_party/
 
 ENV MINIO_UPDATE off
 ENV MINIO_ACCESS_KEY_FILE=access_key \
-    MINIO_SECRET_KEY_FILE=secret_key
+    MINIO_SECRET_KEY_FILE=secret_key \
+    MINIO_KMS_MASTER_KEY_FILE=kms_master_key \
+    MINIO_SSE_MASTER_KEY_FILE=sse_master_key
 
 RUN \
-     apk add --no-cache ca-certificates 'curl>7.61.0' && \
+     apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-     curl https://dl.minio.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
+     curl https://dl.min.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
      chmod +x /usr/bin/minio  && \
-     chmod +x /usr/bin/docker-entrypoint.sh && \
-     chmod +x /usr/bin/healthcheck.sh
+     chmod +x /usr/bin/docker-entrypoint.sh
 
 EXPOSE 9000
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
-
-HEALTHCHECK --interval=30s --timeout=5s \
-    CMD /usr/bin/healthcheck.sh
 
 CMD ["minio"]

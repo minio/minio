@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,10 @@
 package mountinfo
 
 import (
-	"os"
+	"path/filepath"
+	"sync"
+
+	"golang.org/x/sys/windows"
 )
 
 // CheckCrossDevice - check if any input path has multiple sub-mounts.
@@ -28,32 +31,31 @@ func CheckCrossDevice(paths []string) error {
 	return nil
 }
 
-// fileExists checks if specified file exists.
-func fileExists(filename string) (bool, error) {
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return false, nil
-	} else if err != nil {
-		return false, err
-	}
-	return true, nil
-}
+// mountPointCache contains results of IsLikelyMountPoint
+var mountPointCache sync.Map
 
 // IsLikelyMountPoint determines if a directory is a mountpoint.
-func IsLikelyMountPoint(file string) bool {
-	stat, err := os.Lstat(file)
-	if err != nil {
+func IsLikelyMountPoint(path string) bool {
+	path = filepath.Dir(path)
+	if v, ok := mountPointCache.Load(path); ok {
+		return v.(bool)
+	}
+	wpath, _ := windows.UTF16PtrFromString(path)
+	wvolume := make([]uint16, len(path)+1)
+
+	if err := windows.GetVolumePathName(wpath, &wvolume[0], uint32(len(wvolume))); err != nil {
+		mountPointCache.Store(path, false)
 		return false
 	}
 
-	// If current file is a symlink, then it is a mountpoint.
-	if stat.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(file)
-		if err != nil {
-			return false
-		}
-		exists, _ := fileExists(target)
-		return exists
+	switch windows.GetDriveType(&wvolume[0]) {
+	case windows.DRIVE_FIXED, windows.DRIVE_REMOVABLE, windows.DRIVE_REMOTE, windows.DRIVE_RAMDISK:
+		// Recognize "fixed", "removable", "remote" and "ramdisk" drives as proper drives
+		// which can be treated as an actual mount-point, rest can be ignored.
+		// https://docs.microsoft.com/en-us/windows/desktop/api/fileapi/nf-fileapi-getdrivetypew
+		mountPointCache.Store(path, true)
+		return true
 	}
-
+	mountPointCache.Store(path, false)
 	return false
 }

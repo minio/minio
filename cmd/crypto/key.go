@@ -1,4 +1,4 @@
-// Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"path"
 
@@ -108,7 +107,7 @@ func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucke
 	)
 	switch sealedKey.Algorithm {
 	default:
-		return Error{fmt.Sprintf("The sealing algorithm '%s' is not supported", sealedKey.Algorithm)}
+		return Errorf("The sealing algorithm '%s' is not supported", sealedKey.Algorithm)
 	case SealAlgorithm:
 		mac := hmac.New(sha256.New, extKey[:])
 		mac.Write(sealedKey.IV[:])

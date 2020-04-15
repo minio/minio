@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"path"
 )
 
 // Converts underlying storage error. Convenience function written to
@@ -40,6 +42,8 @@ func toObjectErr(err error, params ...string) error {
 		}
 	case errDiskFull:
 		err = StorageFull{}
+	case errTooManyOpenFiles:
+		err = SlowDown{}
 	case errFileAccessDenied:
 		if len(params) >= 2 {
 			err = PrefixAccessDenied{
@@ -47,7 +51,14 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
-	case errIsNotRegular, errFileAccessDenied:
+	case errFileParentIsFile:
+		if len(params) >= 2 {
+			err = ParentIsObject{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
+	case errIsNotRegular:
 		if len(params) >= 2 {
 			err = ObjectExistsAsDirectory{
 				Bucket: params[0],
@@ -55,10 +66,17 @@ func toObjectErr(err error, params ...string) error {
 			}
 		}
 	case errFileNotFound:
-		if len(params) >= 2 {
+		switch len(params) {
+		case 2:
 			err = ObjectNotFound{
 				Bucket: params[0],
 				Object: params[1],
+			}
+		case 3:
+			err = InvalidUploadID{
+				Bucket:   params[0],
+				Object:   params[1],
+				UploadID: params[2],
 			}
 		}
 	case errFileNameTooLong:
@@ -104,6 +122,13 @@ type StorageFull struct{}
 
 func (e StorageFull) Error() string {
 	return "Storage reached its minimum free disk threshold."
+}
+
+// SlowDown  too many file descriptors open or backend busy .
+type SlowDown struct{}
+
+func (e SlowDown) Error() string {
+	return "Please reduce your request rate"
 }
 
 // InsufficientReadQuorum storage cannot satisfy quorum for read operation.
@@ -179,7 +204,14 @@ func (e ObjectExistsAsDirectory) Error() string {
 type PrefixAccessDenied GenericError
 
 func (e PrefixAccessDenied) Error() string {
-	return "Prefix access is denied: " + e.Bucket + "/" + e.Object
+	return "Prefix access is denied: " + e.Bucket + SlashSeparator + e.Object
+}
+
+// ParentIsObject object access is denied.
+type ParentIsObject GenericError
+
+func (e ParentIsObject) Error() string {
+	return "Parent is object " + e.Bucket + SlashSeparator + path.Dir(e.Object)
 }
 
 // BucketExists bucket exists.
@@ -223,12 +255,26 @@ func (e BucketPolicyNotFound) Error() string {
 	return "No bucket policy found for bucket: " + e.Bucket
 }
 
+// BucketLifecycleNotFound - no bucket lifecycle found.
+type BucketLifecycleNotFound GenericError
+
+func (e BucketLifecycleNotFound) Error() string {
+	return "No bucket life cycle found for bucket : " + e.Bucket
+}
+
+// BucketSSEConfigNotFound - no bucket encryption config found
+type BucketSSEConfigNotFound GenericError
+
+func (e BucketSSEConfigNotFound) Error() string {
+	return "No bucket encryption found for bucket: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.
 type BucketNameInvalid GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e BucketNameInvalid) Error() string {
 	return "Bucket name invalid: " + e.Bucket
 }
@@ -238,15 +284,31 @@ func (e BucketNameInvalid) Error() string {
 // ObjectNameInvalid - object name provided is invalid.
 type ObjectNameInvalid GenericError
 
-// Return string an error formatted as the given text.
+// ObjectNameTooLong - object name too long.
+type ObjectNameTooLong GenericError
+
+// ObjectNamePrefixAsSlash - object name has a slash as prefix.
+type ObjectNamePrefixAsSlash GenericError
+
+// Error returns string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
+}
+
+// Error returns string an error formatted as the given text.
+func (e ObjectNameTooLong) Error() string {
+	return "Object name too long: " + e.Bucket + "#" + e.Object
+}
+
+// Error returns string an error formatted as the given text.
+func (e ObjectNamePrefixAsSlash) Error() string {
+	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled
 type AllAccessDisabled GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e AllAccessDisabled) Error() string {
 	return "All access to this object has been disabled"
 }
@@ -254,7 +316,7 @@ func (e AllAccessDisabled) Error() string {
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.
 type IncompleteBody GenericError
 
-// Return string an error formatted as the given text.
+// Error returns string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
 	return e.Bucket + "#" + e.Object + "has incomplete body"
 }
@@ -286,11 +348,10 @@ func (e ObjectTooSmall) Error() string {
 
 // OperationTimedOut - a timeout occurred.
 type OperationTimedOut struct {
-	Path string
 }
 
 func (e OperationTimedOut) Error() string {
-	return "Operation timed out: " + e.Path
+	return "Operation timed out"
 }
 
 /// Multipart related errors.
@@ -306,6 +367,8 @@ func (e MalformedUploadID) Error() string {
 
 // InvalidUploadID invalid upload id.
 type InvalidUploadID struct {
+	Bucket   string
+	Object   string
 	UploadID string
 }
 
@@ -357,13 +420,6 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
-// PolicyNesting - policy nesting conflict.
-type PolicyNesting struct{}
-
-func (e PolicyNesting) Error() string {
-	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
-}
-
 // UnsupportedMetadata - unsupported metadata
 type UnsupportedMetadata struct{}
 
@@ -378,8 +434,26 @@ func (e BackendDown) Error() string {
 	return "Backend down"
 }
 
+// isErrBucketNotFound - Check if error type is BucketNotFound.
+func isErrBucketNotFound(err error) bool {
+	var bkNotFound BucketNotFound
+	return errors.As(err, &bkNotFound)
+}
+
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
-	_, ok := err.(ObjectNotFound)
+	var objNotFound ObjectNotFound
+	return errors.As(err, &objNotFound)
+}
+
+// PreConditionFailed - Check if copy precondition failed
+type PreConditionFailed struct{}
+
+func (e PreConditionFailed) Error() string {
+	return "At least one of the pre-conditions you specified did not hold"
+}
+
+func isErrPreconditionFailed(err error) bool {
+	_, ok := err.(PreConditionFailed)
 	return ok
 }

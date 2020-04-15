@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import * as actionsCommon from "./actions"
 export default (
   state = {
     sidebarOpen: false,
-    storageInfo: { total: 0, free: 0 },
+    storageInfo: { total: [0], free: [0], used: [0] },
     serverInfo: {}
   },
   action

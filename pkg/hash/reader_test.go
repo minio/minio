@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 
 // Tests functions like Size(), MD5*(), SHA256*()
 func TestHashReaderHelperMethods(t *testing.T) {
-	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4)
+	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,6 +60,9 @@ func TestHashReaderHelperMethods(t *testing.T) {
 		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", hex.EncodeToString(r.MD5Current()))
 	}
 	expectedSHA256, err := hex.DecodeString("88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(r.SHA256(), expectedSHA256) {
 		t.Errorf("Expected md5hex \"88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589\", got %s", r.SHA256HexString())
 	}
@@ -104,7 +107,7 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
+		r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize, false)
 		if err != nil {
 			t.Fatalf("Test %d: Initializing reader failed %s", i+1, err)
 		}
@@ -163,7 +166,7 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
+		_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize, false)
 		if err != nil && testCase.success {
 			t.Errorf("Test %d: Expected success, but got error %s instead", i+1, err)
 		}

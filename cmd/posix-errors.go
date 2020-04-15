@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"runtime"
 	"syscall"
@@ -24,85 +25,58 @@ import (
 
 // Function not implemented error
 func isSysErrNoSys(err error) bool {
-	if err == syscall.ENOSYS {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.ENOSYS
-
+	return errors.Is(err, syscall.ENOSYS)
 }
 
 // Not supported error
 func isSysErrOpNotSupported(err error) bool {
-	if err == syscall.EOPNOTSUPP {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.EOPNOTSUPP
-
+	return errors.Is(err, syscall.EOPNOTSUPP)
 }
 
 // No space left on device error
 func isSysErrNoSpace(err error) bool {
-	if err == syscall.ENOSPC {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.ENOSPC
+	return errors.Is(err, syscall.ENOSPC)
 }
 
 // Input/output error
 func isSysErrIO(err error) bool {
-	if err == syscall.EIO {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.EIO
+	return errors.Is(err, syscall.EIO)
 }
 
 // Check if the given error corresponds to EISDIR (is a directory).
 func isSysErrIsDir(err error) bool {
-	if err == syscall.EISDIR {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.EISDIR
-
+	return errors.Is(err, syscall.EISDIR)
 }
 
 // Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
-	if err == syscall.ENOTDIR {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.ENOTDIR
+	return errors.Is(err, syscall.ENOTDIR)
 }
 
 // Check if the given error corresponds to the ENAMETOOLONG (name too long).
 func isSysErrTooLong(err error) bool {
-	if err == syscall.ENAMETOOLONG {
-		return true
-	}
-	pathErr, ok := err.(*os.PathError)
-	return ok && pathErr.Err == syscall.ENAMETOOLONG
+	return errors.Is(err, syscall.ENAMETOOLONG)
+}
+
+// Check if the given error corresponds to the ELOOP (too many symlinks).
+func isSysErrTooManySymlinks(err error) bool {
+	return errors.Is(err, syscall.ELOOP)
 }
 
 // Check if the given error corresponds to ENOTEMPTY for unix
 // and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
 func isSysErrNotEmpty(err error) bool {
-	if err == syscall.ENOTEMPTY {
+	if errors.Is(err, syscall.ENOTEMPTY) {
 		return true
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
 		if runtime.GOOS == globalWindowsOSName {
-			if errno, _ok := pathErr.Err.(syscall.Errno); _ok && errno == 0x91 {
+			var errno syscall.Errno
+			if errors.As(pathErr.Err, &errno) {
 				// ERROR_DIR_NOT_EMPTY
-				return true
+				return errno == 0x91
 			}
-		}
-		if pathErr.Err == syscall.ENOTEMPTY {
-			return true
 		}
 	}
 	return false
@@ -113,10 +87,12 @@ func isSysErrPathNotFound(err error) bool {
 	if runtime.GOOS != globalWindowsOSName {
 		return false
 	}
-	if pathErr, ok := err.(*os.PathError); ok {
-		if errno, _ok := pathErr.Err.(syscall.Errno); _ok && errno == 0x03 {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		var errno syscall.Errno
+		if errors.As(pathErr.Err, &errno) {
 			// ERROR_PATH_NOT_FOUND
-			return true
+			return errno == 0x03
 		}
 	}
 	return false
@@ -128,11 +104,22 @@ func isSysErrHandleInvalid(err error) bool {
 		return false
 	}
 	// Check if err contains ERROR_INVALID_HANDLE errno
-	errno, ok := err.(syscall.Errno)
-	return ok && errno == 0x6
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		var errno syscall.Errno
+		if errors.As(pathErr.Err, &errno) {
+			// ERROR_PATH_NOT_FOUND
+			return errno == 0x6
+		}
+	}
+	return false
 }
 
 func isSysErrCrossDevice(err error) bool {
-	e, ok := err.(*os.LinkError)
-	return ok && e.Err == syscall.EXDEV
+	return errors.Is(err, syscall.EXDEV)
+}
+
+// Check if given error corresponds to too many open files
+func isSysErrTooManyFiles(err error) bool {
+	return errors.Is(err, syscall.ENFILE) || errors.Is(err, syscall.EMFILE)
 }

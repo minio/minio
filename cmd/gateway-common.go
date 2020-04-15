@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,19 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
+	xnet "github.com/minio/minio/pkg/net"
 
-	minio "github.com/minio/minio-go"
+	minio "github.com/minio/minio-go/v6"
 )
 
 var (
@@ -30,7 +38,27 @@ var (
 
 	// MustGetUUID function alias.
 	MustGetUUID = mustGetUUID
+
+	// CleanMetadataKeys provides cleanMetadataKeys function alias.
+	CleanMetadataKeys = cleanMetadataKeys
+
+	// PathJoin function alias.
+	PathJoin = pathJoin
+
+	// ListObjects function alias.
+	ListObjects = listObjects
+
+	// FilterMatchingPrefix function alias.
+	FilterMatchingPrefix = filterMatchingPrefix
+
+	// IsStringEqual is string equal.
+	IsStringEqual = isStringEqual
 )
+
+// StatInfo -  alias for statInfo
+type StatInfo struct {
+	statInfo
+}
 
 // AnonErrToObjectErr - converts standard http codes into meaningful object layer errors.
 func AnonErrToObjectErr(statusCode int, params ...string) error {
@@ -143,7 +171,7 @@ func FromMinioClientListMultipartsInfo(lmur minio.ListMultipartUploadsResult) Li
 // FromMinioClientObjectInfo converts minio ObjectInfo to gateway ObjectInfo
 func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 	userDefined := FromMinioClientMetadata(oi.Metadata)
-	userDefined["Content-Type"] = oi.ContentType
+	userDefined[xhttp.ContentType] = oi.ContentType
 
 	return ObjectInfo{
 		Bucket:          bucket,
@@ -153,8 +181,9 @@ func FromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 		ETag:            canonicalizeETag(oi.ETag),
 		UserDefined:     userDefined,
 		ContentType:     oi.ContentType,
-		ContentEncoding: oi.Metadata.Get("Content-Encoding"),
+		ContentEncoding: oi.Metadata.Get(xhttp.ContentEncoding),
 		StorageClass:    oi.StorageClass,
+		Expires:         oi.Expires,
 	}
 }
 
@@ -259,7 +288,32 @@ func ToMinioClientCompleteParts(parts []CompletePart) []minio.CompletePart {
 	return mparts
 }
 
-// ErrorRespToObjectError converts Minio errors to minio object layer errors.
+// IsBackendOnline - verifies if the backend is reachable
+// by performing a GET request on the URL. returns 'true'
+// if backend is reachable.
+func IsBackendOnline(ctx context.Context, clnt *http.Client, urlStr string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	// never follow redirects
+	clnt.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := clnt.Do(req)
+	if err != nil {
+		clnt.CloseIdleConnections()
+		return !xnet.IsNetworkOrHostDown(err)
+	}
+	xhttp.DrainBody(resp.Body)
+	return true
+}
+
+// ErrorRespToObjectError converts MinIO errors to minio object layer errors.
 func ErrorRespToObjectError(err error, params ...string) error {
 	if err == nil {
 		return nil
@@ -274,13 +328,13 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
-	if isNetworkOrHostDown(err) {
+	if xnet.IsNetworkOrHostDown(err) {
 		return BackendDown{}
 	}
 
 	minioErr, ok := err.(minio.ErrorResponse)
 	if !ok {
-		// We don't interpret non Minio errors. As minio errors will
+		// We don't interpret non MinIO errors. As minio errors will
 		// have StatusCode to help to convert to object errors.
 		return err
 	}
@@ -292,6 +346,8 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		err = BucketNotEmpty{}
 	case "NoSuchBucketPolicy":
 		err = BucketPolicyNotFound{}
+	case "NoSuchLifecycleConfiguration":
+		err = BucketLifecycleNotFound{}
 	case "InvalidBucketName":
 		err = BucketNameInvalid{Bucket: bucket}
 	case "InvalidPart":
@@ -320,4 +376,78 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	return err
+}
+
+// ComputeCompleteMultipartMD5 calculates MD5 ETag for complete multipart responses
+func ComputeCompleteMultipartMD5(parts []CompletePart) string {
+	return getCompleteMultipartMD5(parts)
+}
+
+// parse gateway sse env variable
+func parseGatewaySSE(s string) (gatewaySSE, error) {
+	l := strings.Split(s, ";")
+	var gwSlice = make([]string, 0)
+	for _, val := range l {
+		v := strings.ToUpper(val)
+		if v == gatewaySSES3 || v == gatewaySSEC {
+			gwSlice = append(gwSlice, v)
+			continue
+		}
+		return nil, config.ErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
+	}
+	return gatewaySSE(gwSlice), nil
+}
+
+// handle gateway env vars
+func gatewayHandleEnvVars() {
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	if !globalActiveCred.IsValid() {
+		logger.Fatal(config.ErrInvalidCredentials(nil),
+			"Unable to validate credentials inherited from the shell environment")
+	}
+
+	gwsseVal := env.Get("MINIO_GATEWAY_SSE", "")
+	if len(gwsseVal) != 0 {
+		var err error
+		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
+		if err != nil {
+			logger.Fatal(err, "Unable to parse MINIO_GATEWAY_SSE value (`%s`)", gwsseVal)
+		}
+	}
+}
+
+// shouldMeterRequest checks whether incoming request should be added to prometheus gateway metrics
+func shouldMeterRequest(req *http.Request) bool {
+	return !(guessIsBrowserReq(req) || guessIsHealthCheckReq(req) || guessIsMetricsReq(req))
+}
+
+// MetricsTransport is a custom wrapper around Transport to track metrics
+type MetricsTransport struct {
+	Transport *http.Transport
+	Metrics   *Metrics
+}
+
+// RoundTrip implements the RoundTrip method for MetricsTransport
+func (m MetricsTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	metered := shouldMeterRequest(r)
+	if metered && (r.Method == http.MethodPost || r.Method == http.MethodPut) {
+		m.Metrics.IncRequests(r.Method)
+		if r.ContentLength > 0 {
+			m.Metrics.IncBytesSent(uint64(r.ContentLength))
+		}
+	}
+	// Make the request to the server.
+	resp, err := m.Transport.RoundTrip(r)
+	if err != nil {
+		return nil, err
+	}
+	if metered && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		m.Metrics.IncRequests(r.Method)
+		if resp.ContentLength > 0 {
+			m.Metrics.IncBytesReceived(uint64(resp.ContentLength))
+		}
+	}
+	return resp, nil
 }

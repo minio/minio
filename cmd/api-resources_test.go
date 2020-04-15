@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,9 +34,9 @@ func TestListObjectsV2Resources(t *testing.T) {
 		{
 			values: url.Values{
 				"prefix":             []string{"photos/"},
-				"continuation-token": []string{"token"},
+				"continuation-token": []string{"dG9rZW4="},
 				"start-after":        []string{"start-after"},
-				"delimiter":          []string{"/"},
+				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
 				"max-keys":           []string{"100"},
 				"encoding-type":      []string{"gzip"},
@@ -44,7 +44,7 @@ func TestListObjectsV2Resources(t *testing.T) {
 			prefix:       "photos/",
 			token:        "token",
 			startAfter:   "start-after",
-			delimiter:    "/",
+			delimiter:    SlashSeparator,
 			fetchOwner:   true,
 			maxKeys:      100,
 			encodingType: "gzip",
@@ -53,18 +53,18 @@ func TestListObjectsV2Resources(t *testing.T) {
 		{
 			values: url.Values{
 				"prefix":             []string{"photos/"},
-				"continuation-token": []string{"token"},
+				"continuation-token": []string{"dG9rZW4="},
 				"start-after":        []string{"start-after"},
-				"delimiter":          []string{"/"},
+				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
 				"encoding-type":      []string{"gzip"},
 			},
 			prefix:       "photos/",
 			token:        "token",
 			startAfter:   "start-after",
-			delimiter:    "/",
+			delimiter:    SlashSeparator,
 			fetchOwner:   true,
-			maxKeys:      1000,
+			maxKeys:      maxObjectList,
 			encodingType: "gzip",
 			errCode:      ErrNone,
 		},
@@ -73,7 +73,7 @@ func TestListObjectsV2Resources(t *testing.T) {
 				"prefix":             []string{"photos/"},
 				"continuation-token": []string{""},
 				"start-after":        []string{"start-after"},
-				"delimiter":          []string{"/"},
+				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
 				"encoding-type":      []string{"gzip"},
 			},
@@ -130,13 +130,13 @@ func TestListObjectsV1Resources(t *testing.T) {
 			values: url.Values{
 				"prefix":        []string{"photos/"},
 				"marker":        []string{"test"},
-				"delimiter":     []string{"/"},
+				"delimiter":     []string{SlashSeparator},
 				"max-keys":      []string{"100"},
 				"encoding-type": []string{"gzip"},
 			},
 			prefix:       "photos/",
 			marker:       "test",
-			delimiter:    "/",
+			delimiter:    SlashSeparator,
 			maxKeys:      100,
 			encodingType: "gzip",
 		},
@@ -144,13 +144,13 @@ func TestListObjectsV1Resources(t *testing.T) {
 			values: url.Values{
 				"prefix":        []string{"photos/"},
 				"marker":        []string{"test"},
-				"delimiter":     []string{"/"},
+				"delimiter":     []string{SlashSeparator},
 				"encoding-type": []string{"gzip"},
 			},
 			prefix:       "photos/",
 			marker:       "test",
-			delimiter:    "/",
-			maxKeys:      1000,
+			delimiter:    SlashSeparator,
+			maxKeys:      maxObjectList,
 			encodingType: "gzip",
 		},
 	}

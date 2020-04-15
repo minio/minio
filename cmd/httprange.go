@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,4 +160,16 @@ func parseRequestRangeSpec(rangeString string) (hrange *HTTPRangeSpec, err error
 		// rangeString contains first and last byte positions missing. eg. "bytes=-"
 		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
 	}
+}
+
+// String returns stringified representation of range for a particular resource size.
+func (h *HTTPRangeSpec) String(resourceSize int64) string {
+	if h == nil {
+		return ""
+	}
+	off, length, err := h.GetOffsetLength(resourceSize)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d-%d", off, off+length-1)
 }

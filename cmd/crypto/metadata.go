@@ -1,4 +1,4 @@
-// Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ package crypto
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
+	"errors"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -38,6 +38,14 @@ func IsMultiPart(metadata map[string]string) bool {
 func RemoveSensitiveEntries(metadata map[string]string) { // The functions is tested in TestRemoveSensitiveHeaders for compatibility reasons
 	delete(metadata, SSECKey)
 	delete(metadata, SSECopyKey)
+}
+
+// RemoveSSEHeaders removes all crypto-specific SSE
+// header entries from the metadata map.
+func RemoveSSEHeaders(metadata map[string]string) {
+	delete(metadata, SSEHeader)
+	delete(metadata, SSECKeyMD5)
+	delete(metadata, SSECAlgorithm)
 }
 
 // RemoveInternalEntries removes all crypto-specific internal
@@ -111,28 +119,46 @@ func CreateMultipartMetadata(metadata map[string]string) map[string]string {
 	return metadata
 }
 
-// CreateMetadata encodes the keyID, the sealed kms data key and the sealed key
-// into the metadata and returns the modified metadata. It allocates a new
-// metadata map if metadata is nil.
+// CreateMetadata encodes the sealed object key into the metadata and returns
+// the modified metadata. If the keyID and the kmsKey is not empty it encodes
+// both into the metadata as well. It allocates a new metadata map if metadata
+// is nil.
 func (s3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
-		logger.CriticalIf(context.Background(), fmt.Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
+		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
+	}
+
+	// There are two possibilites:
+	// - We use a KMS -> There must be non-empty key ID and a KMS data key.
+	// - We use a K/V -> There must be no key ID and no KMS data key.
+	// Otherwise, the caller has passed an invalid argument combination.
+	if keyID == "" && len(kmsKey) != 0 {
+		logger.CriticalIf(context.Background(), errors.New("The key ID must not be empty if a KMS data key is present"))
+	}
+	if keyID != "" && len(kmsKey) == 0 {
+		logger.CriticalIf(context.Background(), errors.New("The KMS data key must not be empty if a key ID is present"))
 	}
 
 	if metadata == nil {
 		metadata = map[string]string{}
 	}
-	metadata[S3KMSKeyID] = keyID
+
 	metadata[SSESealAlgorithm] = sealedKey.Algorithm
 	metadata[SSEIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
 	metadata[S3SealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
-	metadata[S3KMSSealedKey] = base64.StdEncoding.EncodeToString(kmsKey)
+	if len(kmsKey) > 0 && keyID != "" { // We use a KMS -> Store key ID and sealed KMS data key.
+		metadata[S3KMSKeyID] = keyID
+		metadata[S3KMSSealedKey] = base64.StdEncoding.EncodeToString(kmsKey)
+	}
 	return metadata
 }
 
 // ParseMetadata extracts all SSE-S3 related values from the object metadata
-// and checks whether they are well-formed. It returns the KMS key-ID, the
-// sealed KMS key and the sealed object key on success.
+// and checks whether they are well-formed. It returns the sealed object key
+// on success. If the metadata contains both, a KMS master key ID and a sealed
+// KMS data key it returns both. If the metadata does not contain neither a
+// KMS master key ID nor a sealed KMS data key it returns an empty keyID and
+// KMS data key. Otherwise, it returns an error.
 func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, err error) {
 	// Extract all required values from object metadata
 	b64IV, ok := metadata[SSEIV]
@@ -145,15 +171,20 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	}
 	b64SealedKey, ok := metadata[S3SealedKey]
 	if !ok {
-		return keyID, kmsKey, sealedKey, Error{"The object metadata is missing the internal sealed key for SSE-S3"}
+		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-S3")
 	}
-	keyID, ok = metadata[S3KMSKeyID]
-	if !ok {
-		return keyID, kmsKey, sealedKey, Error{"The object metadata is missing the internal KMS key-ID for SSE-S3"}
+
+	// There are two possibilites:
+	// - We use a KMS -> There must be a key ID and a KMS data key.
+	// - We use a K/V -> There must be no key ID and no KMS data key.
+	// Otherwise, the metadata is corrupted.
+	keyID, idPresent := metadata[S3KMSKeyID]
+	b64KMSSealedKey, kmsKeyPresent := metadata[S3KMSSealedKey]
+	if !idPresent && kmsKeyPresent {
+		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3")
 	}
-	b64KMSSealedKey, ok := metadata[S3KMSSealedKey]
-	if !ok {
-		return keyID, kmsKey, sealedKey, Error{"The object metadata is missing the internal sealed KMS data key for SSE-S3"}
+	if idPresent && !kmsKeyPresent {
+		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3")
 	}
 
 	// Check whether all extracted values are well-formed
@@ -166,11 +197,13 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	}
 	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
 	if err != nil || len(encryptedKey) != 64 {
-		return keyID, kmsKey, sealedKey, Error{"The internal sealed key for SSE-S3 is invalid"}
+		return keyID, kmsKey, sealedKey, Errorf("The internal sealed key for SSE-S3 is invalid")
 	}
-	kmsKey, err = base64.StdEncoding.DecodeString(b64KMSSealedKey)
-	if err != nil {
-		return keyID, kmsKey, sealedKey, Error{"The internal sealed KMS data key for SSE-S3 is invalid"}
+	if idPresent && kmsKeyPresent { // We are using a KMS -> parse the sealed KMS data key.
+		kmsKey, err = base64.StdEncoding.DecodeString(b64KMSSealedKey)
+		if err != nil {
+			return keyID, kmsKey, sealedKey, Errorf("The internal sealed KMS data key for SSE-S3 is invalid")
+		}
 	}
 
 	sealedKey.Algorithm = algorithm
@@ -183,7 +216,7 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 // It allocates a new metadata map if metadata is nil.
 func (ssec) CreateMetadata(metadata map[string]string, sealedKey SealedKey) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
-		logger.CriticalIf(context.Background(), fmt.Errorf("The seal algorithm '%s' is invalid for SSE-C", sealedKey.Algorithm))
+		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-C", sealedKey.Algorithm))
 	}
 
 	if metadata == nil {
@@ -210,7 +243,7 @@ func (ssec) ParseMetadata(metadata map[string]string) (sealedKey SealedKey, err 
 	}
 	b64SealedKey, ok := metadata[SSECSealedKey]
 	if !ok {
-		return sealedKey, Error{"The object metadata is missing the internal sealed key for SSE-C"}
+		return sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-C")
 	}
 
 	// Check whether all extracted values are well-formed
@@ -223,7 +256,7 @@ func (ssec) ParseMetadata(metadata map[string]string) (sealedKey SealedKey, err 
 	}
 	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
 	if err != nil || len(encryptedKey) != 64 {
-		return sealedKey, Error{"The internal sealed key for SSE-C is invalid"}
+		return sealedKey, Errorf("The internal sealed key for SSE-C is invalid")
 	}
 
 	sealedKey.Algorithm = algorithm

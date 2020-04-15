@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +16,18 @@
 
 package logger
 
-// LoggingTarget is the entity that we will receive
-// a single log entry and send it to the log target
-//   e.g. send the log to a http server
-type LoggingTarget interface {
-	send(entry interface{}) error
+// Target is the entity that we will receive
+// a single log entry and Send it to the log target
+//   e.g. Send the log to a http server
+type Target interface {
+	Send(entry interface{}, errKind string) error
 }
 
 // Targets is the set of enabled loggers
-var Targets = []LoggingTarget{}
+var Targets = []Target{}
 
 // AddTarget adds a new logger target to the
 // list of enabled loggers
-func AddTarget(t LoggingTarget) {
+func AddTarget(t Target) {
 	Targets = append(Targets, t)
 }

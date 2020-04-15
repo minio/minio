@@ -1,7 +1,7 @@
 /*
  * Quick - Quick key value store for config files and persistent state files
  *
- * Quick (C) 2017 Minio, Inc.
+ * Quick (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import (
 	"time"
 
 	etcd "github.com/coreos/etcd/clientv3"
-	dns "github.com/minio/minio/pkg/dns"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -138,21 +137,29 @@ func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 		dataBytes = []byte(strings.Replace(string(dataBytes), "\n", "\r\n", -1))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	_, err = clnt.Put(ctx, filename, string(dataBytes))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return err
+	_, err = clnt.Put(ctx, filename, string(dataBytes))
+	if err == context.DeadlineExceeded {
+		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
+	} else if err != nil {
+		return fmt.Errorf("unexpected error %w returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
+	}
+	return nil
 }
 
 func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	resp, err := clnt.Get(ctx, filename)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	resp, err := clnt.Get(ctx, filename)
 	if err != nil {
-		return err
+		if err == context.DeadlineExceeded {
+			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
+		}
+		return fmt.Errorf("unexpected error %w returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
 	}
 	if resp.Count == 0 {
-		return dns.ErrNoEntriesFound
+		return os.ErrNotExist
 	}
 
 	for _, ev := range resp.Kvs {
@@ -165,26 +172,19 @@ func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 			return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 		}
 	}
-	return dns.ErrNoEntriesFound
+	return os.ErrNotExist
 }
 
 // loadFileConfig unmarshals the file's content with the right
 // decoder format according to the filename extension. If no
 // extension is provided, json will be selected by default.
 func loadFileConfig(filename string, v interface{}) error {
-	if _, err := os.Stat(filename); err != nil {
-		return err
-	}
 	fileData, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return err
 	}
 	if runtime.GOOS == "windows" {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
-	}
-
-	if err = checkDupJSONKeys(string(fileData)); err != nil {
-		return err
 	}
 
 	// Unmarshal file's content

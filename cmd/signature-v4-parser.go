@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,41 +44,40 @@ func (c credentialHeader) getScope() string {
 		c.scope.region,
 		c.scope.service,
 		c.scope.request,
-	}, "/")
+	}, SlashSeparator)
 }
 
-func getReqAccessKeyV4(r *http.Request, region string) (string, bool, APIErrorCode) {
-	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get("X-Amz-Credential"), region)
+func getReqAccessKeyV4(r *http.Request, region string, stype serviceType) (auth.Credentials, bool, APIErrorCode) {
+	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get("X-Amz-Credential"), region, stype)
 	if err != ErrNone {
 		// Strip off the Algorithm prefix.
 		v4Auth := strings.TrimPrefix(r.Header.Get("Authorization"), signV4Algorithm)
 		authFields := strings.Split(strings.TrimSpace(v4Auth), ",")
 		if len(authFields) != 3 {
-			return "", false, ErrMissingFields
+			return auth.Credentials{}, false, ErrMissingFields
 		}
-		ch, err = parseCredentialHeader(authFields[0], region)
+		ch, err = parseCredentialHeader(authFields[0], region, stype)
 		if err != ErrNone {
-			return "", false, err
+			return auth.Credentials{}, false, err
 		}
 	}
-	owner, s3Err := checkKeyValid(ch.accessKey)
-	return ch.accessKey, owner, s3Err
+	return checkKeyValid(ch.accessKey)
 }
 
 // parse credentialHeader string into its structured form.
-func parseCredentialHeader(credElement string, region string) (ch credentialHeader, aec APIErrorCode) {
-	creds := strings.Split(strings.TrimSpace(credElement), "=")
+func parseCredentialHeader(credElement string, region string, stype serviceType) (ch credentialHeader, aec APIErrorCode) {
+	creds := strings.SplitN(strings.TrimSpace(credElement), "=", 2)
 	if len(creds) != 2 {
 		return ch, ErrMissingFields
 	}
 	if creds[0] != "Credential" {
 		return ch, ErrMissingCredTag
 	}
-	credElements := strings.Split(strings.TrimSpace(creds[1]), "/")
+	credElements := strings.Split(strings.TrimSpace(creds[1]), SlashSeparator)
 	if len(credElements) < 5 {
 		return ch, ErrCredMalformed
 	}
-	accessKey := strings.Join(credElements[:len(credElements)-4], "/") // The access key may contain one or more `/`
+	accessKey := strings.Join(credElements[:len(credElements)-4], SlashSeparator) // The access key may contain one or more `/`
 	if !auth.IsAccessKeyValid(accessKey) {
 		return ch, ErrInvalidAccessKeyID
 	}
@@ -108,8 +107,12 @@ func parseCredentialHeader(credElement string, region string) (ch credentialHead
 		return ch, ErrAuthorizationHeaderMalformed
 
 	}
-	if credElements[2] != "s3" {
-		return ch, ErrInvalidService
+	if credElements[2] != string(stype) {
+		switch stype {
+		case serviceSTS:
+			return ch, ErrInvalidServiceSTS
+		}
+		return ch, ErrInvalidServiceS3
 	}
 	cred.scope.service = credElements[2]
 	if credElements[3] != "aws4_request" {
@@ -186,10 +189,9 @@ func doesV4PresignParamsExist(query url.Values) APIErrorCode {
 }
 
 // Parses all the presigned signature values into separate elements.
-func parsePreSignV4(query url.Values, region string) (psv preSignValues, aec APIErrorCode) {
-	var err APIErrorCode
+func parsePreSignV4(query url.Values, region string, stype serviceType) (psv preSignValues, aec APIErrorCode) {
 	// verify whether the required query params exist.
-	err = doesV4PresignParamsExist(query)
+	err := doesV4PresignParamsExist(query)
 	if err != ErrNone {
 		return psv, err
 	}
@@ -203,7 +205,7 @@ func parsePreSignV4(query url.Values, region string) (psv preSignValues, aec API
 	preSignV4Values := preSignValues{}
 
 	// Save credential.
-	preSignV4Values.Credential, err = parseCredentialHeader("Credential="+query.Get("X-Amz-Credential"), region)
+	preSignV4Values.Credential, err = parseCredentialHeader("Credential="+query.Get("X-Amz-Credential"), region, stype)
 	if err != ErrNone {
 		return psv, err
 	}
@@ -251,7 +253,9 @@ func parsePreSignV4(query url.Values, region string) (psv preSignValues, aec API
 //    Authorization: algorithm Credential=accessKeyID/credScope, \
 //            SignedHeaders=signedHeaders, Signature=signature
 //
-func parseSignV4(v4Auth string, region string) (sv signValues, aec APIErrorCode) {
+func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues, aec APIErrorCode) {
+	// credElement is fetched first to skip replacing the space in access key.
+	credElement := strings.TrimPrefix(strings.Split(strings.TrimSpace(v4Auth), ",")[0], signV4Algorithm)
 	// Replace all spaced strings, some clients can send spaced
 	// parameters and some won't. So we pro-actively remove any spaces
 	// to make parsing easier.
@@ -277,7 +281,7 @@ func parseSignV4(v4Auth string, region string) (sv signValues, aec APIErrorCode)
 
 	var err APIErrorCode
 	// Save credentail values.
-	signV4Values.Credential, err = parseCredentialHeader(authFields[0], region)
+	signV4Values.Credential, err = parseCredentialHeader(strings.TrimSpace(credElement), region, stype)
 	if err != ErrNone {
 		return sv, err
 	}

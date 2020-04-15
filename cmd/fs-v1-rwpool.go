@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	pathutil "path"
 	"sync"
@@ -51,7 +50,7 @@ func (fsi *fsIOPool) lookupToRead(path string) (*lock.RLockedFile, bool) {
 		if rlkFile.IsClosed() {
 			// Log this as an error.
 			reqInfo := (&logger.ReqInfo{}).AppendTags("path", path)
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 			logger.LogIf(ctx, errUnexpected)
 
 			// Purge the cached lock path from map.

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ const defaultFlushInterval = time.Duration(100) * time.Millisecond
 type Forwarder struct {
 	RoundTripper http.RoundTripper
 	PassHost     bool
+	Logger       func(error)
 
 	// internal variables
 	rewriter *headerRewriter
@@ -58,8 +59,18 @@ func (f *Forwarder) ServeHTTP(w http.ResponseWriter, inReq *http.Request) {
 		},
 		Transport:     f.RoundTripper,
 		FlushInterval: defaultFlushInterval,
+		ErrorHandler:  f.customErrHandler,
 	}
 	revproxy.ServeHTTP(w, outReq)
+}
+
+// customErrHandler is originally implemented to avoid having the following error
+//    `http: proxy error: context canceled` printed by Golang
+func (f *Forwarder) customErrHandler(w http.ResponseWriter, r *http.Request, err error) {
+	if f.Logger != nil && err != context.Canceled {
+		f.Logger(err)
+	}
+	w.WriteHeader(http.StatusBadGateway)
 }
 
 func (f *Forwarder) getURLFromRequest(req *http.Request) *url.URL {
@@ -80,7 +91,8 @@ func (f *Forwarder) getURLFromRequest(req *http.Request) *url.URL {
 func copyURL(i *url.URL) *url.URL {
 	out := *i
 	if i.User != nil {
-		out.User = &(*i.User)
+		u := *i.User
+		out.User = &u
 	}
 	return &out
 }

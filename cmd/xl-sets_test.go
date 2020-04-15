@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,9 @@ func TestCrcHashMod(t *testing.T) {
 // TestNewXL - tests initialization of all input disks
 // and constructs a valid `XL` object
 func TestNewXLSets(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var nDisks = 16 // Maximum disks.
 	var erasureDisks []string
 	for i := 0; i < nDisks; i++ {
@@ -76,24 +79,24 @@ func TestNewXLSets(t *testing.T) {
 		defer os.RemoveAll(disk)
 	}
 
-	endpoints := mustGetNewEndpointList(erasureDisks...)
-	_, err := waitForFormatXL(context.Background(), true, endpoints, 0, 16)
+	endpoints := mustGetNewEndpoints(erasureDisks...)
+	_, _, err := waitForFormatXL(true, endpoints, 1, 0, 16, "")
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
-	_, err = waitForFormatXL(context.Background(), true, nil, 1, 16)
+	_, _, err = waitForFormatXL(true, nil, 1, 1, 16, "")
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
 	// Initializes all erasure disks
-	format, err := waitForFormatXL(context.Background(), true, endpoints, 1, 16)
+	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
 
-	if _, err := newXLSets(endpoints, format, 1, 16); err != nil {
+	if _, err := newXLSets(ctx, endpoints, storageDisks, format, 1, 16); err != nil {
 		t.Fatalf("Unable to initialize erasure")
 	}
 }
@@ -101,10 +104,13 @@ func TestNewXLSets(t *testing.T) {
 // TestHashedLayer - tests the hashed layer which will be returned
 // consistently for a given object name.
 func TestHashedLayer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var objs []*xlObjects
 
 	for i := 0; i < 16; i++ {
-		obj, fsDirs, err := prepareXL16()
+		obj, fsDirs, err := prepareXL16(ctx)
 		if err != nil {
 			t.Fatal("Unable to initialize 'XL' object layer.", err)
 		}
@@ -114,7 +120,8 @@ func TestHashedLayer(t *testing.T) {
 			defer os.RemoveAll(dir)
 		}
 
-		objs = append(objs, obj.(*xlObjects))
+		z := obj.(*xlZones)
+		objs = append(objs, z.zones[0].sets[0])
 	}
 
 	sets := &xlSets{sets: objs, distributionAlgo: "CRCMOD"}

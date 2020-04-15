@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,14 @@ import (
 
 	sha256 "github.com/minio/sha256-simd"
 
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/s3utils"
+)
+
+// AdminAPIVersion - admin api version used in the request.
+const (
+	AdminAPIVersion   = "v3"
+	AdminAPIVersionV2 = "v2"
+	adminAPIPrefix    = "/" + AdminAPIVersion
 )
 
 // sum256 calculate sha256 sum for an input byte array.

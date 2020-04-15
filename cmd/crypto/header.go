@@ -1,4 +1,4 @@
-// Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+// MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -82,6 +83,13 @@ func RemoveSensitiveHeaders(h http.Header) {
 	h.Del(SSECopyKey)
 }
 
+// IsRequested returns true if the HTTP headers indicates
+// that any form server-side encryption (SSE-C, SSE-S3 or SSE-KMS)
+// is requested.
+func IsRequested(h http.Header) bool {
+	return S3.IsRequested(h) || SSEC.IsRequested(h) || SSECopy.IsRequested(h) || S3KMS.IsRequested(h)
+}
+
 // S3 represents AWS SSE-S3. It provides functionality to handle
 // SSE-S3 requests.
 var S3 = s3{}
@@ -123,6 +131,25 @@ func (s3KMS) IsRequested(h http.Header) bool {
 		return strings.ToUpper(h.Get(SSEHeader)) != SSEAlgorithmAES256 // Return only true if the SSE header is specified and does not contain the SSE-S3 value
 	}
 	return false
+}
+
+// ParseHTTP parses the SSE-KMS headers and returns the SSE-KMS key ID
+// and context, if present, on success.
+func (s3KMS) ParseHTTP(h http.Header) (string, interface{}, error) {
+	algorithm := h.Get(SSEHeader)
+	if algorithm != SSEAlgorithmKMS {
+		return "", nil, ErrInvalidEncryptionMethod
+	}
+
+	contextStr, ok := h[SSEKmsContext]
+	if ok {
+		var context map[string]interface{}
+		if err := json.Unmarshal([]byte(contextStr[0]), &context); err != nil {
+			return "", nil, err
+		}
+		return h.Get(SSEKmsID), context, nil
+	}
+	return h.Get(SSEKmsID), nil, nil
 }
 
 var (

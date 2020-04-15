@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@ package iampolicy
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
+	"strings"
 
-	"github.com/minio/minio/pkg/policy"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
 // DefaultVersion - default policy version as per AWS S3 specification.
@@ -36,6 +36,20 @@ type Args struct {
 	IsOwner         bool                   `json:"owner"`
 	ObjectName      string                 `json:"object"`
 	Claims          map[string]interface{} `json:"claims"`
+}
+
+// GetPolicies get policies
+func (a Args) GetPolicies(policyClaimName string) ([]string, bool) {
+	pname, ok := a.Claims[policyClaimName]
+	if !ok {
+		return nil, false
+	}
+	pnameStr, ok := pname.(string)
+	if ok {
+		return strings.Split(pnameStr, ","), true
+	}
+	pnameSlice, ok := pname.([]string)
+	return pnameSlice, ok
 }
 
 // Policy - iam bucket iamp.
@@ -81,7 +95,7 @@ func (iamp Policy) IsEmpty() bool {
 // isValid - checks if Policy is valid or not.
 func (iamp Policy) isValid() error {
 	if iamp.Version != DefaultVersion && iamp.Version != "" {
-		return fmt.Errorf("invalid version '%v'", iamp.Version)
+		return Errorf("invalid version '%v'", iamp.Version)
 	}
 
 	for _, statement := range iamp.Statements {
@@ -92,13 +106,15 @@ func (iamp Policy) isValid() error {
 
 	for i := range iamp.Statements {
 		for _, statement := range iamp.Statements[i+1:] {
-			actions := iamp.Statements[i].Actions.Intersection(statement.Actions)
-			if len(actions) == 0 {
+			if iamp.Statements[i].Effect != statement.Effect {
 				continue
 			}
 
-			resources := iamp.Statements[i].Resources.Intersection(statement.Resources)
-			if len(resources) == 0 {
+			if !iamp.Statements[i].Actions.Equals(statement.Actions) {
+				continue
+			}
+
+			if !iamp.Statements[i].Resources.Equals(statement.Resources) {
 				continue
 			}
 
@@ -106,8 +122,8 @@ func (iamp Policy) isValid() error {
 				continue
 			}
 
-			return fmt.Errorf("duplicate actions %v, resources %v found in statements %v, %v",
-				actions, resources, iamp.Statements[i], statement)
+			return Errorf("duplicate actions %v, resources %v found in statements %v, %v",
+				statement.Actions, statement.Resources, iamp.Statements[i], statement)
 		}
 	}
 
@@ -166,7 +182,7 @@ func ParseConfig(reader io.Reader) (*Policy, error) {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&iamp); err != nil {
-		return nil, err
+		return nil, Errorf("%w", err)
 	}
 
 	return &iamp, iamp.Validate()

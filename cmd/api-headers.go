@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,13 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // Returns a hexadecimal representation of time at the
@@ -36,13 +39,13 @@ func mustGetRequestID(t time.Time) string {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set("Server", globalServerUserAgent)
+	w.Header().Set(xhttp.ServerInfo, "MinIO/"+ReleaseTag)
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
-	if region := globalServerConfig.GetRegion(); region != "" {
-		w.Header().Set("X-Amz-Bucket-Region", region)
+	if region := globalServerRegion; region != "" {
+		w.Header().Set(xhttp.AmzBucketRegion, region)
 	}
-	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set(xhttp.AcceptRanges, "bytes")
 
 	// Remove sensitive information
 	crypto.RemoveSensitiveHeaders(w.Header())
@@ -72,24 +75,43 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set last modified time.
 	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
-	w.Header().Set("Last-Modified", lastModified)
+	w.Header().Set(xhttp.LastModified, lastModified)
 
 	// Set Etag if available.
 	if objInfo.ETag != "" {
-		w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
+		w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+	}
+
+	if strings.Contains(objInfo.ETag, "-") && len(objInfo.Parts) > 0 {
+		w.Header().Set(xhttp.AmzMpPartsCount, strconv.Itoa(len(objInfo.Parts)))
 	}
 
 	if objInfo.ContentType != "" {
-		w.Header().Set("Content-Type", objInfo.ContentType)
+		w.Header().Set(xhttp.ContentType, objInfo.ContentType)
 	}
 
 	if objInfo.ContentEncoding != "" {
-		w.Header().Set("Content-Encoding", objInfo.ContentEncoding)
+		w.Header().Set(xhttp.ContentEncoding, objInfo.ContentEncoding)
+	}
+
+	if !objInfo.Expires.IsZero() {
+		w.Header().Set(xhttp.Expires, objInfo.Expires.UTC().Format(http.TimeFormat))
+	}
+	if globalCacheConfig.Enabled {
+		w.Header().Set(xhttp.XCache, objInfo.CacheStatus.String())
+		w.Header().Set(xhttp.XCacheLookup, objInfo.CacheLookupStatus.String())
+	}
+
+	// Set tag count if object has tags
+	tags, _ := url.ParseQuery(objInfo.UserTags)
+	tagCount := len(tags)
+	if tagCount != 0 {
+		w.Header().Set(xhttp.AmzTagCount, strconv.Itoa(tagCount))
 	}
 
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
-		if hasPrefix(k, ReservedMetadataPrefix) {
+		if HasPrefix(k, ReservedMetadataPrefix) {
 			// Do not need to send any internal metadata
 			// values to client.
 			continue
@@ -120,10 +142,10 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	// Set content length.
-	w.Header().Set("Content-Length", strconv.FormatInt(rangeLen, 10))
+	w.Header().Set(xhttp.ContentLength, strconv.FormatInt(rangeLen, 10))
 	if rs != nil {
 		contentRange := fmt.Sprintf("bytes %d-%d/%d", start, start+rangeLen-1, totalObjectSize)
-		w.Header().Set("Content-Range", contentRange)
+		w.Header().Set(xhttp.ContentRange, contentRange)
 	}
 
 	return nil

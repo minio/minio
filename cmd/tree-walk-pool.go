@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -33,7 +34,6 @@ type listParams struct {
 	recursive bool
 	marker    string
 	prefix    string
-	heal      bool
 }
 
 // errWalkAbort - returned by doTreeWalk() if it returns prematurely.
@@ -44,25 +44,25 @@ var errWalkAbort = errors.New("treeWalk abort")
 
 // treeWalk - represents the go routine that does the file tree walk.
 type treeWalk struct {
-	resultCh   chan treeWalkResult
+	resultCh   chan TreeWalkResult
 	endWalkCh  chan struct{}   // To signal when treeWalk go-routine should end.
 	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
 }
 
-// treeWalkPool - pool of treeWalk go routines.
+// TreeWalkPool - pool of treeWalk go routines.
 // A treeWalk is added to the pool by Set() and removed either by
 // doing a Release() or if the concerned timer goes off.
 // treeWalkPool's purpose is to maintain active treeWalk go-routines in a map so that
 // it can be looked up across related list calls.
-type treeWalkPool struct {
+type TreeWalkPool struct {
 	pool    map[listParams][]treeWalk
 	timeOut time.Duration
 	lock    *sync.Mutex
 }
 
-// newTreeWalkPool - initialize new tree walk pool.
-func newTreeWalkPool(timeout time.Duration) *treeWalkPool {
-	tPool := &treeWalkPool{
+// NewTreeWalkPool - initialize new tree walk pool.
+func NewTreeWalkPool(timeout time.Duration) *TreeWalkPool {
+	tPool := &TreeWalkPool{
 		pool:    make(map[listParams][]treeWalk),
 		timeOut: timeout,
 		lock:    &sync.Mutex{},
@@ -71,10 +71,10 @@ func newTreeWalkPool(timeout time.Duration) *treeWalkPool {
 }
 
 // Release - selects a treeWalk from the pool based on the input
-// listParams, removes it from the pool, and returns the treeWalkResult
+// listParams, removes it from the pool, and returns the TreeWalkResult
 // channel.
 // Returns nil if listParams does not have an asccociated treeWalk.
-func (t treeWalkPool) Release(params listParams) (resultCh chan treeWalkResult, endWalkCh chan struct{}) {
+func (t TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
@@ -104,7 +104,7 @@ func (t treeWalkPool) Release(params listParams) (resultCh chan treeWalkResult, 
 // 2) Relase() signals the timer go-routine to end on endTimerCh.
 //    During listing the timer should not timeout and end the treeWalk go-routine, hence the
 //    timer go-routine should be ended.
-func (t treeWalkPool) Set(params listParams, resultCh chan treeWalkResult, endWalkCh chan struct{}) {
+func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -128,20 +128,23 @@ func (t treeWalkPool) Set(params listParams, resultCh chan treeWalkResult, endWa
 			t.lock.Lock()
 			walks, ok := t.pool[params]
 			if ok {
+				// Trick of filtering without allocating
+				// https://github.com/golang/go/wiki/SliceTricks#filtering-without-allocating
+				nwalks := walks[:0]
 				// Look for walkInfo, remove it from the walks list.
-				for i, walk := range walks {
-					if walk == walkInfo {
-						walks = append(walks[:i], walks[i+1:]...)
+				for _, walk := range walks {
+					if !reflect.DeepEqual(walk, walkInfo) {
+						nwalks = append(nwalks, walk)
 					}
 				}
-				if len(walks) == 0 {
+				if len(nwalks) == 0 {
 					// No more treeWalk go-routines associated with listParams
 					// hence remove map entry.
 					delete(t.pool, params)
 				} else {
 					// There are more treeWalk go-routines associated with listParams
 					// hence save the list in the map.
-					t.pool[params] = walks
+					t.pool[params] = nwalks
 				}
 			}
 			// Signal the treeWalk go-routine to die.

@@ -1,0 +1,33 @@
+# The address:port of the kes server - i.e. on the local machine.
+address = "127.0.0.1:7373"
+
+[tls]
+key  = "./kes-tls.key"
+cert = "./kes-tls.crt" 
+
+[policy.minio]
+paths = [
+          "/v1/key/create/minio-*",
+          "/v1/key/generate/minio-*",
+          "/v1/key/decrypt/minio-*"
+        ]
+identities = [ "dd46485bedc9ad2909d2e8f9017216eec4413bc5c64b236d992f7ec19c843c5f" ]
+
+[cache.expiry]
+all    = "5m" 
+unused = "20s" 
+
+[keystore.vault]
+address   = "https://127.0.0.1:8200"  # The Vault endpoint - i.e. https://127.0.0.1:8200
+name      = "minio"                   # The domain resp. prefix at Vault's K/V backend 
+
+[keystore.vault.approle]
+id     = ""    # Your AppRole Role ID 
+secret = ""    # Your AppRole Secret ID
+retry  = "15s" # Duration until the server tries to re-authenticate after connection loss.
+
+[keystore.vault.tls]
+ca = "./vault-tls.crt" # Since we use self-signed certificates
+
+[keystore.vault.status]
+ping = "10s"

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,11 +34,13 @@ type ProfilerType string
 
 // Different supported profiler types.
 const (
-	ProfilerCPU   ProfilerType = "cpu"   // represents CPU profiler type
-	ProfilerMEM                = "mem"   // represents MEM profiler type
-	ProfilerBlock              = "block" // represents Block profiler type
-	ProfilerMutex              = "mutex" // represents Mutex profiler type
-	ProfilerTrace              = "trace" // represents Trace profiler type
+	ProfilerCPU        ProfilerType = "cpu"        // represents CPU profiler type
+	ProfilerMEM        ProfilerType = "mem"        // represents MEM profiler type
+	ProfilerBlock      ProfilerType = "block"      // represents Block profiler type
+	ProfilerMutex      ProfilerType = "mutex"      // represents Mutex profiler type
+	ProfilerTrace      ProfilerType = "trace"      // represents Trace profiler type
+	ProfilerThreads    ProfilerType = "threads"    // represents ThreadCreate profiler type
+	ProfilerGoroutines ProfilerType = "goroutines" // represents Goroutine dumps.
 )
 
 // StartProfilingResult holds the result of starting
@@ -50,13 +53,15 @@ type StartProfilingResult struct {
 
 // StartProfiling makes an admin call to remotely start profiling on a standalone
 // server or the whole cluster in  case of a distributed setup.
-func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingResult, error) {
+func (adm *AdminClient) StartProfiling(ctx context.Context, profiler ProfilerType) ([]StartProfilingResult, error) {
 	v := url.Values{}
 	v.Set("profilerType", string(profiler))
-	resp, err := adm.executeMethod("POST", requestData{
-		relPath:     "/v1/profiling/start",
-		queryValues: v,
-	})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     adminAPIPrefix + "/profiling/start",
+			queryValues: v,
+		},
+	)
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -82,11 +87,13 @@ func (adm *AdminClient) StartProfiling(profiler ProfilerType) ([]StartProfilingR
 
 // DownloadProfilingData makes an admin call to download profiling data of a standalone
 // server or of the whole cluster in  case of a distributed setup.
-func (adm *AdminClient) DownloadProfilingData() (io.ReadCloser, error) {
-	path := fmt.Sprintf("/v1/profiling/download")
-	resp, err := adm.executeMethod("GET", requestData{
-		relPath: path,
-	})
+func (adm *AdminClient) DownloadProfilingData(ctx context.Context) (io.ReadCloser, error) {
+	path := fmt.Sprintf(adminAPIPrefix + "/profiling/download")
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet, requestData{
+			relPath: path,
+		},
+	)
 
 	if err != nil {
 		closeResponse(resp)

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,9 +23,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 // HTTPClientTarget - HTTP client target.
@@ -42,6 +42,11 @@ type HTTPClientTarget struct {
 // ID - returns target ID.
 func (target HTTPClientTarget) ID() event.TargetID {
 	return target.id
+}
+
+// IsActive - does nothing and available for interface compatibility.
+func (target *HTTPClientTarget) IsActive() (bool, error) {
+	return true, nil
 }
 
 func (target *HTTPClientTarget) start() {
@@ -89,8 +94,12 @@ func (target *HTTPClientTarget) start() {
 	}()
 }
 
-// Send - sends event to HTTP client.
-func (target *HTTPClientTarget) Send(eventData event.Event) error {
+// Save - sends event to HTTP client.
+func (target *HTTPClientTarget) Save(eventData event.Event) error {
+	return target.send(eventData)
+}
+
+func (target *HTTPClientTarget) send(eventData event.Event) error {
 	if atomic.LoadUint32(&target.isRunning) != 0 {
 		return errors.New("closed http connection")
 	}
@@ -109,6 +118,11 @@ func (target *HTTPClientTarget) Send(eventData event.Event) error {
 	}
 }
 
+// Send - interface compatible method does no-op.
+func (target *HTTPClientTarget) Send(eventKey string) error {
+	return nil
+}
+
 // Close - closes underneath goroutine.
 func (target *HTTPClientTarget) Close() error {
 	atomic.AddUint32(&target.isStopped, 1)
@@ -120,12 +134,12 @@ func (target *HTTPClientTarget) Close() error {
 }
 
 func getNewUUID() (string, error) {
-	uuid, err := uuid.New()
+	u, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
 
-	return uuid.String(), nil
+	return u.String(), nil
 }
 
 // NewHTTPClientTarget - creates new HTTP client target.
@@ -135,7 +149,7 @@ func NewHTTPClientTarget(host xnet.Host, w http.ResponseWriter) (*HTTPClientTarg
 		return nil, err
 	}
 	c := &HTTPClientTarget{
-		id:      event.TargetID{"httpclient" + "+" + uuid + "+" + host.Name, host.Port.String()},
+		id:      event.TargetID{ID: "httpclient" + "+" + uuid + "+" + host.Name, Name: host.Port.String()},
 		w:       w,
 		eventCh: make(chan []byte),
 		DoneCh:  make(chan struct{}),

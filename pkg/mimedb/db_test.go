@@ -1,5 +1,5 @@
 /*
- * mime-db: Mime Database, (C) 2015, 2016, 2017 Minio, Inc.
+ * mime-db: Mime Database, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,9 +31,8 @@ func TestMimeLookup(t *testing.T) {
 }
 
 func TestTypeByExtension(t *testing.T) {
-	var contentType string
 	// Test TypeByExtension.
-	contentType = TypeByExtension(".txt")
+	contentType := TypeByExtension(".txt")
 	if contentType != "text/plain" {
 		t.Fatalf("Invalid content type are found expected \"text/plain\", got %s", contentType)
 	}

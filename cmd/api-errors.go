@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,24 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
+	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
+	"google.golang.org/api/googleapi"
+
+	minio "github.com/minio/minio-go/v6"
+	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/dns"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+	"github.com/minio/minio/pkg/bucket/object/tagging"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
-	"github.com/minio/minio/pkg/s3select"
 )
 
 // APIError structure
@@ -45,6 +56,7 @@ type APIErrorResponse struct {
 	Key        string `xml:"Key,omitempty" json:"Key,omitempty"`
 	BucketName string `xml:"BucketName,omitempty" json:"BucketName,omitempty"`
 	Resource   string
+	Region     string `xml:"Region,omitempty" json:"Region,omitempty"`
 	RequestID  string `xml:"RequestId" json:"RequestId"`
 	HostID     string `xml:"HostId" json:"HostId"`
 }
@@ -59,6 +71,7 @@ const (
 	ErrBadDigest
 	ErrEntityTooSmall
 	ErrEntityTooLarge
+	ErrPolicyTooLarge
 	ErrIncompleteBody
 	ErrInternalError
 	ErrInvalidAccessKeyID
@@ -68,6 +81,7 @@ const (
 	ErrInvalidCopyPartRange
 	ErrInvalidCopyPartRangeSource
 	ErrInvalidMaxKeys
+	ErrInvalidEncodingMethod
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
 	ErrInvalidPartNumberMarker
@@ -81,10 +95,15 @@ const (
 	ErrMissingContentLength
 	ErrMissingContentMD5
 	ErrMissingRequestBodyError
+	ErrMissingSecurityHeader
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
+	ErrNoSuchBucketLifecycle
+	ErrNoSuchLifecycleConfiguration
+	ErrNoSuchBucketSSEConfig
 	ErrNoSuchKey
 	ErrNoSuchUpload
+	ErrNoSuchVersion
 	ErrNotImplemented
 	ErrPreconditionFailed
 	ErrRequestTimeTooSkewed
@@ -103,11 +122,11 @@ const (
 	ErrMissingCredTag
 	ErrCredMalformed
 	ErrInvalidRegion
-	ErrInvalidService
+	ErrInvalidServiceS3
+	ErrInvalidServiceSTS
 	ErrInvalidRequestVersion
 	ErrMissingSignTag
 	ErrMissingSignHeadersTag
-	ErrPolicyAlreadyExpired
 	ErrMalformedDate
 	ErrMalformedPresignedDate
 	ErrMalformedCredentialDate
@@ -130,6 +149,17 @@ const (
 	ErrSlowDown
 	ErrInvalidPrefixMarker
 	ErrBadRequest
+	ErrKeyTooLongError
+	ErrInvalidBucketObjectLockConfiguration
+	ErrObjectLockConfigurationNotFound
+	ErrObjectLockConfigurationNotAllowed
+	ErrNoSuchObjectLockConfiguration
+	ErrObjectLocked
+	ErrInvalidRetentionDate
+	ErrPastObjectLockRetainDate
+	ErrUnknownWORMModeDirective
+	ErrObjectLockInvalidHeaders
+	ErrInvalidTagDirective
 	// Add new error codes here.
 
 	// SSE-S3 related API errors
@@ -150,6 +180,9 @@ const (
 	ErrKMSNotConfigured
 	ErrKMSAuthFailure
 
+	ErrNoAccessKey
+	ErrInvalidToken
+
 	// Bucket notification related errors.
 	ErrEventNotification
 	ErrARNNotification
@@ -167,19 +200,21 @@ const (
 
 	// Add new extended error codes here.
 
-	// Minio extended errors.
+	// MinIO extended errors.
 	ErrReadQuorum
 	ErrWriteQuorum
+	ErrParentIsObject
 	ErrStorageFull
 	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
-	ErrPolicyNesting
 	ErrInvalidObjectName
+	ErrInvalidObjectNamePrefixSlash
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
+	ErrOperationMaxedOut
 	ErrInvalidRequest
-	// Minio storage class error codes
+	// MinIO storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
 	// Add new extended error codes here.
@@ -188,6 +223,8 @@ const (
 
 	ErrMalformedJSON
 	ErrAdminNoSuchUser
+	ErrAdminNoSuchGroup
+	ErrAdminGroupNotEmpty
 	ErrAdminNoSuchPolicy
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
@@ -208,7 +245,7 @@ const (
 	ErrHealOverlappingPaths
 	ErrIncorrectContinuationToken
 
-	//S3 Select Errors
+	// S3 Select Errors
 	ErrEmptyRequestBody
 	ErrUnsupportedFunction
 	ErrInvalidExpressionType
@@ -292,14 +329,37 @@ const (
 	ErrEvaluatorInvalidTimestampFormatPatternSymbol
 	ErrEvaluatorBindingDoesNotExist
 	ErrMissingHeaders
+	ErrInvalidColumnIndex
+
 	ErrAdminConfigNotificationTargetsFailed
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
+	ErrAddUserInvalidArgument
+	ErrAddServiceAccountInvalidArgument
+	ErrAddServiceAccountInvalidParent
+	ErrPostPolicyConditionInvalidFormat
 )
+
+type errorCodeMap map[APIErrorCode]APIError
+
+func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError {
+	apiErr, ok := e[errCode]
+	if !ok {
+		apiErr = e[ErrInternalError]
+	}
+	if err != nil {
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
+	}
+	return apiErr
+}
+
+func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+	return e.ToAPIErrWithErr(errCode, nil)
+}
 
 // error code to APIError structure, these fields carry respective
 // descriptions for all the error responses.
-var errorCodeResponse = map[APIErrorCode]APIError{
+var errorCodes = errorCodeMap{
 	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
 		Description:    "This copy request is illegal because it is trying to copy an object to itself without changing the object's metadata, storage class, website redirect location or encryption attributes.",
@@ -335,6 +395,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Argument maxKeys must be an integer between 0 and 2147483647",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidEncodingMethod: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid Encoding Method specified in Request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidMaxParts: {
 		Code:           "InvalidArgument",
 		Description:    "Argument max-parts must be an integer between 0 and 2147483647",
@@ -368,6 +433,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrEntityTooLarge: {
 		Code:           "EntityTooLarge",
 		Description:    "Your proposed upload exceeds the maximum allowed object size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyTooLarge: {
+		Code:           "PolicyTooLarge",
+		Description:    "Policy exceeds the maximum allowed document size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrIncompleteBody: {
@@ -415,6 +485,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Missing required header for this request: Content-Md5.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrMissingSecurityHeader: {
+		Code:           "MissingSecurityHeader",
+		Description:    "Your request was missing a required header",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrMissingRequestBodyError: {
 		Code:           "MissingRequestBodyError",
 		Description:    "Request body is empty.",
@@ -430,6 +505,21 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The bucket policy does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrNoSuchBucketLifecycle: {
+		Code:           "NoSuchBucketLifecycle",
+		Description:    "The bucket lifecycle configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchLifecycleConfiguration: {
+		Code:           "NoSuchLifecycleConfiguration",
+		Description:    "The lifecycle configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchBucketSSEConfig: {
+		Code:           "ServerSideEncryptionConfigurationNotFoundError",
+		Description:    "The server side encryption configuration was not found",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrNoSuchKey: {
 		Code:           "NoSuchKey",
 		Description:    "The specified key does not exist.",
@@ -438,6 +528,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrNoSuchUpload: {
 		Code:           "NoSuchUpload",
 		Description:    "The specified multipart upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchVersion: {
+		Code:           "NoSuchVersion",
+		Description:    "Indicates that the version ID specified in the request does not match an existing version.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNotImplemented: {
@@ -569,9 +664,14 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
 	// right Description:   "Error parsing the X-Amz-Credential parameter; incorrect service \"s4\". This endpoint belongs to \"s3\".".
 	// Need changes to make sure variable messages can be constructed.
-	ErrInvalidService: {
-		Code:           "AuthorizationQueryParametersError",
-		Description:    "Error parsing the X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
+	ErrInvalidServiceS3: {
+		Code:           "AuthorizationParametersError",
+		Description:    "Error parsing the Credential/X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidServiceSTS: {
+		Code:           "AuthorizationParametersError",
+		Description:    "Error parsing the Credential parameter; incorrect service. This endpoint belongs to \"sts\".",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
@@ -590,11 +690,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrMissingSignHeadersTag: {
 		Code:           "InvalidArgument",
 		Description:    "Signature header missing SignedHeaders field.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrPolicyAlreadyExpired: {
-		Code:           "AccessDenied",
-		Description:    "Invalid according to Policy: Policy expired.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedExpires: {
@@ -647,6 +742,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "400 BadRequest",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrKeyTooLongError: {
+		Code:           "KeyTooLongError",
+		Description:    "Your key is too long",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {
@@ -669,7 +769,51 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Duration provided in the request is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-
+	ErrInvalidBucketObjectLockConfiguration: {
+		Code:           "InvalidRequest",
+		Description:    "Bucket is missing ObjectLockConfiguration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectLockConfigurationNotFound: {
+		Code:           "ObjectLockConfigurationNotFoundError",
+		Description:    "Object Lock configuration does not exist for this bucket",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrObjectLockConfigurationNotAllowed: {
+		Code:           "InvalidBucketState",
+		Description:    "Object Lock configuration cannot be enabled on existing buckets",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrNoSuchObjectLockConfiguration: {
+		Code:           "NoSuchObjectLockConfiguration",
+		Description:    "The specified object does not have a ObjectLock configuration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectLocked: {
+		Code:           "InvalidRequest",
+		Description:    "Object is WORM protected and cannot be overwritten",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidRetentionDate: {
+		Code:           "InvalidRequest",
+		Description:    "Date must be provided in ISO 8601 format",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPastObjectLockRetainDate: {
+		Code:           "InvalidRequest",
+		Description:    "the retain until date must be in the future",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnknownWORMModeDirective: {
+		Code:           "InvalidRequest",
+		Description:    "unknown wormMode directive",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectLockInvalidHeaders: {
+		Code:           "InvalidRequest",
+		Description:    "x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	/// Bucket notification related errors.
 	ErrEventNotification: {
 		Code:           "InvalidArgument",
@@ -718,7 +862,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrUnsupportedNotification: {
 		Code:           "UnsupportedNotification",
-		Description:    "Minio server does not support Topic or Cloud Function based notifications.",
+		Description:    "MinIO server does not support Topic or Cloud Function based notifications.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopyPartRange: {
@@ -734,6 +878,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrMetadataTooLarge: {
 		Code:           "InvalidArgument",
 		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidTagDirective: {
+		Code:           "InvalidArgument",
+		Description:    "Unknown tag directive.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidEncryptionMethod: {
@@ -806,6 +955,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Server side encryption specified but KMS authorization failed",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrNoAccessKey: {
+		Code:           "AccessDenied",
+		Description:    "No AWSAccessKey was presented",
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrInvalidToken: {
+		Code:           "InvalidTokenId",
+		Description:    "The security token included in the request is invalid",
+		HTTPStatusCode: http.StatusForbidden,
+	},
 
 	/// S3 extensions.
 	ErrContentSHA256Mismatch: {
@@ -814,11 +973,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
-	/// Minio extensions.
+	/// MinIO extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
 		HTTPStatusCode: http.StatusInsufficientStorage,
+	},
+	ErrParentIsObject: {
+		Code:           "XMinioParentIsObject",
+		Description:    "Object-prefix is already an object, please choose a different object-prefix name.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrRequestBodyParse: {
 		Code:           "XMinioRequestBodyParse",
@@ -830,24 +994,14 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Object name already exists as a directory.",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrReadQuorum: {
-		Code:           "XMinioReadQuorum",
-		Description:    "Multiple disk failures, unable to reconstruct data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrWriteQuorum: {
-		Code:           "XMinioWriteQuorum",
-		Description:    "Multiple disks failures, unable to write data.",
-		HTTPStatusCode: http.StatusServiceUnavailable,
-	},
-	ErrPolicyNesting: {
-		Code:           "XMinioPolicyNesting",
-		Description:    "New bucket policy conflicts with an existing policy. Please try again with new prefix.",
-		HTTPStatusCode: http.StatusConflict,
-	},
 	ErrInvalidObjectName: {
 		Code:           "XMinioInvalidObjectName",
 		Description:    "Object name contains unsupported characters.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidObjectNamePrefixSlash: {
+		Code:           "XMinioInvalidObjectName",
+		Description:    "Object name contains a leading slash.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidResourceName: {
@@ -869,6 +1023,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminNoSuchUser",
 		Description:    "The specified user does not exist.",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminNoSuchGroup: {
+		Code:           "XMinioAdminNoSuchGroup",
+		Description:    "The specified group does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminGroupNotEmpty: {
+		Code:           "XMinioAdminGroupNotEmpty",
+		Description:    "The specified group is not empty - cannot remove it.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminNoSuchPolicy: {
 		Code:           "XMinioAdminNoSuchPolicy",
@@ -934,6 +1098,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrOperationTimedOut: {
 		Code:           "XMinioServerTimedOut",
 		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
+	},
+	ErrOperationMaxedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout exceeded while waiting to proceed with the request",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 	ErrUnsupportedMetadata: {
@@ -1416,10 +1585,36 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Some headers in the query are missing from the file. Check the file and try again.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidColumnIndex: {
+		Code:           "InvalidColumnIndex",
+		Description:    "The column index is invalid. Please check the service documentation and try again.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidDecompressedSize: {
 		Code:           "XMinioInvalidDecompressedSize",
 		Description:    "The data provided is unfit for decompression",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAddUserInvalidArgument: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "User is not allowed to be same as admin access key",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAddServiceAccountInvalidArgument: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "Creating service accounts for admin access key is not allowed",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrAddServiceAccountInvalidParent: {
+		Code:           "XMinioInvalidIAMCredentialsParent",
+		Description:    "Creating service accounts for other users is not allowed",
+		HTTPStatusCode: http.StatusConflict,
+	},
+
+	ErrPostPolicyConditionInvalidFormat: {
+		Code:           "PostPolicyInvalidKeyName",
+		Description:    "Invalid according to Policy: Policy Condition failed",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	// Add your error structure here.
 }
@@ -1427,17 +1622,20 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 // toAPIErrorCode - Converts embedded errors. Convenience
 // function written to handle all cases where we have known types of
 // errors returned by underlying layers.
-func toAPIErrorCode(err error) (apiErr APIErrorCode) {
+func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
+	case errNoSuchGroup:
+		apiErr = ErrAdminNoSuchGroup
+	case errGroupNotEmpty:
+		apiErr = ErrAdminGroupNotEmpty
 	case errNoSuchPolicy:
 		apiErr = ErrAdminNoSuchPolicy
 	case errSignatureMismatch:
@@ -1448,6 +1646,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case errDataTooSmall:
 		apiErr = ErrEntityTooSmall
+	case errAuthentication:
+		apiErr = ErrAccessDenied
 	case auth.ErrInvalidAccessKeyLength:
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:
@@ -1459,8 +1659,6 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidEncryptionMethod
 	case crypto.ErrInvalidCustomerAlgorithm:
 		apiErr = ErrInvalidSSECustomerAlgorithm
-	case crypto.ErrInvalidCustomerKey:
-		apiErr = ErrInvalidSSECustomerKey
 	case crypto.ErrMissingCustomerKey:
 		apiErr = ErrMissingSSECustomerKey
 	case crypto.ErrMissingCustomerKeyMD5:
@@ -1481,167 +1679,20 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case crypto.ErrKMSAuthLogin:
 		apiErr = ErrKMSAuthFailure
-	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
+	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
-	}
-	switch err {
-	case s3select.ErrBusy:
-		apiErr = ErrBusy
-	case s3select.ErrUnauthorizedAccess:
-		apiErr = ErrUnauthorizedAccess
-	case s3select.ErrExpressionTooLong:
-		apiErr = ErrExpressionTooLong
-	case s3select.ErrIllegalSQLFunctionArgument:
-		apiErr = ErrIllegalSQLFunctionArgument
-	case s3select.ErrInvalidKeyPath:
-		apiErr = ErrInvalidKeyPath
-	case s3select.ErrInvalidCompressionFormat:
-		apiErr = ErrInvalidCompressionFormat
-	case s3select.ErrInvalidFileHeaderInfo:
-		apiErr = ErrInvalidFileHeaderInfo
-	case s3select.ErrInvalidJSONType:
-		apiErr = ErrInvalidJSONType
-	case s3select.ErrInvalidQuoteFields:
-		apiErr = ErrInvalidQuoteFields
-	case s3select.ErrInvalidRequestParameter:
-		apiErr = ErrInvalidRequestParameter
-	case s3select.ErrInvalidDataType:
-		apiErr = ErrInvalidDataType
-	case s3select.ErrInvalidTextEncoding:
-		apiErr = ErrInvalidTextEncoding
-	case s3select.ErrInvalidTableAlias:
-		apiErr = ErrInvalidTableAlias
-	case s3select.ErrMissingRequiredParameter:
-		apiErr = ErrMissingRequiredParameter
-	case s3select.ErrObjectSerializationConflict:
-		apiErr = ErrObjectSerializationConflict
-	case s3select.ErrUnsupportedSQLOperation:
-		apiErr = ErrUnsupportedSQLOperation
-	case s3select.ErrUnsupportedSQLStructure:
-		apiErr = ErrUnsupportedSQLStructure
-	case s3select.ErrUnsupportedSyntax:
-		apiErr = ErrUnsupportedSyntax
-	case s3select.ErrUnsupportedRangeHeader:
-		apiErr = ErrUnsupportedRangeHeader
-	case s3select.ErrLexerInvalidChar:
-		apiErr = ErrLexerInvalidChar
-	case s3select.ErrLexerInvalidOperator:
-		apiErr = ErrLexerInvalidOperator
-	case s3select.ErrLexerInvalidLiteral:
-		apiErr = ErrLexerInvalidLiteral
-	case s3select.ErrLexerInvalidIONLiteral:
-		apiErr = ErrLexerInvalidIONLiteral
-	case s3select.ErrParseExpectedDatePart:
-		apiErr = ErrParseExpectedDatePart
-	case s3select.ErrParseExpectedKeyword:
-		apiErr = ErrParseExpectedKeyword
-	case s3select.ErrParseExpectedTokenType:
-		apiErr = ErrParseExpectedTokenType
-	case s3select.ErrParseExpected2TokenTypes:
-		apiErr = ErrParseExpected2TokenTypes
-	case s3select.ErrParseExpectedNumber:
-		apiErr = ErrParseExpectedNumber
-	case s3select.ErrParseExpectedRightParenBuiltinFunctionCall:
-		apiErr = ErrParseExpectedRightParenBuiltinFunctionCall
-	case s3select.ErrParseExpectedTypeName:
-		apiErr = ErrParseExpectedTypeName
-	case s3select.ErrParseExpectedWhenClause:
-		apiErr = ErrParseExpectedWhenClause
-	case s3select.ErrParseUnsupportedToken:
-		apiErr = ErrParseUnsupportedToken
-	case s3select.ErrParseUnsupportedLiteralsGroupBy:
-		apiErr = ErrParseUnsupportedLiteralsGroupBy
-	case s3select.ErrParseExpectedMember:
-		apiErr = ErrParseExpectedMember
-	case s3select.ErrParseUnsupportedSelect:
-		apiErr = ErrParseUnsupportedSelect
-	case s3select.ErrParseUnsupportedCase:
-		apiErr = ErrParseUnsupportedCase
-	case s3select.ErrParseUnsupportedCaseClause:
-		apiErr = ErrParseUnsupportedCaseClause
-	case s3select.ErrParseUnsupportedAlias:
-		apiErr = ErrParseUnsupportedAlias
-	case s3select.ErrParseUnsupportedSyntax:
-		apiErr = ErrParseUnsupportedSyntax
-	case s3select.ErrParseUnknownOperator:
-		apiErr = ErrParseUnknownOperator
-	case s3select.ErrParseMissingIdentAfterAt:
-		apiErr = ErrParseMissingIdentAfterAt
-	case s3select.ErrParseUnexpectedOperator:
-		apiErr = ErrParseUnexpectedOperator
-	case s3select.ErrParseUnexpectedTerm:
-		apiErr = ErrParseUnexpectedTerm
-	case s3select.ErrParseUnexpectedToken:
-		apiErr = ErrParseUnexpectedToken
-	case s3select.ErrParseUnexpectedKeyword:
-		apiErr = ErrParseUnexpectedKeyword
-	case s3select.ErrParseExpectedExpression:
-		apiErr = ErrParseExpectedExpression
-	case s3select.ErrParseExpectedLeftParenAfterCast:
-		apiErr = ErrParseExpectedLeftParenAfterCast
-	case s3select.ErrParseExpectedLeftParenValueConstructor:
-		apiErr = ErrParseExpectedLeftParenValueConstructor
-	case s3select.ErrParseExpectedLeftParenBuiltinFunctionCall:
-		apiErr = ErrParseExpectedLeftParenBuiltinFunctionCall
-	case s3select.ErrParseExpectedArgumentDelimiter:
-		apiErr = ErrParseExpectedArgumentDelimiter
-	case s3select.ErrParseCastArity:
-		apiErr = ErrParseCastArity
-	case s3select.ErrParseInvalidTypeParam:
-		apiErr = ErrParseInvalidTypeParam
-	case s3select.ErrParseEmptySelect:
-		apiErr = ErrParseEmptySelect
-	case s3select.ErrParseSelectMissingFrom:
-		apiErr = ErrParseSelectMissingFrom
-	case s3select.ErrParseExpectedIdentForGroupName:
-		apiErr = ErrParseExpectedIdentForGroupName
-	case s3select.ErrParseExpectedIdentForAlias:
-		apiErr = ErrParseExpectedIdentForAlias
-	case s3select.ErrParseUnsupportedCallWithStar:
-		apiErr = ErrParseUnsupportedCallWithStar
-	case s3select.ErrParseNonUnaryAgregateFunctionCall:
-		apiErr = ErrParseNonUnaryAgregateFunctionCall
-	case s3select.ErrParseMalformedJoin:
-		apiErr = ErrParseMalformedJoin
-	case s3select.ErrParseExpectedIdentForAt:
-		apiErr = ErrParseExpectedIdentForAt
-	case s3select.ErrParseAsteriskIsNotAloneInSelectList:
-		apiErr = ErrParseAsteriskIsNotAloneInSelectList
-	case s3select.ErrParseCannotMixSqbAndWildcardInSelectList:
-		apiErr = ErrParseCannotMixSqbAndWildcardInSelectList
-	case s3select.ErrParseInvalidContextForWildcardInSelectList:
-		apiErr = ErrParseInvalidContextForWildcardInSelectList
-	case s3select.ErrIncorrectSQLFunctionArgumentType:
-		apiErr = ErrIncorrectSQLFunctionArgumentType
-	case s3select.ErrValueParseFailure:
-		apiErr = ErrValueParseFailure
-	case s3select.ErrIntegerOverflow:
-		apiErr = ErrIntegerOverflow
-	case s3select.ErrLikeInvalidInputs:
-		apiErr = ErrLikeInvalidInputs
-	case s3select.ErrCastFailed:
-		apiErr = ErrCastFailed
-	case s3select.ErrInvalidCast:
-		apiErr = ErrInvalidCast
-	case s3select.ErrEvaluatorInvalidTimestampFormatPattern:
-		apiErr = ErrEvaluatorInvalidTimestampFormatPattern
-	case s3select.ErrEvaluatorInvalidTimestampFormatPatternSymbolForParsing:
-		apiErr = ErrEvaluatorInvalidTimestampFormatPatternSymbolForParsing
-	case s3select.ErrEvaluatorTimestampFormatPatternDuplicateFields:
-		apiErr = ErrEvaluatorTimestampFormatPatternDuplicateFields
-	case s3select.ErrEvaluatorTimestampFormatPatternHourClockAmPmMismatch:
-		apiErr = ErrEvaluatorTimestampFormatPatternHourClockAmPmMismatch
-	case s3select.ErrEvaluatorUnterminatedTimestampFormatPatternToken:
-		apiErr = ErrEvaluatorUnterminatedTimestampFormatPatternToken
-	case s3select.ErrEvaluatorInvalidTimestampFormatPatternToken:
-		apiErr = ErrEvaluatorInvalidTimestampFormatPatternToken
-	case s3select.ErrEvaluatorInvalidTimestampFormatPatternSymbol:
-		apiErr = ErrEvaluatorInvalidTimestampFormatPatternSymbol
-	case s3select.ErrEvaluatorBindingDoesNotExist:
-		apiErr = ErrEvaluatorBindingDoesNotExist
-	case s3select.ErrMissingHeaders:
-		apiErr = ErrMissingHeaders
-
+	case errDiskNotFound:
+		apiErr = ErrSlowDown
+	case objectlock.ErrInvalidRetentionDate:
+		apiErr = ErrInvalidRetentionDate
+	case objectlock.ErrPastObjectLockRetainDate:
+		apiErr = ErrPastObjectLockRetainDate
+	case objectlock.ErrUnknownWORMModeDirective:
+		apiErr = ErrUnknownWORMModeDirective
+	case objectlock.ErrObjectLockInvalidHeaders:
+		apiErr = ErrObjectLockInvalidHeaders
+	case objectlock.ErrMalformedXML:
+		apiErr = ErrMalformedXML
 	}
 
 	// Compression errors
@@ -1674,6 +1725,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectExistsAsDirectory
 	case PrefixAccessDenied:
 		apiErr = ErrAccessDenied
+	case ParentIsObject:
+		apiErr = ErrParentIsObject
 	case BucketNameInvalid:
 		apiErr = ErrInvalidBucketName
 	case BucketNotFound:
@@ -1692,14 +1745,16 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrMethodNotAllowed
 	case ObjectNameInvalid:
 		apiErr = ErrInvalidObjectName
+	case ObjectNamePrefixAsSlash:
+		apiErr = ErrInvalidObjectNamePrefixSlash
 	case InvalidUploadID:
 		apiErr = ErrNoSuchUpload
 	case InvalidPart:
 		apiErr = ErrInvalidPart
 	case InsufficientWriteQuorum:
-		apiErr = ErrWriteQuorum
+		apiErr = ErrSlowDown
 	case InsufficientReadQuorum:
-		apiErr = ErrReadQuorum
+		apiErr = ErrSlowDown
 	case UnsupportedDelimiter:
 		apiErr = ErrNotImplemented
 	case InvalidMarkerPrefixCombination:
@@ -1726,6 +1781,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedMetadata
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
+	case BucketLifecycleNotFound:
+		apiErr = ErrNoSuchLifecycleConfiguration
+	case BucketSSEConfigNotFound:
+		apiErr = ErrNoSuchBucketSSEConfig
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:
@@ -1748,12 +1807,124 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrOverlappingFilterNotification
 	case *event.ErrUnsupportedConfiguration:
 		apiErr = ErrUnsupportedNotification
+	case OperationTimedOut:
+		apiErr = ErrOperationTimedOut
 	case BackendDown:
 		apiErr = ErrBackendDown
-	case crypto.Error:
-		apiErr = ErrObjectTampered
+	case ObjectNameTooLong:
+		apiErr = ErrKeyTooLongError
 	default:
-		apiErr = ErrInternalError
+		var ie, iw int
+		// This work-around is to handle the issue golang/go#30648
+		if _, ferr := fmt.Fscanf(strings.NewReader(err.Error()),
+			"request declared a Content-Length of %d but only wrote %d bytes",
+			&ie, &iw); ferr != nil {
+			apiErr = ErrInternalError
+			// Make sure to log the errors which we cannot translate
+			// to a meaningful S3 API errors. This is added to aid in
+			// debugging unexpected/unhandled errors.
+			logger.LogIf(ctx, err)
+		} else if ie > iw {
+			apiErr = ErrIncompleteBody
+		} else {
+			apiErr = ErrInternalError
+			// Make sure to log the errors which we cannot translate
+			// to a meaningful S3 API errors. This is added to aid in
+			// debugging unexpected/unhandled errors.
+			logger.LogIf(ctx, err)
+		}
+	}
+
+	return apiErr
+}
+
+var noError = APIError{}
+
+// toAPIError - Converts embedded errors. Convenience
+// function written to handle all cases where we have known types of
+// errors returned by underlying layers.
+func toAPIError(ctx context.Context, err error) APIError {
+	if err == nil {
+		return noError
+	}
+
+	var apiErr = errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
+	if apiErr.Code == "InternalError" {
+		// If we see an internal error try to interpret
+		// any underlying errors if possible depending on
+		// their internal error types. This code is only
+		// useful with gateway implementations.
+		switch e := err.(type) {
+		case *xml.SyntaxError:
+			apiErr = APIError{
+				Code: "MalformedXML",
+				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
+					e.Error()),
+				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
+			}
+		case url.EscapeError:
+			apiErr = APIError{
+				Code: "XMinioInvalidObjectName",
+				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
+					e.Error()),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case lifecycle.Error:
+			apiErr = APIError{
+				Code:           "InvalidRequest",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case tagging.Error:
+			apiErr = APIError{
+				Code:           e.Code(),
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case policy.Error:
+			apiErr = APIError{
+				Code:           "MalformedPolicy",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case crypto.Error:
+			apiErr = APIError{
+				Code:           "XMinIOEncryptionError",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case minio.ErrorResponse:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Message,
+				HTTPStatusCode: e.StatusCode,
+			}
+		case *googleapi.Error:
+			apiErr = APIError{
+				Code:           "XGCSInternalError",
+				Description:    e.Message,
+				HTTPStatusCode: e.Code,
+			}
+			// GCS may send multiple errors, just pick the first one
+			// since S3 only sends one Error XML response.
+			if len(e.Errors) >= 1 {
+				apiErr.Code = e.Errors[0].Reason
+
+			}
+		case azblob.StorageError:
+			apiErr = APIError{
+				Code:           string(e.ServiceCode()),
+				Description:    e.Error(),
+				HTTPStatusCode: e.Response().StatusCode,
+			}
+		case oss.ServiceError:
+			apiErr = APIError{
+				Code:           e.Code,
+				Description:    e.Message,
+				HTTPStatusCode: e.StatusCode,
+			}
+			// Add more Gateway SDKs here if any in future.
+		}
 	}
 
 	return apiErr
@@ -1761,20 +1932,24 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 
 // getAPIError provides API Error for input API error code.
 func getAPIError(code APIErrorCode) APIError {
-	if apiErr, ok := errorCodeResponse[code]; ok {
+	if apiErr, ok := errorCodes[code]; ok {
 		return apiErr
 	}
-	return errorCodeResponse[ErrInternalError]
+	return errorCodes.ToAPIErr(ErrInternalError)
 }
 
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
-func getAPIErrorResponse(err APIError, resource, requestid string) APIErrorResponse {
+func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID, hostID string) APIErrorResponse {
+	reqInfo := logger.GetReqInfo(ctx)
 	return APIErrorResponse{
-		Code:      err.Code,
-		Message:   err.Description,
-		Resource:  resource,
-		RequestID: requestid,
-		HostID:    "3L137",
+		Code:       err.Code,
+		Message:    err.Description,
+		BucketName: reqInfo.BucketName,
+		Key:        reqInfo.ObjectName,
+		Resource:   resource,
+		Region:     globalServerRegion,
+		RequestID:  requestID,
+		HostID:     hostID,
 	}
 }

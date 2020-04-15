@@ -1,7 +1,7 @@
 .login {
     height: 100vh;
     min-height: 500px;
-    background: @dark-gray;
+    background: #002a37;
 
     text-align: center;
     &:before {
@@ -95,10 +95,46 @@
     }
 }
 
+.openid-login {
+    margin-top: 30px;
+}
+
+.openid-btn {
+    display: inline-block;
+    color: @link-color;
+    margin-top: 30px;
+    border-width: 1px;
+    border-style: solid;
+    opacity: 0.6;
+    font-size: 14px;
+    &:hover {
+        opacity: 1;
+        cursor: pointer;
+    }
+}
+
+.or {
+    display:flex;
+    justify-content:center;
+    align-items: center;
+    color:grey;
+  }
+
+.or:after,
+.or:before {
+    content: "";
+    display: block;
+    background: grey;
+    width: 10px;
+    height: 1px;
+    margin: 0 10px;
+}
+
 /*------------------------------
     Chrome autofill fix
 -------------------------------*/
 input:-webkit-autofill {
-     -webkit-box-shadow:0 0 0 50px @dark-gray inset !important;
+     -webkit-box-shadow:0 0 0 50px #002a37 inset !important;
      -webkit-text-fill-color: @white !important;
+    caret-color: white;
 }

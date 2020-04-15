@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 )
 
 // ValidateFilterRuleValue - checks if given value is filter rule value or not.
@@ -167,6 +167,13 @@ func (q *Queue) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 
 // Validate - checks whether queue has valid values or not.
 func (q Queue) Validate(region string, targetList *TargetList) error {
+	if q.ARN.region == "" {
+		if !targetList.Exists(q.ARN.TargetID) {
+			return &ErrARNNotFound{q.ARN}
+		}
+		return nil
+	}
+
 	if region != "" && q.ARN.region != region {
 		return &ErrUnknownRegion{q.ARN.region}
 	}
@@ -191,19 +198,18 @@ func (q Queue) ToRulesMap() RulesMap {
 
 // Unused.  Available for completion.
 type lambda struct {
-	common
 	ARN string `xml:"CloudFunction"`
 }
 
 // Unused. Available for completion.
 type topic struct {
-	common
 	ARN string `xml:"Topic" json:"Topic"`
 }
 
 // Config - notification configuration described in
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html
 type Config struct {
+	XMLNS      string   `xml:"xmlns,attr,omitempty"`
 	XMLName    xml.Name `xml:"NotificationConfiguration"`
 	QueueList  []Queue  `xml:"QueueConfiguration,omitempty"`
 	LambdaList []lambda `xml:"CloudFunctionConfiguration,omitempty"`
@@ -223,6 +229,10 @@ func (conf *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	if len(parsedConfig.QueueList) > 0 {
 		for i, q1 := range parsedConfig.QueueList[:len(parsedConfig.QueueList)-1] {
 			for _, q2 := range parsedConfig.QueueList[i+1:] {
+				// Removes the region from ARN if server region is not set
+				if q2.ARN.region != "" && q1.ARN.region == "" {
+					q2.ARN.region = ""
+				}
 				if reflect.DeepEqual(q1, q2) {
 					return &ErrDuplicateQueueConfiguration{q1}
 				}
@@ -245,8 +255,6 @@ func (conf Config) Validate(region string, targetList *TargetList) error {
 		if err := queue.Validate(region, targetList); err != nil {
 			return err
 		}
-
-		// TODO: Need to discuss/check why same ARN cannot be used in another queue configuration.
 	}
 
 	return nil
@@ -273,6 +281,7 @@ func (conf *Config) ToRulesMap() RulesMap {
 // ParseConfig - parses data in reader to notification configuration.
 func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Config, error) {
 	var config Config
+
 	if err := xml.NewDecoder(reader).Decode(&config); err != nil {
 		return nil, err
 	}
@@ -282,6 +291,9 @@ func ParseConfig(reader io.Reader, region string, targetList *TargetList) (*Conf
 	}
 
 	config.SetRegion(region)
-
+	//If xml namespace is empty, set a default value before returning.
+	if config.XMLNS == "" {
+		config.XMLNS = "http://s3.amazonaws.com/doc/2006-03-01/"
+	}
 	return &config, nil
 }

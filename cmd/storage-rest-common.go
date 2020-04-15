@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,37 +16,56 @@
 
 package cmd
 
-const storageRESTVersion = "v1"
-const storageRESTPath = minioReservedBucketPath + "/storage/" + storageRESTVersion + "/"
-
 const (
-	storageRESTMethodDiskInfo  = "diskinfo"
-	storageRESTMethodMakeVol   = "makevol"
-	storageRESTMethodStatVol   = "statvol"
-	storageRESTMethodDeleteVol = "deletevol"
-	storageRESTMethodListVols  = "listvols"
-
-	storageRESTMethodPrepareFile = "preparefile"
-	storageRESTMethodAppendFile  = "appendfile"
-	storageRESTMethodStatFile    = "statfile"
-	storageRESTMethodReadAll     = "readall"
-	storageRESTMethodReadFile    = "readfile"
-	storageRESTMethodListDir     = "listdir"
-	storageRESTMethodDeleteFile  = "deletefile"
-	storageRESTMethodRenameFile  = "renamefile"
+	storageRESTVersion       = "v17" // RemoveBucket API change
+	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
+	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
 
 const (
-	storageRESTVolume     = "volume"
-	storageRESTDirPath    = "dir-path"
-	storageRESTFilePath   = "file-path"
-	storageRESTSrcVolume  = "source-volume"
-	storageRESTSrcPath    = "source-path"
-	storageRESTDstVolume  = "destination-volume"
-	storageRESTDstPath    = "destination-path"
-	storageRESTOffset     = "offset"
-	storageRESTLength     = "length"
-	storageRESTCount      = "count"
-	storageRESTBitrotAlgo = "bitrot-algo"
-	storageRESTBitrotHash = "bitrot-hash"
+	storageRESTMethodDiskInfo             = "/diskinfo"
+	storageRESTMethodCrawlAndGetDataUsage = "/crawlandgetdatausage"
+	storageRESTMethodMakeVol              = "/makevol"
+	storageRESTMethodMakeVolBulk          = "/makevolbulk"
+	storageRESTMethodStatVol              = "/statvol"
+	storageRESTMethodDeleteVol            = "/deletevol"
+	storageRESTMethodListVols             = "/listvols"
+
+	storageRESTMethodAppendFile     = "/appendfile"
+	storageRESTMethodCreateFile     = "/createfile"
+	storageRESTMethodWriteAll       = "/writeall"
+	storageRESTMethodStatFile       = "/statfile"
+	storageRESTMethodReadAll        = "/readall"
+	storageRESTMethodReadFile       = "/readfile"
+	storageRESTMethodReadFileStream = "/readfilestream"
+	storageRESTMethodListDir        = "/listdir"
+	storageRESTMethodWalk           = "/walk"
+	storageRESTMethodWalkSplunk     = "/walksplunk"
+	storageRESTMethodDeleteFile     = "/deletefile"
+	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
+	storageRESTMethodDeletePrefixes = "/deleteprefixes"
+	storageRESTMethodRenameFile     = "/renamefile"
+	storageRESTMethodVerifyFile     = "/verifyfile"
+)
+
+const (
+	storageRESTVolume      = "volume"
+	storageRESTVolumes     = "volumes"
+	storageRESTDirPath     = "dir-path"
+	storageRESTFilePath    = "file-path"
+	storageRESTSrcVolume   = "source-volume"
+	storageRESTSrcPath     = "source-path"
+	storageRESTDstVolume   = "destination-volume"
+	storageRESTDstPath     = "destination-path"
+	storageRESTOffset      = "offset"
+	storageRESTLength      = "length"
+	storageRESTShardSize   = "shard-size"
+	storageRESTCount       = "count"
+	storageRESTMarkerPath  = "marker"
+	storageRESTLeafFile    = "leaf-file"
+	storageRESTRecursive   = "recursive"
+	storageRESTBitrotAlgo  = "bitrot-algo"
+	storageRESTBitrotHash  = "bitrot-hash"
+	storageRESTDiskID      = "disk-id"
+	storageRESTForceDelete = "force-delete"
 )

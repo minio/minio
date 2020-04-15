@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ func TestFSFormatFS(t *testing.T) {
 	rlk.Close()
 
 	// Do the basic sanity checks to check if initFormatFS() did its job.
-	f, err := os.OpenFile(fsFormatPath, os.O_RDWR, 0)
+	f, err := os.OpenFile(fsFormatPath, os.O_RDWR|os.O_SYNC, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

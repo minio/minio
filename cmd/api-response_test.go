@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ func TestObjectLocation(t *testing.T) {
 	testCases := []struct {
 		request          *http.Request
 		bucket, object   string
-		domain           string
+		domains          []string
 		expectedLocation string
 	}{
 		// Server binding to localhost IP with https.
@@ -80,7 +80,7 @@ func TestObjectLocation(t *testing.T) {
 				Host:   "mys3.bucket.org",
 				Header: map[string][]string{},
 			},
-			domain:           "mys3.bucket.org",
+			domains:          []string{"mys3.bucket.org"},
 			bucket:           "mybucket",
 			object:           "test/1.txt",
 			expectedLocation: "http://mybucket.mys3.bucket.org/test/1.txt",
@@ -92,14 +92,14 @@ func TestObjectLocation(t *testing.T) {
 					"X-Forwarded-Scheme": {httpsScheme},
 				},
 			},
-			domain:           "mys3.bucket.org",
+			domains:          []string{"mys3.bucket.org"},
 			bucket:           "mybucket",
 			object:           "test/1.txt",
 			expectedLocation: "https://mybucket.mys3.bucket.org/test/1.txt",
 		},
 	}
 	for i, testCase := range testCases {
-		gotLocation := getObjectLocation(testCase.request, testCase.domain, testCase.bucket, testCase.object)
+		gotLocation := getObjectLocation(testCase.request, testCase.domains, testCase.bucket, testCase.object)
 		if testCase.expectedLocation != gotLocation {
 			t.Errorf("Test %d: expected %s, got %s", i+1, testCase.expectedLocation, gotLocation)
 		}

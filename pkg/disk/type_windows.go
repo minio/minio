@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

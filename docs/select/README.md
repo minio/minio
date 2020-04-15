@@ -1,11 +1,18 @@
-# Select API Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Select API Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 Traditional retrieval of objects is always as whole entities, i.e GetObject for a 5 GiB object, will always return 5 GiB of data. S3 Select API allows us to retrieve a subset of data by using simple SQL expressions. By using Select API to retrieve only the data needed by the application, drastic performance improvements can be achieved.
 
-> This implementation is compatible with AWS S3 Select API
+You can use the Select API to query objects with following features:
+
+- CSV, JSON and Parquet - Objects must be in CSV, JSON, or Parquet format.
+- UTF-8 is the only encoding type the Select API supports.
+- GZIP or BZIP2 - CSV and JSON files can be compressed using GZIP or BZIP2. The Select API supports columnar compression for Parquet using GZIP, Snappy, LZ4. Whole object compression is not supported for Parquet objects.
+- Server-side encryption - The Select API supports querying objects that are protected with server-side encryption.
+
+Type inference and automatic conversion of values is performed based on the context when the value is un-typed (such as when reading CSV data). If present, the CAST function overrides automatic conversion.
 
 ## 1. Prerequisites
-- Install Minio Server from [here](http://docs.minio.io/docs/minio-quickstart-guide).
-- Familiarity with AWS S3 API
+- Install MinIO Server from [here](http://docs.min.io/docs/minio-quickstart-guide).
+- Familiarity with AWS S3 API.
 - Familiarity with Python and installing dependencies.
 
 ## 2. Install boto3
@@ -53,9 +60,9 @@ for event in r['Payload']:
 ```
 
 ## 4. Run the Program
-Upload first a sample dataset downloaded from [TotalPopulation.csv](https://esa.un.org/unpd/wpp/DVD/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2017_TotalPopulationBySex.csv) using the following commands.
+Upload a sample dataset to MinIO using the following commands.
 ```sh
-$ curl "https://esa.un.org/unpd/wpp/DVD/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2017_TotalPopulationBySex.csv" > TotalPopulation.csv
+$ curl "https://population.un.org/wpp/Download/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2019_TotalPopulationBySex.csv" > TotalPopulation.csv
 $ mc mb myminio/mycsvbucket
 $ gzip TotalPopulation.csv
 $ mc cp TotalPopulation.csv.gz myminio/mycsvbucket/sampledata/
@@ -81,9 +88,22 @@ Stats details bytesProcessed:
 25786743
 ```
 
+For a more detailed SELECT SQL reference, please see [here](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-select.html)
+
 ## 5. Explore Further
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
-- [The Minio documentation website](https://docs.minio.io)
+- [Use `mc` with MinIO Server](https://docs.min.io/docs/minio-client-quickstart-guide)
+- [Use `mc sql` with MinIO Server](https://docs.min.io/docs/minio-client-complete-guide.html#sql)
+- [Use `minio-go` SDK with MinIO Server](https://docs.min.io/docs/golang-client-quickstart-guide)
+- [Use `aws-cli` with MinIO Server](https://docs.min.io/docs/aws-cli-with-minio)
+- [Use `s3cmd` with MinIO Server](https://docs.min.io/docs/s3cmd-with-minio)
+- [The MinIO documentation website](https://docs.min.io)
+
+## 6. Implementation Status
+- Full AWS S3 [SELECT SQL](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-select.html) syntax is supported.
+- All [operators](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-operators.html) are supported.
+- All aggregation, conditional, type-conversion and string functions are supported.
+- JSON path expressions such as `FROM S3Object[*].path` are not yet evaluated.
+- Large numbers (outside of the signed 64-bit range) are not yet supported.
+- The Date [functions](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html) `DATE_ADD`, `DATE_DIFF`, `EXTRACT` and `UTCNOW` along with type conversion using `CAST` to the `TIMESTAMP` data type are currently supported.
+- AWS S3's [reserved keywords](https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-keyword-list.html) list is not yet respected.
+- CSV input fields (even quoted) cannot contain newlines even if `RecordDelimiter` is something else.

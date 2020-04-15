@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/googleapi"
 
-	miniogo "github.com/minio/minio-go"
+	miniogo "github.com/minio/minio-go/v6"
 	minio "github.com/minio/minio/cmd"
 )
 
@@ -374,15 +374,6 @@ func TestGCSToObjectError(t *testing.T) {
 				Bucket: "bucket",
 				Object: "object",
 			},
-		},
-		{
-			[]string{"bucket", "object"},
-			&googleapi.Error{
-				Errors: []googleapi.ErrorItem{{
-					Reason: "unknown",
-				}},
-			},
-			fmt.Errorf("Unsupported error reason: unknown"),
 		},
 	}
 

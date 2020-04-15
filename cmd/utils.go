@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,16 +33,24 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"runtime/pprof"
+	"runtime/trace"
 	"strings"
 	"sync"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/madmin"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
-	"github.com/pkg/profile"
+)
+
+const (
+	slashSeparator = "/"
 )
 
 // IsErrIgnored returns whether given error is ignored or not.
@@ -53,50 +61,52 @@ func IsErrIgnored(err error, ignoredErrs ...error) bool {
 // IsErr returns whether given error is exact error.
 func IsErr(err error, errs ...error) bool {
 	for _, exactErr := range errs {
-		if err == exactErr {
+		if errors.Is(err, exactErr) {
 			return true
 		}
 	}
 	return false
 }
 
-// Close Http tracing file.
-func stopHTTPTrace() {
-	if globalHTTPTraceFile != nil {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("traceFile", globalHTTPTraceFile.Name())
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
-		logger.LogIf(ctx, globalHTTPTraceFile.Close())
-		globalHTTPTraceFile = nil
+func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
+	path, err := getResource(r.URL.Path, r.Host, globalDomainNames)
+	if err != nil {
+		logger.CriticalIf(GlobalContext, err)
 	}
+
+	return path2BucketObject(path)
 }
 
-// make a copy of http.Header
-func cloneHeader(h http.Header) http.Header {
-	h2 := make(http.Header, len(h))
-	for k, vv := range h {
-		vv2 := make([]string, len(vv))
-		copy(vv2, vv)
-		h2[k] = vv2
-
+// path2BucketObjectWithBasePath returns bucket and prefix, if any,
+// of a 'path'. basePath is trimmed from the front of the 'path'.
+func path2BucketObjectWithBasePath(basePath, path string) (bucket, prefix string) {
+	path = strings.TrimPrefix(path, basePath)
+	path = strings.TrimPrefix(path, SlashSeparator)
+	m := strings.Index(path, SlashSeparator)
+	if m < 0 {
+		return path, ""
 	}
-	return h2
+	return path[:m], path[m+len(SlashSeparator):]
 }
 
-// Convert url path into bucket and object name.
-func urlPath2BucketObjectName(path string) (bucketName, objectName string) {
-	// Trim any preceding slash separator.
-	urlPath := strings.TrimPrefix(path, slashSeparator)
+func path2BucketObject(s string) (bucket, prefix string) {
+	return path2BucketObjectWithBasePath("", s)
+}
 
-	// Split urlpath using slash separator into a given number of
-	// expected tokens.
-	tokens := strings.SplitN(urlPath, slashSeparator, 2)
-	bucketName = tokens[0]
-	if len(tokens) == 2 {
-		objectName = tokens[1]
-	}
+func getDefaultParityBlocks(drive int) int {
+	return drive / 2
+}
 
-	// Success.
-	return bucketName, objectName
+func getDefaultDataBlocks(drive int) int {
+	return drive - getDefaultParityBlocks(drive)
+}
+
+func getReadQuorum(drive int) int {
+	return getDefaultDataBlocks(drive)
+}
+
+func getWriteQuorum(drive int) int {
+	return getDefaultDataBlocks(drive) + 1
 }
 
 // URI scheme constants.
@@ -104,6 +114,12 @@ const (
 	httpScheme  = "http"
 	httpsScheme = "https"
 )
+
+// nopCharsetConverter is a dummy charset convert which just copies input to output,
+// it is used to ignore custom encoding charset in S3 XML body.
+func nopCharsetConverter(label string, input io.Reader) (io.Reader, error) {
+	return input, nil
+}
 
 // xmlDecoder provide decoded value in xml.
 func xmlDecoder(body io.Reader, v interface{}, size int64) error {
@@ -114,19 +130,27 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 		lbody = body
 	}
 	d := xml.NewDecoder(lbody)
+	// Ignore any encoding set in the XML body
+	d.CharsetReader = nopCharsetConverter
 	return d.Decode(v)
 }
 
 // checkValidMD5 - verify if valid md5, returns md5 in bytes.
 func checkValidMD5(h http.Header) ([]byte, error) {
-	md5B64, ok := h["Content-Md5"]
+	md5B64, ok := h[xhttp.ContentMD5]
 	if ok {
 		if md5B64[0] == "" {
 			return nil, fmt.Errorf("Content-Md5 header set to empty value")
 		}
-		return base64.StdEncoding.DecodeString(md5B64[0])
+		return base64.StdEncoding.Strict().DecodeString(md5B64[0])
 	}
 	return []byte{}, nil
+}
+
+// hasContentMD5 returns true if Content-MD5 header is set.
+func hasContentMD5(h http.Header) bool {
+	_, ok := h[xhttp.ContentMD5]
+	return ok
 }
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
@@ -147,9 +171,9 @@ const (
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
 
-	// Default values used while communicating with the cloud backends
-	defaultDialTimeout   = 30 * time.Second
-	defaultDialKeepAlive = 30 * time.Second
+	// Default values used while communicating for internode communication.
+	defaultDialTimeout   = 5 * time.Second
+	defaultDialKeepAlive = 15 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -188,79 +212,191 @@ func contains(slice interface{}, elem interface{}) bool {
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
-	stopFn func()
-	pathFn func() string
+	// Profile recorded at start of benchmark.
+	base   []byte
+	stopFn func() ([]byte, error)
+	ext    string
 }
 
-func (p profilerWrapper) Stop() {
-	p.stopFn()
+// recordBase will record the profile and store it as the base.
+func (p *profilerWrapper) recordBase(name string, debug int) {
+	var buf bytes.Buffer
+	p.base = nil
+	err := pprof.Lookup(name).WriteTo(&buf, debug)
+	if err != nil {
+		return
+	}
+	p.base = buf.Bytes()
 }
 
-func (p profilerWrapper) Path() string {
-	return p.pathFn()
+// Base returns the recorded base if any.
+func (p profilerWrapper) Base() []byte {
+	return p.base
+}
+
+// Stop the currently running benchmark.
+func (p profilerWrapper) Stop() ([]byte, error) {
+	return p.stopFn()
+}
+
+// Extension returns the extension without dot prefix.
+func (p profilerWrapper) Extension() string {
+	return p.ext
+}
+
+// Returns current profile data, returns error if there is no active
+// profiling in progress. Stops an active profile.
+func getProfileData() (map[string][]byte, error) {
+	globalProfilerMu.Lock()
+	defer globalProfilerMu.Unlock()
+
+	if len(globalProfiler) == 0 {
+		return nil, errors.New("profiler not enabled")
+	}
+
+	dst := make(map[string][]byte, len(globalProfiler))
+	for typ, prof := range globalProfiler {
+		// Stop the profiler
+		var err error
+		buf, err := prof.Stop()
+		delete(globalProfiler, typ)
+		if err == nil {
+			dst[typ+"."+prof.Extension()] = buf
+		}
+		buf = prof.Base()
+		if len(buf) > 0 {
+			dst[typ+"-before"+"."+prof.Extension()] = buf
+		}
+	}
+	return dst, nil
+}
+
+func setDefaultProfilerRates() {
+	runtime.MemProfileRate = 4096      // 512K -> 4K - Must be constant throughout application lifetime.
+	runtime.SetMutexProfileFraction(0) // Disable until needed
+	runtime.SetBlockProfileRate(0)     // Disable until needed
 }
 
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
-func startProfiler(profilerType, dirPath string) (interface {
-	Stop()
-	Path() string
-}, error) {
-
-	var err error
-	if dirPath == "" {
-		dirPath, err = ioutil.TempDir("", "profile")
+func startProfiler(profilerType string) (minioProfiler, error) {
+	var prof profilerWrapper
+	prof.ext = "pprof"
+	// Enable profiler and set the name of the file that pkg/pprof
+	// library creates to store profiling data.
+	switch madmin.ProfilerType(profilerType) {
+	case madmin.ProfilerCPU:
+		dirPath, err := ioutil.TempDir("", "profile")
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	var profiler interface {
-		Stop()
-	}
-
-	var profilerFileName string
-
-	// Enable profiler and set the name of the file that pkg/pprof
-	// library creates to store profiling data.
-	switch profilerType {
-	case "cpu":
-		profiler = profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "cpu.pprof"
-	case "mem":
-		profiler = profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "mem.pprof"
-	case "block":
-		profiler = profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "block.pprof"
-	case "mutex":
-		profiler = profile.Start(profile.MutexProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "mutex.pprof"
-	case "trace":
-		profiler = profile.Start(profile.TraceProfile, profile.NoShutdownHook, profile.ProfilePath(dirPath))
-		profilerFileName = "trace.out"
+		fn := filepath.Join(dirPath, "cpu.out")
+		f, err := os.Create(fn)
+		if err != nil {
+			return nil, err
+		}
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			return nil, err
+		}
+		prof.stopFn = func() ([]byte, error) {
+			pprof.StopCPUProfile()
+			err := f.Close()
+			if err != nil {
+				return nil, err
+			}
+			defer os.RemoveAll(dirPath)
+			return ioutil.ReadFile(fn)
+		}
+	case madmin.ProfilerMEM:
+		runtime.GC()
+		prof.recordBase("heap", 0)
+		prof.stopFn = func() ([]byte, error) {
+			runtime.GC()
+			var buf bytes.Buffer
+			err := pprof.Lookup("heap").WriteTo(&buf, 0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerBlock:
+		prof.recordBase("block", 0)
+		runtime.SetBlockProfileRate(1)
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("block").WriteTo(&buf, 0)
+			runtime.SetBlockProfileRate(0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerMutex:
+		prof.recordBase("mutex", 0)
+		runtime.SetMutexProfileFraction(1)
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("mutex").WriteTo(&buf, 0)
+			runtime.SetMutexProfileFraction(0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerThreads:
+		prof.recordBase("threadcreate", 0)
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("threadcreate").WriteTo(&buf, 0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerGoroutines:
+		prof.ext = "txt"
+		prof.recordBase("goroutine", 1)
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("goroutine").WriteTo(&buf, 1)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerTrace:
+		dirPath, err := ioutil.TempDir("", "profile")
+		if err != nil {
+			return nil, err
+		}
+		fn := filepath.Join(dirPath, "trace.out")
+		f, err := os.Create(fn)
+		if err != nil {
+			return nil, err
+		}
+		err = trace.Start(f)
+		if err != nil {
+			return nil, err
+		}
+		prof.ext = "trace"
+		prof.stopFn = func() ([]byte, error) {
+			trace.Stop()
+			err := f.Close()
+			if err != nil {
+				return nil, err
+			}
+			defer os.RemoveAll(dirPath)
+			return ioutil.ReadFile(fn)
+		}
 	default:
 		return nil, errors.New("profiler type unknown")
 	}
 
-	return &profilerWrapper{
-		stopFn: profiler.Stop,
-		pathFn: func() string {
-			return filepath.Join(dirPath, profilerFileName)
-		},
-	}, nil
+	return prof, nil
+}
+
+// minioProfiler - minio profiler interface.
+type minioProfiler interface {
+	// Return base profile. 'nil' if none.
+	Base() []byte
+	// Stop the profiler
+	Stop() ([]byte, error)
+	// Return extension of profile
+	Extension() string
 }
 
 // Global profiler to be used by service go-routine.
-var globalProfiler interface {
-	// Stop the profiler
-	Stop()
-	// Return the path of the profiling file
-	Path() string
-}
+var globalProfiler map[string]minioProfiler
+var globalProfilerMu sync.Mutex
 
 // dump the request into a string in JSON format.
 func dumpRequest(r *http.Request) string {
-	header := cloneHeader(r.Header)
+	header := r.Header.Clone()
 	header.Set("Host", r.Host)
 	// Replace all '%' to '%%' so that printer format parser
 	// to ignore URL encoded values.
@@ -280,7 +416,7 @@ func dumpRequest(r *http.Request) string {
 	}
 
 	// Formatted string.
-	return strings.TrimSpace(string(buffer.Bytes()))
+	return strings.TrimSpace(buffer.String())
 }
 
 // isFile - returns whether given path is a file or not.
@@ -315,25 +451,52 @@ func ToS3ETag(etag string) string {
 	return etag
 }
 
-// NewCustomHTTPTransport returns a new http configuration
+type dialContext func(ctx context.Context, network, address string) (net.Conn, error)
+
+func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialer := &net.Dialer{
+			Timeout:   dialTimeout,
+			KeepAlive: dialKeepAlive,
+		}
+
+		return dialer.DialContext(ctx, network, addr)
+	}
+}
+
+func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive time.Duration) func() *http.Transport {
+	// For more details about various values used here refer
+	// https://golang.org/pkg/net/http/#Transport documentation
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
+		MaxIdleConnsPerHost:   256,
+		IdleConnTimeout:       time.Minute,
+		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 10 * time.Second,
+		TLSClientConfig:       tlsConfig,
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}
+	return func() *http.Transport {
+		return tr
+	}
+}
+
+// NewGatewayHTTPTransport returns a new http configuration
 // used while communicating with the cloud backends.
 // This sets the value for MaxIdleConnsPerHost from 2 (go default)
-// to 100.
-func NewCustomHTTPTransport() *http.Transport {
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{
-			Timeout:   defaultDialTimeout,
-			KeepAlive: defaultDialKeepAlive,
-		}).DialContext,
-		MaxIdleConns:          1024,
-		MaxIdleConnsPerHost:   1024,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{RootCAs: globalRootCAs},
-		DisableCompression:    true,
-	}
+// to 256.
+func NewGatewayHTTPTransport() *http.Transport {
+	tr := newCustomHTTPTransport(&tls.Config{
+		RootCAs: globalRootCAs,
+	}, defaultDialTimeout, defaultDialKeepAlive)()
+	// Set aggressive timeouts for gateway
+	tr.ResponseHeaderTimeout = 30 * time.Second
+	return tr
 }
 
 // Load the json (typically from disk file).
@@ -390,81 +553,28 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 func newContext(r *http.Request, w http.ResponseWriter, api string) context.Context {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	object := vars["object"]
-	prefix := vars["prefix"]
-
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		object = vars["object"]
+	}
+	prefix, err := url.QueryUnescape(vars["prefix"])
+	if err != nil {
+		prefix = vars["prefix"]
+	}
 	if prefix != "" {
 		object = prefix
 	}
 	reqInfo := &logger.ReqInfo{
-		RequestID:  w.Header().Get(responseRequestIDKey),
-		RemoteHost: handlers.GetSourceIP(r),
-		UserAgent:  r.UserAgent(),
-		API:        api,
-		BucketName: bucket,
-		ObjectName: object,
+		DeploymentID: globalDeploymentID,
+		RequestID:    w.Header().Get(xhttp.AmzRequestID),
+		RemoteHost:   handlers.GetSourceIP(r),
+		Host:         getHostName(r),
+		UserAgent:    r.UserAgent(),
+		API:          api,
+		BucketName:   bucket,
+		ObjectName:   object,
 	}
-	return logger.SetReqInfo(context.Background(), reqInfo)
-}
-
-// isNetworkOrHostDown - if there was a network error or if the host is down.
-func isNetworkOrHostDown(err error) bool {
-	if err == nil {
-		return false
-	}
-	switch err.(type) {
-	case *net.DNSError, *net.OpError, net.UnknownNetworkError:
-		return true
-	case *url.Error:
-		// For a URL error, where it replies back "connection closed"
-		if strings.Contains(err.Error(), "Connection closed by foreign host") {
-			return true
-		}
-		return true
-	default:
-		if strings.Contains(err.Error(), "net/http: TLS handshake timeout") {
-			// If error is - tlsHandshakeTimeoutError,.
-			return true
-		} else if strings.Contains(err.Error(), "i/o timeout") {
-			// If error is - tcp timeoutError.
-			return true
-		} else if strings.Contains(err.Error(), "connection timed out") {
-			// If err is a net.Dial timeout.
-			return true
-		} else if strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken") {
-			return true
-		}
-	}
-	return false
-}
-
-var b512pool = sync.Pool{
-	New: func() interface{} {
-		buf := make([]byte, 512)
-		return &buf
-	},
-}
-
-// CloseResponse close non nil response with any response Body.
-// convenient wrapper to drain any remaining data on response body.
-//
-// Subsequently this allows golang http RoundTripper
-// to re-use the same connection for future requests.
-func CloseResponse(respBody io.ReadCloser) {
-	// Callers should close resp.Body when done reading from it.
-	// If resp.Body is not closed, the Client's underlying RoundTripper
-	// (typically Transport) may not be able to re-use a persistent TCP
-	// connection to the server for a subsequent "keep-alive" request.
-	if respBody != nil {
-		// Drain any remaining Body and then close the connection.
-		// Without this closing connection would disallow re-using
-		// the same connection for future uses.
-		//  - http://stackoverflow.com/a/17961593/4465767
-		bufp := b512pool.Get().(*[]byte)
-		defer b512pool.Put(bufp)
-		io.CopyBuffer(ioutil.Discard, respBody, *bufp)
-		respBody.Close()
-	}
+	return logger.SetReqInfo(r.Context(), reqInfo)
 }
 
 // Used for registering with rest handlers (have a look at registerStorageRESTHandlers for usage example)
@@ -475,4 +585,72 @@ func restQueries(keys ...string) []string {
 		accumulator = append(accumulator, key, "{"+key+":.*}")
 	}
 	return accumulator
+}
+
+// Reverse the input order of a slice of string
+func reverseStringSlice(input []string) {
+	for left, right := 0, len(input)-1; left < right; left, right = left+1, right-1 {
+		input[left], input[right] = input[right], input[left]
+	}
+}
+
+// lcp finds the longest common prefix of the input strings.
+// It compares by bytes instead of runes (Unicode code points).
+// It's up to the caller to do Unicode normalization if desired
+// (e.g. see golang.org/x/text/unicode/norm).
+func lcp(l []string) string {
+	// Special cases first
+	switch len(l) {
+	case 0:
+		return ""
+	case 1:
+		return l[0]
+	}
+	// LCP of min and max (lexigraphically)
+	// is the LCP of the whole set.
+	min, max := l[0], l[0]
+	for _, s := range l[1:] {
+		switch {
+		case s < min:
+			min = s
+		case s > max:
+			max = s
+		}
+	}
+	for i := 0; i < len(min) && i < len(max); i++ {
+		if min[i] != max[i] {
+			return min[:i]
+		}
+	}
+	// In the case where lengths are not equal but all bytes
+	// are equal, min is the answer ("foo" < "foobar").
+	return min
+}
+
+// Returns the mode in which MinIO is running
+func getMinioMode() string {
+	mode := globalMinioModeFS
+	if globalIsDistXL {
+		mode = globalMinioModeDistXL
+	} else if globalIsXL {
+		mode = globalMinioModeXL
+	} else if globalIsGateway {
+		mode = globalMinioModeGatewayPrefix + globalGatewayName
+	}
+	return mode
+}
+
+func iamPolicyClaimNameOpenID() string {
+	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
+}
+
+func iamPolicyClaimNameSA() string {
+	return "sa-policy"
+}
+
+func isWORMEnabled(bucket string) bool {
+	if isMinioMetaBucketName(bucket) {
+		return false
+	}
+	return globalWORMEnabled
 }

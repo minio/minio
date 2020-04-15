@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
 
 func TestStatementIsAllowed(t *testing.T) {
@@ -183,6 +183,14 @@ func TestStatementIsValid(t *testing.T) {
 		t.Fatalf("unexpected error. %v\n", err)
 	}
 
+	func3, err := condition.NewStringEqualsFunc(
+		condition.AWSUserAgent,
+		"NSPlayer",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error. %v\n", err)
+	}
+
 	testCases := []struct {
 		statement Statement
 		expectErr bool
@@ -232,6 +240,18 @@ func TestStatementIsValid(t *testing.T) {
 			NewActionSet(GetObjectAction, PutObjectAction),
 			NewResourceSet(NewResource("mybucket", "myobject*")),
 			condition.NewFunctions(func1),
+		), false},
+		{NewStatement(
+			policy.Allow,
+			NewActionSet(CreateUserAdminAction, DeleteUserAdminAction),
+			nil,
+			condition.NewFunctions(func2, func3),
+		), true},
+		{NewStatement(
+			policy.Allow,
+			NewActionSet(CreateUserAdminAction, DeleteUserAdminAction),
+			nil,
+			condition.NewFunctions(),
 		), false},
 	}
 

@@ -1,9 +1,9 @@
 ### Backend format `xl.json`
 
 ```go
-// objectPartInfo Info of each part kept in the multipart metadata
+// ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
-type objectPartInfo struct {
+type ObjectPartInfo struct {
 	Number int    `json:"number"`
 	Name   string `json:"name"`
 	ETag   string `json:"etag"`
@@ -42,13 +42,13 @@ type xlMetaV1 struct {
 	Stat    statInfo `json:"stat"`    // Stat of the current object `xl.json`.
 	// Erasure coded info for the current object `xl.json`.
 	Erasure erasureInfo `json:"erasure"`
-	// Minio release tag for current object `xl.json`.
-	Minio struct {
+	// MinIO release tag for current object `xl.json`.
+	MinIO struct {
 		Release string `json:"release"`
 	} `json:"minio"`
 	// Metadata map for current object `xl.json`.
 	Meta map[string]string `json:"meta,omitempty"`
 	// Captures all the individual object `xl.json`.
-	Parts []objectPartInfo `json:"parts,omitempty"`
+	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 ```

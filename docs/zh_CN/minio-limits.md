@@ -5,8 +5,8 @@
 
 |项目|参数|
 |:---|:---|
-|最大驱动器数量|16|
-|最小驱动器数量|4|
+|最大驱动器数量|Unlimited|
+|最小驱动器数量|Unlimited|
 |读仲裁|N / 2|
 |写仲裁|N / 2+1 |
 
@@ -35,17 +35,17 @@
 
 ###  Minio不支持的Amazon S3 Bucket API
 
-- BucketACL (可以用 [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy))
+- BucketACL (可以用 [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy))
 - BucketCORS (所有HTTP方法的所有存储桶都默认启用CORS)
 - BucketLifecycle (Minio纠删码不需要)
-- BucketReplication (可以用 [`mc mirror`](https://docs.minio.io/docs/minio-client-complete-guide#mirror))
+- BucketReplication (可以用 [`mc mirror`](https://docs.min.io/docs/minio-client-complete-guide#mirror))
 - BucketVersions, BucketVersioning (可以用 [`s3git`](https://github.com/s3git/s3git))
 - BucketWebsite (可以用 [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
-- BucketAnalytics, BucketMetrics, BucketLogging (可以用 [bucket notification](https://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
+- BucketAnalytics, BucketMetrics, BucketLogging (可以用 [bucket notification](https://docs.min.io/docs/minio-client-complete-guide#events) APIs)
 - BucketRequestPayment
 - BucketTagging
 
 ### Minio不支持的Amazon S3 Object API.
 
-- ObjectACL (可以用 [bucket policies](https://docs.minio.io/docs/minio-client-complete-guide#policy))
+- ObjectACL (可以用 [bucket policies](https://docs.min.io/docs/minio-client-complete-guide#policy))
 - ObjectTorrent

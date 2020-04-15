@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,43 @@
 package azure
 
 import (
-	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
 
-	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	minio "github.com/minio/minio/cmd"
 )
+
+func TestParseStorageEndpoint(t *testing.T) {
+	testCases := []struct {
+		host        string
+		accountName string
+		expectedURL string
+		expectedErr error
+	}{
+		{
+			"", "myaccount", "https://myaccount.blob.core.windows.net", nil,
+		},
+		{
+			"myaccount.blob.core.usgovcloudapi.net", "myaccount", "https://myaccount.blob.core.usgovcloudapi.net", nil,
+		},
+		{
+			"http://localhost:10000", "myaccount", "http://localhost:10000/myaccount", nil,
+		},
+	}
+	for i, testCase := range testCases {
+		endpointURL, err := parseStorageEndpoint(testCase.host, testCase.accountName)
+		if err != testCase.expectedErr {
+			t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.expectedErr, err)
+		}
+		if endpointURL.String() != testCase.expectedURL {
+			t.Errorf("Test %d: Expected URL %s, got %s", i+1, testCase.expectedURL, endpointURL.String())
+		}
+	}
+}
 
 // Test canonical metadata.
 func TestS3MetaToAzureProperties(t *testing.T) {
@@ -55,7 +83,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"X_Amz_Matdesc":    "{}",
 		"X_Amz_Iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	meta, _, err := s3MetaToAzureProperties(context.Background(), headers)
+	meta, _, err := s3MetaToAzureProperties(minio.GlobalContext, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
@@ -65,7 +93,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers = map[string]string{
 		"invalid--meta": "value",
 	}
-	_, _, err = s3MetaToAzureProperties(context.Background(), headers)
+	_, _, err = s3MetaToAzureProperties(minio.GlobalContext, headers)
 	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
@@ -75,11 +103,11 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers = map[string]string{
 		"content-md5": "Dce7bmCX61zvxzP5QmfelQ==",
 	}
-	_, props, err := s3MetaToAzureProperties(context.Background(), headers)
+	_, props, err := s3MetaToAzureProperties(minio.GlobalContext, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
-	if props.ContentMD5 != headers["content-md5"] {
+	if base64.StdEncoding.EncodeToString(props.ContentMD5) != headers["content-md5"] {
 		t.Fatalf("Test failed, expected %s, got %s", headers["content-md5"], props.ContentMD5)
 	}
 }
@@ -110,23 +138,22 @@ func TestAzurePropertiesToS3Meta(t *testing.T) {
 		"Content-Disposition":      "dummy",
 		"Content-Encoding":         "gzip",
 		"Content-Length":           "10",
-		"Content-MD5":              "base64-md5",
+		"Content-MD5":              base64.StdEncoding.EncodeToString([]byte("base64-md5")),
 		"Content-Type":             "application/javascript",
 	}
-	actualMeta := azurePropertiesToS3Meta(metadata, storage.BlobProperties{
+	actualMeta := azurePropertiesToS3Meta(metadata, azblob.BlobHTTPHeaders{
 		CacheControl:       "max-age: 3600",
 		ContentDisposition: "dummy",
 		ContentEncoding:    "gzip",
-		ContentLength:      10,
-		ContentMD5:         "base64-md5",
+		ContentMD5:         []byte("base64-md5"),
 		ContentType:        "application/javascript",
-	})
+	}, 10)
 	if !reflect.DeepEqual(actualMeta, expectedMeta) {
 		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, actualMeta)
 	}
 }
 
-// Add tests for azure to object error.
+// Add tests for azure to object error (top level).
 func TestAzureToObjectError(t *testing.T) {
 	testCases := []struct {
 		actualErr      error
@@ -140,115 +167,73 @@ func TestAzureToObjectError(t *testing.T) {
 			fmt.Errorf("Non azure error"),
 			fmt.Errorf("Non azure error"), "", "",
 		},
-		{
-			storage.AzureStorageServiceError{
-				Code: "ContainerAlreadyExists",
-			}, minio.BucketExists{Bucket: "bucket"}, "bucket", "",
-		},
-		{
-			storage.AzureStorageServiceError{
-				Code: "InvalidResourceName",
-			}, minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
-		},
-		{
-			storage.AzureStorageServiceError{
-				Code: "RequestBodyTooLarge",
-			}, minio.PartTooBig{}, "", "",
-		},
-		{
-			storage.AzureStorageServiceError{
-				Code: "InvalidMetadata",
-			}, minio.UnsupportedMetadata{}, "", "",
-		},
-		{
-			storage.AzureStorageServiceError{
-				StatusCode: http.StatusNotFound,
-			}, minio.ObjectNotFound{
-				Bucket: "bucket",
-				Object: "object",
-			}, "bucket", "object",
-		},
-		{
-			storage.AzureStorageServiceError{
-				StatusCode: http.StatusNotFound,
-			}, minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
-		},
-		{
-			storage.AzureStorageServiceError{
-				StatusCode: http.StatusBadRequest,
-			}, minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
-		},
 	}
 	for i, testCase := range testCases {
 		if err := azureToObjectError(testCase.actualErr, testCase.bucket, testCase.object); err != nil {
 			if err.Error() != testCase.expectedErr.Error() {
 				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.expectedErr, err)
 			}
+		} else {
+			if testCase.expectedErr != nil {
+				t.Errorf("Test %d expected an error but one was not produced", i+1)
+			}
 		}
 	}
 }
 
-// Test azureGetBlockID().
-func TestAzureGetBlockID(t *testing.T) {
+// Add tests for azure to object error (internal).
+func TestAzureCodesToObjectError(t *testing.T) {
 	testCases := []struct {
-		partID        int
-		subPartNumber int
-		uploadID      string
-		md5           string
-		blockID       string
+		originalErr       error
+		actualServiceCode string
+		actualStatusCode  int
+		expectedErr       error
+		bucket, object    string
 	}{
-		{1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ=="},
-		{2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw=="},
+		{
+			nil, "ContainerAlreadyExists", 0,
+			minio.BucketExists{Bucket: "bucket"}, "bucket", "",
+		},
+		{
+			nil, "InvalidResourceName", 0,
+			minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+		},
+		{
+			nil, "RequestBodyTooLarge", 0,
+			minio.PartTooBig{}, "", "",
+		},
+		{
+			nil, "InvalidMetadata", 0,
+			minio.UnsupportedMetadata{}, "", "",
+		},
+		{
+			nil, "", http.StatusNotFound,
+			minio.ObjectNotFound{
+				Bucket: "bucket",
+				Object: "object",
+			}, "bucket", "object",
+		},
+		{
+			nil, "", http.StatusNotFound,
+			minio.BucketNotFound{Bucket: "bucket"}, "bucket", "",
+		},
+		{
+			nil, "", http.StatusBadRequest,
+			minio.BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+		},
+		{
+			fmt.Errorf("unhandled azure error"), "", http.StatusForbidden,
+			fmt.Errorf("unhandled azure error"), "", "",
+		},
 	}
-	for _, test := range testCases {
-		blockID := azureGetBlockID(test.partID, test.subPartNumber, test.uploadID, test.md5)
-		if blockID != test.blockID {
-			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
-		}
-	}
-}
-
-// Test azureParseBlockID().
-func TestAzureParseBlockID(t *testing.T) {
-	testCases := []struct {
-		blockID       string
-		partID        int
-		subPartNumber int
-		uploadID      string
-		md5           string
-		success       bool
-	}{
-		// Invalid base64.
-		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ=", 0, 0, "", "", false},
-		// Invalid number of tokens.
-		{"MDAwMDEuQUEuZjMyOGMzNWNhZDkzODEzNwo=", 0, 0, "", "", false},
-		// Invalid encoded part ID.
-		{"MDAwMGEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQo=", 0, 0, "", "", false},
-		// Invalid sub part ID.
-		{"MDAwMDEuQUEuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQo=", 0, 0, "", "", false},
-		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ==", 1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e", true},
-		{"MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw==", 2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273", true},
-	}
-	for i, test := range testCases {
-		partID, subPartNumber, uploadID, md5, err := azureParseBlockID(test.blockID)
-		if err != nil && test.success {
-			t.Errorf("Test %d: Expected success but failed %s", i+1, err)
-		}
-		if err == nil && !test.success {
-			t.Errorf("Test %d: Expected to fail but succeeeded insteadl", i+1)
-		}
-		if err == nil {
-			if partID != test.partID {
-				t.Errorf("Test %d: %d not equal to %d", i+1, partID, test.partID)
+	for i, testCase := range testCases {
+		if err := azureCodesToObjectError(testCase.originalErr, testCase.actualServiceCode, testCase.actualStatusCode, testCase.bucket, testCase.object); err != nil {
+			if err.Error() != testCase.expectedErr.Error() {
+				t.Errorf("Test %d: Expected error %s, got %s", i+1, testCase.expectedErr, err)
 			}
-			if subPartNumber != test.subPartNumber {
-				t.Errorf("Test %d: %d not equal to %d", i+1, subPartNumber, test.subPartNumber)
-			}
-			if uploadID != test.uploadID {
-				t.Errorf("Test %d: %s not equal to %s", i+1, uploadID, test.uploadID)
-			}
-			if md5 != test.md5 {
-				t.Errorf("Test %d: %s not equal to %s", i+1, md5, test.md5)
+		} else {
+			if testCase.expectedErr != nil {
+				t.Errorf("Test %d expected an error but one was not produced", i+1)
 			}
 		}
 	}
@@ -300,7 +285,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 	}
 
 	for _, uploadID := range invalidUploadIDs {
-		if err := checkAzureUploadID(context.Background(), uploadID); err == nil {
+		if err := checkAzureUploadID(minio.GlobalContext, uploadID); err == nil {
 			t.Fatalf("%s: expected: <error>, got: <nil>", uploadID)
 		}
 	}
@@ -311,7 +296,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 	}
 
 	for _, uploadID := range validUploadIDs {
-		if err := checkAzureUploadID(context.Background(), uploadID); err != nil {
+		if err := checkAzureUploadID(minio.GlobalContext, uploadID); err != nil {
 			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
 		}
 	}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"testing"
 
@@ -44,7 +43,6 @@ func TestCreateServerEndpoints(t *testing.T) {
 		{":9000", []string{"/export1{1...32}", "/export1{1...32}"}, false},
 		// Same host cannot export same disk on two ports - special case localhost.
 		{":9001", []string{"http://localhost:900{1...2}/export{1...64}"}, false},
-
 		// Valid inputs.
 		{":9000", []string{"/export1"}, true},
 		{":9000", []string{"/export1", "/export2", "/export3", "/export4"}, true},
@@ -55,14 +53,17 @@ func TestCreateServerEndpoints(t *testing.T) {
 		{":9001", []string{"http://localhost:9001/export{01...64}"}, true},
 	}
 
-	for i, testCase := range testCases {
-		_, _, _, _, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
-		if err != nil && testCase.success {
-			t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
-		}
-		if err == nil && !testCase.success {
-			t.Errorf("Test %d: Expected failure but passed instead", i+1)
-		}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			_, _, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
+			if err != nil && testCase.success {
+				t.Errorf("Expected success but failed instead %s", err)
+			}
+			if err == nil && !testCase.success {
+				t.Errorf("Expected failure but passed instead")
+			}
+		})
 	}
 }
 
@@ -75,8 +76,10 @@ func TestGetDivisibleSize(t *testing.T) {
 		{[]uint64{8, 8, 8}, 8},
 		{[]uint64{24}, 24},
 	}
-	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
 			gotGCD := getDivisibleSize(testCase.totalSizes)
 			if testCase.result != gotGCD {
 				t.Errorf("Expected %v, got %v", testCase.result, gotGCD)
@@ -91,45 +94,73 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 		args        []string
 		totalSizes  []uint64
 		indexes     [][]uint64
-		envOverride string
+		envOverride uint64
 		success     bool
 	}{
 		{
 			[]string{"data{1...64}"},
 			[]uint64{64},
 			[][]uint64{{8, 8, 8, 8, 8, 8, 8, 8}},
-			"8",
+			8,
+			true,
+		},
+		{
+			[]string{"http://host{1...12}/data{1...12}"},
+			[]uint64{144},
+			[][]uint64{{16, 16, 16, 16, 16, 16, 16, 16, 16}},
+			16,
+			true,
+		},
+		{
+			[]string{"http://host{0...5}/data{1...28}"},
+			[]uint64{168},
+			[][]uint64{{12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12}},
+			12,
+			true,
+		},
+		// Incorrect custom set drive count.
+		{
+			[]string{"http://host{0...5}/data{1...28}"},
+			[]uint64{168},
+			nil,
+			10,
+			false,
+		},
+		// Failure not divisible number of disks.
+		{
+			[]string{"http://host{1...11}/data{1...11}"},
+			[]uint64{121},
+			[][]uint64{{11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11}},
+			11,
 			true,
 		},
 		{
 			[]string{"data{1...60}"},
 			nil,
 			nil,
-			"8",
+			8,
 			false,
 		},
 		{
 			[]string{"data{1...64}"},
 			nil,
 			nil,
-			"-1",
+			64,
 			false,
 		},
 		{
 			[]string{"data{1...64}"},
 			nil,
 			nil,
-			"2",
+			2,
 			false,
 		},
 	}
 
-	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			if err := os.Setenv("MINIO_ERASURE_SET_DRIVE_COUNT", testCase.envOverride); err != nil {
-				t.Fatal(err)
-			}
-			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes, testCase.envOverride)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}
@@ -139,7 +170,6 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 			if !reflect.DeepEqual(testCase.indexes, gotIndexes) {
 				t.Errorf("Expected %v, got %v", testCase.indexes, gotIndexes)
 			}
-			os.Unsetenv("MINIO_ERASURE_SET_DRIVE_COUNT")
 		})
 	}
 }
@@ -154,12 +184,6 @@ func TestGetSetIndexes(t *testing.T) {
 	}{
 		// Invalid inputs.
 		{
-			[]string{"data{1...27}"},
-			[]uint64{27},
-			nil,
-			false,
-		},
-		{
 			[]string{"data{1...3}"},
 			[]uint64{3},
 			nil,
@@ -172,6 +196,12 @@ func TestGetSetIndexes(t *testing.T) {
 			false,
 		},
 		// Valid inputs.
+		{
+			[]string{"data{1...27}"},
+			[]uint64{27},
+			[][]uint64{{9, 9, 9}},
+			true,
+		},
 		{
 			[]string{"data/controller1/export{1...4}, data/controller2/export{1...8}, data/controller3/export{1...12}"},
 			[]uint64{4, 8, 12},
@@ -193,7 +223,7 @@ func TestGetSetIndexes(t *testing.T) {
 		{
 			[]string{"data/controller{1...11}/export{1...8}"},
 			[]uint64{88},
-			[][]uint64{{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8}},
+			[][]uint64{{11, 11, 11, 11, 11, 11, 11, 11}},
 			true,
 		},
 		{
@@ -210,9 +240,10 @@ func TestGetSetIndexes(t *testing.T) {
 		},
 	}
 
-	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes, 0)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}
@@ -224,6 +255,17 @@ func TestGetSetIndexes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getHexSequences(start int, number int, paddinglen int) (seq []string) {
+	for i := start; i <= number; i++ {
+		if paddinglen == 0 {
+			seq = append(seq, fmt.Sprintf("%x", i))
+		} else {
+			seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dx", paddinglen), i))
+		}
+	}
+	return seq
 }
 
 func getSequences(start int, number int, paddinglen int) (seq []string) {
@@ -247,12 +289,6 @@ func TestParseEndpointSet(t *testing.T) {
 		// Tests invalid inputs.
 		{
 			"...",
-			endpointSet{},
-			false,
-		},
-		// Indivisible range.
-		{
-			"{1...27}",
 			endpointSet{},
 			false,
 		},
@@ -282,14 +318,31 @@ func TestParseEndpointSet(t *testing.T) {
 		},
 		// Tests valid inputs.
 		{
+			"{1...27}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 27, 0),
+						},
+					},
+				},
+				nil,
+				[][]uint64{{9, 9, 9}},
+			},
+			true,
+		},
+		{
 			"/export/set{1...64}",
 			endpointSet{
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"/export/set",
-							"",
-							getSequences(1, 64, 0),
+							Prefix: "/export/set",
+							Suffix: "",
+							Seq:    getSequences(1, 64, 0),
 						},
 					},
 				},
@@ -305,14 +358,14 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"",
-							"",
-							getSequences(1, 64, 0),
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 64, 0),
 						},
 						{
-							"http://minio",
-							"/export/set",
-							getSequences(2, 3, 0),
+							Prefix: "http://minio",
+							Suffix: "/export/set",
+							Seq:    getSequences(2, 3, 0),
 						},
 					},
 				},
@@ -328,9 +381,9 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"http://minio",
-							".mydomain.net/data",
-							getSequences(1, 64, 0),
+							Prefix: "http://minio",
+							Suffix: ".mydomain.net/data",
+							Seq:    getSequences(1, 64, 0),
 						},
 					},
 				},
@@ -345,14 +398,14 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"",
-							"/data",
-							getSequences(1, 16, 0),
+							Prefix: "",
+							Suffix: "/data",
+							Seq:    getSequences(1, 16, 0),
 						},
 						{
-							"http://rack",
-							".mydomain.minio",
-							getSequences(1, 4, 0),
+							Prefix: "http://rack",
+							Suffix: ".mydomain.minio",
+							Seq:    getSequences(1, 4, 0),
 						},
 					},
 				},
@@ -368,14 +421,14 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"",
-							"",
-							getSequences(0, 1, 0),
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(0, 1, 0),
 						},
 						{
-							"http://minio",
-							".mydomain.net/data",
-							getSequences(0, 15, 0),
+							Prefix: "http://minio",
+							Suffix: ".mydomain.net/data",
+							Seq:    getSequences(0, 15, 0),
 						},
 					},
 				},
@@ -391,9 +444,9 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"http://server1/data",
-							"",
-							getSequences(1, 32, 0),
+							Prefix: "http://server1/data",
+							Suffix: "",
+							Seq:    getSequences(1, 32, 0),
 						},
 					},
 				},
@@ -409,9 +462,9 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"http://server1/data",
-							"",
-							getSequences(1, 32, 2),
+							Prefix: "http://server1/data",
+							Suffix: "",
+							Seq:    getSequences(1, 32, 2),
 						},
 					},
 				},
@@ -427,19 +480,19 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"",
-							"",
-							getSequences(1, 2, 0),
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 2, 0),
 						},
 						{
-							"",
-							"/test",
-							getSequences(1, 64, 0),
+							Prefix: "",
+							Suffix: "/test",
+							Seq:    getSequences(1, 64, 0),
 						},
 						{
-							"http://minio",
-							"/export/set",
-							getSequences(2, 3, 0),
+							Prefix: "http://minio",
+							Suffix: "/export/set",
+							Seq:    getSequences(2, 3, 0),
 						},
 					},
 				},
@@ -456,14 +509,60 @@ func TestParseEndpointSet(t *testing.T) {
 				[]ellipses.ArgPattern{
 					[]ellipses.Pattern{
 						{
-							"",
-							"",
-							getSequences(1, 10, 0),
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 10, 0),
 						},
 						{
-							"/export",
-							"/disk",
-							getSequences(1, 10, 0),
+							Prefix: "/export",
+							Suffix: "/disk",
+							Seq:    getSequences(1, 10, 0),
+						},
+					},
+				},
+				nil,
+				[][]uint64{{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}},
+			},
+			true,
+		},
+		// IPv6 ellipses with hexadecimal expansion
+		{
+			"http://[2001:3984:3989::{1...a}]/disk{1...10}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 10, 0),
+						},
+						{
+							Prefix: "http://[2001:3984:3989::",
+							Suffix: "]/disk",
+							Seq:    getHexSequences(1, 10, 0),
+						},
+					},
+				},
+				nil,
+				[][]uint64{{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}},
+			},
+			true,
+		},
+		// IPv6 ellipses with hexadecimal expansion with 3 position numerics.
+		{
+			"http://[2001:3984:3989::{001...00a}]/disk{1...10}",
+			endpointSet{
+				[]ellipses.ArgPattern{
+					[]ellipses.Pattern{
+						{
+							Prefix: "",
+							Suffix: "",
+							Seq:    getSequences(1, 10, 0),
+						},
+						{
+							Prefix: "http://[2001:3984:3989::",
+							Suffix: "]/disk",
+							Seq:    getHexSequences(1, 10, 3),
 						},
 					},
 				},
@@ -474,9 +573,10 @@ func TestParseEndpointSet(t *testing.T) {
 		},
 	}
 
-	for i, testCase := range testCases {
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
-			gotEs, err := parseEndpointSet(testCase.arg)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			gotEs, err := parseEndpointSet(0, testCase.arg)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,16 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	pathutil "path"
+	"time"
 
+	jsoniter "github.com/json-iterator/go"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
-	"github.com/tidwall/gjson"
 )
 
 // FS format, and object metadata.
@@ -46,7 +49,7 @@ const (
 	fsMetaVersion101 = "1.0.1"
 
 	// FS backend meta 1.0.2
-	// Removed the fields "Format" and "Minio" from fsMetaV1 as they were unused. Added "Checksum" field - to be used in future for bit-rot protection.
+	// Removed the fields "Format" and "MinIO" from fsMetaV1 as they were unused. Added "Checksum" field - to be used in future for bit-rot protection.
 	fsMetaVersion = "1.0.2"
 
 	// Add more constants here.
@@ -87,6 +90,7 @@ func (c *FSChecksumInfoV1) UnmarshalJSON(data []byte) error {
 	}
 
 	var info checksuminfo
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err := json.Unmarshal(data, &info)
 	if err != nil {
 		return err
@@ -113,7 +117,7 @@ type fsMetaV1 struct {
 	// Metadata map for current object.
 	Meta map[string]string `json:"meta,omitempty"`
 	// parts info for current object - used in encryption.
-	Parts []objectPartInfo `json:"parts,omitempty"`
+	Parts []ObjectPartInfo `json:"parts,omitempty"`
 }
 
 // IsValid - tells if the format is sane by validating the version
@@ -139,7 +143,7 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		m.Meta["content-type"] = mimedb.TypeByExtension(pathutil.Ext(object))
 	}
 
-	if hasSuffix(object, slashSeparator) {
+	if HasSuffix(object, SlashSeparator) {
 		m.Meta["etag"] = emptyETag // For directories etag is d41d8cd98f00b204e9800998ecf8427e
 		m.Meta["content-type"] = "application/octet-stream"
 	}
@@ -164,15 +168,28 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 	objInfo.ETag = extractETag(m.Meta)
 	objInfo.ContentType = m.Meta["content-type"]
 	objInfo.ContentEncoding = m.Meta["content-encoding"]
-	if storageClass, ok := m.Meta[amzStorageClass]; ok {
+	if storageClass, ok := m.Meta[xhttp.AmzStorageClass]; ok {
 		objInfo.StorageClass = storageClass
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
+	var (
+		t time.Time
+		e error
+	)
+	if exp, ok := m.Meta["expires"]; ok {
+		if t, e = time.Parse(http.TimeFormat, exp); e == nil {
+			objInfo.Expires = t.UTC()
+		}
+	}
+
+	// Add user tags to the object info
+	objInfo.UserTags = m.Meta[xhttp.AmzObjectTagging]
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
+	// Tags have also been extracted, we remove that as well.
 	objInfo.UserDefined = cleanMetadata(m.Meta)
 
 	// All the parts per object.
@@ -191,44 +208,6 @@ func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 		return 0, err
 	}
 	return fi.Size(), nil
-}
-
-func parseFSVersion(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "version").String()
-}
-
-func parseFSMetaMap(fsMetaBuf []byte) map[string]string {
-	// Get xlMetaV1.Meta map.
-	metaMapResult := gjson.GetBytes(fsMetaBuf, "meta").Map()
-	metaMap := make(map[string]string)
-	for key, valResult := range metaMapResult {
-		metaMap[key] = valResult.String()
-	}
-	return metaMap
-}
-
-func parseFSPartsArray(fsMetaBuf []byte) []objectPartInfo {
-	// Get xlMetaV1.Parts array
-	var partsArray []objectPartInfo
-
-	partsArrayResult := gjson.GetBytes(fsMetaBuf, "parts")
-	partsArrayResult.ForEach(func(key, part gjson.Result) bool {
-		partJSON := part.String()
-		number := gjson.Get(partJSON, "number").Int()
-		name := gjson.Get(partJSON, "name").String()
-		etag := gjson.Get(partJSON, "etag").String()
-		size := gjson.Get(partJSON, "size").Int()
-		actualSize := gjson.Get(partJSON, "actualSize").Int()
-		partsArray = append(partsArray, objectPartInfo{
-			Number:     int(number),
-			Name:       name,
-			ETag:       etag,
-			Size:       size,
-			ActualSize: int64(actualSize),
-		})
-		return true
-	})
-	return partsArray
 }
 
 func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, err error) {
@@ -250,8 +229,10 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		return 0, io.EOF
 	}
 
-	// obtain version.
-	m.Version = parseFSVersion(fsMetaBuf)
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(fsMetaBuf, m); err != nil {
+		return 0, err
+	}
 
 	// Verify if the format is valid, return corrupted format
 	// for unrecognized formats.
@@ -260,12 +241,6 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 		logger.LogIf(ctx, errCorruptedFormat)
 		return 0, errCorruptedFormat
 	}
-
-	// obtain parts information
-	m.Parts = parseFSPartsArray(fsMetaBuf)
-
-	// obtain metadata.
-	m.Meta = parseFSMetaMap(fsMetaBuf)
 
 	// Success.
 	return int64(len(fsMetaBuf)), nil

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,12 @@ func (p Port) String() string {
 
 // ParsePort - parses string into Port
 func ParsePort(s string) (p Port, err error) {
+	if s == "https" {
+		return Port(443), nil
+	} else if s == "http" {
+		return Port(80), nil
+	}
+
 	var i int
 	if i, err = strconv.Atoi(s); err != nil {
 		return p, errors.New("invalid port number")

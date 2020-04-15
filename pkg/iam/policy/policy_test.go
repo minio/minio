@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/minio/minio/pkg/policy"
-	"github.com/minio/minio/pkg/policy/condition"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
 
 func TestPolicyIsAllowed(t *testing.T) {
@@ -338,6 +338,24 @@ func TestPolicyIsValid(t *testing.T) {
 		},
 	}
 
+	case8Policy := Policy{
+		Version: DefaultVersion,
+		Statements: []Statement{
+			NewStatement(
+				policy.Allow,
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "/myobject*")),
+				condition.NewFunctions(),
+			),
+			NewStatement(
+				policy.Allow,
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "/myobject*")),
+				condition.NewFunctions(),
+			),
+		},
+	}
+
 	testCases := []struct {
 		policy    Policy
 		expectErr bool
@@ -353,8 +371,10 @@ func TestPolicyIsValid(t *testing.T) {
 		{case5Policy, true},
 		// Invalid statement error.
 		{case6Policy, true},
-		// Duplicate statement error.
-		{case7Policy, true},
+		// Duplicate statement different Effects.
+		{case7Policy, false},
+		// Duplicate statement same Effects.
+		{case8Policy, true},
 	}
 
 	for i, testCase := range testCases {
@@ -921,6 +941,25 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
     ]
 }`)
 
+	case11Policy := Policy{
+		ID:      "MyPolicyForMyBucket1",
+		Version: DefaultVersion,
+		Statements: []Statement{
+			NewStatement(
+				policy.Allow,
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "myobject*")),
+				condition.NewFunctions(),
+			),
+			NewStatement(
+				policy.Deny,
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "myobject*")),
+				condition.NewFunctions(),
+			),
+		},
+	}
+
 	testCases := []struct {
 		data           []byte
 		expectedResult Policy
@@ -938,8 +977,8 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
 		{case9Data, Policy{}, true},
 		// Duplicate statement error.
 		{case10Data, Policy{}, true},
-		// Duplicate statement error (Effect differs).
-		{case11Data, Policy{}, true},
+		// Duplicate statement success (Effect differs).
+		{case11Data, case11Policy, false},
 	}
 
 	for i, testCase := range testCases {

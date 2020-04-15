@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,29 +17,41 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 // Type of service signals currently supported.
 type serviceSignal int
 
 const (
-	serviceStatus  = iota // Gets status about the service.
-	serviceRestart        // Restarts the service.
-	serviceStop           // Stops the server.
+	serviceRestart serviceSignal = iota // Restarts the server.
+	serviceStop                         // Stops the server.
 	// Add new service requests here.
 )
 
 // Global service signal channel.
 var globalServiceSignalCh chan serviceSignal
 
-// Global service done channel.
-var globalServiceDoneCh chan struct{}
+// GlobalServiceDoneCh - Global service done channel.
+var GlobalServiceDoneCh <-chan struct{}
+
+// GlobalContext context that is canceled when server is requested to shut down.
+var GlobalContext context.Context
+
+// cancelGlobalContext can be used to indicate server shutdown.
+var cancelGlobalContext context.CancelFunc
 
 // Initialize service mutex once.
 func init() {
-	globalServiceDoneCh = make(chan struct{}, 1)
+	initGlobalContext()
+}
+
+func initGlobalContext() {
+	GlobalContext, cancelGlobalContext = context.WithCancel(context.Background())
+	GlobalServiceDoneCh = GlobalContext.Done()
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 
@@ -56,9 +68,7 @@ func restartProcess() error {
 		return err
 	}
 
-	// Pass on the environment and replace the old count key with the new one.
-	cmd := exec.Command(argv0, os.Args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Start()
+	// Invokes the execve system call.
+	// Re-uses the same pid. This preserves the pid over multiple server-respawns.
+	return syscall.Exec(argv0, os.Args, os.Environ())
 }

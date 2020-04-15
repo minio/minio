@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ type Reader struct {
 
 // NewReader returns a new hash Reader which computes the MD5 sum and
 // SHA256 sum (if set) of the provided io.Reader at EOF.
-func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) (*Reader, error) {
+func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64, strictCompat bool) (*Reader, error) {
 	if _, ok := src.(*Reader); ok {
 		return nil, errNestedReader
 	}
@@ -62,6 +62,14 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	if len(sha256sum) != 0 {
 		sha256Hash = sha256.New()
 	}
+	var md5Hash hash.Hash
+	if strictCompat {
+		// Strict compatibility is set then we should
+		// calculate md5sum always.
+		md5Hash = md5.New()
+	} else if len(md5sum) != 0 {
+		md5Hash = md5.New()
+	}
 	if size >= 0 {
 		src = io.LimitReader(src, size)
 	}
@@ -70,7 +78,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		sha256sum:  sha256sum,
 		src:        src,
 		size:       size,
-		md5Hash:    md5.New(),
+		md5Hash:    md5Hash,
 		sha256Hash: sha256Hash,
 		actualSize: actualSize,
 	}, nil
@@ -79,7 +87,9 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.src.Read(p)
 	if n > 0 {
-		r.md5Hash.Write(p[:n])
+		if r.md5Hash != nil {
+			r.md5Hash.Write(p[:n])
+		}
 		if r.sha256Hash != nil {
 			r.sha256Hash.Write(p[:n])
 		}
@@ -114,7 +124,10 @@ func (r *Reader) MD5() []byte {
 // NOTE: Calling this function multiple times might yield
 // different results if they are intermixed with Reader.
 func (r *Reader) MD5Current() []byte {
-	return r.md5Hash.Sum(nil)
+	if r.md5Hash != nil {
+		return r.md5Hash.Sum(nil)
+	}
+	return nil
 }
 
 // SHA256 - returns byte sha256 value
@@ -145,7 +158,7 @@ func (r *Reader) Verify() error {
 			return SHA256Mismatch{hex.EncodeToString(r.sha256sum), hex.EncodeToString(sum)}
 		}
 	}
-	if len(r.md5sum) > 0 {
+	if r.md5Hash != nil && len(r.md5sum) > 0 {
 		if sum := r.md5Hash.Sum(nil); !bytes.Equal(r.md5sum, sum) {
 			return BadDigest{hex.EncodeToString(r.md5sum), hex.EncodeToString(sum)}
 		}

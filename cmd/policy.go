@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,16 +21,19 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	miniogopolicy "github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/minio-go/pkg/set"
+	jsoniter "github.com/json-iterator/go"
+	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/policy"
 )
 
 // PolicySys - policy subsystem.
@@ -39,26 +42,13 @@ type PolicySys struct {
 	bucketPolicyMap map[string]policy.Policy
 }
 
-// removeDeletedBuckets - to handle a corner case where we have cached the policy for a deleted
-// bucket. i.e if we miss a delete-bucket notification we should delete the corresponding
-// bucket policy during sys.refresh()
-func (sys *PolicySys) removeDeletedBuckets(bucketInfos []BucketInfo) {
-	buckets := set.NewStringSet()
-	for _, info := range bucketInfos {
-		buckets.Add(info.Name)
-	}
-	sys.Lock()
-	defer sys.Unlock()
-
-	for bucket := range sys.bucketPolicyMap {
-		if !buckets.Contains(bucket) {
-			delete(sys.bucketPolicyMap, bucket)
-		}
-	}
-}
-
 // Set - sets policy to given bucket name.  If policy is empty, existing policy is removed.
 func (sys *PolicySys) Set(bucketName string, policy policy.Policy) {
+	if globalIsGateway {
+		// Set policy is a non-op under gateway mode.
+		return
+	}
+
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -79,12 +69,24 @@ func (sys *PolicySys) Remove(bucketName string) {
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *PolicySys) IsAllowed(args policy.Args) bool {
-	sys.RLock()
-	defer sys.RUnlock()
+	if globalIsGateway {
+		// When gateway is enabled, no cached value
+		// is used to validate bucket policies.
+		objAPI := newObjectLayerFn()
+		if objAPI != nil {
+			config, err := objAPI.GetBucketPolicy(GlobalContext, args.BucketName)
+			if err == nil {
+				return config.IsAllowed(args)
+			}
+		}
+	} else {
+		sys.RLock()
+		defer sys.RUnlock()
 
-	// If policy is available for given bucket, check the policy.
-	if p, found := sys.bucketPolicyMap[args.BucketName]; found {
-		return p.IsAllowed(args)
+		// If policy is available for given bucket, check the policy.
+		if p, found := sys.bucketPolicyMap[args.BucketName]; found {
+			return p.IsAllowed(args)
+		}
 	}
 
 	// As policy is not available for given bucket name, returns IsOwner i.e.
@@ -92,16 +94,10 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 	return args.IsOwner
 }
 
-// Refresh PolicySys.
-func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
-	buckets, err := objAPI.ListBuckets(context.Background())
-	if err != nil {
-		logger.LogIf(context.Background(), err)
-		return err
-	}
-	sys.removeDeletedBuckets(buckets)
+// Loads policies for all buckets into PolicySys.
+func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketPolicy(context.Background(), bucket.Name)
+		config, err := objAPI.GetBucketPolicy(GlobalContext, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				sys.Remove(bucket.Name)
@@ -117,8 +113,8 @@ func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 			logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
 			config.Version = policy.DefaultVersion
 
-			if err = savePolicyConfig(context.Background(), objAPI, bucket.Name, config); err != nil {
-				logger.LogIf(context.Background(), err)
+			if err = savePolicyConfig(GlobalContext, objAPI, bucket.Name, config); err != nil {
+				logger.LogIf(GlobalContext, err)
 				return err
 			}
 		}
@@ -128,51 +124,19 @@ func (sys *PolicySys) refresh(objAPI ObjectLayer) error {
 }
 
 // Init - initializes policy system from policy.json of all buckets.
-func (sys *PolicySys) Init(objAPI ObjectLayer) error {
+func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
 
-	defer func() {
-		// Refresh PolicySys in background.
-		go func() {
-			ticker := time.NewTicker(globalRefreshBucketPolicyInterval)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-globalServiceDoneCh:
-					return
-				case <-ticker.C:
-					sys.refresh(objAPI)
-				}
-			}
-		}()
-	}()
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	// Initializing policy needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		select {
-		case _ = <-retryTimerCh:
-			// Load PolicySys once during boot.
-			if err := sys.refresh(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
-					logger.Info("Waiting for policy subsystem to be initialized..")
-					continue
-				}
-				return err
-			}
-			return nil
-		}
+	// In gateway mode, we don't need to load the policies
+	// from the backend.
+	if globalIsGateway {
+		return nil
 	}
+
+	// Load PolicySys once during boot.
+	return sys.load(buckets, objAPI)
 }
 
 // NewPolicySys - creates new policy system.
@@ -182,10 +146,44 @@ func NewPolicySys() *PolicySys {
 	}
 }
 
-func getConditionValues(request *http.Request, locationConstraint string) map[string][]string {
-	args := make(map[string][]string)
+func getConditionValues(r *http.Request, lc string, username string, claims map[string]interface{}) map[string][]string {
+	currTime := UTCNow()
 
-	for key, values := range request.Header {
+	principalType := "Anonymous"
+	if username != "" {
+		principalType = "User"
+	}
+
+	args := map[string][]string{
+		"CurrentTime":     {currTime.Format(time.RFC3339)},
+		"EpochTime":       {strconv.FormatInt(currTime.Unix(), 10)},
+		"SecureTransport": {strconv.FormatBool(r.TLS != nil)},
+		"SourceIp":        {handlers.GetSourceIP(r)},
+		"UserAgent":       {r.UserAgent()},
+		"Referer":         {r.Referer()},
+		"principaltype":   {principalType},
+		"userid":          {username},
+		"username":        {username},
+	}
+
+	if lc != "" {
+		args["LocationConstraint"] = []string{lc}
+	}
+
+	cloneHeader := r.Header.Clone()
+
+	for _, objLock := range []string{
+		xhttp.AmzObjectLockMode,
+		xhttp.AmzObjectLockLegalHold,
+		xhttp.AmzObjectLockRetainUntilDate,
+	} {
+		if values, ok := cloneHeader[objLock]; ok {
+			args[strings.TrimPrefix(objLock, "X-Amz-")] = values
+		}
+		cloneHeader.Del(objLock)
+	}
+
+	for key, values := range cloneHeader {
 		if existingValues, found := args[key]; found {
 			args[key] = append(existingValues, values...)
 		} else {
@@ -193,7 +191,23 @@ func getConditionValues(request *http.Request, locationConstraint string) map[st
 		}
 	}
 
-	for key, values := range request.URL.Query() {
+	var cloneURLValues = url.Values{}
+	for k, v := range r.URL.Query() {
+		cloneURLValues[k] = v
+	}
+
+	for _, objLock := range []string{
+		xhttp.AmzObjectLockMode,
+		xhttp.AmzObjectLockLegalHold,
+		xhttp.AmzObjectLockRetainUntilDate,
+	} {
+		if values, ok := cloneURLValues[objLock]; ok {
+			args[strings.TrimPrefix(objLock, "X-Amz-")] = values
+		}
+		cloneURLValues.Del(objLock)
+	}
+
+	for key, values := range cloneURLValues {
 		if existingValues, found := args[key]; found {
 			args[key] = append(existingValues, values...)
 		} else {
@@ -201,10 +215,12 @@ func getConditionValues(request *http.Request, locationConstraint string) map[st
 		}
 	}
 
-	args["SourceIp"] = []string{handlers.GetSourceIP(request)}
-
-	if locationConstraint != "" {
-		args["LocationConstraint"] = []string{locationConstraint}
+	// JWT specific values
+	for k, v := range claims {
+		vStr, ok := v.(string)
+		if ok {
+			args[k] = []string{vStr}
+		}
 	}
 
 	return args
@@ -215,7 +231,7 @@ func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	configData, err := readConfig(context.Background(), objAPI, configFile)
+	configData, err := readConfig(GlobalContext, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = BucketPolicyNotFound{Bucket: bucketName}
@@ -268,6 +284,7 @@ func PolicyToBucketAccessPolicy(bucketPolicy *policy.Policy) (*miniogopolicy.Buc
 	}
 
 	var policyInfo miniogopolicy.BucketAccessPolicy
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(data, &policyInfo); err != nil {
 		// This should not happen because data is valid to JSON data.
 		return nil, err
@@ -285,6 +302,7 @@ func BucketAccessPolicyToPolicy(policyInfo *miniogopolicy.BucketAccessPolicy) (*
 	}
 
 	var bucketPolicy policy.Policy
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(data, &bucketPolicy); err != nil {
 		// This should not happen because data is valid to JSON data.
 		return nil, err

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,14 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/minio/minio/pkg/auth"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
 
 // AccountStatus - account status.
@@ -37,20 +42,21 @@ type UserInfo struct {
 	SecretKey  string        `json:"secretKey,omitempty"`
 	PolicyName string        `json:"policyName,omitempty"`
 	Status     AccountStatus `json:"status"`
+	MemberOf   []string      `json:"memberOf,omitempty"`
 }
 
 // RemoveUser - remove a user.
-func (adm *AdminClient) RemoveUser(accessKey string) error {
+func (adm *AdminClient) RemoveUser(ctx context.Context, accessKey string) error {
 	queryValues := url.Values{}
 	queryValues.Set("accessKey", accessKey)
 
 	reqData := requestData{
-		relPath:     "/v1/remove-user",
+		relPath:     adminAPIPrefix + "/remove-user",
 		queryValues: queryValues,
 	}
 
-	// Execute DELETE on /minio/admin/v1/remove-user to remove a user.
-	resp, err := adm.executeMethod("DELETE", reqData)
+	// Execute DELETE on /minio/admin/v3/remove-user to remove a user.
+	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -65,13 +71,13 @@ func (adm *AdminClient) RemoveUser(accessKey string) error {
 }
 
 // ListUsers - list all users.
-func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
+func (adm *AdminClient) ListUsers(ctx context.Context) (map[string]UserInfo, error) {
 	reqData := requestData{
-		relPath: "/v1/list-users",
+		relPath: adminAPIPrefix + "/list-users",
 	}
 
-	// Execute GET on /minio/admin/v1/list-users
-	resp, err := adm.executeMethod("GET", reqData)
+	// Execute GET on /minio/admin/v3/list-users
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -82,7 +88,7 @@ func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +101,51 @@ func (adm *AdminClient) ListUsers() (map[string]UserInfo, error) {
 	return users, nil
 }
 
+// GetUserInfo - get info on a user
+func (adm *AdminClient) GetUserInfo(ctx context.Context, name string) (u UserInfo, err error) {
+	queryValues := url.Values{}
+	queryValues.Set("accessKey", name)
+
+	reqData := requestData{
+		relPath:     adminAPIPrefix + "/user-info",
+		queryValues: queryValues,
+	}
+
+	// Execute GET on /minio/admin/v3/user-info
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return u, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return u, httpRespToErrorResponse(resp)
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return u, err
+	}
+
+	if err = json.Unmarshal(b, &u); err != nil {
+		return u, err
+	}
+
+	return u, nil
+}
+
 // SetUser - sets a user info.
-func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatus) error {
+func (adm *AdminClient) SetUser(ctx context.Context, accessKey, secretKey string, status AccountStatus) error {
+
+	if !auth.IsAccessKeyValid(accessKey) {
+		return auth.ErrInvalidAccessKeyLength
+	}
+
+	if !auth.IsSecretKeyValid(secretKey) {
+		return auth.ErrInvalidSecretKeyLength
+	}
+
 	data, err := json.Marshal(UserInfo{
 		SecretKey: secretKey,
 		Status:    status,
@@ -104,7 +153,7 @@ func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatu
 	if err != nil {
 		return err
 	}
-	econfigBytes, err := EncryptData(adm.secretAccessKey, data)
+	econfigBytes, err := EncryptData(adm.getSecretKey(), data)
 	if err != nil {
 		return err
 	}
@@ -113,13 +162,13 @@ func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatu
 	queryValues.Set("accessKey", accessKey)
 
 	reqData := requestData{
-		relPath:     "/v1/add-user",
+		relPath:     adminAPIPrefix + "/add-user",
 		queryValues: queryValues,
 		content:     econfigBytes,
 	}
 
-	// Execute PUT on /minio/admin/v1/add-user to set a user.
-	resp, err := adm.executeMethod("PUT", reqData)
+	// Execute PUT on /minio/admin/v3/add-user to set a user.
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -134,49 +183,23 @@ func (adm *AdminClient) SetUser(accessKey, secretKey string, status AccountStatu
 }
 
 // AddUser - adds a user.
-func (adm *AdminClient) AddUser(accessKey, secretKey string) error {
-	return adm.SetUser(accessKey, secretKey, AccountEnabled)
-}
-
-// SetUserPolicy - adds a policy for a user.
-func (adm *AdminClient) SetUserPolicy(accessKey, policyName string) error {
-	queryValues := url.Values{}
-	queryValues.Set("accessKey", accessKey)
-	queryValues.Set("name", policyName)
-
-	reqData := requestData{
-		relPath:     "/v1/set-user-policy",
-		queryValues: queryValues,
-	}
-
-	// Execute PUT on /minio/admin/v1/set-user-policy to set policy.
-	resp, err := adm.executeMethod("PUT", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
-	}
-
-	return nil
+func (adm *AdminClient) AddUser(ctx context.Context, accessKey, secretKey string) error {
+	return adm.SetUser(ctx, accessKey, secretKey, AccountEnabled)
 }
 
 // SetUserStatus - adds a status for a user.
-func (adm *AdminClient) SetUserStatus(accessKey string, status AccountStatus) error {
+func (adm *AdminClient) SetUserStatus(ctx context.Context, accessKey string, status AccountStatus) error {
 	queryValues := url.Values{}
 	queryValues.Set("accessKey", accessKey)
 	queryValues.Set("status", string(status))
 
 	reqData := requestData{
-		relPath:     "/v1/set-user-status",
+		relPath:     adminAPIPrefix + "/set-user-status",
 		queryValues: queryValues,
 	}
 
-	// Execute PUT on /minio/admin/v1/set-user-status to set status.
-	resp, err := adm.executeMethod("PUT", reqData)
+	// Execute PUT on /minio/admin/v3/set-user-status to set status.
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -188,4 +211,69 @@ func (adm *AdminClient) SetUserStatus(accessKey string, status AccountStatus) er
 	}
 
 	return nil
+}
+
+// AddServiceAccountReq is the request body of the add service account admin call
+type AddServiceAccountReq struct {
+	Parent string            `json:"parent"`
+	Policy *iampolicy.Policy `json:"policy,omitempty"`
+}
+
+// AddServiceAccountResp is the response body of the add service account admin call
+type AddServiceAccountResp struct {
+	Credentials auth.Credentials `json:"credentials"`
+}
+
+// AddServiceAccount - creates a new service account belonging to the given parent user
+// while restricting the service account permission by the given policy document.
+func (adm *AdminClient) AddServiceAccount(ctx context.Context, parentUser string, policy *iampolicy.Policy) (auth.Credentials, error) {
+	if !auth.IsAccessKeyValid(parentUser) {
+		return auth.Credentials{}, auth.ErrInvalidAccessKeyLength
+	}
+
+	if policy != nil {
+		if err := policy.Validate(); err != nil {
+			return auth.Credentials{}, err
+		}
+	}
+
+	data, err := json.Marshal(AddServiceAccountReq{
+		Parent: parentUser,
+		Policy: policy,
+	})
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	econfigBytes, err := EncryptData(adm.getSecretKey(), data)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	reqData := requestData{
+		relPath: adminAPIPrefix + "/add-service-account",
+		content: econfigBytes,
+	}
+
+	// Execute PUT on /minio/admin/v3/add-service-account to set a user.
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
+	defer closeResponse(resp)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return auth.Credentials{}, httpRespToErrorResponse(resp)
+	}
+
+	data, err = DecryptData(adm.getSecretKey(), resp.Body)
+	if err != nil {
+		return auth.Credentials{}, err
+	}
+
+	var serviceAccountResp AddServiceAccountResp
+	if err = json.Unmarshal(data, &serviceAccountResp); err != nil {
+		return auth.Credentials{}, err
+	}
+	return serviceAccountResp.Credentials, nil
 }

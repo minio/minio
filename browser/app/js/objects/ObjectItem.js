@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ export const ObjectItem = ({
       </div>
       <div className="fesl-item fesl-item-name">
         <a
-          href="#"
+          href={getDataType(name, contentType) === "folder" ? name : "#"}
           onClick={e => {
             e.preventDefault()
             if (onClick) {

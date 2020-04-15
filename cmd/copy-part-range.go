@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,21 +17,22 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 )
 
 // Writes S3 compatible copy part range error.
-func writeCopyPartErr(w http.ResponseWriter, err error, url *url.URL) {
+func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url *url.URL, browser bool) {
 	switch err {
 	case errInvalidRange:
-		writeErrorResponse(w, ErrInvalidCopyPartRange, url)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRange), url, browser)
 		return
 	case errInvalidRangeSource:
-		writeErrorResponse(w, ErrInvalidCopyPartRangeSource, url)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url, browser)
 		return
 	default:
-		writeErrorResponse(w, ErrInternalError, url)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), url, browser)
 		return
 	}
 }

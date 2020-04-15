@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,438 +17,528 @@
 package s3select
 
 import (
-	"encoding/json"
-	"math"
-	"sort"
-	"strconv"
+	"bufio"
+	"bytes"
+	"compress/bzip2"
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"strings"
+	"sync"
 
-	"github.com/minio/minio/pkg/s3select/format"
-	"github.com/xwb1989/sqlparser"
+	"github.com/minio/minio/pkg/s3select/csv"
+	"github.com/minio/minio/pkg/s3select/json"
+	"github.com/minio/minio/pkg/s3select/parquet"
+	"github.com/minio/minio/pkg/s3select/simdj"
+	"github.com/minio/minio/pkg/s3select/sql"
+	"github.com/minio/simdjson-go"
 )
 
-// SelectFuncs contains the relevant values from the parser for S3 Select
-// Functions
-type SelectFuncs struct {
-	funcExpr []*sqlparser.FuncExpr
-	index    []int
+type recordReader interface {
+	// Read a record.
+	// dst is optional but will be used if valid.
+	Read(dst sql.Record) (sql.Record, error)
+	Close() error
 }
 
-// RunSqlParser allows us to easily bundle all the functions from above and run
-// them in the appropriate order.
-func runSelectParser(f format.Select, myRow chan *Row) {
-	reqCols, alias, myLimit, whereClause, aggFunctionNames, myFuncs, myErr := ParseSelect(f)
-	if myErr != nil {
-		rowStruct := &Row{
-			err: myErr,
-		}
-		myRow <- rowStruct
-		return
+const (
+	csvFormat     = "csv"
+	jsonFormat    = "json"
+	parquetFormat = "parquet"
+)
+
+// CompressionType - represents value inside <CompressionType/> in request XML.
+type CompressionType string
+
+const (
+	noneType  CompressionType = "none"
+	gzipType  CompressionType = "gzip"
+	bzip2Type CompressionType = "bzip2"
+)
+
+const (
+	maxRecordSize = 1 << 20 // 1 MiB
+)
+
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		// make a buffer with a reasonable capacity.
+		return bytes.NewBuffer(make([]byte, 0, maxRecordSize))
+	},
+}
+
+var bufioWriterPool = sync.Pool{
+	New: func() interface{} {
+		// ioutil.Discard is just used to create the writer. Actual destination
+		// writer is set later by Reset() before using it.
+		return bufio.NewWriter(ioutil.Discard)
+	},
+}
+
+// UnmarshalXML - decodes XML data.
+func (c *CompressionType) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var s string
+	if err := d.DecodeElement(&s, &start); err != nil {
+		return errMalformedXML(err)
 	}
-	processSelectReq(reqCols, alias, whereClause, myLimit, aggFunctionNames, myRow, myFuncs, f)
 
+	parsedType := CompressionType(strings.ToLower(s))
+	if s == "" {
+		parsedType = noneType
+	}
+
+	switch parsedType {
+	case noneType, gzipType, bzip2Type:
+	default:
+		return errInvalidCompressionFormat(fmt.Errorf("invalid compression format '%v'", s))
+	}
+
+	*c = parsedType
+	return nil
 }
 
-// ParseSelect parses the SELECT expression, and effectively tokenizes it into
-// its separate parts. It returns the requested column names,alias,limit of
-// records, and the where clause.
-func ParseSelect(f format.Select) ([]string, string, int64, interface{}, []string, *SelectFuncs, error) {
-	// return columnNames, alias, limitOfRecords, whereclause,coalStore, nil
+// InputSerialization - represents elements inside <InputSerialization/> in request XML.
+type InputSerialization struct {
+	CompressionType CompressionType    `xml:"CompressionType"`
+	CSVArgs         csv.ReaderArgs     `xml:"CSV"`
+	JSONArgs        json.ReaderArgs    `xml:"JSON"`
+	ParquetArgs     parquet.ReaderArgs `xml:"Parquet"`
+	unmarshaled     bool
+	format          string
+}
 
-	stmt, err := sqlparser.Parse(cleanExpr(f.Expression()))
-	// TODO Maybe can parse their errors a bit to return some more of the s3 errors
+// IsEmpty - returns whether input serialization is empty or not.
+func (input *InputSerialization) IsEmpty() bool {
+	return !input.unmarshaled
+}
+
+// UnmarshalXML - decodes XML data.
+func (input *InputSerialization) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	// Make subtype to avoid recursive UnmarshalXML().
+	type subInputSerialization InputSerialization
+	parsedInput := subInputSerialization{}
+	if err := d.DecodeElement(&parsedInput, &start); err != nil {
+		return errMalformedXML(err)
+	}
+
+	// If no compression is specified, set to noneType
+	if parsedInput.CompressionType == CompressionType("") {
+		parsedInput.CompressionType = noneType
+	}
+
+	found := 0
+	if !parsedInput.CSVArgs.IsEmpty() {
+		parsedInput.format = csvFormat
+		found++
+	}
+	if !parsedInput.JSONArgs.IsEmpty() {
+		parsedInput.format = jsonFormat
+		found++
+	}
+	if !parsedInput.ParquetArgs.IsEmpty() {
+		if parsedInput.CompressionType != "" && parsedInput.CompressionType != noneType {
+			return errInvalidRequestParameter(fmt.Errorf("CompressionType must be NONE for Parquet format"))
+		}
+
+		parsedInput.format = parquetFormat
+		found++
+	}
+
+	if found != 1 {
+		return errInvalidDataSource(nil)
+	}
+
+	*input = InputSerialization(parsedInput)
+	input.unmarshaled = true
+	return nil
+}
+
+// OutputSerialization - represents elements inside <OutputSerialization/> in request XML.
+type OutputSerialization struct {
+	CSVArgs     csv.WriterArgs  `xml:"CSV"`
+	JSONArgs    json.WriterArgs `xml:"JSON"`
+	unmarshaled bool
+	format      string
+}
+
+// IsEmpty - returns whether output serialization is empty or not.
+func (output *OutputSerialization) IsEmpty() bool {
+	return !output.unmarshaled
+}
+
+// UnmarshalXML - decodes XML data.
+func (output *OutputSerialization) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	// Make subtype to avoid recursive UnmarshalXML().
+	type subOutputSerialization OutputSerialization
+	parsedOutput := subOutputSerialization{}
+	if err := d.DecodeElement(&parsedOutput, &start); err != nil {
+		return errMalformedXML(err)
+	}
+
+	found := 0
+	if !parsedOutput.CSVArgs.IsEmpty() {
+		parsedOutput.format = csvFormat
+		found++
+	}
+	if !parsedOutput.JSONArgs.IsEmpty() {
+		parsedOutput.format = jsonFormat
+		found++
+	}
+	if found != 1 {
+		return errObjectSerializationConflict(fmt.Errorf("either CSV or JSON should be present in OutputSerialization"))
+	}
+
+	*output = OutputSerialization(parsedOutput)
+	output.unmarshaled = true
+	return nil
+}
+
+// RequestProgress - represents elements inside <RequestProgress/> in request XML.
+type RequestProgress struct {
+	Enabled bool `xml:"Enabled"`
+}
+
+// S3Select - filters the contents on a simple structured query language (SQL) statement. It
+// represents elements inside <SelectRequest/> in request XML specified in detail at
+// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectSELECTContent.html.
+type S3Select struct {
+	XMLName        xml.Name            `xml:"SelectRequest"`
+	Expression     string              `xml:"Expression"`
+	ExpressionType string              `xml:"ExpressionType"`
+	Input          InputSerialization  `xml:"InputSerialization"`
+	Output         OutputSerialization `xml:"OutputSerialization"`
+	Progress       RequestProgress     `xml:"RequestProgress"`
+
+	statement      *sql.SelectStatement
+	progressReader *progressReader
+	recordReader   recordReader
+}
+
+var (
+	legacyXMLName = "SelectObjectContentRequest"
+)
+
+// UnmarshalXML - decodes XML data.
+func (s3Select *S3Select) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	// S3 also supports the older SelectObjectContentRequest tag,
+	// though it is no longer found in documentation. This is
+	// checked and renamed below to allow older clients to also
+	// work.
+	if start.Name.Local == legacyXMLName {
+		start.Name = xml.Name{Space: "", Local: "SelectRequest"}
+	}
+
+	// Make subtype to avoid recursive UnmarshalXML().
+	type subS3Select S3Select
+	parsedS3Select := subS3Select{}
+	if err := d.DecodeElement(&parsedS3Select, &start); err != nil {
+		if _, ok := err.(*s3Error); ok {
+			return err
+		}
+
+		return errMalformedXML(err)
+	}
+
+	parsedS3Select.ExpressionType = strings.ToLower(parsedS3Select.ExpressionType)
+	if parsedS3Select.ExpressionType != "sql" {
+		return errInvalidExpressionType(fmt.Errorf("invalid expression type '%v'", parsedS3Select.ExpressionType))
+	}
+
+	if parsedS3Select.Input.IsEmpty() {
+		return errMissingRequiredParameter(fmt.Errorf("InputSerialization must be provided"))
+	}
+
+	if parsedS3Select.Output.IsEmpty() {
+		return errMissingRequiredParameter(fmt.Errorf("OutputSerialization must be provided"))
+	}
+
+	statement, err := sql.ParseSelectStatement(parsedS3Select.Expression)
 	if err != nil {
-		return nil, "", 0, nil, nil, nil, ErrLexerInvalidChar
+		return err
 	}
 
-	var whereClause interface{}
-	var alias string
-	var limit int64
-	myFuncs := &SelectFuncs{}
-	switch stmt := stmt.(type) {
-	case *sqlparser.Select:
-		// evaluates the where clause
-		functionNames := make([]string, len(stmt.SelectExprs))
-		columnNames := make([]string, len(stmt.SelectExprs))
+	parsedS3Select.statement = &statement
 
-		if stmt.Where != nil {
-			switch expr := stmt.Where.Expr.(type) {
-			default:
-				whereClause = expr
-			case *sqlparser.ComparisonExpr:
-				whereClause = expr
-			}
-		}
-		if stmt.SelectExprs != nil {
-			for i := 0; i < len(stmt.SelectExprs); i++ {
-				switch expr := stmt.SelectExprs[i].(type) {
-				case *sqlparser.StarExpr:
-					columnNames[0] = "*"
-				case *sqlparser.AliasedExpr:
-					switch smallerexpr := expr.Expr.(type) {
-					case *sqlparser.FuncExpr:
-						if smallerexpr.IsAggregate() {
-							functionNames[i] = smallerexpr.Name.CompliantName()
-							// Will return function name
-							// Case to deal with if we have functions and not an asterix
-							switch tempagg := smallerexpr.Exprs[0].(type) {
-							case *sqlparser.StarExpr:
-								columnNames[0] = "*"
-								if smallerexpr.Name.CompliantName() != "count" {
-									return nil, "", 0, nil, nil, nil, ErrParseUnsupportedCallWithStar
-								}
-							case *sqlparser.AliasedExpr:
-								switch col := tempagg.Expr.(type) {
-								case *sqlparser.BinaryExpr:
-									return nil, "", 0, nil, nil, nil, ErrParseNonUnaryAgregateFunctionCall
-								case *sqlparser.ColName:
-									columnNames[i] = col.Name.CompliantName()
-								}
-							}
-							// Case to deal with if COALESCE was used..
-						} else if supportedFunc(smallerexpr.Name.CompliantName()) {
-							if myFuncs.funcExpr == nil {
-								myFuncs.funcExpr = make([]*sqlparser.FuncExpr, len(stmt.SelectExprs))
-								myFuncs.index = make([]int, len(stmt.SelectExprs))
-							}
-							myFuncs.funcExpr[i] = smallerexpr
-							myFuncs.index[i] = i
-						} else {
-							return nil, "", 0, nil, nil, nil, ErrUnsupportedSQLOperation
-						}
-					case *sqlparser.ColName:
-						columnNames[i] = smallerexpr.Name.CompliantName()
-					}
-				}
-			}
-		}
-
-		// This code retrieves the alias and makes sure it is set to the correct
-		// value, if not it sets it to the tablename
-		if (stmt.From) != nil {
-			for i := 0; i < len(stmt.From); i++ {
-				switch smallerexpr := stmt.From[i].(type) {
-				case *sqlparser.JoinTableExpr:
-					return nil, "", 0, nil, nil, nil, ErrParseMalformedJoin
-				case *sqlparser.AliasedTableExpr:
-					alias = smallerexpr.As.CompliantName()
-					if alias == "" {
-						alias = sqlparser.GetTableName(smallerexpr.Expr).CompliantName()
-					}
-				}
-			}
-		}
-		if stmt.Limit != nil {
-			switch expr := stmt.Limit.Rowcount.(type) {
-			case *sqlparser.SQLVal:
-				// The Value of how many rows we're going to limit by
-				parsedLimit, _ := strconv.Atoi(string(expr.Val[:]))
-				limit = int64(parsedLimit)
-			}
-		}
-		if stmt.GroupBy != nil {
-			return nil, "", 0, nil, nil, nil, ErrParseUnsupportedLiteralsGroupBy
-		}
-		if stmt.OrderBy != nil {
-			return nil, "", 0, nil, nil, nil, ErrParseUnsupportedToken
-		}
-		if err := parseErrs(columnNames, whereClause, alias, myFuncs, f); err != nil {
-			return nil, "", 0, nil, nil, nil, err
-		}
-		return columnNames, alias, limit, whereClause, functionNames, myFuncs, nil
-	}
-	return nil, "", 0, nil, nil, nil, nil
-}
-
-// This is the main function, It goes row by row and for records which validate
-// the where clause it currently prints the appropriate row given the requested
-// columns.
-func processSelectReq(reqColNames []string, alias string, whereClause interface{}, limitOfRecords int64, functionNames []string, myRow chan *Row, myFunc *SelectFuncs, f format.Select) {
-	counter := -1
-	var columns []string
-	filtrCount := 0
-	functionFlag := false
-	// My values is used to store our aggregation values if we need to store them.
-	myAggVals := make([]float64, len(reqColNames))
-	// LowercasecolumnsMap is used in accordance with hasDuplicates so that we can
-	// raise the error "Ambigious" if a case insensitive column is provided and we
-	// have multiple matches.
-	lowercaseColumnsMap := make(map[string]int)
-	hasDuplicates := make(map[string]bool)
-	// ColumnsMap stores our columns and their index.
-	columnsMap := make(map[string]int)
-	if limitOfRecords == 0 {
-		limitOfRecords = math.MaxInt64
-	}
-	for {
-		record, err := f.Read()
-		if err != nil {
-			rowStruct := &Row{
-				err: err,
-			}
-			myRow <- rowStruct
-			return
-		}
-		if record == nil {
-			if functionFlag {
-				rowStruct := &Row{
-					record: aggFuncToStr(myAggVals, f) + "\n",
-				}
-				myRow <- rowStruct
-			}
-			close(myRow)
-			return
-		}
-
-		out, _ := json.Marshal(record)
-		f.UpdateBytesProcessed(record)
-
-		if counter == -1 && f.HasHeader() && len(f.Header()) > 0 {
-			columns = f.Header()
-			myErr := checkForDuplicates(columns, columnsMap, hasDuplicates, lowercaseColumnsMap)
-			if format.IsInt(reqColNames[0]) {
-				myErr = ErrMissingHeaders
-			}
-			if myErr != nil {
-				rowStruct := &Row{
-					err: myErr,
-				}
-				myRow <- rowStruct
-				return
-			}
-		} else if counter == -1 && len(f.Header()) > 0 {
-			columns = f.Header()
-			for i := 0; i < len(columns); i++ {
-				columnsMap["_"+strconv.Itoa(i)] = i
-			}
-
-		}
-		// Return in case the number of record reaches the LIMIT defined in select query
-		if int64(filtrCount) == limitOfRecords && limitOfRecords != 0 {
-			close(myRow)
-			return
-		}
-
-		// The call to the where function clause,ensures that the rows we print match our where clause.
-		condition, myErr := matchesMyWhereClause(record, alias, whereClause)
-		if myErr != nil {
-			rowStruct := &Row{
-				err: myErr,
-			}
-			myRow <- rowStruct
-			return
-		}
-		if condition {
-			// if its an asterix we just print everything in the row
-			if reqColNames[0] == "*" && functionNames[0] == "" {
-				var row *Row
-				switch f.Type() {
-				case format.CSV:
-					row = &Row{
-						record: strings.Join(convertToSlice(columnsMap, record, string(out)), f.OutputFieldDelimiter()) + "\n",
-					}
-				case format.JSON:
-					row = &Row{
-						record: string(out) + "\n",
-					}
-				}
-				myRow <- row
-
-			} else if alias != "" {
-				// This is for dealing with the case of if we have to deal with a
-				// request for a column with an index e.g A_1.
-				if format.IsInt(reqColNames[0]) {
-					// This checks whether any aggregation function was called as now we
-					// no longer will go through printing each row, and only print at the end
-					if len(functionNames) > 0 && functionNames[0] != "" {
-						functionFlag = true
-						aggregationFunctions(counter, filtrCount, myAggVals, reqColNames, functionNames, string(out))
-					} else {
-						// The code below finds the appropriate columns of the row given the
-						// indicies provided in the SQL request and utilizes the map to
-						// retrieve the correct part of the row.
-						myQueryRow, myErr := processColNameIndex(string(out), reqColNames, columns, f)
-						if myErr != nil {
-							rowStruct := &Row{
-								err: myErr,
-							}
-							myRow <- rowStruct
-							return
-						}
-						rowStruct := &Row{
-							record: myQueryRow + "\n",
-						}
-						myRow <- rowStruct
-					}
-				} else {
-					// This code does aggregation if we were provided column names in the
-					// form of acutal names rather an indices.
-					if len(functionNames) > 0 && functionNames[0] != "" {
-						functionFlag = true
-						aggregationFunctions(counter, filtrCount, myAggVals, reqColNames, functionNames, string(out))
-					} else {
-						// This code prints the appropriate part of the row given the filter
-						// and select request, if the select request was based on column
-						// names rather than indices.
-						myQueryRow, myErr := processColNameLiteral(string(out), reqColNames, myFunc, f)
-						if myErr != nil {
-							rowStruct := &Row{
-								err: myErr,
-							}
-							myRow <- rowStruct
-							return
-						}
-						rowStruct := &Row{
-							record: myQueryRow + "\n",
-						}
-						myRow <- rowStruct
-					}
-				}
-			}
-			filtrCount++
-		}
-		counter++
-	}
-}
-
-// processColumnNames is a function which allows for cleaning of column names.
-func processColumnNames(reqColNames []string, alias string, f format.Select) error {
-	switch f.Type() {
-	case format.CSV:
-		for i := 0; i < len(reqColNames); i++ {
-			// The code below basically cleans the column name of its alias and other
-			// syntax, so that we can extract its pure name.
-			reqColNames[i] = cleanCol(reqColNames[i], alias)
-		}
-	case format.JSON:
-		// JSON doesnt have columns so no cleaning required
-	}
-
+	*s3Select = S3Select(parsedS3Select)
 	return nil
 }
 
-// processColNameIndex is the function which creates the row for an index based
-// query.
-func processColNameIndex(record string, reqColNames []string, columns []string, f format.Select) (string, error) {
-	row := make([]string, len(reqColNames))
-	for i := 0; i < len(reqColNames); i++ {
-		// COALESCE AND NULLIF do not support index based access.
-		if reqColNames[0] == "0" {
-			return "", format.ErrInvalidColumnIndex
-		}
-		mytempindex, err := strconv.Atoi(reqColNames[i])
-		if mytempindex > len(columns) {
-			return "", format.ErrInvalidColumnIndex
-		}
+func (s3Select *S3Select) outputRecord() sql.Record {
+	switch s3Select.Output.format {
+	case csvFormat:
+		return csv.NewRecord()
+	case jsonFormat:
+		return json.NewRecord(sql.SelectFmtJSON)
+	}
 
+	panic(fmt.Errorf("unknown output format '%v'", s3Select.Output.format))
+}
+
+func (s3Select *S3Select) getProgress() (bytesScanned, bytesProcessed int64) {
+	if s3Select.progressReader != nil {
+		return s3Select.progressReader.Stats()
+	}
+
+	return -1, -1
+}
+
+// Open - opens S3 object by using callback for SQL selection query.
+// Currently CSV, JSON and Apache Parquet formats are supported.
+func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadCloser, error)) error {
+	switch s3Select.Input.format {
+	case csvFormat:
+		rc, err := getReader(0, -1)
 		if err != nil {
-			return "", ErrMissingHeaders
+			return err
 		}
-		// Subtract 1 because AWS Indexing is not 0 based, it starts at 1 generating the key like "_1".
-		row[i] = jsonValue(string("_"+strconv.Itoa(mytempindex-1)), record)
-	}
-	rowStr := strings.Join(row, f.OutputFieldDelimiter())
-	if len(rowStr) > MaxCharsPerRecord {
-		return "", ErrOverMaxRecordSize
-	}
 
-	return rowStr, nil
-}
-
-// processColNameLiteral is the function which creates the row for an name based
-// query.
-func processColNameLiteral(record string, reqColNames []string, myFunc *SelectFuncs, f format.Select) (string, error) {
-	row := make([]string, len(reqColNames))
-	for i := 0; i < len(reqColNames); i++ {
-		// this is the case to deal with COALESCE.
-		if reqColNames[i] == "" && isValidFunc(myFunc.index, i) {
-			row[i] = evaluateFuncExpr(myFunc.funcExpr[i], "", record)
-			continue
+		s3Select.progressReader, err = newProgressReader(rc, s3Select.Input.CompressionType)
+		if err != nil {
+			rc.Close()
+			return err
 		}
-		row[i] = jsonValue(reqColNames[i], record)
-	}
-	rowStr := strings.Join(row, f.OutputFieldDelimiter())
-	if len(rowStr) > MaxCharsPerRecord {
-		return "", ErrOverMaxRecordSize
-	}
-	return rowStr, nil
-}
 
-// aggregationFunctions is a function which performs the actual aggregation
-// methods on the given row, it uses an array defined in the main parsing
-// function to keep track of values.
-func aggregationFunctions(counter int, filtrCount int, myAggVals []float64, storeReqCols []string, storeFunctions []string, record string) error {
-	for i := 0; i < len(storeFunctions); i++ {
-		if storeFunctions[i] == "" {
-			i++
-		} else if storeFunctions[i] == "count" {
-			myAggVals[i]++
+		s3Select.recordReader, err = csv.NewReader(s3Select.progressReader, &s3Select.Input.CSVArgs)
+		if err != nil {
+			rc.Close()
+			var stErr bzip2.StructuralError
+			if errors.As(err, &stErr) {
+				return errInvalidBZIP2CompressionFormat(err)
+			}
+			return err
+		}
+		return nil
+	case jsonFormat:
+		rc, err := getReader(0, -1)
+		if err != nil {
+			return err
+		}
+
+		s3Select.progressReader, err = newProgressReader(rc, s3Select.Input.CompressionType)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+
+		if strings.EqualFold(s3Select.Input.JSONArgs.ContentType, "lines") {
+			if simdjson.SupportedCPU() {
+				s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			} else {
+				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			}
 		} else {
-			// If column names are provided as an index it'll use this if statement instead of the else/
-			var convAggFloat float64
-			if format.IsInt(storeReqCols[i]) {
-				myIndex, _ := strconv.Atoi(storeReqCols[i])
-				convAggFloat, _ = strconv.ParseFloat(jsonValue(string("_"+strconv.Itoa(myIndex)), record), 64)
-
-			} else {
-				// case that the columns are in the form of named columns rather than indices.
-				convAggFloat, _ = strconv.ParseFloat(jsonValue(storeReqCols[i], record), 64)
-			}
-			// This if statement is for calculating the min.
-			if storeFunctions[i] == "min" {
-				if counter == -1 {
-					myAggVals[i] = math.MaxFloat64
-				}
-				if convAggFloat < myAggVals[i] {
-					myAggVals[i] = convAggFloat
-				}
-
-			} else if storeFunctions[i] == "max" {
-				// This if statement is for calculating the max.
-				if counter == -1 {
-					myAggVals[i] = math.SmallestNonzeroFloat64
-				}
-				if convAggFloat > myAggVals[i] {
-					myAggVals[i] = convAggFloat
-				}
-
-			} else if storeFunctions[i] == "sum" {
-				// This if statement is for calculating the sum.
-				myAggVals[i] += convAggFloat
-
-			} else if storeFunctions[i] == "avg" {
-				// This if statement is for calculating the average.
-				if filtrCount == 0 {
-					myAggVals[i] = convAggFloat
-				} else {
-					myAggVals[i] = (convAggFloat + (myAggVals[i] * float64(filtrCount))) / float64((filtrCount + 1))
-				}
-			} else {
-				return ErrParseNonUnaryAgregateFunctionCall
-			}
+			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 		}
+		return nil
+	case parquetFormat:
+		var err error
+		s3Select.recordReader, err = parquet.NewReader(getReader, &s3Select.Input.ParquetArgs)
+		return err
 	}
-	return nil
+
+	panic(fmt.Errorf("unknown input format '%v'", s3Select.Input.format))
 }
 
-// convertToSlice takes the map[string]interface{} and convert it to []string
-func convertToSlice(columnsMap map[string]int, record map[string]interface{}, marshalledRecord string) []string {
-	var result []string
-	type kv struct {
-		Key   string
-		Value int
+func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
+	switch s3Select.Output.format {
+	case csvFormat:
+		// Use bufio Writer to prevent csv.Writer from allocating a new buffer.
+		bufioWriter := bufioWriterPool.Get().(*bufio.Writer)
+		defer func() {
+			bufioWriter.Reset(ioutil.Discard)
+			bufioWriterPool.Put(bufioWriter)
+		}()
+
+		bufioWriter.Reset(buf)
+		opts := sql.WriteCSVOpts{
+			FieldDelimiter: []rune(s3Select.Output.CSVArgs.FieldDelimiter)[0],
+			Quote:          []rune(s3Select.Output.CSVArgs.QuoteCharacter)[0],
+			QuoteEscape:    []rune(s3Select.Output.CSVArgs.QuoteEscapeCharacter)[0],
+			AlwaysQuote:    strings.ToLower(s3Select.Output.CSVArgs.QuoteFields) == "always",
+		}
+		err := record.WriteCSV(bufioWriter, opts)
+		if err != nil {
+			return err
+		}
+		err = bufioWriter.Flush()
+		if err != nil {
+			return err
+		}
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString(s3Select.Output.CSVArgs.RecordDelimiter)
+
+		return nil
+	case jsonFormat:
+		err := record.WriteJSON(buf)
+		if err != nil {
+			return err
+		}
+		// Trim trailing newline from non-simd output
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
+		buf.WriteString(s3Select.Output.JSONArgs.RecordDelimiter)
+
+		return nil
 	}
-	var ss []kv
-	for k, v := range columnsMap {
-		ss = append(ss, kv{k, v})
+
+	panic(fmt.Errorf("unknown output format '%v'", s3Select.Output.format))
+}
+
+// Evaluate - filters and sends records read from opened reader as per select statement to http response writer.
+func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
+	getProgressFunc := s3Select.getProgress
+	if !s3Select.Progress.Enabled {
+		getProgressFunc = nil
 	}
-	sort.Slice(ss, func(i, j int) bool {
-		return ss[i].Value < ss[j].Value
-	})
-	for _, kv := range ss {
-		if _, ok := record[kv.Key]; ok {
-			result = append(result, jsonValue(kv.Key, marshalledRecord))
+	writer := newMessageWriter(w, getProgressFunc)
+
+	var outputQueue []sql.Record
+
+	// Create queue based on the type.
+	if s3Select.statement.IsAggregated() {
+		outputQueue = make([]sql.Record, 0, 1)
+	} else {
+		outputQueue = make([]sql.Record, 0, 100)
+	}
+	var err error
+	sendRecord := func() bool {
+		buf := bufPool.Get().(*bytes.Buffer)
+		buf.Reset()
+
+		for _, outputRecord := range outputQueue {
+			if outputRecord == nil {
+				continue
+			}
+			before := buf.Len()
+			if err = s3Select.marshal(buf, outputRecord); err != nil {
+				bufPool.Put(buf)
+				return false
+			}
+			if buf.Len()-before > maxRecordSize {
+				writer.FinishWithError("OverMaxRecordSize", "The length of a record in the input or result is greater than maxCharsPerRecord of 1 MB.")
+				bufPool.Put(buf)
+				return false
+			}
+		}
+
+		if err = writer.SendRecord(buf); err != nil {
+			// FIXME: log this error.
+			err = nil
+			bufPool.Put(buf)
+			return false
+		}
+		outputQueue = outputQueue[:0]
+		return true
+	}
+
+	var rec sql.Record
+OuterLoop:
+	for {
+		if s3Select.statement.LimitReached() {
+			if !sendRecord() {
+				break
+			}
+			if err = writer.Finish(s3Select.getProgress()); err != nil {
+				// FIXME: log this error.
+				err = nil
+			}
+			break
+		}
+
+		if rec, err = s3Select.recordReader.Read(rec); err != nil {
+			if err != io.EOF {
+				break
+			}
+
+			if s3Select.statement.IsAggregated() {
+				outputRecord := s3Select.outputRecord()
+				if err = s3Select.statement.AggregateResult(outputRecord); err != nil {
+					break
+				}
+				outputQueue = append(outputQueue, outputRecord)
+			}
+
+			if !sendRecord() {
+				break
+			}
+
+			if err = writer.Finish(s3Select.getProgress()); err != nil {
+				// FIXME: log this error.
+				err = nil
+			}
+			break
+		}
+
+		var inputRecords []*sql.Record
+		if inputRecords, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
+			break
+		}
+
+		for _, inputRecord := range inputRecords {
+			if s3Select.statement.IsAggregated() {
+				if err = s3Select.statement.AggregateRow(*inputRecord); err != nil {
+					break OuterLoop
+				}
+			} else {
+				var outputRecord sql.Record
+				// We will attempt to reuse the records in the table.
+				// The type of these should not change.
+				// The queue should always have at least one entry left for this to work.
+				outputQueue = outputQueue[:len(outputQueue)+1]
+				if t := outputQueue[len(outputQueue)-1]; t != nil {
+					// If the output record is already set, we reuse it.
+					outputRecord = t
+					outputRecord.Reset()
+				} else {
+					// Create new one
+					outputRecord = s3Select.outputRecord()
+					outputQueue[len(outputQueue)-1] = outputRecord
+				}
+				outputRecord, err = s3Select.statement.Eval(*inputRecord, outputRecord)
+				if outputRecord == nil || err != nil {
+					// This should not be written.
+					// Remove it from the queue.
+					outputQueue = outputQueue[:len(outputQueue)-1]
+					if err != nil {
+						break OuterLoop
+					}
+					continue
+				}
+
+				outputQueue[len(outputQueue)-1] = outputRecord
+				if len(outputQueue) < cap(outputQueue) {
+					continue
+				}
+
+				if !sendRecord() {
+					break OuterLoop
+				}
+			}
 		}
 	}
-	return result
+
+	if err != nil {
+		_ = writer.FinishWithError("InternalError", err.Error())
+	}
+}
+
+// Close - closes opened S3 object.
+func (s3Select *S3Select) Close() error {
+	return s3Select.recordReader.Close()
+}
+
+// NewS3Select - creates new S3Select by given request XML reader.
+func NewS3Select(r io.Reader) (*S3Select, error) {
+	s3Select := &S3Select{}
+	if err := xml.NewDecoder(r).Decode(s3Select); err != nil {
+		return nil, err
+	}
+
+	return s3Select, nil
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func TestHTTPRequestRangeSpec(t *testing.T) {
 		"bytes=-1-10",
 		"bytes=0-+3",
 		"bytes=+3-+5",
-		"bytes=10-11,12-10", // Unsupported by S3/Minio (valid in RFC)
+		"bytes=10-11,12-10", // Unsupported by S3/MinIO (valid in RFC)
 	}
 	for i, urs := range unparsableRangeSpecs {
 		rs, err := parseRequestRangeSpec(urs)

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ func TestCertNew(t *testing.T) {
 	if !reflect.DeepEqual(gcert.Certificate, expectedCert.Certificate) {
 		t.Error("certificate doesn't match expected certificate")
 	}
-	c, err = certs.New("server.crt", "server2.key", tls.LoadX509KeyPair)
+	_, err = certs.New("server.crt", "server2.key", tls.LoadX509KeyPair)
 	if err == nil {
 		t.Fatal("Expected to fail but got success")
 	}

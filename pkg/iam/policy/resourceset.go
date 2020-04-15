@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v6/pkg/set"
 )
 
 // ResourceSet - set of resources in policy statement.
@@ -54,6 +54,24 @@ func (resourceSet ResourceSet) Add(resource Resource) {
 	resourceSet[resource] = struct{}{}
 }
 
+// Equals - checks whether given resource set is equal to current resource set or not.
+func (resourceSet ResourceSet) Equals(sresourceSet ResourceSet) bool {
+	// If length of set is not equal to length of given set, the
+	// set is not equal to given set.
+	if len(resourceSet) != len(sresourceSet) {
+		return false
+	}
+
+	// As both sets are equal in length, check each elements are equal.
+	for k := range resourceSet {
+		if _, ok := sresourceSet[k]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Intersection - returns resources available in both ResourceSet.
 func (resourceSet ResourceSet) Intersection(sset ResourceSet) ResourceSet {
 	nset := NewResourceSet()
@@ -69,7 +87,7 @@ func (resourceSet ResourceSet) Intersection(sset ResourceSet) ResourceSet {
 // MarshalJSON - encodes ResourceSet to JSON data.
 func (resourceSet ResourceSet) MarshalJSON() ([]byte, error) {
 	if len(resourceSet) == 0 {
-		return nil, fmt.Errorf("empty resource set")
+		return nil, Errorf("empty resource set")
 	}
 
 	resources := []Resource{}
@@ -81,9 +99,9 @@ func (resourceSet ResourceSet) MarshalJSON() ([]byte, error) {
 }
 
 // Match - matches object name with anyone of resource pattern in resource set.
-func (resourceSet ResourceSet) Match(resource string) bool {
+func (resourceSet ResourceSet) Match(resource string, conditionValues map[string][]string) bool {
 	for r := range resourceSet {
-		if r.Match(resource) {
+		if r.Match(resource, conditionValues) {
 			return true
 		}
 	}
@@ -116,7 +134,7 @@ func (resourceSet *ResourceSet) UnmarshalJSON(data []byte) error {
 		}
 
 		if _, found := (*resourceSet)[resource]; found {
-			return fmt.Errorf("duplicate resource '%v' found", s)
+			return Errorf("duplicate resource '%v' found", s)
 		}
 
 		resourceSet.Add(resource)

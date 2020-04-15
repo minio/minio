@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017, 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,24 +20,28 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 )
 
 const (
-	// Minimum length for Minio access key.
+	// Minimum length for MinIO access key.
 	accessKeyMinLen = 3
 
-	// Maximum length for Minio access key.
+	// Maximum length for MinIO access key.
 	// There is no max length enforcement for access keys
 	accessKeyMaxLen = 20
 
-	// Minimum length for Minio secret key for both server and gateway mode.
+	// Minimum length for MinIO secret key for both server and gateway mode.
 	secretKeyMinLen = 8
 
-	// Maximum secret key length for Minio, this
+	// Maximum secret key length for MinIO, this
 	// is used when autogenerating new credentials.
 	// There is no max length enforcement for secret keys
 	secretKeyMaxLen = 40
@@ -60,10 +64,24 @@ func IsAccessKeyValid(accessKey string) bool {
 	return len(accessKey) >= accessKeyMinLen
 }
 
-// isSecretKeyValid - validate secret key for right length.
-func isSecretKeyValid(secretKey string) bool {
+// IsSecretKeyValid - validate secret key for right length.
+func IsSecretKeyValid(secretKey string) bool {
 	return len(secretKey) >= secretKeyMinLen
 }
+
+// Default access and secret keys.
+const (
+	DefaultAccessKey = "minioadmin"
+	DefaultSecretKey = "minioadmin"
+)
+
+// Default access credentials
+var (
+	DefaultCredentials = Credentials{
+		AccessKey: DefaultAccessKey,
+		SecretKey: DefaultSecretKey,
+	}
+)
 
 // Credentials holds access and secret keys.
 type Credentials struct {
@@ -72,24 +90,51 @@ type Credentials struct {
 	Expiration   time.Time `xml:"Expiration" json:"expiration,omitempty"`
 	SessionToken string    `xml:"SessionToken" json:"sessionToken,omitempty"`
 	Status       string    `xml:"-" json:"status,omitempty"`
+	ParentUser   string    `xml:"-" json:"parentUser,omitempty"`
+}
+
+func (cred Credentials) String() string {
+	var s strings.Builder
+	s.WriteString(cred.AccessKey)
+	s.WriteString(":")
+	s.WriteString(cred.SecretKey)
+	if cred.SessionToken != "" {
+		s.WriteString("\n")
+		s.WriteString(cred.SessionToken)
+	}
+	if !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel) {
+		s.WriteString("\n")
+		s.WriteString(cred.Expiration.String())
+	}
+	return s.String()
 }
 
 // IsExpired - returns whether Credential is expired or not.
 func (cred Credentials) IsExpired() bool {
-	if cred.Expiration.IsZero() || cred.Expiration == timeSentinel {
+	if cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel) {
 		return false
 	}
 
 	return cred.Expiration.Before(time.Now().UTC())
 }
 
+// IsTemp - returns whether credential is temporary or not.
+func (cred Credentials) IsTemp() bool {
+	return cred.SessionToken != "" && cred.ParentUser == "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
+}
+
+// IsServiceAccount - returns whether credential is a service account or not
+func (cred Credentials) IsServiceAccount() bool {
+	return cred.ParentUser != "" && (cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel))
+}
+
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
 	// Verify credentials if its enabled or not set.
-	if cred.Status == "enabled" || cred.Status == "" {
-		return IsAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
+	if cred.Status == "off" {
+		return false
 	}
-	return false
+	return IsAccessKeyValid(cred.AccessKey) && IsSecretKeyValid(cred.SecretKey) && !cred.IsExpired()
 }
 
 // Equal - returns whether two credentials are equal or not.
@@ -102,6 +147,39 @@ func (cred Credentials) Equal(ccred Credentials) bool {
 }
 
 var timeSentinel = time.Unix(0, 0).UTC()
+
+// ErrInvalidDuration invalid token expiry
+var ErrInvalidDuration = errors.New("invalid token expiry")
+
+// ExpToInt64 - convert input interface value to int64.
+func ExpToInt64(expI interface{}) (expAt int64, err error) {
+	switch exp := expI.(type) {
+	case string:
+		expAt, err = strconv.ParseInt(exp, 10, 64)
+	case float64:
+		expAt, err = int64(exp), nil
+	case int64:
+		expAt, err = exp, nil
+	case int:
+		expAt, err = int64(exp), nil
+	case uint64:
+		expAt, err = int64(exp), nil
+	case uint:
+		expAt, err = int64(exp), nil
+	case json.Number:
+		expAt, err = exp.Int64()
+	case time.Duration:
+		expAt, err = time.Now().UTC().Add(exp).Unix(), nil
+	case nil:
+		expAt, err = 0, nil
+	default:
+		expAt, err = 0, ErrInvalidDuration
+	}
+	if expAt < 0 {
+		return 0, ErrInvalidDuration
+	}
+	return expAt, err
+}
 
 // GetNewCredentialsWithMetadata generates and returns new credential with expiry.
 func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
@@ -131,19 +209,24 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 	if err != nil {
 		return cred, err
 	}
-	cred.SecretKey = string([]byte(base64.URLEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
-	cred.Status = "enabled"
+	cred.SecretKey = strings.Replace(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
+		"/", "+", -1)
+	cred.Status = "on"
 
-	expiry, ok := m["exp"].(float64)
-	if !ok {
+	if tokenSecret == "" {
 		cred.Expiration = timeSentinel
 		return cred, nil
+	}
+
+	expiry, err := ExpToInt64(m["exp"])
+	if err != nil {
+		return cred, err
 	}
 
 	m["accessKey"] = cred.AccessKey
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
 
-	cred.Expiration = time.Unix(int64(expiry), 0)
+	cred.Expiration = time.Unix(expiry, 0).UTC()
 	cred.SessionToken, err = jwt.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return cred, err
@@ -163,12 +246,12 @@ func CreateCredentials(accessKey, secretKey string) (cred Credentials, err error
 	if !IsAccessKeyValid(accessKey) {
 		return cred, ErrInvalidAccessKeyLength
 	}
-	if !isSecretKeyValid(secretKey) {
+	if !IsSecretKeyValid(secretKey) {
 		return cred, ErrInvalidSecretKeyLength
 	}
 	cred.AccessKey = accessKey
 	cred.SecretKey = secretKey
 	cred.Expiration = timeSentinel
-	cred.Status = "enabled"
+	cred.Status = "on"
 	return cred, nil
 }

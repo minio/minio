@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData, ObjectOptions{})
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), ObjectOptions{UserDefined: input.metaData})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -220,7 +220,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData, ObjectOptions{})
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), ObjectOptions{UserDefined: input.metaData})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -259,7 +259,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 
 	for i, testCase := range testCases {
 		for _, d := range disks {
-			err = os.Chmod(d+"/"+testCase.bucketName+"/"+testCase.chmodPath, 0)
+			err = os.Chmod(d+SlashSeparator+testCase.bucketName+SlashSeparator+testCase.chmodPath, 0)
 			if err != nil {
 				t.Fatalf("Test %d, Unable to chmod: %v", i+1, err)
 			}
@@ -333,7 +333,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetHashReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData, ObjectOptions{})
+		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), ObjectOptions{UserDefined: input.metaData})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)

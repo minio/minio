@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,23 @@ import history from "../history"
 import {
   sortObjectsByName,
   sortObjectsBySize,
-  sortObjectsByDate
+  sortObjectsByDate,
 } from "../utils"
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix, getCheckedList } from "./selectors"
 import * as alertActions from "../alert/actions"
 import * as bucketActions from "../buckets/actions"
-import { minioBrowserPrefix } from "../constants"
+import {
+  minioBrowserPrefix,
+  SORT_BY_NAME,
+  SORT_BY_SIZE,
+  SORT_BY_LAST_MODIFIED,
+  SORT_ORDER_ASC,
+  SORT_ORDER_DESC,
+} from "../constants"
 
 export const SET_LIST = "objects/SET_LIST"
-export const RESET_LIST = "object/RESET_LIST"
+export const RESET_LIST = "objects/RESET_LIST"
 export const APPEND_LIST = "objects/APPEND_LIST"
 export const REMOVE = "objects/REMOVE"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
@@ -39,112 +46,121 @@ export const SET_SHARE_OBJECT = "objects/SET_SHARE_OBJECT"
 export const CHECKED_LIST_ADD = "objects/CHECKED_LIST_ADD"
 export const CHECKED_LIST_REMOVE = "objects/CHECKED_LIST_REMOVE"
 export const CHECKED_LIST_RESET = "objects/CHECKED_LIST_RESET"
+export const SET_LIST_LOADING = "objects/SET_LIST_LOADING"
 
-export const setList = (objects, marker, isTruncated) => ({
+export const setList = (objects) => ({
   type: SET_LIST,
   objects,
-  marker,
-  isTruncated
 })
 
 export const resetList = () => ({
-  type: RESET_LIST
+  type: RESET_LIST,
 })
 
-export const appendList = (objects, marker, isTruncated) => ({
-  type: APPEND_LIST,
-  objects,
-  marker,
-  isTruncated
+export const setListLoading = (listLoading) => ({
+  type: SET_LIST_LOADING,
+  listLoading,
 })
 
-export const fetchObjects = append => {
-  return function(dispatch, getState) {
+export const fetchObjects = () => {
+  return function (dispatch, getState) {
+    dispatch(resetList())
     const {
       buckets: { currentBucket },
-      objects: { currentPrefix, marker }
+      objects: { currentPrefix },
     } = getState()
     if (currentBucket) {
+      dispatch(setListLoading(true))
       return web
         .ListObjects({
           bucketName: currentBucket,
           prefix: currentPrefix,
-          marker: append ? marker : ""
         })
-        .then(res => {
-          let objects = []
-          if (res.objects) {
-            objects = res.objects.map(object => {
-              return {
-                ...object,
-                name: object.name.replace(currentPrefix, "")
-              }
-            })
+        .then((res) => {
+          // we need to check if the bucket name and prefix are the same as
+          // when the request was made before updating the displayed objects
+          if (
+            currentBucket === getCurrentBucket(getState()) &&
+            currentPrefix === getCurrentPrefix(getState())
+          ) {
+            let objects = []
+            if (res.objects) {
+              objects = res.objects.map((object) => {
+                return {
+                  ...object,
+                  name: object.name.replace(currentPrefix, ""),
+                }
+              })
+            }
+
+            const sortBy = SORT_BY_LAST_MODIFIED
+            const sortOrder = SORT_ORDER_DESC
+            dispatch(setSortBy(sortBy))
+            dispatch(setSortOrder(sortOrder))
+            const sortedList = sortObjectsList(objects, sortBy, sortOrder)
+            dispatch(setList(sortedList))
+
+            dispatch(setPrefixWritable(res.writable))
+            dispatch(setListLoading(false))
           }
-          if (append) {
-            dispatch(appendList(objects, res.nextmarker, res.istruncated))
-          } else {
-            dispatch(setList(objects, res.nextmarker, res.istruncated))
-            dispatch(setSortBy(""))
-            dispatch(setSortOrder(false))
-          }
-          dispatch(setPrefixWritable(res.writable))
         })
-        .catch(err => {
+        .catch((err) => {
           if (web.LoggedIn()) {
             dispatch(
               alertActions.set({
                 type: "danger",
                 message: err.message,
-                autoClear: true
+                autoClear: true,
               })
             )
             dispatch(resetList())
           } else {
             history.push("/login")
           }
+          dispatch(setListLoading(false))
         })
     }
   }
 }
 
-export const sortObjects = sortBy => {
-  return function(dispatch, getState) {
+export const sortObjects = (sortBy) => {
+  return function (dispatch, getState) {
     const { objects } = getState()
-    const sortOrder = objects.sortBy == sortBy ? !objects.sortOrder : true
+    let sortOrder = SORT_ORDER_ASC
+    // Reverse sort order if the list is already sorted on same field
+    if (objects.sortBy === sortBy && objects.sortOrder === SORT_ORDER_ASC) {
+      sortOrder = SORT_ORDER_DESC
+    }
     dispatch(setSortBy(sortBy))
     dispatch(setSortOrder(sortOrder))
-    let list
-    switch (sortBy) {
-      case "name":
-        list = sortObjectsByName(objects.list, sortOrder)
-        break
-      case "size":
-        list = sortObjectsBySize(objects.list, sortOrder)
-        break
-      case "last-modified":
-        list = sortObjectsByDate(objects.list, sortOrder)
-        break
-      default:
-        list = objects.list
-        break
-    }
-    dispatch(setList(list, objects.marker, objects.isTruncated))
+    const sortedList = sortObjectsList(objects.list, sortBy, sortOrder)
+    dispatch(setList(sortedList))
   }
 }
 
-export const setSortBy = sortBy => ({
+const sortObjectsList = (list, sortBy, sortOrder) => {
+  switch (sortBy) {
+    case SORT_BY_NAME:
+      return sortObjectsByName(list, sortOrder)
+    case SORT_BY_SIZE:
+      return sortObjectsBySize(list, sortOrder)
+    case SORT_BY_LAST_MODIFIED:
+      return sortObjectsByDate(list, sortOrder)
+  }
+}
+
+export const setSortBy = (sortBy) => ({
   type: SET_SORT_BY,
-  sortBy
+  sortBy,
 })
 
-export const setSortOrder = sortOrder => ({
+export const setSortOrder = (sortOrder) => ({
   type: SET_SORT_ORDER,
-  sortOrder
+  sortOrder,
 })
 
-export const selectPrefix = prefix => {
-  return function(dispatch, getState) {
+export const selectPrefix = (prefix) => {
+  return function (dispatch, getState) {
     dispatch(setCurrentPrefix(prefix))
     dispatch(fetchObjects())
     dispatch(resetCheckedList())
@@ -153,49 +169,49 @@ export const selectPrefix = prefix => {
   }
 }
 
-export const setCurrentPrefix = prefix => {
+export const setCurrentPrefix = (prefix) => {
   return {
     type: SET_CURRENT_PREFIX,
-    prefix
+    prefix,
   }
 }
 
-export const setPrefixWritable = prefixWritable => ({
+export const setPrefixWritable = (prefixWritable) => ({
   type: SET_PREFIX_WRITABLE,
-  prefixWritable
+  prefixWritable,
 })
 
-export const deleteObject = object => {
-  return function(dispatch, getState) {
+export const deleteObject = (object) => {
+  return function (dispatch, getState) {
     const currentBucket = getCurrentBucket(getState())
     const currentPrefix = getCurrentPrefix(getState())
     const objectName = `${currentPrefix}${object}`
     return web
       .RemoveObject({
         bucketName: currentBucket,
-        objects: [objectName]
+        objects: [objectName],
       })
       .then(() => {
         dispatch(removeObject(object))
       })
-      .catch(e => {
+      .catch((e) => {
         dispatch(
           alertActions.set({
             type: "danger",
-            message: e.message
+            message: e.message,
           })
         )
       })
   }
 }
 
-export const removeObject = object => ({
+export const removeObject = (object) => ({
   type: REMOVE,
-  object
+  object,
 })
 
 export const deleteCheckedObjects = () => {
-  return function(dispatch, getState) {
+  return function (dispatch, getState) {
     const checkedObjects = getCheckedList(getState())
     for (let i = 0; i < checkedObjects.length; i++) {
       dispatch(deleteObject(checkedObjects[i]))
@@ -205,35 +221,54 @@ export const deleteCheckedObjects = () => {
 }
 
 export const shareObject = (object, days, hours, minutes) => {
-  return function(dispatch, getState) {
+  return function (dispatch, getState) {
     const currentBucket = getCurrentBucket(getState())
     const currentPrefix = getCurrentPrefix(getState())
     const objectName = `${currentPrefix}${object}`
     const expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
-    return web
-      .PresignedGet({
-        host: location.host,
-        bucket: currentBucket,
-        object: objectName,
-        expiry
-      })
-      .then(obj => {
-        dispatch(showShareObject(object, obj.url))
-        dispatch(
-          alertActions.set({
-            type: "success",
-            message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`
-          })
+    if (web.LoggedIn()) {
+      return web
+        .PresignedGet({
+          host: location.host,
+          bucket: currentBucket,
+          object: objectName,
+          expiry: expiry,
+        })
+        .then((obj) => {
+          dispatch(showShareObject(object, obj.url))
+          dispatch(
+            alertActions.set({
+              type: "success",
+              message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes`,
+            })
+          )
+        })
+        .catch((err) => {
+          dispatch(
+            alertActions.set({
+              type: "danger",
+              message: err.message,
+            })
+          )
+        })
+    } else {
+      dispatch(
+        showShareObject(
+          object,
+          `${location.host}` +
+            "/" +
+            `${currentBucket}` +
+            "/" +
+            encodeURI(objectName)
         )
-      })
-      .catch(err => {
-        dispatch(
-          alertActions.set({
-            type: "danger",
-            message: err.message
-          })
-        )
-      })
+      )
+      dispatch(
+        alertActions.set({
+          type: "success",
+          message: `Object shared.`,
+        })
+      )
+    }
   }
 }
 
@@ -241,18 +276,17 @@ export const showShareObject = (object, url) => ({
   type: SET_SHARE_OBJECT,
   show: true,
   object,
-  url
+  url,
 })
 
 export const hideShareObject = (object, url) => ({
   type: SET_SHARE_OBJECT,
   show: false,
   object: "",
-  url: ""
+  url: "",
 })
-
-export const downloadObject = object => {
-  return function(dispatch, getState) {
+export const getObjectURL = (object, callback) => {
+  return function (dispatch, getState) {
     const currentBucket = getCurrentBucket(getState())
     const currentPrefix = getCurrentPrefix(getState())
     const objectName = `${currentPrefix}${object}`
@@ -260,70 +294,89 @@ export const downloadObject = object => {
     if (web.LoggedIn()) {
       return web
         .CreateURLToken()
-        .then(res => {
-          const url = `${
-            window.location.origin
-          }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=${
-            res.token
-          }`
-          window.location = url
+        .then((res) => {
+          const url = `${window.location.origin}${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=${res.token}`
+          callback(url)
         })
-        .catch(err => {
+        .catch((err) => {
           dispatch(
             alertActions.set({
               type: "danger",
-              message: err.message
+              message: err.message,
             })
           )
         })
     } else {
-      const url = `${
-        window.location.origin
-      }${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=''`
+      const url = `${window.location.origin}${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=`
+      callback(url)
+    }
+  }
+}
+export const downloadObject = (object) => {
+  return function (dispatch, getState) {
+    const currentBucket = getCurrentBucket(getState())
+    const currentPrefix = getCurrentPrefix(getState())
+    const objectName = `${currentPrefix}${object}`
+    const encObjectName = encodeURI(objectName)
+    if (web.LoggedIn()) {
+      return web
+        .CreateURLToken()
+        .then((res) => {
+          const url = `${window.location.origin}${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=${res.token}`
+          window.location = url
+        })
+        .catch((err) => {
+          dispatch(
+            alertActions.set({
+              type: "danger",
+              message: err.message,
+            })
+          )
+        })
+    } else {
+      const url = `${window.location.origin}${minioBrowserPrefix}/download/${currentBucket}/${encObjectName}?token=`
       window.location = url
     }
   }
 }
 
-export const checkObject = object => ({
+export const checkObject = (object) => ({
   type: CHECKED_LIST_ADD,
-  object
+  object,
 })
 
-export const uncheckObject = object => ({
+export const uncheckObject = (object) => ({
   type: CHECKED_LIST_REMOVE,
-  object
+  object,
 })
 
 export const resetCheckedList = () => ({
-  type: CHECKED_LIST_RESET
+  type: CHECKED_LIST_RESET,
 })
 
 export const downloadCheckedObjects = () => {
-  return function(dispatch, getState) {
+  return function (dispatch, getState) {
     const state = getState()
     const req = {
       bucketName: getCurrentBucket(state),
       prefix: getCurrentPrefix(state),
-      objects: getCheckedList(state)
+      objects: getCheckedList(state),
     }
     if (!web.LoggedIn()) {
-      const requestUrl = location.origin + "/minio/zip?token=''"
+      const requestUrl = location.origin + "/minio/zip?token="
       downloadZip(requestUrl, req, dispatch)
     } else {
       return web
         .CreateURLToken()
-        .then(res => {
-          const requestUrl = `${
-            location.origin
-          }${minioBrowserPrefix}/zip?token=${res.token}`
+        .then((res) => {
+          const requestUrl = `${location.origin}${minioBrowserPrefix}/zip?token=${res.token}`
           downloadZip(requestUrl, req, dispatch)
         })
-        .catch(err =>
+        .catch((err) =>
           dispatch(
             alertActions.set({
               type: "danger",
-              message: err.message
+              message: err.message,
             })
           )
         )
@@ -339,11 +392,11 @@ const downloadZip = (url, req, dispatch) => {
   xhr.open("POST", url, true)
   xhr.responseType = "blob"
 
-  xhr.onload = function(e) {
+  xhr.onload = function (e) {
     if (this.status == 200) {
       dispatch(resetCheckedList())
       var blob = new Blob([this.response], {
-        type: "octet/stream"
+        type: "octet/stream",
       })
       var blobUrl = window.URL.createObjectURL(blob)
       var separator = req.prefix.length > 1 ? "-" : ""

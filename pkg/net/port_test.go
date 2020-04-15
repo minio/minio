@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,10 +49,11 @@ func TestParsePort(t *testing.T) {
 		{"0", Port(0), false},
 		{"9000", Port(9000), false},
 		{"65535", Port(65535), false},
+		{"http", Port(80), false},
+		{"https", Port(443), false},
 		{"90000", Port(0), true},
 		{"-10", Port(0), true},
 		{"", Port(0), true},
-		{"http", Port(0), true},
 		{" 1024", Port(0), true},
 	}
 

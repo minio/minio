@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { getVisibleBuckets, getCurrentBucket } from "../selectors"
+import { getFilteredBuckets, getCurrentBucket } from "../selectors"
 
-describe("getVisibleBuckets", () => {
+describe("getFilteredBuckets", () => {
   let state
   beforeEach(() => {
     state = {
@@ -28,11 +28,11 @@ describe("getVisibleBuckets", () => {
 
   it("should return all buckets if no filter specified", () => {
     state.buckets.filter = ""
-    expect(getVisibleBuckets(state)).toEqual(["test1", "test11", "test2"])
+    expect(getFilteredBuckets(state)).toEqual(["test1", "test11", "test2"])
   })
 
   it("should return all matching buckets if filter is specified", () => {
     state.buckets.filter = "test1"
-    expect(getVisibleBuckets(state)).toEqual(["test1", "test11"])
+    expect(getFilteredBuckets(state)).toEqual(["test1", "test11"])
   })
 })

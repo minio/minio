@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,26 +108,4 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 
 	// Success.
 	return totalWritten, nil
-}
-
-// Returns shard-file size.
-func getErasureShardFileSize(blockSize int64, totalLength int64, dataBlocks int) int64 {
-	shardSize := ceilFrac(int64(blockSize), int64(dataBlocks))
-	numShards := totalLength / int64(blockSize)
-	lastBlockSize := totalLength % int64(blockSize)
-	lastShardSize := ceilFrac(lastBlockSize, int64(dataBlocks))
-	return shardSize*numShards + lastShardSize
-}
-
-// Returns the endOffset till which bitrotReader should read data using disk.ReadFile()
-// partOffset, partLength and partSize are values of the object's part file.
-func getErasureShardFileEndOffset(partOffset int64, partLength int64, partSize int64, erasureBlockSize int64, dataBlocks int) int64 {
-	shardSize := ceilFrac(erasureBlockSize, int64(dataBlocks))
-	shardFileSize := getErasureShardFileSize(erasureBlockSize, partSize, dataBlocks)
-	endShard := (partOffset + int64(partLength)) / erasureBlockSize
-	endOffset := endShard*shardSize + shardSize
-	if endOffset > shardFileSize {
-		endOffset = shardFileSize
-	}
-	return endOffset
 }

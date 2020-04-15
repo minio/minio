@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,13 @@
 package target
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/minio/minio/pkg/event"
@@ -41,7 +45,48 @@ type AMQPArgs struct {
 	Internal     bool     `json:"internal"`
 	NoWait       bool     `json:"noWait"`
 	AutoDeleted  bool     `json:"autoDeleted"`
+	QueueDir     string   `json:"queueDir"`
+	QueueLimit   uint64   `json:"queueLimit"`
 }
+
+//lint:file-ignore ST1003 We cannot change these exported names.
+
+// AMQP input constants.
+const (
+	AmqpQueueDir   = "queue_dir"
+	AmqpQueueLimit = "queue_limit"
+
+	AmqpURL               = "url"
+	AmqpExchange          = "exchange"
+	AmqpRoutingKey        = "routing_key"
+	AmqpExchangeType      = "exchange_type"
+	AmqpDeliveryMode      = "delivery_mode"
+	AmqpMandatory         = "mandatory"
+	AmqpImmediate         = "immediate"
+	AmqpDurable           = "durable"
+	AmqpInternal          = "internal"
+	AmqpNoWait            = "no_wait"
+	AmqpAutoDeleted       = "auto_deleted"
+	AmqpArguments         = "arguments"
+	AmqpPublishingHeaders = "publishing_headers"
+
+	EnvAMQPEnable            = "MINIO_NOTIFY_AMQP_ENABLE"
+	EnvAMQPURL               = "MINIO_NOTIFY_AMQP_URL"
+	EnvAMQPExchange          = "MINIO_NOTIFY_AMQP_EXCHANGE"
+	EnvAMQPRoutingKey        = "MINIO_NOTIFY_AMQP_ROUTING_KEY"
+	EnvAMQPExchangeType      = "MINIO_NOTIFY_AMQP_EXCHANGE_TYPE"
+	EnvAMQPDeliveryMode      = "MINIO_NOTIFY_AMQP_DELIVERY_MODE"
+	EnvAMQPMandatory         = "MINIO_NOTIFY_AMQP_MANDATORY"
+	EnvAMQPImmediate         = "MINIO_NOTIFY_AMQP_IMMEDIATE"
+	EnvAMQPDurable           = "MINIO_NOTIFY_AMQP_DURABLE"
+	EnvAMQPInternal          = "MINIO_NOTIFY_AMQP_INTERNAL"
+	EnvAMQPNoWait            = "MINIO_NOTIFY_AMQP_NO_WAIT"
+	EnvAMQPAutoDeleted       = "MINIO_NOTIFY_AMQP_AUTO_DELETED"
+	EnvAMQPArguments         = "MINIO_NOTIFY_AMQP_ARGUMENTS"
+	EnvAMQPPublishingHeaders = "MINIO_NOTIFY_AMQP_PUBLISHING_HEADERS"
+	EnvAMQPQueueDir          = "MINIO_NOTIFY_AMQP_QUEUE_DIR"
+	EnvAMQPQueueLimit        = "MINIO_NOTIFY_AMQP_QUEUE_LIMIT"
+)
 
 // Validate AMQP arguments
 func (a *AMQPArgs) Validate() error {
@@ -51,15 +96,26 @@ func (a *AMQPArgs) Validate() error {
 	if _, err := amqp.ParseURI(a.URL.String()); err != nil {
 		return err
 	}
+	if a.QueueDir != "" {
+		if !filepath.IsAbs(a.QueueDir) {
+			return errors.New("queueDir path should be absolute")
+		}
+	}
+	if a.QueueLimit > 10000 {
+		return errors.New("queueLimit should not exceed 10000")
+	}
+
 	return nil
 }
 
 // AMQPTarget - AMQP target
 type AMQPTarget struct {
-	id        event.TargetID
-	args      AMQPArgs
-	conn      *amqp.Connection
-	connMutex sync.Mutex
+	id         event.TargetID
+	args       AMQPArgs
+	conn       *amqp.Connection
+	connMutex  sync.Mutex
+	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns TargetID.
@@ -67,7 +123,23 @@ func (target *AMQPTarget) ID() event.TargetID {
 	return target.id
 }
 
+// IsActive - Return true if target is up and active
+func (target *AMQPTarget) IsActive() (bool, error) {
+	ch, err := target.channel()
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		ch.Close()
+	}()
+	return true, nil
+}
+
 func (target *AMQPTarget) channel() (*amqp.Channel, error) {
+	var err error
+	var conn *amqp.Connection
+	var ch *amqp.Channel
+
 	isAMQPClosedErr := func(err error) bool {
 		if err == amqp.ErrClosed {
 			return true
@@ -83,21 +155,27 @@ func (target *AMQPTarget) channel() (*amqp.Channel, error) {
 	target.connMutex.Lock()
 	defer target.connMutex.Unlock()
 
-	ch, err := target.conn.Channel()
-	if err == nil {
-		return ch, nil
+	if target.conn != nil {
+		ch, err = target.conn.Channel()
+		if err == nil {
+			return ch, nil
+		}
+
+		if !isAMQPClosedErr(err) {
+			return nil, err
+		}
 	}
 
-	if !isAMQPClosedErr(err) {
+	conn, err = amqp.Dial(target.args.URL.String())
+	if err != nil {
+		if IsConnRefusedErr(err) {
+			return nil, errNotConnected
+		}
 		return nil, err
 	}
 
-	var conn *amqp.Connection
-	if conn, err = amqp.Dial(target.args.URL.String()); err != nil {
-		return nil, err
-	}
-
-	if ch, err = conn.Channel(); err != nil {
+	ch, err = conn.Channel()
+	if err != nil {
 		return nil, err
 	}
 
@@ -106,24 +184,15 @@ func (target *AMQPTarget) channel() (*amqp.Channel, error) {
 	return ch, nil
 }
 
-// Send - sends event to AMQP.
-func (target *AMQPTarget) Send(eventData event.Event) error {
-	ch, err := target.channel()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		// FIXME: log returned error. ignore time being.
-		_ = ch.Close()
-	}()
-
+// send - sends an event to the AMQP.
+func (target *AMQPTarget) send(eventData event.Event, ch *amqp.Channel) error {
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
 	}
 	key := eventData.S3.Bucket.Name + "/" + objectName
 
-	data, err := json.Marshal(event.Log{eventData.EventName, key, []event.Event{eventData}})
+	data, err := json.Marshal(event.Log{EventName: eventData.EventName, Key: key, Records: []event.Event{eventData}})
 	if err != nil {
 		return err
 	}
@@ -133,29 +202,111 @@ func (target *AMQPTarget) Send(eventData event.Event) error {
 		return err
 	}
 
-	return ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
+	if err := ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
 		target.args.Immediate, amqp.Publishing{
 			ContentType:  "application/json",
 			DeliveryMode: target.args.DeliveryMode,
 			Body:         data,
-		})
+		}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Save - saves the events to the store which will be replayed when the amqp connection is active.
+func (target *AMQPTarget) Save(eventData event.Event) error {
+	if target.store != nil {
+		return target.store.Put(eventData)
+	}
+	ch, err := target.channel()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cErr := ch.Close()
+		target.loggerOnce(context.Background(), cErr, target.ID())
+	}()
+
+	return target.send(eventData, ch)
+}
+
+// Send - sends event to AMQP.
+func (target *AMQPTarget) Send(eventKey string) error {
+	ch, err := target.channel()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cErr := ch.Close()
+		target.loggerOnce(context.Background(), cErr, target.ID())
+	}()
+
+	eventData, eErr := target.store.Get(eventKey)
+	if eErr != nil {
+		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+		// Such events will not exist and wouldve been already been sent successfully.
+		if os.IsNotExist(eErr) {
+			return nil
+		}
+		return eErr
+	}
+
+	if err := target.send(eventData, ch); err != nil {
+		return err
+	}
+
+	// Delete the event from store.
+	return target.store.Del(eventKey)
 }
 
 // Close - does nothing and available for interface compatibility.
 func (target *AMQPTarget) Close() error {
+	if target.conn != nil {
+		return target.conn.Close()
+	}
 	return nil
 }
 
 // NewAMQPTarget - creates new AMQP target.
-func NewAMQPTarget(id string, args AMQPArgs) (*AMQPTarget, error) {
-	conn, err := amqp.Dial(args.URL.String())
-	if err != nil {
-		return nil, err
+func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{}), test bool) (*AMQPTarget, error) {
+	var conn *amqp.Connection
+	var err error
+
+	var store Store
+
+	target := &AMQPTarget{
+		id:         event.TargetID{ID: id, Name: "amqp"},
+		args:       args,
+		loggerOnce: loggerOnce,
 	}
 
-	return &AMQPTarget{
-		id:   event.TargetID{id, "amqp"},
-		args: args,
-		conn: conn,
-	}, nil
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-amqp-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return target, oErr
+		}
+		target.store = store
+	}
+
+	conn, err = amqp.Dial(args.URL.String())
+	if err != nil {
+		if store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
+		}
+	}
+	target.conn = conn
+
+	if target.store != nil && !test {
+		// Replays the events from the store.
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
+
+		// Start replaying events from the store.
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
+	}
+
+	return target, nil
 }

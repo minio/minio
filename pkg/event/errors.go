@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,14 +64,14 @@ func (err ErrInvalidFilterName) Error() string {
 type ErrFilterNamePrefix struct{}
 
 func (err ErrFilterNamePrefix) Error() string {
-	return fmt.Sprintf("more than one prefix in filter rule")
+	return "more than one prefix in filter rule"
 }
 
 // ErrFilterNameSuffix - more than one suffix usage error.
 type ErrFilterNameSuffix struct{}
 
 func (err ErrFilterNameSuffix) Error() string {
-	return fmt.Sprintf("more than one suffix in filter rule")
+	return "more than one suffix in filter rule"
 }
 
 // ErrInvalidFilterValue - invalid filter value error.

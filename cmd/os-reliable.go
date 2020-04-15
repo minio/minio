@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,9 +139,13 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 			// directory" error message. Handle this specifically here.
 			return errFileAccessDenied
 		case isSysErrCrossDevice(err):
-			return fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
+			return fmt.Errorf("%w (%s)->(%s)", errCrossDeviceLink, srcFilePath, dstFilePath)
 		case os.IsNotExist(err):
 			return errFileNotFound
+		case os.IsExist(err):
+			// This is returned only when destination is a directory and we
+			// are attempting a rename from file to directory.
+			return errIsNotRegular
 		default:
 			return err
 		}
@@ -152,11 +156,11 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 // Reliably retries os.RenameAll if for some reason os.RenameAll returns
 // syscall.ENOENT (parent does not exist).
 func reliableRename(srcFilePath, dstFilePath string) (err error) {
+	if err = reliableMkdirAll(path.Dir(dstFilePath), 0777); err != nil {
+		return err
+	}
 	i := 0
 	for {
-		if err = reliableMkdirAll(path.Dir(dstFilePath), 0777); err != nil {
-			return err
-		}
 		// After a successful parent directory create attempt a renameAll.
 		if err = os.Rename(srcFilePath, dstFilePath); err != nil {
 			// Retry only for the first retryable error.

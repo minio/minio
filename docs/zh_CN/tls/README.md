@@ -1,10 +1,10 @@
-# 使用TLS安全的访问Minio服务[![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# 使用TLS安全的访问Minio服务[![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 本文，我们讲介绍如何在Linux和Windows上配置Minio服务使用TLS。
 
 ## 1. 前提条件
 
-* 下载Minio server [这里](https://docs.minio.io/docs/minio-quickstart-guide)
+* 下载Minio server [这里](https://docs.min.io/docs/minio-quickstart-guide)
 
 ## 2. 配置已存在的证书
 
@@ -20,7 +20,7 @@ Minio在Linux只支持使用PEM格式的key/certificate。
 
 #### 使用 Let's Encrypt
 
-更多信息，请访问 [这里](https://docs.minio.io/cn/generate-let-s-encypt-certificate-using-concert-for-minio)
+更多信息，请访问 [这里](https://docs.min.io/cn/generate-let-s-encypt-certificate-using-concert-for-minio)
 
 #### 使用 generate_cert.go (self-signed certificate)
 
@@ -125,5 +125,5 @@ certtool.exe --generate-self-signed --load-privkey private.key --template cert.c
 Minio可以配置成连接其它服务，不管是Minio节点还是像NATs、Redis这些。如果这些服务用的不是在已知证书机构注册的证书，你可以让Minio服务信任这些CA，怎么做呢，将这些证书放到Minio配置路径下(`~/.minio/certs/CAs/` Linux 或者 `C:\Users\<Username>\.minio\certs\CAs` Windows).
 
 # 了解更多
-* [Minio快速入门](https://docs.minio.io/cn/minio-quickstart-guide)
-* [Minio客户端权威指南](https://docs.minio.io/cn/minio-client-complete-guide)
+* [Minio快速入门](https://docs.min.io/cn/minio-quickstart-guide)
+* [Minio客户端权威指南](https://docs.min.io/cn/minio-client-complete-guide)

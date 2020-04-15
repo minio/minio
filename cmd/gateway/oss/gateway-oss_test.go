@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package oss
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -111,12 +110,11 @@ func TestOSSToObjectError(t *testing.T) {
 
 func TestS3MetaToOSSOptions(t *testing.T) {
 	var err error
-	var headers map[string]string
 
-	headers = map[string]string{
+	headers := map[string]string{
 		"x-amz-meta-invalid_meta": "value",
 	}
-	_, err = appendS3MetaToOSSOptions(context.Background(), nil, headers)
+	_, err = appendS3MetaToOSSOptions(minio.GlobalContext, nil, headers)
 	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
@@ -133,7 +131,7 @@ func TestS3MetaToOSSOptions(t *testing.T) {
 		"X-Amz-Meta-X-Amz-Matdesc": "{}",
 		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	opts, err := appendS3MetaToOSSOptions(context.Background(), nil, headers)
+	opts, err := appendS3MetaToOSSOptions(minio.GlobalContext, nil, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}

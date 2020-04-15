@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2018 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 
 var (
 	// Regex to extract ellipses syntax inputs.
-	regexpEllipses = regexp.MustCompile(`(.*)({[0-9]*\.\.\.[0-9]*})(.*)`)
+	regexpEllipses = regexp.MustCompile(`(.*)({[0-9a-z]*\.\.\.[0-9a-z]*})(.*)`)
 
 	// Ellipses constants
 	openBraces  = "{"
@@ -38,10 +38,10 @@ var (
 // `{1...64}`
 // `{33...64}`
 func parseEllipsesRange(pattern string) (seq []string, err error) {
-	if strings.Index(pattern, openBraces) == -1 {
+	if !strings.Contains(pattern, openBraces) {
 		return nil, errors.New("Invalid argument")
 	}
-	if strings.Index(pattern, closeBraces) == -1 {
+	if !strings.Contains(pattern, closeBraces) {
 		return nil, errors.New("Invalid argument")
 	}
 
@@ -53,13 +53,24 @@ func parseEllipsesRange(pattern string) (seq []string, err error) {
 		return nil, errors.New("Invalid argument")
 	}
 
+	var hexadecimal bool
 	var start, end uint64
 	if start, err = strconv.ParseUint(ellipsesRange[0], 10, 64); err != nil {
-		return nil, err
+		// Look for hexadecimal conversions if any.
+		start, err = strconv.ParseUint(ellipsesRange[0], 16, 64)
+		if err != nil {
+			return nil, err
+		}
+		hexadecimal = true
 	}
 
 	if end, err = strconv.ParseUint(ellipsesRange[1], 10, 64); err != nil {
-		return nil, err
+		// Look for hexadecimal conversions if any.
+		end, err = strconv.ParseUint(ellipsesRange[1], 16, 64)
+		if err != nil {
+			return nil, err
+		}
+		hexadecimal = true
 	}
 
 	if start > end {
@@ -68,9 +79,17 @@ func parseEllipsesRange(pattern string) (seq []string, err error) {
 
 	for i := start; i <= end; i++ {
 		if strings.HasPrefix(ellipsesRange[0], "0") && len(ellipsesRange[0]) > 1 || strings.HasPrefix(ellipsesRange[1], "0") {
-			seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dd", len(ellipsesRange[1])), i))
+			if hexadecimal {
+				seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dx", len(ellipsesRange[1])), i))
+			} else {
+				seq = append(seq, fmt.Sprintf(fmt.Sprintf("%%0%dd", len(ellipsesRange[1])), i))
+			}
 		} else {
-			seq = append(seq, fmt.Sprintf("%d", i))
+			if hexadecimal {
+				seq = append(seq, fmt.Sprintf("%x", i))
+			} else {
+				seq = append(seq, fmt.Sprintf("%d", i))
+			}
 		}
 	}
 
@@ -126,7 +145,7 @@ func (p Pattern) Expand() []string {
 		case p.Suffix != "" && p.Prefix == "":
 			labels = append(labels, fmt.Sprintf("%s%s", p.Seq[i], p.Suffix))
 		case p.Suffix == "" && p.Prefix == "":
-			labels = append(labels, fmt.Sprintf("%s", p.Seq[i]))
+			labels = append(labels, p.Seq[i])
 		default:
 			labels = append(labels, fmt.Sprintf("%s%s%s", p.Prefix, p.Seq[i], p.Suffix))
 		}
