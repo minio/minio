@@ -51,7 +51,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	cleanupWg.Add(1)
 	go func() {
 		defer cleanupWg.Done()
-		fs.cleanupStaleMultipartUploads(GlobalContext, time.Millisecond, 0, ctx.Done())
+		fs.cleanupStaleMultipartUploads(ctx, time.Millisecond, 0)
 	}()
 
 	// Wait for 100ms such that - we have given enough time for
