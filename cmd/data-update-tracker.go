@@ -545,9 +545,11 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uin
 	return d.filterFrom(ctx, oldest, current), nil
 }
 
-// splitPathDeterministic will split the provided path deterministically
-// and returns up to 3 parts.
-// Returns 0 length if no parts where found.
+// splitPathDeterministic will split the provided relative path
+// deterministically and return up to the first 3 elements of the path.
+// Slash and dot prefixes are removed.
+// Trailing slashes are removed.
+// Returns 0 length if no parts are found after trimming.
 func splitPathDeterministic(in string) []string {
 	split := strings.Split(in, SlashSeparator)
 
@@ -564,9 +566,8 @@ func splitPathDeterministic(in string) []string {
 		}
 		split = split[:len(split)-1]
 	}
-	if len(split) == 0 {
-		return nil
-	}
+
+	// Return up to 3 parts.
 	if len(split) > 3 {
 		split = split[:3]
 	}
