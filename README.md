@@ -9,13 +9,13 @@ MinIO is High Performance Object Storage released under Apache License v2.0. It 
 ### Stable
 ```
 docker pull minio/minio
-docker run -p 9000:9000 minio/minio server /data
+docker run -e MINIO_ACCESS_KEY=samplekey -e MINIO_SECRET_KEY=samplekey -p 9000:9000 minio/minio server /data
 ```
 
 ### Edge
 ```
 docker pull minio/minio:edge
-docker run -p 9000:9000 minio/minio:edge server /data
+docker run -e MINIO_ACCESS_KEY=samplekey -e MINIO_SECRET_KEY=samplekey -p 9000:9000 minio/minio:edge server /data
 ```
 
 > NOTE: Docker will not display the default keys unless you start the container with the `-it`(interactive TTY) argument. Generally, it is not recommended to use default keys with containers. Please visit MinIO Docker quickstart guide for more information [here](https://docs.min.io/docs/minio-docker-quickstart-guide)
