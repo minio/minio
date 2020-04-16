@@ -233,11 +233,7 @@ func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error 
 }
 
 func (iamOS *IAMObjectStore) deleteIAMConfig(path string) error {
-	err := deleteConfig(iamOS.ctx, iamOS.objAPI, path)
-	if _, ok := err.(ObjectNotFound); ok {
-		return errConfigNotFound
-	}
-	return err
+	return deleteConfig(iamOS.ctx, iamOS.objAPI, path)
 }
 
 func (iamOS *IAMObjectStore) loadPolicyDoc(policy string, m map[string]iampolicy.Policy) error {
@@ -428,10 +424,12 @@ func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	if err := iamOS.loadPolicyDocs(ctx, iamPolicyDocsMap); err != nil {
 		return err
 	}
+
 	// load STS temp users
 	if err := iamOS.loadUsers(ctx, stsUser, iamUsersMap); err != nil {
 		return err
 	}
+
 	if isMinIOUsersSys {
 		if err := iamOS.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
 			return err
@@ -442,15 +440,18 @@ func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
 		if err := iamOS.loadGroups(ctx, iamGroupsMap); err != nil {
 			return err
 		}
-
-		if err := iamOS.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
-			return err
-		}
 	}
+
+	// load polices mapped to users
+	if err := iamOS.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
+		return err
+	}
+
 	// load STS policy mappings
 	if err := iamOS.loadMappedPolicies(ctx, stsUser, false, iamUserPolicyMap); err != nil {
 		return err
 	}
+
 	// load policies mapped to groups
 	if err := iamOS.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
 		return err

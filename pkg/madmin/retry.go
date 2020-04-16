@@ -168,6 +168,7 @@ func isS3CodeRetryable(s3Code string) (ok bool) {
 
 // List of HTTP status codes which are retryable.
 var retryableHTTPStatusCodes = map[int]struct{}{
+	http.StatusRequestTimeout:      {},
 	http.StatusTooManyRequests:     {},
 	http.StatusInternalServerError: {},
 	http.StatusBadGateway:          {},
