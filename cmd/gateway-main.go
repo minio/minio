@@ -244,7 +244,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(buckets, newObject), "Unable to initialize notification system")
 		// Start watching disk for reloading config, this
 		// is only enabled for "NAS" gateway.
-		globalConfigSys.WatchConfigNASDisk(newObject)
+		globalConfigSys.WatchConfigNASDisk(GlobalContext, newObject)
 	}
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
