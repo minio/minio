@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: MinIO Community Support
+    url: https://slack.min.io
+    about: Please ask and answer questions here.
+  - name: MinIO SUBNET Support
+    url: https://min.io/pricing
+    about: Join this for Enterprise Support.
