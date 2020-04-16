@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -196,6 +198,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	httpServer := xhttp.NewServer([]string{globalCLIContext.Addr},
 		criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
+	httpServer.BaseContext = func(listener net.Listener) context.Context {
+		return GlobalContext
+	}
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
