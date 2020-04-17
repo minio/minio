@@ -99,9 +99,6 @@ func (m MQTTArgs) Validate() error {
 			return errors.New("qos should be set to 1 or 2 if queueDir is set")
 		}
 	}
-	if m.QueueLimit > maxLimit {
-		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
-	}
 
 	return nil
 }

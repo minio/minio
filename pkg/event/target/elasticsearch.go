@@ -74,9 +74,6 @@ func (a ElasticsearchArgs) Validate() error {
 	if a.Index == "" {
 		return errors.New("empty index value")
 	}
-	if a.QueueLimit > maxLimit {
-		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
-	}
 	return nil
 }
 

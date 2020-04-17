@@ -159,9 +159,6 @@ func (p PostgreSQLArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if p.QueueLimit > maxLimit {
-		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
-	}
 
 	return nil
 }
