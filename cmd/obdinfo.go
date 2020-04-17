@@ -402,13 +402,8 @@ func getLocalOsInfoOBD(ctx context.Context) madmin.ServerOsOBDInfo {
 		}
 	}
 
-	users, err := host.UsersWithContext(ctx)
-	if err != nil {
-		return madmin.ServerOsOBDInfo{
-			Addr:  addr,
-			Error: err.Error(),
-		}
-	}
+	// ignore user err, as it cannot be obtained reliably inside containers
+	users, _ := host.UsersWithContext(ctx)
 
 	return madmin.ServerOsOBDInfo{
 		Addr:    addr,
