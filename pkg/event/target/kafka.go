@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -110,8 +111,8 @@ func (k KafkaArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if k.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
+	if k.QueueLimit > maxLimit {
+		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
 	}
 	if k.Version != "" {
 		if _, err := sarama.ParseKafkaVersion(k.Version); err != nil {

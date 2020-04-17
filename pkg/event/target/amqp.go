@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -101,8 +102,8 @@ func (a *AMQPArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if a.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
+	if a.QueueLimit > maxLimit {
+		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
 	}
 
 	return nil

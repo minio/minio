@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -136,8 +137,8 @@ func (n NATSArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if n.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
+	if n.QueueLimit > maxLimit {
+		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
 	}
 
 	return nil

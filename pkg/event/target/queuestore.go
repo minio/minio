@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	maxLimit = 10000 // Max store limit.
+	maxLimit = 100000 // Max store limit.
 	eventExt = ".event"
 )
 

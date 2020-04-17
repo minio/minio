@@ -89,8 +89,8 @@ func (r RedisArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if r.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
+	if r.QueueLimit > maxLimit {
+		return fmt.Errorf("queueLimit should not exceed %d", maxLimit)
 	}
 
 	return nil
