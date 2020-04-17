@@ -45,6 +45,15 @@ type HelpKV struct {
 // HelpKVS - implement order of keys help messages.
 type HelpKVS []HelpKV
 
+// Keys returns help keys
+func (h Help) Keys() []string {
+	var keys []string
+	for _, kh := range h.KeysHelp {
+		keys = append(keys, kh.Key)
+	}
+	return keys
+}
+
 // HelpConfigKV - return help for a given sub-system.
 func (adm *AdminClient) HelpConfigKV(ctx context.Context, subSys, key string, envOnly bool) (Help, error) {
 	v := url.Values{}
