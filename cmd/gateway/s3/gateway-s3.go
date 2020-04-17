@@ -242,7 +242,7 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 
 		// Start stale enc multipart uploads cleanup routine.
 		go encS.cleanupStaleEncMultipartUploads(minio.GlobalContext,
-			minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry, minio.GlobalServiceDoneCh)
+			minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry)
 
 		return &encS, nil
 	}

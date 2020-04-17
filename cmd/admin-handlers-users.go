@@ -565,7 +565,16 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if err = json.NewEncoder(w).Encode(policies); err != nil {
+	var newPolicies = make(map[string]iampolicy.Policy)
+	for name, p := range policies {
+		_, err = json.Marshal(p)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+		newPolicies[name] = p
+	}
+	if err = json.NewEncoder(w).Encode(newPolicies); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
