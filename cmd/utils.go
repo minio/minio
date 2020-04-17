@@ -172,8 +172,7 @@ const (
 	globalMaxPartID = 10000
 
 	// Default values used while communicating for internode communication.
-	defaultDialTimeout   = 5 * time.Second
-	defaultDialKeepAlive = 15 * time.Second
+	defaultDialTimeout = 5 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -464,14 +463,16 @@ func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext 
 	}
 }
 
-func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive time.Duration) func() *http.Transport {
+func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
-		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       time.Minute,
+		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
+		MaxIdleConnsPerHost:   16,
+		MaxIdleConns:          16,
+		MaxConnsPerHost:       64, // This is used per drive/rpc host. More requests will block until free.
+		IdleConnTimeout:       1 * time.Minute,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
@@ -493,9 +494,14 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive ti
 func NewGatewayHTTPTransport() *http.Transport {
 	tr := newCustomHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
-	}, defaultDialTimeout, defaultDialKeepAlive)()
+	}, defaultDialTimeout)()
 	// Set aggressive timeouts for gateway
 	tr.ResponseHeaderTimeout = 30 * time.Second
+
+	// Allow more requests to be in flight.
+	tr.MaxConnsPerHost = 256
+	tr.MaxIdleConnsPerHost = 16
+	tr.MaxIdleConns = 256
 	return tr
 }
 
