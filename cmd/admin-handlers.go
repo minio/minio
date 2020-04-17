@@ -1482,7 +1482,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 
 	// Fetch the configured targets
-	targetList, err := notify.FetchRegisteredTargets(cfg, GlobalContext.Done(), NewGatewayHTTPTransport(), true, false)
+	tr := NewGatewayHTTPTransport()
+	defer tr.CloseIdleConnections()
+	targetList, err := notify.FetchRegisteredTargets(cfg, GlobalContext.Done(), tr, true, false)
 	if err != nil && err != notify.ErrTargetsOffline {
 		logger.LogIf(GlobalContext, err)
 		return nil

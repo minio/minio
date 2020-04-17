@@ -172,8 +172,7 @@ const (
 	globalMaxPartID = 10000
 
 	// Default values used while communicating for internode communication.
-	defaultDialTimeout   = 5 * time.Second
-	defaultDialKeepAlive = 15 * time.Second
+	defaultDialTimeout = 5 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
