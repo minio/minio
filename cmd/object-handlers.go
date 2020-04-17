@@ -610,10 +610,29 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	// remove SSE Headers from source info
 	crypto.RemoveSSEHeaders(defaultMeta)
 
+	// Storage class is special, it can be replaced regardless of the
+	// metadata directive, if set should be preserved and replaced
+	// to the destination metadata.
+	sc := r.Header.Get(xhttp.AmzStorageClass)
+	if sc == "" {
+		sc = r.URL.Query().Get(xhttp.AmzStorageClass)
+	}
+
 	// if x-amz-metadata-directive says REPLACE then
 	// we extract metadata from the input headers.
 	if isDirectiveReplace(r.Header.Get(xhttp.AmzMetadataDirective)) {
-		return extractMetadata(ctx, r)
+		emetadata, err := extractMetadata(ctx, r)
+		if err != nil {
+			return nil, err
+		}
+		if sc != "" {
+			emetadata[xhttp.AmzStorageClass] = sc
+		}
+		return emetadata, nil
+	}
+
+	if sc != "" {
+		defaultMeta[xhttp.AmzStorageClass] = sc
 	}
 
 	// if x-amz-metadata-directive says COPY then we
@@ -778,6 +797,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Validate storage class metadata if present
+	dstSc := r.Header.Get(xhttp.AmzStorageClass)
+	if dstSc != "" && !storageclass.IsValid(dstSc) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidStorageClass), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	// Check if bucket encryption is enabled
 	_, encEnabled := globalBucketSSEConfigSys.Get(dstBucket)
 	// This request header needs to be set prior to setting ObjectOptions
@@ -840,6 +866,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// this changes for encryption which can be observed below.
 	if cpSrcDstSame {
 		srcInfo.metadataOnly = true
+	}
+
+	var chStorageClass bool
+	if dstSc != "" {
+		sc, ok := srcInfo.UserDefined[xhttp.AmzStorageClass]
+		if (ok && dstSc != sc) || (srcInfo.StorageClass != dstSc) {
+			chStorageClass = true
+			srcInfo.metadataOnly = false
+		}
 	}
 
 	var reader io.Reader
@@ -923,9 +958,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// If src == dst and either
 		// - the object is encrypted using SSE-C and two different SSE-C keys are present
 		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
-		// than execute a key rotation.
+		// - the object storage class is not changing
+		// then execute a key rotation.
 		var keyRotation bool
-		if cpSrcDstSame && (sseCopyC && sseC) {
+		if cpSrcDstSame && (sseCopyC && sseC) && !chStorageClass {
 			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
