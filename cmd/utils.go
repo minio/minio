@@ -470,8 +470,9 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
-		MaxIdleConnsPerHost:   256,
-		MaxIdleConns:          256,
+		MaxIdleConnsPerHost:   16,
+		MaxIdleConns:          16,
+		MaxConnsPerHost:       64, // This is used per drive/rpc host. More requests will block until free.
 		IdleConnTimeout:       5 * time.Minute,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
@@ -497,6 +498,11 @@ func NewGatewayHTTPTransport() *http.Transport {
 	}, defaultDialTimeout)()
 	// Set aggressive timeouts for gateway
 	tr.ResponseHeaderTimeout = 30 * time.Second
+
+	// Allow more requests to be in flight.
+	tr.MaxConnsPerHost = 256
+	tr.MaxIdleConnsPerHost = 16
+	tr.MaxIdleConns = 256
 	return tr
 }
 

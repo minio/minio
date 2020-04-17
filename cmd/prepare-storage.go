@@ -203,10 +203,10 @@ func IsServerResolvable(endpoint Endpoint) error {
 	httpClient := &http.Client{
 		Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
 	}
+	defer httpClient.CloseIdleConnections()
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		httpClient.CloseIdleConnections()
 		return err
 	}
 	defer xhttp.DrainBody(resp.Body)

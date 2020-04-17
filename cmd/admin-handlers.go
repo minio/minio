@@ -989,7 +989,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	traceCh := make(chan interface{}, 4000)
 
-	peers := getRestClients(globalEndpoints)
+	peers := newPeerRestClients(globalEndpoints)
 
 	globalHTTPTrace.Subscribe(traceCh, doneCh, func(entry interface{}) bool {
 		return mustTrace(entry, trcAll, trcErr)
@@ -1056,7 +1056,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	defer close(doneCh)
 	logCh := make(chan interface{}, 4000)
 
-	peers := getRestClients(globalEndpoints)
+	peers := newPeerRestClients(globalEndpoints)
 
 	globalConsoleSys.Subscribe(logCh, doneCh, node, limitLines, logKind, nil)
 
@@ -1612,7 +1612,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 	}
 
 	tr := newCustomHTTPTransport(&tls.Config{RootCAs: globalRootCAs}, timeout)()
-
+	defer tr.CloseIdleConnections()
 	if dErr := u.DialHTTP(tr); dErr != nil {
 		if urlErr, ok := dErr.(*url.Error); ok {
 			// To treat "connection refused" errors as un reachable endpoint.

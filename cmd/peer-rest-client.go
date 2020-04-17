@@ -1002,7 +1002,8 @@ func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
 	return remoteHosts
 }
 
-func getRestClients(endpoints EndpointZones) []*peerRESTClient {
+// newPeerRestClients creates new peer clients.
+func newPeerRestClients(endpoints EndpointZones) []*peerRESTClient {
 	peerHosts := getRemoteHosts(endpoints)
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {
@@ -1019,7 +1020,6 @@ func getRestClients(endpoints EndpointZones) []*peerRESTClient {
 
 // Returns a peer rest client.
 func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
-
 	scheme := "http"
 	if globalIsSSL {
 		scheme = "https"
