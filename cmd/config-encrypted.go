@@ -50,7 +50,6 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	bucketNotFound := BucketNotFound{}
 
 	for !stop {
 		select {
@@ -58,7 +57,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 			if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
 				if errors.Is(err, errDiskNotFound) ||
 					errors.As(err, &rquorum) ||
-					errors.As(err, &bucketNotFound) {
+					isErrBucketNotFound(err) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}
@@ -108,7 +107,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 				if errors.Is(err, errDiskNotFound) ||
 					errors.As(err, &rquorum) ||
 					errors.As(err, &wquorum) ||
-					errors.As(err, &bucketNotFound) {
+					isErrBucketNotFound(err) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}

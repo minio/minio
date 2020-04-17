@@ -404,8 +404,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	defer sys.store.unlock()
 
 	err := sys.store.deletePolicyDoc(policyName)
-	switch err.(type) {
-	case ObjectNotFound:
+	if err == errNoSuchPolicy {
 		// Ignore error if policy is already deleted.
 		err = nil
 	}
@@ -417,7 +416,6 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	var usersType []IAMUserType
 	for u, mp := range sys.iamUserPolicyMap {
 		if mp.Policy == policyName {
-			usersToDel = append(usersToDel, u)
 			cr, ok := sys.iamUsersMap[u]
 			if !ok {
 				// This case cannot happen
@@ -429,6 +427,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 			} else {
 				usersType = append(usersType, regularUser)
 			}
+			usersToDel = append(usersToDel, u)
 		}
 	}
 	for i, u := range usersToDel {
@@ -538,8 +537,7 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	// It is ok to ignore deletion error on the mapped policy
 	sys.store.deleteMappedPolicy(accessKey, regularUser, false)
 	err := sys.store.deleteUserIdentity(accessKey, regularUser)
-	switch err.(type) {
-	case ObjectNotFound:
+	if err == errNoSuchUser {
 		// ignore if user is already deleted.
 		err = nil
 	}
@@ -1020,14 +1018,11 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		// len(gi.Members) == 0 here.
 
 		// Remove the group from storage. First delete the
-		// mapped policy.
-		err := sys.store.deleteMappedPolicy(group, regularUser, true)
-		// No-mapped-policy case is ignored.
-		if err != nil && err != errNoSuchPolicy {
+		// mapped policy. No-mapped-policy case is ignored.
+		if err := sys.store.deleteMappedPolicy(group, regularUser, true); err != nil && err != errNoSuchPolicy {
 			return err
 		}
-		err = sys.store.deleteGroupInfo(group)
-		if err != nil {
+		if err := sys.store.deleteGroupInfo(group); err != nil && err != errNoSuchGroup {
 			return err
 		}
 
@@ -1195,7 +1190,7 @@ func (sys *IAMSys) policyDBSet(name, policy string, userType IAMUserType, isGrou
 
 	// Handle policy mapping removal
 	if policy == "" {
-		if err := sys.store.deleteMappedPolicy(name, userType, isGroup); err != nil {
+		if err := sys.store.deleteMappedPolicy(name, userType, isGroup); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 		if !isGroup {

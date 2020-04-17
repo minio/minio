@@ -186,16 +186,14 @@ func (sys *ConfigSys) Load(objAPI ObjectLayer) error {
 }
 
 // WatchConfigNASDisk - watches nas disk on periodic basis.
-func (sys *ConfigSys) WatchConfigNASDisk(objAPI ObjectLayer) {
+func (sys *ConfigSys) WatchConfigNASDisk(ctx context.Context, objAPI ObjectLayer) {
 	configInterval := globalRefreshIAMInterval
 	watchDisk := func() {
-		ticker := time.NewTicker(configInterval)
-		defer ticker.Stop()
 		for {
 			select {
-			case <-GlobalServiceDoneCh:
+			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-time.After(configInterval):
 				loadConfig(objAPI)
 			}
 		}

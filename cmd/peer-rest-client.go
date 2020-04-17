@@ -834,7 +834,7 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	return state, err
 }
 
-func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
+func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
 	values.Set(peerRESTTraceErr, strconv.FormatBool(trcErr))
@@ -876,7 +876,7 @@ func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh chan stru
 	}
 }
 
-func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
+func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh <-chan struct{}, v url.Values) {
 	// To cancel the REST request in case doneCh gets closed.
 	ctx, cancel := context.WithCancel(GlobalContext)
 
@@ -915,7 +915,7 @@ func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh chan st
 }
 
 // Listen - listen on peers.
-func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh chan struct{}, v url.Values) {
+func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh <-chan struct{}, v url.Values) {
 	go func() {
 		for {
 			client.doListen(listenCh, doneCh, v)
@@ -931,7 +931,7 @@ func (client *peerRESTClient) Listen(listenCh chan interface{}, doneCh chan stru
 }
 
 // Trace - send http trace request to peer nodes
-func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct{}, trcAll, trcErr bool) {
+func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
 	go func() {
 		for {
 			client.doTrace(traceCh, doneCh, trcAll, trcErr)
@@ -947,7 +947,7 @@ func (client *peerRESTClient) Trace(traceCh chan interface{}, doneCh chan struct
 }
 
 // ConsoleLog - sends request to peer nodes to get console logs
-func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh chan struct{}) {
+func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan struct{}) {
 	go func() {
 		for {
 			// get cancellation context to properly unsubscribe peers
