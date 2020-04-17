@@ -4,7 +4,7 @@ MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests
 is enabled, the MinIO server encrypts each object with an unique object key which is protected by a master key
 managed by the KMS.
 
-> MinIO still provides native Hashicorp Vault support. However, this is feature is **deprecated** and may be
+> MinIO still provides native Hashicorp Vault support. However, this feature is **deprecated** and may be
 > removed in the future. Therefore, we strongly recommend to use the architecture and KMS Guide below.
 > If you have to maintain a legacy MinIO-Vault deployment you can find the legacy documentation [here](https://docs.min.io/docs/minio-vault-legacy.html).
 
