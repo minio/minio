@@ -317,16 +317,14 @@ func getLocalProcOBD(ctx context.Context) madmin.ServerProcOBDInfo {
 		sysProc.PageFaults = pageFaults
 
 		parent, err := proc.ParentWithContext(ctx)
-		if err != nil {
-			return errProcInfo(err)
+		if err == nil {
+			sysProc.Parent = parent.Pid
 		}
-		sysProc.Parent = parent.Pid
 
 		ppid, err := proc.PpidWithContext(ctx)
-		if err != nil {
-			return errProcInfo(err)
+		if err == nil {
+			sysProc.Ppid = ppid
 		}
-		sysProc.Ppid = ppid
 
 		rlimit, err := proc.RlimitWithContext(ctx)
 		if err != nil {
