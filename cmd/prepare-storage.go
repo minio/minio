@@ -201,7 +201,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 
 	httpClient := &http.Client{
-		Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)(),
+		Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
 	}
 
 	resp, err := httpClient.Do(req)

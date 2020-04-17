@@ -247,7 +247,7 @@ func newBootstrapRESTClient(endpoint Endpoint) (*bootstrapRESTClient, error) {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
 		return nil, err

@@ -464,14 +464,15 @@ func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext 
 	}
 }
 
-func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive time.Duration) func() *http.Transport {
+func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
+		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
 		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       time.Minute,
+		MaxIdleConns:          256,
+		IdleConnTimeout:       5 * time.Minute,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
@@ -493,7 +494,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive ti
 func NewGatewayHTTPTransport() *http.Transport {
 	tr := newCustomHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
-	}, defaultDialTimeout, defaultDialKeepAlive)()
+	}, defaultDialTimeout)()
 	// Set aggressive timeouts for gateway
 	tr.ResponseHeaderTimeout = 30 * time.Second
 	return tr

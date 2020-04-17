@@ -1611,11 +1611,7 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 		return pErr
 	}
 
-	tr := newCustomHTTPTransport(
-		&tls.Config{RootCAs: globalRootCAs},
-		timeout,
-		0, /* Default value */
-	)()
+	tr := newCustomHTTPTransport(&tls.Config{RootCAs: globalRootCAs}, timeout)()
 
 	if dErr := u.DialHTTP(tr); dErr != nil {
 		if urlErr, ok := dErr.(*url.Error); ok {
