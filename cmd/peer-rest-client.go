@@ -374,7 +374,11 @@ func (client *peerRESTClient) DispatchNetOBDInfo(ctx context.Context) (info madm
 		return
 	}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
+	waitReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return
+	}
+	err = gob.NewDecoder(waitReader).Decode(&info)
 	return
 }
 
