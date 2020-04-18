@@ -24,8 +24,8 @@ import (
 
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/tags"
 
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -205,9 +205,9 @@ func (a GatewayUnsupported) PutObjectTag(ctx context.Context, bucket, object str
 }
 
 // GetObjectTag - not implemented.
-func (a GatewayUnsupported) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (a GatewayUnsupported) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return tagging.Tagging{}, NotImplemented{}
+	return nil, NotImplemented{}
 }
 
 // DeleteObjectTag - not implemented.

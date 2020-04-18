@@ -40,7 +40,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
@@ -48,6 +47,7 @@ import (
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/s3select"
+	"github.com/minio/minio/pkg/tags"
 	"github.com/minio/sio"
 )
 
@@ -648,20 +648,22 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 
 // Extract tags relevant for an CopyObject operation based on conditional
 // header values specified in X-Amz-Tagging-Directive.
-func getCpObjTagsFromHeader(ctx context.Context, r *http.Request, tags string) (string, error) {
-	// if x-amz-tagging-directive says REPLACE then
-	// we extract tags from the input headers.
-	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
-		if tags := r.Header.Get(xhttp.AmzObjectTagging); tags != "" {
-			return extractTags(ctx, tags)
-		}
-		// Copy is default behavior if x-amz-tagging-directive is set, but x-amz-tagging is
-		// is not set
-		return tags, nil
+func getCpObjTagsFromHeader(ctx context.Context, r *http.Request, objTags string) (string, error) {
+	// If x-amz-tagging-directive header is not REPLACE, return passed tags.
+	if !isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
+		return objTags, nil
 	}
 
-	// Copy is default behavior if x-amz-tagging-directive is not set.
-	return tags, nil
+	// If x-amz-tagging header is empty, return passed tags.
+	if r.Header.Get(xhttp.AmzObjectTagging) == "" {
+		return objTags, nil
+	}
+
+	objTags = r.Header.Get(xhttp.AmzObjectTagging)
+
+	// Validate extracted tags.
+	_, err := tags.Parse(objTags, true)
+	return objTags, err
 }
 
 // getRemoteInstanceTransport contains a singleton roundtripper.
@@ -1260,12 +1262,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if tags := r.Header.Get(xhttp.AmzObjectTagging); tags != "" {
-		metadata[xhttp.AmzObjectTagging], err = extractTags(ctx, tags)
-		if err != nil {
+	if objTags := r.Header.Get(xhttp.AmzObjectTagging); objTags != "" {
+		if _, err := tags.Parse(objTags, true); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+
+		metadata[xhttp.AmzObjectTagging] = objTags
 	}
 
 	if rAuthType == authTypeStreamingSigned {
@@ -3033,14 +3036,14 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	tagging, err := tagging.ParseTagging(io.LimitReader(r.Body, r.ContentLength))
+	tags, err := tags.UnmarshalXML(io.LimitReader(r.Body, r.ContentLength), true)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Put object tags
-	err = objAPI.PutObjectTag(ctx, bucket, object, tagging.String())
+	err = objAPI.PutObjectTag(ctx, bucket, object, tags.String())
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

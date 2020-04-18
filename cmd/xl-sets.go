@@ -32,11 +32,11 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/pkg/tags"
 )
 
 // setsStorageAPI is encapsulated type for Close()
@@ -1779,7 +1779,7 @@ func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) err
 }
 
 // GetObjectTag - get object tags from an existing object
-func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
 }
 

@@ -27,9 +27,9 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/minio/minio/pkg/tags"
 )
 
 // list all errors which can be ignored in object operations.
@@ -1052,16 +1052,12 @@ func (xl xlObjects) DeleteObjectTag(ctx context.Context, bucket, object string) 
 }
 
 // GetObjectTag - get object tags from an existing object
-func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	// GetObjectInfo will return tag value as well
 	oi, err := xl.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
-		return tagging.Tagging{}, err
+		return nil, err
 	}
 
-	tags, err := tagging.FromString(oi.UserTags)
-	if err != nil {
-		return tagging.Tagging{}, err
-	}
-	return tags, nil
+	return tags.Parse(oi.UserTags, true)
 }
