@@ -471,7 +471,6 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
 		MaxIdleConnsPerHost:   16,
 		MaxIdleConns:          16,
-		MaxConnsPerHost:       64, // This is used per drive/rpc host. More requests will block until free.
 		IdleConnTimeout:       1 * time.Minute,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
