@@ -86,8 +86,24 @@ func (policy Policy) isValid() error {
 		}
 	}
 
+	return nil
+}
+
+// MarshalJSON - encodes Policy to JSON data.
+func (policy Policy) MarshalJSON() ([]byte, error) {
+	if err := policy.isValid(); err != nil {
+		return nil, err
+	}
+
+	// subtype to avoid recursive call to MarshalJSON()
+	type subPolicy Policy
+	return json.Marshal(subPolicy(policy))
+}
+
+func (policy *Policy) dropDuplicateStatements() {
+redo:
 	for i := range policy.Statements {
-		for _, statement := range policy.Statements[i+1:] {
+		for j, statement := range policy.Statements[i+1:] {
 			if policy.Statements[i].Effect != statement.Effect {
 				continue
 			}
@@ -107,26 +123,10 @@ func (policy Policy) isValid() error {
 			if policy.Statements[i].Conditions.String() != statement.Conditions.String() {
 				continue
 			}
-
-			return Errorf("duplicate principal %v, actions %v, resouces %v found in statements %v, %v",
-				statement.Principal, statement.Actions,
-				statement.Resources, policy.Statements[i],
-				statement)
+			policy.Statements = append(policy.Statements[:j], policy.Statements[j+1:]...)
+			goto redo
 		}
 	}
-
-	return nil
-}
-
-// MarshalJSON - encodes Policy to JSON data.
-func (policy Policy) MarshalJSON() ([]byte, error) {
-	if err := policy.isValid(); err != nil {
-		return nil, err
-	}
-
-	// subtype to avoid recursive call to MarshalJSON()
-	type subPolicy Policy
-	return json.Marshal(subPolicy(policy))
 }
 
 // UnmarshalJSON - decodes JSON data to Policy.
@@ -142,6 +142,8 @@ func (policy *Policy) UnmarshalJSON(data []byte) error {
 	if err := p.isValid(); err != nil {
 		return err
 	}
+
+	p.dropDuplicateStatements()
 
 	*policy = p
 
