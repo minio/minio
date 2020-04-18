@@ -161,9 +161,6 @@ func (m MySQLArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if m.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
