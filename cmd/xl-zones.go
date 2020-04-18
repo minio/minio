@@ -26,11 +26,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -1588,7 +1588,7 @@ func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) er
 }
 
 // GetObjectTag - get object tags from an existing object
-func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	if z.SingleZone() {
 		return z.zones[0].GetObjectTag(ctx, bucket, object)
 	}
@@ -1602,7 +1602,7 @@ func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (tagg
 		}
 		return tags, nil
 	}
-	return tagging.Tagging{}, BucketNotFound{
+	return nil, BucketNotFound{
 		Bucket: bucket,
 	}
 }
