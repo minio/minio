@@ -2109,10 +2109,10 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	clnt := &http.Client{
 		Transport: NewGatewayHTTPTransport(),
 	}
+	defer clnt.CloseIdleConnections()
 
 	resp, err := clnt.Do(req)
 	if err != nil {
-		clnt.CloseIdleConnections()
 		return toJSONError(ctx, err)
 	}
 	defer xhttp.DrainBody(resp.Body)

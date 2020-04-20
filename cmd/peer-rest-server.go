@@ -403,9 +403,12 @@ func (s *peerRESTServer) DispatchNetOBDInfoHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	done := keepHTTPResponseAlive(w)
+
 	ctx := newContext(r, w, "DispatchNetOBDInfo")
 	info := globalNotificationSys.NetOBDInfo(ctx)
 
+	done()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 	w.(http.Flusher).Flush()
 }

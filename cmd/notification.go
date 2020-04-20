@@ -1171,7 +1171,7 @@ func NewNotificationSys(endpoints EndpointZones) *NotificationSys {
 		targetList:                 event.NewTargetList(),
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		peerClients:                getRestClients(endpoints),
+		peerClients:                newPeerRestClients(endpoints),
 	}
 }
 

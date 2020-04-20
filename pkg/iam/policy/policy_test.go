@@ -373,8 +373,8 @@ func TestPolicyIsValid(t *testing.T) {
 		{case6Policy, true},
 		// Duplicate statement different Effects.
 		{case7Policy, false},
-		// Duplicate statement same Effects.
-		{case8Policy, true},
+		// Duplicate statement same Effects, duplicate effect will be removed.
+		{case8Policy, false},
 	}
 
 	for i, testCase := range testCases {
@@ -923,6 +923,18 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
         }
     ]
 }`)
+	case10Policy := Policy{
+		ID:      "MyPolicyForMyBucket1",
+		Version: DefaultVersion,
+		Statements: []Statement{
+			NewStatement(
+				policy.Allow,
+				NewActionSet(PutObjectAction),
+				NewResourceSet(NewResource("mybucket", "myobject*")),
+				condition.NewFunctions(),
+			),
+		},
+	}
 
 	case11Data := []byte(`{
     "ID": "MyPolicyForMyBucket1",
@@ -975,8 +987,8 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
 		{case8Data, case8Policy, false},
 		// Invalid version error.
 		{case9Data, Policy{}, true},
-		// Duplicate statement error.
-		{case10Data, Policy{}, true},
+		// Duplicate statement success, duplicate statement is removed.
+		{case10Data, case10Policy, false},
 		// Duplicate statement success (Effect differs).
 		{case11Data, case11Policy, false},
 	}
@@ -987,12 +999,12 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+			t.Errorf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
 		}
 
 		if !testCase.expectErr {
 			if !reflect.DeepEqual(result, testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+				t.Errorf("case %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 			}
 		}
 	}

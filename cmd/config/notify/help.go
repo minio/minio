@@ -24,7 +24,7 @@ import (
 const (
 	formatComment     = `'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'`
 	queueDirComment   = `staging dir for undelivered messages e.g. '/home/events'`
-	queueLimitComment = `maximum limit for undelivered messages, defaults to '10000'`
+	queueLimitComment = `maximum limit for undelivered messages, defaults to '100000'`
 )
 
 // Help template inputs for all notification targets

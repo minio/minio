@@ -650,11 +650,10 @@ function test_copy_object() {
         fi
     fi
 
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
     if [ $rv -eq 0 ]; then
         log_success "$(get_duration "$start_time")" "${test_function}"
     else
-        # clean up and log error
-        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
     fi
 
@@ -686,8 +685,15 @@ function test_copy_object_storage_class() {
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api copy-object --bucket ${bucket_name} --storage-class REDUCED_REDUNDANCY --key datafile-1-kB-copy --copy-source ${bucket_name}/datafile-1-kB"
         test_function=${function}
-        out=$($function)
+        out=$($function 2>&1)
         rv=$?
+        # if this functionality is not implemented return right away.
+        if [ $rv -eq 255 ]; then
+            if echo "$out" | greq -q "NotImplemented"; then
+                ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+                return 0
+            fi
+        fi
         hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
         if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
             # Verification failed
@@ -715,11 +721,10 @@ function test_copy_object_storage_class() {
         fi
     fi
 
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
     if [ $rv -eq 0 ]; then
         log_success "$(get_duration "$start_time")" "${test_function}"
     else
-        # clean up and log error
-        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
     fi
 
@@ -750,8 +755,15 @@ function test_copy_object_storage_class_same() {
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api copy-object --bucket ${bucket_name} --storage-class REDUCED_REDUNDANCY --key datafile-1-kB --copy-source ${bucket_name}/datafile-1-kB"
         test_function=${function}
-        out=$($function)
+        out=$($function 2>&1)
         rv=$?
+        # if this functionality is not implemented return right away.
+        if [ $rv -eq 255 ]; then
+            if echo "$out" | greq -q "NotImplemented"; then
+                ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+                return 0
+            fi
+        fi
         hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
         if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
             # Verification failed
@@ -779,11 +791,10 @@ function test_copy_object_storage_class_same() {
         fi
     fi
 
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
     if [ $rv -eq 0 ]; then
         log_success "$(get_duration "$start_time")" "${test_function}"
     else
-        # clean up and log error
-        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
     fi
 

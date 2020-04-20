@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"time"
 
@@ -663,6 +664,10 @@ func getCpObjTagsFromHeader(ctx context.Context, r *http.Request, tags string) (
 	return tags, nil
 }
 
+// getRemoteInstanceTransport contains a singleton roundtripper.
+var getRemoteInstanceTransport http.RoundTripper
+var getRemoteInstanceTransportOnce sync.Once
+
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
@@ -673,7 +678,10 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	if err != nil {
 		return nil, err
 	}
-	core.SetCustomTransport(NewGatewayHTTPTransport())
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+	})
+	core.SetCustomTransport(getRemoteInstanceTransport)
 	return core, nil
 }
 
