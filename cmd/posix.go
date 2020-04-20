@@ -179,7 +179,7 @@ func isDirEmpty(dirname string) bool {
 	f, err := os.Open((dirname))
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 
 		return false
@@ -189,7 +189,7 @@ func isDirEmpty(dirname string) bool {
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
 		if !os.IsNotExist(err) {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 
 		return false
@@ -351,7 +351,7 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 			return 0, errSkipFile
 		}
 
-		meta, err := xlMetaV1UnmarshalJSON(context.Background(), xlMetaBuf)
+		meta, err := xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 		if err != nil {
 			return 0, nil
 		}
@@ -677,9 +677,8 @@ func (s *posix) ListDirSplunk(volume, dirPath string, count int) (entries []stri
 	if err != nil {
 		return nil, err
 	}
-	// Stat a volume entry.
-	_, err = os.Stat((volumeDir))
-	if err != nil {
+
+	if _, err = os.Stat(volumeDir); err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
 		} else if isSysErrIO(err) {
@@ -694,6 +693,9 @@ func (s *posix) ListDirSplunk(volume, dirPath string, count int) (entries []stri
 	} else {
 		entries, err = readDir(dirPath)
 	}
+	if err != nil {
+		return nil, err
+	}
 
 	for i, entry := range entries {
 		if entry != receiptJSON {
@@ -704,7 +706,7 @@ func (s *posix) ListDirSplunk(volume, dirPath string, count int) (entries []stri
 		}
 	}
 
-	return entries, err
+	return entries, nil
 }
 
 // WalkSplunk - is a sorted walker which returns file entries in lexically
@@ -732,10 +734,10 @@ func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan stru
 	ch = make(chan FileInfo)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
+		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
 			entries, err := s.ListDirSplunk(volume, dirPath, -1)
 			if err != nil {
-				return
+				return false, nil
 			}
 			if len(entries) == 0 {
 				return true, nil
@@ -744,7 +746,7 @@ func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan stru
 			return false, filterMatchingPrefix(entries, dirEntry)
 		}
 
-		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, true, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, true, listDir, endWalkCh)
 		for {
 			walkResult, ok := <-walkResultCh
 			if !ok {
@@ -758,14 +760,11 @@ func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan stru
 					Mode:   os.ModeDir,
 				}
 			} else {
-				// Dynamic time delay.
-				t := UTCNow()
-				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, xlMetaJSONFile))
-				sleepDuration(time.Since(t), 10.0)
+				xlMetaBuf, err := ioutil.ReadFile(pathJoin(volumeDir, walkResult.entry, xlMetaJSONFile))
 				if err != nil {
 					continue
 				}
-				fi = readMetadata(buf, volume, walkResult.entry)
+				fi = readMetadata(xlMetaBuf, volume, walkResult.entry)
 			}
 			select {
 			case ch <- fi:
@@ -809,13 +808,10 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	ch = make(chan FileInfo, maxObjectList)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
-			// Dynamic time delay.
-			t := UTCNow()
+		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
 			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
-			sleepDuration(time.Since(t), 10.0)
 			if err != nil {
-				return
+				return false, nil
 			}
 			if len(entries) == 0 {
 				return true, nil
@@ -824,7 +820,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 			return false, filterMatchingPrefix(entries, dirEntry)
 		}
 
-		walkResultCh := startTreeWalk(context.Background(), volume, dirPath, marker, recursive, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
 		for {
 			walkResult, ok := <-walkResultCh
 			if !ok {
@@ -838,14 +834,11 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 					Mode:   os.ModeDir,
 				}
 			} else {
-				// Dynamic time delay.
-				t := UTCNow()
-				buf, err := s.ReadAll(volume, pathJoin(walkResult.entry, leafFile))
-				sleepDuration(time.Since(t), 10.0)
+				xlMetaBuf, err := ioutil.ReadFile(pathJoin(volumeDir, walkResult.entry, leafFile))
 				if err != nil {
 					continue
 				}
-				fi = readMetadataFn(buf, volume, walkResult.entry)
+				fi = readMetadataFn(xlMetaBuf, volume, walkResult.entry)
 			}
 			select {
 			case ch <- fi:
@@ -871,9 +864,8 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 	if err != nil {
 		return nil, err
 	}
-	// Stat a volume entry.
-	_, err = os.Stat((volumeDir))
-	if err != nil {
+
+	if _, err = os.Stat(volumeDir); err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
 		} else if isSysErrIO(err) {
@@ -887,6 +879,9 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 		entries, err = readDirN(dirPath, count)
 	} else {
 		entries, err = readDir(dirPath)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	// If leaf file is specified, filter out the entries.
@@ -1452,10 +1447,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 		}
 	}
 
-	// Trailing slash is removed when found to ensure
-	// slashpath.Dir() to work as intended.
-	deletePath = strings.TrimSuffix(deletePath, SlashSeparator)
-	deletePath = slashpath.Dir(deletePath)
+	deletePath = filepath.Dir(deletePath)
 
 	// Delete parent directory obviously not recursively. Errors for
 	// parent directories shouldn't trickle down.
@@ -1616,6 +1608,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
 		}
+		return err
 	}
 
 	srcIsDir := HasSuffix(srcPath, SlashSeparator)

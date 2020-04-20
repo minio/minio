@@ -1,7 +1,5 @@
-// +build !linux
-
 /*
- * MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,18 +14,24 @@
  * limitations under the License.
  */
 
-package cpu
+package api
 
-import (
-	"fmt"
-	"runtime"
-	"time"
+import "github.com/minio/minio/cmd/config"
+
+// Help template for storageclass feature.
+var (
+	Help = config.HelpKVS{
+		config.HelpKV{
+			Key:         apiRequestsMax,
+			Description: `set the maximum number of concurrent requests, e.g. "1600"`,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         apiRequestsDeadline,
+			Description: `set the deadline for API requests waiting to be processed e.g. "1m"`,
+			Optional:    true,
+			Type:        "duration",
+		},
+	}
 )
-
-func newCounter() (counter, error) {
-	return counter{}, fmt.Errorf("cpu metrics not implemented for %s platform", runtime.GOOS)
-}
-
-func (c counter) now() time.Time {
-	return time.Time{}
-}

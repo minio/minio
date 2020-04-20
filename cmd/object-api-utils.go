@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -33,6 +32,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -45,7 +45,6 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/wildcard"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const (
@@ -217,12 +216,12 @@ func pathJoin(elem ...string) string {
 
 // mustGetUUID - get a random UUID.
 func mustGetUUID() string {
-	uuid, err := uuid.New()
+	u, err := uuid.NewRandom()
 	if err != nil {
-		logger.CriticalIf(context.Background(), err)
+		logger.CriticalIf(GlobalContext, err)
 	}
 
-	return uuid.String()
+	return u.String()
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
@@ -774,16 +773,13 @@ func (p *PutObjReader) MD5CurrentHexString() string {
 // NewPutObjReader returns a new PutObjReader and holds
 // reference to underlying data stream from client and the encrypted
 // data reader
-func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, encKey []byte) *PutObjReader {
+func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, key *crypto.ObjectKey) *PutObjReader {
 	p := PutObjReader{Reader: rawReader, rawReader: rawReader}
 
-	if len(encKey) != 0 && encReader != nil {
-		var objKey crypto.ObjectKey
-		copy(objKey[:], encKey)
-		p.sealMD5Fn = sealETagFn(objKey)
+	if key != nil && encReader != nil {
+		p.sealMD5Fn = sealETagFn(*key)
 		p.Reader = encReader
 	}
-
 	return &p
 }
 

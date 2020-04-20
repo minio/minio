@@ -121,9 +121,7 @@ func getRequestAuthType(r *http.Request) authType {
 	return authTypeUnknown
 }
 
-// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
-// It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+func validateAdminSignature(ctx context.Context, r *http.Request, region string) (auth.Credentials, map[string]interface{}, bool, APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
 	s3Err := ErrAccessDenied
@@ -132,7 +130,7 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iamp
 		// We only support admin credentials to access admin APIs.
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 		if s3Err != ErrNone {
-			return cred, s3Err
+			return cred, nil, owner, s3Err
 		}
 
 		// we only support V4 (no presign) with auth body
@@ -144,12 +142,21 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iamp
 		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description), logger.Application)
 	}
 
-	var claims map[string]interface{}
-	claims, s3Err = checkClaimsFromToken(r, cred)
+	claims, s3Err := checkClaimsFromToken(r, cred)
+	if s3Err != ErrNone {
+		return cred, nil, owner, s3Err
+	}
+
+	return cred, claims, owner, ErrNone
+}
+
+// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
+// It does not accept presigned or JWT or anonymous requests.
+func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, region)
 	if s3Err != ErrNone {
 		return cred, s3Err
 	}
-
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
 		Action:          iampolicy.Action(action),
@@ -176,15 +183,13 @@ func getSessionToken(r *http.Request) (token string) {
 // Fetch claims in the security token returned by the client, doesn't return
 // errors - upon errors the returned claims map will be empty.
 func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
-	claims, _ := getClaimsFromToken(r)
+	claims, _ := getClaimsFromToken(r, getSessionToken(r))
 	return claims
 }
 
 // Fetch claims in the security token returned by the client.
-func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
+func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, error) {
 	claims := xjwt.NewMapClaims()
-
-	token := getSessionToken(r)
 	if token == "" {
 		return claims.Map(), nil
 	}
@@ -245,10 +250,13 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	if token != "" && cred.AccessKey == "" {
 		return nil, ErrNoAccessKey
 	}
+	if cred.IsServiceAccount() && token == "" {
+		token = cred.SessionToken
+	}
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
 		return nil, ErrInvalidToken
 	}
-	claims, err := getClaimsFromToken(r)
+	claims, err := getClaimsFromToken(r, token)
 	if err != nil {
 		return nil, toAPIErrorCode(r.Context(), err)
 	}
@@ -589,6 +597,15 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
+	}
+
+	// Do not check for PutObjectRetentionAction permission,
+	// if mode and retain until date are not set.
+	// Can happen when bucket has default lock config set
+	if action == iampolicy.PutObjectRetentionAction &&
+		r.Header.Get(xhttp.AmzObjectLockMode) == "" &&
+		r.Header.Get(xhttp.AmzObjectLockRetainUntilDate) == "" {
+		return ErrNone
 	}
 
 	if cred.AccessKey == "" {

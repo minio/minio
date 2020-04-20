@@ -99,9 +99,6 @@ func (m MQTTArgs) Validate() error {
 			return errors.New("qos should be set to 1 or 2 if queueDir is set")
 		}
 	}
-	if m.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -258,19 +255,20 @@ func NewMQTTTarget(id string, args MQTTArgs, doneCh <-chan struct{}, loggerOnce 
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-mqtt-"+id)
 		target.store = NewQueueStore(queueDir, args.QueueLimit)
 		if err := target.store.Open(); err != nil {
-			return nil, err
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
 		}
 
 		if !test {
 			go retryRegister()
 			// Replays the events from the store.
-			eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+			eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 			// Start replaying events from the store.
-			go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+			go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 		}
 	} else {
 		if token.Wait() && token.Error() != nil {
-			return nil, token.Error()
+			return target, token.Error()
 		}
 	}
 	return target, nil

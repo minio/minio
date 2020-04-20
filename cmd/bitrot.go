@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"hash"
 	"io"
@@ -72,7 +71,7 @@ func (a BitrotAlgorithm) New() hash.Hash {
 		hh, _ := highwayhash.New(magicHighwayHash256Key) // New will never return error since key is 256 bit
 		return hh
 	default:
-		logger.CriticalIf(context.Background(), errors.New("Unsupported bitrot algorithm"))
+		logger.CriticalIf(GlobalContext, errors.New("Unsupported bitrot algorithm"))
 		return nil
 	}
 }
@@ -88,7 +87,7 @@ func (a BitrotAlgorithm) Available() bool {
 func (a BitrotAlgorithm) String() string {
 	name, ok := bitrotAlgorithms[a]
 	if !ok {
-		logger.CriticalIf(context.Background(), errors.New("Unsupported bitrot algorithm"))
+		logger.CriticalIf(GlobalContext, errors.New("Unsupported bitrot algorithm"))
 	}
 	return name
 }

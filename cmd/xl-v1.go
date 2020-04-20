@@ -108,7 +108,7 @@ func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo
 					return err
 				}
 				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 				logger.LogIf(ctx, err)
 			}
 			disksInfo[index] = info

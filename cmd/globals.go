@@ -153,6 +153,10 @@ var (
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
 
+	// globalAPIThrottling controls S3 requests throttling when
+	// enabled in the config or in the shell environment.
+	globalAPIThrottling apiThrottling
+
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config
 	globalOpenIDConfig openid.Config

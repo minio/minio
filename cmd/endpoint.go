@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -271,7 +270,7 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 			"host",
 			endpoint.Hostname(),
 		)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err, logger.Application)
 		return false
 	}
@@ -341,7 +340,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 								startTime.Add(timeElapsed),
 								"elapsed",
 								""))
-						ctx := logger.SetReqInfo(context.Background(), reqInfo)
+						ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 						logger.LogIf(ctx, err, logger.Application)
 					}
 					continue
@@ -368,7 +367,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 								"elapsed",
 								"",
 							))
-						ctx := logger.SetReqInfo(context.Background(),
+						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
 						logger.LogIf(ctx, err, logger.Application)
 					}
@@ -399,7 +398,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 									"elapsed",
 									"",
 								))
-							ctx := logger.SetReqInfo(context.Background(),
+							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
 							logger.LogIf(ctx, err, logger.Application)
 						}

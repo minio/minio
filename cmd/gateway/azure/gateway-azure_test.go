@@ -17,7 +17,6 @@
 package azure
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -85,7 +84,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 		"X_Amz_Matdesc":    "{}",
 		"X_Amz_Iv":         "eWmyryl8kq+EVnnsE7jpOg==",
 	}
-	meta, _, err := s3MetaToAzureProperties(context.Background(), headers)
+	meta, _, err := s3MetaToAzureProperties(minio.GlobalContext, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
@@ -95,7 +94,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers = map[string]string{
 		"invalid--meta": "value",
 	}
-	_, _, err = s3MetaToAzureProperties(context.Background(), headers)
+	_, _, err = s3MetaToAzureProperties(minio.GlobalContext, headers)
 	if err != nil {
 		if _, ok := err.(minio.UnsupportedMetadata); !ok {
 			t.Fatalf("Test failed with unexpected error %s, expected UnsupportedMetadata", err)
@@ -105,7 +104,7 @@ func TestS3MetaToAzureProperties(t *testing.T) {
 	headers = map[string]string{
 		"content-md5": "Dce7bmCX61zvxzP5QmfelQ==",
 	}
-	_, props, err := s3MetaToAzureProperties(context.Background(), headers)
+	_, props, err := s3MetaToAzureProperties(minio.GlobalContext, headers)
 	if err != nil {
 		t.Fatalf("Test failed, with %s", err)
 	}
@@ -287,7 +286,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 	}
 
 	for _, uploadID := range invalidUploadIDs {
-		if err := checkAzureUploadID(context.Background(), uploadID); err == nil {
+		if err := checkAzureUploadID(minio.GlobalContext, uploadID); err == nil {
 			t.Fatalf("%s: expected: <error>, got: <nil>", uploadID)
 		}
 	}
@@ -298,7 +297,7 @@ func TestCheckAzureUploadID(t *testing.T) {
 	}
 
 	for _, uploadID := range validUploadIDs {
-		if err := checkAzureUploadID(context.Background(), uploadID); err != nil {
+		if err := checkAzureUploadID(minio.GlobalContext, uploadID); err != nil {
 			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
 		}
 	}

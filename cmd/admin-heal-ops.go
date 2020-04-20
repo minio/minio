@@ -183,7 +183,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 	}
 
 	b, err := json.Marshal(&hsp)
-	return b, toAdminAPIErr(context.Background(), err)
+	return b, toAdminAPIErr(GlobalContext, err)
 }
 
 // LaunchNewHealSequence - launches a background routine that performs

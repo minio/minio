@@ -166,7 +166,7 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := newObject.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	objLock := newObject.NewNSLock(GlobalContext, minioMetaBucket, transactionConfigPrefix)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -250,12 +250,12 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
+		if err = migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient); err != nil {
 			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
 		}
 	}
 
-	if err = globalIAMSys.Init(newObject); err != nil {
+	if err = globalIAMSys.Init(GlobalContext, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize IAM system: %w", err)
 	}
 
@@ -316,7 +316,7 @@ func serverMain(ctx *cli.Context) {
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
@@ -412,7 +412,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	newObject, err := newObjectLayer(globalEndpoints)
+	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
 		// Stop watching for any certificate changes.
@@ -479,7 +479,7 @@ func serverMain(ctx *cli.Context) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
+func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
 
 	if endpointZones.NEndpoints() == 1 {
@@ -487,5 +487,5 @@ func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err err
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	return newXLZones(endpointZones)
+	return newXLZones(ctx, endpointZones)
 }

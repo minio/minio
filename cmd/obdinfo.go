@@ -80,25 +80,25 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 					})
 					continue
 				}
-				measure := func(index int) {
-					latency, throughput, err := disk.GetOBDInfo(ctx, pathJoin(endpoint.Path, minioMetaTmpBucket, mustGetUUID()))
-					driveOBDInfo := madmin.DriveOBDInfo{
-						Path:       endpoint.Path,
-						Latency:    latency,
-						Throughput: throughput,
-					}
+				measurePath := pathJoin(minioMetaTmpBucket, mustGetUUID())
+				measure := func(index int, path string) {
+					var driveOBDInfo madmin.DriveOBDInfo
+					latency, throughput, err := disk.GetOBDInfo(ctx, path, pathJoin(path, measurePath))
 					if err != nil {
 						driveOBDInfo.Error = err.Error()
 					}
+					driveOBDInfo.Path = path
+					driveOBDInfo.Latency = latency
+					driveOBDInfo.Throughput = throughput
 					drivesOBDInfo = append(drivesOBDInfo, driveOBDInfo)
 					wg.Done()
 				}
 				wg.Add(1)
 
 				if parallel {
-					go measure(i)
+					go measure(i, endpoint.Path)
 				} else {
-					measure(i)
+					measure(i, endpoint.Path)
 				}
 			}
 		}
@@ -317,16 +317,14 @@ func getLocalProcOBD(ctx context.Context) madmin.ServerProcOBDInfo {
 		sysProc.PageFaults = pageFaults
 
 		parent, err := proc.ParentWithContext(ctx)
-		if err != nil {
-			return errProcInfo(err)
+		if err == nil {
+			sysProc.Parent = parent.Pid
 		}
-		sysProc.Parent = parent.Pid
 
 		ppid, err := proc.PpidWithContext(ctx)
-		if err != nil {
-			return errProcInfo(err)
+		if err == nil {
+			sysProc.Ppid = ppid
 		}
-		sysProc.Ppid = ppid
 
 		rlimit, err := proc.RlimitWithContext(ctx)
 		if err != nil {
@@ -404,13 +402,8 @@ func getLocalOsInfoOBD(ctx context.Context) madmin.ServerOsOBDInfo {
 		}
 	}
 
-	users, err := host.UsersWithContext(ctx)
-	if err != nil {
-		return madmin.ServerOsOBDInfo{
-			Addr:  addr,
-			Error: err.Error(),
-		}
-	}
+	// ignore user err, as it cannot be obtained reliably inside containers
+	users, _ := host.UsersWithContext(ctx)
 
 	return madmin.ServerOsOBDInfo{
 		Addr:    addr,

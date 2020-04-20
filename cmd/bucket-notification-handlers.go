@@ -116,7 +116,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 			// With newer config disallowing changing / turning off
 			// notification targets without removing ARN in notification
 			// configuration we won't see this problem anymore.
-			if reflect.DeepEqual(queue.ARN, arnErr.ARN) {
+			if reflect.DeepEqual(queue.ARN, arnErr.ARN) && i < len(config.QueueList) {
 				config.QueueList = append(config.QueueList[:i],
 					config.QueueList[i+1:]...)
 			}
@@ -282,16 +282,13 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
 	// Listen Publisher and peer-listen-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	listenCh := make(chan interface{}, 4000)
 
-	peers := getRestClients(globalEndpoints)
+	peers := newPeerRestClients(globalEndpoints)
 
-	globalHTTPListen.Subscribe(listenCh, doneCh, func(evI interface{}) bool {
+	globalHTTPListen.Subscribe(listenCh, ctx.Done(), func(evI interface{}) bool {
 		ev, ok := evI.(event.Event)
 		if !ok {
 			return false
@@ -310,7 +307,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		if peer == nil {
 			continue
 		}
-		peer.Listen(listenCh, doneCh, values)
+		peer.Listen(listenCh, ctx.Done(), values)
 	}
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
@@ -336,7 +333,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 				return
 			}
 			w.(http.Flusher).Flush()
-		case <-GlobalServiceDoneCh:
+		case <-ctx.Done():
 			return
 		}
 	}

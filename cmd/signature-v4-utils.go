@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"encoding/hex"
 	"io"
@@ -64,7 +63,7 @@ func getContentSha256Cksum(r *http.Request, stype serviceType) string {
 	if stype == serviceSTS {
 		payload, err := ioutil.ReadAll(io.LimitReader(r.Body, stsRequestBodyLimit))
 		if err != nil {
-			logger.CriticalIf(context.Background(), err)
+			logger.CriticalIf(GlobalContext, err)
 		}
 		sum256 := sha256.New()
 		sum256.Write(payload)

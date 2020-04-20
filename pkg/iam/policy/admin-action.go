@@ -35,8 +35,6 @@ const (
 	AccountingUsageInfoAdminAction = "admin:AccountingUsageInfo"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
-	// PerfInfoAdminAction - allow listing performance info
-	PerfInfoAdminAction = "admin:PerfInfo"
 	// TopLocksAdminAction - allow listing top locks
 	TopLocksAdminAction = "admin:TopLocksInfo"
 	// ProfilingAdminAction - allow profiling
@@ -47,8 +45,6 @@ const (
 	ConsoleLogAdminAction = "admin:ConsoleLog"
 	// KMSKeyStatusAdminAction - allow getting KMS key status
 	KMSKeyStatusAdminAction = "admin:KMSKeyStatus"
-	// ServerHardwareInfoAdminAction - allow listing server hardware info
-	ServerHardwareInfoAdminAction = "admin:HardwareInfo"
 	// ServerInfoAdminAction - allow listing server info
 	ServerInfoAdminAction = "admin:ServerInfo"
 	// OBDInfoAdminAction - allow obtaining cluster on-board diagnostics
@@ -66,6 +62,7 @@ const (
 
 	// CreateUserAdminAction - allow creating MinIO user
 	CreateUserAdminAction = "admin:CreateUser"
+
 	// DeleteUserAdminAction - allow deleting MinIO user
 	DeleteUserAdminAction = "admin:DeleteUser"
 	// ListUsersAdminAction - allow list users permission
@@ -115,13 +112,12 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	ServerInfoAdminAction:          {},
 	StorageInfoAdminAction:         {},
 	DataUsageInfoAdminAction:       {},
-	PerfInfoAdminAction:            {},
 	TopLocksAdminAction:            {},
 	ProfilingAdminAction:           {},
 	TraceAdminAction:               {},
+	OBDInfoAdminAction:             {},
 	ConsoleLogAdminAction:          {},
 	KMSKeyStatusAdminAction:        {},
-	ServerHardwareInfoAdminAction:  {},
 	ServerUpdateAdminAction:        {},
 	ConfigUpdateAdminAction:        {},
 	CreateUserAdminAction:          {},
@@ -164,13 +160,12 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	StorageInfoAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	DataUsageInfoAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	PerfInfoAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	OBDInfoAdminAction:             condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TopLocksAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ProfilingAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TraceAdminAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ConsoleLogAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	KMSKeyStatusAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	ServerHardwareInfoAdminAction:  condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ConfigUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	CreateUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),

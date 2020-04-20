@@ -27,6 +27,9 @@ import (
 
 // Tests undoes and validates if the undoing completes successfully.
 func TestUndoMakeBucket(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -35,13 +38,13 @@ func TestUndoMakeBucket(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Remove format.json on 16 disks.
-	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	bucketName := getRandomBucketName()
-	if err = obj.MakeBucketWithLocation(context.Background(), bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(ctx, bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
 	z := obj.(*xlZones)
@@ -49,7 +52,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	undoMakeBucket(xl.getDisks(), bucketName)
 
 	// Validate if bucket was deleted properly.
-	_, err = obj.GetBucketInfo(context.Background(), bucketName)
+	_, err = obj.GetBucketInfo(ctx, bucketName)
 	if err != nil {
 		switch err.(type) {
 		case BucketNotFound:
@@ -60,8 +63,10 @@ func TestUndoMakeBucket(t *testing.T) {
 }
 
 func TestHealObjectCorrupted(t *testing.T) {
-	resetGlobalHealState()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	resetGlobalHealState()
 	defer resetGlobalHealState()
 
 	nDisks := 16
@@ -73,7 +78,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,21 +88,21 @@ func TestHealObjectCorrupted(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(context.Background(), bucket, "")
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := objLayer.NewMultipartUpload(context.Background(), bucket, object, opts)
+	uploadID, err := objLayer.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := objLayer.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := objLayer.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -107,7 +112,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		})
 	}
 
-	_, err = objLayer.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = objLayer.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
@@ -121,7 +126,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+	_, err = objLayer.HealObject(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -144,7 +149,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
-	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
+	_, err = objLayer.HealObject(ctx, bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
@@ -170,7 +175,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
-	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
+	_, err = objLayer.HealObject(ctx, bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		t.Errorf("Expected nil but received %v", err)
 	}
@@ -190,7 +195,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errFileNotFound.
-	_, err = objLayer.HealObject(context.Background(), bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
+	_, err = objLayer.HealObject(ctx, bucket, object, madmin.HealOpts{DryRun: false, Remove: true, ScanMode: madmin.HealDeepScan})
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); !ok {
 			t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
@@ -198,7 +203,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// since majority of xl.jsons are not available, object should be successfully deleted.
-	_, err = objLayer.GetObjectInfo(context.Background(), bucket, object, ObjectOptions{})
+	_, err = objLayer.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if _, ok := err.(ObjectNotFound); !ok {
 		t.Errorf("Expect %v but received %v", ObjectNotFound{Bucket: bucket, Object: object}, err)
 	}
@@ -206,6 +211,9 @@ func TestHealObjectCorrupted(t *testing.T) {
 
 // Tests healing of object.
 func TestHealObjectXL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -215,7 +223,7 @@ func TestHealObjectXL(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,21 +233,21 @@ func TestHealObjectXL(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err = obj.MakeBucketWithLocation(ctx, bucket, "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
 	// Create an object with multiple parts uploaded in decreasing
 	// part number.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucket, object, opts)
+	uploadID, err := obj.NewMultipartUpload(ctx, bucket, object, opts)
 	if err != nil {
 		t.Fatalf("Failed to create a multipart upload - %v", err)
 	}
 
 	var uploadedParts []CompletePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err1 := obj.PutObjectPart(context.Background(), bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
+		pInfo, err1 := obj.PutObjectPart(ctx, bucket, object, uploadID, partID, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), opts)
 		if err1 != nil {
 			t.Fatalf("Failed to upload a part - %v", err1)
 		}
@@ -249,7 +257,7 @@ func TestHealObjectXL(t *testing.T) {
 		})
 	}
 
-	_, err = obj.CompleteMultipartUpload(context.Background(), bucket, object, uploadID, uploadedParts, ObjectOptions{})
+	_, err = obj.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
@@ -263,7 +271,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	_, err = obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+	_, err = obj.HealObject(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -285,7 +293,7 @@ func TestHealObjectXL(t *testing.T) {
 	z.zones[0].xlDisksMu.Unlock()
 
 	// Try healing now, expect to receive errDiskNotFound.
-	_, err = obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealDeepScan})
+	_, err = obj.HealObject(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealDeepScan})
 	// since majority of xl.jsons are not available, object quorum can't be read properly and error will be errXLReadQuorum
 	if _, ok := err.(InsufficientReadQuorum); !ok {
 		t.Errorf("Expected %v but received %v", InsufficientReadQuorum{}, err)
@@ -294,6 +302,9 @@ func TestHealObjectXL(t *testing.T) {
 
 // Tests healing of empty directories
 func TestHealEmptyDirectoryXL(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
@@ -302,7 +313,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,13 +322,13 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	object := "empty-dir/"
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err = obj.MakeBucketWithLocation(ctx, bucket, "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
 	// Upload an empty directory
-	_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t,
+	_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t,
 		bytes.NewReader([]byte{}), 0, "", ""), opts)
 	if err != nil {
 		t.Fatal(err)
@@ -333,7 +344,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	}
 
 	// Heal the object
-	hr, err := obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+	hr, err := obj.HealObject(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -357,7 +368,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	}
 
 	// Heal the same object again
-	hr, err = obj.HealObject(context.Background(), bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
+	hr, err = obj.HealObject(ctx, bucket, object, madmin.HealOpts{ScanMode: madmin.HealNormalScan})
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
