@@ -81,7 +81,9 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			err := objAPI.CrawlAndGetDataUsage(ctx, nextBloomCycle, results)
+			bf, err := globalNotificationSys.UpdateBloomFilter(ctx, nextBloomCycle)
+			logger.LogIf(ctx, err)
+			err = objAPI.CrawlAndGetDataUsage(ctx, bf, results)
 			close(results)
 			logger.LogIf(ctx, err)
 			if err == nil {
@@ -206,7 +208,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 		if _, ok := f.oldCache.Cache[thisHash]; f.withFilter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
-			if !f.withFilter.containsDir(folder.name) {
+			if folder.name != dataUsageRoot && !f.withFilter.containsDir(folder.name) {
 				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)

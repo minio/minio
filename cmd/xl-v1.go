@@ -17,9 +17,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -32,7 +30,6 @@ import (
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/willf/bloom"
 )
 
 // XL constants.
@@ -204,14 +201,14 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, updates chan<- DataUsageInfo) error {
+func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	// This should only be called from runDataUsageInfo and this setup should not happen (zones).
 	return errors.New("xlObjects CrawlAndGetDataUsage not implemented")
 }
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bloomIdx uint64, updates chan<- dataUsageCache) error {
+func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	var disks []StorageAPI
 
 	for _, d := range xl.getLoadBalancedDisks() {
@@ -229,45 +226,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	err := oldCache.load(ctx, xl, dataUsageCacheName)
 	if err != nil {
 		return err
-	}
-
-	// Collect bloom filters from all disks here...
-	bf := &bloomFilter{}
-	for _, disk := range disks {
-		hist := bloomIdx - dataUsageUpdateDirCycles
-		if bloomIdx < dataUsageUpdateDirCycles {
-			hist = 0
-		}
-
-		diskBF, err := disk.UpdateBloomFilter(ctx, hist, bloomIdx)
-		if false && intDataUpdateTracker.debug {
-			b, _ := json.MarshalIndent(diskBF, "", "  ")
-			logger.Info("Disk %v, Bloom filter: %v", disk.String(), string(b))
-		}
-
-		if err != nil || !diskBF.Complete || bf == nil {
-			logger.LogIf(ctx, err)
-			bf = nil
-			continue
-		}
-
-		var tmp bloom.BloomFilter
-		_, err = tmp.ReadFrom(bytes.NewBuffer(diskBF.Filter))
-		if err != nil {
-			logger.LogIf(ctx, err)
-			bf = nil
-			continue
-		}
-		if bf.BloomFilter == nil {
-			bf.BloomFilter = &tmp
-		} else {
-			err = bf.Merge(&tmp)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				bf = nil
-				continue
-			}
-		}
 	}
 
 	// New cache..

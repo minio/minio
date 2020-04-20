@@ -247,7 +247,10 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 			}
 			continue
 		}
-
+		if buf.Len() == 0 {
+			logger.LogIf(ctx, errors.New("zero sized output, skipping save"))
+			continue
+		}
 		for _, drive := range drives {
 			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 			err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
@@ -592,14 +595,6 @@ type bloomFilterResponse struct {
 	Complete bool
 	// Binary data of the bloom filter.
 	Filter []byte
-}
-
-// cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
-// The response will contain a bloom filter starting at index x up to, but not including index y.
-// If y is 0, the response will not update y, but return the currently recorded information
-// from the current x to y-1.
-func cycleServerBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
-	return intDataUpdateTracker.cycleFilter(ctx, oldest, current)
 }
 
 // ObjectPathUpdated indicates a path has been updated.

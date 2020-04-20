@@ -54,6 +54,7 @@ const (
 	peerRESTMethodReloadFormat                 = "/reloadformat"
 	peerRESTMethodTargetExists                 = "/targetexists"
 	peerRESTMethodSendEvent                    = "/sendevent"
+	peerRESTMethodCycleBloom                   = "/cyclebloom"
 	peerRESTMethodTrace                        = "/trace"
 	peerRESTMethodListen                       = "/listen"
 	peerRESTMethodBucketLifecycleSet           = "/setbucketlifecycle"

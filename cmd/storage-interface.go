@@ -35,7 +35,6 @@ type StorageAPI interface {
 
 	DiskInfo() (info DiskInfo, err error)
 	CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)
-	UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error)
 
 	// Volume operations.
 	MakeVol(volume string) (err error)

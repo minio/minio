@@ -50,7 +50,7 @@ func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
 type GatewayUnsupported struct{}
 
 // CrawlAndGetDataUsage - crawl is not implemented for gateway
-func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, bloomIdx uint64, updates chan<- DataUsageInfo) error {
+func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
 	return NotImplemented{}
 }
