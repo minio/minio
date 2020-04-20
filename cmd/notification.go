@@ -243,6 +243,36 @@ func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
 	return ng.Wait()
 }
 
+// DeleteServiceAccount - deletes a specific service account across all peers
+func (sys *NotificationSys) DeleteServiceAccount(accessKey string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.DeleteServiceAccount(accessKey)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// LoadServiceAccount - reloads a specific service account across all peers
+func (sys *NotificationSys) LoadServiceAccount(accessKey string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.LoadServiceAccount(accessKey)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
 // BackgroundHealStatus - returns background heal status of all peers
 func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
 	states := make([]madmin.BgHealState, len(sys.peerClients))
