@@ -755,6 +755,11 @@ type sendEventResp struct {
 }
 
 func (s *peerRESTServer) CycleServerBloomFilterHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
 	ctx := newContext(r, w, "CycleServerBloomFilter")
 
 	var req bloomFilterRequest
