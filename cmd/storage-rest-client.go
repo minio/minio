@@ -151,29 +151,6 @@ func (client *storageRESTClient) Hostname() string {
 	return client.endpoint.Host
 }
 
-func (client *storageRESTClient) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(bloomFilterRequest{
-		Oldest:  oldest,
-		Current: current,
-	})
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return nil, err
-	}
-	respBody, err := client.call(storageRESTMethodUpdateBloomFilter,
-		url.Values{},
-		&buf, int64(buf.Len()))
-	defer http.DrainBody(respBody)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return nil, err
-	}
-	dec := gob.NewDecoder(respBody)
-	var resp bloomFilterResponse
-	return &resp, dec.Decode(&resp)
-}
-
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	b := cache.serialize()
 	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage,
