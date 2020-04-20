@@ -81,7 +81,7 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			bf, err := globalNotificationSys.UpdateBloomFilter(ctx, nextBloomCycle)
+			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
 			logger.LogIf(ctx, err)
 			err = objAPI.CrawlAndGetDataUsage(ctx, bf, results)
 			close(results)

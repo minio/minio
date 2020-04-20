@@ -400,9 +400,9 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 	return ng.Wait()
 }
 
-// UpdateBloomFilter will cycle all servers to the current index and
+// updateBloomFilter will cycle all servers to the current index and
 // return a merged bloom filter if a complete one can be retrieved.
-func (sys *NotificationSys) UpdateBloomFilter(ctx context.Context, current uint64) (*bloomFilter, error) {
+func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint64) (*bloomFilter, error) {
 	var req = bloomFilterRequest{
 		Current: current,
 		Oldest:  current - dataUsageUpdateDirCycles,
