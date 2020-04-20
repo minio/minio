@@ -16,9 +16,13 @@
 
 package lifecycle
 
-import (
-	"bytes"
-	"encoding/xml"
+import "encoding/xml"
+
+var (
+	errInvalidRuleID           = Errorf("ID must be less than 255 characters")
+	errEmptyRuleStatus         = Errorf("Status should not be empty")
+	errInvalidRuleStatus       = Errorf("Status must be set to either Enabled or Disabled")
+	errMissingExpirationAction = Errorf("No expiration action found")
 )
 
 // Status represents lifecycle configuration status
@@ -30,106 +34,98 @@ const (
 	Disabled Status = "Disabled"
 )
 
-// Rule - a rule for lifecycle configuration.
-type Rule struct {
-	XMLName    xml.Name   `xml:"Rule"`
-	ID         string     `xml:"ID,omitempty"`
-	Status     Status     `xml:"Status"`
-	Filter     Filter     `xml:"Filter,omitempty"`
-	Expiration Expiration `xml:"Expiration,omitempty"`
-	Transition Transition `xml:"Transition,omitempty"`
-	// FIXME: add a type to catch unsupported AbortIncompleteMultipartUpload AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
-	NoncurrentVersionExpiration NoncurrentVersionExpiration `xml:"NoncurrentVersionExpiration,omitempty"`
-	NoncurrentVersionTransition NoncurrentVersionTransition `xml:"NoncurrentVersionTransition,omitempty"`
-}
-
-var (
-	errInvalidRuleID           = Errorf("ID must be less than 255 characters")
-	errEmptyRuleStatus         = Errorf("Status should not be empty")
-	errInvalidRuleStatus       = Errorf("Status must be set to either Enabled or Disabled")
-	errMissingExpirationAction = Errorf("No expiration action found")
-)
-
-// validateID - checks if ID is valid or not.
-func (r Rule) validateID() error {
-	// cannot be longer than 255 characters
-	if len(string(r.ID)) > 255 {
-		return errInvalidRuleID
+// MarshalXML encodes to XML data.
+func (status Status) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	switch status {
+	case Enabled, Disabled:
+		return e.EncodeElement(string(status), start)
 	}
-	return nil
-}
 
-// validateStatus - checks if status is valid or not.
-func (r Rule) validateStatus() error {
-	// Status can't be empty
-	if len(r.Status) == 0 {
+	if status == "" {
 		return errEmptyRuleStatus
 	}
 
-	// Status must be one of Enabled or Disabled
-	if r.Status != Enabled && r.Status != Disabled {
-		return errInvalidRuleStatus
-	}
-	return nil
+	return errInvalidRuleStatus
 }
 
-func (r Rule) validateAction() error {
-	if r.Expiration == (Expiration{}) {
-		return errMissingExpirationAction
+// UnmarshalXML decodes XML data.
+func (status *Status) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var s string
+	if err := d.DecodeElement(&s, &start); err != nil {
+		return err
 	}
-	return nil
+
+	switch Status(s) {
+	case Enabled, Disabled:
+		*status = Status(s)
+		return nil
+	}
+
+	if s == "" {
+		return errEmptyRuleStatus
+	}
+
+	return errInvalidRuleStatus
 }
 
-func (r Rule) validateFilter() error {
-	return r.Filter.Validate()
+// Rule - a rule for lifecycle configuration.
+type Rule struct {
+	XMLName                        xml.Name                        `xml:"Rule"`
+	ID                             string                          `xml:"ID,omitempty"`
+	Status                         Status                          `xml:"Status"`
+	Filter                         *Filter                         `xml:"Filter,omitempty"`
+	Expiration                     *Expiration                     `xml:"Expiration,omitempty"`
+	Transition                     *Transition                     `xml:"Transition,omitempty"`                     // unsupported
+	AbortIncompleteMultipartUpload *AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"` // unsupported
+	NoncurrentVersionExpiration    *NoncurrentVersionExpiration    `xml:"NoncurrentVersionExpiration,omitempty"`    // unsupported
+	NoncurrentVersionTransition    *NoncurrentVersionTransition    `xml:"NoncurrentVersionTransition,omitempty"`    // unsupported
 }
 
 // Prefix - a rule can either have prefix under <filter></filter> or under
 // <filter><and></and></filter>. This method returns the prefix from the
 // location where it is available
 func (r Rule) Prefix() string {
-	if r.Filter.Prefix != "" {
-		return r.Filter.Prefix
-	}
-	if r.Filter.And.Prefix != "" {
-		return r.Filter.And.Prefix
-	}
-	return ""
+	return r.Filter.getPrefix()
 }
 
 // Tags - a rule can either have tag under <filter></filter> or under
 // <filter><and></and></filter>. This method returns all the tags from the
 // rule in the format tag1=value1&tag2=value2
 func (r Rule) Tags() string {
-	if !r.Filter.Tag.IsEmpty() {
-		return r.Filter.Tag.String()
-	}
-	if len(r.Filter.And.Tags) != 0 {
-		var buf bytes.Buffer
-		for _, t := range r.Filter.And.Tags {
-			if buf.Len() > 0 {
-				buf.WriteString("&")
-			}
-			buf.WriteString(t.String())
-		}
-		return buf.String()
-	}
-	return ""
+	return r.Filter.getTags()
 }
 
-// Validate - validates the rule element
-func (r Rule) Validate() error {
-	if err := r.validateID(); err != nil {
+// MarshalXML encodes to XML data.
+func (r Rule) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if len(r.ID) > 255 {
+		return errInvalidRuleID
+	}
+
+	if r.Expiration == nil {
+		return errMissingExpirationAction
+	}
+
+	type subRule Rule
+	return e.EncodeElement(subRule(r), start)
+}
+
+// UnmarshalXML decodes XML data.
+func (r *Rule) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	type subRule Rule
+	var sr subRule
+	if err := d.DecodeElement(&sr, &start); err != nil {
 		return err
 	}
-	if err := r.validateStatus(); err != nil {
-		return err
+
+	// cannot be longer than 255 characters
+	if len(sr.ID) > 255 {
+		return errInvalidRuleID
 	}
-	if err := r.validateAction(); err != nil {
-		return err
+
+	if sr.Expiration == nil {
+		return errMissingExpirationAction
 	}
-	if err := r.validateFilter(); err != nil {
-		return err
-	}
+
+	*r = Rule(sr)
 	return nil
 }

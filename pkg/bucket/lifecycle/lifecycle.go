@@ -40,103 +40,124 @@ const (
 	DeleteAction
 )
 
+func validateRules(rules []Rule) error {
+	// Lifecycle config should have at least one rule
+	if len(rules) == 0 {
+		return errLifecycleNoRule
+	}
+
+	if len(rules) > 1000 {
+		return errLifecycleTooManyRules
+	}
+
+	prefixes := []string{}
+	for _, rule := range rules {
+		prefix := rule.Prefix()
+		for i := range prefixes {
+			if prefix != prefixes[i] && (strings.HasPrefix(prefixes[i], prefix) || strings.HasPrefix(prefix, prefixes[i])) {
+				return errLifecycleOverlappingPrefix
+			}
+		}
+		prefixes = append(prefixes, prefix)
+	}
+
+	return nil
+}
+
 // Lifecycle - Configuration for bucket lifecycle.
 type Lifecycle struct {
 	XMLName xml.Name `xml:"LifecycleConfiguration"`
 	Rules   []Rule   `xml:"Rule"`
 }
 
-// IsEmpty - returns whether policy is empty or not.
-func (lc Lifecycle) IsEmpty() bool {
-	return len(lc.Rules) == 0
-}
-
-// ParseLifecycleConfig - parses data in given reader to Lifecycle.
-func ParseLifecycleConfig(reader io.Reader) (*Lifecycle, error) {
-	var lc Lifecycle
-	if err := xml.NewDecoder(reader).Decode(&lc); err != nil {
-		return nil, err
-	}
-	if err := lc.Validate(); err != nil {
-		return nil, err
-	}
-	return &lc, nil
-}
-
-// Validate - validates the lifecycle configuration
-func (lc Lifecycle) Validate() error {
-	// Lifecycle config can't have more than 1000 rules
-	if len(lc.Rules) > 1000 {
-		return errLifecycleTooManyRules
-	}
-	// Lifecycle config should have at least one rule
-	if len(lc.Rules) == 0 {
-		return errLifecycleNoRule
-	}
-	// Validate all the rules in the lifecycle config
-	for _, r := range lc.Rules {
-		if err := r.Validate(); err != nil {
-			return err
-		}
-	}
-	// Compare every rule's prefix with every other rule's prefix
-	for i := range lc.Rules {
-		if i == len(lc.Rules)-1 {
-			break
-		}
-		// N B Empty prefixes overlap with all prefixes
-		otherRules := lc.Rules[i+1:]
-		for _, otherRule := range otherRules {
-			if strings.HasPrefix(lc.Rules[i].Prefix(), otherRule.Prefix()) ||
-				strings.HasPrefix(otherRule.Prefix(), lc.Rules[i].Prefix()) {
-				return errLifecycleOverlappingPrefix
-			}
-		}
-	}
-	return nil
-}
-
-// FilterRuleActions returns the expiration and transition from the object name
+// getActions returns the expiration and transition from the object name
 // after evaluating all rules.
-func (lc Lifecycle) FilterRuleActions(objName, objTags string) (Expiration, Transition) {
+func (lc Lifecycle) getActions(objName, objTags string) (*Expiration, *Transition) {
 	if objName == "" {
-		return Expiration{}, Transition{}
+		return nil, nil
 	}
+
 	for _, rule := range lc.Rules {
 		if rule.Status == Disabled {
 			continue
 		}
+
+		if !strings.HasPrefix(objName, rule.Prefix()) {
+			continue
+		}
+
 		tags := rule.Tags()
-		if strings.HasPrefix(objName, rule.Prefix()) {
-			if tags != "" {
-				if strings.Contains(objTags, tags) {
-					return rule.Expiration, Transition{}
-				}
-			} else {
-				return rule.Expiration, Transition{}
-			}
+		if tags == "" {
+			return rule.Expiration, nil
+		}
+
+		if strings.Contains(objTags, tags) {
+			return rule.Expiration, nil
 		}
 	}
-	return Expiration{}, Transition{}
+
+	return nil, nil
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
 func (lc Lifecycle) ComputeAction(objName, objTags string, modTime time.Time) Action {
-	var action = NoneAction
 	if modTime.IsZero() {
-		return action
+		return NoneAction
 	}
-	exp, _ := lc.FilterRuleActions(objName, objTags)
-	if !exp.IsDateNull() {
-		if time.Now().After(exp.Date.Time) {
-			action = DeleteAction
-		}
+
+	exp, _ := lc.getActions(objName, objTags)
+	if exp == nil {
+		return NoneAction
 	}
-	if !exp.IsDaysNull() {
-		if time.Now().After(modTime.Add(time.Duration(exp.Days) * 24 * time.Hour)) {
-			action = DeleteAction
-		}
+
+	if exp.Date != nil {
+		modTime = exp.Date.Time
+	} else {
+		modTime = modTime.Add(time.Duration(*exp.Days) * 24 * time.Hour)
 	}
-	return action
+
+	if time.Now().After(modTime) {
+		return DeleteAction
+	}
+
+	return NoneAction
+}
+
+// MarshalXML encodes to XML data.
+func (lc Lifecycle) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if err := validateRules(lc.Rules); err != nil {
+		return err
+	}
+
+	type subLifecycle Lifecycle // sub-type to avoid recursively called MarshalXML()
+	start.Name.Local = "LifecycleConfiguration"
+	return e.EncodeElement(subLifecycle(lc), start)
+}
+
+// UnmarshalXML decodes XML data.
+func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	type subLifecycle Lifecycle // sub-type to avoid recursively called UnmarshalXML()
+	var slc subLifecycle
+	if err := d.DecodeElement(&slc, &start); err != nil {
+		return err
+	}
+
+	if err := validateRules(slc.Rules); err != nil {
+		return err
+	}
+
+	*lc = Lifecycle(slc)
+	return nil
+}
+
+// ParseLifecycleConfig - parses data in given reader to Lifecycle.
+func ParseLifecycleConfig(reader io.Reader) (*Lifecycle, error) {
+	var config Lifecycle
+
+	if err := xml.NewDecoder(reader).Decode(&config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }

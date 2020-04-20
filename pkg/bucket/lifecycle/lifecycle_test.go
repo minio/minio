@@ -24,18 +24,21 @@ import (
 	"time"
 )
 
+var threeDays = ExpirationDays(3)
+
 func TestParseLifecycleConfig(t *testing.T) {
 	// Test for  lifecycle config with more than 1000 rules
 	var manyRules []Rule
 	rule := Rule{
 		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(3)},
+		Expiration: &Expiration{Days: &threeDays},
 	}
 	for i := 0; i < 1001; i++ {
 		manyRules = append(manyRules, rule)
 	}
 
-	manyRuleLcConfig, err := xml.Marshal(Lifecycle{Rules: manyRules})
+	type testLifecycle Lifecycle // to override checks.
+	manyRuleLcConfig, err := xml.Marshal(testLifecycle{Rules: manyRules})
 	if err != nil {
 		t.Fatal("Failed to marshal lifecycle config with more than 1000 rules")
 	}
@@ -43,22 +46,22 @@ func TestParseLifecycleConfig(t *testing.T) {
 	// Test for lifecycle config with rules containing overlapping prefixes
 	rule1 := Rule{
 		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(3)},
-		Filter: Filter{
+		Expiration: &Expiration{Days: &threeDays},
+		Filter: &Filter{
 			Prefix: "/a/b",
 		},
 	}
 	rule2 := Rule{
 		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(3)},
-		Filter: Filter{
-			And: And{
+		Expiration: &Expiration{Days: &threeDays},
+		Filter: &Filter{
+			And: &And{
 				Prefix: "/a/b/c",
 			},
 		},
 	}
 	overlappingRules := []Rule{rule1, rule2}
-	overlappingLcConfig, err := xml.Marshal(Lifecycle{Rules: overlappingRules})
+	overlappingLcConfig, err := xml.Marshal(testLifecycle{Rules: overlappingRules})
 	if err != nil {
 		t.Fatal("Failed to marshal lifecycle config with rules having overlapping prefix")
 	}
@@ -115,18 +118,18 @@ func TestParseLifecycleConfig(t *testing.T) {
 // marshaling/unmarshaling can handle output from each other
 func TestMarshalLifecycleConfig(t *testing.T) {
 	// Time at midnight UTC
-	midnightTS := ExpirationDate{time.Date(2019, time.April, 20, 0, 0, 0, 0, time.UTC)}
+	midnightTS := &ExpirationDate{time.Date(2019, time.April, 20, 0, 0, 0, 0, time.UTC)}
 	lc := Lifecycle{
 		Rules: []Rule{
 			{
 				Status:     "Enabled",
-				Filter:     Filter{Prefix: "prefix-1"},
-				Expiration: Expiration{Days: ExpirationDays(3)},
+				Filter:     &Filter{Prefix: "prefix-1"},
+				Expiration: &Expiration{Days: &threeDays},
 			},
 			{
 				Status:     "Enabled",
-				Filter:     Filter{Prefix: "prefix-1"},
-				Expiration: Expiration{Date: ExpirationDate(midnightTS)},
+				Filter:     &Filter{Prefix: "prefix-1"},
+				Expiration: &Expiration{Date: midnightTS},
 			},
 		},
 	}

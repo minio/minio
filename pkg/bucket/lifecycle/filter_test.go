@@ -112,12 +112,8 @@ func TestUnsupportedFilters(t *testing.T) {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
 			var filter Filter
 			err := xml.Unmarshal([]byte(tc.inputXML), &filter)
-			if err != nil {
-				t.Fatalf("%d: Expected no error but got %v", i+1, err)
-			}
-			err = filter.Validate()
 			if err != tc.expectedErr {
-				t.Fatalf("%d: Expected %v but got %v", i+1, tc.expectedErr, err)
+				t.Fatalf("%d: Expected no error but got %v", i+1, err)
 			}
 		})
 	}

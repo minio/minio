@@ -92,11 +92,6 @@ func TestInvalidExpiration(t *testing.T) {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
 			var expiration Expiration
 			err := xml.Unmarshal([]byte(tc.inputXML), &expiration)
-			if err != nil {
-				t.Fatalf("%d: %v", i+1, err)
-			}
-
-			err = expiration.Validate()
 			if err != tc.expectedErr {
 				t.Fatalf("%d: %v", i+1, err)
 			}

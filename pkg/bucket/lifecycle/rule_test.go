@@ -100,11 +100,7 @@ func TestInvalidRules(t *testing.T) {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
 			var rule Rule
 			err := xml.Unmarshal([]byte(tc.inputXML), &rule)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if err := rule.Validate(); err != tc.expectedErr {
+			if err != tc.expectedErr {
 				t.Fatalf("%d: Expected %v but got %v", i+1, tc.expectedErr, err)
 			}
 		})

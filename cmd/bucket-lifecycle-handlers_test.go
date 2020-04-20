@@ -189,7 +189,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			bucketName:         bucketName,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
-			body:               []byte(`<LifecycleConfiguration><Rule><ID>id</ID><Filter><Prefix>logs/</Prefix><Tag><Key>Key1</Key><Value>Value1</Value></Tag></Filter><Status>Enabled</Status><Expiration><Date>365</Date></Expiration></Rule></LifecycleConfiguration>`),
+			body:               []byte(`<LifecycleConfiguration><Rule><ID>id</ID><Filter><Prefix>logs/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>365</Date></Expiration></Rule></LifecycleConfiguration>`),
 			expectedRespStatus: http.StatusBadRequest,
 			lifecycleResponse:  []byte(``),
 			errorResponse: APIErrorResponse{

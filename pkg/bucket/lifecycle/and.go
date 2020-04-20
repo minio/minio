@@ -22,43 +22,46 @@ import (
 	"github.com/minio/minio-go/v6/pkg/tags"
 )
 
-// And - a tag to combine a prefix and multiple tags for lifecycle configuration rule.
-type And struct {
-	XMLName xml.Name   `xml:"And"`
-	Prefix  string     `xml:"Prefix,omitempty"`
-	Tags    []tags.Tag `xml:"Tag,omitempty"`
-}
-
 var errDuplicateTagKey = Errorf("Duplicate Tag Keys are not allowed")
 
-// isEmpty returns true if Tags field is null
-func (a And) isEmpty() bool {
-	return len(a.Tags) == 0 && a.Prefix == ""
+type andRule struct {
+	Prefix string     `xml:"Prefix,omitempty"`
+	Tags   []tags.Tag `xml:"Tag"`
 }
 
-// Validate - validates the And field
-func (a And) Validate() error {
-	if a.ContainsDuplicateTag() {
-		return errDuplicateTagKey
+// And - a tag to combine a prefix and multiple tags for lifecycle configuration rule.
+type And struct {
+	Prefix string
+	Tags   map[string]string
+}
+
+// MarshalXML encodes to XML data.
+func (a And) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	sa := andRule{Prefix: a.Prefix}
+	for key, value := range a.Tags {
+		sa.Tags = append(sa.Tags, tags.Tag{Key: key, Value: value})
 	}
-	for _, t := range a.Tags {
-		if err := t.Validate(); err != nil {
-			return err
+
+	return e.EncodeElement(sa, start)
+}
+
+// UnmarshalXML decodes XML data.
+func (a *And) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	sa := andRule{}
+	if err := d.DecodeElement(&sa, &start); err != nil {
+		return err
+	}
+
+	m := make(map[string]string)
+	for _, tag := range sa.Tags {
+		if _, found := m[tag.Key]; found {
+			return errDuplicateTagKey
 		}
+
+		m[tag.Key] = tag.Value
 	}
+
+	a.Prefix = sa.Prefix
+	a.Tags = m
 	return nil
-}
-
-// ContainsDuplicateTag - returns true if duplicate keys are present in And
-func (a And) ContainsDuplicateTag() bool {
-	x := make(map[string]struct{}, len(a.Tags))
-
-	for _, t := range a.Tags {
-		if _, has := x[t.Key]; has {
-			return true
-		}
-		x[t.Key] = struct{}{}
-	}
-
-	return false
 }

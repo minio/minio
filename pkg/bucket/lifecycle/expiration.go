@@ -28,31 +28,31 @@ var (
 	errLifecycleDateNotMidnight   = Errorf("'Date' must be at midnight GMT")
 )
 
-// ExpirationDays is a type alias to unmarshal Days in Expiration
-type ExpirationDays int
+// ExpirationDays is non-zero number of days.
+type ExpirationDays uint
 
-// UnmarshalXML parses number of days from Expiration and validates if
-// greater than zero
-func (eDays *ExpirationDays) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	var numDays int
-	err := d.DecodeElement(&numDays, &startElement)
-	if err != nil {
-		return err
-	}
-	if numDays <= 0 {
+// MarshalXML encodes to XML data.
+func (days ExpirationDays) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if days == 0 {
 		return errLifecycleInvalidDays
 	}
-	*eDays = ExpirationDays(numDays)
-	return nil
+
+	return e.EncodeElement(uint(days), start)
 }
 
-// MarshalXML encodes number of days to expire if it is non-zero and
-// encodes empty string otherwise
-func (eDays *ExpirationDays) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
-	if *eDays == ExpirationDays(0) {
-		return nil
+// UnmarshalXML decodes XML data.
+func (days *ExpirationDays) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var ui uint
+	if err := d.DecodeElement(&ui, &start); err != nil {
+		return err
 	}
-	return e.EncodeElement(int(*eDays), startElement)
+
+	if ui == 0 {
+		return errLifecycleInvalidDays
+	}
+
+	*days = ExpirationDays(ui)
+	return nil
 }
 
 // ExpirationDate is a embedded type containing time.Time to unmarshal
@@ -61,73 +61,73 @@ type ExpirationDate struct {
 	time.Time
 }
 
-// UnmarshalXML parses date from Expiration and validates date format
-func (eDate *ExpirationDate) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	var dateStr string
-	err := d.DecodeElement(&dateStr, &startElement)
-	if err != nil {
-		return err
-	}
-	// While AWS documentation mentions that the date specified
-	// must be present in ISO 8601 format, in reality they allow
-	// users to provide RFC 3339 compliant dates.
-	expDate, err := time.Parse(time.RFC3339, dateStr)
-	if err != nil {
+// MarshalXML encodes to XML data.
+func (edate ExpirationDate) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if edate.IsZero() {
 		return errLifecycleInvalidDate
 	}
-	// Allow only date timestamp specifying midnight GMT
-	hr, min, sec := expDate.Clock()
-	nsec := expDate.Nanosecond()
-	loc := expDate.Location()
-	if !(hr == 0 && min == 0 && sec == 0 && nsec == 0 && loc.String() == time.UTC.String()) {
+
+	expected := time.Date(edate.Year(), edate.Month(), edate.Day(), 0, 0, 0, 0, time.UTC)
+	if !edate.Equal(expected) {
 		return errLifecycleDateNotMidnight
 	}
 
-	*eDate = ExpirationDate{expDate}
-	return nil
+	return e.EncodeElement(edate.Format(time.RFC3339), start)
 }
 
-// MarshalXML encodes expiration date if it is non-zero and encodes
-// empty string otherwise
-func (eDate *ExpirationDate) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
-	if *eDate == (ExpirationDate{time.Time{}}) {
-		return nil
+// UnmarshalXML decodes XML data.
+func (edate *ExpirationDate) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	var s string
+	if err := d.DecodeElement(&s, &start); err != nil {
+		return err
 	}
-	return e.EncodeElement(eDate.Format(time.RFC3339), startElement)
+
+	// While AWS documentation mentions that the date specified
+	// must be present in ISO 8601 format, in reality they allow
+	// users to provide RFC 3339 compliant dates.
+	date, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return errLifecycleInvalidDate
+	}
+
+	expected := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	if !date.Equal(expected) {
+		return errLifecycleDateNotMidnight
+	}
+
+	*edate = ExpirationDate{date}
+	return nil
 }
 
 // Expiration - expiration actions for a rule in lifecycle configuration.
 type Expiration struct {
-	XMLName xml.Name       `xml:"Expiration"`
-	Days    ExpirationDays `xml:"Days,omitempty"`
-	Date    ExpirationDate `xml:"Date,omitempty"`
+	XMLName xml.Name        `xml:"Expiration"`
+	Days    *ExpirationDays `xml:"Days,omitempty"`
+	Date    *ExpirationDate `xml:"Date,omitempty"`
 }
 
-// Validate - validates the "Expiration" element
-func (e Expiration) Validate() error {
-	// Neither expiration days or date is specified
-	if e.IsDaysNull() && e.IsDateNull() {
-		return errLifecycleInvalidExpiration
+// MarshalXML encodes XML date.
+func (ex Expiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if (ex.Days != nil) != (ex.Date != nil) { // ex.Days XOR ex.Date
+		type subExpiration Expiration // sub-type to avoid recursively called MarshalXML()
+		return e.EncodeElement(subExpiration(ex), start)
 	}
 
-	// Both expiration days and date are specified
-	if !e.IsDaysNull() && !e.IsDateNull() {
-		return errLifecycleInvalidExpiration
+	return errLifecycleInvalidExpiration
+}
+
+// UnmarshalXML decodes XML data.
+func (ex *Expiration) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	type subExpiration Expiration // sub-type to avoid recursively called UnmarshalXML()
+	var se subExpiration
+	if err := d.DecodeElement(&se, &start); err != nil {
+		return err
 	}
-	return nil
-}
 
-// IsDaysNull returns true if days field is null
-func (e Expiration) IsDaysNull() bool {
-	return e.Days == ExpirationDays(0)
-}
+	if (se.Days != nil) != (se.Date != nil) { // se.Days XOR se.Date
+		*ex = Expiration(se)
+		return nil
+	}
 
-// IsDateNull returns true if date field is null
-func (e Expiration) IsDateNull() bool {
-	return e.Date == ExpirationDate{time.Time{}}
-}
-
-// IsNull returns true if both date and days fields are null
-func (e Expiration) IsNull() bool {
-	return e.IsDaysNull() && e.IsDateNull()
+	return errLifecycleInvalidExpiration
 }

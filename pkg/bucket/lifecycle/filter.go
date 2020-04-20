@@ -18,76 +18,73 @@ package lifecycle
 
 import (
 	"encoding/xml"
+	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/tags"
 )
 
-var (
-	errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
-)
+var errInvalidFilter = Errorf("Filter must have exactly one of Prefix, Tag, or And specified")
+
+func isAllowed(prefix string, and *And, tag *tags.Tag) bool {
+	return (prefix != "") != (and != nil) != (tag != nil) || // prefix XOR and XOR tag.
+		(prefix == "" && and == nil && tag == nil) // empty prefix allowed.
+}
 
 // Filter - a filter for a lifecycle configuration Rule.
 type Filter struct {
-	XMLName xml.Name `xml:"Filter"`
-	Prefix  string
-	And     And
-	Tag     tags.Tag
+	XMLName xml.Name  `xml:"Filter"`
+	Prefix  string    `xml:"Prefix"`
+	And     *And      `xml:"And,omitempty"`
+	Tag     *tags.Tag `xml:"Tag,omitempty"`
 }
 
-// MarshalXML - produces the xml representation of the Filter struct
-// only one of Prefix, And and Tag should be present in the output.
+func (f Filter) getPrefix() string {
+	if f.Prefix != "" {
+		return f.Prefix
+	}
+
+	if f.And != nil {
+		return f.And.Prefix
+	}
+
+	return ""
+}
+
+func (f Filter) getTags() string {
+	s := []string{}
+	if f.And != nil {
+		for key, value := range f.And.Tags {
+			s = append(s, key+"="+value)
+		}
+	} else if f.Tag != nil {
+		s = append(s, f.Tag.String())
+	}
+
+	return strings.Join(s, "&")
+}
+
+// MarshalXML encodes to XML data.
 func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	if err := e.EncodeToken(start); err != nil {
+	if isAllowed(f.Prefix, f.And, f.Tag) {
+		type subFilter Filter // sub-type to avoid recursively called MarshalXML()
+		return e.EncodeElement(subFilter(f), start)
+	}
+
+	return errInvalidFilter
+}
+
+// UnmarshalXML decodes XML data.
+func (f *Filter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	type subFilter Filter // sub-type to avoid recursively called UnmarshalXML()
+	sf := subFilter{}
+	if err := d.DecodeElement(&sf, &start); err != nil {
 		return err
 	}
 
-	switch {
-	case !f.And.isEmpty():
-		if err := e.EncodeElement(f.And, xml.StartElement{Name: xml.Name{Local: "And"}}); err != nil {
-			return err
-		}
-	case !f.Tag.IsEmpty():
-		if err := e.EncodeElement(f.Tag, xml.StartElement{Name: xml.Name{Local: "Tag"}}); err != nil {
-			return err
-		}
-	default:
-		// Always print Prefix field when both And & Tag are empty
-		if err := e.EncodeElement(f.Prefix, xml.StartElement{Name: xml.Name{Local: "Prefix"}}); err != nil {
-			return err
-		}
+	if isAllowed(sf.Prefix, sf.And, sf.Tag) {
+		*f = Filter(sf)
+		return nil
 	}
 
-	return e.EncodeToken(xml.EndElement{Name: start.Name})
-}
-
-// Validate - validates the filter element
-func (f Filter) Validate() error {
-	// A Filter must have exactly one of Prefix, Tag, or And specified.
-	if !f.And.isEmpty() {
-		if f.Prefix != "" {
-			return errInvalidFilter
-		}
-		if !f.Tag.IsEmpty() {
-			return errInvalidFilter
-		}
-		if err := f.And.Validate(); err != nil {
-			return err
-		}
-	}
-	if f.Prefix != "" {
-		if !f.Tag.IsEmpty() {
-			return errInvalidFilter
-		}
-	}
-	if !f.Tag.IsEmpty() {
-		if err := f.Tag.Validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// isEmpty - returns true if Filter tag is empty
-func (f Filter) isEmpty() bool {
-	return f.And.isEmpty() && f.Prefix == "" && f.Tag.IsEmpty()
+	return errInvalidFilter
 }
