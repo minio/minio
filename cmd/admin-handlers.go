@@ -1457,7 +1457,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Mode:         mode,
 		Domain:       domain,
 		Region:       globalServerRegion,
-		SQSARN:       globalNotificationSys.GetARNList(),
+		SQSARN:       globalNotificationSys.GetARNList(false),
 		DeploymentID: globalDeploymentID,
 		Buckets:      buckets,
 		Objects:      objects,
