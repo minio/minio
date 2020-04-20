@@ -317,7 +317,7 @@ func TestParsingUploadChunkSize(t *testing.T) {
 		os.Setenv(key, chunkValue)
 		result := getUploadChunkSizeFromEnv(key, "0.25")
 		if result != azureDefaultUploadChunkSize {
-			t.Errorf("Test %d: expected: %g, got: %d", i+1, azureDefaultUploadChunkSize, result)
+			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
 		}
 	}
 
@@ -331,7 +331,7 @@ func TestParsingUploadChunkSize(t *testing.T) {
 		os.Setenv(key, chunkValue)
 		result := getUploadChunkSizeFromEnv(key, "0.25")
 		if result == azureDefaultUploadChunkSize {
-			t.Errorf("Test %d: expected: %g, got: %d", i+1, azureDefaultUploadChunkSize, result)
+			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
 		}
 	}
 

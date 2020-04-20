@@ -50,7 +50,7 @@ import (
 )
 
 var (
-	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, "0.25")
+	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, "25")
 	azureSdkTimeout        = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
 	azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
 )
@@ -62,8 +62,8 @@ const (
 	// than 0.5 MB per chunk to stay within the defaultDialTimeout tolerance.
 	// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
 	// To change the upload chunk size, set the environmental variable MINIO_AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
-	azureDefaultUploadChunkSize = 0.25 * humanize.MiByte
-	azureUploadMaxMemoryUsage   = 10 * humanize.MiByte
+	azureDefaultUploadChunkSize = 25 * humanize.MiByte
+	azureUploadMaxMemoryUsage   = 100 * humanize.MiByte
 	azureChunkSizeEnvVar        = "MINIO_AZURE_CHUNK_SIZE_MB"
 
 	azureDownloadRetryAttempts = 5
