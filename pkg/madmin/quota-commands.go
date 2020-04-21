@@ -64,7 +64,7 @@ func (adm *AdminClient) RemoveBucketQuota(ctx context.Context, bucket string) er
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent {
 		return httpRespToErrorResponse(resp)
 	}
 
@@ -124,7 +124,7 @@ func (adm *AdminClient) SetBucketQuota(ctx context.Context, bucket string, quota
 		content:     data,
 	}
 
-	// Execute PUT on /minio/admin/v3/add-user to set a user.
+	// Execute PUT on /minio/admin/v3/set-bucket-quota to set quota for a bucket.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)

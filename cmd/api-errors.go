@@ -238,6 +238,7 @@ const (
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
 	ErrAdminNoSuchQuotaConfiguration
+	ErrAdminBucketQuotaDisabled
 
 	ErrHealNotImplemented
 	ErrHealNoSuchProcess
@@ -1098,9 +1099,14 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminNoSuchQuotaConfiguration: {
-		Code:           "NoSuchQuotaConfiguration",
+		Code:           "XMinioAdminNoSuchQuotaConfiguration",
 		Description:    "The quota configuration does not exist",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminBucketQuotaDisabled: {
+		Code:           "XMinioAdminBucketQuotaDisabled",
+		Description:    "Quota specified but disk usage crawl is disabled on MinIO server",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",

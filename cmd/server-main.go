@@ -275,7 +275,7 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
-	// Initialize bucket object lock.
+	// Initialize bucket quota system.
 	if err = initBucketQuotaSys(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
 	}

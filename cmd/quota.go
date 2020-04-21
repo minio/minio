@@ -81,9 +81,7 @@ func (sys *BucketQuotaSys) Keys() []string {
 
 // NewBucketQuotaSys returns initialized BucketQuotaSys
 func NewBucketQuotaSys() *BucketQuotaSys {
-	return &BucketQuotaSys{
-		quotaMap: map[string]madmin.BucketQuota{},
-	}
+	return &BucketQuotaSys{quotaMap: map[string]madmin.BucketQuota{}}
 }
 
 // parseBucketQuota parses BucketQuota from json
@@ -98,22 +96,39 @@ func parseBucketQuota(data []byte) (quotaCfg madmin.BucketQuota, err error) {
 	return
 }
 
-func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
-	q, ok := globalBucketQuotaSys.Get(bucket)
-	if !ok {
-		return nil
-	}
-	objectAPI := newObjectLayerWithoutSafeModeFn()
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err != nil {
-		return err
-	}
+type bucketStorageCache struct {
+	bucketsSizes map[string]uint64
+	lastUpdate   time.Time
+	mu           sync.Mutex
+}
 
-	currUsage := dataUsageInfo.BucketsSizes[bucket]
+func (b *bucketStorageCache) check(ctx context.Context, q madmin.BucketQuota, bucket string, size int64) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if time.Since(b.lastUpdate) > 10*time.Second {
+		dui, err := loadDataUsageFromBackend(ctx, newObjectLayerWithoutSafeModeFn())
+		if err != nil {
+			return err
+		}
+		b.lastUpdate = time.Now()
+		b.bucketsSizes = dui.BucketsSizes
+	}
+	currUsage := b.bucketsSizes[bucket]
 	if (currUsage + uint64(size)) > q.Quota {
 		return BucketQuotaExceeded{Bucket: bucket}
 	}
 	return nil
+}
+func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
+	if size < 0 {
+		return nil
+	}
+	q, ok := globalBucketQuotaSys.Get(bucket)
+	if !ok {
+		return nil
+	}
+
+	return globalBucketStorageCache.check(ctx, q, bucket, size)
 }
 
 func initBucketQuotaSys(buckets []BucketInfo, objAPI ObjectLayer) error {
@@ -167,7 +182,6 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
 		return nil
 	}
-
 	for _, bucket := range globalBucketQuotaSys.Keys() {
 		// Check if the current bucket has quota restrictions, if not skip it
 		cfg, ok := globalBucketQuotaSys.Get(bucket)
@@ -183,7 +197,10 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		if err != nil {
 			return err
 		}
-		toFree := dataUsageInfo.BucketsSizes[bucket] - cfg.Quota
+		var toFree uint64
+		if dataUsageInfo.BucketsSizes[bucket] > cfg.Quota {
+			toFree = dataUsageInfo.BucketsSizes[bucket] - cfg.Quota
+		}
 		if toFree <= 0 {
 			continue
 		}
@@ -198,7 +215,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		// ModTime to find the oldest objects in bucket to delete. In
 		// the context of bucket quota enforcement - number of hits are
 		// irrelevant.
-		scorer, err := newFileScorer(int64(toFree), time.Now().Unix(), 1)
+		scorer, err := newFileScorer(toFree, time.Now().Unix(), 1)
 		if err != nil {
 			return err
 		}
@@ -214,7 +231,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		numKeys := len(scorer.fileNames())
 		for i, key := range scorer.fileNames() {
 			objects = append(objects, key)
-			if len(objects) < maxObjectList && (i-1 < numKeys) {
+			if len(objects) < maxObjectList && (i < numKeys-1) {
 				// skip deletion until maxObjectList or end of slice
 				continue
 			}

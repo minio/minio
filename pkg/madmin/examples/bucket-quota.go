@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -36,8 +37,8 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	kiB int64 = 1 << 10
-	ctx :=  context.Background()
+	var kiB int64 = 1 << 10
+	ctx := context.Background()
 	// set bucket quota config
 	if err := madmClnt.SetBucketQuota(ctx, "bucket-name", 64*kiB, HardQuota); err != nil {
 		log.Fatalln(err)
