@@ -71,6 +71,11 @@ func (target ExampleTarget) IsActive() (bool, error) {
 	return false, errors.New("not connected to target server/service")
 }
 
+// HasQueueStore - No-Op. Added for interface compatibility
+func (target ExampleTarget) HasQueueStore() bool {
+	return false
+}
+
 func TestTargetListAdd(t *testing.T) {
 	targetListCase1 := NewTargetList()
 
