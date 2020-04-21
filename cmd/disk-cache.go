@@ -312,7 +312,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}()
 	cleanupBackend := func() { bkReader.Close() }
 	cleanupPipe := func() { pipeWriter.Close() }
-	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts.CheckCopyPrecondFn, cleanupBackend, cleanupPipe)
+	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts, cleanupBackend, cleanupPipe)
 }
 
 // Returns ObjectInfo from cache if available.
