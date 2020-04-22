@@ -18,13 +18,13 @@
 # handle command line arguments
 if [ $# -ne 2 ]; then
     echo "usage: run.sh <OUTPUT-LOG-FILE> <ERROR-LOG-FILE>"
-    exit -1
+    exit 1
 fi
 
 output_log_file="$1"
 error_log_file="$2"
 
 # run tests
-cd /mint/run/core/aws-sdk-java/ || exit -1
+cd /mint/run/core/aws-sdk-java/ || exit 1
 
 java -jar FunctionalTests.jar 1>>"$output_log_file" 2>"$error_log_file"
