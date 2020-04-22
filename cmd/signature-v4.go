@@ -280,6 +280,11 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	// Get the encoded query.
 	encodedQuery := query.Encode()
 
+	// Verify if credential scope date is same request date
+	// - https://docs.aws.amazon.com/general/latest/gr/sigv4-date-handling.html
+	if pSignValues.Date.Format(yyyymmdd) != t.Format(yyyymmdd) {
+		return ErrAuthorizationDateHeaderMalformed
+	}
 	// Verify if date query is same.
 	if req.URL.Query().Get(xhttp.AmzDate) != query.Get(xhttp.AmzDate) {
 		return ErrSignatureDoesNotMatch
@@ -366,6 +371,12 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, st
 	t, e := time.Parse(iso8601Format, date)
 	if e != nil {
 		return ErrMalformedDate
+	}
+
+	// Verify if credential scope date is same request date
+	// - https://docs.aws.amazon.com/general/latest/gr/sigv4-date-handling.html
+	if signV4Values.Credential.scope.date.Format(yyyymmdd) != t.Format(yyyymmdd) {
+		return ErrAuthorizationDateHeaderMalformed
 	}
 
 	// Query string.

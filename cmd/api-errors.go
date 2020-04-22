@@ -111,6 +111,7 @@ const (
 	ErrInvalidPart
 	ErrInvalidPartOrder
 	ErrAuthorizationHeaderMalformed
+	ErrAuthorizationDateHeaderMalformed
 	ErrMalformedPOSTRequest
 	ErrPOSTFileRequired
 	ErrSignatureVersionNotSupported
@@ -577,6 +578,11 @@ var errorCodes = errorCodeMap{
 	ErrAuthorizationHeaderMalformed: {
 		Code:           "AuthorizationHeaderMalformed",
 		Description:    "The authorization header is malformed; the region is wrong; expecting 'us-east-1'.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAuthorizationDateHeaderMalformed: {
+		Code:           "AuthorizationHeaderMalformed",
+		Description:    "The authorization header is malformed; Invalid credential date. Date is not the same as X-Amz-Date.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMalformedPOSTRequest: {
