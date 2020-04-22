@@ -282,7 +282,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// Verify if credential scope date is same request date
 	// - https://docs.aws.amazon.com/general/latest/gr/sigv4-date-handling.html
-	if pSignValues.Date.Format(yyyymmdd) != t.Format(yyyymmdd) {
+	if pSignValues.Credential.scope.date.Format(yyyymmdd) != t.Format(yyyymmdd) {
 		return ErrAuthorizationDateHeaderMalformed
 	}
 	// Verify if date query is same.
