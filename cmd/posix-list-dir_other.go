@@ -1,7 +1,7 @@
 // +build plan9 solaris
 
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,44 @@ import (
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
+}
+
+// readDir applies the filter function on each entries at dirPath, doesn't recurse into
+// the directory itself.
+func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+	d, err := os.Open(dirPath)
+	if err != nil {
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		}
+
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileNotFound
+		}
+		return err
+	}
+	defer d.Close()
+
+	maxEntries := 1000
+	for {
+		// Read up to max number of entries.
+		fis, err := d.Readdir(maxEntries)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		for _, fi := range fis {
+			if err = filter(fi.Name(), fi.Mode()); err == errDoneForNow {
+				// filtering requested to return by caller.
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // Return N entries at the directory dirPath. If count is -1, return all entries
