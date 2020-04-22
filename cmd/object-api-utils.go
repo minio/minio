@@ -649,6 +649,10 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			// Apply the skipLen and limit on the decompressed stream.
 			err = s2Reader.Skip(decOff)
 			if err != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
 				return nil, err
 			}
 
