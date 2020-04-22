@@ -111,7 +111,7 @@ function trust_s3_endpoint_tls_cert()
     # Download the public certificate from the server
     openssl s_client -showcerts -connect "$SERVER_ENDPOINT" </dev/null 2>/dev/null | \
 	openssl x509 -outform PEM -out /usr/local/share/ca-certificates/s3_server_cert.crt || \
-	exit -1
+	exit 1
 
     # Load the certificate in the system
     update-ca-certificates --fresh >/dev/null
@@ -191,7 +191,6 @@ function main()
         echo -n "($i/$count) Running $sdk_name tests ... "
         if ! run_test "$sdk_dir"; then
             (( i-- ))
-            break
         fi
     done
 

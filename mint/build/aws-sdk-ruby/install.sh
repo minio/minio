@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-#  Mint (C) 2017 Minio, Inc.
+#  Mint (C) 20172-2020 Minio, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,4 +15,4 @@
 #  limitations under the License.
 #
 
-gem install --no-rdoc --no-ri aws-sdk-resources:3.56.0 aws-sdk multipart_body
+gem install --no-rdoc --no-ri aws-sdk-resources aws-sdk multipart_body

@@ -207,6 +207,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			return cacheReader, nil
 		}
 		if cc != nil && cc.noStore {
+			cacheReader.Close()
 			c.cacheStats.incMiss()
 			bReader, err := c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 			bReader.ObjInfo.CacheLookupStatus = CacheHit
@@ -220,9 +221,11 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		c.incCacheStats(cacheObjSize)
 		return cacheReader, nil
 	} else if err != nil {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		if _, ok := err.(ObjectNotFound); ok {
 			if cacheErr == nil {
-				cacheReader.Close()
 				// Delete cached entry if backend object
 				// was deleted.
 				dcache.Delete(ctx, bucket, object)
@@ -233,6 +236,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	if !objInfo.IsCacheable() {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -240,6 +246,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
 	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
