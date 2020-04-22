@@ -49,6 +49,10 @@ const (
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
 	SSECacheEncrypted = "X-Minio-Internal-Encrypted-Cache"
+
+	// Maximum number of cache directory entries to read into memory at
+	// once (per cache volume).
+	cacheReaddirMax = 1024
 )
 
 // CacheChecksumInfoV1 - carries checksums of individual blocks on disk.
@@ -263,54 +267,70 @@ func (c *diskCache) purge(ctx context.Context) {
 		}
 		return fm
 	}
-	objDirs, err := ioutil.ReadDir(c.dir)
+
+	dir, err := os.Open(c.dir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, obj := range objDirs {
-		if obj.Name() == minioMetaBucket {
-			continue
+	for {
+		objDirs, err := dir.Readdir(cacheReaddirMax)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			log.Fatal(err)
 		}
 
-		cacheDir := pathJoin(c.dir, obj.Name())
-		meta, _, numHits, err := c.statCachedMeta(ctx, cacheDir)
-		if err != nil {
-			// delete any partially filled cache entry left behind.
-			removeAll(cacheDir)
-			continue
-		}
-		// stat all cached file ranges and cacheDataFile.
-		cachedFiles := fiStatFn(meta.Ranges, cacheDataFile, pathJoin(c.dir, obj.Name()))
-		objInfo := meta.ToObjectInfo("", "")
-		cc := cacheControlOpts(objInfo)
-		for fname, fi := range cachedFiles {
-			if cc != nil {
-				if cc.isStale(objInfo.ModTime) {
-					if err = removeAll(fname); err != nil {
-						logger.LogIf(ctx, err)
-					}
-					scorer.adjustSaveBytes(-fi.Size())
-					// break early if sufficient disk space reclaimed.
-					if c.diskUsageLow() {
-						return
-					}
-				}
+		for _, obj := range objDirs {
+			if obj.Name() == minioMetaBucket {
 				continue
 			}
-			scorer.addFile(fname, atime.Get(fi), fi.Size(), numHits)
-		}
-		// clean up stale cache.json files for objects that never got cached but access count was maintained in cache.json
-		fi, err := os.Stat(pathJoin(cacheDir, cacheMetaJSONFile))
-		if err != nil || (fi.ModTime().Before(expiry) && len(cachedFiles) == 0) {
-			removeAll(cacheDir)
-			scorer.adjustSaveBytes(-fi.Size())
-			continue
-		}
-		if c.diskUsageLow() {
-			return
+
+			cacheDir := pathJoin(c.dir, obj.Name())
+			meta, _, numHits, err := c.statCachedMeta(ctx, cacheDir)
+			if err != nil {
+				// delete any partially filled cache entry left behind.
+				removeAll(cacheDir)
+				continue
+			}
+			// stat all cached file ranges and cacheDataFile.
+			cachedFiles := fiStatFn(meta.Ranges, cacheDataFile, pathJoin(c.dir, obj.Name()))
+			objInfo := meta.ToObjectInfo("", "")
+			cc := cacheControlOpts(objInfo)
+			for fname, fi := range cachedFiles {
+				if cc != nil {
+					if cc.isStale(objInfo.ModTime) {
+						if err = removeAll(fname); err != nil {
+							logger.LogIf(ctx, err)
+						}
+						scorer.adjustSaveBytes(-fi.Size())
+						// break early if sufficient disk space reclaimed.
+						if c.diskUsageLow() {
+							return
+						}
+					}
+					continue
+				}
+				scorer.addFile(fname, atime.Get(fi), fi.Size(), numHits)
+			}
+			// clean up stale cache.json files for objects that never got cached but access count was maintained in cache.json
+			fi, err := os.Stat(pathJoin(cacheDir, cacheMetaJSONFile))
+			if err != nil || (fi.ModTime().Before(expiry) && len(cachedFiles) == 0) {
+				removeAll(cacheDir)
+				scorer.adjustSaveBytes(-fi.Size())
+				continue
+			}
+			if c.diskUsageLow() {
+				return
+			}
 		}
 	}
+	if err != nil && err != io.EOF {
+		log.Fatal(err)
+	}
+
 	for _, path := range scorer.fileNames() {
 		removeAll(path)
 		slashIdx := strings.LastIndex(path, SlashSeparator)
