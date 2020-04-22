@@ -147,7 +147,8 @@ func getUploadChunkSizeFromEnv(envvar string, defaultValue string) int {
 	}
 
 	if i <= 0 || i > 100 {
-		logger.LogIf(context.Background(), fmt.Errorf("The environmental variable '%v' should be a floating point value between 0 and 100. The upload chunk size is set to the default: %s", azureChunkSizeEnvVar, defaultValue))
+		logger.LogIf(context.Background(), fmt.Errorf("ENV '%v' should be a floating point value between 0 and 100.\n" +
+		"The upload chunk size is set to its default: %s\n", azureChunkSizeEnvVar, defaultValue)
 		return azureDefaultUploadChunkSize
 	}
 
