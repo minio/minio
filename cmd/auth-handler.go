@@ -140,6 +140,7 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
 		ctx := logger.SetReqInfo(ctx, reqInfo)
 		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description), logger.Application)
+		return cred, nil, owner, s3Err
 	}
 
 	claims, s3Err := checkClaimsFromToken(r, cred)
