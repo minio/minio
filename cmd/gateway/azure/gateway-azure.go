@@ -50,8 +50,8 @@ import (
 )
 
 var (
-	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, "25")
-	azureSdkTimeout        = time.Duration(azureUploadChunkSize/humanize.MiByte) * 60 * time.Second
+	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
+	azureSdkTimeout        = time.Duration(azureUploadChunkSize/humanize.MiByte) * azureSdkTimeoutPerMb
 	azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
 )
 
@@ -63,6 +63,7 @@ const (
 	// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
 	// To change the upload chunk size, set the environmental variable MINIO_AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
 	azureDefaultUploadChunkSize = 25 * humanize.MiByte
+	azureSdkTimeoutPerMb        = 60 * time.Second
 	azureUploadMaxMemoryUsage   = 100 * humanize.MiByte
 	azureChunkSizeEnvVar        = "MINIO_AZURE_CHUNK_SIZE_MB"
 
@@ -93,8 +94,8 @@ EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}azureaccountkey
-     {{.Prompt}} {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}0.25
+     {{.Prompt}} {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
 
   2. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
@@ -147,8 +148,8 @@ func getUploadChunkSizeFromEnv(envvar string, defaultValue string) int {
 	}
 
 	if i <= 0 || i > 100 {
-		logger.LogIf(context.Background(), fmt.Errorf("ENV '%v' should be a floating point value between 0 and 100.\n" +
-		"The upload chunk size is set to its default: %s\n", azureChunkSizeEnvVar, defaultValue)
+		logger.LogIf(context.Background(), fmt.Errorf("ENV '%v' should be a floating point value between 0 and 100.\n"+
+			"The upload chunk size is set to its default: %s\n", azureChunkSizeEnvVar, defaultValue))
 		return azureDefaultUploadChunkSize
 	}
 

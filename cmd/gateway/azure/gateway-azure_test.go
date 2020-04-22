@@ -19,9 +19,11 @@ package azure
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/dustin/go-humanize"
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -314,7 +316,7 @@ func TestParsingUploadChunkSize(t *testing.T) {
 
 	for i, chunkValue := range invalidValues {
 		os.Setenv(key, chunkValue)
-		result := getUploadChunkSizeFromEnv(key, "0.25")
+		result := getUploadChunkSizeFromEnv(key, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
 		if result != azureDefaultUploadChunkSize {
 			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
 		}
@@ -328,7 +330,7 @@ func TestParsingUploadChunkSize(t *testing.T) {
 	}
 	for i, chunkValue := range validValues {
 		os.Setenv(key, chunkValue)
-		result := getUploadChunkSizeFromEnv(key, "0.25")
+		result := getUploadChunkSizeFromEnv(key, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
 		if result == azureDefaultUploadChunkSize {
 			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
 		}
