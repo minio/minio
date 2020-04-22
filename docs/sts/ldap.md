@@ -104,7 +104,7 @@ member: CN=John,CN=Users,DC=minioad,DC=local
 
 The lines with "..." represent skipped content not shown here from brevity. Based on the output above, we see that the username format variable looks like `cn=%s,cn=users,dc=minioad,dc=local`.
 
-The group search filter looks like `(&(objectclass=group)(memberUid=%s))` and the group name attribute is clearly `cn`.
+The group search filter looks like `(&(objectclass=group)(member=%s))` and the group name attribute is clearly `cn`.
 
 Thus the key configuration parameters look like:
 
