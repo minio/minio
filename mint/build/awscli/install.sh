@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-#  Mint (C) 2017 Minio, Inc.
+#  Mint (C) 2017-2020 Minio, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -15,6 +15,4 @@
 #  limitations under the License.
 #
 
-AWS_CLI_VERSION="1.16.309"
-
-python -m pip install awscli==$AWS_CLI_VERSION
+pip3 install awscli --upgrade

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015-2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ const (
 // setHeadGetRespHeaders - set any requested parameters as response headers.
 func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
-		if header, ok := supportedHeadGetReqParams[k]; ok {
+		if header, ok := supportedHeadGetReqParams[strings.ToLower(k)]; ok {
 			w.Header()[header] = v
 		}
 	}
@@ -376,7 +376,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(ctx, w, r, objInfo) {
+	if checkPreconditions(ctx, w, r, objInfo, opts) {
 		return
 	}
 
@@ -566,7 +566,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(ctx, w, r, objInfo) {
+	if checkPreconditions(ctx, w, r, objInfo, opts) {
 		return
 	}
 

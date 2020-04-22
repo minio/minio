@@ -561,7 +561,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
 	}
 	// Take a rwPool lock for NFS gateway type deployment
 	rwPoolUnlocker := func() {}
@@ -578,7 +578,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
 	}
 
-	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn, nsUnlocker, rwPoolUnlocker)
+	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker, rwPoolUnlocker)
 	if rErr != nil {
 		return nil, rErr
 	}

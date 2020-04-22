@@ -40,6 +40,7 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 	UserDefined          map[string]string
+	PartNumber           int
 	CheckCopyPrecondFn   CheckCopyPreconditionFn
 }
 
