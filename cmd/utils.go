@@ -495,7 +495,7 @@ func NewGatewayHTTPTransport() *http.Transport {
 		RootCAs: globalRootCAs,
 	}, defaultDialTimeout)()
 	// Set aggressive timeouts for gateway
-	tr.ResponseHeaderTimeout = 30 * time.Second
+	tr.ResponseHeaderTimeout = 1 * time.Minute
 
 	// Allow more requests to be in flight.
 	tr.MaxConnsPerHost = 256
