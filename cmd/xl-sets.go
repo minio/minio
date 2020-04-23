@@ -293,7 +293,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
+func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3) (*xlSets, error) {
 	endpointStrings := make([]string, len(endpoints))
 	for i, endpoint := range endpoints {
 		if endpoint.IsLocal {
@@ -302,6 +302,9 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 			endpointStrings[i] = endpoint.String()
 		}
 	}
+
+	setCount := len(format.XL.Sets)
+	drivesPerSet := len(format.XL.Sets[0])
 
 	// Initialize the XL sets instance.
 	s := &xlSets{

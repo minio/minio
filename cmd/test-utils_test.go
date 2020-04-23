@@ -182,7 +182,7 @@ func prepareXLSets32(ctx context.Context) (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 
-	objAPI, err := newXLSets(ctx, endpoints, storageDisks, format, 2, 16)
+	objAPI, err := newXLSets(ctx, endpoints, storageDisks, format)
 	if err != nil {
 		return nil, nil, err
 	}
