@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/minio/minio/pkg/env"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -48,16 +49,23 @@ import (
 	minio "github.com/minio/minio/cmd"
 )
 
+var (
+	azureUploadChunkSize   = getUploadChunkSizeFromEnv(azureChunkSizeEnvVar, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
+	azureSdkTimeout        = time.Duration(azureUploadChunkSize/humanize.MiByte) * azureSdkTimeoutPerMb
+	azureUploadConcurrency = azureUploadMaxMemoryUsage / azureUploadChunkSize
+)
+
 const (
 	// The defaultDialTimeout for communicating with the cloud backends is set
 	// to 30 seconds in utils.go; the Azure SDK recommends to set a timeout of 60
 	// seconds per MB of data a client expects to upload so we must transfer less
 	// than 0.5 MB per chunk to stay within the defaultDialTimeout tolerance.
 	// See https://github.com/Azure/azure-storage-blob-go/blob/fc70003/azblob/zc_policy_retry.go#L39-L44 for more details.
-	azureUploadChunkSize      = 0.25 * humanize.MiByte
-	azureSdkTimeout           = (azureUploadChunkSize / humanize.MiByte) * 60 * time.Second
-	azureUploadMaxMemoryUsage = 10 * humanize.MiByte
-	azureUploadConcurrency    = azureUploadMaxMemoryUsage / azureUploadChunkSize
+	// To change the upload chunk size, set the environmental variable MINIO_AZURE_CHUNK_SIZE_MB with a (float) value between 0 and 100
+	azureDefaultUploadChunkSize = 25 * humanize.MiByte
+	azureSdkTimeoutPerMb        = 60 * time.Second
+	azureUploadMaxMemoryUsage   = 100 * humanize.MiByte
+	azureChunkSizeEnvVar        = "MINIO_AZURE_CHUNK_SIZE_MB"
 
 	azureDownloadRetryAttempts = 5
 	azureBlockSize             = 100 * humanize.MiByte
@@ -86,6 +94,7 @@ EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}azureaccountname
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}azureaccountkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}0.25
      {{.Prompt}} {{.HelpName}} https://azureaccountname.blob.custom.azure.endpoint
 
   2. Start minio gateway server for Azure Blob Storage backend with edge caching enabled.
@@ -97,6 +106,7 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_AZURE_CHUNK_SIZE_MB {{.AssignmentOperator}}25
      {{.Prompt}} {{.HelpName}}
 `
 
@@ -123,6 +133,27 @@ func azureGatewayMain(ctx *cli.Context) {
 	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
 
 	minio.StartGateway(ctx, &Azure{host})
+}
+
+// getUploadChunkSizeFromEnv returns the parsed chunk size from the environmental variable 'MINIO_AZURE_CHUNK_SIZE_MB'
+// The environmental variable should be a floating point number between 0 and 100 representing the MegaBytes
+// The returned value is an int representing the size in bytes
+func getUploadChunkSizeFromEnv(envvar string, defaultValue string) int {
+	envChunkSize := env.Get(envvar, defaultValue)
+
+	i, err := strconv.ParseFloat(envChunkSize, 64)
+	if err != nil {
+		logger.LogIf(context.Background(), err)
+		return azureDefaultUploadChunkSize
+	}
+
+	if i <= 0 || i > 100 {
+		logger.LogIf(context.Background(), fmt.Errorf("ENV '%v' should be a floating point value between 0 and 100.\n"+
+			"The upload chunk size is set to its default: %s\n", azureChunkSizeEnvVar, defaultValue))
+		return azureDefaultUploadChunkSize
+	}
+
+	return int(i * humanize.MiByte)
 }
 
 // Azure implements Gateway.
