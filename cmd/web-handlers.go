@@ -667,13 +667,10 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !HasSuffix(objectName, SlashSeparator) && objectName != "" {
-			// Get the retention/lock info to check if it is enabled or not
-			retentionInfo, _ := globalBucketObjectLockConfig.Get(args.BucketName)
-			bucketObjectLockEnabled := retentionInfo.Mode != ""
-			fmt.Println("bucketObjectLockEnabled =", bucketObjectLockEnabled)
-
-			// Check permissions for non-anonymous user
-			govBypassPerms := ErrNone
+			// Check for permissions only in the case of
+			// non-anonymous login. For anonymous login, policy has already
+			// been checked.
+			govBypassPerms := ErrAccessDenied
 			if authErr != errNoAuthToken {
 				if !globalIAMSys.IsAllowed(iampolicy.Args{
 					AccountName:     claims.AccessKey,
@@ -686,36 +683,30 @@ next:
 				}) {
 					return toJSONError(ctx, errAccessDenied)
 				}
-
-				// Check if user is allowed to run BypassGovernanceRetention
-				// and GetBucketObjectLockConfiguration actions
-				if bucketObjectLockEnabled {
-					if !globalIAMSys.IsAllowed(iampolicy.Args{
-						AccountName:     claims.AccessKey,
-						Action:          iampolicy.BypassGovernanceRetentionAction,
-						BucketName:      args.BucketName,
-						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-						IsOwner:         owner,
-						ObjectName:      objectName,
-						Claims:          claims.Map(),
-					}) {
-						govBypassPerms = ErrAccessDenied
-					}
-					if globalIAMSys.IsAllowed(iampolicy.Args{
-						AccountName:     claims.AccessKey,
-						Action:          iampolicy.GetBucketObjectLockConfigurationAction,
-						BucketName:      args.BucketName,
-						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-						IsOwner:         owner,
-						ObjectName:      objectName,
-						Claims:          claims.Map(),
-					}) {
-						govBypassPerms = ErrAccessDenied
-					}
+				if globalIAMSys.IsAllowed(iampolicy.Args{
+					AccountName:     claims.AccessKey,
+					Action:          iampolicy.BypassGovernanceRetentionAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+					IsOwner:         owner,
+					ObjectName:      objectName,
+					Claims:          claims.Map(),
+				}) {
+					govBypassPerms = ErrNone
+				}
+				if globalIAMSys.IsAllowed(iampolicy.Args{
+					AccountName:     claims.AccessKey,
+					Action:          iampolicy.GetBucketObjectLockConfigurationAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+					IsOwner:         owner,
+					ObjectName:      objectName,
+					Claims:          claims.Map(),
+				}) {
+					govBypassPerms = ErrNone
 				}
 			}
 			if authErr == errNoAuthToken {
-				govBypassPerms = ErrNone
 				// Check if object is allowed to be deleted anonymously
 				if !globalPolicySys.IsAllowed(policy.Args{
 					Action:          policy.DeleteObjectAction,
@@ -726,28 +717,27 @@ next:
 				}) {
 					return toJSONError(ctx, errAccessDenied)
 				}
-				// Check if lock mode is set up
-				if bucketObjectLockEnabled {
-					if globalPolicySys.IsAllowed(policy.Args{
-						Action:          policy.BypassGovernanceRetentionAction,
-						BucketName:      args.BucketName,
-						ConditionValues: getConditionValues(r, "", "", nil),
-						IsOwner:         false,
-						ObjectName:      objectName,
-					}) {
-						govBypassPerms = ErrAccessDenied
-					}
 
-					// Check if object is allowed to be deleted anonymously
-					if globalPolicySys.IsAllowed(policy.Args{
-						Action:          policy.GetBucketObjectLockConfigurationAction,
-						BucketName:      args.BucketName,
-						ConditionValues: getConditionValues(r, "", "", nil),
-						IsOwner:         false,
-						ObjectName:      objectName,
-					}) {
-						govBypassPerms = ErrAccessDenied
-					}
+				// Check if object is allowed to be deleted anonymously
+				if globalPolicySys.IsAllowed(policy.Args{
+					Action:          policy.BypassGovernanceRetentionAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", "", nil),
+					IsOwner:         false,
+					ObjectName:      objectName,
+				}) {
+					govBypassPerms = ErrNone
+				}
+
+				// Check if object is allowed to be deleted anonymously
+				if globalPolicySys.IsAllowed(policy.Args{
+					Action:          policy.GetBucketObjectLockConfigurationAction,
+					BucketName:      args.BucketName,
+					ConditionValues: getConditionValues(r, "", "", nil),
+					IsOwner:         false,
+					ObjectName:      objectName,
+				}) {
+					govBypassPerms = ErrNone
 				}
 			}
 			if govBypassPerms != ErrNone {
