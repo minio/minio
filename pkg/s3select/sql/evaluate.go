@@ -275,7 +275,6 @@ func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
 		aF, aOK := a.ToFloat()
 		bF, bOK := b.ToFloat()
 
-		// FIXME: more type inference?
 		return aOK && bOK && aF == bF
 	}
 
