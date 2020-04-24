@@ -87,6 +87,11 @@ func (target WebhookTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *WebhookTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *WebhookTarget) IsActive() (bool, error) {
 	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())

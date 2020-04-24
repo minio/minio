@@ -56,18 +56,23 @@ type NotificationSys struct {
 }
 
 // GetARNList - returns available ARNs.
-func (sys *NotificationSys) GetARNList() []string {
+func (sys *NotificationSys) GetARNList(onlyActive bool) []string {
 	arns := []string{}
 	if sys == nil {
 		return arns
 	}
 	region := globalServerRegion
-	for _, targetID := range sys.targetList.List() {
+	for targetID, target := range sys.targetList.TargetMap() {
 		// httpclient target is part of ListenBucketNotification
 		// which doesn't need to be listed as part of the ARN list
 		// This list is only meant for external targets, filter
 		// this out pro-actively.
 		if !strings.HasPrefix(targetID.ID, "httpclient+") {
+			if onlyActive && !target.HasQueueStore() {
+				if _, err := target.IsActive(); err != nil {
+					continue
+				}
+			}
 			arns = append(arns, targetID.ToARN(region).String())
 		}
 	}

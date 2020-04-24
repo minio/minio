@@ -315,7 +315,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	objInfo.UserDefined = minio.CleanMinioInternalMetadataKeys(objInfo.UserDefined)
-	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o.CheckCopyPrecondFn)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)
 	}

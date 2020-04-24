@@ -128,6 +128,11 @@ func (target *RedisTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *RedisTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *RedisTarget) IsActive() (bool, error) {
 	conn := target.pool.Get()

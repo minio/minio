@@ -82,7 +82,7 @@ All test logs are stored in `/mint/log/log.json` as multiple JSON document.  Bel
 After making changes to Mint source code a local docker image can be built/run by
 
 ```sh
-$ docker build -t minio/mint . -f Dockerfile.dev
+$ docker build -t minio/mint . -f Dockerfile.mint
 $ docker run -e SERVER_ENDPOINT=play.minio.io:9000 -e ACCESS_KEY=Q3AM3UQ867SPQQA43P2F \
              -e SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG \
              -e ENABLE_HTTPS=1 -e MINT_MODE=full minio/mint:latest

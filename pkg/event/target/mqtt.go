@@ -118,6 +118,11 @@ func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *MQTTTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *MQTTTarget) IsActive() (bool, error) {
 	if !target.client.IsConnectionOpen() {
