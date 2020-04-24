@@ -128,17 +128,18 @@ func TestActionSetToSlice(t *testing.T) {
 
 func TestActionSetUnmarshalJSON(t *testing.T) {
 	testCases := []struct {
-		data           []byte
-		expectedResult ActionSet
-		expectErr      bool
+		data               []byte
+		expectedResult     ActionSet
+		expectUnmarshalErr bool
+		expectValidateErr  bool
 	}{
-		{[]byte(`"s3:PutObject"`), NewActionSet(PutObjectAction), false},
-		{[]byte(`["s3:PutObject"]`), NewActionSet(PutObjectAction), false},
-		{[]byte(`["s3:PutObject", "s3:GetObject"]`), NewActionSet(PutObjectAction, GetObjectAction), false},
-		{[]byte(`["s3:PutObject", "s3:GetObject", "s3:PutObject"]`), NewActionSet(PutObjectAction, GetObjectAction), false},
-		{[]byte(`[]`), NewActionSet(), true},           // Empty array.
-		{[]byte(`"foo"`), nil, true},                   // Invalid action.
-		{[]byte(`["s3:PutObject", "foo"]`), nil, true}, // Invalid action.
+		{[]byte(`"s3:PutObject"`), NewActionSet(PutObjectAction), false, false},
+		{[]byte(`["s3:PutObject"]`), NewActionSet(PutObjectAction), false, false},
+		{[]byte(`["s3:PutObject", "s3:GetObject"]`), NewActionSet(PutObjectAction, GetObjectAction), false, false},
+		{[]byte(`["s3:PutObject", "s3:GetObject", "s3:PutObject"]`), NewActionSet(PutObjectAction, GetObjectAction), false, false},
+		{[]byte(`[]`), NewActionSet(), true, false},           // Empty array.
+		{[]byte(`"foo"`), nil, false, true},                   // Invalid action.
+		{[]byte(`["s3:PutObject", "foo"]`), nil, false, true}, // Invalid action.
 	}
 
 	for i, testCase := range testCases {
@@ -146,11 +147,17 @@ func TestActionSetUnmarshalJSON(t *testing.T) {
 		err := json.Unmarshal(testCase.data, &result)
 		expectErr := (err != nil)
 
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v\n", i+1, testCase.expectErr, expectErr)
+		if expectErr != testCase.expectUnmarshalErr {
+			t.Fatalf("case %v: error during unmarshal: expected: %v, got: %v\n", i+1, testCase.expectUnmarshalErr, expectErr)
 		}
 
-		if !testCase.expectErr {
+		err = result.Validate()
+		expectErr = (err != nil)
+		if expectErr != testCase.expectValidateErr {
+			t.Fatalf("case %v: error during validation: expected: %v, got: %v\n", i+1, testCase.expectValidateErr, expectErr)
+		}
+
+		if !testCase.expectUnmarshalErr && !testCase.expectValidateErr {
 			if !reflect.DeepEqual(result, testCase.expectedResult) {
 				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
 			}

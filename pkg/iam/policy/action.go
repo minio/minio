@@ -17,8 +17,6 @@
 package iampolicy
 
 import (
-	"encoding/json"
-
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -205,47 +203,6 @@ func (action Action) Match(a Action) bool {
 func (action Action) IsValid() bool {
 	_, ok := supportedActions[action]
 	return ok
-}
-
-// MarshalJSON - encodes Action to JSON data.
-func (action Action) MarshalJSON() ([]byte, error) {
-	if action.IsValid() || AdminAction(action).IsValid() {
-		return json.Marshal(string(action))
-	}
-
-	return nil, Errorf("invalid action '%v'", action)
-}
-
-// UnmarshalJSON - decodes JSON data to Action.
-func (action *Action) UnmarshalJSON(data []byte) error {
-	var s string
-
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-
-	a := Action(s)
-	if !a.IsValid() {
-		return Errorf("invalid action '%v'", s)
-	}
-
-	*action = a
-
-	return nil
-}
-
-func parseAction(s string) (Action, error) {
-	adminAction, err := parseAdminAction(s)
-	if err == nil {
-		return Action(adminAction), nil
-	}
-	action := Action(s)
-
-	if action.IsValid() {
-		return action, nil
-	}
-
-	return action, Errorf("unsupported action '%v'", s)
 }
 
 // actionConditionKeyMap - holds mapping of supported condition key for an action.
