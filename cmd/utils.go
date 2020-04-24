@@ -652,10 +652,3 @@ func iamPolicyClaimNameOpenID() string {
 func iamPolicyClaimNameSA() string {
 	return "sa-policy"
 }
-
-func isWORMEnabled(bucket string) bool {
-	if isMinioMetaBucketName(bucket) {
-		return false
-	}
-	return globalWORMEnabled
-}

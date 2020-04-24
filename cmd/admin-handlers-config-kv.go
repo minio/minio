@@ -66,12 +66,6 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)
@@ -109,12 +103,6 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -355,12 +343,6 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 

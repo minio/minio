@@ -213,9 +213,6 @@ var (
 	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
 
-	// Is worm enabled
-	globalWORMEnabled bool
-
 	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
 
 	// Disk cache drives

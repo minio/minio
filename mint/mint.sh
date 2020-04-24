@@ -154,30 +154,15 @@ function main()
     [ "$ENABLE_HTTPS" == "1" ] && trust_s3_endpoint_tls_cert
 
     declare -a run_list
-    if [ "$MINT_MODE" == "worm" ]; then
-        if [ "$#" -gt 1 ]; then
-            echo "No argument is accepted for worm mode"
-            exit 1
-        fi
+    sdks=( "$@" )
 
-        run_list=( "$TESTS_DIR/worm" )
-    else
-        sdks=( "$@" )
-
-        ## populate all sdks except worm when no argument is given.
-        if [ "$#" -eq 0 ]; then
-            sdks=( $(ls -I worm "$TESTS_DIR") )
-        fi
-
-        for sdk in "${sdks[@]}"; do
-            if [ "$sdk" == "worm" ]; then
-                echo "worm test cannot be run without worm mode"
-                exit 1
-            fi
-
-            run_list=( "${run_list[@]}" "$TESTS_DIR/$sdk" )
-        done
+    if [ "$#" -eq 0 ]; then
+        sdks=( $(ls "$TESTS_DIR") )
     fi
+
+    for sdk in "${sdks[@]}"; do
+        run_list=( "${run_list[@]}" "$TESTS_DIR/$sdk" )
+    done
 
     count="${#run_list[@]}"
     i=0

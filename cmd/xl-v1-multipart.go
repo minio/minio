@@ -673,13 +673,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	if xl.isObject(bucket, object) {
-		// Deny if WORM is enabled
-		if isWORMEnabled(bucket) {
-			if _, err := xl.getObjectInfo(ctx, bucket, object, ObjectOptions{}); err == nil {
-				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-			}
-		}
-
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
