@@ -31,7 +31,7 @@ import (
 )
 
 // Similar to enforceRetentionBypassForDelete but for WebUI
-func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn) APIErrorCode {
+func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerms bool) APIErrorCode {
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
@@ -80,7 +80,7 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 			// and must explicitly include x-amz-bypass-governance-retention:true
 			// as a request header with any request that requires overriding
 			// governance mode.
-			byPassSet := objectlock.IsObjectLockGovernanceBypassSet(r.Header)
+			byPassSet := govBypassPerms && objectlock.IsObjectLockGovernanceBypassSet(r.Header)
 			if !byPassSet {
 				t, err := objectlock.UTCNowNTP()
 				if err != nil {
@@ -91,6 +91,11 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 				if !ret.RetainUntilDate.Before(t) {
 					return ErrObjectLocked
 				}
+
+				if !govBypassPerms {
+					return ErrObjectLocked
+				}
+
 				return ErrNone
 			}
 		}
