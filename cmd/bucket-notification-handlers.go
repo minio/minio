@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"reflect"
 	"time"
@@ -296,11 +295,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
 			return false
 		}
-		objectName, uerr := url.QueryUnescape(ev.S3.Object.Key)
-		if uerr != nil {
-			objectName = ev.S3.Object.Key
-		}
-		return len(rulesMap.Match(ev.EventName, objectName).ToSlice()) != 0
+		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
 
 	for _, peer := range peers {

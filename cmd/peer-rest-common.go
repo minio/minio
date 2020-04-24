@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v7"
+	peerRESTVersion       = "v8"
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -52,17 +52,14 @@ const (
 	peerRESTMethodDownloadProfilingData        = "/downloadprofilingdata"
 	peerRESTMethodBucketPolicySet              = "/setbucketpolicy"
 	peerRESTMethodBucketNotificationPut        = "/putbucketnotification"
-	peerRESTMethodBucketNotificationListen     = "/listenbucketnotification"
 	peerRESTMethodReloadFormat                 = "/reloadformat"
-	peerRESTMethodTargetExists                 = "/targetexists"
-	peerRESTMethodSendEvent                    = "/sendevent"
 	peerRESTMethodTrace                        = "/trace"
 	peerRESTMethodListen                       = "/listen"
+	peerRESTMethodLog                          = "/log"
 	peerRESTMethodBucketLifecycleSet           = "/setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove        = "/removebucketlifecycle"
 	peerRESTMethodBucketEncryptionSet          = "/setbucketencryption"
 	peerRESTMethodBucketEncryptionRemove       = "/removebucketencryption"
-	peerRESTMethodLog                          = "/log"
 	peerRESTMethodPutBucketObjectLockConfig    = "/putbucketobjectlockconfig"
 	peerRESTMethodBucketObjectLockConfigRemove = "/removebucketobjectlockconfig"
 )
