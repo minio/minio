@@ -397,38 +397,21 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	password := cred.SecretKey
-	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
+	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
 
 	var createReq madmin.AddServiceAccountReq
-	if err = json.Unmarshal(configBytes, &createReq); err != nil {
+	if err = json.Unmarshal(reqBytes, &createReq); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
 
-	if createReq.Parent == "" {
-		apiErr := APIError{
-			Code:           "XMinioAdminInvalidArgument",
-			Description:    "Service account parent cannot be empty",
-			HTTPStatusCode: http.StatusBadRequest,
-		}
-		writeErrorResponseJSON(ctx, w, apiErr, r.URL)
-		return
-	}
-
-	// Disallow creating service accounts by root user as well.
-	if createReq.Parent == globalActiveCred.AccessKey {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddServiceAccountInvalidArgument), r.URL)
-		return
-	}
-
-	// Disallow creating service accounts by users who are not the requested parent.
-	// this restriction is not required for Owner account i.e root user.
-	if createReq.Parent != cred.AccessKey && !owner {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddServiceAccountInvalidParent), r.URL)
+	// Disallow creating service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
 		return
 	}
 
@@ -438,14 +421,14 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	creds, err := globalIAMSys.NewServiceAccount(ctx, createReq.Parent, createReq.Policy)
+	newCred, err := globalIAMSys.NewServiceAccount(ctx, cred.AccessKey, createReq.Policy)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Notify all other Minio peers to reload user
-	for _, nerr := range globalNotificationSys.LoadUser(creds.AccessKey, false) {
+	// Notify all other Minio peers to reload user the service account
+	for _, nerr := range globalNotificationSys.LoadServiceAccount(newCred.AccessKey) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
@@ -454,8 +437,8 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 
 	var createResp = madmin.AddServiceAccountResp{
 		Credentials: auth.Credentials{
-			AccessKey: creds.AccessKey,
-			SecretKey: creds.SecretKey,
+			AccessKey: newCred.AccessKey,
+			SecretKey: newCred.SecretKey,
 		},
 	}
 
@@ -465,13 +448,117 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	econfigData, err := madmin.EncryptData(password, data)
+	encryptedData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	writeSuccessResponseJSON(w, econfigData)
+	writeSuccessResponseJSON(w, encryptedData)
+}
+
+// ListServiceAccounts - GET /minio/admin/v3/list-service-accounts
+func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListServiceAccounts")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, _, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	// Disallow creating service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
+	}
+
+	serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, cred.AccessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	var listResp = madmin.ListServiceAccountsResp{
+		Accounts: serviceAccounts,
+	}
+
+	data, err := json.Marshal(listResp)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+}
+
+// DeleteServiceAccount - DELETE /minio/admin/v3/delete-service-account
+func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DeleteServiceAccount")
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, _, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	// Disallow creating service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
+	}
+
+	// Deny if WORM is enabled
+	if globalWORMEnabled {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	serviceAccount := mux.Vars(r)["accessKey"]
+	if serviceAccount == "" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminInvalidArgument), r.URL)
+		return
+	}
+
+	user, err := globalIAMSys.GetServiceAccountParent(ctx, serviceAccount)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if cred.AccessKey != user {
+		// The service account belongs to another user but return not found error to mitigate brute force attacks.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServiceAccountNotFound), r.URL)
+		return
+	}
+
+	err = globalIAMSys.DeleteServiceAccount(ctx, serviceAccount)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessNoContent(w)
 }
 
 // InfoCannedPolicyV2 - GET /minio/admin/v2/info-canned-policy?name={policyName}
