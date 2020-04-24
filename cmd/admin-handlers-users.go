@@ -60,12 +60,6 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
 
@@ -290,12 +284,6 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
 	status := vars["status"]
@@ -326,12 +314,6 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.CreateUserAdminAction)
 	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -412,12 +394,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	// Disallow creating service accounts by root user.
 	if owner {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -525,12 +501,6 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	// Disallow creating service accounts by root user.
 	if owner {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -681,12 +651,6 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 	vars := mux.Vars(r)
 	policyName := vars["name"]
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
-
 	if err := globalIAMSys.DeletePolicy(policyName); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -712,12 +676,6 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	vars := mux.Vars(r)
 	policyName := vars["name"]
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
 
 	// Error out if Content-Length is missing.
 	if r.ContentLength <= 0 {
@@ -770,12 +728,6 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	policyName := vars["policyName"]
 	entityName := vars["userOrGroup"]
 	isGroup := vars["isGroup"] == "true"
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
-		return
-	}
 
 	if !isGroup {
 		ok, err := globalIAMSys.IsTempUser(entityName)

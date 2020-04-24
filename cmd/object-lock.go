@@ -314,7 +314,7 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 	if objInfo, err := getObjectInfoFn(ctx, bucket, object, opts); err == nil {
 		objExists = true
 		r := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
-		if globalWORMEnabled || ((r.Mode == objectlock.RetCompliance) && r.RetainUntilDate.After(t)) {
+		if r.Mode == objectlock.RetCompliance && r.RetainUntilDate.After(t) {
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
 		mode = r.Mode
