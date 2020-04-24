@@ -272,6 +272,13 @@ func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
 		aF, aOK := a.ToFloat()
 		bF, bOK := b.ToFloat()
 
+		// Try CSV values
+		aCsv := a.CSVString()
+		bCSV := b.CSVString()
+		if aCsv != "" && bCSV != "" && aCsv == bCSV {
+			return true
+		}
+
 		// FIXME: more type inference?
 		return aOK && bOK && aF == bF
 	}
