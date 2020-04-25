@@ -257,7 +257,7 @@ This behavior is consistent across all keys, each key self documents itself with
 ## Environment only settings (not in config)
 
 #### Usage crawler
-Data usage crawler is enabled by default, following ENVs allow for more staggered delay in terms of usage calculation. 
+Data usage crawler is enabled by default, following ENVs allow for more staggered delay in terms of usage calculation.
 
 The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `MINIO_DISK_USAGE_CRAWL_DELAY` environment variable. By default the value is `10`. This means the crawler will sleep *10x* the time each operation takes.
 
@@ -267,16 +267,6 @@ Example: Following setting will decrease the crawler speed by a factor of 3, red
 
 ```sh
 export MINIO_DISK_USAGE_CRAWL_DELAY=30
-minio server /data
-```
-
-#### Worm (deprecated)
-Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. Set ``MINIO_WORM=on`` environment variable to enable WORM mode. This ENV setting is not recommended anymore, please use Object Locking and Object Retention APIs documented [here](https://github.com/minio/minio/tree/master/docs/retention).
-
-Example:
-
-```sh
-export MINIO_WORM=on
 minio server /data
 ```
 

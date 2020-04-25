@@ -354,6 +354,25 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	return nil
 }
 
+// LoadServiceAccount - reloads a specific service account from backend disks or etcd.
+func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
+	if sys == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
+
+	if globalEtcdClient == nil {
+		err := sys.store.loadUser(accessKey, srvAccUser, sys.iamUsersMap)
+		if err != nil {
+			return err
+		}
+	}
+	// When etcd is set, we use watch APIs so this code is not needed.
+	return nil
+}
+
 // Perform IAM configuration migration.
 func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
@@ -830,6 +849,86 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 	sys.iamUsersMap[u.Credentials.AccessKey] = u.Credentials
 
 	return cred, nil
+}
+
+// ListServiceAccounts - lists all services accounts associated to a specific user
+func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]string, error) {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || sys == nil || sys.store == nil {
+		return nil, errServerNotInitialized
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return nil, errIAMActionNotAllowed
+	}
+
+	var serviceAccounts []string
+
+	for k, v := range sys.iamUsersMap {
+		if v.IsServiceAccount() && v.ParentUser == accessKey {
+			serviceAccounts = append(serviceAccounts, k)
+		}
+	}
+
+	return serviceAccounts, nil
+}
+
+// GetServiceAccountParent - gets information about a service account
+func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string) (string, error) {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || sys == nil || sys.store == nil {
+		return "", errServerNotInitialized
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return "", errIAMActionNotAllowed
+	}
+
+	sa, ok := sys.iamUsersMap[accessKey]
+	if !ok || !sa.IsServiceAccount() {
+		return "", errNoSuchServiceAccount
+	}
+
+	return sa.ParentUser, nil
+}
+
+// DeleteServiceAccount - delete a service account
+func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || sys == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
+
+	if sys.usersSysType != MinIOUsersSysType {
+		return errIAMActionNotAllowed
+	}
+
+	sa, ok := sys.iamUsersMap[accessKey]
+	if !ok || !sa.IsServiceAccount() {
+		return errNoSuchServiceAccount
+	}
+
+	// It is ok to ignore deletion error on the mapped policy
+	err := sys.store.deleteUserIdentity(accessKey, srvAccUser)
+	if err != nil {
+		// ignore if user is already deleted.
+		if err == errNoSuchUser {
+			return nil
+		}
+		return err
+	}
+
+	delete(sys.iamUsersMap, accessKey)
+	return nil
 }
 
 // SetUser - set user credentials and policy.

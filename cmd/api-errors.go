@@ -334,8 +334,8 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
-	ErrAddServiceAccountInvalidArgument
-	ErrAddServiceAccountInvalidParent
+	ErrAdminAccountNotEligible
+	ErrServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
 
@@ -1599,17 +1599,16 @@ var errorCodes = errorCodeMap{
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrAddServiceAccountInvalidArgument: {
+	ErrAdminAccountNotEligible: {
 		Code:           "XMinioInvalidIAMCredentials",
-		Description:    "Creating service accounts for admin access key is not allowed",
+		Description:    "The administrator key is not eligible for this operation",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrAddServiceAccountInvalidParent: {
-		Code:           "XMinioInvalidIAMCredentialsParent",
-		Description:    "Creating service accounts for other users is not allowed",
-		HTTPStatusCode: http.StatusConflict,
+	ErrServiceAccountNotFound: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "The specified service account is not found",
+		HTTPStatusCode: http.StatusNotFound,
 	},
-
 	ErrPostPolicyConditionInvalidFormat: {
 		Code:           "PostPolicyInvalidKeyName",
 		Description:    "Invalid according to Policy: Policy Condition failed",

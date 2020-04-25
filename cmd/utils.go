@@ -495,7 +495,7 @@ func NewGatewayHTTPTransport() *http.Transport {
 		RootCAs: globalRootCAs,
 	}, defaultDialTimeout)()
 	// Set aggressive timeouts for gateway
-	tr.ResponseHeaderTimeout = 30 * time.Second
+	tr.ResponseHeaderTimeout = 1 * time.Minute
 
 	// Allow more requests to be in flight.
 	tr.MaxConnsPerHost = 256
@@ -651,11 +651,4 @@ func iamPolicyClaimNameOpenID() string {
 
 func iamPolicyClaimNameSA() string {
 	return "sa-policy"
-}
-
-func isWORMEnabled(bucket string) bool {
-	if isMinioMetaBucketName(bucket) {
-		return false
-	}
-	return globalWORMEnabled
 }

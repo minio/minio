@@ -46,7 +46,7 @@ func main() {
 
 	p := iampolicy.Policy{
 		Version: iampolicy.DefaultVersion,
-		Statements: []Statement{
+		Statements: []iampolicy.Statement{
 			iampolicy.NewStatement(
 				policy.Allow,
 				iampolicy.NewActionSet(iampolicy.GetObjectAction),
@@ -55,10 +55,23 @@ func main() {
 			)},
 	}
 
-	creds, err := madmClnt.AddServiceAccount(context.Background(), "parentuser", &p)
+	// Create a new service account
+	creds, err := madmClnt.AddServiceAccount(context.Background(), &p)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 	fmt.Println(creds)
+
+	// List all services accounts
+	list, err := madmClnt.ListServiceAccounts(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Println(list)
+
+	// Delete a service account
+	err = madmClnt.DeleteServiceAccount(context.Background(), list.Accounts[0])
+	if err != nil {
+		log.Fatalln(err)
+	}
 }

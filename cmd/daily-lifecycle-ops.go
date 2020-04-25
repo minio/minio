@@ -51,11 +51,6 @@ func startDailyLifecycle(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
-	// No action is expected when WORM is enabled
-	if globalWORMEnabled {
-		return nil
-	}
-
 	buckets, err := objAPI.ListBuckets(ctx)
 	if err != nil {
 		return err

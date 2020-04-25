@@ -682,13 +682,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	// Deny if WORM is enabled
-	if isWORMEnabled(bucket) {
-		if _, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object)); err == nil {
-			return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-		}
-	}
-
 	err = fsRenameFile(ctx, appendFilePath, pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		logger.LogIf(ctx, err)

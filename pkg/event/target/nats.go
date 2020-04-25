@@ -207,6 +207,11 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *NATSTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *NATSTarget) IsActive() (bool, error) {
 	var connErr error

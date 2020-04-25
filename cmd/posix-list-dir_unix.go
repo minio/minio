@@ -1,7 +1,7 @@
 // +build linux,!appengine darwin freebsd netbsd openbsd
 
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,59 @@ func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode, err er
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
+}
+
+// readDir applies the filter function on each entries at dirPath, doesn't recurse into
+// the directory itself.
+func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+	fd, err := syscall.Open(dirPath, 0, 0)
+	if err != nil {
+		if os.IsNotExist(err) || isSysErrNotDir(err) {
+			return errFileNotFound
+		}
+		if os.IsPermission(err) {
+			return errFileAccessDenied
+		}
+		return err
+	}
+	defer syscall.Close(fd)
+
+	buf := make([]byte, blockSize) // stack-allocated; doesn't escape
+	boff := 0                      // starting read position in buf
+	nbuf := 0                      // end valid data in buf
+
+	for {
+		if boff >= nbuf {
+			boff = 0
+			nbuf, err = syscall.ReadDirent(fd, buf)
+			if err != nil {
+				if isSysErrNotDir(err) {
+					return errFileNotFound
+				}
+				return err
+			}
+			if nbuf <= 0 {
+				break
+			}
+		}
+		consumed, name, typ, err := parseDirEnt(buf[boff:nbuf])
+		if err != nil {
+			return err
+		}
+		boff += consumed
+		if name == "" || name == "." || name == ".." {
+			continue
+		}
+		if typ&os.ModeSymlink == os.ModeSymlink {
+			continue
+		}
+		if err = filter(name, typ); err == errDoneForNow {
+			// filtering requested to return by caller.
+			return nil
+		}
+	}
+
+	return err
 }
 
 // Return count entries at the directory dirPath and all entries

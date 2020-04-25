@@ -132,6 +132,11 @@ func (target *AMQPTarget) IsActive() (bool, error) {
 	return true, nil
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *AMQPTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 func (target *AMQPTarget) channel() (*amqp.Channel, error) {
 	var err error
 	var conn *amqp.Connection
