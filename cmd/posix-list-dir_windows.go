@@ -121,17 +121,16 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	data := &syscall.Win32finddata{}
 
 	for count != 0 {
-		e := syscall.FindNextFile(syscall.Handle(d.Fd()), data)
-		if e != nil {
-			if e == syscall.ERROR_NO_MORE_FILES {
+		err = syscall.FindNextFile(syscall.Handle(d.Fd()), data)
+		if err != nil {
+			if err == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
-				err = &os.PathError{
+				return nil, &os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
-					Err:  e,
+					Err:  err,
 				}
-				return
 			}
 		}
 		name := syscall.UTF16ToString(data.FileName[0:])
@@ -140,23 +139,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		}
 		switch {
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
-			// If its symbolic link, follow the link using os.Stat()
-			var fi os.FileInfo
-			fi, err = os.Stat(pathJoin(dirPath, name))
-			if err != nil {
-				// If file does not exist, we continue and skip it.
-				// Could happen if it was deleted in the middle while
-				// this list was being performed.
-				if os.IsNotExist(err) {
-					continue
-				}
-				return nil, err
-			}
-			if fi.IsDir() {
-				entries = append(entries, name+SlashSeparator)
-			} else if fi.Mode().IsRegular() {
-				entries = append(entries, name)
-			}
+			continue
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
 			entries = append(entries, name+SlashSeparator)
 		default:
