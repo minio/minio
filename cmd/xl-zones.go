@@ -87,11 +87,9 @@ func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, 
 			return nil, err
 		}
 	}
-	if !z.SingleZone() {
-		z.quickHealBuckets(ctx)
-	}
-	go intDataUpdateTracker.start(GlobalContext, localDrives...)
 
+	z.quickHealBuckets(ctx)
+	go intDataUpdateTracker.start(GlobalContext, localDrives...)
 	return z, nil
 }
 
