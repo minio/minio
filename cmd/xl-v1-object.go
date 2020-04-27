@@ -137,16 +137,16 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		if objInfo, err = xl.getObjectInfoDir(ctx, bucket, object); err != nil {
 			return nil, toObjectErr(err, bucket, object)
 		}
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn)
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
 	}
 
 	var objInfo ObjectInfo
-	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
+	objInfo, err = xl.getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -156,6 +156,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		err := xl.getObject(ctx, bucket, object, off, length, pw, "", opts)
 		pw.CloseWithError(err)
 	}()
+
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
@@ -365,7 +366,7 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, op
 		return info, nil
 	}
 
-	info, err := xl.getObjectInfo(ctx, bucket, object)
+	info, err := xl.getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -374,7 +375,7 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, op
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string, opt ObjectOptions) (objInfo ObjectInfo, err error) {
 	disks := xl.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -627,13 +628,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	if xl.isObject(bucket, object) {
-		// Deny if WORM is enabled
-		if isWORMEnabled(bucket) {
-			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
-				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-			}
-		}
-
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 

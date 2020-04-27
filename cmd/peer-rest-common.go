@@ -17,19 +17,14 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v7"
+	peerRESTVersion       = "v8"
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
 )
 
 const (
-	peerRESTMethodNetReadPerfInfo              = "/netreadperfinfo"
-	peerRESTMethodCollectNetPerfInfo           = "/collectnetperfinfo"
 	peerRESTMethodServerInfo                   = "/serverinfo"
-	peerRESTMethodCPULoadInfo                  = "/cpuloadinfo"
-	peerRESTMethodMemUsageInfo                 = "/memusageinfo"
-	peerRESTMethodDrivePerfInfo                = "/driveperfinfo"
 	peerRESTMethodDriveOBDInfo                 = "/driveobdinfo"
 	peerRESTMethodNetOBDInfo                   = "/netobdinfo"
 	peerRESTMethodCPUOBDInfo                   = "/cpuobdinfo"
@@ -45,7 +40,9 @@ const (
 	peerRESTMethodGetLocks                     = "/getlocks"
 	peerRESTMethodBucketPolicyRemove           = "/removebucketpolicy"
 	peerRESTMethodLoadUser                     = "/loaduser"
+	peerRESTMethodLoadServiceAccount           = "/loadserviceaccount"
 	peerRESTMethodDeleteUser                   = "/deleteuser"
+	peerRESTMethodDeleteServiceAccount         = "/deleteserviceaccount"
 	peerRESTMethodLoadPolicy                   = "/loadpolicy"
 	peerRESTMethodLoadPolicyMapping            = "/loadpolicymapping"
 	peerRESTMethodDeletePolicy                 = "/deletepolicy"
@@ -55,19 +52,14 @@ const (
 	peerRESTMethodDownloadProfilingData        = "/downloadprofilingdata"
 	peerRESTMethodBucketPolicySet              = "/setbucketpolicy"
 	peerRESTMethodBucketNotificationPut        = "/putbucketnotification"
-	peerRESTMethodBucketNotificationListen     = "/listenbucketnotification"
 	peerRESTMethodReloadFormat                 = "/reloadformat"
-	peerRESTMethodTargetExists                 = "/targetexists"
-	peerRESTMethodSendEvent                    = "/sendevent"
 	peerRESTMethodTrace                        = "/trace"
 	peerRESTMethodListen                       = "/listen"
+	peerRESTMethodLog                          = "/log"
 	peerRESTMethodBucketLifecycleSet           = "/setbucketlifecycle"
 	peerRESTMethodBucketLifecycleRemove        = "/removebucketlifecycle"
 	peerRESTMethodBucketEncryptionSet          = "/setbucketencryption"
 	peerRESTMethodBucketEncryptionRemove       = "/removebucketencryption"
-	peerRESTMethodLog                          = "/log"
-	peerRESTMethodHardwareCPUInfo              = "/cpuhardwareinfo"
-	peerRESTMethodHardwareNetworkInfo          = "/networkhardwareinfo"
 	peerRESTMethodPutBucketObjectLockConfig    = "/putbucketobjectlockconfig"
 	peerRESTMethodBucketObjectLockConfigRemove = "/removebucketobjectlockconfig"
 )

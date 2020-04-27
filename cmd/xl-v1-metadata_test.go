@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -136,7 +135,7 @@ func TestObjectToPartOffset(t *testing.T) {
 
 	// Test them.
 	for _, testCase := range testCases {
-		index, offset, err := xlMeta.ObjectToPartOffset(context.Background(), testCase.offset)
+		index, offset, err := xlMeta.ObjectToPartOffset(GlobalContext, testCase.offset)
 		if err != testCase.expectedErr {
 			t.Fatalf("%+v: expected = %s, got: %s", testCase, testCase.expectedErr, err)
 		}
@@ -192,7 +191,7 @@ func TestPickValidXLMeta(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		xlMeta, err := pickValidXLMeta(context.Background(), test.metaArr, test.modTime, len(test.metaArr)/2)
+		xlMeta, err := pickValidXLMeta(GlobalContext, test.metaArr, test.modTime, len(test.metaArr)/2)
 		if test.expectedErr != nil {
 			if err.Error() != test.expectedErr.Error() {
 				t.Errorf("Test %d: Expected to fail with %v but received %v",

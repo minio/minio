@@ -75,12 +75,15 @@ EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
-  2. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
+  2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
+     {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
+
+  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
-  3. Start distributed minio server in an expanded setup, run the following command on all the nodes
+  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
@@ -108,7 +111,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalMinioAddr = globalCLIContext.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
 		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
@@ -166,7 +168,7 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := newObject.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	objLock := newObject.NewNSLock(GlobalContext, minioMetaBucket, transactionConfigPrefix)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -250,12 +252,12 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
+		if err = migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient); err != nil {
 			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
 		}
 	}
 
-	if err = globalIAMSys.Init(newObject); err != nil {
+	if err = globalIAMSys.Init(GlobalContext, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize IAM system: %w", err)
 	}
 
@@ -316,7 +318,7 @@ func serverMain(ctx *cli.Context) {
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
@@ -340,6 +342,14 @@ func serverMain(ctx *cli.Context) {
 	// Check and load Root CAs.
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	globalMinioEndpoint = func() string {
+		host := globalMinioHost
+		if host == "" {
+			host = sortIPs(localIP4.ToSlice())[0]
+		}
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
@@ -412,7 +422,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	newObject, err := newObjectLayer(globalEndpoints)
+	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
 		// Stop watching for any certificate changes.
@@ -479,7 +489,7 @@ func serverMain(ctx *cli.Context) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
+func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
 
 	if endpointZones.NEndpoints() == 1 {
@@ -487,5 +497,5 @@ func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err err
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	return newXLZones(endpointZones)
+	return newXLZones(ctx, endpointZones)
 }

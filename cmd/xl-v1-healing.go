@@ -122,11 +122,6 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 				Endpoint: drive,
 				State:    beforeState[i],
 			})
-			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    afterState[i],
-			})
 		}
 	}
 
@@ -151,12 +146,26 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	errs = g.Wait()
 
 	reducedErr = reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
-	if reducedErr == errXLWriteQuorum {
-		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(storageDisks, bucket)
+	if reducedErr != nil {
+		if reducedErr == errXLWriteQuorum {
+			// Purge successfully created buckets if we don't have writeQuorum.
+			undoMakeBucket(storageDisks, bucket)
+		}
+		return res, reducedErr
 	}
 
-	return res, reducedErr
+	for i := range afterState {
+		if storageDisks[i] != nil {
+			drive := storageDisks[i].String()
+			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: drive,
+				State:    afterState[i],
+			})
+		}
+	}
+
+	return res, nil
 }
 
 // listAllBuckets lists all buckets from all disks. It also
@@ -712,7 +721,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 	} else {
 		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID, "", "Heal", bucket, object)
 	}
-	healCtx := logger.SetReqInfo(context.Background(), newReqInfo)
+	healCtx := logger.SetReqInfo(GlobalContext, newReqInfo)
 
 	// Healing directories handle it separately.
 	if HasSuffix(object, SlashSeparator) {

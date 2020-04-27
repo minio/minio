@@ -238,6 +238,9 @@ func (s *xlSets) connectDisks() {
 			}
 			disk.SetDiskID(format.XL.This)
 			s.xlDisksMu.Lock()
+			if s.xlDisks[setIndex][diskIndex] != nil {
+				s.xlDisks[setIndex][diskIndex].Close()
+			}
 			s.xlDisks[setIndex][diskIndex] = disk
 			s.xlDisksMu.Unlock()
 			go func(setIndex int) {
@@ -290,7 +293,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
+func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
 	endpointStrings := make([]string, len(endpoints))
 	for i, endpoint := range endpoints {
 		if endpoint.IsLocal {
@@ -333,16 +336,21 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
-			if storageDisks[i*drivesPerSet+j] == nil {
+			disk := storageDisks[i*drivesPerSet+j]
+			if disk == nil {
 				continue
 			}
-			if diskID, derr := storageDisks[i*drivesPerSet+j].GetDiskID(); derr == nil {
-				m, n, err := findDiskIndexByDiskID(format, diskID)
-				if err != nil {
-					continue
-				}
-				s.xlDisks[m][n] = storageDisks[i*drivesPerSet+j]
+			diskID, derr := disk.GetDiskID()
+			if derr != nil {
+				disk.Close()
+				continue
 			}
+			m, n, err := findDiskIndexByDiskID(format, diskID)
+			if err != nil {
+				disk.Close()
+				continue
+			}
+			s.xlDisks[m][n] = disk
 		}
 
 		// Initialize xl objects for a given set.
@@ -355,12 +363,12 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			mrfUploadCh: make(chan partialUpload, 10000),
 		}
 
-		go s.sets[i].cleanupStaleMultipartUploads(context.Background(),
-			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
+		go s.sets[i].cleanupStaleMultipartUploads(ctx,
+			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, ctx.Done())
 	}
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
 
@@ -528,7 +536,7 @@ func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].DeleteBucket(context.Background(), bucket, false)
+				return sets[index].DeleteBucket(GlobalContext, bucket, false)
 			}
 			return nil
 		}, index)
@@ -708,7 +716,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(context.Background(), bucket, "")
+				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "")
 			}
 			return nil
 		}, index)
@@ -1022,7 +1030,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	defer close(endWalkCh)
 
 	const ndisks = 3
-	entryChs := s.startMergeWalksN(context.Background(), bucket, prefix, "", true, endWalkCh, ndisks)
+	entryChs := s.startMergeWalksN(GlobalContext, bucket, prefix, "", true, endWalkCh, ndisks)
 
 	var objInfos []ObjectInfo
 	var eof bool
@@ -1171,7 +1179,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
 		// start file tree walk across at most randomly 3 disks in a set.
-		entryChs = s.startMergeWalksN(context.Background(), bucket, prefix, marker, recursive, endWalkCh, ndisks)
+		entryChs = s.startMergeWalksN(GlobalContext, bucket, prefix, marker, recursive, endWalkCh, ndisks)
 	}
 
 	entries := mergeEntriesCh(entryChs, maxKeys, ndisks)
@@ -1379,11 +1387,13 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 
 		diskID, err := disk.GetDiskID()
 		if err != nil {
+			disk.Close()
 			continue
 		}
 
 		m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 		if err != nil {
+			disk.Close()
 			continue
 		}
 
@@ -1587,11 +1597,13 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 
 			diskID, err := disk.GetDiskID()
 			if err != nil {
+				disk.Close()
 				continue
 			}
 
 			m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 			if err != nil {
+				disk.Close()
 				continue
 			}
 

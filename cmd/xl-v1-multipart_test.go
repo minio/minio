@@ -25,8 +25,11 @@ import (
 
 // Tests cleanup multipart uploads for erasure coded backend.
 func TestXLCleanupStaleMultipartUploads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL16()
+	obj, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,20 +43,17 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	objectName := "object"
 	var opts ObjectOptions
 
-	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
+	obj.MakeBucketWithLocation(ctx, bucketName, "")
+	uploadID, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-
-	// Create a context we can cancel.
-	ctx, cancel := context.WithCancel(context.Background())
 
 	var cleanupWg sync.WaitGroup
 	cleanupWg.Add(1)
 	go func() {
 		defer cleanupWg.Done()
-		xl.cleanupStaleMultipartUploads(context.Background(), time.Millisecond, 0, ctx.Done())
+		xl.cleanupStaleMultipartUploads(GlobalContext, time.Millisecond, 0, ctx.Done())
 	}()
 
 	// Wait for 100ms such that - we have given enough time for cleanup routine to kick in.

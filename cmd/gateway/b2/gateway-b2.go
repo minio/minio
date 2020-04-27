@@ -87,8 +87,13 @@ EXAMPLES:
 
 // Handler for 'minio gateway b2' command line.
 func b2GatewayMain(ctx *cli.Context) {
+	strictS3Compat := true
+	if ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat") {
+		strictS3Compat = false
+	}
+
 	minio.StartGateway(ctx, &B2{
-		strictS3Compat: ctx.IsSet("compat") || ctx.GlobalIsSet("compat"),
+		strictS3Compat: strictS3Compat,
 	})
 }
 
@@ -105,7 +110,7 @@ func (g *B2) Name() string {
 // NewGatewayLayer returns b2 gateway layer, implements ObjectLayer interface to
 // talk to B2 remote backend.
 func (g *B2) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	ctx := context.Background()
+	ctx := minio.GlobalContext
 	client, err := b2.AuthorizeAccount(ctx, creds.AccessKey, creds.SecretKey, b2.Transport(minio.NewGatewayHTTPTransport()))
 	if err != nil {
 		return nil, err
@@ -473,7 +478,7 @@ func (l *b2Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
 }
 
 // GetObject reads an object from B2. Supports additional

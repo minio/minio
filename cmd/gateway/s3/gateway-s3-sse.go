@@ -315,7 +315,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	objInfo.UserDefined = minio.CleanMinioInternalMetadataKeys(objInfo.UserDefined)
-	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o.CheckCopyPrecondFn)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)
 	}
@@ -679,13 +679,13 @@ func getGWContentPath(object string) string {
 }
 
 // Clean-up the stale incomplete encrypted multipart uploads. Should be run in a Go routine.
-func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh <-chan struct{}) {
+func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-doneCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			l.cleanupStaleEncMultipartUploadsOnGW(ctx, expiry)

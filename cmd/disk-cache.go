@@ -207,6 +207,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			return cacheReader, nil
 		}
 		if cc != nil && cc.noStore {
+			cacheReader.Close()
 			c.cacheStats.incMiss()
 			bReader, err := c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 			bReader.ObjInfo.CacheLookupStatus = CacheHit
@@ -220,9 +221,11 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		c.incCacheStats(cacheObjSize)
 		return cacheReader, nil
 	} else if err != nil {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		if _, ok := err.(ObjectNotFound); ok {
 			if cacheErr == nil {
-				cacheReader.Close()
 				// Delete cached entry if backend object
 				// was deleted.
 				dcache.Delete(ctx, bucket, object)
@@ -233,13 +236,19 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	if !objInfo.IsCacheable() {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
-	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -312,7 +321,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}()
 	cleanupBackend := func() { bkReader.Close() }
 	cleanupPipe := func() { pipeWriter.Close() }
-	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts.CheckCopyPrecondFn, cleanupBackend, cleanupPipe)
+	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts, cleanupBackend, cleanupPipe)
 }
 
 // Returns ObjectInfo from cache if available.
@@ -501,7 +510,7 @@ func (c *cacheObjects) hashIndex(bucket, object string) int {
 // or the global env overrides.
 func newCache(config cache.Config) ([]*diskCache, bool, error) {
 	var caches []*diskCache
-	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
+	ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{})
 	formats, migrating, err := loadAndValidateCacheFormat(ctx, config.Drives)
 	if err != nil {
 		return nil, false, err
@@ -614,7 +623,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(opts.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(opts.UserDefined)
-	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}

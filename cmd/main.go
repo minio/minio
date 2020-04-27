@@ -29,10 +29,12 @@ import (
 
 // GlobalFlags - global flags for minio.
 var GlobalFlags = []cli.Flag{
+	// Deprecated flag, so its hidden now - existing deployments will keep working.
 	cli.StringFlag{
-		Name:  "config-dir, C",
-		Value: defaultConfigDir.Get(),
-		Usage: "[DEPRECATED] path to legacy configuration directory",
+		Name:   "config-dir, C",
+		Value:  defaultConfigDir.Get(),
+		Usage:  "[DEPRECATED] path to legacy configuration directory",
+		Hidden: true,
 	},
 	cli.StringFlag{
 		Name:  "certs-dir, S",
@@ -51,9 +53,17 @@ var GlobalFlags = []cli.Flag{
 		Name:  "json",
 		Usage: "output server logs and startup information in json format",
 	},
+	// Deprecated flag, so its hidden now, existing deployments will keep working.
 	cli.BoolFlag{
-		Name:  "compat",
-		Usage: "enable strict S3 compatibility by turning off certain performance optimizations",
+		Name:   "compat",
+		Usage:  "enable strict S3 compatibility by turning off certain performance optimizations",
+		Hidden: true,
+	},
+	// This flag is hidden and to be used only during certain performance testing.
+	cli.BoolFlag{
+		Name:   "no-compat",
+		Usage:  "disable strict S3 compatibility by turning on certain performance optimizations",
+		Hidden: true,
 	},
 }
 

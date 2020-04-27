@@ -574,6 +574,16 @@ func TestCSVQueries2(t *testing.T) {
 			wantResult: `{"num2":" 0.765111"}`,
 		},
 		{
+			name:       "select-in-array",
+			query:      `select id from S3Object s WHERE id in [1,3]`,
+			wantResult: `{"id":"1"}`,
+		},
+		{
+			name:       "select-in-array-matchnone",
+			query:      `select id from S3Object s WHERE s.id in [4,3]`,
+			wantResult: ``,
+		},
+		{
 			name:       "select-float-by-val",
 			query:      `SELECT num2 from s3object s WHERE num2 = 0.765111`,
 			wantResult: `{"num2":" 0.765111"}`,

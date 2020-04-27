@@ -38,9 +38,10 @@ notify_elasticsearch  publish bucket notifications to Elasticsearch endpoints
 notify_redis          publish bucket notifications to Redis datastores
 ```
 
-> NOTE: '\*' at the end of arg means its mandatory.  
-> NOTE: '\*' at the end of the values, means its the default value for the arg.  
-> NOTE: When configured using environment variables, the `:name` can be specified using this format `MINIO_NOTIFY_WEBHOOK_ENABLE_<name>`.
+> NOTE:
+> - '\*' at the end of arg means its mandatory.
+> - '\*' at the end of the values, means its the default value for the arg.
+> - When configured using environment variables, the `:name` can be specified using this format `MINIO_NOTIFY_WEBHOOK_ENABLE_<name>`.
 
 <a name="AMQP"></a>
 
@@ -68,7 +69,7 @@ internal       (on|off)    set to 'on' for exchange to be not used directly by p
 auto_deleted   (on|off)    auto delete queue when set to 'on', when there are no consumers
 delivery_mode  (number)    set to '1' for non-persistent or '2' for persistent queue
 queue_dir      (path)      staging dir for undelivered messages e.g. '/home/events'
-queue_limit    (number)    maximum limit for undelivered messages, defaults to '10000'
+queue_limit    (number)    maximum limit for undelivered messages, defaults to '100000'
 comment        (sentence)  optionally add a comment to this setting
 ```
 
@@ -91,11 +92,11 @@ MINIO_NOTIFY_AMQP_INTERNAL       (on|off)    set to 'on' for exchange to be not 
 MINIO_NOTIFY_AMQP_AUTO_DELETED   (on|off)    auto delete queue when set to 'on', when there are no consumers
 MINIO_NOTIFY_AMQP_DELIVERY_MODE  (number)    set to '1' for non-persistent or '2' for persistent queue
 MINIO_NOTIFY_AMQP_QUEUE_DIR      (path)      staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_AMQP_QUEUE_LIMIT    (number)    maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_AMQP_QUEUE_LIMIT    (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_AMQP_COMMENT        (sentence)  optionally add a comment to this setting
 ```
 
-MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the AMQP broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 To update the configuration, use `mc admin config get notify_amqp` command to get the current configuration for `notify_amqp`.
 
@@ -202,7 +203,7 @@ qos                  (number)    set the quality of service priority, defaults t
 keep_alive_interval  (duration)  keep-alive interval for MQTT connections in s,m,h,d
 reconnect_interval   (duration)  reconnect interval for MQTT connections in s,m,h,d
 queue_dir            (path)      staging dir for undelivered messages e.g. '/home/events'
-queue_limit          (number)    maximum limit for undelivered messages, defaults to '10000'
+queue_limit          (number)    maximum limit for undelivered messages, defaults to '100000'
 comment              (sentence)  optionally add a comment to this setting
 ```
 
@@ -222,11 +223,11 @@ MINIO_NOTIFY_MQTT_QOS                  (number)    set the quality of service pr
 MINIO_NOTIFY_MQTT_KEEP_ALIVE_INTERVAL  (duration)  keep-alive interval for MQTT connections in s,m,h,d
 MINIO_NOTIFY_MQTT_RECONNECT_INTERVAL   (duration)  reconnect interval for MQTT connections in s,m,h,d
 MINIO_NOTIFY_MQTT_QUEUE_DIR            (path)      staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_MQTT_QUEUE_LIMIT          (number)    maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_MQTT_QUEUE_LIMIT          (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_MQTT_COMMENT              (sentence)  optionally add a comment to this setting
 ```
 
-MinIO supports persistent event store. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the MQTT broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration.
 
@@ -335,7 +336,7 @@ url*         (url)                Elasticsearch server's address, with optional 
 index*       (string)             Elasticsearch index to store/update events, index is auto-created
 format*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
 queue_dir    (path)               staging dir for undelivered messages e.g. '/home/events'
-queue_limit  (number)             maximum limit for undelivered messages, defaults to '10000'
+queue_limit  (number)             maximum limit for undelivered messages, defaults to '100000'
 comment      (sentence)           optionally add a comment to this setting
 ```
 
@@ -351,13 +352,13 @@ MINIO_NOTIFY_ELASTICSEARCH_URL*         (url)                Elasticsearch serve
 MINIO_NOTIFY_ELASTICSEARCH_INDEX*       (string)             Elasticsearch index to store/update events, index is auto-created
 MINIO_NOTIFY_ELASTICSEARCH_FORMAT*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
 MINIO_NOTIFY_ELASTICSEARCH_QUEUE_DIR    (path)               staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_ELASTICSEARCH_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_ELASTICSEARCH_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_ELASTICSEARCH_COMMENT      (sentence)           optionally add a comment to this setting
 ```
 
 For example: `http://localhost:9200` or with authentication info `http://elastic:MagicWord@127.0.0.1:9200`.
 
-MinIO supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the Elasticsearch broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 If Elasticsearch has authentication enabled, the credentials can be supplied to MinIO via the `url` parameter formatted as `PROTO://USERNAME:PASSWORD@ELASTICSEARCH_HOST:PORT`.
 
@@ -501,7 +502,7 @@ key*         (string)             Redis key to store/update events, key is auto-
 format*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
 password     (string)             Redis server password
 queue_dir    (path)               staging dir for undelivered messages e.g. '/home/events'
-queue_limit  (number)             maximum limit for undelivered messages, defaults to '10000'
+queue_limit  (number)             maximum limit for undelivered messages, defaults to '100000'
 comment      (sentence)           optionally add a comment to this setting
 ```
 
@@ -517,11 +518,11 @@ MINIO_NOTIFY_REDIS_KEY*         (string)             Redis key to store/update e
 MINIO_NOTIFY_REDIS_FORMAT*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
 MINIO_NOTIFY_REDIS_PASSWORD     (string)             Redis server password
 MINIO_NOTIFY_REDIS_QUEUE_DIR    (path)               staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_REDIS_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_REDIS_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_REDIS_COMMENT      (sentence)           optionally add a comment to this setting
 ```
 
-MinIO supports persistent event store. The persistent store will backup events when the Redis broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the Redis broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration.
 
@@ -590,7 +591,7 @@ Install NATS from [here](http://nats.io/).
 
 ### Step 1: Add NATS endpoint to MinIO
 
-MinIO supports persistent event store. The persistent store will backup events when the NATS broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the NATS broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 ```
 KEY:
@@ -613,7 +614,7 @@ cert_authority                    (string)    path to certificate chain of the t
 client_cert                       (string)    client cert for NATS mTLS auth
 client_key                        (string)    client cert key for NATS mTLS auth
 queue_dir                         (path)      staging dir for undelivered messages e.g. '/home/events'
-queue_limit                       (number)    maximum limit for undelivered messages, defaults to '10000'
+queue_limit                       (number)    maximum limit for undelivered messages, defaults to '100000'
 comment                           (sentence)  optionally add a comment to this setting
 ```
 
@@ -640,7 +641,7 @@ MINIO_NOTIFY_NATS_CERT_AUTHORITY                    (string)    path to certific
 MINIO_NOTIFY_NATS_CLIENT_CERT                       (string)    client cert for NATS mTLS auth
 MINIO_NOTIFY_NATS_CLIENT_KEY                        (string)    client cert key for NATS mTLS auth
 MINIO_NOTIFY_NATS_QUEUE_DIR                         (path)      staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_NATS_QUEUE_LIMIT                       (number)    maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_NATS_QUEUE_LIMIT                       (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_NATS_COMMENT                           (sentence)  optionally add a comment to this setting
 ```
 
@@ -806,6 +807,28 @@ Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jp
 
 ## Publish MinIO events via PostgreSQL
 
+> NOTE: Until release RELEASE.2020-04-10T03-34-42Z PostgreSQL notification used to support following options:
+>
+> ```
+> host                (hostname)           Postgres server hostname (used only if `connection_string` is empty)
+> port                (port)               Postgres server port, defaults to `5432` (used only if `connection_string` is empty)
+> username            (string)             database username (used only if `connection_string` is empty)
+> password            (string)             database password (used only if `connection_string` is empty)
+> database            (string)             database name (used only if `connection_string` is empty)
+> ```
+>
+> These are now deprecated, if you plan to upgrade to any releases after *RELEASE.2020-04-10T03-34-42Z* make sure
+> to migrate to only using *connection_string* option. To migrate, once you have upgraded all the servers use the
+> following command to update the existing notification targets.
+>
+> ```
+> mc admin config set myminio/ notify_postgres[:name] connection_string="host=hostname port=2832 username=psqluser password=psqlpass database=bucketevents"
+> ```
+>
+> Please make sure this step is carried out, without this step PostgreSQL notification targets will not work,
+> an error message will be shown on the console upon server upgrade/restart, make sure to follow the above
+> instructions appropriately. For further questions please join our https://slack.min.io
+
 Install [PostgreSQL](https://www.postgresql.org/) database server. For illustrative purposes, we have set the "postgres" user password as `password` and created a database called `minio_events` to store the events.
 
 This notification target supports two formats: _namespace_ and _access_.
@@ -829,16 +852,11 @@ KEY:
 notify_postgres[:name]  publish bucket notifications to Postgres databases
 
 ARGS:
-connection_string*  (string)             Postgres server connection-string
+connection_string*  (string)             Postgres server connection-string e.g. "host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable"
 table*              (string)             DB table name to store/update events, table is auto-created
 format*             (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-host                (hostname)           Postgres server hostname (used only if `connection_string` is empty)
-port                (port)               Postgres server port, defaults to `5432` (used only if `connection_string` is empty)
-username            (string)             database username (used only if `connection_string` is empty)
-password            (string)             database password (used only if `connection_string` is empty)
-database            (string)             database name (used only if `connection_string` is empty)
 queue_dir           (path)               staging dir for undelivered messages e.g. '/home/events'
-queue_limit         (number)             maximum limit for undelivered messages, defaults to '10000'
+queue_limit         (number)             maximum limit for undelivered messages, defaults to '100000'
 comment             (sentence)           optionally add a comment to this setting
 ```
 
@@ -849,33 +867,28 @@ notify_postgres[:name]  publish bucket notifications to Postgres databases
 
 ARGS:
 MINIO_NOTIFY_POSTGRES_ENABLE*             (on|off)             enable notify_postgres target, default is 'off'
-MINIO_NOTIFY_POSTGRES_CONNECTION_STRING*  (string)             Postgres server connection-string
+MINIO_NOTIFY_POSTGRES_CONNECTION_STRING*  (string)             Postgres server connection-string e.g. "host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable"
 MINIO_NOTIFY_POSTGRES_TABLE*              (string)             DB table name to store/update events, table is auto-created
 MINIO_NOTIFY_POSTGRES_FORMAT*             (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-MINIO_NOTIFY_POSTGRES_HOST                (hostname)           Postgres server hostname (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_PORT                (port)               Postgres server port, defaults to `5432` (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_USERNAME            (string)             database username (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_PASSWORD            (string)             database password (used only if `connection_string` is empty)
-MINIO_NOTIFY_POSTGRES_DATABASE            (string)             database name (used only if `connection_string` is empty)
 MINIO_NOTIFY_POSTGRES_QUEUE_DIR           (path)               staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT         (number)             maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT         (number)             maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_POSTGRES_COMMENT             (sentence)           optionally add a comment to this setting
 ```
 
-MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
 To update the configuration, use `mc admin config get` command to get the current configuration.
 
 ```sh
 $ mc admin config get myminio notify_postgres
-notify_postgres:1 password="" port="" queue_dir="" connection_string="" host="" queue_limit="0"  table="" username="" database="" format="namespace"
+notify_postgres:1 queue_dir="" connection_string="" queue_limit="0"  table="" format="namespace"
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:postgresql` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_postgres:1 password="password" port="5432" queue_dir="" connection_string="sslmode=disable" host="127.0.0.1" queue_limit="0"  table="bucketevents" username="postgres" database="minio_events" format="namespace"
+$ mc admin config set myminio notify_postgres:1 connection_string="host=localhost port=5432 dbname=minio_events user=postgres password=password sslmode=disable" table="bucketevents" format="namespace"
 ```
 
 Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
@@ -923,6 +936,28 @@ key                 |                      value
 
 ## Publish MinIO events via MySQL
 
+> NOTE: Until release RELEASE.2020-04-10T03-34-42Z MySQL notification used to support following options:
+>
+> ```
+> host         (hostname)           MySQL server hostname (used only if `dsn_string` is empty)
+> port         (port)               MySQL server port (used only if `dsn_string` is empty)
+> username     (string)             database username (used only if `dsn_string` is empty)
+> password     (string)             database password (used only if `dsn_string` is empty)
+> database     (string)             database name (used only if `dsn_string` is empty)
+> ```
+>
+> These are now deprecated, if you plan to upgrade to any releases after *RELEASE.2020-04-10T03-34-42Z* make sure
+> to migrate to only using *dsn_string* option. To migrate, once you have upgraded all the servers use the
+> following command to update the existing notification targets.
+>
+> ```
+> mc admin config set myminio/ notify_mysql[:name] dsn_string="mysqluser:mysqlpass@tcp(localhost:2832)/bucketevents"
+> ```
+>
+> Please make sure this step is carried out, without this step MySQL notification targets will not work,
+> an error message will be shown on the console upon server upgrade/restart, make sure to follow the above
+> instructions appropriately. For further questions please join our https://slack.min.io
+
 Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
 
 This notification target supports two formats: _namespace_ and _access_.
@@ -946,16 +981,11 @@ KEY:
 notify_mysql[:name]  publish bucket notifications to MySQL databases. When multiple MySQL server endpoints are needed, a user specified "name" can be added for each configuration, (e.g."notify_mysql:myinstance").
 
 ARGS:
-dsn_string*  (string)             MySQL data-source-name connection string
+dsn_string*  (string)             MySQL data-source-name connection string e.g. "<user>:<password>@tcp(<host>:<port>)/<database>"
 table*       (string)             DB table name to store/update events, table is auto-created
 format*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-host         (hostname)           MySQL server hostname (used only if `dsn_string` is empty)
-port         (port)               MySQL server port (used only if `dsn_string` is empty)
-username     (string)             database username (used only if `dsn_string` is empty)
-password     (string)             database password (used only if `dsn_string` is empty)
-database     (string)             database name (used only if `dsn_string` is empty)
 queue_dir    (path)               staging dir for undelivered messages e.g. '/home/events'
-queue_limit  (number)             maximum limit for undelivered messages, defaults to '10000'
+queue_limit  (number)             maximum limit for undelivered messages, defaults to '100000'
 comment      (sentence)           optionally add a comment to this setting
 ```
 
@@ -966,36 +996,27 @@ notify_mysql[:name]  publish bucket notifications to MySQL databases
 
 ARGS:
 MINIO_NOTIFY_MYSQL_ENABLE*      (on|off)             enable notify_mysql target, default is 'off'
-MINIO_NOTIFY_MYSQL_DSN_STRING*  (string)             MySQL data-source-name connection string
+MINIO_NOTIFY_MYSQL_DSN_STRING*  (string)             MySQL data-source-name connection string e.g. "<user>:<password>@tcp(<host>:<port>)/<database>"
 MINIO_NOTIFY_MYSQL_TABLE*       (string)             DB table name to store/update events, table is auto-created
 MINIO_NOTIFY_MYSQL_FORMAT*      (namespace*|access)  'namespace' reflects current bucket/object list and 'access' reflects a journal of object operations, defaults to 'namespace'
-MINIO_NOTIFY_MYSQL_HOST         (hostname)           MySQL server hostname (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_PORT         (port)               MySQL server port (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_USERNAME     (string)             database username (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_PASSWORD     (string)             database password (used only if `dsn_string` is empty)
-MINIO_NOTIFY_MYSQL_DATABASE     (string)             database name (used only if `dsn_string` is empty)
 MINIO_NOTIFY_MYSQL_QUEUE_DIR    (path)               staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_MYSQL_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_MYSQL_QUEUE_LIMIT  (number)             maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_MYSQL_COMMENT      (sentence)           optionally add a comment to this setting
 ```
 
-`dsn_string` is optional. If not specified, the connection information specified by the `user`, `password`, `host`, `port`, and `database` parameters are used. `dsn_string` is formed as `"<user>:<password>@tcp(<host>:<port>)/<database>"`
+`dsn_string` is required and is of form `"<user>:<password>@tcp(<host>:<port>)/<database>"`
 
-MinIO supports persistent event store. The persistent store will backup events if MySQL connection goes offline and then replays the stored events when the broken connection comes back up. The event store can be configured by setting a directory path in `queue_dir` field, and the maximum number of events, which can be stored in a `queue_dir`, in `queue_limit` field. For example, `queue_dir` can be set to `/home/events` and `queue_limit` can be set to `1000`. By default, the `queue_limit` is set to `10000`.
+MinIO supports persistent event store. The persistent store will backup events if MySQL connection goes offline and then replays the stored events when the broken connection comes back up. The event store can be configured by setting a directory path in `queue_dir` field, and the maximum number of events, which can be stored in a `queue_dir`, in `queue_limit` field. For example, `queue_dir` can be set to `/home/events` and `queue_limit` can be set to `1000`. By default, the `queue_limit` is set to `100000`.
 
 Before updating the configuration, let's start with `mc admin config get` command to get the current configuration.
 
 ```sh
 $ mc admin config get myminio/ notify_mysql
-notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0 
+notify_mysql:myinstance enable=off format=namespace host= port= username= password= database= dsn_string= table= queue_dir= queue_limit=0
 ```
 
-Use `mc admin config set` command to update MySQL notification configuration for the deployment.
+Use `mc admin config set` command to update MySQL notification configuration for the deployment with `dsn_string` parameter:
 
-```sh
-$ mc admin config set myminio notify_mysql:myinstance table="minio_images" username="root" password="xxxx" host="172.17.0.1" port="3306" database="miniodb"
-```
-or with `dsn_string` parameter;
 ```sh
 $ mc admin config set myminio notify_mysql:myinstance table="minio_images" dsn_string="root:xxxx@tcp(172.17.0.1:3306)/miniodb"
 ```
@@ -1056,7 +1077,7 @@ MinIO requires Kafka version 0.10 or 0.9. Internally MinIO uses the [Shopify/sar
 
 ### Step 2: Add Kafka endpoint to MinIO
 
-MinIO supports persistent event store. The persistent store will backup events when the kafka broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the kafka broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 ```
 KEY:
@@ -1075,7 +1096,7 @@ tls_skip_verify  (on|off)    trust server TLS without verification, defaults to 
 client_tls_cert  (path)      path to client certificate for mTLS auth
 client_tls_key   (path)      path to client key for mTLS auth
 queue_dir        (path)      staging dir for undelivered messages e.g. '/home/events'
-queue_limit      (number)    maximum limit for undelivered messages, defaults to '10000'
+queue_limit      (number)    maximum limit for undelivered messages, defaults to '100000'
 version          (string)    specify the version of the Kafka cluster e.g '2.2.0'
 comment          (sentence)  optionally add a comment to this setting
 ```
@@ -1099,7 +1120,7 @@ MINIO_NOTIFY_KAFKA_TLS_SKIP_VERIFY  (on|off)                trust server TLS wit
 MINIO_NOTIFY_KAFKA_CLIENT_TLS_CERT  (path)                  path to client certificate for mTLS auth
 MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY   (path)                  path to client key for mTLS auth
 MINIO_NOTIFY_KAFKA_QUEUE_DIR        (path)                  staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_KAFKA_QUEUE_LIMIT      (number)                maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_KAFKA_QUEUE_LIMIT      (number)                maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_KAFKA_COMMENT          (sentence)              optionally add a comment to this setting
 MINIO_NOTIFY_KAFKA_VERSION          (string)                specify the version of the Kafka cluster e.g. '2.2.0'
 ```
@@ -1209,7 +1230,7 @@ kafkacat -b localhost:9092 -t bucketevents
 
 ### Step 1: Add Webhook endpoint to MinIO
 
-MinIO supports persistent event store. The persistent store will backup events when the webhook goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the webhook goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 ```
 KEY:
@@ -1219,7 +1240,7 @@ ARGS:
 endpoint*    (url)       webhook server endpoint e.g. http://localhost:8080/minio/events
 auth_token   (string)    opaque string or JWT authorization token
 queue_dir    (path)      staging dir for undelivered messages e.g. '/home/events'
-queue_limit  (number)    maximum limit for undelivered messages, defaults to '10000'
+queue_limit  (number)    maximum limit for undelivered messages, defaults to '100000'
 comment      (sentence)  optionally add a comment to this setting
 ```
 
@@ -1233,7 +1254,7 @@ MINIO_NOTIFY_WEBHOOK_ENABLE*      (on|off)    enable notify_webhook target, defa
 MINIO_NOTIFY_WEBHOOK_ENDPOINT*    (url)       webhook server endpoint e.g. http://localhost:8080/minio/events
 MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN   (string)    opaque string or JWT authorization token
 MINIO_NOTIFY_WEBHOOK_QUEUE_DIR    (path)      staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT  (number)    maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT  (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_WEBHOOK_COMMENT      (sentence)  optionally add a comment to this setting
 ```
 
@@ -1312,7 +1333,7 @@ docker run --rm -p 4150-4151:4150-4151 nsqio/nsq /nsqd
 
 ### Step 1: Add NSQ endpoint to MinIO
 
-MinIO supports persistent event store. The persistent store will backup events when the NSQ broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 10000.
+MinIO supports persistent event store. The persistent store will backup events when the NSQ broker goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
 To update the configuration, use `mc admin config get` command to get the current configuration for `notify_nsq`.
 
@@ -1326,7 +1347,7 @@ topic*           (string)    NSQ topic
 tls              (on|off)    set to 'on' to enable TLS
 tls_skip_verify  (on|off)    trust server TLS without verification, defaults to "on" (verify)
 queue_dir        (path)      staging dir for undelivered messages e.g. '/home/events'
-queue_limit      (number)    maximum limit for undelivered messages, defaults to '10000'
+queue_limit      (number)    maximum limit for undelivered messages, defaults to '100000'
 comment          (sentence)  optionally add a comment to this setting
 ```
 
@@ -1342,7 +1363,7 @@ MINIO_NOTIFY_NSQ_TOPIC*           (string)    NSQ topic
 MINIO_NOTIFY_NSQ_TLS              (on|off)    set to 'on' to enable TLS
 MINIO_NOTIFY_NSQ_TLS_SKIP_VERIFY  (on|off)    trust server TLS without verification, defaults to "on" (verify)
 MINIO_NOTIFY_NSQ_QUEUE_DIR        (path)      staging dir for undelivered messages e.g. '/home/events'
-MINIO_NOTIFY_NSQ_QUEUE_LIMIT      (number)    maximum limit for undelivered messages, defaults to '10000'
+MINIO_NOTIFY_NSQ_QUEUE_LIMIT      (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_NSQ_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 

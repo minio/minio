@@ -221,10 +221,13 @@ var OBDDataTypesList = []OBDDataType{
 
 // ServerOBDInfo - Connect to a minio server and call OBD Info Management API
 // to fetch server's information represented by OBDInfo structure
-func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDataType) <-chan OBDInfo {
+func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDataType, deadline time.Duration) <-chan OBDInfo {
 	respChan := make(chan OBDInfo)
 	go func() {
 		v := url.Values{}
+
+		v.Set("deadline",
+			deadline.Truncate(1*time.Second).String())
 
 		// start with all set to false
 		for _, d := range OBDDataTypesList {
@@ -236,6 +239,7 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			v.Set(string(d), "true")
 		}
 		var OBDInfoMessage OBDInfo
+		OBDInfoMessage.TimeStamp = time.Now()
 
 		if v.Get(string(OBDDataTypeMinioInfo)) == "true" {
 			info, err := adm.ServerInfo(ctx)
@@ -259,8 +263,10 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			respChan <- OBDInfo{
 				Error: err.Error(),
 			}
+			close(respChan)
 			return
 		}
+
 		// Check response http status code
 		if resp.StatusCode != http.StatusOK {
 			respChan <- OBDInfo{
@@ -268,10 +274,13 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			}
 			return
 		}
+
 		// Unmarshal the server's json response
 		decoder := json.NewDecoder(resp.Body)
 		for {
 			err := decoder.Decode(&OBDInfoMessage)
+			OBDInfoMessage.TimeStamp = time.Now()
+
 			if err == io.EOF {
 				break
 			}
@@ -283,7 +292,6 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			respChan <- OBDInfoMessage
 		}
 
-		OBDInfoMessage.TimeStamp = time.Now()
 		respChan <- OBDInfoMessage
 		close(respChan)
 	}()

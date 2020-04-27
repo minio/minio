@@ -50,7 +50,7 @@ func (ps *PubSub) Publish(item interface{}) {
 }
 
 // Subscribe - Adds a subscriber to pubsub system
-func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh chan struct{}, filter func(entry interface{}) bool) {
+func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filter func(entry interface{}) bool) {
 	ps.Lock()
 	defer ps.Unlock()
 

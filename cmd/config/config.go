@@ -70,6 +70,7 @@ const (
 	RegionSubSys         = "region"
 	EtcdSubSys           = "etcd"
 	StorageClassSubSys   = "storage_class"
+	APISubSys            = "api"
 	CompressionSubSys    = "compression"
 	KmsVaultSubSys       = "kms_vault"
 	KmsKesSubSys         = "kms_kes"
@@ -101,6 +102,7 @@ var SubSystems = set.CreateStringSet([]string{
 	RegionSubSys,
 	EtcdSubSys,
 	CacheSubSys,
+	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
@@ -128,6 +130,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	RegionSubSys,
 	EtcdSubSys,
 	CacheSubSys,
+	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
@@ -194,6 +197,23 @@ type KVS []KV
 // Empty - return if kv is empty
 func (kvs KVS) Empty() bool {
 	return len(kvs) == 0
+}
+
+// Keys returns the list of keys for the current KVS
+func (kvs KVS) Keys() []string {
+	var keys = make([]string, len(kvs))
+	var foundComment bool
+	for i := range kvs {
+		if kvs[i].Key == madmin.CommentKey {
+			foundComment = true
+		}
+		keys[i] = kvs[i].Key
+	}
+	// Comment KV not found, add it explicitly.
+	if !foundComment {
+		keys = append(keys, madmin.CommentKey)
+	}
+	return keys
 }
 
 func (kvs KVS) String() string {
@@ -581,9 +601,20 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		return Errorf("sub-system '%s' only supports single target", subSystemValue[0])
 	}
 
+	tgt := Default
+	subSys := subSystemValue[0]
+	if len(subSystemValue) == 2 {
+		tgt = subSystemValue[1]
+	}
+
+	fields := madmin.KvFields(inputs[1], defaultKVS[subSys].Keys())
+	if len(fields) == 0 {
+		return Errorf("sub-system '%s' cannot have empty keys", subSys)
+	}
+
 	var kvs = KVS{}
 	var prevK string
-	for _, v := range strings.Fields(inputs[1]) {
+	for _, v := range fields {
 		kv := strings.SplitN(v, KvSeparator, 2)
 		if len(kv) == 0 {
 			continue
@@ -602,12 +633,6 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 			continue
 		}
 		return Errorf("key '%s', cannot have empty value", kv[0])
-	}
-
-	tgt := Default
-	subSys := subSystemValue[0]
-	if len(subSystemValue) == 2 {
-		tgt = subSystemValue[1]
 	}
 
 	_, ok := kvs.Lookup(Enable)

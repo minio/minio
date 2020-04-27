@@ -26,12 +26,15 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -118,9 +121,7 @@ func getRequestAuthType(r *http.Request) authType {
 	return authTypeUnknown
 }
 
-// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
-// It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+func validateAdminSignature(ctx context.Context, r *http.Request, region string) (auth.Credentials, map[string]interface{}, bool, APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
 	s3Err := ErrAccessDenied
@@ -129,7 +130,7 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iamp
 		// We only support admin credentials to access admin APIs.
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 		if s3Err != ErrNone {
-			return cred, s3Err
+			return cred, nil, owner, s3Err
 		}
 
 		// we only support V4 (no presign) with auth body
@@ -139,14 +140,24 @@ func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iamp
 		reqInfo := (&logger.ReqInfo{}).AppendTags("requestHeaders", dumpRequest(r))
 		ctx := logger.SetReqInfo(ctx, reqInfo)
 		logger.LogIf(ctx, errors.New(getAPIError(s3Err).Description), logger.Application)
+		return cred, nil, owner, s3Err
 	}
 
-	var claims map[string]interface{}
-	claims, s3Err = checkClaimsFromToken(r, cred)
+	claims, s3Err := checkClaimsFromToken(r, cred)
+	if s3Err != ErrNone {
+		return cred, nil, owner, s3Err
+	}
+
+	return cred, claims, owner, ErrNone
+}
+
+// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
+// It does not accept presigned or JWT or anonymous requests.
+func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, region)
 	if s3Err != ErrNone {
 		return cred, s3Err
 	}
-
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
 		Action:          iampolicy.Action(action),
@@ -173,15 +184,13 @@ func getSessionToken(r *http.Request) (token string) {
 // Fetch claims in the security token returned by the client, doesn't return
 // errors - upon errors the returned claims map will be empty.
 func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
-	claims, _ := getClaimsFromToken(r)
+	claims, _ := getClaimsFromToken(r, getSessionToken(r))
 	return claims
 }
 
 // Fetch claims in the security token returned by the client.
-func getClaimsFromToken(r *http.Request) (map[string]interface{}, error) {
+func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, error) {
 	claims := xjwt.NewMapClaims()
-
-	token := getSessionToken(r)
 	if token == "" {
 		return claims.Map(), nil
 	}
@@ -242,10 +251,13 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	if token != "" && cred.AccessKey == "" {
 		return nil, ErrNoAccessKey
 	}
+	if cred.IsServiceAccount() && token == "" {
+		token = cred.SessionToken
+	}
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
 		return nil, ErrInvalidToken
 	}
-	claims, err := getClaimsFromToken(r)
+	claims, err := getClaimsFromToken(r, token)
 	if err != nil {
 		return nil, toAPIErrorCode(r.Context(), err)
 	}
@@ -464,6 +476,106 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
 }
 
+func validateSignature(atype authType, r *http.Request) (auth.Credentials, bool, map[string]interface{}, APIErrorCode) {
+	var cred auth.Credentials
+	var owner bool
+	var s3Err APIErrorCode
+	switch atype {
+	case authTypeUnknown, authTypeStreamingSigned:
+		return cred, owner, nil, ErrSignatureVersionNotSupported
+	case authTypeSignedV2, authTypePresignedV2:
+		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
+			return cred, owner, nil, s3Err
+		}
+		cred, owner, s3Err = getReqAccessKeyV2(r)
+	case authTypePresigned, authTypeSigned:
+		region := globalServerRegion
+		if s3Err = isReqAuthenticated(GlobalContext, r, region, serviceS3); s3Err != ErrNone {
+			return cred, owner, nil, s3Err
+		}
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+	}
+	if s3Err != ErrNone {
+		return cred, owner, nil, s3Err
+	}
+
+	claims, s3Err := checkClaimsFromToken(r, cred)
+	if s3Err != ErrNone {
+		return cred, owner, nil, s3Err
+	}
+
+	return cred, owner, claims, ErrNone
+}
+
+func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate time.Time, retMode objectlock.RetMode, byPassSet bool, r *http.Request, cred auth.Credentials, owner bool, claims map[string]interface{}) (s3Err APIErrorCode) {
+	var retSet bool
+	if cred.AccessKey == "" {
+		conditions := getConditionValues(r, "", "", nil)
+		conditions["object-lock-mode"] = []string{string(retMode)}
+		conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
+		if retDays > 0 {
+			conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
+		}
+		if retMode == objectlock.RetGovernance && byPassSet {
+			byPassSet = globalPolicySys.IsAllowed(policy.Args{
+				AccountName:     cred.AccessKey,
+				Action:          policy.Action(policy.BypassGovernanceRetentionAction),
+				BucketName:      bucketName,
+				ConditionValues: conditions,
+				IsOwner:         false,
+				ObjectName:      objectName,
+			})
+		}
+		if globalPolicySys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          policy.Action(policy.PutObjectRetentionAction),
+			BucketName:      bucketName,
+			ConditionValues: conditions,
+			IsOwner:         false,
+			ObjectName:      objectName,
+		}) {
+			retSet = true
+		}
+		if byPassSet || retSet {
+			return ErrNone
+		}
+		return ErrAccessDenied
+	}
+
+	conditions := getConditionValues(r, "", cred.AccessKey, claims)
+	conditions["object-lock-mode"] = []string{string(retMode)}
+	conditions["object-lock-retain-until-date"] = []string{retDate.Format(time.RFC3339)}
+	if retDays > 0 {
+		conditions["object-lock-remaining-retention-days"] = []string{strconv.Itoa(retDays)}
+	}
+	if retMode == objectlock.RetGovernance && byPassSet {
+		byPassSet = globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          policy.BypassGovernanceRetentionAction,
+			BucketName:      bucketName,
+			ObjectName:      objectName,
+			ConditionValues: conditions,
+			IsOwner:         owner,
+			Claims:          claims,
+		})
+	}
+	if globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     cred.AccessKey,
+		Action:          policy.PutObjectRetentionAction,
+		BucketName:      bucketName,
+		ConditionValues: conditions,
+		ObjectName:      objectName,
+		IsOwner:         owner,
+		Claims:          claims,
+	}) {
+		retSet = true
+	}
+	if byPassSet || retSet {
+		return ErrNone
+	}
+	return ErrAccessDenied
+}
+
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this
 // call verifies bucket policies and IAM policies, supports multi user
 // checks etc.
@@ -486,6 +598,15 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
+	}
+
+	// Do not check for PutObjectRetentionAction permission,
+	// if mode and retain until date are not set.
+	// Can happen when bucket has default lock config set
+	if action == iampolicy.PutObjectRetentionAction &&
+		r.Header.Get(xhttp.AmzObjectLockMode) == "" &&
+		r.Header.Get(xhttp.AmzObjectLockRetainUntilDate) == "" {
+		return ErrNone
 	}
 
 	if cred.AccessKey == "" {

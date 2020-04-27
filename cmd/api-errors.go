@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"google.golang.org/api/googleapi"
 
 	minio "github.com/minio/minio-go/v6"
@@ -151,6 +150,7 @@ const (
 	ErrBadRequest
 	ErrKeyTooLongError
 	ErrInvalidBucketObjectLockConfiguration
+	ErrObjectLockConfigurationNotFound
 	ErrObjectLockConfigurationNotAllowed
 	ErrNoSuchObjectLockConfiguration
 	ErrObjectLocked
@@ -334,18 +334,26 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
-	ErrAddServiceAccountInvalidArgument
+	ErrAdminAccountNotEligible
+	ErrServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
 
 type errorCodeMap map[APIErrorCode]APIError
 
-func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError {
 	apiErr, ok := e[errCode]
 	if !ok {
-		return e[ErrInternalError]
+		apiErr = e[ErrInternalError]
+	}
+	if err != nil {
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
 	return apiErr
+}
+
+func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+	return e.ToAPIErrWithErr(errCode, nil)
 }
 
 // error code to APIError structure, these fields carry respective
@@ -765,9 +773,14 @@ var errorCodes = errorCodeMap{
 		Description:    "Bucket is missing ObjectLockConfiguration",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrObjectLockConfigurationNotFound: {
+		Code:           "ObjectLockConfigurationNotFoundError",
+		Description:    "Object Lock configuration does not exist for this bucket",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrObjectLockConfigurationNotAllowed: {
 		Code:           "InvalidBucketState",
-		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
+		Description:    "Object Lock configuration cannot be enabled on existing buckets",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrNoSuchObjectLockConfiguration: {
@@ -1586,12 +1599,16 @@ var errorCodes = errorCodeMap{
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusConflict,
 	},
-	ErrAddServiceAccountInvalidArgument: {
-		Code:           "XMinioInvalidArgument",
-		Description:    "New service accounts for admin access key is not allowed",
+	ErrAdminAccountNotEligible: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "The administrator key is not eligible for this operation",
 		HTTPStatusCode: http.StatusConflict,
 	},
-
+	ErrServiceAccountNotFound: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "The specified service account is not found",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrPostPolicyConditionInvalidFormat: {
 		Code:           "PostPolicyInvalidKeyName",
 		Description:    "Invalid according to Policy: Policy Condition failed",
@@ -1897,12 +1914,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code:           string(e.ServiceCode()),
 				Description:    e.Error(),
 				HTTPStatusCode: e.Response().StatusCode,
-			}
-		case oss.ServiceError:
-			apiErr = APIError{
-				Code:           e.Code,
-				Description:    e.Message,
-				HTTPStatusCode: e.StatusCode,
 			}
 			// Add more Gateway SDKs here if any in future.
 		}

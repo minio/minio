@@ -80,19 +80,18 @@ func (n NSQArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if n.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
 
 // NSQTarget - NSQ target.
 type NSQTarget struct {
-	id       event.TargetID
-	args     NSQArgs
-	producer *nsq.Producer
-	store    Store
+	id         event.TargetID
+	args       NSQArgs
+	producer   *nsq.Producer
+	store      Store
+	config     *nsq.Config
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -100,8 +99,21 @@ func (target *NSQTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *NSQTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *NSQTarget) IsActive() (bool, error) {
+	if target.producer != nil {
+		producer, err := nsq.NewProducer(target.args.NSQDAddress.String(), target.config)
+		if err != nil {
+			return false, err
+		}
+		target.producer = producer
+	}
+
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
 		if IsConnRefusedErr(err) {
@@ -186,38 +198,43 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 
 	var store Store
 
+	target := &NSQTarget{
+		id:         event.TargetID{ID: id, Name: "nsq"},
+		args:       args,
+		config:     config,
+		loggerOnce: loggerOnce,
+	}
+
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nsq-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
 			return nil, oErr
 		}
+		target.store = store
 	}
 
 	producer, err := nsq.NewProducer(args.NSQDAddress.String(), config)
 	if err != nil {
-		return nil, err
+		target.loggerOnce(context.Background(), err, target.ID())
+		return target, err
 	}
-
-	target := &NSQTarget{
-		id:       event.TargetID{ID: id, Name: "nsq"},
-		args:     args,
-		producer: producer,
-		store:    store,
-	}
+	target.producer = producer
 
 	if err := target.producer.Ping(); err != nil {
 		// To treat "connection refused" errors as errNotConnected.
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
+			target.loggerOnce(context.Background(), err, target.ID())
 			return nil, err
 		}
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

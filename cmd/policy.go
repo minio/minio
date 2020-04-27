@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,7 +74,7 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 		// is used to validate bucket policies.
 		objAPI := newObjectLayerFn()
 		if objAPI != nil {
-			config, err := objAPI.GetBucketPolicy(context.Background(), args.BucketName)
+			config, err := objAPI.GetBucketPolicy(GlobalContext, args.BucketName)
 			if err == nil {
 				return config.IsAllowed(args)
 			}
@@ -97,7 +97,7 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 // Loads policies for all buckets into PolicySys.
 func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketPolicy(context.Background(), bucket.Name)
+		config, err := objAPI.GetBucketPolicy(GlobalContext, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); ok {
 				sys.Remove(bucket.Name)
@@ -113,8 +113,8 @@ func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 			logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
 			config.Version = policy.DefaultVersion
 
-			if err = savePolicyConfig(context.Background(), objAPI, bucket.Name, config); err != nil {
-				logger.LogIf(context.Background(), err)
+			if err = savePolicyConfig(GlobalContext, objAPI, bucket.Name, config); err != nil {
+				logger.LogIf(GlobalContext, err)
 				return err
 			}
 		}
@@ -146,7 +146,7 @@ func NewPolicySys() *PolicySys {
 	}
 }
 
-func getConditionValues(request *http.Request, locationConstraint string, username string, claims map[string]interface{}) map[string][]string {
+func getConditionValues(r *http.Request, lc string, username string, claims map[string]interface{}) map[string][]string {
 	currTime := UTCNow()
 
 	principalType := "Anonymous"
@@ -156,22 +156,21 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 
 	args := map[string][]string{
 		"CurrentTime":     {currTime.Format(time.RFC3339)},
-		"EpochTime":       {fmt.Sprintf("%d", currTime.Unix())},
+		"EpochTime":       {strconv.FormatInt(currTime.Unix(), 10)},
+		"SecureTransport": {strconv.FormatBool(r.TLS != nil)},
+		"SourceIp":        {handlers.GetSourceIP(r)},
+		"UserAgent":       {r.UserAgent()},
+		"Referer":         {r.Referer()},
 		"principaltype":   {principalType},
-		"SecureTransport": {fmt.Sprintf("%t", request.TLS != nil)},
-		"SourceIp":        {handlers.GetSourceIP(request)},
-		"UserAgent":       {request.UserAgent()},
-		"Referer":         {request.Referer()},
 		"userid":          {username},
 		"username":        {username},
 	}
 
-	if locationConstraint != "" {
-		args["LocationConstraint"] = []string{locationConstraint}
+	if lc != "" {
+		args["LocationConstraint"] = []string{lc}
 	}
 
-	// TODO: support object-lock-remaining-retention-days
-	cloneHeader := request.Header.Clone()
+	cloneHeader := r.Header.Clone()
 
 	for _, objLock := range []string{
 		xhttp.AmzObjectLockMode,
@@ -193,7 +192,7 @@ func getConditionValues(request *http.Request, locationConstraint string, userna
 	}
 
 	var cloneURLValues = url.Values{}
-	for k, v := range request.URL.Query() {
+	for k, v := range r.URL.Query() {
 		cloneURLValues[k] = v
 	}
 
@@ -232,7 +231,7 @@ func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, err
 	// Construct path to policy.json for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
 
-	configData, err := readConfig(context.Background(), objAPI, configFile)
+	configData, err := readConfig(GlobalContext, objAPI, configFile)
 	if err != nil {
 		if err == errConfigNotFound {
 			err = BucketPolicyNotFound{Bucket: bucketName}

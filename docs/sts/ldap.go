@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 
 	miniogo "github.com/minio/minio-go/v6"
 	cr "github.com/minio/minio-go/v6/pkg/credentials"
@@ -64,8 +65,18 @@ func main() {
 	}
 	fmt.Printf("%#v\n", v)
 
+	stsEndpointUrl, err := url.Parse(stsEndpoint)
+	if err != nil {
+		log.Fatalf("Err: %v", err)
+	}
+
+	secure := false
+	if stsEndpointUrl.Scheme == "https" {
+		secure = true
+	}
+
 	// Use generated credentials to authenticate with MinIO server
-	minioClient, err := miniogo.NewWithCredentials("localhost:9000", li, false, "")
+	minioClient, err := miniogo.NewWithCredentials(stsEndpointUrl.Host, li, secure, "")
 	if err != nil {
 		log.Fatalln(err)
 	}

@@ -23,6 +23,9 @@ import (
 	"context"
 	"log"
 
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -45,9 +48,18 @@ func main() {
 	}
 
 	// Create policy
-	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::my-bucketname/*"],"Sid": ""}]}`
+	p := iampolicy.Policy{
+		Version: iampolicy.DefaultVersion,
+		Statements: []iampolicy.Statement{
+			iampolicy.NewStatement(
+				policy.Allow,
+				iampolicy.NewActionSet(iampolicy.GetObjectAction),
+				iampolicy.NewResourceSet(iampolicy.NewResource("testbucket/*", "")),
+				condition.NewFunctions(),
+			)},
+	}
 
-	if err = madmClnt.AddCannedPolicy(context.Background(), "get-only", policy); err != nil {
+	if err = madmClnt.AddCannedPolicy(context.Background(), "get-only", &p); err != nil {
 		log.Fatalln(err)
 	}
 

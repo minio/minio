@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,69 @@ import (
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
+}
+
+// readDir applies the filter function on each entries at dirPath, doesn't recurse into
+// the directory itself.
+func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+	d, err := os.Open(dirPath)
+	if err != nil {
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		}
+
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileNotFound
+		}
+		return err
+	}
+	defer d.Close()
+
+	st, err := d.Stat()
+	if err != nil {
+		return err
+	}
+	// Not a directory return error.
+	if !st.IsDir() {
+		return errFileAccessDenied
+	}
+
+	data := &syscall.Win32finddata{}
+
+	for {
+		e := syscall.FindNextFile(syscall.Handle(d.Fd()), data)
+		if e != nil {
+			if e == syscall.ERROR_NO_MORE_FILES {
+				break
+			} else {
+				err = &os.PathError{
+					Op:   "FindNextFile",
+					Path: dirPath,
+					Err:  e,
+				}
+				return err
+			}
+		}
+		name := syscall.UTF16ToString(data.FileName[0:])
+		if name == "" || name == "." || name == ".." { // Useless names
+			continue
+		}
+		if data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+			continue
+		}
+		var typ os.FileMode = 0 // regular file
+		if data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0 {
+			typ = os.ModeDir
+		}
+		if err = filter(name, typ); err == errDoneForNow {
+			// filtering requested to return by caller.
+			return nil
+		}
+	}
+
+	return err
 }
 
 // Return N entries at the directory dirPath. If count is -1, return all entries
@@ -58,17 +121,16 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	data := &syscall.Win32finddata{}
 
 	for count != 0 {
-		e := syscall.FindNextFile(syscall.Handle(d.Fd()), data)
-		if e != nil {
-			if e == syscall.ERROR_NO_MORE_FILES {
+		err = syscall.FindNextFile(syscall.Handle(d.Fd()), data)
+		if err != nil {
+			if err == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
-				err = &os.PathError{
+				return nil, &os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
-					Err:  e,
+					Err:  err,
 				}
-				return
 			}
 		}
 		name := syscall.UTF16ToString(data.FileName[0:])
@@ -77,23 +139,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		}
 		switch {
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
-			// If its symbolic link, follow the link using os.Stat()
-			var fi os.FileInfo
-			fi, err = os.Stat(pathJoin(dirPath, name))
-			if err != nil {
-				// If file does not exist, we continue and skip it.
-				// Could happen if it was deleted in the middle while
-				// this list was being performed.
-				if os.IsNotExist(err) {
-					continue
-				}
-				return nil, err
-			}
-			if fi.IsDir() {
-				entries = append(entries, name+SlashSeparator)
-			} else if fi.Mode().IsRegular() {
-				entries = append(entries, name)
-			}
+			continue
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
 			entries = append(entries, name+SlashSeparator)
 		default:

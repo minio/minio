@@ -54,8 +54,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/v6/pkg/s3signer"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/signer"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -96,30 +96,13 @@ const testConcurrencyLevel = 10
 ///      (that are executed by other agents) or when customers pass requests through proxies, which may
 ///      modify the user-agent.
 ///
-///  Content-Length:
-///
-///      This is ignored from signing because generating a pre-signed URL should not provide a content-length
-///      constraint, specifically when vending a S3 pre-signed PUT URL. The corollary to this is that when
-///      sending regular requests (non-pre-signed), the signature contains a checksum of the body, which
-///      implicitly validates the payload length (since changing the number of bytes would change the checksum)
-///      and therefore this header is not valuable in the signature.
-///
-///  Content-Type:
-///
-///      Signing this header causes quite a number of problems in browser environments, where browsers
-///      like to modify and normalize the content-type header in different ways. There is more information
-///      on this in https://github.com/aws/aws-sdk-js/issues/244. Avoiding this field simplifies logic
-///      and reduces the possibility of future bugs
-///
 ///  Authorization:
 ///
 ///      Is skipped for obvious reasons
 ///
 var ignoredHeaders = map[string]bool{
-	"Authorization":  true,
-	"Content-Type":   true,
-	"Content-Length": true,
-	"User-Agent":     true,
+	"Authorization": true,
+	"User-Agent":    true,
 }
 
 // Headers to ignore in streaming v4
@@ -177,7 +160,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	return obj, fsDirs[0], nil
 }
 
-func prepareXLSets32() (ObjectLayer, []string, error) {
+func prepareXLSets32(ctx context.Context) (ObjectLayer, []string, error) {
 	fsDirs1, err := getRandomDisks(16)
 	if err != nil {
 		return nil, nil, err
@@ -199,7 +182,7 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 
-	objAPI, err := newXLSets(endpoints, storageDisks, format, 2, 16)
+	objAPI, err := newXLSets(ctx, endpoints, storageDisks, format, 2, 16)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -207,12 +190,12 @@ func prepareXLSets32() (ObjectLayer, []string, error) {
 	return objAPI, fsDirs, nil
 }
 
-func prepareXL(nDisks int) (ObjectLayer, []string, error) {
+func prepareXL(ctx context.Context, nDisks int) (ObjectLayer, []string, error) {
 	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, _, err := initObjectLayer(mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -220,8 +203,8 @@ func prepareXL(nDisks int) (ObjectLayer, []string, error) {
 	return obj, fsDirs, nil
 }
 
-func prepareXL16() (ObjectLayer, []string, error) {
-	return prepareXL(16)
+func prepareXL16(ctx context.Context) (ObjectLayer, []string, error) {
+	return prepareXL(ctx, 16)
 }
 
 // Initialize FS objects.
@@ -309,16 +292,18 @@ type TestServer struct {
 	SecretKey string
 	Server    *httptest.Server
 	Obj       ObjectLayer
+	cancel    context.CancelFunc
 }
 
 // UnstartedTestServer - Configures a temp FS/XL backend,
 // initializes the endpoints and configures the test server.
 // The server should be started using the Start() method.
 func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
+	ctx, cancel := context.WithCancel(context.Background())
 	// create an instance of TestServer.
-	testServer := TestServer{}
+	testServer := TestServer{cancel: cancel}
 	// return FS/XL object layer and temp backend.
-	objLayer, disks, err := prepareTestBackend(instanceType)
+	objLayer, disks, err := prepareTestBackend(ctx, instanceType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,9 +343,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(ctx, objLayer)
 
-	buckets, err := objLayer.ListBuckets(context.Background())
+	buckets, err := objLayer.ListBuckets(ctx)
 	if err != nil {
 		t.Fatalf("Unable to list buckets on backend %s", err)
 	}
@@ -481,10 +466,6 @@ func resetGlobalIAMSys() {
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
-	// close any indefinitely running go-routines from previous
-	// tests.
-	cancelGlobalContext()
-	initGlobalContext()
 	// set globalObjectAPI to `nil`.
 	resetGlobalObjectAPI()
 	// Reset config path set.
@@ -524,13 +505,14 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 
 // Deleting the temporary backend and stopping the server.
 func (testServer TestServer) Stop() {
+	testServer.cancel()
+	testServer.Server.Close()
 	os.RemoveAll(testServer.Root)
 	for _, ep := range testServer.Disks {
 		for _, disk := range ep.Endpoints {
 			os.RemoveAll(disk.Path)
 		}
 	}
-	testServer.Server.Close()
 }
 
 // Truncate request to simulate unexpected EOF for a request signed using streaming signature v4.
@@ -953,7 +935,7 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 // Sign given request using Signature V2.
 func signRequestV2(req *http.Request, accessKey, secretKey string) error {
-	s3signer.SignV2(*req, accessKey, secretKey, false)
+	signer.SignV2(*req, accessKey, secretKey, false)
 	return nil
 }
 
@@ -1589,14 +1571,14 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
+func newTestObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
 	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	z, err := newXLZones(endpointZones)
+	z, err := newXLZones(ctx, endpointZones)
 	if err != nil {
 		return nil, err
 	}
@@ -1604,7 +1586,7 @@ func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(z)
+	globalIAMSys.Init(GlobalContext, z)
 
 	globalPolicySys = NewPolicySys()
 	globalPolicySys.Init(nil, z)
@@ -1616,8 +1598,8 @@ func newTestObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(endpointZones EndpointZones) (ObjectLayer, []StorageAPI, error) {
-	objLayer, err := newTestObjectLayer(endpointZones)
+func initObjectLayer(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, []StorageAPI, error) {
+	objLayer, err := newTestObjectLayer(ctx, endpointZones)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1676,14 +1658,14 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 // prepare test backend.
 // create FS/XL/XLSet backend.
 // return object layer, backend disks.
-func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
+func prepareTestBackend(ctx context.Context, instanceType string) (ObjectLayer, []string, error) {
 	switch instanceType {
 	// Total number of disks for XL sets backend is set to 32.
 	case XLSetsTestStr:
-		return prepareXLSets32()
+		return prepareXLSets32(ctx)
 	// Total number of disks for XL backend is set to 16.
 	case XLTestStr:
-		return prepareXL16()
+		return prepareXL16(ctx)
 	default:
 		// return FS backend by default.
 		obj, disk, err := prepareFS()
@@ -1887,6 +1869,9 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
 func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// reset globals.
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
@@ -1908,7 +1893,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 
 	newAllSubsystems()
 
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(GlobalContext, objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
@@ -1922,7 +1907,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
 
-	objLayer, xlDisks, err := prepareXL16()
+	objLayer, xlDisks, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -1952,6 +1937,9 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 // ExecObjectLayerTest - executes object layer tests.
 // Creates single node and XL ObjectLayer instance and runs test for both the layers.
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
@@ -1964,7 +1952,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	}
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(ctx, objLayer)
 
 	buckets, err := objLayer.ListBuckets(context.Background())
 	if err != nil {
@@ -1980,19 +1968,22 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
-	objLayer, fsDirs, err := prepareXLSets32()
+	objLayer, fsDirs, err := prepareXLSets32(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
+	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, t)
-	defer removeRoots(append(fsDirs, fsDir))
 }
 
 // ExecObjectLayerTestWithDirs - executes object layer tests.
 // Creates single node and XL ObjectLayer instance and runs test for both the layers.
 func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) {
-	objLayer, fsDirs, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objLayer, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2011,7 +2002,10 @@ func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) 
 // ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
 // disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundType) {
-	objLayer, fsDirs, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objLayer, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -2031,12 +2025,15 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 // ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
 // files/directories under .minio/tmp.  Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	nDisks := 16
 	erasureDisks, err := getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
-	objLayer, _, err := initObjectLayer(mustGetZoneEndpoints(erasureDisks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(erasureDisks...))
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}

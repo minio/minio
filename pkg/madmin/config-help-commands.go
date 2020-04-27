@@ -45,6 +45,15 @@ type HelpKV struct {
 // HelpKVS - implement order of keys help messages.
 type HelpKVS []HelpKV
 
+// Keys returns help keys
+func (h Help) Keys() []string {
+	var keys []string
+	for _, kh := range h.KeysHelp {
+		keys = append(keys, kh.Key)
+	}
+	return keys
+}
+
 // HelpConfigKV - return help for a given sub-system.
 func (adm *AdminClient) HelpConfigKV(ctx context.Context, subSys, key string, envOnly bool) (Help, error) {
 	v := url.Values{}
@@ -59,7 +68,7 @@ func (adm *AdminClient) HelpConfigKV(ctx context.Context, subSys, key string, en
 		queryValues: v,
 	}
 
-	// Execute GET on /minio/admin/v2/help-config-kv
+	// Execute GET on /minio/admin/v3/help-config-kv
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	if err != nil {
 		return Help{}, err

@@ -28,7 +28,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -51,7 +50,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	locationConstraint := createBucketLocationConfiguration{}
 	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
 	if err != nil && r.ContentLength != 0 {
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(GlobalContext, err)
 		// Treat all other failures as XML parsing errors.
 		return "", ErrMalformedXML
 	} // else for both err as nil or io.EOF
@@ -359,31 +358,6 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// maxClients throttles the S3 API calls
-func maxClients(f http.HandlerFunc, enabled bool, requestsMaxCh chan struct{}, requestsDeadline time.Duration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !enabled {
-			f.ServeHTTP(w, r)
-			return
-		}
-
-		select {
-		case requestsMaxCh <- struct{}{}:
-			defer func() { <-requestsMaxCh }()
-			f.ServeHTTP(w, r)
-		case <-time.NewTimer(requestsDeadline).C:
-
-			// Send a http timeout message
-			writeErrorResponse(r.Context(), w,
-				errorCodes.ToAPIErr(ErrOperationMaxedOut),
-				r.URL, guessIsBrowserReq(r))
-			return
-		case <-r.Context().Done():
-			return
-		}
-	}
-}
-
 func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -431,7 +405,7 @@ func getResource(path string, host string, domains []string) (string, error) {
 		if host, _, err = net.SplitHostPort(host); err != nil {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("host", host)
 			reqInfo.AppendTags("path", path)
-			ctx := logger.SetReqInfo(context.Background(), reqInfo)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 			logger.LogIf(ctx, err)
 			return "", err
 		}

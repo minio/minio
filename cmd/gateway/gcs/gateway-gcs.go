@@ -144,12 +144,12 @@ EXAMPLES:
 func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
 	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
-		logger.LogIf(context.Background(), errGCSProjectIDNotFound, logger.Application)
+		logger.LogIf(minio.GlobalContext, errGCSProjectIDNotFound, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("projectID", ctx.Args().First())
-		contxt := logger.SetReqInfo(context.Background(), reqInfo)
+		contxt := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 		logger.LogIf(contxt, errGCSInvalidProjectID, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
@@ -169,7 +169,7 @@ func (g *GCS) Name() string {
 
 // NewGatewayLayer returns gcs ObjectLayer.
 func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	ctx := context.Background()
+	ctx := minio.GlobalContext
 
 	var err error
 	if g.projectID == "" {
@@ -373,7 +373,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(ctx context.Context, bucket str
 		if err != nil {
 			if err != iterator.Done {
 				reqInfo := &logger.ReqInfo{BucketName: bucket}
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				ctx := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 				logger.LogIf(ctx, err)
 			}
 			return
@@ -383,7 +383,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(ctx context.Context, bucket str
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(ctx)
 			if err != nil {
 				reqInfo := &logger.ReqInfo{BucketName: bucket, ObjectName: attrs.Name}
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				ctx := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 				logger.LogIf(ctx, err)
 				return
 			}
@@ -754,7 +754,7 @@ func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
 }
 
 // GetObject - reads an object from GCS. Supports additional

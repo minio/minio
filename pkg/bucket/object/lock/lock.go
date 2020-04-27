@@ -28,33 +28,36 @@ import (
 	"time"
 
 	"github.com/beevik/ntp"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/env"
 )
 
-// Mode - object retention mode.
-type Mode string
+// RetMode - object retention mode.
+type RetMode string
 
 const (
-	// Governance - governance mode.
-	Governance Mode = "GOVERNANCE"
+	// RetGovernance - governance mode.
+	RetGovernance RetMode = "GOVERNANCE"
 
-	// Compliance - compliance mode.
-	Compliance Mode = "COMPLIANCE"
-
-	// Invalid - invalid retention mode.
-	Invalid Mode = ""
+	// RetCompliance - compliance mode.
+	RetCompliance RetMode = "COMPLIANCE"
 )
 
-func parseMode(modeStr string) (mode Mode) {
+// Valid - returns if retention mode is valid
+func (r RetMode) Valid() bool {
+	switch r {
+	case RetGovernance, RetCompliance:
+		return true
+	}
+	return false
+}
+
+func parseRetMode(modeStr string) (mode RetMode) {
 	switch strings.ToUpper(modeStr) {
 	case "GOVERNANCE":
-		mode = Governance
+		mode = RetGovernance
 	case "COMPLIANCE":
-		mode = Compliance
-	default:
-		mode = Invalid
+		mode = RetCompliance
 	}
 	return mode
 }
@@ -63,22 +66,39 @@ func parseMode(modeStr string) (mode Mode) {
 type LegalHoldStatus string
 
 const (
-	// ON -legal hold is on.
-	ON LegalHoldStatus = "ON"
+	// LegalHoldOn - legal hold is on.
+	LegalHoldOn LegalHoldStatus = "ON"
 
-	// OFF -legal hold is off.
-	OFF LegalHoldStatus = "OFF"
+	// LegalHoldOff - legal hold is off.
+	LegalHoldOff LegalHoldStatus = "OFF"
 )
 
-func parseLegalHoldStatus(holdStr string) LegalHoldStatus {
+// Valid - returns true if legal hold status has valid values
+func (l LegalHoldStatus) Valid() bool {
+	switch l {
+	case LegalHoldOn, LegalHoldOff:
+		return true
+	}
+	return false
+}
+
+func parseLegalHoldStatus(holdStr string) (st LegalHoldStatus) {
 	switch strings.ToUpper(holdStr) {
 	case "ON":
-		return ON
+		st = LegalHoldOn
 	case "OFF":
-		return OFF
+		st = LegalHoldOff
 	}
-	return LegalHoldStatus("")
+	return st
 }
+
+// Bypass retention governance header.
+const (
+	AmzObjectLockBypassRetGovernance = "X-Amz-Bypass-Governance-Retention"
+	AmzObjectLockRetainUntilDate     = "X-Amz-Object-Lock-Retain-Until-Date"
+	AmzObjectLockMode                = "X-Amz-Object-Lock-Mode"
+	AmzObjectLockLegalHold           = "X-Amz-Object-Lock-Legal-Hold"
+)
 
 var (
 	// ErrMalformedBucketObjectConfig -indicates that the bucket object lock config is malformed
@@ -118,13 +138,13 @@ func UTCNowNTP() (time.Time, error) {
 
 // Retention - bucket level retention configuration.
 type Retention struct {
-	Mode     Mode
+	Mode     RetMode
 	Validity time.Duration
 }
 
 // IsEmpty - returns whether retention is empty or not.
 func (r Retention) IsEmpty() bool {
-	return r.Mode == "" || r.Validity == 0
+	return !r.Mode.Valid() || r.Validity == 0
 }
 
 // Retain - check whether given date is retainable by validity time.
@@ -176,7 +196,7 @@ func NewBucketObjectLockConfig() *BucketObjectLockConfig {
 // DefaultRetention - default retention configuration.
 type DefaultRetention struct {
 	XMLName xml.Name `xml:"DefaultRetention"`
-	Mode    Mode     `xml:"Mode"`
+	Mode    RetMode  `xml:"Mode"`
 	Days    *uint64  `xml:"Days"`
 	Years   *uint64  `xml:"Years"`
 }
@@ -198,8 +218,8 @@ func (dr *DefaultRetention) UnmarshalXML(d *xml.Decoder, start xml.StartElement)
 		return err
 	}
 
-	switch string(retention.Mode) {
-	case "GOVERNANCE", "COMPLIANCE":
+	switch retention.Mode {
+	case RetGovernance, RetCompliance:
 	default:
 		return fmt.Errorf("unknown retention mode %v", retention.Mode)
 	}
@@ -282,10 +302,13 @@ func (config *Config) ToRetention() (r Retention) {
 	return r
 }
 
+// Maximum 4KiB size per object lock config.
+const maxObjectLockConfigSize = 1 << 12
+
 // ParseObjectLockConfig parses ObjectLockConfig from xml
 func ParseObjectLockConfig(reader io.Reader) (*Config, error) {
 	config := Config{}
-	if err := xml.NewDecoder(reader).Decode(&config); err != nil {
+	if err := xml.NewDecoder(io.LimitReader(reader, maxObjectLockConfigSize)).Decode(&config); err != nil {
 		return nil, err
 	}
 
@@ -338,17 +361,20 @@ func (rDate *RetentionDate) MarshalXML(e *xml.Encoder, startElement xml.StartEle
 type ObjectRetention struct {
 	XMLNS           string        `xml:"xmlns,attr,omitempty"`
 	XMLName         xml.Name      `xml:"Retention"`
-	Mode            Mode          `xml:"Mode,omitempty"`
+	Mode            RetMode       `xml:"Mode,omitempty"`
 	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
 }
+
+// Maximum 4KiB size per object retention config.
+const maxObjectRetentionSize = 1 << 12
 
 // ParseObjectRetention constructs ObjectRetention struct from xml input
 func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 	ret := ObjectRetention{}
-	if err := xml.NewDecoder(reader).Decode(&ret); err != nil {
+	if err := xml.NewDecoder(io.LimitReader(reader, maxObjectRetentionSize)).Decode(&ret); err != nil {
 		return nil, err
 	}
-	if ret.Mode != Compliance && ret.Mode != Governance {
+	if !ret.Mode.Valid() {
 		return &ret, ErrUnknownWORMModeDirective
 	}
 
@@ -367,10 +393,10 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 
 // IsObjectLockRetentionRequested returns true if object lock retention headers are set.
 func IsObjectLockRetentionRequested(h http.Header) bool {
-	if _, ok := h[xhttp.AmzObjectLockMode]; ok {
+	if _, ok := h[AmzObjectLockMode]; ok {
 		return true
 	}
-	if _, ok := h[xhttp.AmzObjectLockRetainUntilDate]; ok {
+	if _, ok := h[AmzObjectLockRetainUntilDate]; ok {
 		return true
 	}
 	return false
@@ -378,13 +404,13 @@ func IsObjectLockRetentionRequested(h http.Header) bool {
 
 // IsObjectLockLegalHoldRequested returns true if object lock legal hold header is set.
 func IsObjectLockLegalHoldRequested(h http.Header) bool {
-	_, ok := h[xhttp.AmzObjectLockLegalHold]
+	_, ok := h[AmzObjectLockLegalHold]
 	return ok
 }
 
 // IsObjectLockGovernanceBypassSet returns true if object lock governance bypass header is set.
 func IsObjectLockGovernanceBypassSet(h http.Header) bool {
-	return strings.ToLower(h.Get(xhttp.AmzObjectLockBypassGovernance)) == "true"
+	return strings.ToLower(h.Get(AmzObjectLockBypassRetGovernance)) == "true"
 }
 
 // IsObjectLockRequested returns true if legal hold or object lock retention headers are requested.
@@ -393,14 +419,15 @@ func IsObjectLockRequested(h http.Header) bool {
 }
 
 // ParseObjectLockRetentionHeaders parses http headers to extract retention mode and retention date
-func ParseObjectLockRetentionHeaders(h http.Header) (rmode Mode, r RetentionDate, err error) {
-	retMode := h.Get(xhttp.AmzObjectLockMode)
-	dateStr := h.Get(xhttp.AmzObjectLockRetainUntilDate)
+func ParseObjectLockRetentionHeaders(h http.Header) (rmode RetMode, r RetentionDate, err error) {
+	retMode := h.Get(AmzObjectLockMode)
+	dateStr := h.Get(AmzObjectLockRetainUntilDate)
 	if len(retMode) == 0 || len(dateStr) == 0 {
 		return rmode, r, ErrObjectLockInvalidHeaders
 	}
-	rmode = parseMode(retMode)
-	if rmode == Invalid {
+
+	rmode = parseRetMode(retMode)
+	if !rmode.Valid() {
 		return rmode, r, ErrUnknownWORMModeDirective
 	}
 
@@ -429,13 +456,24 @@ func ParseObjectLockRetentionHeaders(h http.Header) (rmode Mode, r RetentionDate
 
 // GetObjectRetentionMeta constructs ObjectRetention from metadata
 func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
-	var mode Mode
+	var mode RetMode
 	var retainTill RetentionDate
 
-	if modeStr, ok := meta[strings.ToLower(xhttp.AmzObjectLockMode)]; ok {
-		mode = parseMode(modeStr)
+	var modeStr, tillStr string
+	ok := false
+
+	modeStr, ok = meta[strings.ToLower(AmzObjectLockMode)]
+	if !ok {
+		modeStr, ok = meta[AmzObjectLockMode]
 	}
-	if tillStr, ok := meta[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)]; ok {
+	if ok {
+		mode = parseRetMode(modeStr)
+	}
+	tillStr, ok = meta[strings.ToLower(AmzObjectLockRetainUntilDate)]
+	if !ok {
+		tillStr, ok = meta[AmzObjectLockRetainUntilDate]
+	}
+	if ok {
 		if t, e := time.Parse(time.RFC3339, tillStr); e == nil {
 			retainTill = RetentionDate{t.UTC()}
 		}
@@ -445,8 +483,10 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 
 // GetObjectLegalHoldMeta constructs ObjectLegalHold from metadata
 func GetObjectLegalHoldMeta(meta map[string]string) ObjectLegalHold {
-
-	holdStr, ok := meta[strings.ToLower(xhttp.AmzObjectLockLegalHold)]
+	holdStr, ok := meta[strings.ToLower(AmzObjectLockLegalHold)]
+	if !ok {
+		holdStr, ok = meta[AmzObjectLockLegalHold]
+	}
 	if ok {
 		return ObjectLegalHold{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Status: parseLegalHoldStatus(holdStr)}
 	}
@@ -455,13 +495,13 @@ func GetObjectLegalHoldMeta(meta map[string]string) ObjectLegalHold {
 
 // ParseObjectLockLegalHoldHeaders parses request headers to construct ObjectLegalHold
 func ParseObjectLockLegalHoldHeaders(h http.Header) (lhold ObjectLegalHold, err error) {
-	holdStatus, ok := h[xhttp.AmzObjectLockLegalHold]
+	holdStatus, ok := h[AmzObjectLockLegalHold]
 	if ok {
-		lh := parseLegalHoldStatus(strings.Join(holdStatus, ""))
-		if lh != ON && lh != OFF {
+		lh := parseLegalHoldStatus(holdStatus[0])
+		if !lh.Valid() {
 			return lhold, ErrUnknownWORMModeDirective
 		}
-		lhold = ObjectLegalHold{Status: lh}
+		lhold = ObjectLegalHold{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Status: lh}
 	}
 	return lhold, nil
 
@@ -477,16 +517,17 @@ type ObjectLegalHold struct {
 
 // IsEmpty returns true if struct is empty
 func (l *ObjectLegalHold) IsEmpty() bool {
-	return l.Status != ON && l.Status != OFF
+	return !l.Status.Valid()
 }
 
 // ParseObjectLegalHold decodes the XML into ObjectLegalHold
 func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
-	if err = xml.NewDecoder(reader).Decode(&hold); err != nil {
+	hold = &ObjectLegalHold{}
+	if err = xml.NewDecoder(reader).Decode(hold); err != nil {
 		return
 	}
 
-	if hold.Status != ON && hold.Status != OFF {
+	if !hold.Status.Valid() {
 		return nil, ErrMalformedXML
 	}
 	return
@@ -511,15 +552,14 @@ func FilterObjectLockMetadata(metadata map[string]string, filterRetention, filte
 		delete(dst, key)
 	}
 	legalHold := GetObjectLegalHoldMeta(metadata)
-	if legalHold.Status == "" || filterLegalHold {
-		delKey(xhttp.AmzObjectLockLegalHold)
+	if !legalHold.Status.Valid() || filterLegalHold {
+		delKey(AmzObjectLockLegalHold)
 	}
 
 	ret := GetObjectRetentionMeta(metadata)
-
-	if ret.Mode == Invalid || filterRetention {
-		delKey(xhttp.AmzObjectLockMode)
-		delKey(xhttp.AmzObjectLockRetainUntilDate)
+	if !ret.Mode.Valid() || filterRetention {
+		delKey(AmzObjectLockMode)
+		delKey(AmzObjectLockRetainUntilDate)
 		return dst
 	}
 	return dst

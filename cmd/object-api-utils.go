@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -33,6 +32,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -45,7 +45,6 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/wildcard"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const (
@@ -217,12 +216,12 @@ func pathJoin(elem ...string) string {
 
 // mustGetUUID - get a random UUID.
 func mustGetUUID() string {
-	uuid, err := uuid.New()
+	u, err := uuid.NewRandom()
 	if err != nil {
-		logger.CriticalIf(context.Background(), err)
+		logger.CriticalIf(GlobalContext, err)
 	}
 
-	return uuid.String()
+	return u.String()
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
@@ -486,15 +485,15 @@ type GetObjectReader struct {
 	pReader io.Reader
 
 	cleanUpFns []func()
-	precondFn  func(ObjectInfo, string) bool
+	opts       ObjectOptions
 	once       sync.Once
 }
 
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
-func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (*GetObjectReader, error) {
-	if pcfn != nil {
-		if ok := pcfn(oi, ""); ok {
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions, cleanupFns ...func()) (*GetObjectReader, error) {
+	if opts.CheckCopyPrecondFn != nil {
+		if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 			// Call the cleanup funcs
 			for i := len(cleanupFns) - 1; i >= 0; i-- {
 				cleanupFns[i]()
@@ -506,7 +505,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPrec
 		ObjInfo:    oi,
 		pReader:    r,
 		cleanUpFns: cleanupFns,
-		precondFn:  pcfn,
+		opts:       opts,
 	}, nil
 }
 
@@ -520,7 +519,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckCopyPrecon
 // are called on Close() in reverse order as passed here. NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanUpFns ...func()) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cleanUpFns ...func()) (
 	fn ObjReaderFn, off, length int64, err error) {
 
 	// Call the clean-up functions immediately in case of exit
@@ -538,6 +537,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 	if err != nil {
 		return nil, 0, 0, err
 	}
+
 	var skipLen int64
 	// Calculate range to read (different for
 	// e.g. encrypted/compressed objects)
@@ -582,8 +582,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			encETag := oi.ETag
 			oi.ETag = getDecryptedETag(h, oi, copySource) // Decrypt the ETag before top layer consumes this value.
 
-			if pcfn != nil {
-				if ok := pcfn(oi, encETag); ok {
+			if opts.CheckCopyPrecondFn != nil {
+				if ok := opts.CheckCopyPrecondFn(oi, encETag); ok {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
@@ -601,7 +601,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				ObjInfo:    oi,
 				pReader:    decReader,
 				cleanUpFns: cFns,
-				precondFn:  pcfn,
+				opts:       opts,
 			}
 			return r, nil
 		}
@@ -635,8 +635,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 		}
 		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			cFns = append(cleanUpFns, cFns...)
-			if pcfn != nil {
-				if ok := pcfn(oi, ""); ok {
+			if opts.CheckCopyPrecondFn != nil {
+				if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
@@ -649,6 +649,10 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			// Apply the skipLen and limit on the decompressed stream.
 			err = s2Reader.Skip(decOff)
 			if err != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
 				return nil, err
 			}
 
@@ -669,7 +673,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				ObjInfo:    oi,
 				pReader:    decReader,
 				cleanUpFns: cFns,
-				precondFn:  pcfn,
+				opts:       opts,
 			}
 			return r, nil
 		}
@@ -681,8 +685,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 		}
 		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			cFns = append(cleanUpFns, cFns...)
-			if pcfn != nil {
-				if ok := pcfn(oi, ""); ok {
+			if opts.CheckCopyPrecondFn != nil {
+				if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
@@ -694,7 +698,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				ObjInfo:    oi,
 				pReader:    inputReader,
 				cleanUpFns: cFns,
-				precondFn:  pcfn,
+				opts:       opts,
 			}
 			return r, nil
 		}
@@ -774,16 +778,13 @@ func (p *PutObjReader) MD5CurrentHexString() string {
 // NewPutObjReader returns a new PutObjReader and holds
 // reference to underlying data stream from client and the encrypted
 // data reader
-func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, encKey []byte) *PutObjReader {
+func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, key *crypto.ObjectKey) *PutObjReader {
 	p := PutObjReader{Reader: rawReader, rawReader: rawReader}
 
-	if len(encKey) != 0 && encReader != nil {
-		var objKey crypto.ObjectKey
-		copy(objKey[:], encKey)
-		p.sealMD5Fn = sealETagFn(objKey)
+	if key != nil && encReader != nil {
+		p.sealMD5Fn = sealETagFn(*key)
 		p.Reader = encReader
 	}
-
 	return &p
 }
 

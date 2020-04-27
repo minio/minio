@@ -36,8 +36,8 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/credentials"
-	"github.com/minio/minio-go/v6/pkg/s3signer"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/signer"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -367,12 +367,11 @@ func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData
 		// Initiate the request.
 		res, err = adm.do(req)
 		if err != nil {
-			// For supported http requests errors verify.
-			if isHTTPReqErrorRetryable(err) {
-				continue // Retry.
+			if err == context.Canceled || err == context.DeadlineExceeded {
+				return nil, err
 			}
-			// For other errors, return here no need to retry.
-			return nil, err
+			// retry all network errors.
+			continue
 		}
 
 		// For any known successful http status, return quickly.
@@ -413,6 +412,12 @@ func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData
 
 		break
 	}
+
+	// Return an error when retry is canceled or deadlined
+	if e := retryCtx.Err(); e != nil {
+		return nil, e
+	}
+
 	return res, err
 }
 
@@ -477,7 +482,7 @@ func (adm AdminClient) newRequest(method string, reqData requestData) (req *http
 	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(reqData.content)))
 	req.Body = ioutil.NopCloser(bytes.NewReader(reqData.content))
 
-	req = s3signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)
+	req = signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)
 	return req, nil
 }
 

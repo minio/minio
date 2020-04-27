@@ -21,10 +21,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -178,7 +178,7 @@ func (c *diskCache) diskUsageLow() bool {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
@@ -193,7 +193,7 @@ func (c *diskCache) diskUsageHigh() bool {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
@@ -207,7 +207,7 @@ func (c *diskCache) diskAvailable(size int64) bool {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return false
 	}
@@ -221,12 +221,16 @@ func (c *diskCache) toClear() uint64 {
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
 		return 0
 	}
 	return bytesToClear(int64(di.Total), int64(di.Free), uint64(c.quotaPct), uint64(c.lowWatermark))
 }
+
+var (
+	errDoneForNow = errors.New("done for now")
+)
 
 // Purge cache entries that were not accessed.
 func (c *diskCache) purge(ctx context.Context) {
@@ -263,25 +267,24 @@ func (c *diskCache) purge(ctx context.Context) {
 		}
 		return fm
 	}
-	objDirs, err := ioutil.ReadDir(c.dir)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	for _, obj := range objDirs {
-		if obj.Name() == minioMetaBucket {
-			continue
+	filterFn := func(name string, typ os.FileMode) error {
+		if name == minioMetaBucket {
+			// Proceed to next file.
+			return nil
 		}
 
-		cacheDir := pathJoin(c.dir, obj.Name())
+		cacheDir := pathJoin(c.dir, name)
 		meta, _, numHits, err := c.statCachedMeta(ctx, cacheDir)
 		if err != nil {
 			// delete any partially filled cache entry left behind.
 			removeAll(cacheDir)
-			continue
+			// Proceed to next file.
+			return nil
 		}
+
 		// stat all cached file ranges and cacheDataFile.
-		cachedFiles := fiStatFn(meta.Ranges, cacheDataFile, pathJoin(c.dir, obj.Name()))
+		cachedFiles := fiStatFn(meta.Ranges, cacheDataFile, pathJoin(c.dir, name))
 		objInfo := meta.ToObjectInfo("", "")
 		cc := cacheControlOpts(objInfo)
 		for fname, fi := range cachedFiles {
@@ -291,9 +294,11 @@ func (c *diskCache) purge(ctx context.Context) {
 						logger.LogIf(ctx, err)
 					}
 					scorer.adjustSaveBytes(-fi.Size())
+
 					// break early if sufficient disk space reclaimed.
 					if c.diskUsageLow() {
-						return
+						// if we found disk usage is already low, we return nil filtering is complete.
+						return errDoneForNow
 					}
 				}
 				continue
@@ -305,12 +310,24 @@ func (c *diskCache) purge(ctx context.Context) {
 		if err != nil || (fi.ModTime().Before(expiry) && len(cachedFiles) == 0) {
 			removeAll(cacheDir)
 			scorer.adjustSaveBytes(-fi.Size())
-			continue
+			// Proceed to next file.
+			return nil
 		}
+
+		// if we found disk usage is already low, we return nil filtering is complete.
 		if c.diskUsageLow() {
-			return
+			return errDoneForNow
 		}
+
+		// Proceed to next file.
+		return nil
 	}
+
+	if err := readDirFilterFn(c.dir, filterFn); err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
+
 	for _, path := range scorer.fileNames() {
 		removeAll(path)
 		slashIdx := strings.LastIndex(path, SlashSeparator)
@@ -800,7 +817,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 		if !bytes.Equal(hashBytes, checksumHash) {
 			err = fmt.Errorf("hashes do not match expected %s, got %s",
 				hex.EncodeToString(checksumHash), hex.EncodeToString(hashBytes))
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			return err
 		}
 
@@ -847,11 +864,11 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
-		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
+		gr, gerr := NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
 		return gr, numHits, gerr
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn, nsUnlocker)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
 	if nErr != nil {
 		return nil, numHits, nErr
 	}

@@ -38,32 +38,28 @@ type IAMObjectStore struct {
 	// Protect assignment to objAPI
 	sync.RWMutex
 
+	ctx    context.Context
 	objAPI ObjectLayer
 }
 
-func newIAMObjectStore() *IAMObjectStore {
-	return &IAMObjectStore{objAPI: nil}
+func newIAMObjectStore(ctx context.Context, objAPI ObjectLayer) *IAMObjectStore {
+	return &IAMObjectStore{ctx: ctx, objAPI: objAPI}
 }
 
-func (iamOS *IAMObjectStore) getObjectAPI() ObjectLayer {
+func (iamOS *IAMObjectStore) lock() {
+	iamOS.Lock()
+}
+
+func (iamOS *IAMObjectStore) unlock() {
+	iamOS.Unlock()
+}
+
+func (iamOS *IAMObjectStore) rlock() {
 	iamOS.RLock()
-	defer iamOS.RUnlock()
-	if iamOS.objAPI != nil {
-		return iamOS.objAPI
-	}
-	return newObjectLayerWithoutSafeModeFn()
 }
 
-func (iamOS *IAMObjectStore) setObjectAPI(objAPI ObjectLayer) {
-	iamOS.Lock()
-	defer iamOS.Unlock()
-	iamOS.objAPI = objAPI
-}
-
-func (iamOS *IAMObjectStore) clearObjectAPI() {
-	iamOS.Lock()
-	defer iamOS.Unlock()
-	iamOS.objAPI = nil
+func (iamOS *IAMObjectStore) runlock() {
+	iamOS.RUnlock()
 }
 
 // Migrate users directory in a single scan.
@@ -80,17 +76,13 @@ func (iamOS *IAMObjectStore) clearObjectAPI() {
 // location.
 //
 // 3. Migrate user identity json file to include version info.
-func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
+func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool) error {
 	basePrefix := iamConfigUsersPrefix
 	if isSTS {
 		basePrefix = iamConfigSTSPrefix
 	}
 
-	objAPI := iamOS.getObjectAPI()
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for item := range listIAMConfigItems(objAPI, basePrefix, true, doneCh) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix, true) {
 		if item.Err != nil {
 			return item.Err
 		}
@@ -169,7 +161,7 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(isSTS bool) error {
 
 }
 
-func (iamOS *IAMObjectStore) migrateToV1() error {
+func (iamOS *IAMObjectStore) migrateToV1(ctx context.Context) error {
 	var iamFmt iamFormat
 	path := getIAMFormatFilePath()
 	if err := iamOS.loadIAMConfig(&iamFmt, path); err != nil {
@@ -190,35 +182,29 @@ func (iamOS *IAMObjectStore) migrateToV1() error {
 	}
 
 	// Migrate long-term users
-	if err := iamOS.migrateUsersConfigToV1(false); err != nil {
-		logger.LogIf(context.Background(), err)
+	if err := iamOS.migrateUsersConfigToV1(ctx, false); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 	// Migrate STS users
-	if err := iamOS.migrateUsersConfigToV1(true); err != nil {
-		logger.LogIf(context.Background(), err)
+	if err := iamOS.migrateUsersConfigToV1(ctx, true); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 	// Save iam format to version 1.
 	if err := iamOS.saveIAMConfig(newIAMFormatVersion1(), path); err != nil {
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(ctx, err)
 		return err
 	}
 	return nil
 }
 
 // Should be called under config migration lock
-func (iamOS *IAMObjectStore) migrateBackendFormat(objAPI ObjectLayer) error {
-	iamOS.setObjectAPI(objAPI)
-	defer iamOS.clearObjectAPI()
-	if err := iamOS.migrateToV1(); err != nil {
-		return err
-	}
-	return nil
+func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
+	return iamOS.migrateToV1(ctx)
 }
 
 func (iamOS *IAMObjectStore) saveIAMConfig(item interface{}, path string) error {
-	objectAPI := iamOS.getObjectAPI()
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -229,12 +215,11 @@ func (iamOS *IAMObjectStore) saveIAMConfig(item interface{}, path string) error 
 			return err
 		}
 	}
-	return saveConfig(context.Background(), objectAPI, path, data)
+	return saveConfig(context.Background(), iamOS.objAPI, path, data)
 }
 
 func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error {
-	objectAPI := iamOS.getObjectAPI()
-	data, err := readConfig(context.Background(), objectAPI, path)
+	data, err := readConfig(iamOS.ctx, iamOS.objAPI, path)
 	if err != nil {
 		return err
 	}
@@ -248,19 +233,10 @@ func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error 
 }
 
 func (iamOS *IAMObjectStore) deleteIAMConfig(path string) error {
-	err := deleteConfig(context.Background(), iamOS.getObjectAPI(), path)
-	if _, ok := err.(ObjectNotFound); ok {
-		return errConfigNotFound
-	}
-	return err
+	return deleteConfig(iamOS.ctx, iamOS.objAPI, path)
 }
 
 func (iamOS *IAMObjectStore) loadPolicyDoc(policy string, m map[string]iampolicy.Policy) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
 	var p iampolicy.Policy
 	err := iamOS.loadIAMConfig(&p, getPolicyDocPath(policy))
 	if err != nil {
@@ -273,15 +249,8 @@ func (iamOS *IAMObjectStore) loadPolicyDoc(policy string, m map[string]iampolicy
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadPolicyDocs(m map[string]iampolicy.Policy) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for item := range listIAMConfigItems(objectAPI, iamConfigPoliciesPrefix, true, doneCh) {
+func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPoliciesPrefix, true) {
 		if item.Err != nil {
 			return item.Err
 		}
@@ -296,11 +265,6 @@ func (iamOS *IAMObjectStore) loadPolicyDocs(m map[string]iampolicy.Policy) error
 }
 
 func (iamOS *IAMObjectStore) loadUser(user string, userType IAMUserType, m map[string]auth.Credentials) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
 	var u UserIdentity
 	err := iamOS.loadIAMConfig(&u, getUserIdentityPath(user, userType))
 	if err != nil {
@@ -344,15 +308,7 @@ func (iamOS *IAMObjectStore) loadUser(user string, userType IAMUserType, m map[s
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadUsers(userType IAMUserType, m map[string]auth.Credentials) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
+func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
 	var basePrefix string
 	switch userType {
 	case srvAccUser:
@@ -363,7 +319,7 @@ func (iamOS *IAMObjectStore) loadUsers(userType IAMUserType, m map[string]auth.C
 		basePrefix = iamConfigUsersPrefix
 	}
 
-	for item := range listIAMConfigItems(objectAPI, basePrefix, true, doneCh) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix, true) {
 		if item.Err != nil {
 			return item.Err
 		}
@@ -378,11 +334,6 @@ func (iamOS *IAMObjectStore) loadUsers(userType IAMUserType, m map[string]auth.C
 }
 
 func (iamOS *IAMObjectStore) loadGroup(group string, m map[string]GroupInfo) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
 	var g GroupInfo
 	err := iamOS.loadIAMConfig(&g, getGroupInfoPath(group))
 	if err != nil {
@@ -395,15 +346,8 @@ func (iamOS *IAMObjectStore) loadGroup(group string, m map[string]GroupInfo) err
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadGroups(m map[string]GroupInfo) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-	for item := range listIAMConfigItems(objectAPI, iamConfigGroupsPrefix, true, doneCh) {
+func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigGroupsPrefix, true) {
 		if item.Err != nil {
 			return item.Err
 		}
@@ -420,11 +364,6 @@ func (iamOS *IAMObjectStore) loadGroups(m map[string]GroupInfo) error {
 func (iamOS *IAMObjectStore) loadMappedPolicy(name string, userType IAMUserType, isGroup bool,
 	m map[string]MappedPolicy) error {
 
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
 	var p MappedPolicy
 	err := iamOS.loadIAMConfig(&p, getMappedPolicyPath(name, userType, isGroup))
 	if err != nil {
@@ -437,14 +376,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(name string, userType IAMUserType,
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicies(userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
-	objectAPI := iamOS.getObjectAPI()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
-	doneCh := make(chan struct{})
-	defer close(doneCh)
+func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
 	var basePath string
 	if isGroup {
 		basePath = iamConfigPolicyDBGroupsPrefix
@@ -458,7 +390,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(userType IAMUserType, isGroup bo
 			basePath = iamConfigPolicyDBUsersPrefix
 		}
 	}
-	for item := range listIAMConfigItems(objectAPI, basePath, false, doneCh) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath, false) {
 		if item.Err != nil {
 			return item.Err
 		}
@@ -475,17 +407,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(userType IAMUserType, isGroup bo
 
 // Refresh IAMSys. If an object layer is passed in use that, otherwise
 // load from global.
-func (iamOS *IAMObjectStore) loadAll(sys *IAMSys, objectAPI ObjectLayer) error {
-	if objectAPI == nil {
-		objectAPI = iamOS.getObjectAPI()
-	}
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-	// cache object layer for other load* functions
-	iamOS.setObjectAPI(objectAPI)
-	defer iamOS.clearObjectAPI()
-
+func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	iamUsersMap := make(map[string]auth.Credentials)
 	iamGroupsMap := make(map[string]GroupInfo)
 	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
@@ -493,48 +415,53 @@ func (iamOS *IAMObjectStore) loadAll(sys *IAMSys, objectAPI ObjectLayer) error {
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
 	isMinIOUsersSys := false
-	sys.RLock()
+	iamOS.rlock()
 	if sys.usersSysType == MinIOUsersSysType {
 		isMinIOUsersSys = true
 	}
-	sys.RUnlock()
+	iamOS.runlock()
 
-	if err := iamOS.loadPolicyDocs(iamPolicyDocsMap); err != nil {
+	if err := iamOS.loadPolicyDocs(ctx, iamPolicyDocsMap); err != nil {
 		return err
 	}
+
 	// load STS temp users
-	if err := iamOS.loadUsers(stsUser, iamUsersMap); err != nil {
+	if err := iamOS.loadUsers(ctx, stsUser, iamUsersMap); err != nil {
 		return err
 	}
-	if isMinIOUsersSys {
-		if err := iamOS.loadUsers(regularUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := iamOS.loadUsers(srvAccUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := iamOS.loadGroups(iamGroupsMap); err != nil {
-			return err
-		}
 
-		if err := iamOS.loadMappedPolicies(regularUser, false, iamUserPolicyMap); err != nil {
+	if isMinIOUsersSys {
+		if err := iamOS.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
+			return err
+		}
+		if err := iamOS.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
+			return err
+		}
+		if err := iamOS.loadGroups(ctx, iamGroupsMap); err != nil {
 			return err
 		}
 	}
-	// load STS policy mappings
-	if err := iamOS.loadMappedPolicies(stsUser, false, iamUserPolicyMap); err != nil {
+
+	// load polices mapped to users
+	if err := iamOS.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
 		return err
 	}
+
+	// load STS policy mappings
+	if err := iamOS.loadMappedPolicies(ctx, stsUser, false, iamUserPolicyMap); err != nil {
+		return err
+	}
+
 	// load policies mapped to groups
-	if err := iamOS.loadMappedPolicies(regularUser, true, iamGroupPolicyMap); err != nil {
+	if err := iamOS.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
 	// Sets default canned policies, if none are set.
 	setDefaultCannedPolicies(iamPolicyDocsMap)
 
-	sys.Lock()
-	defer sys.Unlock()
+	iamOS.lock()
+	defer iamOS.unlock()
 
 	sys.iamUsersMap = iamUsersMap
 	sys.iamPolicyDocsMap = iamPolicyDocsMap
@@ -604,10 +531,9 @@ type itemOrErr struct {
 // prefix. If dirs is true, only directories are listed, otherwise
 // only objects are listed. All returned items have the pathPrefix
 // removed from their names.
-func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
-	doneCh <-chan struct{}) <-chan itemOrErr {
-
+func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix string, dirs bool) <-chan itemOrErr {
 	ch := make(chan itemOrErr)
+
 	dirList := func(lo ListObjectsInfo) []string {
 		return lo.Prefixes
 	}
@@ -623,12 +549,12 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 
 		marker := ""
 		for {
-			lo, err := objectAPI.ListObjects(context.Background(),
+			lo, err := objAPI.ListObjects(context.Background(),
 				minioMetaBucket, pathPrefix, marker, SlashSeparator, maxObjectList)
 			if err != nil {
 				select {
 				case ch <- itemOrErr{Err: err}:
-				case <-doneCh:
+				case <-ctx.Done():
 				}
 				return
 			}
@@ -651,7 +577,7 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 				item = strings.TrimSuffix(item, SlashSeparator)
 				select {
 				case ch <- itemOrErr{Item: item}:
-				case <-doneCh:
+				case <-ctx.Done():
 					return
 				}
 			}
@@ -660,23 +586,18 @@ func listIAMConfigItems(objectAPI ObjectLayer, pathPrefix string, dirs bool,
 			}
 		}
 	}()
+
 	return ch
 }
 
-func (iamOS *IAMObjectStore) watch(sys *IAMSys) {
-	ctx := GlobalContext
-	watchDisk := func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.NewTimer(globalRefreshIAMInterval).C:
-				err := iamOS.loadAll(sys, nil)
-				logger.LogIf(ctx, err)
-			}
+func (iamOS *IAMObjectStore) watch(ctx context.Context, sys *IAMSys) {
+	// Refresh IAMSys.
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.NewTimer(globalRefreshIAMInterval).C:
+			logger.LogIf(ctx, iamOS.loadAll(ctx, sys))
 		}
 	}
-
-	// Refresh IAMSys in background.
-	go watchDisk()
 }

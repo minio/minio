@@ -378,21 +378,22 @@ func saveFormatXL(disk StorageAPI, format interface{}, diskID string) error {
 	return nil
 }
 
-var ignoredHiddenDirectories = []string{
-	minioMetaBucket,
-	".snapshot",
-	"lost+found",
-	"$RECYCLE.BIN",
-	"System Volume Information",
+var ignoredHiddenDirectories = map[string]struct{}{
+	minioMetaBucket:             {},
+	".snapshot":                 {},
+	"lost+found":                {},
+	"$RECYCLE.BIN":              {},
+	"System Volume Information": {},
 }
 
-func isIgnoreHiddenDirectories(dir string) bool {
-	for _, ignDir := range ignoredHiddenDirectories {
-		if dir == ignDir {
-			return true
+func isHiddenDirectories(vols ...VolInfo) bool {
+	for _, vol := range vols {
+		if _, ok := ignoredHiddenDirectories[vol.Name]; ok {
+			continue
 		}
+		return false
 	}
-	return false
+	return true
 }
 
 // loadFormatXL - loads format.json from disk.
@@ -407,9 +408,8 @@ func loadFormatXL(disk StorageAPI) (format *formatXLV3, err error) {
 			if err != nil {
 				return nil, err
 			}
-			if len(vols) > 1 || (len(vols) == 1 && !isIgnoreHiddenDirectories(vols[0].Name)) {
-				// 'format.json' not found, but we
-				// found user data.
+			if !isHiddenDirectories(vols...) {
+				// 'format.json' not found, but we found user data, reject such disks.
 				return nil, errCorruptedFormat
 			}
 			// No other data found, its a fresh disk.
@@ -529,7 +529,7 @@ func formatXLFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, ref
 	}
 	// Deployment ID needs to be set on all the disks.
 	// Save `format.json` across all disks.
-	return saveFormatXLAll(context.Background(), storageDisks, formats)
+	return saveFormatXLAll(GlobalContext, storageDisks, formats)
 
 }
 
@@ -559,7 +559,7 @@ func formatXLFixLocalDeploymentID(endpoints Endpoints, storageDisks []StorageAPI
 				}
 				format.ID = refFormat.ID
 				if err := saveFormatXL(storageDisks[index], format, format.XL.This); err != nil {
-					logger.LogIf(context.Background(), err)
+					logger.LogIf(GlobalContext, err)
 					return fmt.Errorf("Unable to save format.json, %w", err)
 				}
 			}

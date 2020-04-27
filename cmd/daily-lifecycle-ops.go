@@ -63,6 +63,8 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 			continue
 		}
 
+		_, bucketHasLockConfig := globalBucketObjectLockConfig.Get(bucket.Name)
+
 		// Calculate the common prefix of all lifecycle rules
 		var prefixes []string
 		for _, rule := range l.Rules {
@@ -85,9 +87,11 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
-
 				// Find the action that need to be executed
 				if l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime) == lifecycle.DeleteAction {
+					if bucketHasLockConfig && enforceRetentionForLifecycle(ctx, obj) {
+						continue
+					}
 					objects = append(objects, obj.Name)
 				}
 			}

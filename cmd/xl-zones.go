@@ -55,7 +55,7 @@ func (z *xlZones) quickHealBuckets(ctx context.Context) {
 }
 
 // Initialize new zone of erasure sets.
-func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
+func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, error) {
 	var (
 		deploymentID string
 		err          error
@@ -74,13 +74,13 @@ func newXLZones(endpointZones EndpointZones) (ObjectLayer, error) {
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-		z.zones[i], err = newXLSets(ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
+		z.zones[i], err = newXLSets(ctx, ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if !z.SingleZone() {
-		z.quickHealBuckets(context.Background())
+		z.quickHealBuckets(ctx)
 	}
 	return z, nil
 }
@@ -326,7 +326,7 @@ func undoMakeBucketZones(bucket string, zones []*xlSets, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].DeleteBucket(context.Background(), bucket, false)
+				return zones[index].DeleteBucket(GlobalContext, bucket, false)
 			}
 			return nil
 		}, index)
@@ -1290,7 +1290,7 @@ func undoDeleteBucketZones(bucket string, zones []*xlSets, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].MakeBucketWithLocation(context.Background(), bucket, "")
+				return zones[index].MakeBucketWithLocation(GlobalContext, bucket, "")
 			}
 			return nil
 		}, index)

@@ -50,7 +50,7 @@ func (xl xlObjects) getMultipartSHADir(bucket, object string) string {
 
 // checkUploadIDExists - verify if a given uploadID exists and is valid.
 func (xl xlObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) error {
-	_, err := xl.getObjectInfo(ctx, minioMetaMultipartBucket, xl.getUploadIDDir(bucket, object, uploadID))
+	_, err := xl.getObjectInfo(ctx, minioMetaMultipartBucket, xl.getUploadIDDir(bucket, object, uploadID), ObjectOptions{})
 	return err
 }
 
@@ -673,13 +673,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	if xl.isObject(bucket, object) {
-		// Deny if WORM is enabled
-		if isWORMEnabled(bucket) {
-			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
-				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-			}
-		}
-
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 

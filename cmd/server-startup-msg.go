@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"crypto/x509"
 	"fmt"
 	"net"
@@ -55,7 +54,7 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo in safe mode.
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI != nil {
-		if msg := getStorageInfoMsgSafeMode(objAPI.StorageInfo(context.Background(), false)); msg != "" {
+		if msg := getStorageInfoMsgSafeMode(objAPI.StorageInfo(GlobalContext, false)); msg != "" {
 			logStartupMessage(msg)
 		}
 	}
@@ -111,13 +110,13 @@ func printStartupMessage(apiEndpoints []string) {
 	// If cache layer is enabled, print cache capacity.
 	cachedObjAPI := newCachedObjectLayerFn()
 	if cachedObjAPI != nil {
-		printCacheStorageInfo(cachedObjAPI.StorageInfo(context.Background()))
+		printCacheStorageInfo(cachedObjAPI.StorageInfo(GlobalContext))
 	}
 
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(context.Background(), false))
+		printStorageInfo(objAPI.StorageInfo(GlobalContext, false))
 	}
 
 	// Prints credential, region and browser access.
@@ -203,7 +202,7 @@ func printEventNotifiers() {
 		return
 	}
 
-	arns := globalNotificationSys.GetARNList()
+	arns := globalNotificationSys.GetARNList(true)
 	if len(arns) == 0 {
 		return
 	}
@@ -253,7 +252,7 @@ func getStorageInfoMsgSafeMode(storageInfo StorageInfo) string {
 	var mcMessage string
 	if storageInfo.Backend.Type == BackendErasure {
 		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
-			mcMessage = "Use `mc admin info` to look for latest server/disk info`"
+			mcMessage = "Use `mc admin info` to look for latest server/disk info\n"
 		}
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())
 		msg += color.Red("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
@@ -270,7 +269,7 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 	var mcMessage string
 	if storageInfo.Backend.Type == BackendErasure {
 		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
-			mcMessage = "Use `mc admin info` to look for latest server/disk info"
+			mcMessage = "Use `mc admin info` to look for latest server/disk info\n"
 		}
 
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())

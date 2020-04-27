@@ -104,8 +104,24 @@ func (iamp Policy) isValid() error {
 		}
 	}
 
+	return nil
+}
+
+// MarshalJSON - encodes Policy to JSON data.
+func (iamp Policy) MarshalJSON() ([]byte, error) {
+	if err := iamp.isValid(); err != nil {
+		return nil, err
+	}
+
+	// subtype to avoid recursive call to MarshalJSON()
+	type subPolicy Policy
+	return json.Marshal(subPolicy(iamp))
+}
+
+func (iamp *Policy) dropDuplicateStatements() {
+redo:
 	for i := range iamp.Statements {
-		for _, statement := range iamp.Statements[i+1:] {
+		for j, statement := range iamp.Statements[i+1:] {
 			if iamp.Statements[i].Effect != statement.Effect {
 				continue
 			}
@@ -121,24 +137,10 @@ func (iamp Policy) isValid() error {
 			if iamp.Statements[i].Conditions.String() != statement.Conditions.String() {
 				continue
 			}
-
-			return Errorf("duplicate actions %v, resources %v found in statements %v, %v",
-				statement.Actions, statement.Resources, iamp.Statements[i], statement)
+			iamp.Statements = append(iamp.Statements[:j], iamp.Statements[j+1:]...)
+			goto redo
 		}
 	}
-
-	return nil
-}
-
-// MarshalJSON - encodes Policy to JSON data.
-func (iamp Policy) MarshalJSON() ([]byte, error) {
-	if err := iamp.isValid(); err != nil {
-		return nil, err
-	}
-
-	// subtype to avoid recursive call to MarshalJSON()
-	type subPolicy Policy
-	return json.Marshal(subPolicy(iamp))
 }
 
 // UnmarshalJSON - decodes JSON data to Iamp.
@@ -154,6 +156,8 @@ func (iamp *Policy) UnmarshalJSON(data []byte) error {
 	if err := p.isValid(); err != nil {
 		return err
 	}
+
+	p.dropDuplicateStatements()
 
 	*iamp = p
 

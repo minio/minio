@@ -21,17 +21,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
-	"runtime"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/montanaflynn/stats"
-)
-
-const (
-	kb = uint64(1 << 10)
-	mb = uint64(kb << 10)
-	gb = uint64(mb << 10)
 )
 
 var globalLatency = map[string]Latency{}
@@ -58,19 +51,19 @@ type Throughput struct {
 }
 
 // GetOBDInfo about the drive
-func GetOBDInfo(ctx context.Context, endpoint string) (Latency, Throughput, error) {
-	runtime.LockOSThread()
+func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput, error) {
 
-	f, err := OpenFileDirectIO(endpoint, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0755)
+	// Create a file with O_DIRECT flag, choose default umask and also make sure
+	// we are exclusively writing to a new file using O_EXCL.
+	w, err := OpenFileDirectIO(fsPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
 	if err != nil {
 		return Latency{}, Throughput{}, err
 	}
-	defer func() {
-		f.Close()
-		os.Remove(f.Name())
-	}()
 
-	drive := filepath.Dir(endpoint)
+	defer func() {
+		w.Close()
+		os.Remove(fsPath)
+	}()
 
 	// going to leave this here incase we decide to go back to caching again
 	// if gl, ok := globalLatency[drive]; ok {
@@ -79,30 +72,27 @@ func GetOBDInfo(ctx context.Context, endpoint string) (Latency, Throughput, erro
 	// 	}
 	// }
 
-	blockSize := 1 * mb
-	fileSize := 256 * mb
+	blockSize := 4 * humanize.MiByte
+	fileSize := 256 * humanize.MiByte
 
 	latencies := make([]float64, fileSize/blockSize)
 	throughputs := make([]float64, fileSize/blockSize)
 
-	dioFile := os.NewFile(uintptr(f.Fd()), endpoint)
-	data := make([]byte, blockSize)
+	data := AlignedBlock(blockSize)
 
-	for i := uint64(0); i < (fileSize / blockSize); i++ {
+	for i := 0; i < (fileSize / blockSize); i++ {
 		if ctx.Err() != nil {
 			return Latency{}, Throughput{}, ctx.Err()
 		}
 		startTime := time.Now()
-		if n, err := dioFile.Write(data); err != nil {
+		if n, err := w.Write(data); err != nil {
 			return Latency{}, Throughput{}, err
-		} else if uint64(n) != blockSize {
+		} else if n != blockSize {
 			return Latency{}, Throughput{}, fmt.Errorf("Expected to write %d, but only wrote %d", blockSize, n)
 		}
-		latency := time.Since(startTime)
-		latencies[i] = float64(latency.Seconds())
+		latencyInSecs := time.Since(startTime).Seconds()
+		latencies[i] = float64(latencyInSecs)
 	}
-
-	runtime.UnlockOSThread()
 
 	for i := range latencies {
 		throughput := float64(blockSize) / latencies[i]

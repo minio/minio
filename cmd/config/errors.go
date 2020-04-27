@@ -33,7 +33,7 @@ var (
 	ErrInvalidErasureSetSize = newErrFn(
 		"Invalid erasure set size",
 		"Please check the passed value",
-		"Erasure set can only accept any of [4, 6, 8, 10, 12, 14, 16] values",
+		"Erasure set can only accept any of [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] values",
 	)
 
 	ErrInvalidWormValue = newErrFn(

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,12 @@ func (adm AdminClient) newRetryTimer(ctx context.Context, maxRetry int, unit tim
 		defer close(attemptCh)
 		for i := 0; i < maxRetry; i++ {
 			// Attempts start from 1.
-			attemptCh <- i + 1
+			select {
+			case attemptCh <- i + 1:
+			case <-ctx.Done():
+				// Stop the routine.
+				return
+			}
 
 			select {
 			case <-time.After(exponentialBackoffWait(i)):
@@ -163,6 +168,7 @@ func isS3CodeRetryable(s3Code string) (ok bool) {
 
 // List of HTTP status codes which are retryable.
 var retryableHTTPStatusCodes = map[int]struct{}{
+	http.StatusRequestTimeout:      {},
 	http.StatusTooManyRequests:     {},
 	http.StatusInternalServerError: {},
 	http.StatusBadGateway:          {},

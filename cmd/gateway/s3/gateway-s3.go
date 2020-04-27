@@ -243,8 +243,8 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		encS := s3EncObjects{s}
 
 		// Start stale enc multipart uploads cleanup routine.
-		go encS.cleanupStaleEncMultipartUploads(context.Background(),
-			minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry, minio.GlobalServiceDoneCh)
+		go encS.cleanupStaleEncMultipartUploads(minio.GlobalContext,
+			minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry)
 
 		return &encS, nil
 	}
@@ -403,7 +403,7 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
 }
 
 // GetObject reads an object from S3. Supports additional

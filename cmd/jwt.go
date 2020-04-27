@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -164,6 +163,6 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 func newAuthToken(audience string) string {
 	cred := globalActiveCred
 	token, err := authenticateNode(cred.AccessKey, cred.SecretKey, audience)
-	logger.CriticalIf(context.Background(), err)
+	logger.CriticalIf(GlobalContext, err)
 	return token
 }
