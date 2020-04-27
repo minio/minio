@@ -172,8 +172,8 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		// Fallback for filesystems (like old XFS) that don't
 		// support Dirent.Type and have DT_UNKNOWN (0) there
 		// instead.
-		if typ == unexpectedFileMode || typ&os.ModeSymlink == os.ModeSymlink {
-			fi, err := os.Stat(pathJoin(dirPath, name))
+		if typ == unexpectedFileMode {
+			fi, err := os.Lstat(pathJoin(dirPath, name))
 			if err != nil {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
@@ -185,6 +185,9 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				return nil, err
 			}
 			typ = fi.Mode() & os.ModeType
+		}
+		if typ&os.ModeSymlink == os.ModeSymlink {
+			continue
 		}
 		if typ.IsRegular() {
 			entries = append(entries, name)
