@@ -26,6 +26,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -48,6 +49,7 @@ const (
 	objectLockConfig                  = "object-lock.xml"
 	bucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
 	bucketObjectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
+	bucketCreatedTimeFile             = "created.time"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -291,6 +293,16 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
+		}
+
+		for i := range bucketsInfo {
+			configFile := path.Join(bucketConfigPrefix, bucketsInfo[i].Name, bucketCreatedTimeFile)
+			if configData, err := readConfig(ctx, objectAPI, configFile); err == nil {
+				// Ignore any error
+				if created, err := time.Parse(string(configData), time.RFC3339); err == nil {
+					bucketsInfo[i].Created = created
+				}
+			}
 		}
 	}
 
@@ -576,14 +588,23 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if objectLockEnabled && !globalIsGateway {
-		configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
-		if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
+	createdTime := UTCNow().Format(time.RFC3339)
+	if !globalIsGateway {
+		configFile := path.Join(bucketConfigPrefix, bucket, bucketCreatedTimeFile)
+		if err = saveConfig(ctx, objectAPI, configFile, []byte(createdTime)); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
+
+		if objectLockEnabled {
+			configFile = path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
+			if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
+			globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
+			globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
+		}
 	}
 
 	// Make sure to add Location information here only for bucket
