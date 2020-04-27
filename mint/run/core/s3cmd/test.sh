@@ -304,6 +304,21 @@ function test_copy_object()
     log_success "$start_time" "${FUNCNAME[0]}"
 }
 
+function test_copy_object_with_space()
+{
+    show "${FUNCNAME[0]}"
+
+    start_time=$(get_time)
+    object_name1="s3cmd-test object-$RANDOM"
+    object_name2="s3cmd-test object-$RANDOM"
+    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd put "${FILE_1_MB}" "s3://${BUCKET_NAME}/${object_name1}"
+    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd cp "s3://${BUCKET_NAME}/${object_name1}" "s3://${BUCKET_NAME}/${object_name2}"
+    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd info "s3://${BUCKET_NAME}/${object_name2}"
+    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd rm "s3://${BUCKET_NAME}/${object_name1}" "s3://${BUCKET_NAME}/${object_name2}"
+
+    log_success "$start_time" "${FUNCNAME[0]}"
+}
+
 function test_sync_list_objects()
 {
     show "${FUNCNAME[0]}"
@@ -334,6 +349,7 @@ function run_test()
     test_get_object
     test_get_object_multipart
     test_copy_object
+    test_copy_object_with_space
     test_sync_list_objects
 
     teardown
