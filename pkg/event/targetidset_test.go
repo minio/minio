@@ -21,56 +21,6 @@ import (
 	"testing"
 )
 
-func TestTargetIDSetToSlice(t *testing.T) {
-	testCases := []struct {
-		set            TargetIDSet
-		expectedResult []TargetID
-	}{
-		{NewTargetIDSet(), []TargetID{}},
-		{NewTargetIDSet(TargetID{"1", "webhook"}), []TargetID{{"1", "webhook"}}},
-		{NewTargetIDSet(TargetID{"1", "webhook"}, TargetID{"2", "amqp"}), []TargetID{{"1", "webhook"}, {"2", "amqp"}}},
-	}
-
-	for i, testCase := range testCases {
-		result := testCase.set.ToSlice()
-
-		if len(result) != len(testCase.expectedResult) {
-			t.Fatalf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
-		}
-
-		for _, targetID1 := range result {
-			var found bool
-			for _, targetID2 := range testCase.expectedResult {
-				if reflect.DeepEqual(targetID1, targetID2) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Fatalf("test %v: data: expected: %v, got: %v", i+1, testCase.expectedResult, result)
-			}
-		}
-	}
-}
-
-func TestTargetIDSetString(t *testing.T) {
-	testCases := []struct {
-		set            TargetIDSet
-		expectedResult string
-	}{
-		{NewTargetIDSet(), "[]"},
-		{NewTargetIDSet(TargetID{"1", "webhook"}), "[1:webhook]"},
-	}
-
-	for i, testCase := range testCases {
-		result := testCase.set.String()
-
-		if result != testCase.expectedResult {
-			t.Fatalf("test %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
 func TestTargetIDSetClone(t *testing.T) {
 	testCases := []struct {
 		set           TargetIDSet

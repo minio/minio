@@ -138,6 +138,8 @@ var (
 	globalMinioPort = globalMinioDefaultPort
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
+	// Holds the possible host endpoint.
+	globalMinioEndpoint = ""
 
 	// globalConfigSys server config system.
 	globalConfigSys *ConfigSys
