@@ -49,6 +49,11 @@ func (target *HTTPClientTarget) IsActive() (bool, error) {
 	return true, nil
 }
 
+// HasQueueStore - No-Op. Added for interface compatibility
+func (target *HTTPClientTarget) HasQueueStore() bool {
+	return false
+}
+
 func (target *HTTPClientTarget) start() {
 	go func() {
 		defer func() {

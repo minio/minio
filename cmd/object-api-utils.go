@@ -485,15 +485,15 @@ type GetObjectReader struct {
 	pReader io.Reader
 
 	cleanUpFns []func()
-	precondFn  func(ObjectInfo, string) bool
+	opts       ObjectOptions
 	once       sync.Once
 }
 
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
-func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (*GetObjectReader, error) {
-	if pcfn != nil {
-		if ok := pcfn(oi, ""); ok {
+func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions, cleanupFns ...func()) (*GetObjectReader, error) {
+	if opts.CheckCopyPrecondFn != nil {
+		if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 			// Call the cleanup funcs
 			for i := len(cleanupFns) - 1; i >= 0; i-- {
 				cleanupFns[i]()
@@ -505,7 +505,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, pcfn CheckCopyPrec
 		ObjInfo:    oi,
 		pReader:    r,
 		cleanUpFns: cleanupFns,
-		precondFn:  pcfn,
+		opts:       opts,
 	}, nil
 }
 
@@ -519,7 +519,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckCopyPrecon
 // are called on Close() in reverse order as passed here. NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPreconditionFn, cleanUpFns ...func()) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cleanUpFns ...func()) (
 	fn ObjReaderFn, off, length int64, err error) {
 
 	// Call the clean-up functions immediately in case of exit
@@ -537,6 +537,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 	if err != nil {
 		return nil, 0, 0, err
 	}
+
 	var skipLen int64
 	// Calculate range to read (different for
 	// e.g. encrypted/compressed objects)
@@ -581,8 +582,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			encETag := oi.ETag
 			oi.ETag = getDecryptedETag(h, oi, copySource) // Decrypt the ETag before top layer consumes this value.
 
-			if pcfn != nil {
-				if ok := pcfn(oi, encETag); ok {
+			if opts.CheckCopyPrecondFn != nil {
+				if ok := opts.CheckCopyPrecondFn(oi, encETag); ok {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
@@ -600,7 +601,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				ObjInfo:    oi,
 				pReader:    decReader,
 				cleanUpFns: cFns,
-				precondFn:  pcfn,
+				opts:       opts,
 			}
 			return r, nil
 		}
@@ -634,8 +635,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 		}
 		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			cFns = append(cleanUpFns, cFns...)
-			if pcfn != nil {
-				if ok := pcfn(oi, ""); ok {
+			if opts.CheckCopyPrecondFn != nil {
+				if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
@@ -648,6 +649,10 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 			// Apply the skipLen and limit on the decompressed stream.
 			err = s2Reader.Skip(decOff)
 			if err != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
 				return nil, err
 			}
 
@@ -668,7 +673,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				ObjInfo:    oi,
 				pReader:    decReader,
 				cleanUpFns: cFns,
-				precondFn:  pcfn,
+				opts:       opts,
 			}
 			return r, nil
 		}
@@ -680,8 +685,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 		}
 		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			cFns = append(cleanUpFns, cFns...)
-			if pcfn != nil {
-				if ok := pcfn(oi, ""); ok {
+			if opts.CheckCopyPrecondFn != nil {
+				if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
 						cFns[i]()
@@ -693,7 +698,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, pcfn CheckCopyPrecondi
 				ObjInfo:    oi,
 				pReader:    inputReader,
 				cleanUpFns: cFns,
-				precondFn:  pcfn,
+				opts:       opts,
 			}
 			return r, nil
 		}

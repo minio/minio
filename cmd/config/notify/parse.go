@@ -102,8 +102,10 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 	var targetsOffline bool
 
 	defer func() {
-		// Automatically close all connections to targets when an error occur
-		if err != nil {
+		// Automatically close all connections to targets when an error occur.
+		// Close all the targets if returnOnTargetError is set
+		// Else, close only the failed targets
+		if err != nil && returnOnTargetError {
 			for _, t := range targetList.TargetMap() {
 				_ = t.Close()
 			}
@@ -174,6 +176,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 
 		if err = targetList.Add(newTarget); err != nil {
@@ -194,6 +197,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -214,6 +218,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -234,6 +239,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -253,6 +259,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -272,6 +279,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -291,6 +299,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -310,6 +319,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -329,6 +339,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -348,6 +359,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)

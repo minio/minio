@@ -36,6 +36,11 @@ func (target *PeerRESTClientTarget) IsActive() (bool, error) {
 	return true, nil
 }
 
+// HasQueueStore - No-Op. Added for interface compatibility
+func (target PeerRESTClientTarget) HasQueueStore() bool {
+	return false
+}
+
 // Save - Sends event directly without persisting.
 func (target *PeerRESTClientTarget) Save(eventData event.Event) error {
 	return target.send(eventData)

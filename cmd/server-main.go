@@ -75,12 +75,15 @@ EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
-  2. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
+  2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
+     {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
+
+  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
-  3. Start distributed minio server in an expanded setup, run the following command on all the nodes
+  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \

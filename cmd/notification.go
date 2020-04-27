@@ -56,18 +56,23 @@ type NotificationSys struct {
 }
 
 // GetARNList - returns available ARNs.
-func (sys *NotificationSys) GetARNList() []string {
+func (sys *NotificationSys) GetARNList(onlyActive bool) []string {
 	arns := []string{}
 	if sys == nil {
 		return arns
 	}
 	region := globalServerRegion
-	for _, targetID := range sys.targetList.List() {
+	for targetID, target := range sys.targetList.TargetMap() {
 		// httpclient target is part of ListenBucketNotification
 		// which doesn't need to be listed as part of the ARN list
 		// This list is only meant for external targets, filter
 		// this out pro-actively.
 		if !strings.HasPrefix(targetID.ID, "httpclient+") {
+			if onlyActive && !target.HasQueueStore() {
+				if _, err := target.IsActive(); err != nil {
+					continue
+				}
+			}
 			arns = append(arns, targetID.ToARN(region).String())
 		}
 	}
@@ -234,6 +239,36 @@ func (sys *NotificationSys) LoadGroup(group string) []NotificationPeerErr {
 		}
 		client := client
 		ng.Go(GlobalContext, func() error { return client.LoadGroup(group) }, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// DeleteServiceAccount - deletes a specific service account across all peers
+func (sys *NotificationSys) DeleteServiceAccount(accessKey string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.DeleteServiceAccount(accessKey)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// LoadServiceAccount - reloads a specific service account across all peers
+func (sys *NotificationSys) LoadServiceAccount(accessKey string) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.LoadServiceAccount(accessKey)
+		}, idx, *client.host)
 	}
 	return ng.Wait()
 }
