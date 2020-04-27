@@ -46,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerVersion      = 1
-	dataUpdateTrackerFilename     = minioMetaBucket + SlashSeparator + bucketMetaPrefix + SlashSeparator + "tracker.bin"
+	dataUpdateTrackerFilename     = minioMetaBucket + SlashSeparator + bucketMetaPrefix + SlashSeparator + ".tracker.bin"
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 
 	// Reset bloom filters every n cycle
