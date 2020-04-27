@@ -21,10 +21,7 @@ package cmd
 import (
 	"io"
 	"os"
-	"path"
 	"strings"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // Return all the entries at the directory dirPath.
@@ -111,25 +108,8 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			}
 		}
 		for _, fi := range fis {
-			// Stat symbolic link and follow to get the final value.
+			// Not need to follow symlink.
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-				var st os.FileInfo
-				st, err = os.Stat(path.Join(dirPath, fi.Name()))
-				if err != nil {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("path", path.Join(dirPath, fi.Name()))
-					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-					logger.LogIf(ctx, err)
-					continue
-				}
-				// Append to entries if symbolic link exists and is valid.
-				if st.IsDir() {
-					entries = append(entries, fi.Name()+SlashSeparator)
-				} else if st.Mode().IsRegular() {
-					entries = append(entries, fi.Name())
-				}
-				if count > 0 {
-					remaining--
-				}
 				continue
 			}
 			if fi.Mode().IsDir() {

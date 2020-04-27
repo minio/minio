@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -774,52 +773,7 @@ func (s *peerRESTServer) SetBucketSSEConfigHandler(w http.ResponseWriter, r *htt
 	w.(http.Flusher).Flush()
 }
 
-type remoteTargetExistsResp struct {
-	Exists bool
-}
-
-// TargetExistsHandler - Check if Target exists.
-func (s *peerRESTServer) TargetExistsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "TargetExists")
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	vars := mux.Vars(r)
-	bucketName := vars[peerRESTBucket]
-	if bucketName == "" {
-		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
-		return
-	}
-	var targetID event.TargetID
-	if r.ContentLength <= 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&targetID)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	var targetExists remoteTargetExistsResp
-	targetExists.Exists = globalNotificationSys.RemoteTargetExist(bucketName, targetID)
-
-	defer w.(http.Flusher).Flush()
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(&targetExists))
-}
-
-type sendEventRequest struct {
-	Event    event.Event
-	TargetID event.TargetID
-}
-
-type sendEventResp struct {
-	Success bool
-}
-
+// CycleServerBloomFilterHandler cycles bllom filter on server.
 func (s *peerRESTServer) CycleServerBloomFilterHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
@@ -840,51 +794,6 @@ func (s *peerRESTServer) CycleServerBloomFilterHandler(w http.ResponseWriter, r 
 		return
 	}
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(bf))
-	w.(http.Flusher).Flush()
-}
-
-// SendEventHandler - Send Event.
-func (s *peerRESTServer) SendEventHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx := newContext(r, w, "SendEvent")
-
-	vars := mux.Vars(r)
-	bucketName := vars[peerRESTBucket]
-	if bucketName == "" {
-		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
-		return
-	}
-	var eventReq sendEventRequest
-	if r.ContentLength <= 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	err := gob.NewDecoder(r.Body).Decode(&eventReq)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	var eventResp sendEventResp
-	eventResp.Success = true
-	errs := globalNotificationSys.send(bucketName, eventReq.Event, eventReq.TargetID)
-
-	for i := range errs {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("Event", eventReq.Event.EventName.String())
-		reqInfo.AppendTags("targetName", eventReq.TargetID.Name)
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogIf(ctx, errs[i].Err)
-
-		eventResp.Success = false
-		s.writeErrorResponse(w, errs[i].Err)
-		return
-	}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(&eventResp))
 	w.(http.Flusher).Flush()
 }
 
@@ -1100,11 +1009,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
 			return false
 		}
-		objectName, uerr := url.QueryUnescape(ev.S3.Object.Key)
-		if uerr != nil {
-			objectName = ev.S3.Object.Key
-		}
-		return len(rulesMap.Match(ev.EventName, objectName).ToSlice()) != 0
+		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
@@ -1263,8 +1168,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProfilingDataHandler))
 
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTargetExists).HandlerFunc(httpTraceHdrs(server.TargetExistsHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSendEvent).HandlerFunc(httpTraceHdrs(server.SendEventHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketNotificationPut).HandlerFunc(httpTraceHdrs(server.PutBucketNotificationHandler)).Queries(restQueries(peerRESTBucket)...)
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)

@@ -131,6 +131,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	globalMinioEndpoint = func() string {
+		host := globalMinioHost
+		if host == "" {
+			host = sortIPs(localIP4.ToSlice())[0]
+		}
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+	}()
+
 	// Handle gateway specific env
 	gatewayHandleEnvVars()
 
