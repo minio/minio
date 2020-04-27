@@ -660,6 +660,48 @@ function test_copy_object() {
     return $rv
 }
 
+function test_copy_object_with_space() {
+    # log start time
+    start_time=$(get_time)
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+
+    # if make bucket succeeds upload a file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key 'datafile space'"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # copy object server side
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --key 'datafile space-copy' --copy-source '${bucket_name}/datafile space'"
+        test_function=${function}
+        out=$($function)
+        rv=$?
+        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
+            # Verification failed
+            rv=1
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
+        fi
+    fi
+
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+
+    return $rv
+}
+
 # Copy object tests for server side copy
 # of the object, validates returned md5sum.
 # validates change in storage class as well
@@ -1689,6 +1731,7 @@ main() {
     test_multipart_upload && \
     test_max_key_list && \
     test_copy_object && \
+    test_copy_object_with_space && \
     test_copy_object_storage_class && \
     test_copy_object_storage_class_same && \
     test_presigned_object && \
