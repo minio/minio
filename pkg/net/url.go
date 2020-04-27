@@ -20,14 +20,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"net/url"
 	"path"
 	"strings"
-	"time"
 )
 
 // URL - improved JSON friendly url.URL.
@@ -82,34 +78,6 @@ func (u *URL) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	*u = *ru
-	return nil
-}
-
-// DialHTTP - dials the url to check the connection.
-func (u URL) DialHTTP(transport *http.Transport) error {
-	if transport == nil {
-		transport = &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: 2 * time.Second,
-			}).DialContext,
-		}
-
-	}
-
-	var client = &http.Client{
-		Transport: transport,
-	}
-
-	req, err := http.NewRequest("POST", u.String(), nil)
-	if err != nil {
-		return err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close()
 	return nil
 }
 
