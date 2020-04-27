@@ -524,6 +524,25 @@ func (client *peerRESTClient) RemoveBucketObjectLockConfig(bucket string) error 
 	return nil
 }
 
+// cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
+// The response will contain a bloom filter starting at index x up to, but not including index y.
+// If y is 0, the response will not update y, but return the currently recorded information
+// from the current x to y-1.
+func (client *peerRESTClient) cycleServerBloomFilter(ctx context.Context, req bloomFilterRequest) (*bloomFilterResponse, error) {
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(req)
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := client.call(peerRESTMethodCycleBloom, nil, &reader, -1)
+	if err != nil {
+		return nil, err
+	}
+	var resp bloomFilterResponse
+	defer http.DrainBody(respBody)
+	return &resp, gob.NewDecoder(respBody).Decode(&resp)
+}
+
 // SetBucketPolicy - Set bucket policy on the peer node.
 func (client *peerRESTClient) SetBucketPolicy(bucket string, bucketPolicy *policy.Policy) error {
 	values := make(url.Values)

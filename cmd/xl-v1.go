@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -200,24 +202,14 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
-	cache := make(chan dataUsageCache, 1)
-	defer close(cache)
-	buckets, err := xl.ListBuckets(ctx)
-	if err != nil {
-		return err
-	}
-	go func() {
-		for update := range cache {
-			updates <- update.dui(update.Info.Name, buckets)
-		}
-	}()
-	return xl.crawlAndGetDataUsage(ctx, buckets, cache)
+func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+	// This should only be called from runDataUsageInfo and this setup should not happen (zones).
+	return errors.New("xlObjects CrawlAndGetDataUsage not implemented")
 }
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, updates chan<- dataUsageCache) error {
+func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	var disks []StorageAPI
 
 	for _, d := range xl.getLoadBalancedDisks() {
@@ -258,8 +250,14 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	for _, b := range buckets {
 		e := oldCache.find(b.Name)
 		if e != nil {
-			bucketCh <- b
-			cache.replace(b.Name, dataUsageRoot, *e)
+			if bf == nil || bf.containsDir(b.Name) {
+				bucketCh <- b
+				cache.replace(b.Name, dataUsageRoot, *e)
+			} else {
+				if intDataUpdateTracker.debug {
+					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
+				}
+			}
 		}
 	}
 
@@ -303,6 +301,9 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 		cache.Info.NextCycle++
 		cache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
+		if intDataUpdateTracker.debug {
+			logger.Info(color.Green("crawlAndGetDataUsage:")+" Cache saved, Next Cycle: %d", cache.Info.NextCycle)
+		}
 		updates <- cache
 	}()
 
@@ -339,7 +340,11 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 
 				// Calc usage
 				before := cache.Info.LastUpdate
+				if bf != nil {
+					cache.Info.BloomFilter = bf.bytes()
+				}
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
+				cache.Info.BloomFilter = nil
 				if err != nil {
 					logger.LogIf(ctx, err)
 					if cache.Info.LastUpdate.After(before) {

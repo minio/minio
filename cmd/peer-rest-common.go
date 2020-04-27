@@ -53,6 +53,7 @@ const (
 	peerRESTMethodBucketPolicySet              = "/setbucketpolicy"
 	peerRESTMethodBucketNotificationPut        = "/putbucketnotification"
 	peerRESTMethodReloadFormat                 = "/reloadformat"
+	peerRESTMethodCycleBloom                   = "/cyclebloom"
 	peerRESTMethodTrace                        = "/trace"
 	peerRESTMethodListen                       = "/listen"
 	peerRESTMethodLog                          = "/log"
