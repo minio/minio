@@ -96,7 +96,7 @@ func TestNewXLSets(t *testing.T) {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
 
-	if _, err := newXLSets(ctx, endpoints, storageDisks, format, 1, 16); err != nil {
+	if _, err := newXLSets(ctx, endpoints, storageDisks, format); err != nil {
 		t.Fatalf("Unable to initialize erasure")
 	}
 }
