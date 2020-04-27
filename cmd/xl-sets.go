@@ -514,12 +514,11 @@ func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location st
 	}
 
 	errs := g.Wait()
-	// Upon even a single write quorum error we undo all previously created buckets.
+	// Upon any error we try to undo the make bucket operation if possible
+	// on all sets where it succeeded.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoMakeBucketSets(bucket, s.sets, errs)
-			}
+			undoMakeBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
@@ -686,13 +685,11 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bo
 	}
 
 	errs := g.Wait()
-	// For any write quorum failure, we undo all the delete buckets operation
-	// by creating all the buckets again.
+	// For any failure, we attempt undo all the delete buckets operation
+	// by creating buckets again on all sets which were successfully deleted.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoDeleteBucketSets(bucket, s.sets, errs)
-			}
+			undoDeleteBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
