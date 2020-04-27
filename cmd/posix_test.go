@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,33 @@ import (
 
 	"github.com/minio/minio/pkg/disk"
 )
+
+func TestCheckPathLength(t *testing.T) {
+	// Check path length restrictions are not same on windows/darwin
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+
+	testCases := []struct {
+		path        string
+		expectedErr error
+	}{
+		{".", errFileAccessDenied},
+		{"/", errFileAccessDenied},
+		{"..", errFileAccessDenied},
+		{"data/G_792/srv-tse/c/users/denis/documents/gestion!20locative/heritier/propri!E9taire/20190101_a2.03!20-!20m.!20heritier!20re!B4mi!20-!20proce!60s-verbal!20de!20livraison!20et!20de!20remise!20des!20cle!B4s!20acque!B4reurs!20-!204-!20livraison!20-!20lp!20promotion!20toulouse!20-!20encre!20et!20plume!20-!205!20de!B4c.!202019!20a!60!2012-49.pdf.ecc", errFileNameTooLong},
+		{"data/G_792/srv-tse/c/users/denis/documents/gestionlocative.txt", nil},
+	}
+
+	for _, testCase := range testCases {
+		gotErr := checkPathLength(testCase.path)
+		t.Run("", func(t *testing.T) {
+			if gotErr != testCase.expectedErr {
+				t.Errorf("Expected %s, got %s", testCase.expectedErr, gotErr)
+			}
+		})
+	}
+}
 
 // Tests validate volume name.
 func TestIsValidVolname(t *testing.T) {
