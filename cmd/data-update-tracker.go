@@ -45,8 +45,8 @@ const (
 	dataUpdateTrackerFP        = 0.99
 	dataUpdateTrackerQueueSize = 10000
 
+	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
 	dataUpdateTrackerVersion      = 1
-	dataUpdateTrackerFilename     = minioMetaBucket + SlashSeparator + bucketMetaPrefix + SlashSeparator + ".tracker.bin"
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 
 	// Reset bloom filters every n cycle
@@ -195,6 +195,7 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 		return
 	}
 	for _, drive := range drives {
+
 		cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 		f, err := os.Open(cacheFormatPath)
 		if err != nil {
@@ -255,6 +256,9 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 			err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
 			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
 				logger.LogIf(ctx, err)
 				continue
 			}

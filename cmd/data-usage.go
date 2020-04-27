@@ -37,17 +37,19 @@ import (
 )
 
 const (
+	envDataUsageCrawlConf  = "MINIO_DISK_USAGE_CRAWL_ENABLE"
+	envDataUsageCrawlDelay = "MINIO_DISK_USAGE_CRAWL_DELAY"
+	envDataUsageCrawlDebug = "MINIO_DISK_USAGE_CRAWL_DEBUG"
+
+	dataUsageRoot   = SlashSeparator
+	dataUsageBucket = minioMetaBucket + SlashSeparator + bucketMetaPrefix
+
 	dataUsageObjName         = ".usage.json"
 	dataUsageCacheName       = ".usage-cache.bin"
-	envDataUsageCrawlConf    = "MINIO_DISK_USAGE_CRAWL_ENABLE"
-	envDataUsageCrawlDelay   = "MINIO_DISK_USAGE_CRAWL_DELAY"
-	envDataUsageCrawlDebug   = "MINIO_DISK_USAGE_CRAWL_DEBUG"
+	dataUsageBloomName       = ".bloomcycle.bin"
 	dataUsageSleepPerFolder  = 1 * time.Millisecond
 	dataUsageSleepDefMult    = 10.0
 	dataUsageUpdateDirCycles = 16
-	dataUsageRoot            = SlashSeparator
-	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
-	dataUsageBloomName       = ".bloomcycle.bin"
 	dataUsageStartDelay      = 5 * time.Minute // Time to wait on startup and between cycles.
 )
 
@@ -104,7 +106,9 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 				}
 
 				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r, nil, nil), ObjectOptions{})
-				logger.LogIf(ctx, err)
+				if !isErrBucketNotFound(err) {
+					logger.LogIf(ctx, err)
+				}
 			}
 		}
 	}
@@ -126,7 +130,9 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, gui <-chan
 		}
 
 		_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageObjName, NewPutObjReader(r, nil, nil), ObjectOptions{})
-		logger.LogIf(ctx, err)
+		if !isErrBucketNotFound(err) {
+			logger.LogIf(ctx, err)
+		}
 	}
 }
 
@@ -135,7 +141,7 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 
 	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageObjName, 0, -1, &dataUsageInfoJSON, "", ObjectOptions{})
 	if err != nil {
-		if isErrObjectNotFound(err) {
+		if isErrObjectNotFound(err) || isErrBucketNotFound(err) {
 			return DataUsageInfo{}, nil
 		}
 		return DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
