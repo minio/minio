@@ -120,7 +120,7 @@ func (cred Credentials) IsExpired() bool {
 
 // IsTemp - returns whether credential is temporary or not.
 func (cred Credentials) IsTemp() bool {
-	return cred.SessionToken != "" && cred.ParentUser == "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
+	return cred.SessionToken != "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
 }
 
 // IsServiceAccount - returns whether credential is a service account or not

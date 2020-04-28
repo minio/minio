@@ -397,7 +397,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	newCred, err := globalIAMSys.NewServiceAccount(ctx, cred.AccessKey, createReq.Policy)
+	parentUser := cred.AccessKey
+	if cred.ParentUser != "" {
+		parentUser = cred.ParentUser
+	}
+
+	newCred, err := globalIAMSys.NewServiceAccount(ctx, parentUser, createReq.Policy)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -516,7 +521,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if cred.AccessKey != user {
+	if cred.AccessKey != user || cred.ParentUser != user {
 		// The service account belongs to another user but return not found error to mitigate brute force attacks.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServiceAccountNotFound), r.URL)
 		return

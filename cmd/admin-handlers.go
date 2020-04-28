@@ -21,7 +21,6 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -44,7 +43,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/event/target"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -1534,7 +1532,6 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 	}
 
 	if err := checkConnection(kmsInfo.Endpoint, 15*time.Second); err != nil {
-
 		vault.Status = "offline"
 	} else {
 		vault.Status = "online"
@@ -1602,21 +1599,23 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 
 // checkConnection - ping an endpoint , return err in case of no connection
 func checkConnection(endpointStr string, timeout time.Duration) error {
-	u, pErr := xnet.ParseURL(endpointStr)
-	if pErr != nil {
-		return pErr
-	}
-
 	tr := newCustomHTTPTransport(&tls.Config{RootCAs: globalRootCAs}, timeout)()
 	defer tr.CloseIdleConnections()
-	if dErr := u.DialHTTP(tr); dErr != nil {
-		if urlErr, ok := dErr.(*url.Error); ok {
-			// To treat "connection refused" errors as un reachable endpoint.
-			if target.IsConnRefusedErr(urlErr.Err) {
-				return errors.New("endpoint unreachable, please check your endpoint")
-			}
-		}
-		return dErr
+
+	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
+	defer cancel()
+
+	req, err := http.NewRequest(http.MethodHead, endpointStr, nil)
+	if err != nil {
+		return err
 	}
+
+	client := &http.Client{Transport: tr}
+	resp, err := client.Do(req.WithContext(ctx))
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(resp.Body)
+	resp.Body.Close()
 	return nil
 }
