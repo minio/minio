@@ -1459,6 +1459,8 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 		if infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
+			logger.Info("Disk `%s` has been detected as a rootfs disk. Please ensure it is mounted properly.",
+				storageDisks[i].String())
 			storageDisks[i] = nil
 		}
 	}
