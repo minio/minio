@@ -360,6 +360,9 @@ func (d *dataUsageCache) save(ctx context.Context, store ObjectLayer, name strin
 		name,
 		NewPutObjReader(r, nil, nil),
 		ObjectOptions{})
+	if isErrBucketNotFound(err) {
+		return nil
+	}
 	return err
 }
 
