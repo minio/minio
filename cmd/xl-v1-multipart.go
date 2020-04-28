@@ -545,6 +545,8 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
+	defer ObjectPathUpdated(path.Join(bucket, object))
+
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
 

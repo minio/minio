@@ -111,7 +111,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalMinioAddr = globalCLIContext.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
 		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
@@ -344,6 +343,14 @@ func serverMain(ctx *cli.Context) {
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	globalMinioEndpoint = func() string {
+		host := globalMinioHost
+		if host == "" {
+			host = sortIPs(localIP4.ToSlice())[0]
+		}
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+	}()
+
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
 		if globalEndpoints.HTTPS() && !globalIsSSL {
@@ -484,7 +491,6 @@ func serverMain(ctx *cli.Context) {
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
-
 	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)

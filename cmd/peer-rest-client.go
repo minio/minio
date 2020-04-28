@@ -500,78 +500,6 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	return nil
 }
 
-// SendEvent - calls send event RPC.
-func (client *peerRESTClient) SendEvent(bucket string, targetID, remoteTargetID event.TargetID, eventData event.Event) error {
-	numTries := 10
-	for {
-		err := client.sendEvent(bucket, targetID, remoteTargetID, eventData)
-		if err == nil {
-			return nil
-		}
-		if numTries == 0 {
-			return err
-		}
-		numTries--
-		time.Sleep(5 * time.Second)
-	}
-}
-
-func (client *peerRESTClient) sendEvent(bucket string, targetID, remoteTargetID event.TargetID, eventData event.Event) error {
-	args := sendEventRequest{
-		TargetID: remoteTargetID,
-		Event:    eventData,
-	}
-
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(args)
-	if err != nil {
-		return err
-	}
-	respBody, err := client.call(peerRESTMethodSendEvent, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-
-	var eventResp sendEventResp
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&eventResp)
-
-	if err != nil || !eventResp.Success {
-		reqInfo := &logger.ReqInfo{BucketName: bucket}
-		reqInfo.AppendTags("targetID", targetID.Name)
-		reqInfo.AppendTags("event", eventData.EventName.String())
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogIf(ctx, err)
-		globalNotificationSys.RemoveRemoteTarget(bucket, targetID)
-	}
-
-	return err
-}
-
-// RemoteTargetExist - calls remote target ID exist REST API.
-func (client *peerRESTClient) RemoteTargetExist(bucket string, targetID event.TargetID) (bool, error) {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(targetID)
-	if err != nil {
-		return false, err
-	}
-
-	respBody, err := client.call(peerRESTMethodTargetExists, values, &reader, -1)
-	if err != nil {
-		return false, err
-	}
-	defer http.DrainBody(respBody)
-	var targetExists remoteTargetExistsResp
-	err = gob.NewDecoder(respBody).Decode(&targetExists)
-	return targetExists.Exists, err
-}
-
 // RemoveBucketPolicy - Remove bucket policy on the peer node.
 func (client *peerRESTClient) RemoveBucketPolicy(bucket string) error {
 	values := make(url.Values)
@@ -594,6 +522,25 @@ func (client *peerRESTClient) RemoveBucketObjectLockConfig(bucket string) error 
 	}
 	defer http.DrainBody(respBody)
 	return nil
+}
+
+// cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
+// The response will contain a bloom filter starting at index x up to, but not including index y.
+// If y is 0, the response will not update y, but return the currently recorded information
+// from the current x to y-1.
+func (client *peerRESTClient) cycleServerBloomFilter(ctx context.Context, req bloomFilterRequest) (*bloomFilterResponse, error) {
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(req)
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := client.call(peerRESTMethodCycleBloom, nil, &reader, -1)
+	if err != nil {
+		return nil, err
+	}
+	var resp bloomFilterResponse
+	defer http.DrainBody(respBody)
+	return &resp, gob.NewDecoder(respBody).Decode(&resp)
 }
 
 // SetBucketPolicy - Set bucket policy on the peer node.

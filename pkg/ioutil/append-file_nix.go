@@ -25,7 +25,7 @@ import (
 
 // AppendFile - appends the file "src" to the file "dst"
 func AppendFile(dst string, src string) error {
-	appendFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_SYNC, 0666)
+	appendFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
