@@ -64,8 +64,16 @@ func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, 
 		storageDisks = make([][]StorageAPI, len(endpointZones))
 		z            = &xlZones{zones: make([]*xlSets, len(endpointZones))}
 	)
+
+	var localDrives []string
+
 	local := endpointZones.FirstLocal()
 	for i, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				localDrives = append(localDrives, endpoint.Path)
+			}
+		}
 		storageDisks[i], formats[i], err = waitForFormatXL(local, ep.Endpoints, i+1,
 			ep.SetCount, ep.DrivesPerSet, deploymentID)
 		if err != nil {
@@ -74,14 +82,14 @@ func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, 
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-		z.zones[i], err = newXLSets(ctx, ep.Endpoints, storageDisks[i], formats[i], ep.SetCount, ep.DrivesPerSet)
+		z.zones[i], err = newXLSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
 		if err != nil {
 			return nil, err
 		}
 	}
-	if !z.SingleZone() {
-		z.quickHealBuckets(ctx)
-	}
+
+	z.quickHealBuckets(ctx)
+	go intDataUpdateTracker.start(GlobalContext, localDrives...)
 	return z, nil
 }
 
@@ -217,7 +225,7 @@ func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var wg sync.WaitGroup
@@ -257,7 +265,7 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataU
 					}
 				}()
 				// Start crawler. Blocks until done.
-				err := xl.crawlAndGetDataUsage(ctx, buckets, updates)
+				err := xl.crawlAndGetDataUsage(ctx, buckets, bf, updates)
 				if err != nil {
 					mu.Lock()
 					if firstErr == nil {

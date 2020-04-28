@@ -656,9 +656,9 @@ func getCpObjTagsFromHeader(ctx context.Context, r *http.Request, tags string) (
 		if tags := r.Header.Get(xhttp.AmzObjectTagging); tags != "" {
 			return extractTags(ctx, tags)
 		}
-		// Copy is default behavior if x-amz-tagging-directive is set, but x-amz-tagging is
-		// is not set
-		return tags, nil
+		// If x-amz-tagging-directive is explicitly set to replace and  x-amz-tagging is not set.
+		// The S3 behavior is to unset the tags.
+		return "", nil
 	}
 
 	// Copy is default behavior if x-amz-tagging-directive is not set.
@@ -1060,7 +1060,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Tagging Directive in UserDefined needs to be assigned to REPLACE
 	// for the tags to be replaced for the object that is copied.
-	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) && globalIsGateway {
+
+	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
 		srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
 	}
 

@@ -40,6 +40,10 @@ func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.R
 	return nil, errFaultyDisk
 }
 
+func (a badDisk) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
+	return nil, errFaultyDisk
+}
+
 func (a badDisk) CreateFile(volume, path string, size int64, reader io.Reader) error {
 	return errFaultyDisk
 }

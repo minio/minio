@@ -99,11 +99,14 @@ require (
 	github.com/sirupsen/logrus v1.5.0
 	github.com/smartystreets/assertions v0.0.0-20190401211740-f487f9de1cd3 // indirect
 	github.com/soheilhy/cmux v0.1.4 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/tinylib/msgp v1.1.1
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/ugorji/go v1.1.5-pre // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
+	github.com/willf/bitset v1.1.10 // indirect
+	github.com/willf/bloom v2.0.3+incompatible
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect

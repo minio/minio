@@ -117,7 +117,7 @@ func initTestXLObjLayer(ctx context.Context) (ObjectLayer, []string, error) {
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer, err := newXLSets(ctx, endpoints, storageDisks, format, 1, 16)
+	objLayer, err := newXLSets(ctx, endpoints, storageDisks, format)
 	if err != nil {
 		return nil, nil, err
 	}

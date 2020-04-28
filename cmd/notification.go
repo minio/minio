@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -30,19 +31,18 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zip"
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
-
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
-
-	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
+	"github.com/willf/bloom"
 )
 
 // NotificationSys - notification system.
@@ -433,6 +433,75 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 		}, idx, *client.host)
 	}
 	return ng.Wait()
+}
+
+// updateBloomFilter will cycle all servers to the current index and
+// return a merged bloom filter if a complete one can be retrieved.
+func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint64) (*bloomFilter, error) {
+	var req = bloomFilterRequest{
+		Current: current,
+		Oldest:  current - dataUsageUpdateDirCycles,
+	}
+	if current < dataUsageUpdateDirCycles {
+		req.Oldest = 0
+	}
+
+	// Load initial state from local...
+	var bf *bloomFilter
+	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req.Oldest, req.Current)
+	logger.LogIf(ctx, err)
+	if err == nil && bfr.Complete {
+		nbf := intDataUpdateTracker.newBloomFilter()
+		bf = &nbf
+		_, err = bf.ReadFrom(bytes.NewBuffer(bfr.Filter))
+		logger.LogIf(ctx, err)
+	}
+
+	var mu sync.Mutex
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		g.Go(func() error {
+			serverBF, err := client.cycleServerBloomFilter(ctx, req)
+			if false && intDataUpdateTracker.debug {
+				b, _ := json.MarshalIndent(serverBF, "", "  ")
+				logger.Info("Disk %v, Bloom filter: %v", client.host.Name, string(b))
+			}
+			// Keep lock while checking result.
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err != nil || !serverBF.Complete || bf == nil {
+				logger.LogIf(ctx, err)
+				bf = nil
+				return nil
+			}
+
+			var tmp bloom.BloomFilter
+			_, err = tmp.ReadFrom(bytes.NewBuffer(serverBF.Filter))
+			if err != nil {
+				logger.LogIf(ctx, err)
+				bf = nil
+				return nil
+			}
+			if bf.BloomFilter == nil {
+				bf.BloomFilter = &tmp
+			} else {
+				err = bf.Merge(&tmp)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					bf = nil
+					return nil
+				}
+			}
+			return nil
+		}, idx)
+	}
+	g.Wait()
+	return bf, nil
 }
 
 // GetLocks - makes GetLocks RPC call on all peers.

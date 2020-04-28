@@ -69,6 +69,8 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 	// Check if this request is only metadata update.
 	if cpSrcDstSame {
+		defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+
 		// Read metadata associated with the object from all disks.
 		storageDisks := xl.getDisks()
 
@@ -481,6 +483,7 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 
 // putObject wrapper for xl PutObject
 func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	defer ObjectPathUpdated(path.Join(bucket, object))
 	data := r.Reader
 
 	uniqueID := mustGetUUID()
@@ -695,6 +698,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int, isDir bool) error {
 	var disks []StorageAPI
 	var err error
+	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	tmpObj := mustGetUUID()
 	if bucket == minioMetaTmpBucket {
@@ -755,6 +759,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			if errs[idx] != nil {
 				continue
 			}
+
 			tmpObjs[idx] = mustGetUUID()
 			var err error
 			// Rename the current object while requiring
@@ -774,6 +779,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			if err != nil {
 				errs[idx] = err
 			}
+			ObjectPathUpdated(path.Join(bucket, objects[idx]))
 		}
 	}
 

@@ -476,11 +476,6 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	// So preserve it by adding "REPLACE" directive to save all the metadata set by CopyObject API.
 	srcInfo.UserDefined["x-amz-metadata-directive"] = "REPLACE"
 	srcInfo.UserDefined["x-amz-copy-source-if-match"] = srcInfo.ETag
-	_, okTag := srcInfo.UserDefined[xhttp.AmzObjectTagging]
-	if minio.IsStringEqual(srcInfo.UserDefined[xhttp.AmzTagDirective], "REPLACE") && !okTag {
-		// If replace directive is set and tags are not set tags should be unset.
-		srcInfo.UserDefined[xhttp.AmzObjectTagging] = ""
-	}
 	header := make(http.Header)
 	if srcOpts.ServerSideEncryption != nil {
 		encrypt.SSECopy(srcOpts.ServerSideEncryption).Marshal(header)
@@ -489,6 +484,7 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 	if dstOpts.ServerSideEncryption != nil {
 		dstOpts.ServerSideEncryption.Marshal(header)
 	}
+
 	for k, v := range header {
 		srcInfo.UserDefined[k] = v[0]
 	}
@@ -529,8 +525,18 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 
 // NewMultipartUpload upload object in multiple parts
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
+	var tagMap map[string]string
+	var tagObj tagging.Tagging
+	tags, ok := o.UserDefined[xhttp.AmzObjectTagging]
+	if ok {
+		delete(o.UserDefined, xhttp.AmzObjectTagging)
+		if tagObj, err = tagging.FromString(tags); err != nil {
+			return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
+		}
+		tagMap = tagging.ToMap(tagObj)
+	}
 	// Create PutObject options
-	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption}
+	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption, UserTags: tagMap}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)

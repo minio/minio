@@ -293,7 +293,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
+func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3) (*xlSets, error) {
 	endpointStrings := make([]string, len(endpoints))
 	for i, endpoint := range endpoints {
 		if endpoint.IsLocal {
@@ -302,6 +302,9 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 			endpointStrings[i] = endpoint.String()
 		}
 	}
+
+	setCount := len(format.XL.Sets)
+	drivesPerSet := len(format.XL.Sets[0])
 
 	// Initialize the XL sets instance.
 	s := &xlSets{
@@ -473,7 +476,8 @@ func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+	// Use the zone-level implementation instead.
 	return NotImplemented{}
 }
 
@@ -513,12 +517,11 @@ func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location st
 	}
 
 	errs := g.Wait()
-	// Upon even a single write quorum error we undo all previously created buckets.
+	// Upon any error we try to undo the make bucket operation if possible
+	// on all sets where it succeeded.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoMakeBucketSets(bucket, s.sets, errs)
-			}
+			undoMakeBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
@@ -689,13 +692,11 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bo
 	}
 
 	errs := g.Wait()
-	// For any write quorum failure, we undo all the delete buckets operation
-	// by creating all the buckets again.
+	// For any failure, we attempt undo all the delete buckets operation
+	// by creating buckets again on all sets which were successfully deleted.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoDeleteBucketSets(bucket, s.sets, errs)
-			}
+			undoDeleteBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
