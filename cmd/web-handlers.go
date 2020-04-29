@@ -2073,7 +2073,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	v.Set("WebIdentityToken", args.Token)
 	v.Set("Version", stsAPIVersion)
 
-	scheme := "http"
+	scheme := handlers.GetSourceScheme(r)
 	if globalIsSSL {
 		scheme = "https"
 	}
