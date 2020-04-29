@@ -35,7 +35,7 @@ const (
 type adminAPIHandlers struct{}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
-func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
+func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enableBucketQuotaOps bool) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
@@ -169,7 +169,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		}
 
 		// Quota operations
-		if enableConfigOps {
+		if enableConfigOps && enableBucketQuotaOps {
 			// GetBucketQuotaConfig
 			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
 				httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
