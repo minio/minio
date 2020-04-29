@@ -20,7 +20,8 @@ import "github.com/minio/minio/cmd/config"
 
 // Legacy envs
 const (
-	EnvAuditLoggerHTTPEndpoint = "MINIO_AUDIT_LOGGER_HTTP_ENDPOINT"
+	legacyEnvAuditLoggerHTTPEndpoint = "MINIO_AUDIT_LOGGER_HTTP_ENDPOINT"
+	legacyEnvLoggerHTTPEndpoint      = "MINIO_LOGGER_HTTP_ENDPOINT"
 )
 
 // SetLoggerHTTPAudit - helper for migrating older config to newer KV format.
