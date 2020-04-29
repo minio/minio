@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	color "github.com/minio/minio/pkg/color"
 	xnet "github.com/minio/minio/pkg/net"
@@ -131,8 +132,10 @@ func printStartupMessage(apiEndpoints []string) {
 
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
-	if globalIsSSL {
-		printCertificateMsg(globalPublicCerts)
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
+		if globalIsSSL {
+			printCertificateMsg(globalPublicCerts)
+		}
 	}
 }
 
@@ -298,25 +301,9 @@ func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	logStartupMessage(msg)
 }
 
-// Prints certificate expiry date warning
-func getCertificateChainMsg(certs []*x509.Certificate) string {
-	msg := color.Blue("\nCertificate expiry info:\n")
-	totalCerts := len(certs)
-	var expiringCerts int
-	for i := totalCerts - 1; i >= 0; i-- {
-		cert := certs[i]
-		if cert.NotAfter.Before(UTCNow().Add(globalMinioCertExpireWarnDays)) {
-			expiringCerts++
-			msg += fmt.Sprintf(color.Bold("#%d %s will expire on %s\n"), expiringCerts, cert.Subject.CommonName, cert.NotAfter)
-		}
-	}
-	if expiringCerts > 0 {
-		return msg
-	}
-	return ""
-}
-
 // Prints the certificate expiry message.
 func printCertificateMsg(certs []*x509.Certificate) {
-	logStartupMessage(getCertificateChainMsg(certs))
+	for _, cert := range certs {
+		logStartupMessage(config.CertificateText(cert))
+	}
 }
