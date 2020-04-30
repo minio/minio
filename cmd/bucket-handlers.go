@@ -43,6 +43,13 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+const (
+	getBucketVersioningResponse       = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
+	objectLockConfig                  = "object-lock.xml"
+	bucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
+	bucketObjectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
+)
+
 // Check if there are buckets on server without corresponding entry in etcd backend and
 // make entries. Here is the general flow
 // - Range over all the available buckets
@@ -291,9 +298,6 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			switch err {
 			case nil:
 				bucketsInfo[i].Created = meta.Created
-			case errMetaDataConverted:
-				meta.Created = bucketsInfo[i].Created
-				logger.LogIf(ctx, meta.save(ctx, objectAPI))
 			default:
 				logger.LogIf(ctx, err)
 			}
@@ -538,16 +542,12 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 
-				meta := newBucketMetadata(bucket)
 				if objectLockEnabled {
-					meta.LockConfig = []byte(bucketObjectLockEnabledConfig)
-					// FIXME(bala): Not present in current code. Should it be here?
-					// globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
-					// globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
-				}
-				if err := meta.save(ctx, objectAPI); err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
+					configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
+					if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
+						writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+						return
+					}
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
@@ -588,14 +588,18 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	if !globalIsGateway {
 		meta := newBucketMetadata(bucket)
-		if objectLockEnabled {
-			meta.LockConfig = []byte(bucketObjectLockEnabledConfig)
-			globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
-			globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
-		}
 		if err := meta.save(ctx, objectAPI); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
+		}
+		if objectLockEnabled {
+			configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
+			if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
+			globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
+			globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
 		}
 	}
 
@@ -954,6 +958,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
+
 	// Delete metadata, only log errors.
 	logger.LogIf(ctx, newBucketMetadata(bucket).delete(ctx, objectAPI))
 
@@ -1047,17 +1052,28 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
-	meta, err := loadBucketMetadata(ctx, objectAPI, bucket)
+	configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
+	configData, err := readConfig(ctx, objectAPI, configFile)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		aerr := toAPIError(ctx, err)
+		if err == errConfigNotFound {
+			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed)
+		}
+		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
+		return
 	}
-	meta.LockConfig, err = xml.Marshal(config)
+
+	if string(configData) != bucketObjectLockEnabledConfig {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	data, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	err = meta.save(ctx, objectAPI)
-	if err != nil {
+	configFile = path.Join(bucketConfigPrefix, bucket, objectLockConfig)
+	if err = saveConfig(ctx, objectAPI, configFile, data); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1097,11 +1113,38 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	meta, _ := loadBucketMetadata(ctx, objectAPI, bucket)
-	if len(meta.LockConfig) == 0 {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrObjectLockConfigurationNotFound), r.URL, guessIsBrowserReq(r))
+	configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
+	configData, err := readConfig(ctx, objectAPI, configFile)
+	if err != nil {
+		var aerr APIError
+		if err == errConfigNotFound {
+			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotFound)
+		} else {
+			aerr = toAPIError(ctx, err)
+		}
+		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if string(configData) != bucketObjectLockEnabledConfig {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configFile = path.Join(bucketConfigPrefix, bucket, objectLockConfig)
+	configData, err = readConfig(ctx, objectAPI, configFile)
+	if err != nil {
+		if err != errConfigNotFound {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if configData, err = xml.Marshal(objectlock.NewObjectLockConfig()); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	// Write success response.
-	writeSuccessResponseXML(w, meta.LockConfig)
+	writeSuccessResponseXML(w, configData)
 }
