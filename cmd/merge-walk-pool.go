@@ -39,9 +39,9 @@ type mergeWalk struct {
 // mergeWalkPool's purpose is to maintain active mergeWalk go-routines in a map so that
 // it can be looked up across related list calls.
 type MergeWalkPool struct {
+	sync.Mutex
 	pool    map[listParams][]mergeWalk
 	timeOut time.Duration
-	lock    *sync.Mutex
 }
 
 // NewMergeWalkPool - initialize new tree walk pool.
@@ -49,7 +49,6 @@ func NewMergeWalkPool(timeout time.Duration) *MergeWalkPool {
 	tPool := &MergeWalkPool{
 		pool:    make(map[listParams][]mergeWalk),
 		timeOut: timeout,
-		lock:    &sync.Mutex{},
 	}
 	return tPool
 }
@@ -58,9 +57,9 @@ func NewMergeWalkPool(timeout time.Duration) *MergeWalkPool {
 // listParams, removes it from the pool, and returns the MergeWalkResult
 // channel.
 // Returns nil if listParams does not have an asccociated mergeWalk.
-func (t MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{}) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (t *MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{}) {
+	t.Lock()
+	defer t.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
 	if ok {
 		if len(walks) > 0 {
@@ -88,9 +87,9 @@ func (t MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{}) 
 // 2) Relase() signals the timer go-routine to end on endTimerCh.
 //    During listing the timer should not timeout and end the mergeWalk go-routine, hence the
 //    timer go-routine should be ended.
-func (t MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh chan struct{}) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (t *MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh chan struct{}) {
+	t.Lock()
+	defer t.Unlock()
 
 	// Should be a buffered channel so that Release() never blocks.
 	endTimerCh := make(chan struct{}, 1)
@@ -111,7 +110,7 @@ func (t MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh 
 		case <-time.After(t.timeOut):
 			// Timeout has expired. Remove the mergeWalk from mergeWalkPool and
 			// end the mergeWalk go-routine.
-			t.lock.Lock()
+			t.Lock()
 			walks, ok := t.pool[params]
 			if ok {
 				// Trick of filtering without allocating
@@ -135,7 +134,7 @@ func (t MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh 
 			}
 			// Signal the mergeWalk go-routine to die.
 			close(endWalkCh)
-			t.lock.Unlock()
+			t.Unlock()
 		case <-endTimerCh:
 			return
 		}

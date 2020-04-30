@@ -78,7 +78,7 @@ func TestGetCachedLoc(t *testing.T) {
 		// find cache drive where object would be hashed
 		index := c.hashIndex(bucketName, objectName)
 		// turn off drive by setting online status to false
-		c.cache[index].online = false
+		c.cache[index].setOffline()
 		cfs, err := c.getCacheLoc(bucketName, objectName)
 		if n == 1 && err == errDiskNotFound {
 			continue
@@ -118,7 +118,7 @@ func TestGetCacheMaxUse(t *testing.T) {
 		// find cache drive where object would be hashed
 		index := c.hashIndex(bucketName, objectName)
 		// turn off drive by setting online status to false
-		c.cache[index].online = false
+		c.cache[index].setOffline()
 		cb, err := c.getCacheLoc(bucketName, objectName)
 		if n == 1 && err == errDiskNotFound {
 			continue

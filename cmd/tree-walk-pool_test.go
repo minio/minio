@@ -80,22 +80,22 @@ func TestManyWalksSameParam(t *testing.T) {
 			tw.Set(params, resultCh, endWalkCh)
 		}
 
-		tw.lock.Lock()
+		tw.Lock()
 		if walks, ok := tw.pool[params]; ok {
 			if len(walks) != 10 {
 				t.Error("There aren't as many walks as were Set")
 			}
 		}
-		tw.lock.Unlock()
+		tw.Unlock()
 		for i := 0; i < 10; i++ {
-			tw.lock.Lock()
+			tw.Lock()
 			if walks, ok := tw.pool[params]; ok {
 				// Before ith Release we should have 10-i treeWalk go-routines.
 				if 10-i != len(walks) {
 					t.Error("There aren't as many walks as were Set")
 				}
 			}
-			tw.lock.Unlock()
+			tw.Unlock()
 			tw.Release(params)
 		}
 	}

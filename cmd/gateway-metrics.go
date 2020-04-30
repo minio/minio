@@ -18,57 +18,56 @@ package cmd
 
 import (
 	"net/http"
-
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
 
 // RequestStats - counts for Get and Head requests
 type RequestStats struct {
-	Get  atomic.Uint64 `json:"Get"`
-	Head atomic.Uint64 `json:"Head"`
-	Put  atomic.Uint64 `json:"Put"`
-	Post atomic.Uint64 `json:"Post"`
+	Get  uint64 `json:"Get"`
+	Head uint64 `json:"Head"`
+	Put  uint64 `json:"Put"`
+	Post uint64 `json:"Post"`
 }
 
 // Metrics - represents bytes served from backend
 // only implemented for S3 Gateway
 type Metrics struct {
-	bytesReceived atomic.Uint64
-	bytesSent     atomic.Uint64
+	bytesReceived uint64
+	bytesSent     uint64
 	requestStats  RequestStats
 }
 
 // IncBytesReceived - Increase total bytes received from gateway backend
 func (s *Metrics) IncBytesReceived(n uint64) {
-	s.bytesReceived.Add(n)
+	atomic.AddUint64(&s.bytesReceived, n)
 }
 
 // GetBytesReceived - Get total bytes received from gateway backend
 func (s *Metrics) GetBytesReceived() uint64 {
-	return s.bytesReceived.Load()
+	return atomic.LoadUint64(&s.bytesReceived)
 }
 
 // IncBytesSent - Increase total bytes sent to gateway backend
 func (s *Metrics) IncBytesSent(n uint64) {
-	s.bytesSent.Add(n)
+	atomic.AddUint64(&s.bytesSent, n)
 }
 
 // GetBytesSent - Get total bytes received from gateway backend
 func (s *Metrics) GetBytesSent() uint64 {
-	return s.bytesSent.Load()
+	return atomic.LoadUint64(&s.bytesSent)
 }
 
 // IncRequests - Increase request count sent to gateway backend by 1
 func (s *Metrics) IncRequests(method string) {
 	// Only increment for Head & Get requests, else no op
 	if method == http.MethodGet {
-		s.requestStats.Get.Add(1)
+		atomic.AddUint64(&s.requestStats.Get, 1)
 	} else if method == http.MethodHead {
-		s.requestStats.Head.Add(1)
+		atomic.AddUint64(&s.requestStats.Head, 1)
 	} else if method == http.MethodPut {
-		s.requestStats.Put.Add(1)
+		atomic.AddUint64(&s.requestStats.Put, 1)
 	} else if method == http.MethodPost {
-		s.requestStats.Post.Add(1)
+		atomic.AddUint64(&s.requestStats.Post, 1)
 	}
 }
 
