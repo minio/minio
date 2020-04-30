@@ -48,6 +48,7 @@ func newBgHealSequence(numDisks int) *healSequence {
 
 	return &healSequence{
 		sourceCh:    make(chan healSource),
+		respCh:      make(chan healResult),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		settings:    hs,
@@ -125,7 +126,7 @@ func deepHealObject(objectPath string) {
 
 	bgSeq.sourceCh <- healSource{
 		path: objectPath,
-		opts: &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+		opts: madmin.HealOpts{ScanMode: madmin.HealDeepScan},
 	}
 }
 

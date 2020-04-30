@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"path"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -89,10 +88,10 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			case bucket != "" && object != "":
 				res, err = objAPI.HealObject(ctx, bucket, object, task.opts)
 			}
-			ObjectPathUpdated(path.Join(bucket, object))
-			if task.responseCh != nil {
-				task.responseCh <- healResult{result: res, err: err}
+			if task.path != slashSeparator && task.path != nopHeal {
+				ObjectPathUpdated(task.path)
 			}
+			task.responseCh <- healResult{result: res, err: err}
 		case <-h.doneCh:
 			return
 		case <-ctx.Done():
