@@ -26,16 +26,17 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger/message/audit"
-
-	stats "github.com/minio/minio/cmd/http/stats"
 )
 
 // ResponseWriter - is a wrapper to trap the http response status code.
 type ResponseWriter struct {
 	http.ResponseWriter
 	StatusCode int
-	// Response body should be logged
-	LogBody         bool
+	// Log body of 4xx or 5xx responses
+	LogErrBody bool
+	// Log body of all responses
+	LogAllBody bool
+
 	TimeToFirstByte time.Duration
 	StartTime       time.Time
 	// number of bytes written
@@ -69,7 +70,7 @@ func (lrw *ResponseWriter) Write(p []byte) (int, error) {
 		lrw.writeHeaders(&lrw.headers, http.StatusOK, lrw.Header())
 		lrw.headersLogged = true
 	}
-	if lrw.StatusCode >= http.StatusBadRequest || lrw.LogBody {
+	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
 		// Always logging error responses.
 		lrw.body.Write(p)
 	}
@@ -96,7 +97,7 @@ var BodyPlaceHolder = []byte("<BODY>")
 func (lrw *ResponseWriter) Body() []byte {
 	// If there was an error response or body logging is enabled
 	// then we return the body contents
-	if lrw.StatusCode >= http.StatusBadRequest || lrw.LogBody {
+	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
 		return lrw.body.Bytes()
 	}
 	// ... otherwise we return the <BODY> place holder
@@ -145,11 +146,11 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 		timeToFirstByte time.Duration
 	)
 
-	st, ok := w.(*stats.RecordAPIStats)
+	st, ok := w.(*ResponseWriter)
 	if ok {
-		statusCode = st.RespStatusCode
+		statusCode = st.StatusCode
 		timeToResponse = time.Now().UTC().Sub(st.StartTime)
-		timeToFirstByte = st.TTFB
+		timeToFirstByte = st.TimeToFirstByte
 	}
 
 	vars := mux.Vars(r)

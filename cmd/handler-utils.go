@@ -36,8 +36,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
-
-	stats "github.com/minio/minio/cmd/http/stats"
 )
 
 const (
@@ -366,7 +364,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		statsWriter := stats.NewRecordAPIStats(w)
+		statsWriter := logger.NewResponseWriter(w)
 
 		f.ServeHTTP(statsWriter, r)
 

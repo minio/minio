@@ -19,7 +19,6 @@ package stats
 import (
 	"io"
 	"net/http"
-	"time"
 )
 
 // IncomingTrafficMeter counts the incoming bytes from the underlying request.Body.
@@ -62,46 +61,4 @@ func (w *OutgoingTrafficMeter) Flush() {
 // BytesCount returns the number of transferred bytes
 func (w OutgoingTrafficMeter) BytesCount() int {
 	return w.countBytes
-}
-
-// RecordAPIStats is a response writer which stores
-// information of the underlying http response.
-type RecordAPIStats struct {
-	http.ResponseWriter
-	TTFB           time.Duration // TimeToFirstByte.
-	StartTime      time.Time
-	RespStatusCode int
-
-	firstByteRead bool
-}
-
-// NewRecordAPIStats creates a new response writer with
-// start time set to the function call time.
-func NewRecordAPIStats(w http.ResponseWriter) *RecordAPIStats {
-	return &RecordAPIStats{
-		ResponseWriter: w,
-		StartTime:      time.Now().UTC(),
-	}
-}
-
-// WriteHeader calls the underlying WriteHeader
-// and records the response status code.
-func (r *RecordAPIStats) WriteHeader(i int) {
-	r.RespStatusCode = i
-	r.ResponseWriter.WriteHeader(i)
-}
-
-// Write calls the underlying Write and updates TTFB and other info
-func (r *RecordAPIStats) Write(p []byte) (n int, err error) {
-	if !r.firstByteRead {
-		r.TTFB = time.Now().UTC().Sub(r.StartTime)
-		r.firstByteRead = true
-	}
-	n, err = r.ResponseWriter.Write(p)
-	return
-}
-
-// Flush calls the underlying Flush.
-func (r *RecordAPIStats) Flush() {
-	r.ResponseWriter.(http.Flusher).Flush()
 }

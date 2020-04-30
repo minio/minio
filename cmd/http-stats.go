@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	stats "github.com/minio/minio/cmd/http/stats"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )
@@ -167,13 +167,13 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(api string, r *http.Request, w *stats.RecordAPIStats, durationSecs float64) {
+func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter, durationSecs float64) {
 	// A successful request has a 2xx response code
-	successReq := (w.RespStatusCode >= 200 && w.RespStatusCode < 300)
+	successReq := (w.StatusCode >= 200 && w.StatusCode < 300)
 
 	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPath) {
 		st.totalS3Requests.Inc(api)
-		if !successReq && w.RespStatusCode != 0 {
+		if !successReq && w.StatusCode != 0 {
 			st.totalS3Errors.Inc(api)
 		}
 	}
