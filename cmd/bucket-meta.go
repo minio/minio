@@ -1,26 +1,33 @@
+/*
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package cmd
 
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"path"
 	"time"
-
-	"github.com/minio/minio/cmd/logger"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 )
 
 const (
-	getBucketVersioningResponse   = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
-	bucketObjectLockEnabledConfig = `{"x-amz-bucket-object-lock-enabled":true}`
-	bucketMetadataFile            = ".metadata"
-	bucketMetadataFormat          = 1
-	bucketMetadataVersion         = 1
-
-	legacyObjectLockConfig                  = "object-lock.xml"
-	legacyBucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
+	bucketMetadataFile    = ".metadata"
+	bucketMetadataFormat  = 1
+	bucketMetadataVersion = 1
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -31,9 +38,8 @@ const (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type bucketMetadata struct {
-	Name       string
-	Created    time.Time
-	LockConfig []byte
+	Name    string
+	Created time.Time
 }
 
 // newBucketMetadata creates bucketMetadata with the supplied name and Created to Now.
@@ -44,8 +50,6 @@ func newBucketMetadata(name string) bucketMetadata {
 	}
 }
 
-var errMetaDataConverted = errors.New("metadata converted")
-
 // loadBucketMetadata loads the metadata of bucket by name from ObjectLayer o.
 // If an error is returned the returned metadata will be default initialized.
 func loadBucketMetadata(ctx context.Context, o ObjectLayer, name string) (bucketMetadata, error) {
@@ -53,16 +57,6 @@ func loadBucketMetadata(ctx context.Context, o ObjectLayer, name string) (bucket
 	configFile := path.Join(bucketConfigPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, o, configFile)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			// If not found, it may not have been converted.
-			// Try to do so.
-			b.loadLegacyObjectLock(ctx, o)
-			err = b.save(ctx, o)
-			if err != nil {
-				return b, err
-			}
-			return b, errMetaDataConverted
-		}
 		return b, err
 	}
 	if len(data) <= 4 {
@@ -111,25 +105,4 @@ func (b bucketMetadata) delete(ctx context.Context, o ObjectLayer) error {
 		err = nil
 	}
 	return err
-}
-
-// loadLegacyObjectLock will attempt to load legacy object lock to embed it into bucketMetadata.
-func (b *bucketMetadata) loadLegacyObjectLock(ctx context.Context, o ObjectLayer) {
-	configFile := path.Join(bucketConfigPrefix, b.Name, legacyBucketObjectLockEnabledConfigFile)
-	bucketObjLockData, err := readConfig(ctx, o, configFile)
-	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			return
-		}
-		return
-	}
-
-	if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
-		// this should never happen
-		logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
-		return
-	}
-
-	configFile = path.Join(bucketConfigPrefix, b.Name, legacyObjectLockConfig)
-	b.LockConfig, _ = readConfig(ctx, o, configFile)
 }
