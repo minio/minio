@@ -19,10 +19,8 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"math"
 	"net/http"
-	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -376,40 +374,25 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
-		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
-			return err
+		meta, err := loadBucketMetadata(ctx, objAPI, bucket.Name)
+		switch err {
+		case errMetaDataConverted:
+			// Transfer from listing..
+			meta.Created = bucket.Created
+			logger.LogIf(ctx, meta.save(ctx, objAPI))
+		default:
+			logger.LogIf(ctx, err)
+		case nil:
 		}
-
-		if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
-			// this should never happen
-			logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
-			continue
+		// If no config, don't add.
+		if len(meta.LockConfig) == 0 {
+			return nil
 		}
-
-		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
-		configData, err := readConfig(ctx, objAPI, configFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
-				continue
-			}
-			return err
-		}
-
-		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
+		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(meta.LockConfig))
 		if err != nil {
 			return err
 		}
-		retention := objectlock.Retention{}
-		if config.Rule != nil {
-			retention = config.ToRetention()
-		}
-		globalBucketObjectLockConfig.Set(bucket.Name, retention)
+		globalBucketObjectLockConfig.Set(bucket.Name, config.ToRetention())
 	}
 	return nil
 }
