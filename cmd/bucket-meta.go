@@ -22,10 +22,15 @@ import (
 	"fmt"
 	"path"
 	"time"
+
+	"github.com/minio/minio/cmd/logger"
 )
 
 const (
-	bucketMetadataFile    = ".metadata"
+	legacyBucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
+	legacyBucketObjectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
+
+	bucketMetadataFile    = ".metadata.bin"
 	bucketMetadataFormat  = 1
 	bucketMetadataVersion = 1
 )
@@ -38,22 +43,24 @@ const (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type bucketMetadata struct {
-	Name    string
-	Created time.Time
+	Name        string
+	Created     time.Time
+	LockEnabled bool
 }
 
 // newBucketMetadata creates bucketMetadata with the supplied name and Created to Now.
-func newBucketMetadata(name string) bucketMetadata {
+func newBucketMetadata(name string, lockEnabled bool) bucketMetadata {
 	return bucketMetadata{
-		Name:    name,
-		Created: UTCNow(),
+		Name:        name,
+		Created:     UTCNow(),
+		LockEnabled: lockEnabled,
 	}
 }
 
-// loadBucketMetadata loads the metadata of bucket by name from ObjectLayer o.
+// loadBucketMeta loads the metadata of bucket by name from ObjectLayer o.
 // If an error is returned the returned metadata will be default initialized.
-func loadBucketMetadata(ctx context.Context, o ObjectLayer, name string) (bucketMetadata, error) {
-	b := newBucketMetadata(name)
+func loadBucketMeta(ctx context.Context, o ObjectLayer, name string) (bucketMetadata, error) {
+	b := newBucketMetadata(name, false)
 	configFile := path.Join(bucketConfigPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, o, configFile)
 	if err != nil {
@@ -77,6 +84,48 @@ func loadBucketMetadata(ctx context.Context, o ObjectLayer, name string) (bucket
 	// OK, parse data.
 	_, err = b.UnmarshalMsg(data[4:])
 	return b, err
+}
+
+// loadBucketMetadata loads and migrates to bucket metadata.
+func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket string) (bucketMetadata, error) {
+	meta, err := loadBucketMeta(ctx, objectAPI, bucket)
+	if err == nil {
+		return meta, nil
+	}
+
+	if err != errConfigNotFound {
+		return meta, err
+	}
+
+	// Control here means old bucket without bucket metadata. Hence we migrate existing settings.
+	configFile := path.Join(bucketConfigPrefix, bucket, legacyBucketObjectLockEnabledConfigFile)
+
+	save := func() error {
+		if err := meta.save(ctx, objectAPI); err != nil {
+			return err
+		}
+
+		logger.LogIf(ctx, deleteConfig(ctx, objectAPI, configFile))
+		return nil
+	}
+
+	configData, err := readConfig(ctx, objectAPI, configFile)
+	if err != nil {
+		if err != errConfigNotFound {
+			return meta, err
+		}
+
+		err = save()
+		return meta, err
+	}
+
+	if string(configData) != legacyBucketObjectLockEnabledConfig {
+		return meta, fmt.Errorf("content mismatch in config file %v", configFile)
+	}
+
+	meta.LockEnabled = true
+	err = save()
+	return meta, err
 }
 
 // save config to supplied ObjectLayer o.
