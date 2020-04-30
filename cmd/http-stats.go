@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	stats "github.com/minio/minio/cmd/http/stats"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )
@@ -166,18 +167,18 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(api string, r *http.Request, w *recordAPIStats, durationSecs float64) {
+func (st *HTTPStats) updateStats(api string, r *http.Request, w *stats.RecordAPIStats, durationSecs float64) {
 	// A successful request has a 2xx response code
-	successReq := (w.respStatusCode >= 200 && w.respStatusCode < 300)
+	successReq := (w.RespStatusCode >= 200 && w.RespStatusCode < 300)
 
-	if w.isS3Request && !strings.HasSuffix(r.URL.Path, prometheusMetricsPath) {
+	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPath) {
 		st.totalS3Requests.Inc(api)
-		if !successReq && w.respStatusCode != 0 {
+		if !successReq && w.RespStatusCode != 0 {
 			st.totalS3Errors.Inc(api)
 		}
 	}
 
-	if w.isS3Request && r.Method == "GET" {
+	if r.Method == "GET" {
 		// Increment the prometheus http request response histogram with appropriate label
 		httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
 	}
