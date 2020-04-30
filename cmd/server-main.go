@@ -275,6 +275,10 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
+	// Initialize bucket quota system.
+	if err = initBucketQuotaSys(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
+	}
 
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
@@ -308,6 +312,7 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 
 	initDataUsageStats(ctx, objAPI)
 	initDailyLifecycle(ctx, objAPI)
+	initQuotaEnforcement(ctx, objAPI)
 }
 
 // serverMain handler called for 'minio server' command.
@@ -384,7 +389,8 @@ func serverMain(ctx *cli.Context) {
 
 	// Configure server.
 	var handler http.Handler
-	handler, err = configureServerHandler(globalEndpoints)
+	enableBucketQuotaOps := env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn
+	handler, err = configureServerHandler(globalEndpoints, enableBucketQuotaOps)
 	if err != nil {
 		logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}

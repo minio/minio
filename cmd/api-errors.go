@@ -235,6 +235,10 @@ const (
 	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	// Bucket Quota error codes
+	ErrAdminBucketQuotaExceeded
+	ErrAdminNoSuchQuotaConfiguration
+	ErrAdminBucketQuotaDisabled
 
 	ErrHealNotImplemented
 	ErrHealNoSuchProcess
@@ -1089,6 +1093,21 @@ var errorCodes = errorCodeMap{
 		Description:    "Credentials in config mismatch with server environment variables",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrAdminBucketQuotaExceeded: {
+		Code:           "XMinioAdminBucketQuotaExceeded",
+		Description:    "Bucket quota exceeded",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminNoSuchQuotaConfiguration: {
+		Code:           "XMinioAdminNoSuchQuotaConfiguration",
+		Description:    "The quota configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrAdminBucketQuotaDisabled: {
+		Code:           "XMinioAdminBucketQuotaDisabled",
+		Description:    "Quota specified but disk usage crawl is disabled on MinIO server",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
@@ -1783,6 +1802,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchLifecycleConfiguration
 	case BucketSSEConfigNotFound:
 		apiErr = ErrNoSuchBucketSSEConfig
+	case BucketQuotaConfigNotFound:
+		apiErr = ErrAdminNoSuchQuotaConfiguration
+	case BucketQuotaExceeded:
+		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:

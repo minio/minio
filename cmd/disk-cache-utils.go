@@ -285,7 +285,7 @@ func isMetadataSame(m1, m2 map[string]string) bool {
 }
 
 type fileScorer struct {
-	saveBytes int64
+	saveBytes uint64
 	now       int64
 	maxHits   int
 	// 1/size for consistent score.
@@ -294,21 +294,21 @@ type fileScorer struct {
 	// queue is a linked list of files we want to delete.
 	// The list is kept sorted according to score, highest at top, lowest at bottom.
 	queue       list.List
-	queuedBytes int64
+	queuedBytes uint64
 }
 
 type queuedFile struct {
 	name  string
-	size  int64
+	size  uint64
 	score float64
 }
 
 // newFileScorer allows to collect files to save a specific number of bytes.
 // Each file is assigned a score based on its age, size and number of hits.
 // A list of files is maintained
-func newFileScorer(saveBytes int64, now int64, maxHits int) (*fileScorer, error) {
-	if saveBytes <= 0 {
-		return nil, errors.New("newFileScorer: saveBytes <= 0")
+func newFileScorer(saveBytes uint64, now int64, maxHits int) (*fileScorer, error) {
+	if saveBytes == 0 {
+		return nil, errors.New("newFileScorer: saveBytes = 0")
 	}
 	if now < 0 {
 		return nil, errors.New("newFileScorer: now < 0")
@@ -325,7 +325,7 @@ func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits
 	// Calculate how much we want to delete this object.
 	file := queuedFile{
 		name: name,
-		size: size,
+		size: uint64(size),
 	}
 	score := float64(f.now - lastAccess.Unix())
 	// Size as fraction of how much we want to save, 0->1.
@@ -353,7 +353,11 @@ func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits
 // Returns true if there still is a need to delete files (saveBytes >0),
 // false if no more bytes needs to be saved.
 func (f *fileScorer) adjustSaveBytes(n int64) bool {
-	f.saveBytes += n
+	if n < 0 {
+		f.saveBytes -= ^uint64(n - 1)
+	} else {
+		f.saveBytes += uint64(n)
+	}
 	if f.saveBytes <= 0 {
 		f.queue.Init()
 		f.saveBytes = 0

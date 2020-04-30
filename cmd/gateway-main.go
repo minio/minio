@@ -176,10 +176,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	enableIAMOps := globalEtcdClient != nil
+	enableBucketQuotaOps := env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
-	registerAdminRouter(router, enableConfigOps, enableIAMOps)
+	registerAdminRouter(router, enableConfigOps, enableIAMOps, enableBucketQuotaOps)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)

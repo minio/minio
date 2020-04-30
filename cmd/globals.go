@@ -36,6 +36,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
@@ -216,6 +217,9 @@ var (
 	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
 
 	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
+
+	globalBucketQuotaSys     = NewBucketQuotaSys()
+	globalBucketStorageCache bucketStorageCache
 
 	// Disk cache drives
 	globalCacheConfig cache.Config

@@ -599,6 +599,7 @@ func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Requ
 	globalNotificationSys.RemoveNotification(bucketName)
 	globalPolicySys.Remove(bucketName)
 	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketQuotaSys.Remove(bucketName)
 	globalLifecycleSys.Remove(bucketName)
 
 	w.(http.Flusher).Flush()
@@ -872,6 +873,54 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 	}
 
 	globalBucketObjectLockConfig.Set(bucketName, retention)
+	w.(http.Flusher).Flush()
+}
+
+// PutBucketQuotaConfigHandler - handles PUT bucket quota configuration.
+func (s *peerRESTServer) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+
+	var quota madmin.BucketQuota
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
+	}
+
+	err := gob.NewDecoder(r.Body).Decode(&quota)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	globalBucketQuotaSys.Set(bucketName, quota)
+	w.(http.Flusher).Flush()
+}
+
+// RemoveBucketQuotaConfigHandler - handles DELETE bucket quota configuration.
+func (s *peerRESTServer) RemoveBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucketName := vars[peerRESTBucket]
+	if bucketName == "" {
+		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
+		return
+	}
+
+	globalBucketQuotaSys.Remove(bucketName)
 	w.(http.Flusher).Flush()
 }
 
@@ -1181,4 +1230,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodPutBucketObjectLockConfig).HandlerFunc(httpTraceHdrs(server.PutBucketObjectLockConfigHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketObjectLockConfigRemove).HandlerFunc(httpTraceHdrs(server.RemoveBucketObjectLockConfigHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodPutBucketQuotaConfig).HandlerFunc(httpTraceHdrs(server.PutBucketQuotaConfigHandler)).Queries(restQueries(peerRESTBucket)...)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBucketQuotaConfigRemove).HandlerFunc(httpTraceHdrs(server.RemoveBucketQuotaConfigHandler)).Queries(restQueries(peerRESTBucket)...)
 }

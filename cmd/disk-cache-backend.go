@@ -245,7 +245,7 @@ func (c *diskCache) purge(ctx context.Context) {
 	// need to be cleaned up.
 	expiry := UTCNow().Add(-cacheExpiryDays)
 	// defaulting max hits count to 100
-	scorer, err := newFileScorer(int64(toFree), time.Now().Unix(), 100)
+	scorer, err := newFileScorer(toFree, time.Now().Unix(), 100)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return
