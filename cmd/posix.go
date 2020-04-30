@@ -175,7 +175,7 @@ func getValidPath(path string) (string, error) {
 	var rnd [8]byte
 	_, _ = rand.Read(rnd[:])
 	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
-	file, err := os.Create(fn)
+	file, err := disk.OpenFileDirectIO(fn, os.O_CREATE, 0600)
 	if err != nil {
 		return path, err
 	}

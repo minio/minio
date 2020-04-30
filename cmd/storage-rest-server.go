@@ -747,7 +747,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 				}
 				hint := fmt.Sprintf("Run the following command to add the convenient permissions: `sudo chown %s %s && sudo chmod u+rxw %s`",
 					username, endpoint.Path, endpoint.Path)
-				logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint),
+				logger.Fatal(config.ErrUnableToWriteInBackend(err).Msg(err.Error()).Hint(hint),
 					"Unable to initialize posix backend")
 			}
 
