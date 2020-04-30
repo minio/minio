@@ -18,13 +18,17 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"testing"
 )
 
 // Tests for if parent directory is object
 func TestXLParentDirIsObject(t *testing.T) {
-	obj, fsDisks, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDisks, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Unable to initialize 'XL' object layer.")
 	}

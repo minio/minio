@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/config/etcd"
@@ -48,6 +49,7 @@ func initHelp() {
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
 		config.PolicyOPASubSys:      opa.DefaultKVS,
 		config.RegionSubSys:         config.DefaultRegionKVS,
+		config.APISubSys:            api.DefaultKVS,
 		config.CredentialsSubSys:    config.DefaultCredentialKVS,
 		config.KmsVaultSubSys:       crypto.DefaultVaultKVS,
 		config.KmsKesSubSys:         crypto.DefaultKesKVS,
@@ -99,6 +101,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.KmsKesSubSys,
 			Description: "enable external MinIO key encryption service",
+		},
+		config.HelpKV{
+			Key:         config.APISubSys,
+			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -174,6 +180,7 @@ func initHelp() {
 	var helpMap = map[string]config.HelpKVS{
 		"":                          helpSubSys, // Help for all sub-systems.
 		config.RegionSubSys:         config.RegionHelp,
+		config.APISubSys:            api.Help,
 		config.StorageClassSubSys:   storageclass.Help,
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
@@ -218,6 +225,10 @@ func validateConfig(s config.Config) error {
 	}
 
 	if _, err := config.LookupRegion(s[config.RegionSubSys][config.Default]); err != nil {
+		return err
+	}
+
+	if _, err := api.LookupConfig(s[config.APISubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -296,7 +307,7 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, NewGatewayHTTPTransport(),
+	return notify.TestNotificationTargets(s, GlobalContext.Done(), NewGatewayHTTPTransport(),
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
@@ -348,6 +359,18 @@ func lookupConfigs(s config.Config) {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Invalid region configuration: %w", err))
 	}
+
+	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
+	}
+
+	apiRequestsMax := apiConfig.APIRequestsMax
+	if len(globalEndpoints.Hosts()) > 0 {
+		apiRequestsMax /= len(globalEndpoints.Hosts())
+	}
+
+	globalAPIThrottling.init(apiRequestsMax, apiConfig.APIRequestsDeadline)
 
 	if globalIsXL {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
@@ -446,12 +469,12 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalServiceDoneCh, NewGatewayHTTPTransport())
+	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalContext.Done(), NewGatewayHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalServiceDoneCh, NewGatewayHTTPTransport())
+	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalContext.Done(), NewGatewayHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}

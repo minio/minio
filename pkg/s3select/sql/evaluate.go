@@ -250,6 +250,9 @@ func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
 	// Compare two values in terms of in-ness.
 	var cmp func(a, b Value) bool
 	cmp = func(a, b Value) bool {
+		// Convert if needed.
+		inferTypesForCmp(&a, &b)
+
 		if a.Equals(b) {
 			return true
 		}
@@ -272,7 +275,6 @@ func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
 		aF, aOK := a.ToFloat()
 		bF, bOK := b.ToFloat()
 
-		// FIXME: more type inference?
 		return aOK && bOK && aF == bF
 	}
 

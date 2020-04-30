@@ -60,6 +60,11 @@ func (rulesMap RulesMap) Remove(rulesMap2 RulesMap) {
 	}
 }
 
+// MatchSimple - returns true if matching object name and event name in rules map.
+func (rulesMap RulesMap) MatchSimple(eventName Name, objectName string) bool {
+	return rulesMap[eventName].MatchSimple(objectName)
+}
+
 // Match - returns TargetIDSet matching object name and event name in rules map.
 func (rulesMap RulesMap) Match(eventName Name, objectName string) TargetIDSet {
 	return rulesMap[eventName].Match(objectName)

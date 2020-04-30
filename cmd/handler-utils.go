@@ -36,6 +36,8 @@ import (
 	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
+
+	stats "github.com/minio/minio/cmd/http/stats"
 )
 
 const (
@@ -359,63 +361,21 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// maxClients throttles the S3 API calls
-func maxClients(f http.HandlerFunc, enabled bool, requestsMaxCh chan struct{}, requestsDeadline time.Duration) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if !enabled {
-			f.ServeHTTP(w, r)
-			return
-		}
-
-		select {
-		case requestsMaxCh <- struct{}{}:
-			defer func() { <-requestsMaxCh }()
-			f.ServeHTTP(w, r)
-		case <-time.NewTimer(requestsDeadline).C:
-
-			// Send a http timeout message
-			writeErrorResponse(r.Context(), w,
-				errorCodes.ToAPIErr(ErrOperationMaxedOut),
-				r.URL, guessIsBrowserReq(r))
-			return
-		case <-r.Context().Done():
-			return
-		}
-	}
-}
-
 func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		globalHTTPStats.currentS3Requests.Inc(api)
+		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
+		statsWriter := stats.NewRecordAPIStats(w)
 
-		// Time start before the call is about to start.
-		tBefore := UTCNow()
-
-		apiStatsWriter := &recordAPIStats{ResponseWriter: w, TTFB: tBefore, isS3Request: isS3Request}
-
-		if isS3Request {
-			globalHTTPStats.currentS3Requests.Inc(api)
-		}
-
-		// Execute the request
-		f.ServeHTTP(apiStatsWriter, r)
-
-		if isS3Request {
-			globalHTTPStats.currentS3Requests.Dec(api)
-		}
-
-		// Firstbyte read.
-		tAfter := apiStatsWriter.TTFB
+		f.ServeHTTP(statsWriter, r)
 
 		// Time duration in secs since the call started.
-		//
 		// We don't need to do nanosecond precision in this
 		// simply for the fact that it is not human readable.
-		durationSecs := tAfter.Sub(tBefore).Seconds()
+		durationSecs := time.Since(statsWriter.StartTime).Seconds()
 
-		// Update http statistics
-		globalHTTPStats.updateStats(api, r, apiStatsWriter, durationSecs)
+		globalHTTPStats.updateStats(api, r, statsWriter, durationSecs)
 	}
 }
 

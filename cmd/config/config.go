@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -71,6 +70,7 @@ const (
 	RegionSubSys         = "region"
 	EtcdSubSys           = "etcd"
 	StorageClassSubSys   = "storage_class"
+	APISubSys            = "api"
 	CompressionSubSys    = "compression"
 	KmsVaultSubSys       = "kms_vault"
 	KmsKesSubSys         = "kms_kes"
@@ -102,6 +102,7 @@ var SubSystems = set.CreateStringSet([]string{
 	RegionSubSys,
 	EtcdSubSys,
 	CacheSubSys,
+	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
@@ -129,6 +130,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	RegionSubSys,
 	EtcdSubSys,
 	CacheSubSys,
+	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,
 	KmsVaultSubSys,
@@ -577,33 +579,6 @@ func (c Config) Clone() Config {
 	return cp
 }
 
-// Converts an input string of form "k1=v1 k2=v2" into fields
-// of ["k1=v1", "k2=v2"], the tokenization of each `k=v`
-// happens with the right number of input keys, if keys
-// input is empty returned value is empty slice as well.
-func kvFields(input string, keys []string) []string {
-	var valueIndexes []int
-	for _, key := range keys {
-		i := strings.Index(input, key+KvSeparator)
-		if i == -1 {
-			continue
-		}
-		valueIndexes = append(valueIndexes, i)
-	}
-
-	sort.Ints(valueIndexes)
-	var fields = make([]string, len(valueIndexes))
-	for i := range valueIndexes {
-		j := i + 1
-		if j < len(valueIndexes) {
-			fields[i] = strings.TrimSpace(input[valueIndexes[i]:valueIndexes[j]])
-		} else {
-			fields[i] = strings.TrimSpace(input[valueIndexes[i]:])
-		}
-	}
-	return fields
-}
-
 // SetKVS - set specific key values per sub-system.
 func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 	if len(s) == 0 {
@@ -632,7 +607,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		tgt = subSystemValue[1]
 	}
 
-	fields := kvFields(inputs[1], defaultKVS[subSys].Keys())
+	fields := madmin.KvFields(inputs[1], defaultKVS[subSys].Keys())
 	if len(fields) == 0 {
 		return Errorf("sub-system '%s' cannot have empty keys", subSys)
 	}

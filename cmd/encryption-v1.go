@@ -982,6 +982,19 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		encryption encrypt.ServerSide
 		opts       ObjectOptions
 	)
+
+	var partNumber int
+	var err error
+	if pn := r.URL.Query().Get("partNumber"); pn != "" {
+		partNumber, err = strconv.Atoi(pn)
+		if err != nil {
+			return opts, err
+		}
+		if partNumber < 0 {
+			return opts, errInvalidArgument
+		}
+	}
+
 	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
 		key, err := crypto.SSEC.ParseHTTP(r.Header)
 		if err != nil {
@@ -990,10 +1003,16 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		derivedKey := deriveClientKey(key, bucket, object)
 		encryption, err = encrypt.NewSSEC(derivedKey[:])
 		logger.CriticalIf(ctx, err)
-		return ObjectOptions{ServerSideEncryption: encryption}, nil
+		return ObjectOptions{ServerSideEncryption: encryption, PartNumber: partNumber}, nil
 	}
+
 	// default case of passing encryption headers to backend
-	return getDefaultOpts(r.Header, false, nil)
+	opts, err = getDefaultOpts(r.Header, false, nil)
+	if err != nil {
+		return opts, err
+	}
+	opts.PartNumber = partNumber
+	return opts, nil
 }
 
 // get ObjectOptions for PUT calls from encryption headers and metadata

@@ -62,6 +62,7 @@ const (
 
 	// CreateUserAdminAction - allow creating MinIO user
 	CreateUserAdminAction = "admin:CreateUser"
+
 	// DeleteUserAdminAction - allow deleting MinIO user
 	DeleteUserAdminAction = "admin:DeleteUser"
 	// ListUsersAdminAction - allow list users permission
@@ -114,6 +115,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	TopLocksAdminAction:            {},
 	ProfilingAdminAction:           {},
 	TraceAdminAction:               {},
+	OBDInfoAdminAction:             {},
 	ConsoleLogAdminAction:          {},
 	KMSKeyStatusAdminAction:        {},
 	ServerUpdateAdminAction:        {},
@@ -158,6 +160,7 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	StorageInfoAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	DataUsageInfoAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	OBDInfoAdminAction:             condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TopLocksAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ProfilingAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TraceAdminAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),

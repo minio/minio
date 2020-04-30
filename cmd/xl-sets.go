@@ -293,7 +293,7 @@ func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
 
 // Initialize new set of erasure coded sets.
-func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3, setCount int, drivesPerSet int) (*xlSets, error) {
+func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3) (*xlSets, error) {
 	endpointStrings := make([]string, len(endpoints))
 	for i, endpoint := range endpoints {
 		if endpoint.IsLocal {
@@ -302,6 +302,9 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			endpointStrings[i] = endpoint.String()
 		}
 	}
+
+	setCount := len(format.XL.Sets)
+	drivesPerSet := len(format.XL.Sets[0])
 
 	// Initialize the XL sets instance.
 	s := &xlSets{
@@ -330,12 +333,15 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 	for i := 0; i < setCount; i++ {
 		s.xlDisks[i] = make([]StorageAPI, drivesPerSet)
 		s.xlLockers[i] = make([]dsync.NetLocker, drivesPerSet)
+	}
 
+	for i := 0; i < setCount; i++ {
 		var endpoints Endpoints
 		for j := 0; j < drivesPerSet; j++ {
 			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
+
 			disk := storageDisks[i*drivesPerSet+j]
 			if disk == nil {
 				continue
@@ -363,12 +369,12 @@ func newXLSets(endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV
 			mrfUploadCh: make(chan partialUpload, 10000),
 		}
 
-		go s.sets[i].cleanupStaleMultipartUploads(GlobalContext,
-			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, GlobalServiceDoneCh)
+		go s.sets[i].cleanupStaleMultipartUploads(ctx,
+			GlobalMultipartCleanupInterval, GlobalMultipartExpiry, ctx.Done())
 	}
 
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
 
@@ -473,7 +479,8 @@ func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	return storageInfo
 }
 
-func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, updates chan<- DataUsageInfo) error {
+func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+	// Use the zone-level implementation instead.
 	return NotImplemented{}
 }
 
@@ -513,12 +520,11 @@ func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location st
 	}
 
 	errs := g.Wait()
-	// Upon even a single write quorum error we undo all previously created buckets.
+	// Upon any error we try to undo the make bucket operation if possible
+	// on all sets where it succeeded.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoMakeBucketSets(bucket, s.sets, errs)
-			}
+			undoMakeBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
@@ -685,13 +691,11 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bo
 	}
 
 	errs := g.Wait()
-	// For any write quorum failure, we undo all the delete buckets operation
-	// by creating all the buckets again.
+	// For any failure, we attempt undo all the delete buckets operation
+	// by creating buckets again on all sets which were successfully deleted.
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoDeleteBucketSets(bucket, s.sets, errs)
-			}
+			undoDeleteBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
@@ -1458,6 +1462,8 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 		if infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
+			logger.Info("Disk `%s` is a root disk. Please ensure the disk is mounted properly, refusing to use root disk.",
+				storageDisks[i].String())
 			storageDisks[i] = nil
 		}
 	}

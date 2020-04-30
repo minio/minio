@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config/identity/openid"
@@ -135,6 +136,11 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (user auth.Creden
 		return user, ErrSTSAccessDenied
 	}
 
+	// Temporary credentials or Service accounts cannot generate further temporary credentials.
+	if user.IsTemp() || user.IsServiceAccount() {
+		return user, ErrSTSAccessDenied
+	}
+
 	return user, ErrSTSNone
 }
 
@@ -207,10 +213,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	policyName := ""
-	if len(policies) > 0 {
-		policyName = policies[0]
-	}
+	policyName := strings.Join(policies, ",")
 
 	// This policy is the policy associated with the user
 	// requesting for temporary credentials. The temporary
@@ -227,6 +230,10 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}
+
+	// Set the parent of the temporary access key, this is useful
+	// in obtaining service accounts by this cred.
+	cred.ParentUser = user.AccessKey
 
 	// Set the newly generated credentials.
 	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
@@ -500,9 +507,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	policyName := ""
-	// Set the newly generated credentials.
-	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
+	// Set the parent of the temporary access key, this is useful
+	// in obtaining service accounts by this cred.
+	cred.ParentUser = ldapUsername
+
+	// Set the newly generated credentials, policyName is empty on purpose
+	// LDAP policies are applied automatically using their ldapUser, ldapGroups
+	// mapping.
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, ""); err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
 	}

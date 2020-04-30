@@ -35,40 +35,35 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *http.Request) ObjectLayer {
+func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *http.Request) (auth.Credentials, ObjectLayer) {
 	// Get current object layer instance.
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return nil
+		return auth.Credentials{}, nil
 	}
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.ConfigUpdateAdminAction, "")
+	cred, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.ConfigUpdateAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
-		return nil
+		return cred, nil
 	}
 
-	return objectAPI
+	return cred, objectAPI
 }
 
 // DelConfigKVHandler - DELETE /minio/admin/v3/del-config-kv
 func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DelConfigKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	cred, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -78,7 +73,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
@@ -107,14 +102,8 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	cred, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -124,7 +113,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
@@ -172,7 +161,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	cred, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -195,7 +184,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	econfigData, err := madmin.EncryptData(password, buf.Bytes())
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -208,7 +197,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClearConfigHistoryKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	_, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -243,7 +232,7 @@ func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *
 func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RestoreConfigHistoryKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	_, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -289,7 +278,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListConfigHistoryKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	cred, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -313,7 +302,7 @@ func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	econfigData, err := madmin.EncryptData(password, data)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -327,7 +316,7 @@ func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *h
 func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HelpConfigKVHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	_, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -353,14 +342,8 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetConfigHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	cred, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
-		return
-	}
-
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
 
@@ -370,7 +353,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		logger.LogIf(ctx, err, logger.Application)
@@ -414,7 +397,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigHandler")
 
-	objectAPI := validateAdminReqConfigKV(ctx, w, r)
+	cred, objectAPI := validateAdminReqConfigKV(ctx, w, r)
 	if objectAPI == nil {
 		return
 	}
@@ -471,7 +454,7 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	password := globalActiveCred.SecretKey
+	password := cred.SecretKey
 	econfigData, err := madmin.EncryptData(password, []byte(s.String()))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

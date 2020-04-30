@@ -88,13 +88,19 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKVHandler)).Queries("key", "{key:.*}")
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/set-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKVHandler))
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/del-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.DelConfigKVHandler))
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
+		}
+
+		// Enable config help in all modes.
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
+
+		// Config KV history operations.
+		if enableConfigOps {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-config-history-kv").HandlerFunc(httpTraceAll(adminAPI.ListConfigHistoryKVHandler)).Queries("count", "{count:[0-9]+}")
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/clear-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.ClearConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/restore-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.RestoreConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
 		}
 
-		/// Config operations
+		/// Config import/export bulk operations
 		if enableConfigOps {
 			// Get config
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
@@ -115,7 +121,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 			// Service accounts ops
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-service-account").HandlerFunc(httpTraceHdrs(adminAPI.GetServiceAccount)).Queries("accessKey", "{accessKey:.*}")
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(httpTraceHdrs(adminAPI.ListServiceAccounts))
+			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(httpTraceHdrs(adminAPI.DeleteServiceAccount)).Queries("accessKey", "{accessKey:.*}")
 
 			if adminVersion == adminAPIVersionV2Prefix {
 				// Info policy IAM v2
@@ -179,9 +186,19 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
 		if !globalIsGateway {
-
 			// -- OBD API --
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/obdinfo").HandlerFunc(httpTraceHdrs(adminAPI.OBDInfoHandler)).Queries("perfdrive", "{perfdrive:true|false}", "perfnet", "{perfnet:true|false}", "minioinfo", "{minioinfo:true|false}", "minioconfig", "{minioconfig:true|false}", "syscpu", "{syscpu:true|false}", "sysdiskhw", "{sysdiskhw:true|false}", "sysosinfo", "{sysosinfo:true|false}", "sysmem", "{sysmem:true|false}", "sysprocess", "{sysprocess:true|false}")
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/obdinfo").
+				HandlerFunc(httpTraceHdrs(adminAPI.OBDInfoHandler)).
+				Queries("perfdrive", "{perfdrive:true|false}",
+					"perfnet", "{perfnet:true|false}",
+					"minioinfo", "{minioinfo:true|false}",
+					"minioconfig", "{minioconfig:true|false}",
+					"syscpu", "{syscpu:true|false}",
+					"sysdiskhw", "{sysdiskhw:true|false}",
+					"sysosinfo", "{sysosinfo:true|false}",
+					"sysmem", "{sysmem:true|false}",
+					"sysprocess", "{sysprocess:true|false}",
+				)
 		}
 	}
 

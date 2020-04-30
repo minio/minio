@@ -459,10 +459,21 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 	var mode RetMode
 	var retainTill RetentionDate
 
-	if modeStr, ok := meta[strings.ToLower(AmzObjectLockMode)]; ok {
+	var modeStr, tillStr string
+	ok := false
+
+	modeStr, ok = meta[strings.ToLower(AmzObjectLockMode)]
+	if !ok {
+		modeStr, ok = meta[AmzObjectLockMode]
+	}
+	if ok {
 		mode = parseRetMode(modeStr)
 	}
-	if tillStr, ok := meta[strings.ToLower(AmzObjectLockRetainUntilDate)]; ok {
+	tillStr, ok = meta[strings.ToLower(AmzObjectLockRetainUntilDate)]
+	if !ok {
+		tillStr, ok = meta[AmzObjectLockRetainUntilDate]
+	}
+	if ok {
 		if t, e := time.Parse(time.RFC3339, tillStr); e == nil {
 			retainTill = RetentionDate{t.UTC()}
 		}
@@ -473,6 +484,9 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 // GetObjectLegalHoldMeta constructs ObjectLegalHold from metadata
 func GetObjectLegalHoldMeta(meta map[string]string) ObjectLegalHold {
 	holdStr, ok := meta[strings.ToLower(AmzObjectLockLegalHold)]
+	if !ok {
+		holdStr, ok = meta[AmzObjectLockLegalHold]
+	}
 	if ok {
 		return ObjectLegalHold{XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/", Status: parseLegalHoldStatus(holdStr)}
 	}

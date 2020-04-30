@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"os"
@@ -32,19 +33,23 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/willf/bloom"
 )
 
 const (
+	envDataUsageCrawlConf  = "MINIO_DISK_USAGE_CRAWL_ENABLE"
+	envDataUsageCrawlDelay = "MINIO_DISK_USAGE_CRAWL_DELAY"
+	envDataUsageCrawlDebug = "MINIO_DISK_USAGE_CRAWL_DEBUG"
+
+	dataUsageRoot   = SlashSeparator
+	dataUsageBucket = minioMetaBucket + SlashSeparator + bucketMetaPrefix
+
 	dataUsageObjName         = ".usage.json"
 	dataUsageCacheName       = ".usage-cache.bin"
-	envDataUsageCrawlConf    = "MINIO_DISK_USAGE_CRAWL_ENABLE"
-	envDataUsageCrawlDelay   = "MINIO_DISK_USAGE_CRAWL_DELAY"
-	envDataUsageCrawlDebug   = "MINIO_DISK_USAGE_CRAWL_DEBUG"
+	dataUsageBloomName       = ".bloomcycle.bin"
 	dataUsageSleepPerFolder  = 1 * time.Millisecond
 	dataUsageSleepDefMult    = 10.0
 	dataUsageUpdateDirCycles = 16
-	dataUsageRoot            = SlashSeparator
-	dataUsageBucket          = minioMetaBucket + SlashSeparator + bucketMetaPrefix
 	dataUsageStartDelay      = 5 * time.Minute // Time to wait on startup and between cycles.
 )
 
@@ -56,6 +61,20 @@ func initDataUsageStats(ctx context.Context, objAPI ObjectLayer) {
 }
 
 func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
+	// Load current bloom cycle
+	nextBloomCycle := intDataUpdateTracker.current() + 1
+	var buf bytes.Buffer
+	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageBloomName, 0, -1, &buf, "", ObjectOptions{})
+	if err != nil {
+		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) {
+			logger.LogIf(ctx, err)
+		}
+	} else {
+		if buf.Len() == 8 {
+			nextBloomCycle = binary.LittleEndian.Uint64(buf.Bytes())
+		}
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -64,9 +83,33 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			err := objAPI.CrawlAndGetDataUsage(ctx, results)
+			bf, err := globalNotificationSys.updateBloomFilter(ctx, nextBloomCycle)
+			logger.LogIf(ctx, err)
+			err = objAPI.CrawlAndGetDataUsage(ctx, bf, results)
 			close(results)
 			logger.LogIf(ctx, err)
+			if err == nil {
+				// Store new cycle...
+				nextBloomCycle++
+				if nextBloomCycle%dataUpdateTrackerResetEvery == 0 {
+					if intDataUpdateTracker.debug {
+						logger.Info(color.Green("runDataUsageInfo:") + " Resetting bloom filter for next runs.")
+					}
+					nextBloomCycle++
+				}
+				var tmp [8]byte
+				binary.LittleEndian.PutUint64(tmp[:], nextBloomCycle)
+				r, err := hash.NewReader(bytes.NewReader(tmp[:]), int64(len(tmp)), "", "", int64(len(tmp)), false)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					continue
+				}
+
+				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r, nil, nil), ObjectOptions{})
+				if !isErrBucketNotFound(err) {
+					logger.LogIf(ctx, err)
+				}
+			}
 		}
 	}
 }
@@ -87,7 +130,9 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, gui <-chan
 		}
 
 		_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageObjName, NewPutObjReader(r, nil, nil), ObjectOptions{})
-		logger.LogIf(ctx, err)
+		if !isErrBucketNotFound(err) {
+			logger.LogIf(ctx, err)
+		}
 	}
 }
 
@@ -96,7 +141,7 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 
 	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageObjName, 0, -1, &dataUsageInfoJSON, "", ObjectOptions{})
 	if err != nil {
-		if isErrObjectNotFound(err) {
+		if isErrObjectNotFound(err) || isErrBucketNotFound(err) {
 			return DataUsageInfo{}, nil
 		}
 		return DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
@@ -130,6 +175,7 @@ type folderScanner struct {
 	getSize            getSizeFn
 	oldCache           dataUsageCache
 	newCache           dataUsageCache
+	withFilter         *bloomFilter
 	waitForLowActiveIO func()
 
 	dataUsageCrawlMult  float64
@@ -164,12 +210,22 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			return nil, ctx.Err()
 		default:
 		}
+		thisHash := hashPath(folder.name)
 
+		if _, ok := f.oldCache.Cache[thisHash]; f.withFilter != nil && ok {
+			// If folder isn't in filter and we have data, skip it completely.
+			if folder.name != dataUsageRoot && !f.withFilter.containsDir(folder.name) {
+				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
+				if f.dataUsageCrawlDebug {
+					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
+				}
+				continue
+			}
+		}
 		f.waitForLowActiveIO()
 		sleepDuration(dataUsageSleepPerFolder, f.dataUsageCrawlMult)
 
 		cache := dataUsageEntry{}
-		thisHash := hashPath(folder.name)
 
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
@@ -301,11 +357,14 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 	t := UTCNow()
 
 	dataUsageDebug := env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn
-	defer func() {
-		if dataUsageDebug {
-			logger.Info(color.Green("updateUsage")+" Crawl time at %s: %v", basePath, time.Since(t))
-		}
-	}()
+	logPrefix := color.Green("data-usage: ")
+	logSuffix := color.Blue(" - %v + %v", basePath, cache.Info.Name)
+	if dataUsageDebug {
+		defer func() {
+			logger.Info(logPrefix+" Crawl time: %v"+logSuffix, time.Since(t))
+		}()
+
+	}
 
 	if cache.Info.Name == "" {
 		cache.Info.Name = dataUsageRoot
@@ -329,8 +388,16 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		dataUsageCrawlDebug: dataUsageDebug,
 	}
 
+	if len(cache.Info.BloomFilter) > 0 {
+		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
+		_, err := s.withFilter.ReadFrom(bytes.NewBuffer(cache.Info.BloomFilter))
+		if err != nil {
+			logger.LogIf(ctx, err, logPrefix+"Error reading bloom filter")
+			s.withFilter = nil
+		}
+	}
 	if s.dataUsageCrawlDebug {
-		logger.Info(color.Green("runDataUsageInfo:") + " Starting crawler master")
+		logger.Info(logPrefix+"Start crawling. Bloom filter: %v"+logSuffix, s.withFilter != nil)
 	}
 
 	done := ctx.Done()
@@ -341,14 +408,8 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		flattenLevels--
 	}
 
-	var logPrefix, logSuffix string
 	if s.dataUsageCrawlDebug {
-		logPrefix = color.Green("data-usage: ")
-		logSuffix = color.Blue(" - %v + %v", basePath, cache.Info.Name)
-	}
-
-	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"Cycle: %v"+logSuffix, cache.Info.NextCycle)
+		logger.Info(logPrefix+"Cycle: %v, Entries: %v"+logSuffix, cache.Info.NextCycle, len(cache.Cache))
 	}
 
 	// Always scan flattenLevels deep. Cache root is level 0.
@@ -387,9 +448,10 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 			continue
 		}
 		if du == nil {
-			logger.LogIf(ctx, errors.New("data-usage: no disk usage provided"))
+			logger.Info(logPrefix + "no disk usage provided" + logSuffix)
 			continue
 		}
+
 		s.newCache.replace(folder.name, "", *du)
 		// Add to parent manually
 		if folder.parent != nil {
@@ -415,6 +477,17 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 			continue
 		}
 
+		if s.withFilter != nil {
+			// If folder isn't in filter, skip it completely.
+			if !s.withFilter.containsDir(folder.name) {
+				if s.dataUsageCrawlDebug {
+					logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
+				}
+				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h])
+				continue
+			}
+		}
+
 		// Update on this cycle...
 		du, err := s.deepScanFolder(ctx, folder.name)
 		if err != nil {
@@ -427,7 +500,9 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 		s.newCache.replaceHashed(h, folder.parent, *du)
 	}
-
+	if s.dataUsageCrawlDebug {
+		logger.Info(logPrefix+"Finished crawl, %v entries"+logSuffix, len(s.newCache.Cache))
+	}
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
 	return s.newCache, nil

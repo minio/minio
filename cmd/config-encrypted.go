@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 	"unicode/utf8"
 
 	etcd "github.com/coreos/etcd/clientv3"
@@ -50,7 +51,6 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	bucketNotFound := BucketNotFound{}
 
 	for !stop {
 		select {
@@ -58,7 +58,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 			if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
 				if errors.Is(err, errDiskNotFound) ||
 					errors.As(err, &rquorum) ||
-					errors.As(err, &bucketNotFound) {
+					isErrBucketNotFound(err) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}
@@ -108,7 +108,7 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 				if errors.Is(err, errDiskNotFound) ||
 					errors.As(err, &rquorum) ||
 					errors.As(err, &wquorum) ||
-					errors.As(err, &bucketNotFound) {
+					isErrBucketNotFound(err) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}
@@ -164,9 +164,6 @@ func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
 }
 
 func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
-	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-
 	encrypted, err := checkBackendEtcdEncrypted(ctx, client)
 	if err != nil {
 		return err
@@ -207,7 +204,10 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 		logger.Info("Attempting encryption of all IAM users and policies on etcd")
 	}
 
-	r, err := client.Get(ctx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	listCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
+	r, err := client.Get(listCtx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}

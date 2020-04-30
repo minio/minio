@@ -42,6 +42,9 @@ func (xl xlObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealRes
 // `policy.json, notification.xml, listeners.json`.
 func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
 	result madmin.HealResultItem, err error) {
+	if !dryRun {
+		defer ObjectPathUpdated(bucket)
+	}
 
 	storageDisks := xl.getDisks()
 
@@ -122,11 +125,6 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 				Endpoint: drive,
 				State:    beforeState[i],
 			})
-			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    afterState[i],
-			})
 		}
 	}
 
@@ -151,12 +149,26 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	errs = g.Wait()
 
 	reducedErr = reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
-	if reducedErr == errXLWriteQuorum {
-		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(storageDisks, bucket)
+	if reducedErr != nil {
+		if reducedErr == errXLWriteQuorum {
+			// Purge successfully created buckets if we don't have writeQuorum.
+			undoMakeBucket(storageDisks, bucket)
+		}
+		return res, reducedErr
 	}
 
-	return res, reducedErr
+	for i := range afterState {
+		if storageDisks[i] != nil {
+			drive := storageDisks[i].String()
+			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: drive,
+				State:    afterState[i],
+			})
+		}
+	}
+
+	return res, nil
 }
 
 // listAllBuckets lists all buckets from all disks. It also

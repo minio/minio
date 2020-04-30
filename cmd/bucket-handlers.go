@@ -303,7 +303,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 		// err will be nil here as we already called this function
 		// earlier in this request.
-		claims, _ := getClaimsFromToken(r)
+		claims, _ := getClaimsFromToken(r, getSessionToken(r))
 		n := 0
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
@@ -920,7 +920,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if _, ok := globalBucketObjectLockConfig.Get(bucket); (ok || globalWORMEnabled) && forceDelete {
+	if _, ok := globalBucketObjectLockConfig.Get(bucket); ok && forceDelete {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1021,11 +1021,6 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	// Deny if WORM is enabled
-	if globalWORMEnabled {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
-		return
-	}
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketObjectLockConfigurationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -1103,7 +1098,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 	if err != nil {
 		var aerr APIError
 		if err == errConfigNotFound {
-			aerr = errorCodes.ToAPIErr(ErrMethodNotAllowed)
+			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotFound)
 		} else {
 			aerr = toAPIError(ctx, err)
 		}

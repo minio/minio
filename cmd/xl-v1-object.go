@@ -69,6 +69,8 @@ func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBuc
 
 	// Check if this request is only metadata update.
 	if cpSrcDstSame {
+		defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+
 		// Read metadata associated with the object from all disks.
 		storageDisks := xl.getDisks()
 
@@ -137,16 +139,16 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		if objInfo, err = xl.getObjectInfoDir(ctx, bucket, object); err != nil {
 			return nil, toObjectErr(err, bucket, object)
 		}
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts.CheckCopyPrecondFn)
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
 	}
 
 	var objInfo ObjectInfo
-	objInfo, err = xl.getObjectInfo(ctx, bucket, object)
+	objInfo, err = xl.getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts.CheckCopyPrecondFn)
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -156,6 +158,7 @@ func (xl xlObjects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		err := xl.getObject(ctx, bucket, object, off, length, pw, "", opts)
 		pw.CloseWithError(err)
 	}()
+
 	// Cleanup function to cause the go routine above to exit, in
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
@@ -365,7 +368,7 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, op
 		return info, nil
 	}
 
-	info, err := xl.getObjectInfo(ctx, bucket, object)
+	info, err := xl.getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -374,7 +377,7 @@ func (xl xlObjects) GetObjectInfo(ctx context.Context, bucket, object string, op
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) getObjectInfo(ctx context.Context, bucket, object string, opt ObjectOptions) (objInfo ObjectInfo, err error) {
 	disks := xl.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -480,6 +483,7 @@ func (xl xlObjects) PutObject(ctx context.Context, bucket string, object string,
 
 // putObject wrapper for xl PutObject
 func (xl xlObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	defer ObjectPathUpdated(path.Join(bucket, object))
 	data := r.Reader
 
 	uniqueID := mustGetUUID()
@@ -627,13 +631,6 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	}
 
 	if xl.isObject(bucket, object) {
-		// Deny if WORM is enabled
-		if isWORMEnabled(bucket) {
-			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
-				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-			}
-		}
-
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
@@ -701,6 +698,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 func (xl xlObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int, isDir bool) error {
 	var disks []StorageAPI
 	var err error
+	defer ObjectPathUpdated(path.Join(bucket, object))
 
 	tmpObj := mustGetUUID()
 	if bucket == minioMetaTmpBucket {
@@ -761,6 +759,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			if errs[idx] != nil {
 				continue
 			}
+
 			tmpObjs[idx] = mustGetUUID()
 			var err error
 			// Rename the current object while requiring
@@ -780,6 +779,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 			if err != nil {
 				errs[idx] = err
 			}
+			ObjectPathUpdated(path.Join(bucket, objects[idx]))
 		}
 	}
 

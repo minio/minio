@@ -24,6 +24,9 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -41,13 +44,34 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Create policy
-	policy := `{"Version": "2012-10-17","Statement": [{"Action": ["s3:GetObject"],"Effect": "Allow","Resource": ["arn:aws:s3:::testbucket/*"],"Sid": ""}]}`
+	p := iampolicy.Policy{
+		Version: iampolicy.DefaultVersion,
+		Statements: []iampolicy.Statement{
+			iampolicy.NewStatement(
+				policy.Allow,
+				iampolicy.NewActionSet(iampolicy.GetObjectAction),
+				iampolicy.NewResourceSet(iampolicy.NewResource("testbucket/*", "")),
+				condition.NewFunctions(),
+			)},
+	}
 
-	creds, err := madmClnt.AddServiceAccount(context.Background(), "parentuser", policy)
+	// Create a new service account
+	creds, err := madmClnt.AddServiceAccount(context.Background(), &p)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
 	fmt.Println(creds)
+
+	// List all services accounts
+	list, err := madmClnt.ListServiceAccounts(context.Background())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	fmt.Println(list)
+
+	// Delete a service account
+	err = madmClnt.DeleteServiceAccount(context.Background(), list.Accounts[0])
+	if err != nil {
+		log.Fatalln(err)
+	}
 }

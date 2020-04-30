@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"os/signal"
@@ -129,6 +131,14 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	globalMinioEndpoint = func() string {
+		host := globalMinioHost
+		if host == "" {
+			host = sortIPs(localIP4.ToSlice())[0]
+		}
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+	}()
+
 	// Handle gateway specific env
 	gatewayHandleEnvVars()
 
@@ -196,6 +206,9 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	httpServer := xhttp.NewServer([]string{globalCLIContext.Addr},
 		criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
+	httpServer.BaseContext = func(listener net.Listener) context.Context {
+		return GlobalContext
+	}
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
@@ -244,7 +257,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(buckets, newObject), "Unable to initialize notification system")
 		// Start watching disk for reloading config, this
 		// is only enabled for "NAS" gateway.
-		globalConfigSys.WatchConfigNASDisk(newObject)
+		globalConfigSys.WatchConfigNASDisk(GlobalContext, newObject)
 	}
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())

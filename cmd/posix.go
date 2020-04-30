@@ -108,20 +108,31 @@ func checkPathLength(pathName string) error {
 		return errFileNameTooLong
 	}
 
-	if runtime.GOOS == "windows" {
-		// Convert any '\' to '/'.
-		pathName = filepath.ToSlash(pathName)
+	// Disallow more than 1024 characters on windows, there
+	// are no known name_max limits on Windows.
+	if runtime.GOOS == "windows" && len(pathName) > 1024 {
+		return nil
 	}
 
-	// Check each path segment length is > 255
-	for len(pathName) > 0 && pathName != "." && pathName != SlashSeparator {
-		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
+	// On Unix we reject paths if they are just '.', '..' or '/'
+	if pathName == "." || pathName == ".." || pathName == slashSeparator {
+		return errFileAccessDenied
+	}
 
-		if len(file) > 255 {
-			return errFileNameTooLong
+	// Check each path segment length is > 255 on all Unix
+	// platforms, look for this value as NAME_MAX in
+	// /usr/include/linux/limits.h
+	var count int64
+	for _, p := range pathName {
+		switch p {
+		case '/':
+			count = 0 // Reset
+		default:
+			count++
+			if count > 255 {
+				return errFileNameTooLong
+			}
 		}
-
-		pathName = dir
 	} // Success.
 	return nil
 }
@@ -485,8 +496,8 @@ func (s *posix) SetDiskID(id string) {
 func (s *posix) MakeVolBulk(volumes ...string) (err error) {
 	for _, volume := range volumes {
 		if err = s.MakeVol(volume); err != nil {
-			if err != errVolumeExists {
-				return err
+			if os.IsPermission(err) {
+				return errVolumeAccessDenied
 			}
 		}
 	}

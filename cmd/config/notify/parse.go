@@ -17,8 +17,10 @@
 package notify
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,12 +39,16 @@ const (
 	formatAccess    = "access"
 )
 
+// ErrTargetsOffline - Indicates single/multiple target failures.
+var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
+
 // TestNotificationTargets is similar to GetNotificationTargets()
 // avoids explicit registration.
 func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
 	targetIDs []event.TargetID) error {
 	test := true
-	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test)
+	returnOnTargetError := true
+	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test, returnOnTargetError)
 	if err == nil {
 		// Close all targets since we are only testing connections.
 		for _, t := range targets.TargetMap() {
@@ -57,7 +63,8 @@ func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transpor
 // targets, returns error if any.
 func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
 	test := false
-	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test)
+	returnOnTargetError := false
+	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test, returnOnTargetError)
 }
 
 // RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
@@ -65,12 +72,40 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool) (_ *event.TargetList, err error) {
+func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
+
+	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, returnOnTargetError)
+	if err != nil {
+		return targetList, err
+	}
+
+	if test {
+		// Verify if user is trying to disable already configured
+		// notification targets, based on their target IDs
+		for _, targetID := range targetIDs {
+			if !targetList.Exists(targetID) {
+				return nil, config.Errorf(
+					"Unable to disable configured targets '%v'",
+					targetID)
+			}
+		}
+	}
+
+	return targetList, nil
+}
+
+// FetchRegisteredTargets - Returns a set of configured TargetList
+// If `returnOnTargetError` is set to true, The function returns when a target initialization fails
+// Else, the function will return a complete TargetList irrespective of errors
+func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool, returnOnTargetError bool) (_ *event.TargetList, err error) {
 	targetList := event.NewTargetList()
+	var targetsOffline bool
 
 	defer func() {
-		// Automatically close all connections to targets when an error occur
-		if err != nil {
+		// Automatically close all connections to targets when an error occur.
+		// Close all the targets if returnOnTargetError is set
+		// Else, close only the failed targets
+		if err != nil && returnOnTargetError {
 			for _, t := range targetList.TargetMap() {
 				_ = t.Close()
 			}
@@ -137,10 +172,18 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
+
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -150,11 +193,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
-
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -165,10 +214,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -179,10 +235,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		args.RootCAs = transport.TLSClientConfig.RootCAs
 		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -192,10 +255,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -205,10 +275,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -218,10 +295,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -231,10 +315,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -244,10 +335,17 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
-			return nil, err
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
@@ -257,23 +355,22 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 		}
 		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport, test)
 		if err != nil {
-			return nil, err
+			targetsOffline = true
+			if returnOnTargetError {
+				return nil, err
+			}
+			_ = newTarget.Close()
 		}
-		if err := targetList.Add(newTarget); err != nil {
-			return nil, err
+		if err = targetList.Add(newTarget); err != nil {
+			logger.LogIf(context.Background(), err)
+			if returnOnTargetError {
+				return nil, err
+			}
 		}
 	}
 
-	if test {
-		// Verify if user is trying to disable already configured
-		// notification targets, based on their target IDs
-		for _, targetID := range targetIDs {
-			if !targetList.Exists(targetID) {
-				return nil, config.Errorf(
-					"Unable to disable configured targets '%v'",
-					targetID)
-			}
-		}
+	if targetsOffline {
+		return targetList, ErrTargetsOffline
 	}
 
 	return targetList, nil

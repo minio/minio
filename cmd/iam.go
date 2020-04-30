@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
 	"github.com/minio/minio-go/v6/pkg/set"
@@ -144,8 +145,8 @@ type UserIdentity struct {
 	Credentials auth.Credentials `json:"credentials"`
 }
 
-func newUserIdentity(creds auth.Credentials) UserIdentity {
-	return UserIdentity{Version: 1, Credentials: creds}
+func newUserIdentity(cred auth.Credentials) UserIdentity {
+	return UserIdentity{Version: 1, Credentials: cred}
 }
 
 // GroupInfo contains info about a group
@@ -353,6 +354,25 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	return nil
 }
 
+// LoadServiceAccount - reloads a specific service account from backend disks or etcd.
+func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
+	if sys == nil || sys.store == nil {
+		return errServerNotInitialized
+	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
+
+	if globalEtcdClient == nil {
+		err := sys.store.loadUser(accessKey, srvAccUser, sys.iamUsersMap)
+		if err != nil {
+			return err
+		}
+	}
+	// When etcd is set, we use watch APIs so this code is not needed.
+	return nil
+}
+
 // Perform IAM configuration migration.
 func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
@@ -403,8 +423,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	defer sys.store.unlock()
 
 	err := sys.store.deletePolicyDoc(policyName)
-	switch err.(type) {
-	case ObjectNotFound:
+	if err == errNoSuchPolicy {
 		// Ignore error if policy is already deleted.
 		err = nil
 	}
@@ -416,18 +435,18 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 	var usersType []IAMUserType
 	for u, mp := range sys.iamUserPolicyMap {
 		if mp.Policy == policyName {
-			usersToDel = append(usersToDel, u)
 			cr, ok := sys.iamUsersMap[u]
 			if !ok {
 				// This case cannot happen
 				return errNoSuchUser
 			}
-			// User is from STS if the creds are temporary
+			// User is from STS if the cred are temporary
 			if cr.IsTemp() {
 				usersType = append(usersType, stsUser)
 			} else {
 				usersType = append(usersType, regularUser)
 			}
+			usersToDel = append(usersToDel, u)
 		}
 	}
 	for i, u := range usersToDel {
@@ -534,18 +553,7 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errIAMActionNotAllowed
 	}
 
-	// It is ok to ignore deletion error on the mapped policy
-	sys.store.deleteMappedPolicy(accessKey, regularUser, false)
-	err := sys.store.deleteUserIdentity(accessKey, regularUser)
-	switch err.(type) {
-	case ObjectNotFound:
-		// ignore if user is already deleted.
-		err = nil
-	}
-
-	delete(sys.iamUsersMap, accessKey)
-	delete(sys.iamUserPolicyMap, accessKey)
-
+	// Delete any service accounts if any first.
 	for _, u := range sys.iamUsersMap {
 		if u.IsServiceAccount() {
 			if u.ParentUser == accessKey {
@@ -554,6 +562,17 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 			}
 		}
 	}
+
+	// It is ok to ignore deletion error on the mapped policy
+	sys.store.deleteMappedPolicy(accessKey, regularUser, false)
+	err := sys.store.deleteUserIdentity(accessKey, regularUser)
+	if err == errNoSuchUser {
+		// ignore if user is already deleted.
+		err = nil
+	}
+
+	delete(sys.iamUsersMap, accessKey)
+	delete(sys.iamUserPolicyMap, accessKey)
 
 	return err
 }
@@ -641,12 +660,12 @@ func (sys *IAMSys) IsTempUser(name string) (bool, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	creds, found := sys.iamUsersMap[name]
+	cred, found := sys.iamUsersMap[name]
 	if !found {
 		return false, errNoSuchUser
 	}
 
-	return creds.IsTemp(), nil
+	return cred.IsTemp(), nil
 }
 
 // IsServiceAccount - returns if given key is a service account
@@ -659,13 +678,13 @@ func (sys *IAMSys) IsServiceAccount(name string) (bool, string, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	creds, found := sys.iamUsersMap[name]
+	cred, found := sys.iamUsersMap[name]
 	if !found {
 		return false, "", errNoSuchUser
 	}
 
-	if creds.IsServiceAccount() {
-		return true, creds.ParentUser, nil
+	if cred.IsServiceAccount() {
+		return true, cred.ParentUser, nil
 	}
 
 	return false, "", nil
@@ -695,19 +714,19 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 		}, nil
 	}
 
-	creds, found := sys.iamUsersMap[name]
+	cred, found := sys.iamUsersMap[name]
 	if !found {
 		return u, errNoSuchUser
 	}
 
-	if creds.IsTemp() {
+	if cred.IsTemp() || cred.IsServiceAccount() {
 		return u, errIAMActionNotAllowed
 	}
 
 	u = madmin.UserInfo{
 		PolicyName: sys.iamUserPolicyMap[name].Policy,
 		Status: func() madmin.AccountStatus {
-			if creds.IsValid() {
+			if cred.IsValid() {
 				return madmin.AccountEnabled
 			}
 			return madmin.AccountDisabled
@@ -740,7 +759,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		return errNoSuchUser
 	}
 
-	if cred.IsTemp() {
+	if cred.IsTemp() || cred.IsServiceAccount() {
 		return errIAMActionNotAllowed
 	}
 
@@ -764,33 +783,29 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 }
 
 // NewServiceAccount - create a new service account
-func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPolicy string) (auth.Credentials, error) {
+func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, sessionPolicy *iampolicy.Policy) (auth.Credentials, error) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
 		return auth.Credentials{}, errServerNotInitialized
 	}
 
-	if len(sessionPolicy) > 16*1024 {
-		return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
-	}
-
-	if len(sessionPolicy) > 0 {
-		policy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicy)))
+	var policyBuf []byte
+	if sessionPolicy != nil {
+		err := sessionPolicy.Validate()
 		if err != nil {
 			return auth.Credentials{}, err
 		}
-		// Version in policy must not be empty
-		if policy.Version == "" {
-			return auth.Credentials{}, fmt.Errorf("Invalid session policy version")
+		policyBuf, err = json.Marshal(sessionPolicy)
+		if err != nil {
+			return auth.Credentials{}, err
+		}
+		if len(policyBuf) > 16*1024 {
+			return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
 		}
 	}
 
 	sys.store.lock()
 	defer sys.store.unlock()
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
 
 	if parentUser == globalActiveCred.AccessKey {
 		return auth.Credentials{}, errIAMActionNotAllowed
@@ -801,15 +816,24 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 		return auth.Credentials{}, errNoSuchUser
 	}
 
-	if cr.IsTemp() {
+	// Disallow service accounts to further create more service accounts.
+	if cr.IsServiceAccount() {
+		return auth.Credentials{}, errIAMActionNotAllowed
+	}
+
+	// FIXME: Disallow temporary users with no parent, this is most
+	// probably with OpenID which we don't support to provide
+	// any parent user, LDAPUsersType and MinIOUsersType are
+	// currently supported.
+	if cr.ParentUser == "" && cr.IsTemp() {
 		return auth.Credentials{}, errIAMActionNotAllowed
 	}
 
 	m := make(map[string]interface{})
 	m[parentClaim] = parentUser
 
-	if len(sessionPolicy) > 0 {
-		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicy))
+	if len(policyBuf) > 0 {
+		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
 		m[iamPolicyClaimNameSA()] = "embedded-policy"
 	} else {
 		m[iamPolicyClaimNameSA()] = "inherited-policy"
@@ -820,8 +844,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	if err != nil {
 		return auth.Credentials{}, err
 	}
-
 	cred.ParentUser = parentUser
+
 	u := newUserIdentity(cred)
 
 	if err := sys.store.saveUserIdentity(u.Credentials.AccessKey, srvAccUser, u); err != nil {
@@ -833,30 +857,72 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser, sessionPol
 	return cred, nil
 }
 
-// GetServiceAccount - returns the credentials of the given service account
-func (sys *IAMSys) GetServiceAccount(ctx context.Context, serviceAccountAccessKey string) (auth.Credentials, error) {
+// ListServiceAccounts - lists all services accounts associated to a specific user
+func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]string, error) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
-		return auth.Credentials{}, errServerNotInitialized
+		return nil, errServerNotInitialized
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	var serviceAccounts []string
+
+	for k, v := range sys.iamUsersMap {
+		if v.IsServiceAccount() && v.ParentUser == accessKey {
+			serviceAccounts = append(serviceAccounts, k)
+		}
+	}
+
+	return serviceAccounts, nil
+}
+
+// GetServiceAccountParent - gets information about a service account
+func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string) (string, error) {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || sys == nil || sys.store == nil {
+		return "", errServerNotInitialized
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	sa, ok := sys.iamUsersMap[accessKey]
+	if !ok || !sa.IsServiceAccount() {
+		return "", errNoSuchServiceAccount
+	}
+
+	return sa.ParentUser, nil
+}
+
+// DeleteServiceAccount - delete a service account
+func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || sys == nil || sys.store == nil {
+		return errServerNotInitialized
 	}
 
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return auth.Credentials{}, errIAMActionNotAllowed
+	sa, ok := sys.iamUsersMap[accessKey]
+	if !ok || !sa.IsServiceAccount() {
+		return errNoSuchServiceAccount
 	}
 
-	cr, ok := sys.iamUsersMap[serviceAccountAccessKey]
-	if !ok {
-		return auth.Credentials{}, errNoSuchUser
+	// It is ok to ignore deletion error on the mapped policy
+	err := sys.store.deleteUserIdentity(accessKey, srvAccUser)
+	if err != nil {
+		// ignore if user is already deleted.
+		if err == errNoSuchUser {
+			return nil
+		}
+		return err
 	}
 
-	if !cr.IsServiceAccount() {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
-	return cr, nil
+	delete(sys.iamUsersMap, accessKey)
+	return nil
 }
 
 // SetUser - set user credentials and policy.
@@ -937,6 +1003,11 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	defer sys.store.runlock()
 
 	cred, ok = sys.iamUsersMap[accessKey]
+	if ok && cred.IsValid() {
+		if cred.ParentUser != "" {
+			_, ok = sys.iamUsersMap[cred.ParentUser]
+		}
+	}
 	return cred, ok && cred.IsValid()
 }
 
@@ -1045,14 +1116,11 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		// len(gi.Members) == 0 here.
 
 		// Remove the group from storage. First delete the
-		// mapped policy.
-		err := sys.store.deleteMappedPolicy(group, regularUser, true)
-		// No-mapped-policy case is ignored.
-		if err != nil && err != errNoSuchPolicy {
+		// mapped policy. No-mapped-policy case is ignored.
+		if err := sys.store.deleteMappedPolicy(group, regularUser, true); err != nil && err != errNoSuchPolicy {
 			return err
 		}
-		err = sys.store.deleteGroupInfo(group)
-		if err != nil {
+		if err := sys.store.deleteGroupInfo(group); err != nil && err != errNoSuchGroup {
 			return err
 		}
 
@@ -1220,7 +1288,7 @@ func (sys *IAMSys) policyDBSet(name, policy string, userType IAMUserType, isGrou
 
 	// Handle policy mapping removal
 	if policy == "" {
-		if err := sys.store.deleteMappedPolicy(name, userType, isGroup); err != nil {
+		if err := sys.store.deleteMappedPolicy(name, userType, isGroup); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 		if !isGroup {
@@ -1472,53 +1540,50 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 
 	parentArgs := args
 	parentArgs.AccountName = parent
-	if !combinedPolicy.IsAllowed(parentArgs) {
+
+	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
+	if !ok {
 		return false
 	}
 
-	saPolicyClaim, ok := args.Claims[iamPolicyClaimNameSA()]
-	if ok {
-		saPolicyClaimStr, ok := saPolicyClaim.(string)
-		if !ok {
-			// Sub policy if set, should be a string reject
-			// malformed/malicious requests.
-			return false
-		}
+	saPolicyClaimStr, ok := saPolicyClaim.(string)
+	if !ok {
+		// Sub policy if set, should be a string reject
+		// malformed/malicious requests.
+		return false
+	}
 
-		if saPolicyClaimStr == "inherited-policy" {
-			// Immediately returns true since at this stage, since
-			// parent user is allowed to do this action.
-			return true
-		}
+	if saPolicyClaimStr == "inherited-policy" {
+		return combinedPolicy.IsAllowed(parentArgs)
 	}
 
 	// Now check if we have a sessionPolicy.
 	spolicy, ok := args.Claims[iampolicy.SessionPolicyName]
-	if ok {
-		spolicyStr, ok := spolicy.(string)
-		if !ok {
-			// Sub policy if set, should be a string reject
-			// malformed/malicious requests.
-			return false
-		}
-
-		// Check if policy is parseable.
-		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
-		if err != nil {
-			// Log any error in input session policy config.
-			logger.LogIf(context.Background(), err)
-			return false
-		}
-
-		// Policy without Version string value reject it.
-		if subPolicy.Version == "" {
-			return false
-		}
-
-		return subPolicy.IsAllowed(args)
+	if !ok {
+		return false
 	}
 
-	return false
+	spolicyStr, ok := spolicy.(string)
+	if !ok {
+		// Sub policy if set, should be a string reject
+		// malformed/malicious requests.
+		return false
+	}
+
+	// Check if policy is parseable.
+	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
+	if err != nil {
+		// Log any error in input session policy config.
+		logger.LogIf(context.Background(), err)
+		return false
+	}
+
+	// Policy without Version string value reject it.
+	if subPolicy.Version == "" {
+		return false
+	}
+
+	return combinedPolicy.IsAllowed(parentArgs) && subPolicy.IsAllowed(parentArgs)
 }
 
 // IsAllowedSTS is meant for STS based temporary credentials,

@@ -335,7 +335,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.AccessKey,
-				Action:          iampolicy.ListBucketAction,
+				Action:          iampolicy.ListAllMyBucketsAction,
 				BucketName:      bucket.Name,
 				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
@@ -745,17 +745,6 @@ next:
 			}
 
 			apiErr := ErrNone
-			// Deny if global WORM is enabled
-			if globalWORMEnabled {
-				opts, err := getOpts(ctx, r, args.BucketName, objectName)
-				if err != nil {
-					apiErr = toAPIErrorCode(ctx, err)
-				} else {
-					if _, err := getObjectInfo(ctx, args.BucketName, objectName, opts); err == nil {
-						apiErr = ErrMethodNotAllowed
-					}
-				}
-			}
 			if _, ok := globalBucketObjectLockConfig.Get(args.BucketName); ok && (apiErr == ErrNone) {
 				apiErr = enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo)
 				if apiErr != ErrNone && apiErr != ErrNoSuchKey {
@@ -907,11 +896,6 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
-	}
-
-	// When WORM is enabled, disallow changing credenatials for owner and user
-	if globalWORMEnabled {
-		return toJSONError(ctx, errChangeCredNotAllowed)
 	}
 
 	if owner {
@@ -2109,10 +2093,10 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	clnt := &http.Client{
 		Transport: NewGatewayHTTPTransport(),
 	}
+	defer clnt.CloseIdleConnections()
 
 	resp, err := clnt.Do(req)
 	if err != nil {
-		clnt.CloseIdleConnections()
 		return toJSONError(ctx, err)
 	}
 	defer xhttp.DrainBody(resp.Body)
