@@ -30,8 +30,8 @@ import (
 )
 
 const (
-	maxLimit = 10000 // Max store limit.
-	eventExt = ".event"
+	defaultLimit = 100000 // Default store limit.
+	eventExt     = ".event"
 )
 
 // QueueStore - Filestore for persisting events.
@@ -45,7 +45,7 @@ type QueueStore struct {
 // NewQueueStore - Creates an instance for QueueStore.
 func NewQueueStore(directory string, limit uint64) Store {
 	if limit == 0 {
-		limit = maxLimit
+		limit = defaultLimit
 		_, maxRLimit, err := sys.GetMaxOpenFileLimit()
 		if err == nil {
 			// Limit the maximum number of entries

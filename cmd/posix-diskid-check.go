@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 )
 
@@ -31,15 +32,15 @@ func (p *posixDiskIDCheck) String() string {
 }
 
 func (p *posixDiskIDCheck) IsOnline() bool {
-	storedDiskID, err := p.storage.getDiskID()
+	storedDiskID, err := p.storage.GetDiskID()
 	if err != nil {
 		return false
 	}
 	return storedDiskID == p.diskID
 }
 
-func (p *posixDiskIDCheck) CrawlAndGetDataUsage(endCh <-chan struct{}) (DataUsageInfo, error) {
-	return p.storage.CrawlAndGetDataUsage(endCh)
+func (p *posixDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	return p.storage.CrawlAndGetDataUsage(ctx, cache)
 }
 
 func (p *posixDiskIDCheck) Hostname() string {
@@ -48,6 +49,10 @@ func (p *posixDiskIDCheck) Hostname() string {
 
 func (p *posixDiskIDCheck) Close() error {
 	return p.storage.Close()
+}
+
+func (p *posixDiskIDCheck) GetDiskID() (string, error) {
+	return p.diskID, nil
 }
 
 func (p *posixDiskIDCheck) SetDiskID(id string) {
@@ -60,7 +65,7 @@ func (p *posixDiskIDCheck) isDiskStale() bool {
 		// or create format.json
 		return false
 	}
-	storedDiskID, err := p.storage.getDiskID()
+	storedDiskID, err := p.storage.GetDiskID()
 	if err == nil && p.diskID == storedDiskID {
 		return false
 	}
@@ -102,18 +107,25 @@ func (p *posixDiskIDCheck) StatVol(volume string) (vol VolInfo, err error) {
 	return p.storage.StatVol(volume)
 }
 
-func (p *posixDiskIDCheck) DeleteVol(volume string) (err error) {
+func (p *posixDiskIDCheck) DeleteVol(volume string, forceDelete bool) (err error) {
 	if p.isDiskStale() {
 		return errDiskNotFound
 	}
-	return p.storage.DeleteVol(volume)
+	return p.storage.DeleteVol(volume, forceDelete)
 }
 
-func (p *posixDiskIDCheck) Walk(volume, dirPath string, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+func (p *posixDiskIDCheck) Walk(volume, dirPath string, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if p.isDiskStale() {
 		return nil, errDiskNotFound
 	}
 	return p.storage.Walk(volume, dirPath, marker, recursive, leafFile, readMetadataFn, endWalkCh)
+}
+
+func (p *posixDiskIDCheck) WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+	if p.isDiskStale() {
+		return nil, errDiskNotFound
+	}
+	return p.storage.WalkSplunk(volume, dirPath, marker, endWalkCh)
 }
 
 func (p *posixDiskIDCheck) ListDir(volume, dirPath string, count int, leafFile string) ([]string, error) {
@@ -177,6 +189,13 @@ func (p *posixDiskIDCheck) DeleteFileBulk(volume string, paths []string) (errs [
 		return nil, errDiskNotFound
 	}
 	return p.storage.DeleteFileBulk(volume, paths)
+}
+
+func (p *posixDiskIDCheck) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
+	if p.isDiskStale() {
+		return nil, errDiskNotFound
+	}
+	return p.storage.DeletePrefixes(volume, paths)
 }
 
 func (p *posixDiskIDCheck) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {

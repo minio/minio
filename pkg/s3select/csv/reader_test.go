@@ -63,7 +63,13 @@ func TestRead(t *testing.T) {
 			if err != nil {
 				break
 			}
-			record.WriteCSV(&result, []rune(c.fieldDelimiter)[0])
+			opts := sql.WriteCSVOpts{
+				FieldDelimiter: []rune(c.fieldDelimiter)[0],
+				Quote:          '"',
+				QuoteEscape:    '"',
+				AlwaysQuote:    false,
+			}
+			record.WriteCSV(&result, opts)
 			result.Truncate(result.Len() - 1)
 			result.WriteString(c.recordDelimiter)
 		}
@@ -242,8 +248,14 @@ func TestReadExtended(t *testing.T) {
 					break
 				}
 				if fields < 10 {
+					opts := sql.WriteCSVOpts{
+						FieldDelimiter: ',',
+						Quote:          '"',
+						QuoteEscape:    '"',
+						AlwaysQuote:    false,
+					}
 					// Write with fixed delimiters, newlines.
-					err := record.WriteCSV(&result, ',')
+					err := record.WriteCSV(&result, opts)
 					if err != nil {
 						t.Error(err)
 					}
@@ -453,8 +465,15 @@ func TestReadFailures(t *testing.T) {
 				if err != nil {
 					break
 				}
+
+				opts := sql.WriteCSVOpts{
+					FieldDelimiter: ',',
+					Quote:          '"',
+					QuoteEscape:    '"',
+					AlwaysQuote:    false,
+				}
 				// Write with fixed delimiters, newlines.
-				err := record.WriteCSV(&result, ',')
+				err := record.WriteCSV(&result, opts)
 				if err != nil {
 					t.Error(err)
 				}

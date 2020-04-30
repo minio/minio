@@ -33,7 +33,7 @@ var (
 	ErrInvalidErasureSetSize = newErrFn(
 		"Invalid erasure set size",
 		"Please check the passed value",
-		"Erasure set can only accept any of [4, 6, 8, 10, 12, 14, 16] values",
+		"Erasure set can only accept any of [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16] values",
 	)
 
 	ErrInvalidWormValue = newErrFn(
@@ -70,6 +70,18 @@ var (
 		"Invalid cache after value",
 		"Please check the passed value",
 		"MINIO_CACHE_AFTER: Valid cache after value must be 0 or greater",
+	)
+
+	ErrInvalidCacheWatermarkLow = newErrFn(
+		"Invalid cache low watermark value",
+		"Please check the passed value",
+		"MINIO_CACHE_WATERMARK_LOW: Valid cache low watermark value must be between 0-100",
+	)
+
+	ErrInvalidCacheWatermarkHigh = newErrFn(
+		"Invalid cache high watermark value",
+		"Please check the passed value",
+		"MINIO_CACHE_WATERMARK_HIGH: Valid cache high watermark value must be between 0-100",
 	)
 
 	ErrInvalidCacheEncryptionKey = newErrFn(

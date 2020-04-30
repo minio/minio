@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -91,7 +92,10 @@ func TestCommonTime(t *testing.T) {
 // TestListOnlineDisks - checks if listOnlineDisks and outDatedDisks
 // are consistent with each other.
 func TestListOnlineDisks(t *testing.T) {
-	obj, disks, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, disks, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}
@@ -174,15 +178,15 @@ func TestListOnlineDisks(t *testing.T) {
 		// Prepare bucket/object backend for the tests below.
 
 		// Cleanup from previous test.
-		obj.DeleteObject(context.Background(), bucket, object)
-		obj.DeleteBucket(context.Background(), bucket)
+		obj.DeleteObject(GlobalContext, bucket, object)
+		obj.DeleteBucket(GlobalContext, bucket, false)
 
-		err = obj.MakeBucketWithLocation(context.Background(), "bucket", "")
+		err = obj.MakeBucketWithLocation(GlobalContext, "bucket", "")
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
 
-		_, err = obj.PutObject(context.Background(), bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
+		_, err = obj.PutObject(GlobalContext, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 		if err != nil {
 			t.Fatalf("Failed to putObject %v", err)
 		}
@@ -228,7 +232,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 		}
 
-		partsMetadata, errs := readAllXLMetadata(context.Background(), xlDisks, bucket, object)
+		partsMetadata, errs := readAllXLMetadata(GlobalContext, xlDisks, bucket, object)
 		for i := range partsMetadata {
 			if errs[i] != nil {
 				t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[i].Error())
@@ -242,7 +246,7 @@ func TestListOnlineDisks(t *testing.T) {
 				i+1, test.expectedTime, modTime)
 		}
 
-		availableDisks, newErrs := disksWithAllParts(context.Background(), onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
+		availableDisks, newErrs := disksWithAllParts(GlobalContext, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
 		test.errs = newErrs
 
 		if test._tamperBackend != noTamper {
@@ -256,8 +260,9 @@ func TestListOnlineDisks(t *testing.T) {
 }
 
 func TestDisksWithAllParts(t *testing.T) {
-	ctx := context.Background()
-	obj, disks, err := prepareXL16()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	obj, disks, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Prepare XL backend failed - %v", err)
 	}
@@ -317,8 +322,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	diskFailures[15] = "part.1"
 
 	for diskIndex, partName := range diskFailures {
-		for _, info := range partsMetadata[diskIndex].Erasure.Checksums {
-			if info.Name == partName {
+		for i := range partsMetadata[diskIndex].Erasure.Checksums {
+			if fmt.Sprintf("part.%d", i+1) == partName {
 				filePath := pathJoin(xlDisks[diskIndex].String(), bucket, object, partName)
 				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)
 				if err != nil {

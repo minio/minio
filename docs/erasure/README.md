@@ -24,9 +24,9 @@ MinIO's erasure coded backend uses high speed [HighwayHash](https://github.com/m
 
 ## How are drives used for Erasure Code?
 
-MinIO divides the drives you provide into erasure-coding sets of 4, 6, 8, 10, 12, 14 or 16 drives.  Therefore, the number of drives you present must be a multiple of one of these numbers.  Each object is written to a single erasure-coding set.
+MinIO divides the drives you provide into erasure-coding sets of *4 to 16* drives.  Therefore, the number of drives you present must be a multiple of one of these numbers.  Each object is written to a single erasure-coding set.
 
-Minio uses the largest possible EC set size which divides into the number of drives given.  For example, 18 drives are configured as 3 sets of 6 drives; but 24 drives are configured as 2 sets of 12 drives.
+Minio uses the largest possible EC set size which divides into the number of drives given.  For example, *18 drives* are configured as *2 sets of 9 drives*, and *24 drives* are configured as *2 sets of 12 drives*.
 
 The drives should all be of approximately the same size.
 
@@ -41,7 +41,7 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 Example: Start MinIO server in a 12 drives setup, using MinIO binary.
 
 ```sh
-minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8 /data9 /data10 /data11 /data12
+minio server /data{1...12}
 ```
 
 Example: Start MinIO server in a 8 drives setup, using MinIO Docker image. 
@@ -56,7 +56,7 @@ docker run -p 9000:9000 --name minio \
   -v /mnt/data6:/data6 \
   -v /mnt/data7:/data7 \
   -v /mnt/data8:/data8 \
-  minio/minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8
+  minio/minio server /data{1...8}
 ```
 
 ### 3. Test your setup

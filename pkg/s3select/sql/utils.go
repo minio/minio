@@ -50,7 +50,7 @@ func (e *JSONPathElement) String() string {
 	return ""
 }
 
-// Removes double quotes in quoted identifiers
+// String removes double quotes in quoted identifiers
 func (i *Identifier) String() string {
 	if i.Unquoted != nil {
 		return *i.Unquoted

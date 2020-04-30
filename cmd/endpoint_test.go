@@ -37,19 +37,7 @@ func TestNewEndpoint(t *testing.T) {
 		expectedType     EndpointType
 		expectedErr      error
 	}{
-		{"foo", Endpoint{URL: &url.URL{Path: "foo"}, IsLocal: true}, PathEndpointType, nil},
 		{"/foo", Endpoint{URL: &url.URL{Path: "/foo"}, IsLocal: true}, PathEndpointType, nil},
-		{`\foo`, Endpoint{URL: &url.URL{Path: `\foo`}, IsLocal: true}, PathEndpointType, nil},
-		{"C", Endpoint{URL: &url.URL{Path: `C`}, IsLocal: true}, PathEndpointType, nil},
-		{"C:", Endpoint{URL: &url.URL{Path: `C:`}, IsLocal: true}, PathEndpointType, nil},
-		{"C:/", Endpoint{URL: &url.URL{Path: "C:"}, IsLocal: true}, PathEndpointType, nil},
-		{`C:\`, Endpoint{URL: &url.URL{Path: `C:\`}, IsLocal: true}, PathEndpointType, nil},
-		{`C:\foo`, Endpoint{URL: &url.URL{Path: `C:\foo`}, IsLocal: true}, PathEndpointType, nil},
-		{"C:/foo", Endpoint{URL: &url.URL{Path: "C:/foo"}, IsLocal: true}, PathEndpointType, nil},
-		{`C:\\foo`, Endpoint{URL: &url.URL{Path: `C:\\foo`}, IsLocal: true}, PathEndpointType, nil},
-		{"http:path", Endpoint{URL: &url.URL{Path: "http:path"}, IsLocal: true}, PathEndpointType, nil},
-		{"http:/path", Endpoint{URL: &url.URL{Path: "http:/path"}, IsLocal: true}, PathEndpointType, nil},
-		{"http:///path", Endpoint{URL: &url.URL{Path: "http:/path"}, IsLocal: true}, PathEndpointType, nil},
 		{"https://example.org/path", Endpoint{URL: u2, IsLocal: false}, URLEndpointType, nil},
 		{"http://192.168.253.200/path", Endpoint{URL: u4, IsLocal: false}, URLEndpointType, nil},
 		{"", Endpoint{}, -1, fmt.Errorf("empty or root endpoint is not supported")},
@@ -101,7 +89,6 @@ func TestNewEndpoints(t *testing.T) {
 		args        []string
 		expectedErr error
 	}{
-		{[]string{"d1", "d2", "d3", "d4"}, nil},
 		{[]string{"/d1", "/d2", "/d3", "/d4"}, nil},
 		{[]string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}, nil},
 		{[]string{"http://example.org/d1", "http://example.com/d1", "http://example.net/d1", "http://example.edu/d1"}, nil},
@@ -225,20 +212,17 @@ func TestCreateEndpoints(t *testing.T) {
 
 		// FS Setup
 		{"localhost:9000", [][]string{{"http://localhost/d1"}}, "", Endpoints{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
-		{":443", [][]string{{"d1"}}, ":443", Endpoints{Endpoint{URL: &url.URL{Path: "d1"}, IsLocal: true}}, FSSetupType, nil},
+		{":443", [][]string{{"/d1"}}, ":443", Endpoints{Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true}}, FSSetupType, nil},
 		{"localhost:10000", [][]string{{"/d1"}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true}}, FSSetupType, nil},
-		{"localhost:10000", [][]string{{"./d1"}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: "d1"}, IsLocal: true}}, FSSetupType, nil},
-		{"localhost:10000", [][]string{{`\d1`}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: `\d1`}, IsLocal: true}}, FSSetupType, nil},
-		{"localhost:10000", [][]string{{`.\d1`}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: `.\d1`}, IsLocal: true}}, FSSetupType, nil},
 		{"localhost:9000", [][]string{{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}}, "", Endpoints{}, -1, fmt.Errorf("path '/d1' can not be served by different port on same address")},
 
 		// XL Setup with PathEndpointType
-		{":1234", [][]string{{"/d1", "/d2", "d3", "d4"}}, ":1234",
+		{":1234", [][]string{{"/d1", "/d2", "/d3", "/d4"}}, ":1234",
 			Endpoints{
 				Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
 				Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
-				Endpoint{URL: &url.URL{Path: "d3"}, IsLocal: true},
-				Endpoint{URL: &url.URL{Path: "d4"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Path: "/d3"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
 			}, XLSetupType, nil},
 		// DistXL Setup with URLEndpointType
 		{":9000", [][]string{{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}}, ":9000", Endpoints{

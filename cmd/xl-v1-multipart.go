@@ -50,13 +50,13 @@ func (xl xlObjects) getMultipartSHADir(bucket, object string) string {
 
 // checkUploadIDExists - verify if a given uploadID exists and is valid.
 func (xl xlObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) error {
-	_, err := xl.getObjectInfo(ctx, minioMetaMultipartBucket, xl.getUploadIDDir(bucket, object, uploadID))
+	_, err := xl.getObjectInfo(ctx, minioMetaMultipartBucket, xl.getUploadIDDir(bucket, object, uploadID), ObjectOptions{})
 	return err
 }
 
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
-func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) {
-	curpartPath := path.Join(bucket, object, uploadID, partName)
+func (xl xlObjects) removeObjectPart(bucket, object, uploadID string, partNumber int) {
+	curpartPath := pathJoin(bucket, object, uploadID, fmt.Sprintf("part.%d", partNumber))
 	storageDisks := xl.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -391,7 +391,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	md5hex := r.MD5CurrentHexString()
 
 	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, md5hex, n, data.ActualSize())
+	xlMeta.AddObjectPart(partID, md5hex, n, data.ActualSize())
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -399,7 +399,11 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 		}
 		partsMetadata[i].Stat = xlMeta.Stat
 		partsMetadata[i].Parts = xlMeta.Parts
-		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partSuffix, DefaultBitrotAlgorithm, bitrotWriterSum(writers[i])})
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
+			PartNumber: partID,
+			Algorithm:  DefaultBitrotAlgorithm,
+			Hash:       bitrotWriterSum(writers[i]),
+		})
 	}
 
 	// Write all the checksum metadata.
@@ -421,8 +425,8 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	// Return success.
 	return PartInfo{
 		PartNumber:   partID,
-		LastModified: xlMeta.Stat.ModTime,
 		ETag:         md5hex,
+		LastModified: xlMeta.Stat.ModTime,
 		Size:         xlMeta.Stat.Size,
 		ActualSize:   data.ActualSize(),
 	}, nil
@@ -541,6 +545,8 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
+	defer ObjectPathUpdated(path.Join(bucket, object))
+
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
 
@@ -630,7 +636,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		xlMeta.Parts[i] = ObjectPartInfo{
 			Number:     part.PartNumber,
 			Size:       currentXLMeta.Parts[partIdx].Size,
-			Name:       fmt.Sprintf("part.%d", part.PartNumber),
 			ActualSize: currentXLMeta.Parts[partIdx].ActualSize,
 		}
 	}
@@ -670,13 +675,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	if xl.isObject(bucket, object) {
-		// Deny if WORM is enabled
-		if isWORMEnabled(bucket) {
-			if _, err := xl.getObjectInfo(ctx, bucket, object); err == nil {
-				return ObjectInfo{}, ObjectAlreadyExists{Bucket: bucket, Object: object}
-			}
-		}
-
 		// Rename if an object already exists to temporary location.
 		newUniqueID := mustGetUUID()
 
@@ -701,7 +699,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 			// Request 3: PutObjectPart 2
 			// Request 4: CompleteMultipartUpload --part 2
 			// N.B. 1st part is not present. This part should be removed from the storage.
-			xl.removeObjectPart(bucket, object, uploadID, curpart.Name)
+			xl.removeObjectPart(bucket, object, uploadID, curpart.Number)
 		}
 	}
 
@@ -762,7 +760,7 @@ func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, up
 }
 
 // Clean-up the old multipart uploads. Should be run in a Go routine.
-func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
+func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh <-chan struct{}) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -805,7 +803,8 @@ func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk
 				continue
 			}
 			if now.Sub(fi.ModTime) > expiry {
-				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, len(xl.getDisks())/2+1, false)
+				writeQuorum := getWriteQuorum(len(xl.getDisks()))
+				xl.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, writeQuorum, false)
 			}
 		}
 	}

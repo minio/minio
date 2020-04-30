@@ -643,20 +643,158 @@ function test_copy_object() {
         out=$($function)
         rv=$?
         hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
-        if [ $rv -eq 0 ] && [ "$HASH_1_KB" == "$hash2" ]; then
-            function="delete_bucket"
-            out=$(delete_bucket "$bucket_name")
-            rv=$?
-            # The command passed, but the verification failed
-            out="Verification failed for copied object"
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
+            # Verification failed
+            rv=1
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
         fi
     fi
 
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
     if [ $rv -eq 0 ]; then
         log_success "$(get_duration "$start_time")" "${test_function}"
     else
-        # clean up and log error
-        ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+
+    return $rv
+}
+
+# Copy object tests for server side copy
+# of the object, validates returned md5sum.
+# validates change in storage class as well
+function test_copy_object_storage_class() {
+    # log start time
+    start_time=$(get_time)
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+
+    # if make bucket succeeds upload a file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # copy object server side
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --storage-class REDUCED_REDUNDANCY --key datafile-1-kB-copy --copy-source ${bucket_name}/datafile-1-kB"
+        test_function=${function}
+        out=$($function 2>&1)
+        rv=$?
+        # if this functionality is not implemented return right away.
+        if [ $rv -eq 255 ]; then
+            if echo "$out" | greq -q "NotImplemented"; then
+                ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+                return 0
+            fi
+        fi
+        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
+            # Verification failed
+            rv=1
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
+        fi
+        # if copy succeeds stat the object
+        if [ $rv -eq 0 ]; then
+            function="${AWS} s3api head-object --bucket ${bucket_name} --key datafile-1-kB-copy"
+            # save the ref to function being tested, so it can be logged
+            test_function=${function}
+            out=$($function 2>&1)
+            storageClass=$(echo "$out" | jq -r .StorageClass)
+            rv=$?
+        fi
+        # if head-object succeeds, verify metadata has storage class
+        if [ $rv -eq 0 ]; then
+            if [ "${storageClass}" == "null" ]; then
+                rv=1
+                out="StorageClass was not applied"
+            elif [ "${storageClass}" == "STANDARD" ]; then
+                rv=1
+                out="StorageClass was applied incorrectly"
+            fi
+        fi
+    fi
+
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
+        log_failure "$(get_duration "$start_time")" "${function}" "${out}"
+    fi
+
+    return $rv
+}
+
+# Copy object tests for server side copy
+# to itself by changing storage class
+function test_copy_object_storage_class_same() {
+    # log start time
+    start_time=$(get_time)
+
+    function="make_bucket"
+    bucket_name=$(make_bucket)
+    rv=$?
+
+    # if make bucket succeeds upload a file
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api put-object --body ${MINT_DATA_DIR}/datafile-1-kB --bucket ${bucket_name} --key datafile-1-kB"
+        out=$($function 2>&1)
+        rv=$?
+    else
+        # if make bucket fails, $bucket_name has the error output
+        out="${bucket_name}"
+    fi
+
+    # copy object server side
+    if [ $rv -eq 0 ]; then
+        function="${AWS} s3api copy-object --bucket ${bucket_name} --storage-class REDUCED_REDUNDANCY --key datafile-1-kB --copy-source ${bucket_name}/datafile-1-kB"
+        test_function=${function}
+        out=$($function 2>&1)
+        rv=$?
+        # if this functionality is not implemented return right away.
+        if [ $rv -eq 255 ]; then
+            if echo "$out" | greq -q "NotImplemented"; then
+                ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+                return 0
+            fi
+        fi
+        hash2=$(echo "$out" | jq -r .CopyObjectResult.ETag | sed -e 's/^"//' -e 's/"$//')
+        if [ $rv -eq 0 ] && [ "$HASH_1_KB" != "$hash2" ]; then
+            # Verification failed
+            rv=1
+            out="Hash mismatch expected $HASH_1_KB, got $hash2"
+        fi
+        # if copy succeeds stat the object
+        if [ $rv -eq 0 ]; then
+            function="${AWS} s3api head-object --bucket ${bucket_name} --key datafile-1-kB"
+            # save the ref to function being tested, so it can be logged
+            test_function=${function}
+            out=$($function 2>&1)
+            storageClass=$(echo "$out" | jq -r .StorageClass)
+            rv=$?
+        fi
+        # if head-object succeeds, verify metadata has storage class
+        if [ $rv -eq 0 ]; then
+            if [ "${storageClass}" == "null" ]; then
+                rv=1
+                out="StorageClass was not applied"
+            elif [ "${storageClass}" == "STANDARD" ]; then
+                rv=1
+                out="StorageClass was applied incorrectly"
+            fi
+        fi
+    fi
+
+    ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+    if [ $rv -eq 0 ]; then
+        log_success "$(get_duration "$start_time")" "${test_function}"
+    else
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
     fi
 
@@ -1185,8 +1323,8 @@ function test_serverside_encryption_multipart() {
     return $rv
 }
 
-# tests encrypted copy from multipart encrypted object to 
-# single part encrypted object. This test in particular checks if copy 
+# tests encrypted copy from multipart encrypted object to
+# single part encrypted object. This test in particular checks if copy
 # succeeds for the case where encryption overhead for individually
 # encrypted parts vs encryption overhead for the original datastream
 # differs.
@@ -1471,7 +1609,7 @@ function test_legal_hold() {
         out="${bucket_name}"
     fi
 
-    # if upload succeeds download the file
+    # if upload succeeds stat the file
     if [ $rv -eq 0 ]; then
         function="${AWS} s3api head-object --bucket ${bucket_name} --key datafile-1-kB"
         # save the ref to function being tested, so it can be logged
@@ -1551,6 +1689,8 @@ main() {
     test_multipart_upload && \
     test_max_key_list && \
     test_copy_object && \
+    test_copy_object_storage_class && \
+    test_copy_object_storage_class_same && \
     test_presigned_object && \
     test_upload_object_10 && \
     test_multipart_upload_10 && \
@@ -1566,7 +1706,7 @@ main() {
     test_put_object_error && \
     test_serverside_encryption_error && \
     test_worm_bucket && \
-    test_legal_hold 
+    test_legal_hold
 
     return $?
 }

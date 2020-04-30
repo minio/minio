@@ -294,6 +294,12 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 		ret := csv.NewReader(r)
 		ret.Comma = []rune(args.FieldDelimiter)[0]
 		ret.Comment = []rune(args.CommentCharacter)[0]
+		ret.Quote = []rune{}
+		if len([]rune(args.QuoteCharacter)) > 0 {
+			// Add the first rune of args.QuoteChracter
+			ret.Quote = append(ret.Quote, []rune(args.QuoteCharacter)[0])
+		}
+		ret.QuoteEscape = []rune(args.QuoteEscapeCharacter)[0]
 		ret.FieldsPerRecord = -1
 		// If LazyQuotes is true, a quote may appear in an unquoted field and a
 		// non-doubled quote may appear in a quoted field.

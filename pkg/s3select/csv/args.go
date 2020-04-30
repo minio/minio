@@ -18,8 +18,11 @@ package csv
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -55,68 +58,70 @@ func (args *ReaderArgs) IsEmpty() bool {
 }
 
 // UnmarshalXML - decodes XML data.
-func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	// Make subtype to avoid recursive UnmarshalXML().
-	type subReaderArgs ReaderArgs
-	parsedArgs := subReaderArgs{}
-	if err := d.DecodeElement(&parsedArgs, &start); err != nil {
-		return err
+func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error) {
+	args.FileHeaderInfo = none
+	args.RecordDelimiter = defaultRecordDelimiter
+	args.FieldDelimiter = defaultFieldDelimiter
+	args.QuoteCharacter = defaultQuoteCharacter
+	args.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
+	args.CommentCharacter = defaultCommentCharacter
+	args.AllowQuotedRecordDelimiter = false
+
+	for {
+		// Read tokens from the XML document in a stream.
+		t, err := d.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch se := t.(type) {
+		case xml.StartElement:
+			tagName := se.Name.Local
+			switch tagName {
+			case "AllowQuotedRecordDelimiter":
+				var b bool
+				if err = d.DecodeElement(&b, &se); err != nil {
+					return err
+				}
+				args.AllowQuotedRecordDelimiter = b
+			default:
+				var s string
+				if err = d.DecodeElement(&s, &se); err != nil {
+					return err
+				}
+				switch tagName {
+				case "FileHeaderInfo":
+					args.FileHeaderInfo = strings.ToLower(s)
+				case "RecordDelimiter":
+					args.RecordDelimiter = s
+				case "FieldDelimiter":
+					args.FieldDelimiter = s
+				case "QuoteCharacter":
+					if utf8.RuneCountInString(s) > 1 {
+						return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
+					}
+					args.QuoteCharacter = s
+				case "QuoteEscapeCharacter":
+					switch utf8.RuneCountInString(s) {
+					case 0:
+						args.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
+					case 1:
+						args.QuoteEscapeCharacter = s
+					default:
+						return fmt.Errorf("unsupported QuoteEscapeCharacter '%v'", s)
+					}
+				case "Comments":
+					args.CommentCharacter = s
+				default:
+					return errors.New("unrecognized option")
+				}
+			}
+		}
 	}
 
-	parsedArgs.FileHeaderInfo = strings.ToLower(parsedArgs.FileHeaderInfo)
-	switch parsedArgs.FileHeaderInfo {
-	case "":
-		parsedArgs.FileHeaderInfo = none
-	case none, use, ignore:
-	default:
-		return errInvalidFileHeaderInfo(fmt.Errorf("invalid FileHeaderInfo '%v'", parsedArgs.FileHeaderInfo))
-	}
-
-	switch len([]rune(parsedArgs.RecordDelimiter)) {
-	case 0:
-		parsedArgs.RecordDelimiter = defaultRecordDelimiter
-	case 1, 2:
-	default:
-		return fmt.Errorf("invalid RecordDelimiter '%v'", parsedArgs.RecordDelimiter)
-	}
-
-	switch len([]rune(parsedArgs.FieldDelimiter)) {
-	case 0:
-		parsedArgs.FieldDelimiter = defaultFieldDelimiter
-	case 1:
-	default:
-		return fmt.Errorf("invalid FieldDelimiter '%v'", parsedArgs.FieldDelimiter)
-	}
-
-	switch parsedArgs.QuoteCharacter {
-	case "":
-		parsedArgs.QuoteCharacter = defaultQuoteCharacter
-	case defaultQuoteCharacter:
-	default:
-		return fmt.Errorf("unsupported QuoteCharacter '%v'", parsedArgs.QuoteCharacter)
-	}
-
-	switch parsedArgs.QuoteEscapeCharacter {
-	case "":
-		parsedArgs.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
-	case defaultQuoteEscapeCharacter:
-	default:
-		return fmt.Errorf("unsupported QuoteEscapeCharacter '%v'", parsedArgs.QuoteEscapeCharacter)
-	}
-
-	switch parsedArgs.CommentCharacter {
-	case "":
-		parsedArgs.CommentCharacter = defaultCommentCharacter
-	case defaultCommentCharacter:
-	default:
-		return fmt.Errorf("unsupported Comments '%v'", parsedArgs.CommentCharacter)
-	}
-
-	if parsedArgs.AllowQuotedRecordDelimiter {
-		return fmt.Errorf("flag AllowQuotedRecordDelimiter is unsupported at the moment")
-	}
-
-	*args = ReaderArgs(parsedArgs)
 	args.unmarshaled = true
 	return nil
 }
@@ -138,55 +143,60 @@ func (args *WriterArgs) IsEmpty() bool {
 
 // UnmarshalXML - decodes XML data.
 func (args *WriterArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	// Make subtype to avoid recursive UnmarshalXML().
-	type subWriterArgs WriterArgs
-	parsedArgs := subWriterArgs{}
-	if err := d.DecodeElement(&parsedArgs, &start); err != nil {
-		return err
+
+	args.QuoteFields = asneeded
+	args.RecordDelimiter = defaultRecordDelimiter
+	args.FieldDelimiter = defaultFieldDelimiter
+	args.QuoteCharacter = defaultQuoteCharacter
+	args.QuoteEscapeCharacter = defaultQuoteCharacter
+
+	for {
+		// Read tokens from the XML document in a stream.
+		t, err := d.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch se := t.(type) {
+		case xml.StartElement:
+			var s string
+			if err = d.DecodeElement(&s, &se); err != nil {
+				return err
+			}
+			switch se.Name.Local {
+			case "QuoteFields":
+				args.QuoteFields = strings.ToLower(s)
+			case "RecordDelimiter":
+				args.RecordDelimiter = s
+			case "FieldDelimiter":
+				args.FieldDelimiter = s
+			case "QuoteCharacter":
+				switch utf8.RuneCountInString(s) {
+				case 0:
+					args.QuoteCharacter = "\x00"
+				case 1:
+					args.QuoteCharacter = s
+				default:
+					return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
+				}
+			case "QuoteEscapeCharacter":
+				switch utf8.RuneCountInString(s) {
+				case 0:
+					args.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
+				case 1:
+					args.QuoteEscapeCharacter = s
+				default:
+					return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
+				}
+			default:
+				return errors.New("unrecognized option")
+			}
+		}
 	}
 
-	parsedArgs.QuoteFields = strings.ToLower(parsedArgs.QuoteFields)
-	switch parsedArgs.QuoteFields {
-	case "":
-		parsedArgs.QuoteFields = asneeded
-	case always, asneeded:
-	default:
-		return errInvalidQuoteFields(fmt.Errorf("invalid QuoteFields '%v'", parsedArgs.QuoteFields))
-	}
-
-	switch len([]rune(parsedArgs.RecordDelimiter)) {
-	case 0:
-		parsedArgs.RecordDelimiter = defaultRecordDelimiter
-	case 1, 2:
-	default:
-		return fmt.Errorf("invalid RecordDelimiter '%v'", parsedArgs.RecordDelimiter)
-	}
-
-	switch len([]rune(parsedArgs.FieldDelimiter)) {
-	case 0:
-		parsedArgs.FieldDelimiter = defaultFieldDelimiter
-	case 1:
-	default:
-		return fmt.Errorf("invalid FieldDelimiter '%v'", parsedArgs.FieldDelimiter)
-	}
-
-	switch parsedArgs.QuoteCharacter {
-	case "":
-		parsedArgs.QuoteCharacter = defaultQuoteCharacter
-	case defaultQuoteCharacter:
-	default:
-		return fmt.Errorf("unsupported QuoteCharacter '%v'", parsedArgs.QuoteCharacter)
-	}
-
-	switch parsedArgs.QuoteEscapeCharacter {
-	case "":
-		parsedArgs.QuoteEscapeCharacter = defaultQuoteEscapeCharacter
-	case defaultQuoteEscapeCharacter:
-	default:
-		return fmt.Errorf("unsupported QuoteEscapeCharacter '%v'", parsedArgs.QuoteEscapeCharacter)
-	}
-
-	*args = WriterArgs(parsedArgs)
 	args.unmarshaled = true
 	return nil
 }

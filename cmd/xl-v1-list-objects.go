@@ -25,7 +25,7 @@ import (
 // disks - used for doing disk.ListDir()
 func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 	// Returns sorted merged entries from all the disks.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, mergedEntries []string) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
@@ -34,7 +34,7 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 			var newEntries []string
 			var err error
 			entries, err = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
-			if err != nil {
+			if err != nil || len(entries) == 0 {
 				continue
 			}
 
@@ -54,7 +54,12 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 				sort.Strings(mergedEntries)
 			}
 		}
-		return filterMatchingPrefix(mergedEntries, prefixEntry)
+
+		if len(mergedEntries) == 0 {
+			return true, nil
+		}
+
+		return false, filterMatchingPrefix(mergedEntries, prefixEntry)
 	}
 	return listDir
 }
@@ -95,7 +100,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 		} else {
 			// Set the Mode to a "regular" file.
 			var err error
-			objInfo, err = xl.getObjectInfo(ctx, bucket, entry)
+			objInfo, err = xl.getObjectInfo(ctx, bucket, entry, ObjectOptions{})
 			if err != nil {
 				// Ignore errFileNotFound as the object might have got
 				// deleted in the interim period of listing and getObjectInfo(),
@@ -144,7 +149,7 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 
 // ListObjects - list all objects at prefix, delimited by '/'.
 func (xl xlObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, delimiter, xl); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, marker, xl); err != nil {
 		return loi, err
 	}
 

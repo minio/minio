@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,33 @@ import (
 
 	"github.com/minio/minio/pkg/disk"
 )
+
+func TestCheckPathLength(t *testing.T) {
+	// Check path length restrictions are not same on windows/darwin
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+
+	testCases := []struct {
+		path        string
+		expectedErr error
+	}{
+		{".", errFileAccessDenied},
+		{"/", errFileAccessDenied},
+		{"..", errFileAccessDenied},
+		{"data/G_792/srv-tse/c/users/denis/documents/gestion!20locative/heritier/propri!E9taire/20190101_a2.03!20-!20m.!20heritier!20re!B4mi!20-!20proce!60s-verbal!20de!20livraison!20et!20de!20remise!20des!20cle!B4s!20acque!B4reurs!20-!204-!20livraison!20-!20lp!20promotion!20toulouse!20-!20encre!20et!20plume!20-!205!20de!B4c.!202019!20a!60!2012-49.pdf.ecc", errFileNameTooLong},
+		{"data/G_792/srv-tse/c/users/denis/documents/gestionlocative.txt", nil},
+	}
+
+	for _, testCase := range testCases {
+		gotErr := checkPathLength(testCase.path)
+		t.Run("", func(t *testing.T) {
+			if gotErr != testCase.expectedErr {
+				t.Errorf("Expected %s, got %s", testCase.expectedErr, gotErr)
+			}
+		})
+	}
+}
 
 // Tests validate volume name.
 func TestIsValidVolname(t *testing.T) {
@@ -508,7 +535,7 @@ func TestPosixDeleteVol(t *testing.T) {
 		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
 			t.Errorf("Expected the StorageAPI to be of type *posixDiskIDCheck")
 		}
-		if err = posixStorage.DeleteVol(testCase.volName); err != testCase.expectedErr {
+		if err = posixStorage.DeleteVol(testCase.volName, false); err != testCase.expectedErr {
 			t.Fatalf("TestPosix: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -547,7 +574,7 @@ func TestPosixDeleteVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		if err = posixStorage.DeleteVol("mybucket"); err != errDiskAccessDenied {
+		if err = posixStorage.DeleteVol("mybucket", false); err != errDiskAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
@@ -561,7 +588,7 @@ func TestPosixDeleteVol(t *testing.T) {
 
 	// TestPosix for delete on an removed disk.
 	// should fail with disk not found.
-	err = posixDeletedStorage.DeleteVol("Del-Vol")
+	err = posixDeletedStorage.DeleteVol("Del-Vol", false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}

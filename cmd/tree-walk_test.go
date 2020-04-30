@@ -260,7 +260,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file1" from fsDir1.
-	entries := listDir(volume, "", "")
+	_, entries := listDir(volume, "", "")
 	if len(entries) != 2 {
 		t.Fatal("Expected the number of entries to be 2")
 	}
@@ -278,7 +278,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file2" from fsDir2.
-	entries = listDir(volume, "", "")
+	_, entries = listDir(volume, "", "")
 	if len(entries) != 1 {
 		t.Fatal("Expected the number of entries to be 1")
 	}

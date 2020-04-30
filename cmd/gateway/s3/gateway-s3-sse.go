@@ -315,7 +315,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	objInfo.UserDefined = minio.CleanMinioInternalMetadataKeys(objInfo.UserDefined)
-	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o.CheckCopyPrecondFn)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)
 	}
@@ -506,7 +506,6 @@ func (l *s3EncObjects) PutObjectPart(ctx context.Context, bucket string, object 
 		Number: partID,
 		ETag:   pi.ETag,
 		Size:   pi.Size,
-		Name:   strconv.Itoa(partID),
 	}
 	gwMeta.ETag = data.MD5CurrentHexString() // encrypted ETag
 	gwMeta.Stat.Size = pi.Size
@@ -680,13 +679,13 @@ func getGWContentPath(object string) string {
 }
 
 // Clean-up the stale incomplete encrypted multipart uploads. Should be run in a Go routine.
-func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
+func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-doneCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			l.cleanupStaleEncMultipartUploadsOnGW(ctx, expiry)
@@ -743,7 +742,7 @@ func (l *s3EncObjects) getStalePartsForBucket(ctx context.Context, bucket string
 	return
 }
 
-func (l *s3EncObjects) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *s3EncObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	var prefix, continuationToken, delimiter, startAfter string
 	expParts := make(map[string]string)
 

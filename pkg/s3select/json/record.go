@@ -17,14 +17,16 @@
 package json
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/bcicen/jstream"
+	csv "github.com/minio/minio/pkg/csvparser"
 	"github.com/minio/minio/pkg/s3select/sql"
 )
 
@@ -72,7 +74,7 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 }
 
 // Set - sets the value for a column name.
-func (r *Record) Set(name string, value *sql.Value) error {
+func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
 	var v interface{}
 	if b, ok := value.ToBool(); ok {
 		v = b
@@ -97,21 +99,25 @@ func (r *Record) Set(name string, value *sql.Value) error {
 	} else if arr, ok := value.ToArray(); ok {
 		v = arr
 	} else {
-		return fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
+		return nil, fmt.Errorf("unsupported sql value %v and type %v", value, value.GetTypeString())
 	}
 
 	name = strings.Replace(name, "*", "__ALL__", -1)
 	r.KVS = append(r.KVS, jstream.KV{Key: name, Value: v})
-	return nil
+	return r, nil
 }
 
 // WriteCSV - encodes to CSV data.
-func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
+func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 	var csvRecord []string
 	for _, kv := range r.KVS {
 		var columnValue string
 		switch val := kv.Value.(type) {
-		case bool, float64, int64, string:
+		case float64:
+			columnValue = jsonFloat(val)
+		case string:
+			columnValue = val
+		case bool, int64:
 			columnValue = fmt.Sprintf("%v", val)
 		case nil:
 			columnValue = ""
@@ -130,7 +136,10 @@ func (r *Record) WriteCSV(writer io.Writer, fieldDelimiter rune) error {
 	}
 
 	w := csv.NewWriter(writer)
-	w.Comma = fieldDelimiter
+	w.Comma = opts.FieldDelimiter
+	w.Quote = opts.Quote
+	w.AlwaysQuote = opts.AlwaysQuote
+	w.QuoteEscape = opts.QuoteEscape
 	if err := w.Write(csvRecord); err != nil {
 		return err
 	}
@@ -153,8 +162,12 @@ func (r *Record) WriteJSON(writer io.Writer) error {
 }
 
 // Replace the underlying buffer of json data.
-func (r *Record) Replace(k jstream.KVS) error {
-	r.KVS = k
+func (r *Record) Replace(k interface{}) error {
+	v, ok := k.(jstream.KVS)
+	if !ok {
+		return fmt.Errorf("cannot replace internal data in json record with type %T", k)
+	}
+	r.KVS = v
 	return nil
 }
 
@@ -164,4 +177,33 @@ func NewRecord(f sql.SelectObjectFormat) *Record {
 		KVS:          jstream.KVS{},
 		SelectFormat: f,
 	}
+}
+
+// jsonFloat converts a float to string similar to Go stdlib formats json floats.
+func jsonFloat(f float64) string {
+	var tmp [32]byte
+	dst := tmp[:0]
+
+	// Convert as if by ES6 number to string conversion.
+	// This matches most other JSON generators.
+	// See golang.org/issue/6384 and golang.org/issue/14135.
+	// Like fmt %g, but the exponent cutoffs are different
+	// and exponents themselves are not padded to two digits.
+	abs := math.Abs(f)
+	fmt := byte('f')
+	if abs != 0 {
+		if abs < 1e-6 || abs >= 1e21 {
+			fmt = 'e'
+		}
+	}
+	dst = strconv.AppendFloat(dst, f, fmt, -1, 64)
+	if fmt == 'e' {
+		// clean up e-09 to e-9
+		n := len(dst)
+		if n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
+			dst[n-2] = dst[n-1]
+			dst = dst[:n-1]
+		}
+	}
+	return string(dst)
 }

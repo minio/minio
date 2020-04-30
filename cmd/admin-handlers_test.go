@@ -43,7 +43,8 @@ type adminXLTestBed struct {
 
 // prepareAdminXLTestBed - helper function that setups a single-node
 // XL backend for admin-handler tests.
-func prepareAdminXLTestBed() (*adminXLTestBed, error) {
+func prepareAdminXLTestBed(ctx context.Context) (*adminXLTestBed, error) {
+
 	// reset global variables to start afresh.
 	resetTestGlobals()
 
@@ -52,7 +53,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalIsXL = true
 
 	// Initializing objectLayer for HealFormatHandler.
-	objLayer, xlDirs, xlErr := initTestXLObjLayer()
+	objLayer, xlDirs, xlErr := initTestXLObjLayer(ctx)
 	if xlErr != nil {
 		return nil, xlErr
 	}
@@ -70,9 +71,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	globalConfigSys = NewConfigSys()
 
 	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(objLayer)
+	globalIAMSys.Init(ctx, objLayer)
 
-	buckets, err := objLayer.ListBuckets(context.Background())
+	buckets, err := objLayer.ListBuckets(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -103,20 +104,20 @@ func (atb *adminXLTestBed) TearDown() {
 
 // initTestObjLayer - Helper function to initialize an XL-based object
 // layer and set globalObjectAPI.
-func initTestXLObjLayer() (ObjectLayer, []string, error) {
+func initTestXLObjLayer(ctx context.Context) (ObjectLayer, []string, error) {
 	xlDirs, err := getRandomDisks(16)
 	if err != nil {
 		return nil, nil, err
 	}
 	endpoints := mustGetNewEndpoints(xlDirs...)
-	format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
+	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 1, 16, "")
 	if err != nil {
 		removeRoots(xlDirs)
 		return nil, nil, err
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer, err := newXLSets(endpoints, format, 1, 16)
+	objLayer, err := newXLSets(ctx, endpoints, storageDisks, format)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -191,7 +192,10 @@ func getServiceCmdRequest(cmd cmdType, cred auth.Credentials) (*http.Request, er
 // testServicesCmdHandler - parametrizes service subcommand tests on
 // cmdType value.
 func testServicesCmdHandler(cmd cmdType, t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	adminTestBed, err := prepareAdminXLTestBed(ctx)
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
@@ -259,10 +263,14 @@ func buildAdminRequest(queryVal url.Values, method, path string,
 }
 
 func TestAdminServerInfo(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	adminTestBed, err := prepareAdminXLTestBed(ctx)
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
+
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
@@ -313,12 +321,12 @@ func TestToAdminAPIErrCode(t *testing.T) {
 		// 3. Non-admin API specific error.
 		{
 			err:            errDiskNotFound,
-			expectedAPIErr: toAPIErrorCode(context.Background(), errDiskNotFound),
+			expectedAPIErr: toAPIErrorCode(GlobalContext, errDiskNotFound),
 		},
 	}
 
 	for i, test := range testCases {
-		actualErr := toAdminAPIErrCode(context.Background(), test.err)
+		actualErr := toAdminAPIErrCode(GlobalContext, test.err)
 		if actualErr != test.expectedAPIErr {
 			t.Errorf("Test %d: Expected %v but received %v",
 				i+1, test.expectedAPIErr, actualErr)

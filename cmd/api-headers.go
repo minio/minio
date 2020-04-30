@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
@@ -81,6 +82,10 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 	}
 
+	if strings.Contains(objInfo.ETag, "-") && len(objInfo.Parts) > 0 {
+		w.Header().Set(xhttp.AmzMpPartsCount, strconv.Itoa(len(objInfo.Parts)))
+	}
+
 	if objInfo.ContentType != "" {
 		w.Header().Set(xhttp.ContentType, objInfo.ContentType)
 	}
@@ -92,6 +97,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if !objInfo.Expires.IsZero() {
 		w.Header().Set(xhttp.Expires, objInfo.Expires.UTC().Format(http.TimeFormat))
 	}
+
 	if globalCacheConfig.Enabled {
 		w.Header().Set(xhttp.XCache, objInfo.CacheStatus.String())
 		w.Header().Set(xhttp.XCacheLookup, objInfo.CacheLookupStatus.String())

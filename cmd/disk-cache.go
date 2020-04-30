@@ -38,7 +38,8 @@ import (
 )
 
 const (
-	cacheBlkSize = int64(1 * 1024 * 1024)
+	cacheBlkSize    = int64(1 * 1024 * 1024)
+	cacheGCInterval = time.Minute * 30
 )
 
 // CacheStorageInfo - represents total, free capacity of
@@ -174,7 +175,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if c.isCacheExclude(bucket, object) || c.skipCache() {
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
-	var cc cacheControl
+	var cc *cacheControl
 	var cacheObjSize int64
 	// fetch diskCache if object is currently cached or nearest available cache drive
 	dcache, err := c.getCacheToLoc(ctx, bucket, object)
@@ -191,8 +192,8 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			}
 		}
 		cc = cacheControlOpts(cacheReader.ObjInfo)
-		if (!cc.isEmpty() && !cc.isStale(cacheReader.ObjInfo.ModTime)) ||
-			cc.onlyIfCached {
+		if cc != nil && (!cc.isStale(cacheReader.ObjInfo.ModTime) ||
+			cc.onlyIfCached) {
 			// This is a cache hit, mark it so
 			bytesServed := cacheReader.ObjInfo.Size
 			if rs != nil {
@@ -205,7 +206,8 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			c.incHitsToMeta(ctx, dcache, bucket, object, cacheReader.ObjInfo.Size, cacheReader.ObjInfo.ETag)
 			return cacheReader, nil
 		}
-		if cc.noStore {
+		if cc != nil && cc.noStore {
+			cacheReader.Close()
 			c.cacheStats.incMiss()
 			bReader, err := c.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 			bReader.ObjInfo.CacheLookupStatus = CacheHit
@@ -219,9 +221,11 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		c.incCacheStats(cacheObjSize)
 		return cacheReader, nil
 	} else if err != nil {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		if _, ok := err.(ObjectNotFound); ok {
 			if cacheErr == nil {
-				cacheReader.Close()
 				// Delete cached entry if backend object
 				// was deleted.
 				dcache.Delete(ctx, bucket, object)
@@ -232,13 +236,19 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	if !objInfo.IsCacheable() {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
-	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
+		if cacheErr == nil {
+			cacheReader.Close()
+		}
 		c.cacheStats.incMiss()
 		return c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 	}
@@ -259,11 +269,8 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	c.cacheStats.incMiss()
 	// Since we got here, we are serving the request from backend,
 	// and also adding the object to the cache.
-	if !dcache.diskUsageLow() {
-		select {
-		case dcache.purgeChan <- struct{}{}:
-		default:
-		}
+	if dcache.diskUsageHigh() {
+		dcache.incGCCounter()
 	}
 
 	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
@@ -297,7 +304,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			oi, _, _, err := dcache.statRange(ctx, bucket, object, rs)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, true)
+				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
 			}
 		}()
 		return bkReader, bkErr
@@ -314,7 +321,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}()
 	cleanupBackend := func() { bkReader.Close() }
 	cleanupPipe := func() { pipeWriter.Close() }
-	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts.CheckCopyPrecondFn, cleanupBackend, cleanupPipe)
+	return NewGetObjectReaderFromReader(teeReader, bkReader.ObjInfo, opts, cleanupBackend, cleanupPipe)
 }
 
 // Returns ObjectInfo from cache if available.
@@ -330,12 +337,12 @@ func (c *cacheObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 	if err != nil {
 		return getObjectInfoFn(ctx, bucket, object, opts)
 	}
-	var cc cacheControl
+	var cc *cacheControl
 	// if cache control setting is valid, avoid HEAD operation to backend
 	cachedObjInfo, _, cerr := dcache.Stat(ctx, bucket, object)
 	if cerr == nil {
 		cc = cacheControlOpts(cachedObjInfo)
-		if !cc.isStale(cachedObjInfo.ModTime) {
+		if cc == nil || (cc != nil && !cc.isStale(cachedObjInfo.ModTime)) {
 			// This is a cache hit, mark it so
 			c.cacheStats.incHit()
 			return cachedObjInfo, nil
@@ -392,7 +399,7 @@ func (c *cacheObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	// if currently cached, evict old entry and revert to backend.
 	if cachedObjInfo, _, cerr := dcache.Stat(ctx, srcBucket, srcObject); cerr == nil {
 		cc := cacheControlOpts(cachedObjInfo)
-		if !cc.isStale(cachedObjInfo.ModTime) {
+		if cc == nil || !cc.isStale(cachedObjInfo.ModTime) {
 			dcache.Delete(ctx, srcBucket, srcObject)
 		}
 	}
@@ -503,7 +510,7 @@ func (c *cacheObjects) hashIndex(bucket, object string) int {
 // or the global env overrides.
 func newCache(config cache.Config) ([]*diskCache, bool, error) {
 	var caches []*diskCache
-	ctx := logger.SetReqInfo(context.Background(), &logger.ReqInfo{})
+	ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{})
 	formats, migrating, err := loadAndValidateCacheFormat(ctx, config.Drives)
 	if err != nil {
 		return nil, false, err
@@ -522,14 +529,9 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 		if quota == 0 {
 			quota = config.Quota
 		}
-
-		cache, err := newDiskCache(dir, config.Expiry, quota, config.After)
+		cache, err := newDiskCache(dir, quota, config.After, config.WatermarkLow, config.WatermarkHigh)
 		if err != nil {
 			return nil, false, err
-		}
-		// Start the purging go-routine for entries that have expired if no migration in progress
-		if !migrating {
-			go cache.purge()
 		}
 		caches = append(caches, cache)
 	}
@@ -577,13 +579,12 @@ func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	}
 
 	errCnt := 0
-	for index, err := range g.Wait() {
+	for _, err := range g.Wait() {
 		if err != nil {
 			errCnt++
 			logger.LogIf(ctx, err)
 			continue
 		}
-		go c.cache[index].purge()
 	}
 
 	if errCnt > 0 {
@@ -622,7 +623,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	// skip cache for objects with locks
 	objRetention := objectlock.GetObjectRetentionMeta(opts.UserDefined)
 	legalHold := objectlock.GetObjectLegalHoldMeta(opts.UserDefined)
-	if objRetention.Mode != objectlock.Invalid || legalHold.Status != "" {
+	if objRetention.Mode.Valid() || legalHold.Status.Valid() {
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
@@ -647,7 +648,7 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 			oi, _, err := dcache.Stat(ctx, bucket, object)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, true)
+				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
 			}
 		}()
 	}
@@ -697,5 +698,35 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	if migrateSw {
 		go c.migrateCacheFromV1toV2(ctx)
 	}
+	go c.gc(ctx)
 	return c, nil
+}
+
+func (c *cacheObjects) gc(ctx context.Context) {
+	ticker := time.NewTicker(cacheGCInterval)
+
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if c.migrating {
+				continue
+			}
+			var wg sync.WaitGroup
+			for _, dcache := range c.cache {
+				if dcache.gcCount() == 0 {
+					continue
+				}
+				wg.Add(1)
+				go func(d *diskCache) {
+					defer wg.Done()
+					d.resetGCCounter()
+					d.purge(ctx)
+				}(dcache)
+			}
+			wg.Wait()
+		}
+	}
 }

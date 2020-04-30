@@ -43,6 +43,9 @@ const (
 	// PutObject API only.
 	S3XAmzMetadataDirective Key = "s3:x-amz-metadata-directive"
 
+	// S3XAmzContentSha256 - set a static content-sha256 for all calls for a given action.
+	S3XAmzContentSha256 = "s3:x-amz-content-sha256"
+
 	// S3XAmzStorageClass - key representing x-amz-storage-class HTTP header applicable to PutObject API
 	// only.
 	S3XAmzStorageClass Key = "s3:x-amz-storage-class"
@@ -58,6 +61,24 @@ const (
 
 	// S3MaxKeys - key representing max-keys query parameter of ListBucket API only.
 	S3MaxKeys Key = "s3:max-keys"
+
+	// S3ObjectLockRemainingRetentionDays - key representing object-lock-remaining-retention-days
+	// Enables enforcement of an object relative to the remaining retention days, you can set
+	// minimum and maximum allowable retention periods for a bucket using a bucket policy.
+	// This key are specific for s3:PutObjectRetention API.
+	S3ObjectLockRemainingRetentionDays Key = "s3:object-lock-remaining-retention-days"
+
+	// S3ObjectLockMode - key representing object-lock-mode
+	// Enables enforcement of the specified object retention mode
+	S3ObjectLockMode Key = "s3:object-lock-mode"
+
+	// S3ObjectLockRetainUntilDate - key representing object-lock-retain-util-date
+	// Enables enforcement of a specific retain-until-date
+	S3ObjectLockRetainUntilDate Key = "s3:object-lock-retain-until-date"
+
+	// S3ObjectLockLegalHold - key representing object-local-legal-hold
+	// Enables enforcement of the specified object legal hold status
+	S3ObjectLockLegalHold Key = "s3:object-lock-legal-hold"
 
 	// AWSReferer - key representing Referer header of any API.
 	AWSReferer Key = "aws:Referer"
@@ -85,31 +106,24 @@ const (
 
 	// AWSUsername - user friendly name, in MinIO this value is same as your user Access Key.
 	AWSUsername Key = "aws:username"
-
-	// JWTSub - JWT subject claim substitution.
-	JWTSub Key = "jwt:sub"
-
-	// JWTIss issuer claim substitution.
-	JWTIss Key = "jwt:iss"
-
-	// JWTAud audience claim substitution.
-	JWTAud Key = "jwt:aud"
-
-	// JWTJti JWT unique identifier claim substitution.
-	JWTJti Key = "jwt:jti"
 )
 
 // AllSupportedKeys - is list of all all supported keys.
-var AllSupportedKeys = []Key{
+var AllSupportedKeys = append([]Key{
 	S3XAmzCopySource,
 	S3XAmzServerSideEncryption,
 	S3XAmzServerSideEncryptionCustomerAlgorithm,
 	S3XAmzMetadataDirective,
 	S3XAmzStorageClass,
+	S3XAmzContentSha256,
 	S3LocationConstraint,
 	S3Prefix,
 	S3Delimiter,
 	S3MaxKeys,
+	S3ObjectLockRemainingRetentionDays,
+	S3ObjectLockMode,
+	S3ObjectLockLegalHold,
+	S3ObjectLockRetainUntilDate,
 	AWSReferer,
 	AWSSourceIP,
 	AWSUserAgent,
@@ -119,15 +133,11 @@ var AllSupportedKeys = []Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
-	JWTSub,
-	JWTIss,
-	JWTAud,
-	JWTJti,
 	// Add new supported condition keys.
-}
+}, JWTKeys...)
 
 // CommonKeys - is list of all common condition keys.
-var CommonKeys = []Key{
+var CommonKeys = append([]Key{
 	AWSReferer,
 	AWSSourceIP,
 	AWSUserAgent,
@@ -137,11 +147,8 @@ var CommonKeys = []Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
-	JWTSub,
-	JWTIss,
-	JWTAud,
-	JWTJti,
-}
+	S3XAmzContentSha256,
+}, JWTKeys...)
 
 func substFuncFromValues(values map[string][]string) func(string) string {
 	return func(v string) string {

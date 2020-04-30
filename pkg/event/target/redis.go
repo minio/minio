@@ -61,6 +61,12 @@ type RedisArgs struct {
 	QueueLimit uint64    `json:"queueLimit"`
 }
 
+// RedisAccessEvent holds event log data and timestamp
+type RedisAccessEvent struct {
+	Event     []event.Event
+	EventTime string
+}
+
 // Validate RedisArgs fields
 func (r RedisArgs) Validate() error {
 	if !r.Enable {
@@ -82,9 +88,6 @@ func (r RedisArgs) Validate() error {
 		if !filepath.IsAbs(r.QueueDir) {
 			return errors.New("queueDir path should be absolute")
 		}
-	}
-	if r.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
 	}
 
 	return nil
@@ -123,6 +126,11 @@ type RedisTarget struct {
 // ID - returns target ID.
 func (target *RedisTarget) ID() event.TargetID {
 	return target.id
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *RedisTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 // IsActive - Return true if target is up and active
@@ -185,7 +193,7 @@ func (target *RedisTarget) send(eventData event.Event) error {
 	}
 
 	if target.args.Format == event.AccessFormat {
-		data, err := json.Marshal([]interface{}{eventData.EventTime, []event.Event{eventData}})
+		data, err := json.Marshal([]RedisAccessEvent{{Event: []event.Event{eventData}, EventTime: eventData.EventTime}})
 		if err != nil {
 			return err
 		}
@@ -280,20 +288,21 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 
 	var store Store
 
-	if args.QueueDir != "" {
-		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
-		}
-	}
-
 	target := &RedisTarget{
 		id:         event.TargetID{ID: id, Name: "redis"},
 		args:       args,
 		pool:       pool,
-		store:      store,
 		loggerOnce: loggerOnce,
+	}
+
+	if args.QueueDir != "" {
+		queueDir := filepath.Join(args.QueueDir, storePrefix+"-redis-"+id)
+		store = NewQueueStore(queueDir, args.QueueLimit)
+		if oErr := store.Open(); oErr != nil {
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return target, oErr
+		}
+		target.store = store
 	}
 
 	conn := target.pool.Get()
@@ -305,20 +314,22 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
 		if target.store == nil || !(IsConnRefusedErr(pingErr) || IsConnResetErr(pingErr)) {
-			return nil, pingErr
+			target.loggerOnce(context.Background(), pingErr, target.ID())
+			return target, pingErr
 		}
 	} else {
 		if err := target.args.validateFormat(conn); err != nil {
-			return nil, err
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
 		}
 		target.firstPing = true
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

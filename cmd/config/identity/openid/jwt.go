@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
-	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/iam/policy"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -168,7 +168,10 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 // Validate - validates the access token.
 func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	jp := new(jwtgo.Parser)
-	jp.ValidMethods = []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"}
+	jp.ValidMethods = []string{
+		"RS256", "RS384", "RS512", "ES256", "ES384", "ES512",
+		"RS3256", "RS3384", "RS3512", "ES3256", "ES3384", "ES3512",
+	}
 
 	keyFuncCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
 		kid, ok := jwtToken.Header["kid"].(string)

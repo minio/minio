@@ -38,6 +38,10 @@ func (f booleanFunc) evaluate(values map[string][]string) bool {
 		requestValue = values[f.k.Name()]
 	}
 
+	if len(requestValue) == 0 {
+		return false
+	}
+
 	return f.value == requestValue[0]
 }
 

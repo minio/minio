@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -82,9 +83,6 @@ type Target struct {
 	KVS       KVS    `json:"kvs"`
 }
 
-// Targets sub-system targets
-type Targets []Target
-
 // Standard config keys and values.
 const (
 	EnableKey  = "enable"
@@ -95,36 +93,6 @@ const (
 	EnableOff = "off"
 )
 
-func (kvs KVS) String() string {
-	var s strings.Builder
-	for _, kv := range kvs {
-		// Do not need to print state which is on.
-		if kv.Key == EnableKey && kv.Value == EnableOn {
-			continue
-		}
-		if kv.Key == CommentKey && kv.Value == "" {
-			continue
-		}
-		s.WriteString(kv.Key)
-		s.WriteString(KvSeparator)
-		spc := HasSpace(kv.Value)
-		if spc {
-			s.WriteString(KvDoubleQuote)
-		}
-		s.WriteString(kv.Value)
-		if spc {
-			s.WriteString(KvDoubleQuote)
-		}
-		s.WriteString(KvSpaceSeparator)
-	}
-	return s.String()
-}
-
-// Count - returns total numbers of target
-func (t Targets) Count() int {
-	return len(t)
-}
-
 // HasSpace - returns if given string has space.
 func HasSpace(s string) bool {
 	for _, r := range s {
@@ -133,23 +101,6 @@ func HasSpace(s string) bool {
 		}
 	}
 	return false
-}
-
-func (t Targets) String() string {
-	var s strings.Builder
-	count := t.Count()
-	// Print all "on" states entries
-	for _, targetKV := range t {
-		kv := targetKV.KVS
-		count--
-		s.WriteString(targetKV.SubSystem)
-		s.WriteString(KvSpaceSeparator)
-		s.WriteString(kv.String())
-		if len(t) > 1 && count > 0 {
-			s.WriteString(KvNewline)
-		}
-	}
-	return s.String()
 }
 
 // Constant separators
@@ -171,21 +122,52 @@ func SanitizeValue(v string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(v, KvSingleQuote), KvSingleQuote)
 }
 
-// AddTarget - adds new targets, by parsing the input string s.
-func (t *Targets) AddTarget(s string) error {
+// KvFields - converts an input string of form "k1=v1 k2=v2" into
+// fields of ["k1=v1", "k2=v2"], the tokenization of each `k=v`
+// happens with the right number of input keys, if keys
+// input is empty returned value is empty slice as well.
+func KvFields(input string, keys []string) []string {
+	var valueIndexes []int
+	for _, key := range keys {
+		i := strings.Index(input, key+KvSeparator)
+		if i == -1 {
+			continue
+		}
+		valueIndexes = append(valueIndexes, i)
+	}
+
+	sort.Ints(valueIndexes)
+	var fields = make([]string, len(valueIndexes))
+	for i := range valueIndexes {
+		j := i + 1
+		if j < len(valueIndexes) {
+			fields[i] = strings.TrimSpace(input[valueIndexes[i]:valueIndexes[j]])
+		} else {
+			fields[i] = strings.TrimSpace(input[valueIndexes[i]:])
+		}
+	}
+	return fields
+}
+
+// ParseTarget - adds new targets, by parsing the input string s.
+func ParseTarget(s string, help Help) (*Target, error) {
 	inputs := strings.SplitN(s, KvSpaceSeparator, 2)
 	if len(inputs) <= 1 {
-		return fmt.Errorf("invalid number of arguments '%s'", s)
+		return nil, fmt.Errorf("invalid number of arguments '%s'", s)
 	}
 
 	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
-		return fmt.Errorf("invalid number of arguments %s", s)
+		return nil, fmt.Errorf("invalid number of arguments %s", s)
+	}
+
+	if help.SubSys != subSystemValue[0] {
+		return nil, fmt.Errorf("unknown sub-system %s", subSystemValue[0])
 	}
 
 	var kvs = KVS{}
 	var prevK string
-	for _, v := range strings.Fields(inputs[1]) {
+	for _, v := range KvFields(inputs[1], help.Keys()) {
 		kv := strings.SplitN(v, KvSeparator, 2)
 		if len(kv) == 0 {
 			continue
@@ -203,36 +185,20 @@ func (t *Targets) AddTarget(s string) error {
 			kvs.Set(prevK, SanitizeValue(kv[1]))
 			continue
 		}
-		return fmt.Errorf("value for key '%s' cannot be empty", kv[0])
+		return nil, fmt.Errorf("value for key '%s' cannot be empty", kv[0])
 	}
 
-	for i := range *t {
-		if (*t)[i].SubSystem == inputs[0] {
-			(*t)[i] = Target{
-				SubSystem: inputs[0],
-				KVS:       kvs,
-			}
-			return nil
-		}
-	}
-	*t = append(*t, Target{
+	return &Target{
 		SubSystem: inputs[0],
 		KVS:       kvs,
-	})
-	return nil
+	}, nil
 }
 
-// ParseSubSysTarget - parse sub-system target
-func ParseSubSysTarget(buf []byte) (Targets, error) {
-	var targets Targets
+// ParseSubSysTarget - parse a sub-system target
+func ParseSubSysTarget(buf []byte, help Help) (target *Target, err error) {
 	bio := bufio.NewScanner(bytes.NewReader(buf))
-	for bio.Scan() {
-		if err := targets.AddTarget(bio.Text()); err != nil {
-			return nil, err
-		}
+	if bio.Scan() {
+		return ParseTarget(bio.Text(), help)
 	}
-	if err := bio.Err(); err != nil {
-		return nil, err
-	}
-	return targets, nil
+	return nil, bio.Err()
 }

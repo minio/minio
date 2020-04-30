@@ -14,7 +14,6 @@ Mint is a testing framework for Minio object server, available as a docker image
 - minio-py
 - minio-dotnet
 - s3cmd
-- worm
 
 ## Running Mint
 
@@ -42,7 +41,7 @@ Below environment variables are required to be passed to the docker container. S
 | `ACCESS_KEY` | Access key of access `SERVER_ENDPOINT` | `Q3AM3UQ867SPQQA43P2F` |
 | `SECRET_KEY` | Secret Key of access `SERVER_ENDPOINT` | `zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG` |
 | `ENABLE_HTTPS` | (Optional) Set `1` to indicate to use HTTPS to access `SERVER_ENDPOINT`. Defaults to `0` (HTTP) | `1` |
-| `MINT_MODE` | (Optional) Set mode indicating what category of tests to be run by values `core`, `full` or `worm`.  Defaults to `core` | `full` |
+| `MINT_MODE` | (Optional) Set mode indicating what category of tests to be run by values `core`, `full`. Defaults to `core` | `full` |
 | `DOMAIN` | (Optional) Value of MINIO_DOMAIN environment variable used in Minio server | `myminio.com` |
 | `ENABLE_VIRTUAL_STYLE` | (Optional) Set `1` to indicate virtual style access . Defaults to `0` (Path style) | `1` |
 
@@ -82,27 +81,24 @@ All test logs are stored in `/mint/log/log.json` as multiple JSON document.  Bel
 After making changes to Mint source code a local docker image can be built/run by
 
 ```sh
-$ docker build -t minio/mint . -f Dockerfile.dev
+$ docker build -t minio/mint . -f Dockerfile.mint
 $ docker run -e SERVER_ENDPOINT=play.minio.io:9000 -e ACCESS_KEY=Q3AM3UQ867SPQQA43P2F \
              -e SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG \
              -e ENABLE_HTTPS=1 -e MINT_MODE=full minio/mint:latest
 ```
-In case of Worm Mode, start your server with configuration `MINT_MODE` set to `worm`.
-Build/Run of local docker image for Worm mode, is to be tested against your server configuration, by
 
-```
+
 ### Adding tests with new tool/SDK
 
 Below are the steps need to be followed
 
-* Create new app directory under [build](https://github.com/minio/mint/tree/master/build) and [run/core](https://github.com/minio/mint/tree/master/run/core) directories.
-* Create `install.sh` which does installation of required tool/SDK under app directory.
-* Any build and install time dependencies should be added to [install-packages.list](https://github.com/minio/mint/blob/master/install-packages.list).
-* Build time dependencies should be added to [remove-packages.list](https://github.com/minio/mint/blob/master/remove-packages.list) for removal to have clean Mint docker image.
-* Add `run.sh` in app directory under `run/core` which execute actual tests.
+- Create new app directory under [build](https://github.com/minio/mint/tree/master/build) and [run/core](https://github.com/minio/mint/tree/master/run/core) directories.
+- Create `install.sh` which does installation of required tool/SDK under app directory.
+- Any build and install time dependencies should be added to [install-packages.list](https://github.com/minio/mint/blob/master/install-packages.list).
+- Build time dependencies should be added to [remove-packages.list](https://github.com/minio/mint/blob/master/remove-packages.list) for removal to have clean Mint docker image.
+- Add `run.sh` in app directory under `run/core` which execute actual tests.
 
 #### Test data
-
 Tests may use pre-created data set to perform various object operations on Minio server.  Below data files are available under `/mint/data` directory.
 
 | File name |  Size |

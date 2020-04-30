@@ -18,11 +18,15 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/minio/minio/cmd/logger"
 )
+
+var errHealRequired = errors.New("heal required")
 
 // Reads in parallel from readers.
 type parallelReader struct {
@@ -72,6 +76,7 @@ func (p *parallelReader) Read() ([][]byte, error) {
 		readTriggerCh <- true
 	}
 
+	healRequired := int32(0) // Atomic bool flag.
 	readerIndex := 0
 	var wg sync.WaitGroup
 	// if readTrigger is true, it implies next disk.ReadAt() should be tried
@@ -109,6 +114,9 @@ func (p *parallelReader) Read() ([][]byte, error) {
 			p.buf[i] = p.buf[i][:p.shardSize]
 			_, err := disk.ReadAt(p.buf[i], p.offset)
 			if err != nil {
+				if _, ok := err.(*errHashMismatch); ok {
+					atomic.StoreInt32(&healRequired, 1)
+				}
 				p.readers[i] = nil
 				// Since ReadAt returned error, trigger another read.
 				readTriggerCh <- true
@@ -126,24 +134,49 @@ func (p *parallelReader) Read() ([][]byte, error) {
 
 	if p.canDecode(newBuf) {
 		p.offset += p.shardSize
+		if healRequired != 0 {
+			return newBuf, errHealRequired
+		}
 		return newBuf, nil
 	}
 
 	return nil, errXLReadQuorum
 }
 
+type errDecodeHealRequired struct {
+	err error
+}
+
+func (err *errDecodeHealRequired) Error() string {
+	return err.err.Error()
+}
+
+func (err *errDecodeHealRequired) Unwrap() error {
+	return err.err
+}
+
 // Decode reads from readers, reconstructs data if needed and writes the data to the writer.
 func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64) error {
+	healRequired, err := e.decode(ctx, writer, readers, offset, length, totalLength)
+	if healRequired {
+		return &errDecodeHealRequired{err}
+	}
+
+	return err
+}
+
+// Decode reads from readers, reconstructs data if needed and writes the data to the writer.
+func (e Erasure) decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64) (bool, error) {
 	if offset < 0 || length < 0 {
 		logger.LogIf(ctx, errInvalidArgument)
-		return errInvalidArgument
+		return false, errInvalidArgument
 	}
 	if offset+length > totalLength {
 		logger.LogIf(ctx, errInvalidArgument)
-		return errInvalidArgument
+		return false, errInvalidArgument
 	}
 	if length == 0 {
-		return nil
+		return false, nil
 	}
 
 	reader := newParallelReader(readers, e, offset, totalLength)
@@ -151,6 +184,7 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 	startBlock := offset / e.blockSize
 	endBlock := (offset + length) / e.blockSize
 
+	var healRequired bool
 	var bytesWritten int64
 	for block := startBlock; block <= endBlock; block++ {
 		var blockOffset, blockLength int64
@@ -173,21 +207,26 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 		}
 		bufs, err := reader.Read()
 		if err != nil {
-			return err
+			if errors.Is(err, errHealRequired) {
+				healRequired = true
+			} else {
+				return healRequired, err
+			}
 		}
 		if err = e.DecodeDataBlocks(bufs); err != nil {
 			logger.LogIf(ctx, err)
-			return err
+			return healRequired, err
 		}
 		n, err := writeDataBlocks(ctx, writer, bufs, e.dataBlocks, blockOffset, blockLength)
 		if err != nil {
-			return err
+			return healRequired, err
 		}
 		bytesWritten += n
 	}
 	if bytesWritten != length {
 		logger.LogIf(ctx, errLessData)
-		return errLessData
+		return healRequired, errLessData
 	}
-	return nil
+
+	return healRequired, nil
 }

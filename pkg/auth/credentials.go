@@ -90,6 +90,7 @@ type Credentials struct {
 	Expiration   time.Time `xml:"Expiration" json:"expiration,omitempty"`
 	SessionToken string    `xml:"SessionToken" json:"sessionToken,omitempty"`
 	Status       string    `xml:"-" json:"status,omitempty"`
+	ParentUser   string    `xml:"-" json:"parentUser,omitempty"`
 }
 
 func (cred Credentials) String() string {
@@ -101,7 +102,7 @@ func (cred Credentials) String() string {
 		s.WriteString("\n")
 		s.WriteString(cred.SessionToken)
 	}
-	if !cred.Expiration.IsZero() && cred.Expiration != timeSentinel {
+	if !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel) {
 		s.WriteString("\n")
 		s.WriteString(cred.Expiration.String())
 	}
@@ -110,7 +111,7 @@ func (cred Credentials) String() string {
 
 // IsExpired - returns whether Credential is expired or not.
 func (cred Credentials) IsExpired() bool {
-	if cred.Expiration.IsZero() || cred.Expiration == timeSentinel {
+	if cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel) {
 		return false
 	}
 
@@ -119,7 +120,12 @@ func (cred Credentials) IsExpired() bool {
 
 // IsTemp - returns whether credential is temporary or not.
 func (cred Credentials) IsTemp() bool {
-	return cred.SessionToken != ""
+	return cred.SessionToken != "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
+}
+
+// IsServiceAccount - returns whether credential is a service account or not
+func (cred Credentials) IsServiceAccount() bool {
+	return cred.ParentUser != "" && (cred.Expiration.IsZero() || cred.Expiration.Equal(timeSentinel))
 }
 
 // IsValid - returns whether credential is valid or not.
@@ -207,13 +213,14 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 		"/", "+", -1)
 	cred.Status = "on"
 
+	if tokenSecret == "" {
+		cred.Expiration = timeSentinel
+		return cred, nil
+	}
+
 	expiry, err := ExpToInt64(m["exp"])
 	if err != nil {
 		return cred, err
-	}
-	if expiry == 0 {
-		cred.Expiration = timeSentinel
-		return cred, nil
 	}
 
 	m["accessKey"] = cred.AccessKey

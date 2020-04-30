@@ -50,9 +50,6 @@ var errRPCAPIVersionUnsupported = errors.New("Unsupported rpc API version")
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
 
-// errOperationTimedOut
-var errOperationTimedOut = errors.New("Operation timed out")
-
 // errInvalidBucketName - bucket name is reserved for MinIO, usually
 // returned for 'minio', '.minio.sys', buckets with capital letters.
 var errInvalidBucketName = errors.New("The specified bucket is not valid")
@@ -79,6 +76,9 @@ var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
 
 // error returned in IAM subsystem when user doesn't exist.
 var errNoSuchUser = errors.New("Specified user does not exist")
+
+// error returned in IAM subsystem when the service account doesn't exist.
+var errNoSuchServiceAccount = errors.New("Specified service account does not exist")
 
 // error returned in IAM subsystem when groups doesn't exist.
 var errNoSuchGroup = errors.New("Specified group does not exist")

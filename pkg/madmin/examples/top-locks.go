@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 
@@ -37,7 +38,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	locks, err := madmClnt.TopLocks()
+	locks, err := madmClnt.TopLocks(context.Background())
 	if err != nil {
 		log.Fatalf("failed due to: %v", err)
 	}

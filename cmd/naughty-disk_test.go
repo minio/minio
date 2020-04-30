@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"sync"
 )
@@ -77,11 +78,16 @@ func (d *naughtyDisk) calcError() (err error) {
 	return nil
 }
 
-func (d *naughtyDisk) SetDiskID(id string) {
+func (d *naughtyDisk) GetDiskID() (string, error) {
+	return d.disk.GetDiskID()
 }
 
-func (d *naughtyDisk) CrawlAndGetDataUsage(endCh <-chan struct{}) (info DataUsageInfo, err error) {
-	return d.disk.CrawlAndGetDataUsage(endCh)
+func (d *naughtyDisk) SetDiskID(id string) {
+	d.disk.SetDiskID(id)
+}
+
+func (d *naughtyDisk) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (info dataUsageCache, err error) {
+	return d.disk.CrawlAndGetDataUsage(ctx, cache)
 }
 
 func (d *naughtyDisk) DiskInfo() (info DiskInfo, err error) {
@@ -118,14 +124,21 @@ func (d *naughtyDisk) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	return d.disk.StatVol(volume)
 }
-func (d *naughtyDisk) DeleteVol(volume string) (err error) {
+func (d *naughtyDisk) DeleteVol(volume string, forceDelete bool) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.DeleteVol(volume)
+	return d.disk.DeleteVol(volume, forceDelete)
 }
 
-func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh chan struct{}) (chan FileInfo, error) {
+func (d *naughtyDisk) WalkSplunk(volume, path, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+	if err := d.calcError(); err != nil {
+		return nil, err
+	}
+	return d.disk.WalkSplunk(volume, path, marker, endWalkCh)
+}
+
+func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err
 	}
@@ -194,6 +207,13 @@ func (d *naughtyDisk) DeleteFileBulk(volume string, paths []string) ([]error, er
 		errs[idx] = d.disk.DeleteFile(volume, path)
 	}
 	return errs, nil
+}
+
+func (d *naughtyDisk) DeletePrefixes(volume string, paths []string) ([]error, error) {
+	if err := d.calcError(); err != nil {
+		return nil, err
+	}
+	return d.disk.DeletePrefixes(volume, paths)
 }
 
 func (d *naughtyDisk) WriteAll(volume string, path string, reader io.Reader) (err error) {

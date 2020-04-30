@@ -18,14 +18,18 @@ package cmd
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 )
 
 // Tests cleanup multipart uploads for erasure coded backend.
 func TestXLCleanupStaleMultipartUploads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Create an instance of xl backend
-	obj, fsDirs, err := prepareXL16()
+	obj, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,33 +39,37 @@ func TestXLCleanupStaleMultipartUploads(t *testing.T) {
 	z := obj.(*xlZones)
 	xl := z.zones[0].sets[0]
 
-	// Close the go-routine, we are going to
-	// manually start it and test in this test case.
-	GlobalServiceDoneCh <- struct{}{}
-
 	bucketName := "bucket"
 	objectName := "object"
 	var opts ObjectOptions
 
-	obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
+	obj.MakeBucketWithLocation(ctx, bucketName, "")
+	uploadID, err := obj.NewMultipartUpload(GlobalContext, bucketName, objectName, opts)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	go xl.cleanupStaleMultipartUploads(context.Background(), 20*time.Millisecond, 0, GlobalServiceDoneCh)
+	var cleanupWg sync.WaitGroup
+	cleanupWg.Add(1)
+	go func() {
+		defer cleanupWg.Done()
+		xl.cleanupStaleMultipartUploads(GlobalContext, time.Millisecond, 0, ctx.Done())
+	}()
 
-	// Wait for 40ms such that - we have given enough time for
-	// cleanup routine to kick in.
-	time.Sleep(40 * time.Millisecond)
+	// Wait for 100ms such that - we have given enough time for cleanup routine to kick in.
+	// Flaky on slow systems :/
+	time.Sleep(100 * time.Millisecond)
 
-	// Close the routine we do not need it anymore.
-	GlobalServiceDoneCh <- struct{}{}
+	// Exit cleanup..
+	cancel()
+	cleanupWg.Wait()
 
 	// Check if upload id was already purged.
 	if err = obj.AbortMultipartUpload(context.Background(), bucketName, objectName, uploadID); err != nil {
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
+	} else {
+		t.Error("Item was not cleaned up.")
 	}
 }

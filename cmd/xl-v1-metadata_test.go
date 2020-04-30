@@ -17,11 +17,6 @@
 package cmd
 
 import (
-	"bytes"
-	"context"
-	"os"
-	"path"
-	"strconv"
 	"testing"
 	"time"
 
@@ -29,166 +24,6 @@ import (
 )
 
 const ActualSize = 1000
-
-// Tests for reading XL object info.
-func TestXLReadStat(t *testing.T) {
-	ExecObjectLayerDiskAlteredTest(t, testXLReadStat)
-}
-
-func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
-	// Setup for the tests.
-	bucketName := getRandomBucketName()
-	objectName := "test-object"
-	// create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
-	// Stop the test if creation of the bucket fails.
-	if err != nil {
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	// set of byte data for PutObject.
-	// object has to be created before running tests for GetObject.
-	// this is required even to assert the GetObject data,
-	// since dataInserted === dataFetched back is a primary criteria for any object storage this assertion is critical.
-	bytesData := []struct {
-		byteData []byte
-	}{
-		{generateBytesData(6 * humanize.MiByte)},
-	}
-	// set of inputs for uploading the objects before tests for downloading is done.
-	putObjectInputs := []struct {
-		bucketName    string
-		objectName    string
-		contentLength int64
-		textData      []byte
-		metaData      map[string]string
-	}{
-		// case - 1.
-		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
-	}
-	// iterate through the above set of inputs and upkoad the object.
-	for i, input := range putObjectInputs {
-		// uploading the object.
-		_, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), ObjectOptions{UserDefined: input.metaData})
-		// if object upload fails stop the test.
-		if err != nil {
-			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
-		}
-	}
-
-	z := obj.(*xlZones)
-	xl := z.zones[0].sets[0]
-	_, _, err = xl.readXLMetaStat(context.Background(), bucketName, objectName)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Remove one disk.
-	removeDiskN(disks, 7)
-
-	// Removing disk shouldn't affect reading object info.
-	_, _, err = xl.readXLMetaStat(context.Background(), bucketName, objectName)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, disk := range disks {
-		os.RemoveAll(path.Join(disk, bucketName))
-	}
-
-	_, _, err = xl.readXLMetaStat(context.Background(), bucketName, objectName)
-	if err != errVolumeNotFound {
-		t.Fatal(err)
-	}
-}
-
-// Tests for reading XL meta parts.
-func TestXLReadMetaParts(t *testing.T) {
-	ExecObjectLayerDiskAlteredTest(t, testXLReadMetaParts)
-}
-
-// testListObjectParts - Tests validate listing of object parts when disks go offline.
-func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
-	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
-	objectNames := []string{"minio-object-1.txt"}
-	uploadIDs := []string{}
-	var opts ObjectOptions
-
-	// bucketnames[0].
-	// objectNames[0].
-	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "")
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err := obj.NewMultipartUpload(context.Background(), bucketNames[0], objectNames[0], opts)
-	if err != nil {
-		// Failed to create NewMultipartUpload, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
-
-	uploadIDs = append(uploadIDs, uploadID)
-
-	// Create multipart parts.
-	// Need parts to be uploaded before MultipartLists can be called and tested.
-	createPartCases := []struct {
-		bucketName      string
-		objName         string
-		uploadID        string
-		PartID          int
-		inputReaderData string
-		inputMd5        string
-		intputDataSize  int64
-		expectedMd5     string
-	}{
-		// Case 1-4.
-		// Creating sequence of parts for same uploadID.
-		// Used to ensure that the ListMultipartResult produces one output for the four parts uploaded below for the given upload ID.
-		{bucketNames[0], objectNames[0], uploadIDs[0], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), "e2fc714c4727ee9395f324cd2e7f331f"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh")), "1f7690ebdd9b4caf8fab49ca1757bf27"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd")), "09a0877d04abf8759f99adec02baf579"},
-		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd")), "e132e96a5ddad6da8b07bba6f6131fef"},
-	}
-	sha256sum := ""
-	// Iterating over creatPartCases to generate multipart chunks.
-	for _, testCase := range createPartCases {
-		_, perr := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), opts)
-		if perr != nil {
-			t.Fatalf("%s : %s", instanceType, perr)
-		}
-	}
-
-	z := obj.(*xlZones)
-	xl := z.zones[0].sets[0]
-	uploadIDPath := xl.getUploadIDDir(bucketNames[0], objectNames[0], uploadIDs[0])
-
-	_, _, err = xl.readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Remove one disk.
-	removeDiskN(disks, 7)
-
-	// Removing disk shouldn't affect reading object parts info.
-	_, _, err = xl.readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, disk := range disks {
-		os.RemoveAll(path.Join(disk, bucketNames[0]))
-		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, xl.getMultipartSHADir(bucketNames[0], objectNames[0])))
-	}
-
-	_, _, err = xl.readXLMetaParts(context.Background(), minioMetaMultipartBucket, uploadIDPath)
-	if err != errFileNotFound {
-		t.Fatal(err)
-	}
-}
 
 // Test xlMetaV1.AddObjectPart()
 func TestAddObjectPart(t *testing.T) {
@@ -218,8 +53,7 @@ func TestAddObjectPart(t *testing.T) {
 	// Test them.
 	for _, testCase := range testCases {
 		if testCase.expectedIndex > -1 {
-			partNumString := strconv.Itoa(testCase.partNum)
-			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
+			xlMeta.AddObjectPart(testCase.partNum, "", int64(testCase.partNum+humanize.MiByte), ActualSize)
 		}
 
 		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
@@ -250,8 +84,7 @@ func TestObjectPartIndex(t *testing.T) {
 
 	// Add some parts for testing.
 	for _, testCase := range testCases {
-		partNumString := strconv.Itoa(testCase.partNum)
-		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte), ActualSize)
+		xlMeta.AddObjectPart(testCase.partNum, "", int64(testCase.partNum+humanize.MiByte), ActualSize)
 	}
 
 	// Add failure test case.
@@ -279,8 +112,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Add some parts for testing.
 	// Total size of all parts is 5,242,899 bytes.
 	for _, partNum := range []int{1, 2, 4, 5, 7} {
-		partNumString := strconv.Itoa(partNum)
-		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte), ActualSize)
+		xlMeta.AddObjectPart(partNum, "", int64(partNum+humanize.MiByte), ActualSize)
 	}
 
 	testCases := []struct {
@@ -303,7 +135,7 @@ func TestObjectToPartOffset(t *testing.T) {
 
 	// Test them.
 	for _, testCase := range testCases {
-		index, offset, err := xlMeta.ObjectToPartOffset(context.Background(), testCase.offset)
+		index, offset, err := xlMeta.ObjectToPartOffset(GlobalContext, testCase.offset)
 		if err != testCase.expectedErr {
 			t.Fatalf("%+v: expected = %s, got: %s", testCase, testCase.expectedErr, err)
 		}
@@ -359,7 +191,7 @@ func TestPickValidXLMeta(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		xlMeta, err := pickValidXLMeta(context.Background(), test.metaArr, test.modTime, len(test.metaArr)/2)
+		xlMeta, err := pickValidXLMeta(GlobalContext, test.metaArr, test.modTime, len(test.metaArr)/2)
 		if test.expectedErr != nil {
 			if err.Error() != test.expectedErr.Error() {
 				t.Errorf("Test %d: Expected to fail with %v but received %v",

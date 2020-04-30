@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"math/rand"
 	"net"
 	"net/http"
@@ -68,7 +69,7 @@ func (r *lockedRandSource) Seed(seed int64) {
 
 // newRetryTimer creates a timer with exponentially increasing
 // delays until the maximum retry attempts are reached.
-func (adm AdminClient) newRetryTimer(maxRetry int, unit time.Duration, cap time.Duration, jitter float64, doneCh chan struct{}) <-chan int {
+func (adm AdminClient) newRetryTimer(ctx context.Context, maxRetry int, unit time.Duration, cap time.Duration, jitter float64) <-chan int {
 	attemptCh := make(chan int)
 
 	// computes the exponential backoff duration according to
@@ -96,14 +97,20 @@ func (adm AdminClient) newRetryTimer(maxRetry int, unit time.Duration, cap time.
 	go func() {
 		defer close(attemptCh)
 		for i := 0; i < maxRetry; i++ {
-			select {
 			// Attempts start from 1.
+			select {
 			case attemptCh <- i + 1:
-			case <-doneCh:
+			case <-ctx.Done():
 				// Stop the routine.
 				return
 			}
-			time.Sleep(exponentialBackoffWait(i))
+
+			select {
+			case <-time.After(exponentialBackoffWait(i)):
+			case <-ctx.Done():
+				// Stop the routine.
+				return
+			}
 		}
 	}()
 	return attemptCh
@@ -161,6 +168,7 @@ func isS3CodeRetryable(s3Code string) (ok bool) {
 
 // List of HTTP status codes which are retryable.
 var retryableHTTPStatusCodes = map[int]struct{}{
+	http.StatusRequestTimeout:      {},
 	http.StatusTooManyRequests:     {},
 	http.StatusInternalServerError: {},
 	http.StatusBadGateway:          {},

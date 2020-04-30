@@ -24,12 +24,13 @@ import (
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
-func (xl xlObjects) getLoadBalancedDisks() (disks []StorageAPI) {
+func (xl xlObjects) getLoadBalancedDisks() (newDisks []StorageAPI) {
+	disks := xl.getDisks()
 	// Based on the random shuffling return back randomized disks.
-	for _, i := range hashOrder(UTCNow().String(), len(xl.getDisks())) {
-		disks = append(disks, xl.getDisks()[i-1])
+	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
+		newDisks = append(newDisks, disks[i-1])
 	}
-	return disks
+	return newDisks
 }
 
 // This function does the following check, suppose
@@ -80,7 +81,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 	// quorum intentionally, but rely on the default case scenario. Actual quorum
 	// verification will happen by top layer by using getObjectInfo() and will be
 	// ignored if necessary.
-	readQuorum := len(storageDisks) / 2
+	readQuorum := getReadQuorum(len(storageDisks))
 
-	return reduceReadQuorumErrs(context.Background(), g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
+	return reduceReadQuorumErrs(GlobalContext, g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
 }

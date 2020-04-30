@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,8 +124,10 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*;*.png"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXPIRY{{.AssignmentOperator}}40
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}80
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
      {{.Prompt}} {{.HelpName}} mygcsprojectid
 `
 
@@ -142,12 +144,12 @@ EXAMPLES:
 func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
 	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
-		logger.LogIf(context.Background(), errGCSProjectIDNotFound, logger.Application)
+		logger.LogIf(minio.GlobalContext, errGCSProjectIDNotFound, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("projectID", ctx.Args().First())
-		contxt := logger.SetReqInfo(context.Background(), reqInfo)
+		contxt := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 		logger.LogIf(contxt, errGCSInvalidProjectID, logger.Application)
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
@@ -167,7 +169,7 @@ func (g *GCS) Name() string {
 
 // NewGatewayLayer returns gcs ObjectLayer.
 func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	ctx := context.Background()
+	ctx := minio.GlobalContext
 
 	var err error
 	if g.projectID == "" {
@@ -182,7 +184,7 @@ func (g *GCS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error)
 	metrics := minio.NewMetrics()
 
 	t := &minio.MetricsTransport{
-		Transport: minio.NewCustomHTTPTransport(),
+		Transport: minio.NewGatewayHTTPTransport(),
 		Metrics:   metrics,
 	}
 
@@ -371,7 +373,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(ctx context.Context, bucket str
 		if err != nil {
 			if err != iterator.Done {
 				reqInfo := &logger.ReqInfo{BucketName: bucket}
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				ctx := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 				logger.LogIf(ctx, err)
 			}
 			return
@@ -381,7 +383,7 @@ func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(ctx context.Context, bucket str
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(ctx)
 			if err != nil {
 				reqInfo := &logger.ReqInfo{BucketName: bucket, ObjectName: attrs.Name}
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				ctx := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 				logger.LogIf(ctx, err)
 				return
 			}
@@ -412,7 +414,7 @@ func (l *gcsGateway) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to GCS backend.
-func (l *gcsGateway) StorageInfo(ctx context.Context) (si minio.StorageInfo) {
+func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
 	return si
@@ -473,7 +475,7 @@ func (l *gcsGateway) ListBuckets(ctx context.Context) (buckets []minio.BucketInf
 }
 
 // DeleteBucket delete a bucket on GCS.
-func (l *gcsGateway) DeleteBucket(ctx context.Context, bucket string) error {
+func (l *gcsGateway) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	itObject := l.client.Bucket(bucket).Objects(ctx, &storage.Query{
 		Delimiter: minio.SlashSeparator,
 		Versions:  false,
@@ -752,7 +754,7 @@ func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
 }
 
 // GetObject - reads an object from GCS. Supports additional

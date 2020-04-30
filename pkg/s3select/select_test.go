@@ -21,13 +21,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/klauspost/cpuid"
 	"github.com/minio/minio-go/v6"
+	"github.com/minio/simdjson-go"
 )
 
 type testResponseWriter struct {
@@ -56,6 +59,7 @@ func TestJSONQueries(t *testing.T) {
 	{"id": 1,"title": "Second Record","desc": "another text","synonyms": ["some", "synonym", "value"]}
 	{"id": 2,"title": "Second Record","desc": "another text","numbers": [2, 3.0, 4]}
 	{"id": 3,"title": "Second Record","desc": "another text","nested": [[2, 3.0, 4], [7, 8.5, 9]]}`
+
 	var testTable = []struct {
 		name       string
 		query      string
@@ -230,6 +234,11 @@ func TestJSONQueries(t *testing.T) {
 `,
 		},
 		{
+			name:       "index-wildcard-in",
+			query:      `SELECT * from s3object s WHERE title = 'Test Record'`,
+			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
+		},
+		{
 			name: "select-output-field-as-csv",
 			requestXML: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <SelectObjectContentRequest>
@@ -243,6 +252,7 @@ func TestJSONQueries(t *testing.T) {
     </InputSerialization>
     <OutputSerialization>
         <CSV>
+	   <QuoteCharacter>"</QuoteCharacter>
         </CSV>
     </OutputSerialization>
     <RequestProgress>
@@ -251,11 +261,13 @@ func TestJSONQueries(t *testing.T) {
 </SelectObjectContentRequest>`),
 			wantResult: `"[""foo"",""bar"",""whatever""]"`,
 		},
-	}
-
-	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+		{
+			name:  "document",
+			query: "",
+			requestXML: []byte(`
+<?xml version="1.0" encoding="UTF-8"?>
 <SelectObjectContentRequest>
-    <Expression>%s</Expression>
+    <Expression>select * from s3object[*].elements[*] s where s.element_type = '__elem__merfu'</Expression>
     <ExpressionType>SQL</ExpressionType>
     <InputSerialization>
         <CompressionType>NONE</CompressionType>
@@ -270,10 +282,123 @@ func TestJSONQueries(t *testing.T) {
     <RequestProgress>
         <Enabled>FALSE</Enabled>
     </RequestProgress>
+</SelectObjectContentRequest>`),
+			withJSON: `
+{
+  "name": "small_pdf1.pdf",
+  "lume_id": "9507193e-572d-4f95-bcf1-e9226d96be65",
+  "elements": [
+    {
+      "element_type": "__elem__image",
+      "element_id": "859d09c4-7cf1-4a37-9674-3a7de8b56abc",
+      "attributes": {
+        "__attr__image_dpi": 300,
+        "__attr__image_size": [
+          2550,
+          3299
+        ],
+        "__attr__image_index": 1,
+        "__attr__image_format": "JPEG",
+        "__attr__file_extension": "jpg",
+        "__attr__data": null
+      }
+    },
+    {
+      "element_type": "__elem__merfu",
+      "element_id": "d868aefe-ef9a-4be2-b9b2-c9fd89cc43eb",
+      "attributes": {
+        "__attr__image_dpi": 300,
+        "__attr__image_size": [
+          2550,
+          3299
+        ],
+        "__attr__image_index": 2,
+        "__attr__image_format": "JPEG",
+        "__attr__file_extension": "jpg",
+        "__attr__data": null
+      }
+    }
+  ],
+  "data": "asdascasdc1234e123erdasdas"
+}`,
+			wantResult: `{"element_type":"__elem__merfu","element_id":"d868aefe-ef9a-4be2-b9b2-c9fd89cc43eb","attributes":{"__attr__image_dpi":300,"__attr__image_size":[2550,3299],"__attr__image_index":2,"__attr__image_format":"JPEG","__attr__file_extension":"jpg","__attr__data":null}}`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <JSON>
+            <Type>LINES</Type>
+        </JSON>
+    </InputSerialization>
+    <OutputSerialization>
+        <JSON>
+        </JSON>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
 </SelectObjectContentRequest>`
 
 	for _, testCase := range testTable {
 		t.Run(testCase.name, func(t *testing.T) {
+			// Hack cpuid to the CPU doesn't appear to support AVX2.
+			// Restore whatever happens.
+			defer func(f cpuid.Flags) {
+				cpuid.CPU.Features = f
+			}(cpuid.CPU.Features)
+			cpuid.CPU.Features &= math.MaxUint64 - cpuid.AVX2
+
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				in := input
+				if len(testCase.withJSON) > 0 {
+					in = testCase.withJSON
+				}
+				return ioutil.NopCloser(bytes.NewBufferString(in)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+		t.Run("simd-"+testCase.name, func(t *testing.T) {
+			if !simdjson.SupportedCPU() {
+				t.Skip("No CPU support")
+			}
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
 				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
@@ -320,6 +445,89 @@ func TestJSONQueries(t *testing.T) {
 }
 
 func TestCSVQueries(t *testing.T) {
+	input := `index,ID,CaseNumber,Date,Day,Month,Year,Block,IUCR,PrimaryType,Description,LocationDescription,Arrest,Domestic,Beat,District,Ward,CommunityArea,FBI Code,XCoordinate,YCoordinate,UpdatedOn,Latitude,Longitude,Location
+2700763,7732229,,2010-05-26 00:00:00,26,May,2010,113XX S HALSTED ST,1150,,CREDIT CARD FRAUD,,False,False,2233,22.0,34.0,,11,,,,41.688043288,-87.6422444,"(41.688043288, -87.6422444)"`
+
+	var testTable = []struct {
+		name       string
+		query      string
+		requestXML []byte
+		wantResult string
+	}{
+		{
+			name:       "select-in-text-simple",
+			query:      `SELECT index FROM s3Object s WHERE "Month"='May'`,
+			wantResult: `2700763`,
+		},
+	}
+
+	defRequest := `<?xml version="1.0" encoding="UTF-8"?>
+<SelectObjectContentRequest>
+    <Expression>%s</Expression>
+    <ExpressionType>SQL</ExpressionType>
+    <InputSerialization>
+        <CompressionType>NONE</CompressionType>
+        <CSV>
+        	<FieldDelimiter>,</FieldDelimiter>
+        	<FileHeaderInfo>USE</FileHeaderInfo>
+        	<QuoteCharacter>"</QuoteCharacter>
+        	<QuoteEscapeCharacter>"</QuoteEscapeCharacter>
+        	<RecordDelimiter>\n</RecordDelimiter>
+        </CSV>
+    </InputSerialization>
+    <OutputSerialization>
+        <CSV>
+        </CSV>
+    </OutputSerialization>
+    <RequestProgress>
+        <Enabled>FALSE</Enabled>
+    </RequestProgress>
+</SelectObjectContentRequest>`
+
+	for _, testCase := range testTable {
+		t.Run(testCase.name, func(t *testing.T) {
+			testReq := testCase.requestXML
+			if len(testReq) == 0 {
+				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+			}
+			s3Select, err := NewS3Select(bytes.NewReader(testReq))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err = s3Select.Open(func(offset, length int64) (io.ReadCloser, error) {
+				return ioutil.NopCloser(bytes.NewBufferString(input)), nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			w := &testResponseWriter{}
+			s3Select.Evaluate(w)
+			s3Select.Close()
+			resp := http.Response{
+				StatusCode:    http.StatusOK,
+				Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+				ContentLength: int64(len(w.response)),
+			}
+			res, err := minio.NewSelectResults(&resp, "testbucket")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			got, err := ioutil.ReadAll(res)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			gotS := strings.TrimSpace(string(got))
+			if !reflect.DeepEqual(gotS, testCase.wantResult) {
+				t.Errorf("received response does not match with expected reply. Query: %s\ngot: %s\nwant:%s", testCase.query, gotS, testCase.wantResult)
+			}
+		})
+	}
+}
+
+func TestCSVQueries2(t *testing.T) {
 	input := `id,time,num,num2,text
 1,2010-01-01T,7867786,4565.908123,"a text, with comma"
 2,2017-01-02T03:04Z,-5, 0.765111,
@@ -366,6 +574,16 @@ func TestCSVQueries(t *testing.T) {
 			wantResult: `{"num2":" 0.765111"}`,
 		},
 		{
+			name:       "select-in-array",
+			query:      `select id from S3Object s WHERE id in [1,3]`,
+			wantResult: `{"id":"1"}`,
+		},
+		{
+			name:       "select-in-array-matchnone",
+			query:      `select id from S3Object s WHERE s.id in [4,3]`,
+			wantResult: ``,
+		},
+		{
 			name:       "select-float-by-val",
 			query:      `SELECT num2 from s3object s WHERE num2 = 0.765111`,
 			wantResult: `{"num2":" 0.765111"}`,
@@ -380,6 +598,7 @@ func TestCSVQueries(t *testing.T) {
         <CompressionType>NONE</CompressionType>
         <CSV>
             <FileHeaderInfo>USE</FileHeaderInfo>
+	    <QuoteCharacter>"</QuoteCharacter>
         </CSV>
     </InputSerialization>
     <OutputSerialization>
@@ -559,7 +778,23 @@ func TestCSVInput(t *testing.T) {
 			s3Select.Close()
 
 			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+				resp := http.Response{
+					StatusCode:    http.StatusOK,
+					Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+					ContentLength: int64(len(w.response)),
+				}
+				res, err := minio.NewSelectResults(&resp, "testbucket")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				got, err := ioutil.ReadAll(res)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v\ndecoded:%s", w.response, testCase.expectedResult, string(got))
 			}
 		})
 	}
@@ -667,7 +902,23 @@ func TestJSONInput(t *testing.T) {
 			s3Select.Close()
 
 			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+				resp := http.Response{
+					StatusCode:    http.StatusOK,
+					Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+					ContentLength: int64(len(w.response)),
+				}
+				res, err := minio.NewSelectResults(&resp, "testbucket")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				got, err := ioutil.ReadAll(res)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v\ndecoded:%s", w.response, testCase.expectedResult, string(got))
 			}
 		})
 	}
@@ -766,7 +1017,23 @@ func TestParquetInput(t *testing.T) {
 			s3Select.Close()
 
 			if !reflect.DeepEqual(w.response, testCase.expectedResult) {
-				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v", w.response, testCase.expectedResult)
+				resp := http.Response{
+					StatusCode:    http.StatusOK,
+					Body:          ioutil.NopCloser(bytes.NewReader(w.response)),
+					ContentLength: int64(len(w.response)),
+				}
+				res, err := minio.NewSelectResults(&resp, "testbucket")
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				got, err := ioutil.ReadAll(res)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+
+				t.Errorf("received response does not match with expected reply\ngot: %#v\nwant:%#v\ndecoded:%s", w.response, testCase.expectedResult, string(got))
 			}
 		})
 	}

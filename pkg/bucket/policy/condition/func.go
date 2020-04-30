@@ -106,6 +106,18 @@ var conditionFuncMap = map[name]func(Key, ValueSet) (Function, error){
 	notIPAddress:              newNotIPAddressFunc,
 	null:                      newNullFunc,
 	boolean:                   newBooleanFunc,
+	numericEquals:             newNumericEqualsFunc,
+	numericNotEquals:          newNumericNotEqualsFunc,
+	numericLessThan:           newNumericLessThanFunc,
+	numericLessThanEquals:     newNumericLessThanEqualsFunc,
+	numericGreaterThan:        newNumericGreaterThanFunc,
+	numericGreaterThanEquals:  newNumericGreaterThanEqualsFunc,
+	dateEquals:                newDateEqualsFunc,
+	dateNotEquals:             newDateNotEqualsFunc,
+	dateLessThan:              newDateLessThanFunc,
+	dateLessThanEquals:        newDateLessThanEqualsFunc,
+	dateGreaterThan:           newDateGreaterThanFunc,
+	dateGreaterThanEquals:     newDateGreaterThanEqualsFunc,
 	// Add new conditions here.
 }
 

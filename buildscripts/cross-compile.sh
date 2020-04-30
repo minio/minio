@@ -1,14 +1,15 @@
 #!/bin/bash
 
+set -e
 # Enable tracing if set.
-[ -n "$BASH_XTRACEFD" ] && set -ex
+[ -n "$BASH_XTRACEFD" ] && set -x
 
 function _init() {
     ## All binaries are static make sure to disable CGO.
     export CGO_ENABLED=0
 
     ## List of architectures and OS to test coss compilation.
-    SUPPORTED_OSARCH="linux/ppc64le linux/arm64 linux/s390x darwin/amd64 freebsd/amd64"
+    SUPPORTED_OSARCH="linux/ppc64le linux/arm64 linux/s390x darwin/amd64 freebsd/amd64 windows/amd64 linux/arm linux/386"
 }
 
 function _build() {
@@ -19,11 +20,11 @@ function _build() {
     package=$(go list -f '{{.ImportPath}}')
     printf -- "--> %15s:%s\n" "${osarch}" "${package}"
 
-    # Go build to build the binary.
+    # go build -trimpath to build the binary.
     export GOOS=$os
     export GOARCH=$arch
     export GO111MODULE=on
-    go build -tags kqueue -o /dev/null
+    go build -trimpath -tags kqueue -o /dev/null
 }
 
 function main() {

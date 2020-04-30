@@ -40,6 +40,7 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 	UserDefined          map[string]string
+	PartNumber           int
 	CheckCopyPrecondFn   CheckCopyPreconditionFn
 }
 
@@ -55,20 +56,21 @@ const (
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	// Locking operations on object.
-	NewNSLock(ctx context.Context, bucket string, object string) RWLocker
+	NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	CrawlAndGetDataUsage(context.Context, <-chan struct{}) DataUsageInfo
-	StorageInfo(context.Context) StorageInfo
+	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
+	StorageInfo(ctx context.Context, local bool) StorageInfo // local queries only local disks
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, location string) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
-	DeleteBucket(ctx context.Context, bucket string) error
+	DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
+	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error
 
 	// Object operations.
 
@@ -100,8 +102,8 @@ type ObjectLayer interface {
 	ReloadFormat(ctx context.Context, dryRun bool) error
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
-	HealObject(ctx context.Context, bucket, object string, dryRun, remove bool, scanMode madmin.HealScanMode) (madmin.HealResultItem, error)
-	HealObjects(ctx context.Context, bucket, prefix string, fn healObjectFn) error
+	HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error)
+	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn healObjectFn) error
 
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 

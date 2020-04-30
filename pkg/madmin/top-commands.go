@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -53,11 +54,13 @@ func (l LockEntries) Swap(i, j int) {
 }
 
 // TopLocks - returns the oldest locks in a minio setup.
-func (adm *AdminClient) TopLocks() (LockEntries, error) {
-	// Execute GET on /minio/admin/v2/top/locks
+func (adm *AdminClient) TopLocks(ctx context.Context) (LockEntries, error) {
+	// Execute GET on /minio/admin/v3/top/locks
 	// to get the oldest locks in a minio setup.
-	resp, err := adm.executeMethod("GET",
-		requestData{relPath: adminAPIPrefix + "/top/locks"})
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
+		requestData{relPath: adminAPIPrefix + "/top/locks"},
+	)
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err

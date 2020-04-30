@@ -62,9 +62,9 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 		return fmt.Errorf("Expected platform '%s', found to be running '%s'",
 			s1.MinioPlatform, s2.MinioPlatform)
 	}
-	if s1.MinioEndpoints.Nodes() != s2.MinioEndpoints.Nodes() {
-		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.Nodes(),
-			s2.MinioEndpoints.Nodes())
+	if s1.MinioEndpoints.NEndpoints() != s2.MinioEndpoints.NEndpoints() {
+		return fmt.Errorf("Expected number of endpoints %d, seen %d", s1.MinioEndpoints.NEndpoints(),
+			s2.MinioEndpoints.NEndpoints())
 	}
 
 	for i, ep := range s1.MinioEndpoints {
@@ -110,7 +110,7 @@ func registerBootstrapRESTHandlers(router *mux.Router) {
 		httpTraceHdrs(server.VerifyHandler))
 }
 
-// client to talk to bootstrap Nodes.
+// client to talk to bootstrap NEndpoints.
 type bootstrapRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
@@ -126,7 +126,7 @@ func (client *bootstrapRESTClient) reConnect() {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *bootstrapRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	return client.callWithContext(context.Background(), method, values, body, length)
+	return client.callWithContext(GlobalContext, method, values, body, length)
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -247,7 +247,7 @@ func newBootstrapRESTClient(endpoint Endpoint) (*bootstrapRESTClient, error) {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
 		return nil, err

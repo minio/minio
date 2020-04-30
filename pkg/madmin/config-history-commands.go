@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -28,7 +29,7 @@ import (
 // ClearConfigHistoryKV - clears the config entry represented by restoreID.
 // optionally allows setting `all` as a special keyword to automatically
 // erase all config set history entires.
-func (adm *AdminClient) ClearConfigHistoryKV(restoreID string) (err error) {
+func (adm *AdminClient) ClearConfigHistoryKV(ctx context.Context, restoreID string) (err error) {
 	v := url.Values{}
 	v.Set("restoreId", restoreID)
 	reqData := requestData{
@@ -36,8 +37,8 @@ func (adm *AdminClient) ClearConfigHistoryKV(restoreID string) (err error) {
 		queryValues: v,
 	}
 
-	// Execute DELETE on /minio/admin/v2/clear-config-history-kv
-	resp, err := adm.executeMethod(http.MethodDelete, reqData)
+	// Execute DELETE on /minio/admin/v3/clear-config-history-kv
+	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -53,7 +54,7 @@ func (adm *AdminClient) ClearConfigHistoryKV(restoreID string) (err error) {
 
 // RestoreConfigHistoryKV - Restore a previous config set history.
 // Input is a unique id which represents the previous setting.
-func (adm *AdminClient) RestoreConfigHistoryKV(restoreID string) (err error) {
+func (adm *AdminClient) RestoreConfigHistoryKV(ctx context.Context, restoreID string) (err error) {
 	v := url.Values{}
 	v.Set("restoreId", restoreID)
 	reqData := requestData{
@@ -61,8 +62,8 @@ func (adm *AdminClient) RestoreConfigHistoryKV(restoreID string) (err error) {
 		queryValues: v,
 	}
 
-	// Execute PUT on /minio/admin/v2/set-config-kv to set config key/value.
-	resp, err := adm.executeMethod(http.MethodPut, reqData)
+	// Execute PUT on /minio/admin/v3/set-config-kv to set config key/value.
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -90,15 +91,16 @@ func (ch ConfigHistoryEntry) CreateTimeFormatted() string {
 }
 
 // ListConfigHistoryKV - lists a slice of ConfigHistoryEntries sorted by createTime.
-func (adm *AdminClient) ListConfigHistoryKV(count int) ([]ConfigHistoryEntry, error) {
+func (adm *AdminClient) ListConfigHistoryKV(ctx context.Context, count int) ([]ConfigHistoryEntry, error) {
 	if count == 0 {
 		count = 10
 	}
 	v := url.Values{}
 	v.Set("count", strconv.Itoa(count))
 
-	// Execute GET on /minio/admin/v2/list-config-history-kv
-	resp, err := adm.executeMethod(http.MethodGet,
+	// Execute GET on /minio/admin/v3/list-config-history-kv
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
 		requestData{
 			relPath:     adminAPIPrefix + "/list-config-history-kv",
 			queryValues: v,
@@ -111,7 +113,7 @@ func (adm *AdminClient) ListConfigHistoryKV(count int) ([]ConfigHistoryEntry, er
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	data, err := DecryptData(adm.secretAccessKey, resp.Body)
+	data, err := DecryptData(adm.getSecretKey(), resp.Body)
 	if err != nil {
 		return nil, err
 	}

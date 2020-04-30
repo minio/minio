@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -171,7 +170,11 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		if isHostIP(arg) {
 			return ep, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
 		}
-		u = &url.URL{Path: path.Clean(arg)}
+		absArg, err := filepath.Abs(arg)
+		if err != nil {
+			return Endpoint{}, fmt.Errorf("absolute path failed %s", err)
+		}
+		u = &url.URL{Path: path.Clean(absArg)}
 		isLocal = true
 	}
 
@@ -220,12 +223,26 @@ func (l EndpointZones) HTTPS() bool {
 	return l[0].Endpoints.HTTPS()
 }
 
-// Nodes - returns all nodes count
-func (l EndpointZones) Nodes() (count int) {
+// NEndpoints - returns all nodes count
+func (l EndpointZones) NEndpoints() (count int) {
 	for _, ep := range l {
 		count += len(ep.Endpoints)
 	}
 	return count
+}
+
+// Hosts - returns list of unique hosts
+func (l EndpointZones) Hosts() []string {
+	foundSet := set.NewStringSet()
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if foundSet.Contains(endpoint.Host) {
+				continue
+			}
+			foundSet.Add(endpoint.Host)
+		}
+	}
+	return foundSet.ToSlice()
 }
 
 // Endpoints - list of same type of endpoint.
@@ -253,7 +270,7 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 			"host",
 			endpoint.Hostname(),
 		)
-		ctx := logger.SetReqInfo(context.Background(), reqInfo)
+		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err, logger.Application)
 		return false
 	}
@@ -323,7 +340,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 								startTime.Add(timeElapsed),
 								"elapsed",
 								""))
-						ctx := logger.SetReqInfo(context.Background(), reqInfo)
+						ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 						logger.LogIf(ctx, err, logger.Application)
 					}
 					continue
@@ -350,7 +367,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 								"elapsed",
 								"",
 							))
-						ctx := logger.SetReqInfo(context.Background(),
+						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
 						logger.LogIf(ctx, err, logger.Application)
 					}
@@ -381,7 +398,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 									"elapsed",
 									"",
 								))
-							ctx := logger.SetReqInfo(context.Background(),
+							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
 							logger.LogIf(ctx, err, logger.Application)
 						}

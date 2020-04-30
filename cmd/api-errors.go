@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"google.golang.org/api/googleapi"
 
 	minio "github.com/minio/minio-go/v6"
@@ -95,6 +94,7 @@ const (
 	ErrMissingContentLength
 	ErrMissingContentMD5
 	ErrMissingRequestBodyError
+	ErrMissingSecurityHeader
 	ErrNoSuchBucket
 	ErrNoSuchBucketPolicy
 	ErrNoSuchBucketLifecycle
@@ -121,7 +121,8 @@ const (
 	ErrMissingCredTag
 	ErrCredMalformed
 	ErrInvalidRegion
-	ErrInvalidService
+	ErrInvalidServiceS3
+	ErrInvalidServiceSTS
 	ErrInvalidRequestVersion
 	ErrMissingSignTag
 	ErrMissingSignHeadersTag
@@ -149,7 +150,9 @@ const (
 	ErrBadRequest
 	ErrKeyTooLongError
 	ErrInvalidBucketObjectLockConfiguration
+	ErrObjectLockConfigurationNotFound
 	ErrObjectLockConfigurationNotAllowed
+	ErrNoSuchObjectLockConfiguration
 	ErrObjectLocked
 	ErrInvalidRetentionDate
 	ErrPastObjectLockRetainDate
@@ -208,6 +211,7 @@ const (
 	ErrInvalidResourceName
 	ErrServerNotInitialized
 	ErrOperationTimedOut
+	ErrOperationMaxedOut
 	ErrInvalidRequest
 	// MinIO storage class error codes
 	ErrInvalidStorageClass
@@ -330,17 +334,26 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrAdminAccountNotEligible
+	ErrServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
 
 type errorCodeMap map[APIErrorCode]APIError
 
-func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError {
 	apiErr, ok := e[errCode]
 	if !ok {
-		return e[ErrInternalError]
+		apiErr = e[ErrInternalError]
+	}
+	if err != nil {
+		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
 	return apiErr
+}
+
+func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
+	return e.ToAPIErrWithErr(errCode, nil)
 }
 
 // error code to APIError structure, these fields carry respective
@@ -469,6 +482,11 @@ var errorCodes = errorCodeMap{
 	ErrMissingContentMD5: {
 		Code:           "MissingContentMD5",
 		Description:    "Missing required header for this request: Content-Md5.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrMissingSecurityHeader: {
+		Code:           "MissingSecurityHeader",
+		Description:    "Your request was missing a required header",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingRequestBodyError: {
@@ -645,9 +663,14 @@ var errorCodes = errorCodeMap{
 	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
 	// right Description:   "Error parsing the X-Amz-Credential parameter; incorrect service \"s4\". This endpoint belongs to \"s3\".".
 	// Need changes to make sure variable messages can be constructed.
-	ErrInvalidService: {
-		Code:           "AuthorizationQueryParametersError",
-		Description:    "Error parsing the X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
+	ErrInvalidServiceS3: {
+		Code:           "AuthorizationParametersError",
+		Description:    "Error parsing the Credential/X-Amz-Credential parameter; incorrect service. This endpoint belongs to \"s3\".",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidServiceSTS: {
+		Code:           "AuthorizationParametersError",
+		Description:    "Error parsing the Credential parameter; incorrect service. This endpoint belongs to \"sts\".",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// FIXME: Should contain the invalid param set as seen in https://github.com/minio/minio/issues/2385.
@@ -750,10 +773,20 @@ var errorCodes = errorCodeMap{
 		Description:    "Bucket is missing ObjectLockConfiguration",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrObjectLockConfigurationNotFound: {
+		Code:           "ObjectLockConfigurationNotFoundError",
+		Description:    "Object Lock configuration does not exist for this bucket",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrObjectLockConfigurationNotAllowed: {
 		Code:           "InvalidBucketState",
-		Description:    "Object Lock configuration cannot be enabled on existing buckets.",
+		Description:    "Object Lock configuration cannot be enabled on existing buckets",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrNoSuchObjectLockConfiguration: {
+		Code:           "NoSuchObjectLockConfiguration",
+		Description:    "The specified object does not have a ObjectLock configuration",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrObjectLocked: {
 		Code:           "InvalidRequest",
@@ -1064,6 +1097,11 @@ var errorCodes = errorCodeMap{
 	ErrOperationTimedOut: {
 		Code:           "XMinioServerTimedOut",
 		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
+	},
+	ErrOperationMaxedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout exceeded while waiting to proceed with the request",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 	ErrUnsupportedMetadata: {
@@ -1561,6 +1599,16 @@ var errorCodes = errorCodeMap{
 		Description:    "User is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrAdminAccountNotEligible: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "The administrator key is not eligible for this operation",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrServiceAccountNotFound: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "The specified service account is not found",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 	ErrPostPolicyConditionInvalidFormat: {
 		Code:           "PostPolicyInvalidKeyName",
 		Description:    "Invalid according to Policy: Policy Condition failed",
@@ -1629,7 +1677,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrKMSNotConfigured
 	case crypto.ErrKMSAuthLogin:
 		apiErr = ErrKMSAuthFailure
-	case errOperationTimedOut, context.Canceled, context.DeadlineExceeded:
+	case context.Canceled, context.DeadlineExceeded:
 		apiErr = ErrOperationTimedOut
 	case errDiskNotFound:
 		apiErr = ErrSlowDown
@@ -1757,6 +1805,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrOverlappingFilterNotification
 	case *event.ErrUnsupportedConfiguration:
 		apiErr = ErrUnsupportedNotification
+	case OperationTimedOut:
+		apiErr = ErrOperationTimedOut
 	case BackendDown:
 		apiErr = ErrBackendDown
 	case ObjectNameTooLong:
@@ -1803,6 +1853,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case *xml.SyntaxError:
+			apiErr = APIError{
+				Code: "MalformedXML",
+				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description,
+					e.Error()),
+				HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
+			}
 		case url.EscapeError:
 			apiErr = APIError{
 				Code: "XMinioInvalidObjectName",
@@ -1857,12 +1914,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code:           string(e.ServiceCode()),
 				Description:    e.Error(),
 				HTTPStatusCode: e.Response().StatusCode,
-			}
-		case oss.ServiceError:
-			apiErr = APIError{
-				Code:           e.Code,
-				Description:    e.Message,
-				HTTPStatusCode: e.StatusCode,
 			}
 			// Add more Gateway SDKs here if any in future.
 		}

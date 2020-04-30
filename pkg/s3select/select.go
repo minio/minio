@@ -19,7 +19,9 @@ package s3select
 import (
 	"bufio"
 	"bytes"
+	"compress/bzip2"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -30,7 +32,9 @@ import (
 	"github.com/minio/minio/pkg/s3select/csv"
 	"github.com/minio/minio/pkg/s3select/json"
 	"github.com/minio/minio/pkg/s3select/parquet"
+	"github.com/minio/minio/pkg/s3select/simdj"
 	"github.com/minio/minio/pkg/s3select/sql"
+	"github.com/minio/simdjson-go"
 )
 
 type recordReader interface {
@@ -300,9 +304,12 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		s3Select.recordReader, err = csv.NewReader(s3Select.progressReader, &s3Select.Input.CSVArgs)
 		if err != nil {
 			rc.Close()
+			var stErr bzip2.StructuralError
+			if errors.As(err, &stErr) {
+				return errInvalidBZIP2CompressionFormat(err)
+			}
 			return err
 		}
-
 		return nil
 	case jsonFormat:
 		rc, err := getReader(0, -1)
@@ -317,7 +324,11 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		}
 
 		if strings.EqualFold(s3Select.Input.JSONArgs.ContentType, "lines") {
-			s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			if simdjson.SupportedCPU() {
+				s3Select.recordReader = simdj.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			} else {
+				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
+			}
 		} else {
 			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 		}
@@ -342,7 +353,13 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		}()
 
 		bufioWriter.Reset(buf)
-		err := record.WriteCSV(bufioWriter, []rune(s3Select.Output.CSVArgs.FieldDelimiter)[0])
+		opts := sql.WriteCSVOpts{
+			FieldDelimiter: []rune(s3Select.Output.CSVArgs.FieldDelimiter)[0],
+			Quote:          []rune(s3Select.Output.CSVArgs.QuoteCharacter)[0],
+			QuoteEscape:    []rune(s3Select.Output.CSVArgs.QuoteEscapeCharacter)[0],
+			AlwaysQuote:    strings.ToLower(s3Select.Output.CSVArgs.QuoteFields) == "always",
+		}
+		err := record.WriteCSV(bufioWriter, opts)
 		if err != nil {
 			return err
 		}
@@ -350,7 +367,9 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-		buf.Truncate(buf.Len() - 1)
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
 		buf.WriteString(s3Select.Output.CSVArgs.RecordDelimiter)
 
 		return nil
@@ -359,8 +378,10 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 		if err != nil {
 			return err
 		}
-
-		buf.Truncate(buf.Len() - 1)
+		// Trim trailing newline from non-simd output
+		if buf.Bytes()[buf.Len()-1] == '\n' {
+			buf.Truncate(buf.Len() - 1)
+		}
 		buf.WriteString(s3Select.Output.JSONArgs.RecordDelimiter)
 
 		return nil
@@ -377,7 +398,6 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 	writer := newMessageWriter(w, getProgressFunc)
 
-	var inputRecord sql.Record
 	var outputQueue []sql.Record
 
 	// Create queue based on the type.
@@ -418,6 +438,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 
 	var rec sql.Record
+OuterLoop:
 	for {
 		if s3Select.statement.LimitReached() {
 			if !sendRecord() {
@@ -454,47 +475,50 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 			break
 		}
 
-		if inputRecord, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
+		var inputRecords []*sql.Record
+		if inputRecords, err = s3Select.statement.EvalFrom(s3Select.Input.format, rec); err != nil {
 			break
 		}
 
-		if s3Select.statement.IsAggregated() {
-			if err = s3Select.statement.AggregateRow(inputRecord); err != nil {
-				break
-			}
-		} else {
-			var outputRecord sql.Record
-			// We will attempt to reuse the records in the table.
-			// The type of these should not change.
-			// The queue should always have at least one entry left for this to work.
-			outputQueue = outputQueue[:len(outputQueue)+1]
-			if t := outputQueue[len(outputQueue)-1]; t != nil {
-				// If the output record is already set, we reuse it.
-				outputRecord = t
-				outputRecord.Reset()
-			} else {
-				// Create new one
-				outputRecord = s3Select.outputRecord()
-				outputQueue[len(outputQueue)-1] = outputRecord
-			}
-			outputRecord, err = s3Select.statement.Eval(inputRecord, outputRecord)
-			if outputRecord == nil || err != nil {
-				// This should not be written.
-				// Remove it from the queue.
-				outputQueue = outputQueue[:len(outputQueue)-1]
-				if err != nil {
-					break
+		for _, inputRecord := range inputRecords {
+			if s3Select.statement.IsAggregated() {
+				if err = s3Select.statement.AggregateRow(*inputRecord); err != nil {
+					break OuterLoop
 				}
-				continue
-			}
+			} else {
+				var outputRecord sql.Record
+				// We will attempt to reuse the records in the table.
+				// The type of these should not change.
+				// The queue should always have at least one entry left for this to work.
+				outputQueue = outputQueue[:len(outputQueue)+1]
+				if t := outputQueue[len(outputQueue)-1]; t != nil {
+					// If the output record is already set, we reuse it.
+					outputRecord = t
+					outputRecord.Reset()
+				} else {
+					// Create new one
+					outputRecord = s3Select.outputRecord()
+					outputQueue[len(outputQueue)-1] = outputRecord
+				}
+				outputRecord, err = s3Select.statement.Eval(*inputRecord, outputRecord)
+				if outputRecord == nil || err != nil {
+					// This should not be written.
+					// Remove it from the queue.
+					outputQueue = outputQueue[:len(outputQueue)-1]
+					if err != nil {
+						break OuterLoop
+					}
+					continue
+				}
 
-			outputQueue[len(outputQueue)-1] = outputRecord
-			if len(outputQueue) < cap(outputQueue) {
-				continue
-			}
+				outputQueue[len(outputQueue)-1] = outputRecord
+				if len(outputQueue) < cap(outputQueue) {
+					continue
+				}
 
-			if !sendRecord() {
-				break
+				if !sendRecord() {
+					break OuterLoop
+				}
 			}
 		}
 	}

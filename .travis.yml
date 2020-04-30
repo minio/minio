@@ -29,12 +29,6 @@ matrix:
         - SIMPLE_CI=1
       go: 1.13.x
       script:
-        - make
-        - diff -au <(gofmt -s -d cmd) <(printf "")
-        - diff -au <(gofmt -s -d pkg) <(printf "")
-        - make test-race
-        - make crosscompile
-        - make verify
         - cd browser && npm install && npm run test && cd ..
         - bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'
 

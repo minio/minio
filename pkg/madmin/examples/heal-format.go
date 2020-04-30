@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -41,14 +42,14 @@ func main() {
 
 	// Attempt healing format in dry-run mode.
 	isDryRun := true
-	err = madmClnt.HealFormat(isDryRun)
+	err = madmClnt.HealFormat(context.Background(), isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Perform actual healing of format.
 	isDryRun = false
-	err = madmClnt.HealFormat(isDryRun)
+	err = madmClnt.HealFormat(context.Background(), isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}

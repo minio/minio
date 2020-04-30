@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v14" // DeleteFileBulk API change
+	storageRESTVersion       = "v17" // RemoveBucket API change
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -40,29 +40,32 @@ const (
 	storageRESTMethodReadFileStream = "/readfilestream"
 	storageRESTMethodListDir        = "/listdir"
 	storageRESTMethodWalk           = "/walk"
+	storageRESTMethodWalkSplunk     = "/walksplunk"
 	storageRESTMethodDeleteFile     = "/deletefile"
 	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
+	storageRESTMethodDeletePrefixes = "/deleteprefixes"
 	storageRESTMethodRenameFile     = "/renamefile"
 	storageRESTMethodVerifyFile     = "/verifyfile"
 )
 
 const (
-	storageRESTVolume     = "volume"
-	storageRESTVolumes    = "volumes"
-	storageRESTDirPath    = "dir-path"
-	storageRESTFilePath   = "file-path"
-	storageRESTSrcVolume  = "source-volume"
-	storageRESTSrcPath    = "source-path"
-	storageRESTDstVolume  = "destination-volume"
-	storageRESTDstPath    = "destination-path"
-	storageRESTOffset     = "offset"
-	storageRESTLength     = "length"
-	storageRESTShardSize  = "shard-size"
-	storageRESTCount      = "count"
-	storageRESTMarkerPath = "marker"
-	storageRESTLeafFile   = "leaf-file"
-	storageRESTRecursive  = "recursive"
-	storageRESTBitrotAlgo = "bitrot-algo"
-	storageRESTBitrotHash = "bitrot-hash"
-	storageRESTDiskID     = "disk-id"
+	storageRESTVolume      = "volume"
+	storageRESTVolumes     = "volumes"
+	storageRESTDirPath     = "dir-path"
+	storageRESTFilePath    = "file-path"
+	storageRESTSrcVolume   = "source-volume"
+	storageRESTSrcPath     = "source-path"
+	storageRESTDstVolume   = "destination-volume"
+	storageRESTDstPath     = "destination-path"
+	storageRESTOffset      = "offset"
+	storageRESTLength      = "length"
+	storageRESTShardSize   = "shard-size"
+	storageRESTCount       = "count"
+	storageRESTMarkerPath  = "marker"
+	storageRESTLeafFile    = "leaf-file"
+	storageRESTRecursive   = "recursive"
+	storageRESTBitrotAlgo  = "bitrot-algo"
+	storageRESTBitrotHash  = "bitrot-hash"
+	storageRESTDiskID      = "disk-id"
+	storageRESTForceDelete = "force-delete"
 )

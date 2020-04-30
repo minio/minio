@@ -21,15 +21,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"strings"
+	"time"
 	"unicode/utf8"
 
 	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -50,12 +48,17 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 	//    of the object layer.
 	retryTimerCh := newRetryTimerSimple(doneCh)
 	var stop bool
+
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+
 	for !stop {
 		select {
 		case <-retryTimerCh:
 			if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) {
+				if errors.Is(err, errDiskNotFound) ||
+					errors.As(err, &rquorum) ||
+					isErrBucketNotFound(err) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}
@@ -88,11 +91,6 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		}
 	}
 
-	activeCredOld, err := getOldCreds()
-	if err != nil {
-		return err
-	}
-
 	doneCh = make(chan struct{})
 	defer close(doneCh)
 
@@ -106,10 +104,11 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		select {
 		case <-retryTimerCh:
 			// Migrate IAM configuration
-			if err = migrateConfigPrefixToEncrypted(objAPI, activeCredOld, encrypted); err != nil {
-				if err == errDiskNotFound ||
-					strings.Contains(err.Error(), InsufficientReadQuorum{}.Error()) ||
-					strings.Contains(err.Error(), InsufficientWriteQuorum{}.Error()) {
+			if err = migrateConfigPrefixToEncrypted(objAPI, globalOldCred, encrypted); err != nil {
+				if errors.Is(err, errDiskNotFound) ||
+					errors.As(err, &rquorum) ||
+					errors.As(err, &wquorum) ||
+					isErrBucketNotFound(err) {
 					logger.Info("Waiting for config backend to be encrypted..")
 					continue
 				}
@@ -140,7 +139,7 @@ func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, 
 }
 
 func checkBackendEncrypted(objAPI ObjectLayer) (bool, error) {
-	data, err := readConfig(context.Background(), objAPI, backendEncryptedFile)
+	data, err := readConfig(GlobalContext, objAPI, backendEncryptedFile)
 	if err != nil && err != errConfigNotFound {
 		return false, err
 	}
@@ -164,25 +163,7 @@ func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
 	return data, err
 }
 
-func getOldCreds() (activeCredOld auth.Credentials, err error) {
-	accessKeyOld := env.Get(config.EnvAccessKeyOld, "")
-	secretKeyOld := env.Get(config.EnvSecretKeyOld, "")
-	if accessKeyOld != "" && secretKeyOld != "" {
-		activeCredOld, err = auth.CreateCredentials(accessKeyOld, secretKeyOld)
-		if err != nil {
-			return activeCredOld, err
-		}
-		// Once we have obtained the rotating creds
-		os.Unsetenv(config.EnvAccessKeyOld)
-		os.Unsetenv(config.EnvSecretKeyOld)
-	}
-	return activeCredOld, nil
-}
-
-func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-	defer cancel()
-
+func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
 	encrypted, err := checkBackendEtcdEncrypted(ctx, client)
 	if err != nil {
 		return err
@@ -206,20 +187,15 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		}
 	}
 
-	activeCredOld, err := getOldCreds()
-	if err != nil {
-		return err
-	}
-
 	if encrypted {
 		// No key rotation requested, and backend is
 		// already encrypted. We proceed without migration.
-		if !activeCredOld.IsValid() {
+		if !globalOldCred.IsValid() {
 			return nil
 		}
 
 		// No real reason to rotate if old and new creds are same.
-		if activeCredOld.Equal(globalActiveCred) {
+		if globalOldCred.Equal(globalActiveCred) {
 			return nil
 		}
 
@@ -228,7 +204,10 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		logger.Info("Attempting encryption of all IAM users and policies on etcd")
 	}
 
-	r, err := client.Get(ctx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	listCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	defer cancel()
+
+	r, err := client.Get(listCtx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
 	if err != nil {
 		return err
 	}
@@ -254,8 +233,8 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 
 		var data []byte
 		// Is rotating of creds requested?
-		if activeCredOld.IsValid() {
-			data, err = decryptData(cdata, activeCredOld, globalActiveCred)
+		if globalOldCred.IsValid() {
+			data, err = decryptData(cdata, globalOldCred, globalActiveCred)
 			if err != nil {
 				if err == madmin.ErrMaliciousData {
 					return config.ErrInvalidRotatingCredentialsBackendEncrypted(nil)
@@ -285,7 +264,7 @@ func migrateIAMConfigsEtcdToEncrypted(client *etcd.Client) error {
 		}
 	}
 
-	if encrypted && globalActiveCred.IsValid() && activeCredOld.IsValid() {
+	if encrypted && globalActiveCred.IsValid() && globalOldCred.IsValid() {
 		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
 	}
 
@@ -309,14 +288,14 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 		logger.Info("Attempting encryption of all config, IAM users and policies on MinIO backend")
 	}
 
-	err := saveConfig(context.Background(), objAPI, backendEncryptedFile, backendEncryptedMigrationIncomplete)
+	err := saveConfig(GlobalContext, objAPI, backendEncryptedFile, backendEncryptedMigrationIncomplete)
 	if err != nil {
 		return err
 	}
 
 	var marker string
 	for {
-		res, err := objAPI.ListObjects(context.Background(), minioMetaBucket,
+		res, err := objAPI.ListObjects(GlobalContext, minioMetaBucket,
 			minioConfigPrefix, marker, "", maxObjectList)
 		if err != nil {
 			return err
@@ -327,7 +306,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 				cencdata []byte
 			)
 
-			cdata, err = readConfig(context.Background(), objAPI, obj.Name)
+			cdata, err = readConfig(GlobalContext, objAPI, obj.Name)
 			if err != nil {
 				return err
 			}
@@ -360,7 +339,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 				return err
 			}
 
-			if err = saveConfig(context.Background(), objAPI, obj.Name, cencdata); err != nil {
+			if err = saveConfig(GlobalContext, objAPI, obj.Name, cencdata); err != nil {
 				return err
 			}
 		}
@@ -376,5 +355,5 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
 	}
 
-	return saveConfig(context.Background(), objAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+	return saveConfig(GlobalContext, objAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 }

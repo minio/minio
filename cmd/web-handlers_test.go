@@ -449,7 +449,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Cannot find the bucket already created by MakeBucket")
 	}
 	if listBucketsReply.Buckets[0].Name != bucketName {
-		t.Fatalf("Found another bucket other than already created by MakeBucket")
+		t.Fatalf("Found another bucket %q other than already created by MakeBucket", listBucketsReply.Buckets[0].Name)
 	}
 }
 
@@ -1475,8 +1475,11 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 
 // TestWebCheckAuthorization - Test Authorization for all web handlers
 func TestWebCheckAuthorization(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Prepare XL backend
-	obj, fsDirs, err := prepareXL16()
+	obj, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -1564,8 +1567,11 @@ func TestWebCheckAuthorization(t *testing.T) {
 
 // TestWebObjectLayerFaultyDisks - Test Web RPC responses with faulty disks
 func TestWebObjectLayerFaultyDisks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Prepare XL backend
-	obj, fsDirs, err := prepareXL16()
+	obj, fsDirs, err := prepareXL16(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}

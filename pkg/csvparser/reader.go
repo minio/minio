@@ -113,6 +113,12 @@ type Reader struct {
 	// or the Unicode replacement character (0xFFFD).
 	Comma rune
 
+	// Quote is a single rune used for marking fields limits
+	Quote []rune
+
+	// QuoteEscape is a single rune to escape the quote character
+	QuoteEscape rune
+
 	// Comment, if not 0, is the comment character. Lines beginning with the
 	// Comment character without preceding whitespace are ignored.
 	// With leading whitespace the Comment character becomes part of the
@@ -170,8 +176,10 @@ type Reader struct {
 // NewReader returns a new Reader that reads from r.
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		Comma: ',',
-		r:     bufio.NewReader(r),
+		Comma:       ',',
+		Quote:       []rune(`"`),
+		QuoteEscape: '"',
+		r:           bufio.NewReader(r),
 	}
 }
 
@@ -255,6 +263,13 @@ func nextRune(b []byte) rune {
 	return r
 }
 
+func encodeRune(r rune) []byte {
+	rlen := utf8.RuneLen(r)
+	p := make([]byte, rlen)
+	_ = utf8.EncodeRune(p, r)
+	return p
+}
+
 func (r *Reader) readRecord(dst []string) ([]string, error) {
 	if r.Comma == r.Comment || !validDelim(r.Comma) || (r.Comment != 0 && !validDelim(r.Comment)) {
 		return nil, errInvalidDelim
@@ -280,9 +295,20 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 		return nil, errRead
 	}
 
+	var quoteEscape = r.QuoteEscape
+	var quoteEscapeLen = utf8.RuneLen(quoteEscape)
+
+	var quote rune
+	var quoteLen int
+	if len(r.Quote) > 0 {
+		quote = r.Quote[0]
+		quoteLen = utf8.RuneLen(quote)
+	}
+
+	encodedQuote := encodeRune(quote)
+
 	// Parse each field in the record.
 	var err error
-	const quoteLen = len(`"`)
 	commaLen := utf8.RuneLen(r.Comma)
 	recLine := r.numLine // Starting line for record
 	r.recordBuffer = r.recordBuffer[:0]
@@ -292,7 +318,7 @@ parseField:
 		if r.TrimLeadingSpace {
 			line = bytes.TrimLeftFunc(line, unicode.IsSpace)
 		}
-		if len(line) == 0 || line[0] != '"' {
+		if len(line) == 0 || quoteLen == 0 || nextRune(line) != quote {
 			// Non-quoted string field
 			i := bytes.IndexRune(line, r.Comma)
 			field := line
@@ -303,7 +329,7 @@ parseField:
 			}
 			// Check to make sure a quote does not appear in field.
 			if !r.LazyQuotes {
-				if j := bytes.IndexByte(field, '"'); j >= 0 {
+				if j := bytes.IndexRune(field, quote); j >= 0 {
 					col := utf8.RuneCount(fullLine[:len(fullLine)-len(line[j:])])
 					err = &ParseError{StartLine: recLine, Line: r.numLine, Column: col, Err: ErrBareQuote}
 					break parseField
@@ -320,15 +346,25 @@ parseField:
 			// Quoted string field
 			line = line[quoteLen:]
 			for {
-				i := bytes.IndexByte(line, '"')
+				i := bytes.IndexAny(line, string(quote)+string(quoteEscape))
 				if i >= 0 {
-					// Hit next quote.
+					// Hit next quote or escape quote
 					r.recordBuffer = append(r.recordBuffer, line[:i]...)
-					line = line[i+quoteLen:]
+
+					escape := nextRune(line[i:]) == quoteEscape
+					if escape {
+						line = line[i+quoteEscapeLen:]
+					} else {
+						line = line[i+quoteLen:]
+					}
+
 					switch rn := nextRune(line); {
-					case rn == '"':
+					case escape && quoteEscape != quote:
+						r.recordBuffer = append(r.recordBuffer, encodeRune(rn)...)
+						line = line[utf8.RuneLen(rn):]
+					case rn == quote:
 						// `""` sequence (append quote).
-						r.recordBuffer = append(r.recordBuffer, '"')
+						r.recordBuffer = append(r.recordBuffer, encodedQuote...)
 						line = line[quoteLen:]
 					case rn == r.Comma:
 						// `",` sequence (end of field).
@@ -341,7 +377,7 @@ parseField:
 						break parseField
 					case r.LazyQuotes:
 						// `"` sequence (bare quote).
-						r.recordBuffer = append(r.recordBuffer, '"')
+						r.recordBuffer = append(r.recordBuffer, encodedQuote...)
 					default:
 						// `"*` sequence (invalid non-escaped quote).
 						col := utf8.RuneCount(fullLine[:len(fullLine)-len(line)-quoteLen])

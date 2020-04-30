@@ -121,6 +121,10 @@ func (n NATSArgs) Validate() error {
 		return errors.New("cert and key must be specified as a pair")
 	}
 
+	if n.Username != "" && n.Password == "" || n.Username == "" && n.Password != "" {
+		return errors.New("username and password must be specified as a pair")
+	}
+
 	if n.Streaming.Enable {
 		if n.Streaming.ClusterID == "" {
 			return errors.New("empty cluster id")
@@ -131,9 +135,6 @@ func (n NATSArgs) Validate() error {
 		if !filepath.IsAbs(n.QueueDir) {
 			return errors.New("queueDir path should be absolute")
 		}
-	}
-	if n.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
 	}
 
 	return nil
@@ -168,7 +169,15 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 	if n.Secure {
 		scheme = "tls"
 	}
-	addressURL := scheme + "://" + n.Username + ":" + n.Password + "@" + n.Address.String()
+
+	var addressURL string
+	if n.Username != "" && n.Password != "" {
+		addressURL = scheme + "://" + n.Username + ":" + n.Password + "@" + n.Address.String()
+	} else if n.Token != "" {
+		addressURL = scheme + "://" + n.Token + "@" + n.Address.String()
+	} else {
+		addressURL = scheme + "://" + n.Address.String()
+	}
 
 	clientID, err := getNewUUID()
 	if err != nil {
@@ -185,11 +194,12 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 
 // NATSTarget - NATS target.
 type NATSTarget struct {
-	id       event.TargetID
-	args     NATSArgs
-	natsConn *nats.Conn
-	stanConn stan.Conn
-	store    Store
+	id         event.TargetID
+	args       NATSArgs
+	natsConn   *nats.Conn
+	stanConn   stan.Conn
+	store      Store
+	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -197,17 +207,39 @@ func (target *NATSTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *NATSTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *NATSTarget) IsActive() (bool, error) {
+	var connErr error
 	if target.args.Streaming.Enable {
-		if !target.stanConn.NatsConn().IsConnected() {
-			return false, errNotConnected
+		if target.stanConn == nil || target.stanConn.NatsConn() == nil {
+			target.stanConn, connErr = target.args.connectStan()
+		} else {
+			if !target.stanConn.NatsConn().IsConnected() {
+				return false, errNotConnected
+			}
 		}
 	} else {
-		if !target.natsConn.IsConnected() {
-			return false, errNotConnected
+		if target.natsConn == nil {
+			target.natsConn, connErr = target.args.connectNats()
+		} else {
+			if !target.natsConn.IsConnected() {
+				return false, errNotConnected
+			}
 		}
 	}
+
+	if connErr != nil {
+		if connErr.Error() == nats.ErrNoServers.Error() {
+			return false, errNotConnected
+		}
+		return false, connErr
+	}
+
 	return true, nil
 }
 
@@ -250,31 +282,9 @@ func (target *NATSTarget) send(eventData event.Event) error {
 
 // Send - sends event to Nats.
 func (target *NATSTarget) Send(eventKey string) error {
-	var connErr error
-
-	if target.args.Streaming.Enable {
-		if target.stanConn == nil || target.stanConn.NatsConn() == nil {
-			target.stanConn, connErr = target.args.connectStan()
-		} else {
-			if !target.stanConn.NatsConn().IsConnected() {
-				return errNotConnected
-			}
-		}
-	} else {
-		if target.natsConn == nil {
-			target.natsConn, connErr = target.args.connectNats()
-		} else {
-			if !target.natsConn.IsConnected() {
-				return errNotConnected
-			}
-		}
-	}
-
-	if connErr != nil {
-		if connErr.Error() == nats.ErrNoServers.Error() {
-			return errNotConnected
-		}
-		return connErr
+	_, err := target.IsActive()
+	if err != nil {
+		return err
 	}
 
 	eventData, eErr := target.store.Get(eventKey)
@@ -320,39 +330,42 @@ func NewNATSTarget(id string, args NATSArgs, doneCh <-chan struct{}, loggerOnce 
 
 	var store Store
 
+	target := &NATSTarget{
+		id:         event.TargetID{ID: id, Name: "nats"},
+		args:       args,
+		loggerOnce: loggerOnce,
+	}
+
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-nats-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return target, oErr
 		}
+		target.store = store
 	}
 
 	if args.Streaming.Enable {
 		stanConn, err = args.connectStan()
+		target.stanConn = stanConn
 	} else {
 		natsConn, err = args.connectNats()
+		target.natsConn = natsConn
 	}
 
 	if err != nil {
 		if store == nil || err.Error() != nats.ErrNoServers.Error() {
-			return nil, err
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
 		}
-	}
-
-	target := &NATSTarget{
-		id:       event.TargetID{ID: id, Name: "nats"},
-		args:     args,
-		stanConn: stanConn,
-		natsConn: natsConn,
-		store:    store,
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

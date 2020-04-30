@@ -24,7 +24,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/cmd/logger/target/console"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/pubsub"
 )
@@ -75,7 +74,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 }
 
 // Subscribe starts console logging for this node.
-func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
+func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
 	// Enable console logging for remote client.
 	if !sys.HasLogListeners() {
 		logger.AddTarget(sys)
@@ -84,17 +83,20 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan s
 	cnt := 0
 	// by default send all console logs in the ring buffer unless node or limit query parameters
 	// are set.
-	var lastN []madmin.LogInfo
+	var lastN []log.Info
 	if last > defaultLogBufferCount || last <= 0 {
 		last = defaultLogBufferCount
 	}
 
-	lastN = make([]madmin.LogInfo, last)
+	lastN = make([]log.Info, last)
 	sys.RLock()
 	sys.logBuf.Do(func(p interface{}) {
-		if p != nil && (p.(madmin.LogInfo)).SendLog(node, logKind) {
-			lastN[cnt%last] = p.(madmin.LogInfo)
-			cnt++
+		if p != nil {
+			lg, ok := p.(log.Info)
+			if ok && lg.SendLog(node, logKind) {
+				lastN[cnt%last] = lg
+				cnt++
+			}
 		}
 	})
 	sys.RUnlock()
@@ -102,7 +104,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan s
 	if cnt > 0 {
 		for i := 0; i < last; i++ {
 			entry := lastN[(cnt+i)%last]
-			if (entry == madmin.LogInfo{}) {
+			if (entry == log.Info{}) {
 				continue
 			}
 			select {
@@ -118,12 +120,12 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan s
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
-	var lg madmin.LogInfo
+	var lg log.Info
 	switch e := e.(type) {
 	case log.Entry:
-		lg = madmin.LogInfo{Entry: e, NodeName: sys.nodeName}
+		lg = log.Info{Entry: e, NodeName: sys.nodeName}
 	case string:
-		lg = madmin.LogInfo{ConsoleMsg: e, NodeName: sys.nodeName}
+		lg = log.Info{ConsoleMsg: e, NodeName: sys.nodeName}
 	}
 
 	sys.pubsub.Publish(lg)

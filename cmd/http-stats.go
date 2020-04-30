@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/atomic"
 )
@@ -101,28 +102,24 @@ type HTTPAPIStats struct {
 
 // Inc increments the api stats counter.
 func (stats *HTTPAPIStats) Inc(api string) {
-	stats.Lock()
-	defer stats.Unlock()
 	if stats == nil {
 		return
 	}
+	stats.Lock()
+	defer stats.Unlock()
 	if stats.apiStats == nil {
 		stats.apiStats = make(map[string]int)
 	}
-	if _, ok := stats.apiStats[api]; ok {
-		stats.apiStats[api]++
-		return
-	}
-	stats.apiStats[api] = 1
+	stats.apiStats[api]++
 }
 
 // Dec increments the api stats counter.
 func (stats *HTTPAPIStats) Dec(api string) {
-	stats.Lock()
-	defer stats.Unlock()
 	if stats == nil {
 		return
 	}
+	stats.Lock()
+	defer stats.Unlock()
 	if val, ok := stats.apiStats[api]; ok && val > 0 {
 		stats.apiStats[api]--
 	}
@@ -170,18 +167,18 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(api string, r *http.Request, w *recordAPIStats, durationSecs float64) {
+func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter, durationSecs float64) {
 	// A successful request has a 2xx response code
-	successReq := (w.respStatusCode >= 200 && w.respStatusCode < 300)
+	successReq := (w.StatusCode >= 200 && w.StatusCode < 300)
 
-	if w.isS3Request && !strings.HasSuffix(r.URL.Path, prometheusMetricsPath) {
+	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPath) {
 		st.totalS3Requests.Inc(api)
-		if !successReq && w.respStatusCode != 0 {
+		if !successReq && w.StatusCode != 0 {
 			st.totalS3Errors.Inc(api)
 		}
 	}
 
-	if w.isS3Request && r.Method == "GET" {
+	if r.Method == "GET" {
 		// Increment the prometheus http request response histogram with appropriate label
 		httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
 	}

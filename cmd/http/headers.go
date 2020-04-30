@@ -77,6 +77,12 @@ const (
 	AmzObjectLockLegalHold        = "X-Amz-Object-Lock-Legal-Hold"
 	AmzObjectLockBypassGovernance = "X-Amz-Bypass-Governance-Retention"
 
+	// Multipart parts count
+	AmzMpPartsCount = "x-amz-mp-parts-count"
+
+	// Dummy putBucketACL
+	AmzACL = "x-amz-acl"
+
 	// Signature V4 related contants.
 	AmzContentSha256        = "X-Amz-Content-Sha256"
 	AmzDate                 = "X-Amz-Date"
@@ -100,4 +106,7 @@ const (
 
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
+
+	// Delete special flag
+	MinIOForceDelete = "x-minio-force-delete"
 )

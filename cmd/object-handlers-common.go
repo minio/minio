@@ -146,7 +146,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 //  If-Unmodified-Since
 //  If-Match
 //  If-None-Match
-func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
+func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
@@ -170,6 +170,14 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
+
+	// Check if the part number is correct.
+	if opts.PartNumber > 0 && opts.PartNumber != len(objInfo.Parts) {
+		writeHeaders()
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
+		return true
+	}
+
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
 	// otherwise return a 304 (not modified).
 	ifModifiedSinceHeader := r.Header.Get(xhttp.IfModifiedSince)

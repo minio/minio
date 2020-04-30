@@ -20,11 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/config"
@@ -73,16 +75,20 @@ EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
-  2. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
-     {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export/{1...32}
+  2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
+     {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
 
-  3. Start distributed minio server in an expanded setup, run the following command on all the nodes
+  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
-     {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export/{1...32} \
-            http://node{17...64}.example.com/mnt/export/{1...64}
+     {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
+
+  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
+     {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
+            http://node{17...64}.example.com/mnt/export{1...64}
+
 `,
 }
 
@@ -105,7 +111,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalMinioAddr = globalCLIContext.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
 		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
@@ -163,7 +168,7 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := newObject.NewNSLock(context.Background(), minioMetaBucket, transactionConfigPrefix)
+	objLock := newObject.NewNSLock(GlobalContext, minioMetaBucket, transactionConfigPrefix)
 	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
@@ -210,14 +215,15 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	for {
 		rquorum := InsufficientReadQuorum{}
 		wquorum := InsufficientWriteQuorum{}
-
+		bucketNotFound := BucketNotFound{}
 		var err error
 		select {
 		case n := <-retryTimerCh:
 			if err = initAllSubsystems(buckets, newObject); err != nil {
 				if errors.Is(err, errDiskNotFound) ||
 					errors.As(err, &rquorum) ||
-					errors.As(err, &wquorum) {
+					errors.As(err, &wquorum) ||
+					errors.As(err, &bucketNotFound) {
 					if n < 5 {
 						logger.Info("Waiting for all sub-systems to be initialized..")
 					} else {
@@ -242,17 +248,16 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = globalConfigSys.Init(newObject); err != nil {
 		return fmt.Errorf("Unable to initialize config system: %w", err)
 	}
-
 	if globalEtcdClient != nil {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		if err = migrateIAMConfigsEtcdToEncrypted(globalEtcdClient); err != nil {
+		if err = migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient); err != nil {
 			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
 		}
 	}
 
-	if err = globalIAMSys.Init(newObject); err != nil {
+	if err = globalIAMSys.Init(GlobalContext, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize IAM system: %w", err)
 	}
 
@@ -263,7 +268,12 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 
 	// Initialize policy system.
 	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize policy system; %w", err)
+		return fmt.Errorf("Unable to initialize policy system: %w", err)
+	}
+
+	// Initialize bucket object lock.
+	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
 
 	// Initialize lifecycle system.
@@ -275,7 +285,29 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
 	}
+
 	return nil
+}
+
+func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
+	// Make sure only 1 crawler is running on the cluster.
+	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "leader")
+	for {
+		err := locker.GetLock(leaderLockTimeout)
+		if err != nil {
+			time.Sleep(leaderTick)
+			continue
+		}
+		break
+		// No unlock for "leader" lock.
+	}
+
+	if globalIsXL {
+		initGlobalHeal(ctx, objAPI)
+	}
+
+	initDataUsageStats(ctx, objAPI)
+	initDailyLifecycle(ctx, objAPI)
 }
 
 // serverMain handler called for 'minio server' command.
@@ -286,7 +318,7 @@ func serverMain(ctx *cli.Context) {
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
@@ -310,6 +342,14 @@ func serverMain(ctx *cli.Context) {
 	// Check and load Root CAs.
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	globalMinioEndpoint = func() string {
+		host := globalMinioHost
+		if host == "" {
+			host = sortIPs(localIP4.ToSlice())[0]
+		}
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistXL {
@@ -355,6 +395,9 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	httpServer.BaseContext = func(listener net.Listener) context.Context {
+		return GlobalContext
+	}
 	go func() {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
@@ -364,13 +407,22 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	if globalIsDistXL && globalEndpoints.FirstLocal() {
-		// Additionally in distributed setup validate
-		if err := verifyServerSystemConfig(globalEndpoints); err != nil {
-			logger.Fatal(err, "Unable to initialize distributed setup")
+		for {
+			// Additionally in distributed setup, validate the setup and configuration.
+			err := verifyServerSystemConfig(globalEndpoints)
+			if err == nil {
+				break
+			}
+			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup")
+			select {
+			case <-GlobalContext.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}
 
-	newObject, err := newObjectLayer(globalEndpoints)
+	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
 		// Stop watching for any certificate changes.
@@ -386,17 +438,18 @@ func serverMain(ctx *cli.Context) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Calls New() and initializes all sub-systems.
 	newAllSubsystems()
 
 	// Enable healing to heal drives if possible
 	if globalIsXL {
-		initBackgroundHealing()
-		initLocalDisksAutoHeal()
-		initGlobalHeal()
+		initBackgroundHealing(GlobalContext, newObject)
+		initLocalDisksAutoHeal(GlobalContext, newObject)
 	}
 
-	buckets, err := newObject.ListBuckets(context.Background())
+	go startBackgroundOps(GlobalContext, newObject)
+
+	// Calls New() and initializes all sub-systems.
+	buckets, err := newObject.ListBuckets(GlobalContext)
 	if err != nil {
 		logger.Fatal(err, "Unable to list buckets")
 	}
@@ -406,7 +459,7 @@ func serverMain(ctx *cli.Context) {
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(context.Background(), globalCacheConfig)
+		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 
 		globalObjLayerMutex.Lock()
@@ -418,9 +471,6 @@ func serverMain(ctx *cli.Context) {
 	if globalDNSConfig != nil {
 		initFederatorBackend(buckets, newObject)
 	}
-
-	initDataUsageStats()
-	initDailyLifecycle()
 
 	// Disable safe mode operation, after all initialization is over.
 	globalObjLayerMutex.Lock()
@@ -435,20 +485,16 @@ func serverMain(ctx *cli.Context) {
 		logger.StartupMessage(color.RedBold(msg))
 	}
 
-	// Set uptime time after object layer has initialized.
-	globalBootTime = UTCNow()
-
 	handleSignals()
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newObjectLayer(endpointZones EndpointZones) (newObject ObjectLayer, err error) {
+func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
-
-	if endpointZones.Nodes() == 1 {
+	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	return newXLZones(endpointZones)
+	return newXLZones(ctx, endpointZones)
 }

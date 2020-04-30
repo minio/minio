@@ -18,6 +18,7 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -34,7 +35,7 @@ type GroupAddRemove struct {
 // UpdateGroupMembers - adds/removes users to/from a group. Server
 // creates the group as needed. Group is removed if remove request is
 // made on empty group.
-func (adm *AdminClient) UpdateGroupMembers(g GroupAddRemove) error {
+func (adm *AdminClient) UpdateGroupMembers(ctx context.Context, g GroupAddRemove) error {
 	data, err := json.Marshal(g)
 	if err != nil {
 		return err
@@ -45,8 +46,8 @@ func (adm *AdminClient) UpdateGroupMembers(g GroupAddRemove) error {
 		content: data,
 	}
 
-	// Execute PUT on /minio/admin/v2/update-group-members
-	resp, err := adm.executeMethod("PUT", reqData)
+	// Execute PUT on /minio/admin/v3/update-group-members
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -70,7 +71,7 @@ type GroupDesc struct {
 }
 
 // GetGroupDescription - fetches information on a group.
-func (adm *AdminClient) GetGroupDescription(group string) (*GroupDesc, error) {
+func (adm *AdminClient) GetGroupDescription(ctx context.Context, group string) (*GroupDesc, error) {
 	v := url.Values{}
 	v.Set("group", group)
 	reqData := requestData{
@@ -78,7 +79,7 @@ func (adm *AdminClient) GetGroupDescription(group string) (*GroupDesc, error) {
 		queryValues: v,
 	}
 
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -102,12 +103,12 @@ func (adm *AdminClient) GetGroupDescription(group string) (*GroupDesc, error) {
 }
 
 // ListGroups - lists all groups names present on the server.
-func (adm *AdminClient) ListGroups() ([]string, error) {
+func (adm *AdminClient) ListGroups(ctx context.Context) ([]string, error) {
 	reqData := requestData{
 		relPath: adminAPIPrefix + "/groups",
 	}
 
-	resp, err := adm.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -140,7 +141,7 @@ const (
 )
 
 // SetGroupStatus - sets the status of a group.
-func (adm *AdminClient) SetGroupStatus(group string, status GroupStatus) error {
+func (adm *AdminClient) SetGroupStatus(ctx context.Context, group string, status GroupStatus) error {
 	v := url.Values{}
 	v.Set("group", group)
 	v.Set("status", string(status))
@@ -150,7 +151,7 @@ func (adm *AdminClient) SetGroupStatus(group string, status GroupStatus) error {
 		queryValues: v,
 	}
 
-	resp, err := adm.executeMethod("PUT", reqData)
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return err

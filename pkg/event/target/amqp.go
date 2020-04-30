@@ -49,6 +49,8 @@ type AMQPArgs struct {
 	QueueLimit   uint64   `json:"queueLimit"`
 }
 
+//lint:file-ignore ST1003 We cannot change these exported names.
+
 // AMQP input constants.
 const (
 	AmqpQueueDir   = "queue_dir"
@@ -99,9 +101,6 @@ func (a *AMQPArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if a.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -131,6 +130,11 @@ func (target *AMQPTarget) IsActive() (bool, error) {
 		ch.Close()
 	}()
 	return true, nil
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *AMQPTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 func (target *AMQPTarget) channel() (*amqp.Channel, error) {
@@ -273,35 +277,37 @@ func NewAMQPTarget(id string, args AMQPArgs, doneCh <-chan struct{}, loggerOnce 
 
 	var store Store
 
+	target := &AMQPTarget{
+		id:         event.TargetID{ID: id, Name: "amqp"},
+		args:       args,
+		loggerOnce: loggerOnce,
+	}
+
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-amqp-"+id)
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
-			return nil, oErr
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return target, oErr
 		}
+		target.store = store
 	}
 
 	conn, err = amqp.Dial(args.URL.String())
 	if err != nil {
 		if store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
-			return nil, err
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
 		}
 	}
-
-	target := &AMQPTarget{
-		id:         event.TargetID{ID: id, Name: "amqp"},
-		args:       args,
-		conn:       conn,
-		store:      store,
-		loggerOnce: loggerOnce,
-	}
+	target.conn = conn
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
 
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, loggerOnce)
+		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
 	}
 
 	return target, nil

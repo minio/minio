@@ -182,7 +182,7 @@ func testStorageAPIDeleteVol(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		err := storage.DeleteVol(testCase.volumeName)
+		err := storage.DeleteVol(testCase.volumeName, false)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {

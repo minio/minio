@@ -1,7 +1,7 @@
 // +build plan9 solaris
 
 /*
- * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,18 +19,52 @@
 package cmd
 
 import (
-	"context"
 	"io"
 	"os"
-	"path"
 	"strings"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
+}
+
+// readDir applies the filter function on each entries at dirPath, doesn't recurse into
+// the directory itself.
+func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+	d, err := os.Open(dirPath)
+	if err != nil {
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		}
+
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileNotFound
+		}
+		return err
+	}
+	defer d.Close()
+
+	maxEntries := 1000
+	for {
+		// Read up to max number of entries.
+		fis, err := d.Readdir(maxEntries)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		for _, fi := range fis {
+			if err = filter(fi.Name(), fi.Mode()); err == errDoneForNow {
+				// filtering requested to return by caller.
+				return nil
+			}
+		}
+	}
+	return nil
 }
 
 // Return N entries at the directory dirPath. If count is -1, return all entries
@@ -74,25 +108,8 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			}
 		}
 		for _, fi := range fis {
-			// Stat symbolic link and follow to get the final value.
+			// Not need to follow symlink.
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-				var st os.FileInfo
-				st, err = os.Stat(path.Join(dirPath, fi.Name()))
-				if err != nil {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("path", path.Join(dirPath, fi.Name()))
-					ctx := logger.SetReqInfo(context.Background(), reqInfo)
-					logger.LogIf(ctx, err)
-					continue
-				}
-				// Append to entries if symbolic link exists and is valid.
-				if st.IsDir() {
-					entries = append(entries, fi.Name()+SlashSeparator)
-				} else if st.Mode().IsRegular() {
-					entries = append(entries, fi.Name())
-				}
-				if count > 0 {
-					remaining--
-				}
 				continue
 			}
 			if fi.Mode().IsDir() {

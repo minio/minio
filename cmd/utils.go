@@ -49,6 +49,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+const (
+	slashSeparator = "/"
+)
+
 // IsErrIgnored returns whether given error is ignored or not.
 func IsErrIgnored(err error, ignoredErrs ...error) bool {
 	return IsErr(err, ignoredErrs...)
@@ -67,7 +71,7 @@ func IsErr(err error, errs ...error) bool {
 func request2BucketObjectName(r *http.Request) (bucketName, objectName string) {
 	path, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {
-		logger.CriticalIf(context.Background(), err)
+		logger.CriticalIf(GlobalContext, err)
 	}
 
 	return path2BucketObject(path)
@@ -87,6 +91,22 @@ func path2BucketObjectWithBasePath(basePath, path string) (bucket, prefix string
 
 func path2BucketObject(s string) (bucket, prefix string) {
 	return path2BucketObjectWithBasePath("", s)
+}
+
+func getDefaultParityBlocks(drive int) int {
+	return drive / 2
+}
+
+func getDefaultDataBlocks(drive int) int {
+	return drive - getDefaultParityBlocks(drive)
+}
+
+func getReadQuorum(drive int) int {
+	return getDefaultDataBlocks(drive)
+}
+
+func getWriteQuorum(drive int) int {
+	return getDefaultDataBlocks(drive) + 1
 }
 
 // URI scheme constants.
@@ -117,14 +137,20 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 
 // checkValidMD5 - verify if valid md5, returns md5 in bytes.
 func checkValidMD5(h http.Header) ([]byte, error) {
-	md5B64, ok := h["Content-Md5"]
+	md5B64, ok := h[xhttp.ContentMD5]
 	if ok {
 		if md5B64[0] == "" {
 			return nil, fmt.Errorf("Content-Md5 header set to empty value")
 		}
-		return base64.StdEncoding.DecodeString(md5B64[0])
+		return base64.StdEncoding.Strict().DecodeString(md5B64[0])
 	}
 	return []byte{}, nil
+}
+
+// hasContentMD5 returns true if Content-MD5 header is set.
+func hasContentMD5(h http.Header) bool {
+	_, ok := h[xhttp.ContentMD5]
+	return ok
 }
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
@@ -145,10 +171,8 @@ const (
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
 
-	// Default values used while communicating for
-	// internode communication.
-	defaultDialTimeout   = 15 * time.Second
-	defaultDialKeepAlive = 20 * time.Second
+	// Default values used while communicating for internode communication.
+	defaultDialTimeout = 5 * time.Second
 )
 
 // isMaxObjectSize - verify if max object size
@@ -190,13 +214,14 @@ type profilerWrapper struct {
 	// Profile recorded at start of benchmark.
 	base   []byte
 	stopFn func() ([]byte, error)
+	ext    string
 }
 
 // recordBase will record the profile and store it as the base.
-func (p *profilerWrapper) recordBase(name string) {
+func (p *profilerWrapper) recordBase(name string, debug int) {
 	var buf bytes.Buffer
 	p.base = nil
-	err := pprof.Lookup(name).WriteTo(&buf, 0)
+	err := pprof.Lookup(name).WriteTo(&buf, debug)
 	if err != nil {
 		return
 	}
@@ -211,6 +236,11 @@ func (p profilerWrapper) Base() []byte {
 // Stop the currently running benchmark.
 func (p profilerWrapper) Stop() ([]byte, error) {
 	return p.stopFn()
+}
+
+// Extension returns the extension without dot prefix.
+func (p profilerWrapper) Extension() string {
+	return p.ext
 }
 
 // Returns current profile data, returns error if there is no active
@@ -230,11 +260,11 @@ func getProfileData() (map[string][]byte, error) {
 		buf, err := prof.Stop()
 		delete(globalProfiler, typ)
 		if err == nil {
-			dst[typ] = buf
+			dst[typ+"."+prof.Extension()] = buf
 		}
 		buf = prof.Base()
 		if len(buf) > 0 {
-			dst[typ+"-before"] = buf
+			dst[typ+"-before"+"."+prof.Extension()] = buf
 		}
 	}
 	return dst, nil
@@ -249,7 +279,7 @@ func setDefaultProfilerRates() {
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
 func startProfiler(profilerType string) (minioProfiler, error) {
 	var prof profilerWrapper
-
+	prof.ext = "pprof"
 	// Enable profiler and set the name of the file that pkg/pprof
 	// library creates to store profiling data.
 	switch madmin.ProfilerType(profilerType) {
@@ -278,7 +308,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		}
 	case madmin.ProfilerMEM:
 		runtime.GC()
-		prof.recordBase("heap")
+		prof.recordBase("heap", 0)
 		prof.stopFn = func() ([]byte, error) {
 			runtime.GC()
 			var buf bytes.Buffer
@@ -286,7 +316,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerBlock:
-		prof.recordBase("block")
+		prof.recordBase("block", 0)
 		runtime.SetBlockProfileRate(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
@@ -295,7 +325,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerMutex:
-		prof.recordBase("mutex")
+		prof.recordBase("mutex", 0)
 		runtime.SetMutexProfileFraction(1)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
@@ -304,10 +334,18 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerThreads:
-		prof.recordBase("threadcreate")
+		prof.recordBase("threadcreate", 0)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
 			err := pprof.Lookup("threadcreate").WriteTo(&buf, 0)
+			return buf.Bytes(), err
+		}
+	case madmin.ProfilerGoroutines:
+		prof.ext = "txt"
+		prof.recordBase("goroutine", 1)
+		prof.stopFn = func() ([]byte, error) {
+			var buf bytes.Buffer
+			err := pprof.Lookup("goroutine").WriteTo(&buf, 1)
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerTrace:
@@ -324,6 +362,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 		if err != nil {
 			return nil, err
 		}
+		prof.ext = "trace"
 		prof.stopFn = func() ([]byte, error) {
 			trace.Stop()
 			err := f.Close()
@@ -346,6 +385,8 @@ type minioProfiler interface {
 	Base() []byte
 	// Stop the profiler
 	Stop() ([]byte, error)
+	// Return extension of profile
+	Extension() string
 }
 
 // Global profiler to be used by service go-routine.
@@ -422,14 +463,16 @@ func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext 
 	}
 }
 
-func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive time.Duration) func() *http.Transport {
+func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(dialTimeout, dialKeepAlive),
-		MaxIdleConnsPerHost:   256,
-		IdleConnTimeout:       60 * time.Second,
+		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
+		MaxIdleConnsPerHost:   16,
+		MaxIdleConns:          16,
+		IdleConnTimeout:       1 * time.Minute,
+		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
@@ -443,14 +486,22 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout, dialKeepAlive ti
 	}
 }
 
-// NewCustomHTTPTransport returns a new http configuration
+// NewGatewayHTTPTransport returns a new http configuration
 // used while communicating with the cloud backends.
 // This sets the value for MaxIdleConnsPerHost from 2 (go default)
 // to 256.
-func NewCustomHTTPTransport() *http.Transport {
-	return newCustomHTTPTransport(&tls.Config{
+func NewGatewayHTTPTransport() *http.Transport {
+	tr := newCustomHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
-	}, defaultDialTimeout, defaultDialKeepAlive)()
+	}, defaultDialTimeout)()
+	// Set aggressive timeouts for gateway
+	tr.ResponseHeaderTimeout = 1 * time.Minute
+
+	// Allow more requests to be in flight.
+	tr.MaxConnsPerHost = 256
+	tr.MaxIdleConnsPerHost = 16
+	tr.MaxIdleConns = 256
+	return tr
 }
 
 // Load the json (typically from disk file).
@@ -594,13 +645,10 @@ func getMinioMode() string {
 	return mode
 }
 
-func iamPolicyClaimName() string {
+func iamPolicyClaimNameOpenID() string {
 	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
 }
 
-func isWORMEnabled(bucket string) bool {
-	if isMinioMetaBucketName(bucket) {
-		return false
-	}
-	return globalWORMEnabled
+func iamPolicyClaimNameSA() string {
+	return "sa-policy"
 }

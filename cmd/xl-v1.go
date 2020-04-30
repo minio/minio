@@ -18,15 +18,17 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
-	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
-	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -55,6 +57,8 @@ type xlObjects struct {
 	// getLockers returns list of remote and local lockers.
 	getLockers func() []dsync.NetLocker
 
+	endpoints Endpoints
+
 	// Locker mutex map.
 	nsMutex *nsLockMap
 
@@ -68,15 +72,14 @@ type xlObjects struct {
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, object string) RWLocker {
-	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, object)
+func (xl xlObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return xl.nsMutex.NewNSLock(ctx, xl.getLockers, bucket, objects...)
 }
 
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(xl.getDisks())
-	closeLockers(xl.getLockers())
 	return nil
 }
 
@@ -90,7 +93,7 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -107,7 +110,7 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 					return err
 				}
 				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
-				ctx := logger.SetReqInfo(context.Background(), reqInfo)
+				ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 				logger.LogIf(ctx, err)
 			}
 			disksInfo[index] = info
@@ -115,34 +118,19 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 		}, index)
 	}
 
-	getPeerAddress := func(diskPath string) (string, error) {
-		hostPort := strings.Split(diskPath, SlashSeparator)[0]
-		// Host will be empty for xl/fs disk paths.
-		if hostPort == "" {
-			return "", nil
-		}
-		thisAddr, err := xnet.ParseHost(hostPort)
-		if err != nil {
-			return "", err
-		}
-		return thisAddr.String(), nil
-	}
-
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
+
 	// Wait for the routines.
-	for i, err := range g.Wait() {
-		peerAddr, pErr := getPeerAddress(disksInfo[i].RelativePath)
-		if pErr != nil {
-			continue
-		}
+	for i, diskInfoErr := range g.Wait() {
+		peerAddr := endpoints[i].Host
 		if _, ok := offlineDisks[peerAddr]; !ok {
 			offlineDisks[peerAddr] = 0
 		}
 		if _, ok := onlineDisks[peerAddr]; !ok {
 			onlineDisks[peerAddr] = 0
 		}
-		if err != nil {
+		if disks[i] == nil || diskInfoErr != nil {
 			offlineDisks[peerAddr]++
 			continue
 		}
@@ -154,8 +142,8 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI) StorageInfo {
-	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
+func getStorageInfo(disks []StorageAPI, endpoints Endpoints) StorageInfo {
+	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -170,7 +158,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		usedList[i] = di.Used
 		totalList[i] = di.Total
 		availableList[i] = di.Free
-		mountPaths[i] = di.RelativePath
+		mountPaths[i] = di.MountPath
 	}
 
 	storageInfo := StorageInfo{
@@ -188,8 +176,22 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (xl xlObjects) StorageInfo(ctx context.Context) StorageInfo {
-	return getStorageInfo(xl.getDisks())
+func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
+
+	disks := xl.getDisks()
+	if local {
+		var localDisks []StorageAPI
+		for i, disk := range disks {
+			if disk != nil {
+				if xl.endpoints[i].IsLocal && disk.Hostname() == "" {
+					// Append this local disk since local flag is true
+					localDisks = append(localDisks, disk)
+				}
+			}
+		}
+		disks = localDisks
+	}
+	return getStorageInfo(disks, xl.endpoints)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.
@@ -198,45 +200,178 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// CrawlAndGetDataUsage picks three random disks to crawl and get data usage
-func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, endCh <-chan struct{}) DataUsageInfo {
-	var randomDisks []StorageAPI
+// CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
+// Updates are sent on a regular basis and the caller *must* consume them.
+func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+	// This should only be called from runDataUsageInfo and this setup should not happen (zones).
+	return errors.New("xlObjects CrawlAndGetDataUsage not implemented")
+}
+
+// CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
+// Updates are sent on a regular basis and the caller *must* consume them.
+func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
+	var disks []StorageAPI
+
 	for _, d := range xl.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
 			continue
 		}
-		randomDisks = append(randomDisks, d)
-		if len(randomDisks) >= 3 {
-			break
+		disks = append(disks, d)
+	}
+	if len(disks) == 0 || len(buckets) == 0 {
+		return nil
+	}
+
+	// Load bucket totals
+	oldCache := dataUsageCache{}
+	err := oldCache.load(ctx, xl, dataUsageCacheName)
+	if err != nil {
+		return err
+	}
+
+	// New cache..
+	cache := dataUsageCache{
+		Info: dataUsageCacheInfo{
+			Name:      dataUsageRoot,
+			NextCycle: oldCache.Info.NextCycle,
+		},
+		Cache: make(map[dataUsageHash]dataUsageEntry, len(oldCache.Cache)),
+	}
+
+	// Put all buckets into channel.
+	bucketCh := make(chan BucketInfo, len(buckets))
+	// Add new buckets first
+	for _, b := range buckets {
+		if oldCache.find(b.Name) == nil {
+			bucketCh <- b
+		}
+	}
+	// Add existing buckets.
+	for _, b := range buckets {
+		e := oldCache.find(b.Name)
+		if e != nil {
+			if bf == nil || bf.containsDir(b.Name) {
+				bucketCh <- b
+				cache.replace(b.Name, dataUsageRoot, *e)
+			} else {
+				if intDataUpdateTracker.debug {
+					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
+				}
+			}
 		}
 	}
 
-	var dataUsageResults = make([]DataUsageInfo, len(randomDisks))
+	close(bucketCh)
+	buckets = nil
+	bucketResults := make(chan dataUsageEntryInfo, len(disks))
 
-	var wg sync.WaitGroup
-	for i := 0; i < len(randomDisks); i++ {
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			var err error
-			dataUsageResults[index], err = disk.CrawlAndGetDataUsage(endCh)
-			if err != nil {
-				logger.LogIf(ctx, err)
+	// Start async collector/saver.
+	// This goroutine owns the cache.
+	var saverWg sync.WaitGroup
+	saverWg.Add(1)
+	go func() {
+		const updateTime = 30 * time.Second
+		t := time.NewTicker(updateTime)
+		defer t.Stop()
+		defer saverWg.Done()
+		var lastSave time.Time
+
+	saveLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				// Return without saving.
+				return
+			case <-t.C:
+				if cache.Info.LastUpdate.Equal(lastSave) {
+					continue
+				}
+				logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
+				updates <- cache.clone()
+				lastSave = cache.Info.LastUpdate
+			case v, ok := <-bucketResults:
+				if !ok {
+					break saveLoop
+				}
+				cache.replace(v.Name, v.Parent, v.Entry)
+				cache.Info.LastUpdate = time.Now()
 			}
-		}(i, randomDisks[i])
+		}
+		// Save final state...
+		cache.Info.NextCycle++
+		cache.Info.LastUpdate = time.Now()
+		logger.LogIf(ctx, cache.save(ctx, xl, dataUsageCacheName))
+		if intDataUpdateTracker.debug {
+			logger.Info(color.Green("crawlAndGetDataUsage:")+" Cache saved, Next Cycle: %d", cache.Info.NextCycle)
+		}
+		updates <- cache
+	}()
+
+	// Start one crawler per disk
+	var wg sync.WaitGroup
+	wg.Add(len(disks))
+	for i := range disks {
+		go func(i int) {
+			defer wg.Done()
+			disk := disks[i]
+
+			for bucket := range bucketCh {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				// Load cache for bucket
+				cacheName := pathJoin(bucket.Name, dataUsageCacheName)
+				cache := dataUsageCache{}
+				logger.LogIf(ctx, cache.load(ctx, xl, cacheName))
+				if cache.Info.Name == "" {
+					cache.Info.Name = bucket.Name
+				}
+				if cache.Info.Name != bucket.Name {
+					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
+					cache.Info = dataUsageCacheInfo{
+						Name:       bucket.Name,
+						LastUpdate: time.Time{},
+						NextCycle:  0,
+					}
+				}
+
+				// Calc usage
+				before := cache.Info.LastUpdate
+				if bf != nil {
+					cache.Info.BloomFilter = bf.bytes()
+				}
+				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
+				cache.Info.BloomFilter = nil
+				if err != nil {
+					logger.LogIf(ctx, err)
+					if cache.Info.LastUpdate.After(before) {
+						logger.LogIf(ctx, cache.save(ctx, xl, cacheName))
+					}
+					continue
+				}
+
+				var root dataUsageEntry
+				if r := cache.root(); r != nil {
+					root = cache.flatten(*r)
+				}
+				bucketResults <- dataUsageEntryInfo{
+					Name:   cache.Info.Name,
+					Parent: dataUsageRoot,
+					Entry:  root,
+				}
+				// Save cache
+				logger.LogIf(ctx, cache.save(ctx, xl, cacheName))
+			}
+		}(i)
 	}
 	wg.Wait()
+	close(bucketResults)
+	saverWg.Wait()
 
-	var dataUsageInfo = dataUsageResults[0]
-	// Pick the crawling result of the disk which has the most
-	// number of objects in it.
-	for i := 1; i < len(dataUsageResults); i++ {
-		if dataUsageResults[i].ObjectsCount > dataUsageInfo.ObjectsCount {
-			dataUsageInfo = dataUsageResults[i]
-		}
-	}
-
-	return dataUsageInfo
+	return nil
 }
 
 // IsReady - No Op.

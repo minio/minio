@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"path"
 	"sort"
@@ -38,9 +39,8 @@ const erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 // ObjectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
 type ObjectPartInfo struct {
-	Number     int    `json:"number"`
-	Name       string `json:"name"`
 	ETag       string `json:"etag,omitempty"`
+	Number     int    `json:"number"`
 	Size       int64  `json:"size"`
 	ActualSize int64  `json:"actualSize"`
 }
@@ -54,9 +54,9 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 
 // ChecksumInfo - carries checksums of individual scattered parts per disk.
 type ChecksumInfo struct {
-	Name      string
-	Algorithm BitrotAlgorithm
-	Hash      []byte
+	PartNumber int
+	Algorithm  BitrotAlgorithm
+	Hash       []byte
 }
 
 type checksumInfoJSON struct {
@@ -68,7 +68,7 @@ type checksumInfoJSON struct {
 // MarshalJSON marshals the ChecksumInfo struct
 func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
 	info := checksumInfoJSON{
-		Name:      c.Name,
+		Name:      fmt.Sprintf("part.%d", c.PartNumber),
 		Algorithm: c.Algorithm.String(),
 		Hash:      hex.EncodeToString(c.Hash),
 	}
@@ -86,12 +86,14 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	c.Name = info.Name
 	c.Algorithm = BitrotAlgorithmFromString(info.Algorithm)
 	c.Hash = sum
+	if _, err = fmt.Sscanf(info.Name, "part.%d", &c.PartNumber); err != nil {
+		return err
+	}
 
 	if !c.Algorithm.Available() {
-		logger.LogIf(context.Background(), errBitrotHashAlgoInvalid)
+		logger.LogIf(GlobalContext, errBitrotHashAlgoInvalid)
 		return errBitrotHashAlgoInvalid
 	}
 	return nil
@@ -118,7 +120,7 @@ type ErasureInfo struct {
 // AddChecksumInfo adds a checksum of a part.
 func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 	for i, sum := range e.Checksums {
-		if sum.Name == ckSumInfo.Name {
+		if sum.PartNumber == ckSumInfo.PartNumber {
 			e.Checksums[i] = ckSumInfo
 			return
 		}
@@ -127,10 +129,10 @@ func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
 }
 
 // GetChecksumInfo - get checksum of a part.
-func (e ErasureInfo) GetChecksumInfo(partName string) (ckSum ChecksumInfo) {
-	// Return the checksum.
+func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 	for _, sum := range e.Checksums {
-		if sum.Name == partName {
+		if sum.PartNumber == partNumber {
+			// Return the checksum
 			return sum
 		}
 	}
@@ -279,10 +281,9 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 }
 
 // AddObjectPart - add a new object part in order.
-func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag string, partSize int64, actualSize int64) {
+func (m *xlMetaV1) AddObjectPart(partNumber int, partETag string, partSize int64, actualSize int64) {
 	partInfo := ObjectPartInfo{
 		Number:     partNumber,
-		Name:       partName,
 		ETag:       partETag,
 		Size:       partSize,
 		ActualSize: actualSize,
@@ -330,8 +331,8 @@ func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Tim
 	for i, meta := range metaArr {
 		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
 			h := sha256.New()
-			for _, p := range meta.Parts {
-				h.Write([]byte(p.Name))
+			for _, part := range meta.Parts {
+				h.Write([]byte(fmt.Sprintf("part.%d", part.Number)))
 			}
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 		}
@@ -375,61 +376,6 @@ func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time,
 
 // list of all errors that can be ignored in a metadata operation.
 var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
-
-// readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
-func (xl xlObjects) readXLMetaParts(ctx context.Context, bucket, object string) (xlMetaParts []ObjectPartInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		xlMetaParts, xlMeta, err = readXLMetaParts(ctx, disk, bucket, object)
-		if err == nil {
-			return xlMetaParts, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return nil, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return nil, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
-
-// readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
-func (xl xlObjects) readXLMetaStat(ctx context.Context, bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		// parses only xlMetaV1.Meta and xlMeta.Stat
-		xlStat, xlMeta, err = readXLMetaStat(ctx, disk, bucket, object)
-		if err == nil {
-			return xlStat, xlMeta, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if IsErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return statInfo{}, nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	readQuorum := len(xl.getDisks()) / 2
-	return statInfo{}, nil, reduceReadQuorumErrs(ctx, ignoredErrs, nil, readQuorum)
-}
 
 // writeXLMetadata - writes `xl.json` to a single disk.
 func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
