@@ -45,7 +45,6 @@ import (
 
 const (
 	getBucketVersioningResponse = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
-	objectLockConfig            = "object-lock.xml"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -1059,11 +1058,13 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	configFile := path.Join(bucketConfigPrefix, bucket, objectLockConfig)
-	if err = saveConfig(ctx, objectAPI, configFile, data); err != nil {
+
+	meta.LockConfig = data
+	if err = meta.save(ctx, objectAPI); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	if config.Rule != nil {
 		retention := config.ToRetention()
 		globalBucketObjectLockConfig.Set(bucket, retention)
@@ -1111,20 +1112,6 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	configFile := path.Join(bucketConfigPrefix, bucket, objectLockConfig)
-	configData, err := readConfig(ctx, objectAPI, configFile)
-	if err != nil {
-		if err != errConfigNotFound {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-		if configData, err = xml.Marshal(objectlock.NewObjectLockConfig()); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-
 	// Write success response.
-	writeSuccessResponseXML(w, configData)
+	writeSuccessResponseXML(w, meta.LockConfig)
 }

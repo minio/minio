@@ -19,10 +19,8 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"math"
 	"net/http"
-	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -384,17 +382,12 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 			continue
 		}
 
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
-		configData, err := readConfig(ctx, objAPI, configFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
-				continue
-			}
-			return err
+		if len(meta.LockConfig) == 0 {
+			globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
+			continue
 		}
 
-		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
+		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(meta.LockConfig))
 		if err != nil {
 			return err
 		}

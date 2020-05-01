@@ -29,6 +29,7 @@ import (
 const (
 	legacyBucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
 	legacyBucketObjectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
+	legacyObjectLockConfig                  = "object-lock.xml"
 
 	bucketMetadataFile    = ".metadata.bin"
 	bucketMetadataFormat  = 1
@@ -46,6 +47,7 @@ type bucketMetadata struct {
 	Name        string
 	Created     time.Time
 	LockEnabled bool
+	LockConfig  []byte
 }
 
 // newBucketMetadata creates bucketMetadata with the supplied name and Created to Now.
@@ -98,18 +100,20 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	}
 
 	// Control here means old bucket without bucket metadata. Hence we migrate existing settings.
-	configFile := path.Join(bucketConfigPrefix, bucket, legacyBucketObjectLockEnabledConfigFile)
+	flagFile := path.Join(bucketConfigPrefix, bucket, legacyBucketObjectLockEnabledConfigFile)
+	configFile := path.Join(bucketConfigPrefix, bucket, legacyObjectLockConfig)
 
 	save := func() error {
 		if err := meta.save(ctx, objectAPI); err != nil {
 			return err
 		}
 
+		logger.LogIf(ctx, deleteConfig(ctx, objectAPI, flagFile))
 		logger.LogIf(ctx, deleteConfig(ctx, objectAPI, configFile))
 		return nil
 	}
 
-	configData, err := readConfig(ctx, objectAPI, configFile)
+	configData, err := readConfig(ctx, objectAPI, flagFile)
 	if err != nil {
 		if err != errConfigNotFound {
 			return meta, err
@@ -120,10 +124,17 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	}
 
 	if string(configData) != legacyBucketObjectLockEnabledConfig {
-		return meta, fmt.Errorf("content mismatch in config file %v", configFile)
+		return meta, fmt.Errorf("content mismatch in config file %v", flagFile)
 	}
 
 	meta.LockEnabled = true
+
+	configData, err = readConfig(ctx, objectAPI, configFile)
+	if err != nil && err != errConfigNotFound {
+		return meta, err
+	}
+
+	meta.LockConfig = configData
 	err = save()
 	return meta, err
 }
