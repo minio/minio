@@ -1361,7 +1361,6 @@ var iamAccountOtherAccessActions = iampolicy.NewActionSet(
 func (sys *IAMSys) GetAccountAccess(accountName, bucket string) (rd, wr, o bool) {
 	policies, err := sys.PolicyDBGet(accountName, false)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false, false, false
 	}
 
@@ -1508,7 +1507,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	// Check if the parent is allowed to perform this action, reject if not
 	parentUserPolicies, err := sys.PolicyDBGet(parent, false)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 
@@ -1729,7 +1727,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If the credential is temporary, perform STS related checks.
 	ok, err := sys.IsTempUser(args.AccountName)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 	if ok {
@@ -1739,7 +1736,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If the credential is for a service account, perform related check
 	ok, parentUser, err := sys.IsServiceAccount(args.AccountName)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 	if ok {
@@ -1749,7 +1745,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// Continue with the assumption of a regular user
 	policies, err := sys.PolicyDBGet(args.AccountName, false)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 
