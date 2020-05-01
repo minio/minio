@@ -889,11 +889,10 @@ func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string
 	defer sys.store.runlock()
 
 	sa, ok := sys.iamUsersMap[accessKey]
-	if !ok || !sa.IsServiceAccount() {
-		return "", errNoSuchServiceAccount
+	if ok && sa.IsServiceAccount() {
+		return sa.ParentUser, nil
 	}
-
-	return sa.ParentUser, nil
+	return "", nil
 }
 
 // DeleteServiceAccount - delete a service account
@@ -908,7 +907,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 
 	sa, ok := sys.iamUsersMap[accessKey]
 	if !ok || !sa.IsServiceAccount() {
-		return errNoSuchServiceAccount
+		return nil
 	}
 
 	// It is ok to ignore deletion error on the mapped policy
