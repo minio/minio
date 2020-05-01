@@ -376,22 +376,20 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
-		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
+		meta, err := loadBucketMetadata(ctx, objAPI, bucket.Name)
 		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
+			if err != errMetaDataConverted {
+				return err
 			}
-			return err
-		}
 
-		if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
-			// this should never happen
-			logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
+			meta.Created = bucket.Created
+			logger.LogIf(ctx, meta.save(ctx, objAPI))
+		}
+		if !meta.LockEnabled {
 			continue
 		}
 
-		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
+		configFile := path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
 		configData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
 			if errors.Is(err, errConfigNotFound) {

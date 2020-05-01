@@ -44,10 +44,8 @@ import (
 )
 
 const (
-	getBucketVersioningResponse       = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
-	objectLockConfig                  = "object-lock.xml"
-	bucketObjectLockEnabledConfigFile = "object-lock-enabled.json"
-	bucketObjectLockEnabledConfig     = `{"x-amz-bucket-object-lock-enabled":true}`
+	getBucketVersioningResponse = `<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"/>`
+	objectLockConfig            = "object-lock.xml"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -292,6 +290,14 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+
+		for i := range bucketsInfo {
+			meta, err := loadBucketMetadata(ctx, objectAPI, bucketsInfo[i].Name)
+			logger.LogIf(ctx, err)
+			if err == nil {
+				bucketsInfo[i].Created = meta.Created
+			}
+		}
 	}
 
 	if s3Error == ErrAccessDenied {
@@ -532,12 +538,11 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 
-				if objectLockEnabled {
-					configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
-					if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
-						writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-						return
-					}
+				meta := newBucketMetadata(bucket)
+				meta.LockEnabled = objectLockEnabled
+				if err := meta.save(ctx, objectAPI); err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
 				}
 
 				if err = globalDNSConfig.Put(bucket); err != nil {
@@ -576,14 +581,17 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if objectLockEnabled && !globalIsGateway {
-		configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
-		if err = saveConfig(ctx, objectAPI, configFile, []byte(bucketObjectLockEnabledConfig)); err != nil {
+	if !globalIsGateway {
+		meta := newBucketMetadata(bucket)
+		meta.LockEnabled = objectLockEnabled
+		if err := meta.save(ctx, objectAPI); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
+		if objectLockEnabled {
+			globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
+			globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
+		}
 	}
 
 	// Make sure to add Location information here only for bucket
@@ -942,6 +950,9 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
+	// Delete metadata, only log errors.
+	logger.LogIf(ctx, newBucketMetadata(bucket).delete(ctx, objectAPI))
+
 	globalNotificationSys.DeleteBucket(ctx, bucket)
 
 	// Write success response.
@@ -1032,27 +1043,23 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
-	configData, err := readConfig(ctx, objectAPI, configFile)
+
+	meta, err := loadBucketMetadata(ctx, objectAPI, bucket)
 	if err != nil {
-		aerr := toAPIError(ctx, err)
-		if err == errConfigNotFound {
-			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed)
-		}
-		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !meta.LockEnabled {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if string(configData) != bucketObjectLockEnabledConfig {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
-		return
-	}
 	data, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	configFile = path.Join(bucketConfigPrefix, bucket, objectLockConfig)
+	configFile := path.Join(bucketConfigPrefix, bucket, objectLockConfig)
 	if err = saveConfig(ctx, objectAPI, configFile, data); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1093,26 +1100,19 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketObjectLockEnabledConfigFile)
-	configData, err := readConfig(ctx, objectAPI, configFile)
+
+	meta, err := loadBucketMetadata(ctx, objectAPI, bucket)
 	if err != nil {
-		var aerr APIError
-		if err == errConfigNotFound {
-			aerr = errorCodes.ToAPIErr(ErrObjectLockConfigurationNotFound)
-		} else {
-			aerr = toAPIError(ctx, err)
-		}
-		writeErrorResponse(ctx, w, aerr, r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !meta.LockEnabled {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrObjectLockConfigurationNotAllowed), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if string(configData) != bucketObjectLockEnabledConfig {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	configFile = path.Join(bucketConfigPrefix, bucket, objectLockConfig)
-	configData, err = readConfig(ctx, objectAPI, configFile)
+	configFile := path.Join(bucketConfigPrefix, bucket, objectLockConfig)
+	configData, err := readConfig(ctx, objectAPI, configFile)
 	if err != nil {
 		if err != errConfigNotFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
