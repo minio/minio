@@ -293,11 +293,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 		for i := range bucketsInfo {
 			meta, err := loadBucketMetadata(ctx, objectAPI, bucketsInfo[i].Name)
-			switch err {
-			case nil:
+			logger.LogIf(ctx, err)
+			if err == nil {
 				bucketsInfo[i].Created = meta.Created
-			default:
-				logger.LogIf(ctx, err)
 			}
 		}
 	}
@@ -540,7 +538,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 
-				meta := newBucketMetadata(bucket, objectLockEnabled)
+				meta := newBucketMetadata(bucket)
+				meta.LockEnabled = objectLockEnabled
 				if err := meta.save(ctx, objectAPI); err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
@@ -583,7 +582,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if !globalIsGateway {
-		meta := newBucketMetadata(bucket, objectLockEnabled)
+		meta := newBucketMetadata(bucket)
+		meta.LockEnabled = objectLockEnabled
 		if err := meta.save(ctx, objectAPI); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -951,7 +951,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Delete metadata, only log errors.
-	logger.LogIf(ctx, newBucketMetadata(bucket, false).delete(ctx, objectAPI))
+	logger.LogIf(ctx, newBucketMetadata(bucket).delete(ctx, objectAPI))
 
 	globalNotificationSys.DeleteBucket(ctx, bucket)
 

@@ -378,7 +378,12 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
 		meta, err := loadBucketMetadata(ctx, objAPI, bucket.Name)
 		if err != nil {
-			return err
+			if err != errMetaDataConverted {
+				return err
+			}
+
+			meta.Created = bucket.Created
+			logger.LogIf(ctx, meta.save(ctx, objAPI))
 		}
 		if !meta.LockEnabled {
 			continue
