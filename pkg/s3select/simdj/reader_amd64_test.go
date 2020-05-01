@@ -61,6 +61,10 @@ var testCases = []struct {
 }
 
 func TestNDJSON(t *testing.T) {
+	if !simdjson.SupportedCPU() {
+		t.Skip("Unsupported cpu")
+	}
+
 	for _, tt := range testCases {
 
 		t.Run(tt.name, func(t *testing.T) {
