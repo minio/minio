@@ -45,6 +45,20 @@ type HealOpts struct {
 	ScanMode  HealScanMode `json:"scanMode"`
 }
 
+// Equal returns true if no is same as o.
+func (o HealOpts) Equal(no HealOpts) bool {
+	if o.Recursive != no.Recursive {
+		return false
+	}
+	if o.DryRun != no.DryRun {
+		return false
+	}
+	if o.Remove != no.Remove {
+		return false
+	}
+	return o.ScanMode == no.ScanMode
+}
+
 // HealStartSuccess - holds information about a successfully started
 // heal operation
 type HealStartSuccess struct {

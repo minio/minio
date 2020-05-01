@@ -308,8 +308,8 @@ func (ahs *allHealState) PopHealStatusJSON(path string,
 
 // healSource denotes single entity and heal option.
 type healSource struct {
-	path string           // entity path (format, buckets, objects) to heal
-	opts *madmin.HealOpts // optional heal option overrides default setting
+	path string          // entity path (format, buckets, objects) to heal
+	opts madmin.HealOpts // optional heal option overrides default setting
 }
 
 // healSequence - state for each heal sequence initiated on the
@@ -321,8 +321,11 @@ type healSequence struct {
 	// path is just pathJoin(bucket, objPrefix)
 	path string
 
-	// List of entities (format, buckets, objects) to heal
+	// A channel of entities (format, buckets, objects) to heal
 	sourceCh chan healSource
+
+	// A channel of entities with heal result
+	respCh chan healResult
 
 	// Report healing progress
 	reportProgress bool
@@ -385,6 +388,7 @@ func newHealSequence(bucket, objPrefix, clientAddr string,
 	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 
 	return &healSequence{
+		respCh:         make(chan healResult),
 		bucket:         bucket,
 		objPrefix:      objPrefix,
 		path:           pathJoin(bucket, objPrefix),
@@ -636,53 +640,58 @@ func (h *healSequence) healSequenceStart() {
 }
 
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
-	var respCh = make(chan healResult)
-	defer close(respCh)
 	// Send heal request
 	task := healTask{
 		path:       source.path,
-		responseCh: respCh,
 		opts:       h.settings,
+		responseCh: h.respCh,
 	}
-	if source.opts != nil {
-		task.opts = *source.opts
+	if !source.opts.Equal(h.settings) {
+		task.opts = source.opts
 	}
 	globalBackgroundHealRoutine.queueHealTask(task)
-	// Wait for answer and push result to the client
-	res := <-respCh
-	if !h.reportProgress {
-		h.mutex.Lock()
-		defer h.mutex.Unlock()
 
-		// Progress is not reported in case of background heal processing.
-		// Instead we increment relevant counter based on the heal result
-		// for prometheus reporting.
-		if res.err != nil && !isErrObjectNotFound(res.err) {
-			for _, d := range res.result.After.Drives {
-				// For failed items we report the endpoint and drive state
-				// This will help users take corrective actions for drives
-				h.healFailedItemsMap[d.Endpoint+","+d.State]++
+	select {
+	case res := <-h.respCh:
+		if !h.reportProgress {
+			h.mutex.Lock()
+			defer h.mutex.Unlock()
+
+			// Progress is not reported in case of background heal processing.
+			// Instead we increment relevant counter based on the heal result
+			// for prometheus reporting.
+			if res.err != nil && !isErrObjectNotFound(res.err) {
+				for _, d := range res.result.After.Drives {
+					// For failed items we report the endpoint and drive state
+					// This will help users take corrective actions for drives
+					h.healFailedItemsMap[d.Endpoint+","+d.State]++
+				}
+			} else {
+				// Only object type reported for successful healing
+				h.healedItemsMap[res.result.Type]++
 			}
-		} else {
-			// Only object type reported for successful healing
-			h.healedItemsMap[res.result.Type]++
-		}
-		return nil
-	}
-	res.result.Type = healType
-	if res.err != nil {
-		// Object might have been deleted, by the time heal
-		// was attempted, we should ignore this object and return success.
-		if isErrObjectNotFound(res.err) {
 			return nil
 		}
-		// Only report object error
-		if healType != madmin.HealItemObject {
-			return res.err
+		res.result.Type = healType
+		if res.err != nil {
+			// Object might have been deleted, by the time heal
+			// was attempted, we should ignore this object and return success.
+			if isErrObjectNotFound(res.err) {
+				return nil
+			}
+			// Only report object error
+			if healType != madmin.HealItemObject {
+				return res.err
+			}
+			res.result.Detail = res.err.Error()
 		}
-		res.result.Detail = res.err.Error()
+		return h.pushHealResultItem(res.result)
+	case <-h.ctx.Done():
+		return nil
+	case <-h.traverseAndHealDoneCh:
+		return nil
 	}
-	return h.pushHealResultItem(res.result)
+
 }
 
 func (h *healSequence) healItemsFromSourceCh() error {
