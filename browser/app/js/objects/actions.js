@@ -24,7 +24,6 @@ import {
 import { getCurrentBucket } from "../buckets/selectors"
 import { getCurrentPrefix, getCheckedList } from "./selectors"
 import * as alertActions from "../alert/actions"
-import * as bucketActions from "../buckets/actions"
 import {
   minioBrowserPrefix,
   SORT_BY_NAME,
@@ -33,6 +32,7 @@ import {
   SORT_ORDER_ASC,
   SORT_ORDER_DESC,
 } from "../constants"
+import { getServerInfo, hasServerPublicDomain } from '../browser/selectors'
 
 export const SET_LIST = "objects/SET_LIST"
 export const RESET_LIST = "objects/RESET_LIST"
@@ -222,19 +222,38 @@ export const deleteCheckedObjects = () => {
 
 export const shareObject = (object, days, hours, minutes) => {
   return function (dispatch, getState) {
+    const hasServerDomain = hasServerPublicDomain(getState())
     const currentBucket = getCurrentBucket(getState())
     const currentPrefix = getCurrentPrefix(getState())
     const objectName = `${currentPrefix}${object}`
     const expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
     if (web.LoggedIn()) {
       return web
-        .PresignedGet({
-          host: location.host,
-          bucket: currentBucket,
-          object: objectName,
-          expiry: expiry,
+        .GetBucketPolicy({ bucketName: currentBucket, prefix: currentPrefix })
+        .catch(() => ({ policy: null }))
+        .then(({ policy }) => {
+          if (hasServerDomain && ['readonly', 'readwrite'].includes(policy)) {
+            const domain = getServerInfo(getState()).info.domains[0]
+            const url = `${domain}/${currentBucket}/${encodeURI(objectName)}`
+            dispatch(showShareObject(object, url, false))
+            dispatch(
+              alertActions.set({
+                type: "success",
+                message: "Object shared."
+              })
+            )
+          } else {
+            return web
+              .PresignedGet({
+                host: location.host,
+                bucket: currentBucket,
+                object: objectName,
+                expiry: expiry
+              })
+          }
         })
         .then((obj) => {
+          if (!obj) return
           dispatch(showShareObject(object, obj.url))
           dispatch(
             alertActions.set({
@@ -272,11 +291,12 @@ export const shareObject = (object, days, hours, minutes) => {
   }
 }
 
-export const showShareObject = (object, url) => ({
+export const showShareObject = (object, url, showExpiryDate = true) => ({
   type: SET_SHARE_OBJECT,
   show: true,
   object,
   url,
+  showExpiryDate,
 })
 
 export const hideShareObject = (object, url) => ({
