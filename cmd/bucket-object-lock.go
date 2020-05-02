@@ -398,7 +398,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		configData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
 			if errors.Is(err, errConfigNotFound) {
-				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
+				globalBucketObjectLockConfig.Set(bucket.Name, &objectlock.Retention{})
 				continue
 			}
 			return err
@@ -408,7 +408,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		if err != nil {
 			return err
 		}
-		retention := objectlock.Retention{}
+		retention := &objectlock.Retention{}
 		if config.Rule != nil {
 			retention = config.ToRetention()
 		}

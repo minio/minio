@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -69,7 +70,12 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	// Parse bucket encryption xml
 	encConfig, err := validateBucketSSEConfig(io.LimitReader(r.Body, maxBucketSSEConfigSize))
 	if err != nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		apiErr := APIError{
+			Code:           "MalformedXML",
+			Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description, err),
+			HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
+		}
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -86,7 +92,7 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	}
 
 	// Update the in-memory bucket encryption cache
-	globalBucketSSEConfigSys.Set(bucket, *encConfig)
+	globalBucketSSEConfigSys.Set(bucket, encConfig)
 
 	// Update peer MinIO servers of the updated bucket encryption config
 	globalNotificationSys.SetBucketSSEConfig(ctx, bucket, encConfig)
@@ -174,6 +180,7 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 
 	// Remove entry from the in-memory bucket encryption cache
 	globalBucketSSEConfigSys.Remove(bucket)
+
 	// Update peer MinIO servers of the updated bucket encryption config
 	globalNotificationSys.RemoveBucketSSEConfig(ctx, bucket)
 

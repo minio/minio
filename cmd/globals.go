@@ -218,7 +218,7 @@ var (
 
 	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
 
-	globalBucketQuotaSys     = NewBucketQuotaSys()
+	globalBucketQuotaSys     *BucketQuotaSys
 	globalBucketStorageCache bucketStorageCache
 
 	// Disk cache drives

@@ -771,7 +771,7 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
 func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
-		return errInvalidArgument
+		return errServerNotInitialized
 	}
 
 	// In gateway mode, notifications are not supported.
@@ -905,7 +905,7 @@ func (sys *NotificationSys) Send(args eventArgs) {
 }
 
 // PutBucketObjectLockConfig - put bucket object lock configuration to all peers.
-func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention objectlock.Retention) {
+func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention *objectlock.Retention) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		if client == nil {
