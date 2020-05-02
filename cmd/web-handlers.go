@@ -2058,12 +2058,6 @@ type LoginSTSArgs struct {
 	Token string `json:"token" form:"token"`
 }
 
-// LoginSTSRep - login reply.
-type LoginSTSRep struct {
-	Token     string `json:"token"`
-	UIVersion string `json:"uiVersion"`
-}
-
 // LoginSTS - STS user login handler.
 func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *LoginRep) error {
 	ctx := newWebContext(r, args, "WebLoginSTS")
@@ -2074,6 +2068,9 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	v.Set("Version", stsAPIVersion)
 
 	scheme := "http"
+	if sourceScheme := handlers.GetSourceScheme(r); sourceScheme != "" {
+		scheme = sourceScheme
+	}
 	if globalIsSSL {
 		scheme = "https"
 	}
