@@ -667,10 +667,8 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !HasSuffix(objectName, SlashSeparator) && objectName != "" {
-			// Check for permissions only in the case of
-			// non-anonymous login. For anonymous login, policy has already
-			// been checked.
-			govBypassPerms := ErrAccessDenied
+			// Check permissions for non-anonymous user.
+			govBypassPerms := false
 			if authErr != errNoAuthToken {
 				if !globalIAMSys.IsAllowed(iampolicy.Args{
 					AccountName:     claims.AccessKey,
@@ -692,22 +690,12 @@ next:
 					ObjectName:      objectName,
 					Claims:          claims.Map(),
 				}) {
-					govBypassPerms = ErrNone
-				}
-				if globalIAMSys.IsAllowed(iampolicy.Args{
-					AccountName:     claims.AccessKey,
-					Action:          iampolicy.GetBucketObjectLockConfigurationAction,
-					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-					IsOwner:         owner,
-					ObjectName:      objectName,
-					Claims:          claims.Map(),
-				}) {
-					govBypassPerms = ErrNone
+					govBypassPerms = true
 				}
 			}
+
 			if authErr == errNoAuthToken {
-				// Check if object is allowed to be deleted anonymously
+				// Check if object is allowed to be deleted anonymously.
 				if !globalPolicySys.IsAllowed(policy.Args{
 					Action:          policy.DeleteObjectAction,
 					BucketName:      args.BucketName,
@@ -726,30 +714,13 @@ next:
 					IsOwner:         false,
 					ObjectName:      objectName,
 				}) {
-					govBypassPerms = ErrNone
-				}
-
-				// Check if object is allowed to be deleted anonymously
-				if globalPolicySys.IsAllowed(policy.Args{
-					Action:          policy.GetBucketObjectLockConfigurationAction,
-					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", "", nil),
-					IsOwner:         false,
-					ObjectName:      objectName,
-				}) {
-					govBypassPerms = ErrNone
+					govBypassPerms = true
 				}
 			}
-			if govBypassPerms != ErrNone {
+
+			apiErr := enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms)
+			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				return toJSONError(ctx, errAccessDenied)
-			}
-
-			apiErr := ErrNone
-			if _, ok := globalBucketObjectLockConfig.Get(args.BucketName); ok && (apiErr == ErrNone) {
-				apiErr = enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo)
-				if apiErr != ErrNone && apiErr != ErrNoSuchKey {
-					return toJSONError(ctx, errAccessDenied)
-				}
 			}
 			if apiErr == ErrNone {
 				if err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
