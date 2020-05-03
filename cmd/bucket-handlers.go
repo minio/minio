@@ -1069,8 +1069,8 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		globalBucketObjectLockConfig.Set(bucket, retention)
 		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, retention)
 	} else {
-		globalBucketObjectLockConfig.Remove(bucket)
-		globalNotificationSys.RemoveBucketObjectLockConfig(ctx, bucket)
+		globalBucketObjectLockConfig.Set(bucket, objectlock.Retention{})
+		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, objectlock.Retention{})
 	}
 
 	// Write success response.
