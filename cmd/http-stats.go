@@ -21,61 +21,61 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
 )
 
 // ConnStats - Network statistics
 // Count total input/output transferred bytes during
 // the server's life.
 type ConnStats struct {
-	totalInputBytes  atomic.Uint64
-	totalOutputBytes atomic.Uint64
-	s3InputBytes     atomic.Uint64
-	s3OutputBytes    atomic.Uint64
+	totalInputBytes  uint64
+	totalOutputBytes uint64
+	s3InputBytes     uint64
+	s3OutputBytes    uint64
 }
 
 // Increase total input bytes
 func (s *ConnStats) incInputBytes(n int) {
-	s.totalInputBytes.Add(uint64(n))
+	atomic.AddUint64(&s.totalInputBytes, uint64(n))
 }
 
 // Increase total output bytes
 func (s *ConnStats) incOutputBytes(n int) {
-	s.totalOutputBytes.Add(uint64(n))
+	atomic.AddUint64(&s.totalOutputBytes, uint64(n))
 }
 
 // Return total input bytes
 func (s *ConnStats) getTotalInputBytes() uint64 {
-	return s.totalInputBytes.Load()
+	return atomic.LoadUint64(&s.totalInputBytes)
 }
 
 // Return total output bytes
 func (s *ConnStats) getTotalOutputBytes() uint64 {
-	return s.totalOutputBytes.Load()
+	return atomic.LoadUint64(&s.totalOutputBytes)
 }
 
 // Increase outbound input bytes
 func (s *ConnStats) incS3InputBytes(n int) {
-	s.s3InputBytes.Add(uint64(n))
+	atomic.AddUint64(&s.s3InputBytes, uint64(n))
 }
 
 // Increase outbound output bytes
 func (s *ConnStats) incS3OutputBytes(n int) {
-	s.s3OutputBytes.Add(uint64(n))
+	atomic.AddUint64(&s.s3OutputBytes, uint64(n))
 }
 
 // Return outbound input bytes
 func (s *ConnStats) getS3InputBytes() uint64 {
-	return s.s3InputBytes.Load()
+	return atomic.LoadUint64(&s.s3InputBytes)
 }
 
 // Return outbound output bytes
 func (s *ConnStats) getS3OutputBytes() uint64 {
-	return s.s3OutputBytes.Load()
+	return atomic.LoadUint64(&s.s3OutputBytes)
 }
 
 // Return connection stats (total input/output bytes and total s3 input/output bytes)
@@ -178,7 +178,7 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		}
 	}
 
-	if r.Method == "GET" {
+	if r.Method == http.MethodGet {
 		// Increment the prometheus http request response histogram with appropriate label
 		httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
 	}
