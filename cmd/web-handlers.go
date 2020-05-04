@@ -1088,6 +1088,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, err)
 		return
 	}
+	defer hashReader.Close()
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -1098,6 +1099,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			writeWebErrorResponse(w, err)
 			return
 		}
+		defer actualReader.Close()
 
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
@@ -1109,6 +1111,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			writeWebErrorResponse(w, err)
 			return
 		}
+		defer hashReader.Close()
 	}
 	pReader = NewPutObjReader(hashReader, nil, nil)
 	// get gateway encryption options
@@ -1134,6 +1137,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			defer hashReader.Close()
 			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}

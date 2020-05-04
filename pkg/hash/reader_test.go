@@ -30,6 +30,7 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer r.Close()
 	_, err = io.Copy(ioutil.Discard, r)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +54,7 @@ func TestHashReaderHelperMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(r.MD5(), expectedMD5) {
+	if !bytes.Equal(r.md5sum, expectedMD5) {
 		t.Errorf("Expected md5hex \"e2fc714c4727ee9395f324cd2e7f331f\", got %s", r.MD5HexString())
 	}
 	if !bytes.Equal(r.MD5Current(), expectedMD5) {
@@ -111,6 +112,7 @@ func TestHashReaderVerification(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: Initializing reader failed %s", i+1, err)
 		}
+		defer r.Close()
 		_, err = io.Copy(ioutil.Discard, r)
 		if err != nil {
 			if err.Error() != testCase.err.Error() {
@@ -153,8 +155,8 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 			src:         &Reader{src: bytes.NewReader([]byte("abcd"))},
 			size:        4,
 			actualSize:  4,
-			success:     false,
-			expectedErr: errNestedReader,
+			success:     true,
+			expectedErr: nil,
 		},
 		// Expected inputs, NewReader() will succeed.
 		{

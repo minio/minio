@@ -20,6 +20,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 
+	md5simd "github.com/minio/md5-simd"
 	"github.com/minio/sha256-simd"
 )
 
@@ -35,9 +36,17 @@ func getSHA256Sum(data []byte) []byte {
 	return hash.Sum(nil)
 }
 
+// md5Server is a singleton md5 processor.
+var md5Server = md5simd.NewServer()
+
 // getMD5Sum returns MD5 sum of given data.
 func getMD5Sum(data []byte) []byte {
-	hash := md5.New()
+	if len(data) < 32<<10 {
+		v := md5.Sum(data)
+		return v[:]
+	}
+	hash := md5Server.NewHash()
+	defer hash.Close()
 	hash.Write(data)
 	return hash.Sum(nil)
 }

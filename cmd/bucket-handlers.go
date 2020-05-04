@@ -753,6 +753,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	defer hashReader.Close()
+
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 	var objectEncryptionKey crypto.ObjectKey
@@ -791,12 +793,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				return
 			}
 			info := ObjectInfo{Size: fileSize}
+
 			// do not try to verify encrypted content
 			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize, globalCLIContext.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			defer hashReader.Close()
+
 			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}

@@ -929,6 +929,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	defer srcInfo.Reader.Close()
 
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(srcInfo.Reader, nil, nil)
@@ -1037,6 +1038,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			defer srcInfo.Reader.Close()
 
 			if isTargetEncrypted {
 				pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objEncKey)
@@ -1348,6 +1350,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		defer actualReader.Close()
 
 		// Set compression metrics.
 		s2c := newS2CompressReader(actualReader)
@@ -1363,6 +1366,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	defer hashReader.Close()
 
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
@@ -1421,6 +1425,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			defer hashReader.Close()
 			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}
@@ -1840,6 +1845,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	defer srcInfo.Reader.Close()
 
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(rawReader, nil, nil)
@@ -1896,6 +1902,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			defer srcInfo.Reader.Close()
 			pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objectEncryptionKey)
 		}
 	}
@@ -2070,6 +2077,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		defer actualReader.Close()
 
 		// Set compression metrics.
 		s2c := newS2CompressReader(actualReader)
@@ -2086,6 +2094,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	defer hashReader.Close()
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
@@ -2148,6 +2157,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
+			defer hashReader.Close()
 			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
 	}

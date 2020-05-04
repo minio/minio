@@ -415,15 +415,15 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 			return ErrContentSHA256Mismatch
 		}
 	}
-
+	size := r.ContentLength
 	// Verify 'Content-Md5' and/or 'X-Amz-Content-Sha256' if present.
 	// The verification happens implicit during reading.
-	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5),
+	reader, err := hash.NewReader(r.Body, size, hex.EncodeToString(contentMD5),
 		hex.EncodeToString(contentSHA256), -1, globalCLIContext.StrictS3Compat)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}
-	r.Body = ioutil.NopCloser(reader)
+	r.Body = reader
 	return ErrNone
 }
 

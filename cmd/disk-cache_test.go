@@ -209,6 +209,7 @@ func TestDiskCacheMaxUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer hashReader.Close()
 	if !cache.diskAvailable(int64(size)) {
 		err = cache.Put(ctx, bucketName, objectName, hashReader, hashReader.Size(), nil, ObjectOptions{UserDefined: httpMeta}, false)
 		if err != errDiskFull {

@@ -106,6 +106,7 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 				}
 
 				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r, nil, nil), ObjectOptions{})
+				r.Close()
 				if !isErrBucketNotFound(err) {
 					logger.LogIf(ctx, err)
 				}
@@ -133,6 +134,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, gui <-chan
 		if !isErrBucketNotFound(err) {
 			logger.LogIf(ctx, err)
 		}
+		r.Close()
 	}
 }
 

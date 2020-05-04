@@ -1702,7 +1702,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	for _, part := range parts {
 		_, err = obj.PutObjectPart(context.Background(), part.bucketName, part.objName, part.uploadID, part.PartID, mustGetPutObjReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, sha256sum), opts)
 		if err != nil {
-			t.Fatalf("%s : %s", instanceType, err)
+			t.Fatalf("%s : %s, %d bytes input, part %d", instanceType, err, len(part.inputReaderData), part.PartID)
 		}
 	}
 	// Parts to be sent as input for CompleteMultipartUpload.

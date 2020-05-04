@@ -354,6 +354,7 @@ func (d *dataUsageCache) save(ctx context.Context, store ObjectLayer, name strin
 	if err != nil {
 		return err
 	}
+	defer r.Close()
 
 	_, err = store.PutObject(ctx,
 		dataUsageBucket,

@@ -62,6 +62,7 @@ func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data
 	if err != nil {
 		return err
 	}
+	defer hashReader.Close()
 
 	_, err = objAPI.PutObject(ctx, minioMetaBucket, configFile, NewPutObjReader(hashReader, nil, nil), ObjectOptions{})
 	return err

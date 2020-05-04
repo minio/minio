@@ -51,7 +51,7 @@ require (
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.9
 	github.com/klauspost/compress v1.10.3
-	github.com/klauspost/cpuid v1.2.2
+	github.com/klauspost/cpuid v1.2.3
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.3
@@ -67,6 +67,7 @@ require (
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
+	github.com/minio/md5-simd v1.0.1
 	github.com/minio/minio-go/v6 v6.0.55-0.20200424204115-7506d2996b22
 	github.com/minio/parquet-go v0.0.0-20200414234858-838cfa8aae61
 	github.com/minio/sha256-simd v0.1.1
@@ -126,4 +127,8 @@ require (
 	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.4
+)
+
+replace (
+	github.com/minio/md5-simd v1.0.1  => ..\md5-simd\
 )
