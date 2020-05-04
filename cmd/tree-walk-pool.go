@@ -55,9 +55,9 @@ type treeWalk struct {
 // treeWalkPool's purpose is to maintain active treeWalk go-routines in a map so that
 // it can be looked up across related list calls.
 type TreeWalkPool struct {
+	sync.Mutex
 	pool    map[listParams][]treeWalk
 	timeOut time.Duration
-	lock    *sync.Mutex
 }
 
 // NewTreeWalkPool - initialize new tree walk pool.
@@ -65,7 +65,6 @@ func NewTreeWalkPool(timeout time.Duration) *TreeWalkPool {
 	tPool := &TreeWalkPool{
 		pool:    make(map[listParams][]treeWalk),
 		timeOut: timeout,
-		lock:    &sync.Mutex{},
 	}
 	return tPool
 }
@@ -74,9 +73,9 @@ func NewTreeWalkPool(timeout time.Duration) *TreeWalkPool {
 // listParams, removes it from the pool, and returns the TreeWalkResult
 // channel.
 // Returns nil if listParams does not have an asccociated treeWalk.
-func (t TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
+	t.Lock()
+	defer t.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
 	if ok {
 		if len(walks) > 0 {
@@ -104,9 +103,9 @@ func (t TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, 
 // 2) Relase() signals the timer go-routine to end on endTimerCh.
 //    During listing the timer should not timeout and end the treeWalk go-routine, hence the
 //    timer go-routine should be ended.
-func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
+func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
+	t.Lock()
+	defer t.Unlock()
 
 	// Should be a buffered channel so that Release() never blocks.
 	endTimerCh := make(chan struct{}, 1)
@@ -125,7 +124,7 @@ func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWa
 		case <-time.After(t.timeOut):
 			// Timeout has expired. Remove the treeWalk from treeWalkPool and
 			// end the treeWalk go-routine.
-			t.lock.Lock()
+			t.Lock()
 			walks, ok := t.pool[params]
 			if ok {
 				// Trick of filtering without allocating
@@ -149,7 +148,7 @@ func (t TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWa
 			}
 			// Signal the treeWalk go-routine to die.
 			close(endWalkCh)
-			t.lock.Unlock()
+			t.Unlock()
 		case <-endTimerCh:
 			return
 		}
