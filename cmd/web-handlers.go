@@ -1904,7 +1904,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		globalPolicySys.Set(args.BucketName, *bucketPolicy)
+		globalPolicySys.Set(args.BucketName, bucketPolicy)
 		globalNotificationSys.SetBucketPolicy(ctx, args.BucketName, bucketPolicy)
 	}
 

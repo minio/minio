@@ -155,6 +155,9 @@ func newAllSubsystems() {
 
 	// Create new bucket encryption subsystem
 	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+
+	// Create new bucket quota subsystem
+	globalBucketQuotaSys = NewBucketQuotaSys()
 }
 
 func initSafeMode(buckets []BucketInfo) (err error) {
@@ -275,10 +278,6 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
-	// Initialize bucket quota system.
-	if err = initBucketQuotaSys(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
-	}
 
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
@@ -288,6 +287,11 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	// Initialize bucket encryption subsystem.
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
+	}
+
+	// Initialize bucket quota system.
+	if err = globalBucketQuotaSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
 	}
 
 	return nil

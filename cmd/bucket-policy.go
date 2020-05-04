@@ -39,11 +39,11 @@ import (
 // PolicySys - policy subsystem.
 type PolicySys struct {
 	sync.RWMutex
-	bucketPolicyMap map[string]policy.Policy
+	bucketPolicyMap map[string]*policy.Policy
 }
 
 // Set - sets policy to given bucket name.  If policy is empty, existing policy is removed.
-func (sys *PolicySys) Set(bucketName string, policy policy.Policy) {
+func (sys *PolicySys) Set(bucketName string, policy *policy.Policy) {
 	if globalIsGateway {
 		// Set policy is a non-op under gateway mode.
 		return
@@ -97,12 +97,12 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 // Loads policies for all buckets into PolicySys.
 func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketPolicy(GlobalContext, bucket.Name)
+		config, err := getPolicyConfig(objAPI, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); ok {
-				sys.Remove(bucket.Name)
+				continue
 			}
-			continue
+			return err
 		}
 		// This part is specifically written to handle migration
 		// when the Version string is empty, this was allowed
@@ -118,7 +118,7 @@ func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 				return err
 			}
 		}
-		sys.Set(bucket.Name, *config)
+		sys.Set(bucket.Name, config)
 	}
 	return nil
 }
@@ -126,7 +126,7 @@ func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 // Init - initializes policy system from policy.json of all buckets.
 func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
-		return errInvalidArgument
+		return errServerNotInitialized
 	}
 
 	// In gateway mode, we don't need to load the policies
@@ -142,7 +142,7 @@ func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 // NewPolicySys - creates new policy system.
 func NewPolicySys() *PolicySys {
 	return &PolicySys{
-		bucketPolicyMap: make(map[string]policy.Policy),
+		bucketPolicyMap: make(map[string]*policy.Policy),
 	}
 }
 

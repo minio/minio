@@ -77,7 +77,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	globalLifecycleSys.Set(bucket, *bucketLifecycle)
+	globalLifecycleSys.Set(bucket, bucketLifecycle)
 	globalNotificationSys.SetBucketLifecycle(ctx, bucket, bucketLifecycle)
 
 	// Success.

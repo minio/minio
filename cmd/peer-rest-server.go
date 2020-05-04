@@ -675,13 +675,14 @@ func (s *peerRESTServer) SetBucketPolicyHandler(w http.ResponseWriter, r *http.R
 		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
 		return
 	}
-	var policyData policy.Policy
+
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&policyData)
+	var policyData = &policy.Policy{}
+	err := gob.NewDecoder(r.Body).Decode(policyData)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -716,13 +717,13 @@ func (s *peerRESTServer) SetBucketLifecycleHandler(w http.ResponseWriter, r *htt
 		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
 		return
 	}
-	var lifecycleData lifecycle.Lifecycle
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&lifecycleData)
+	var lifecycleData = &lifecycle.Lifecycle{}
+	err := gob.NewDecoder(r.Body).Decode(lifecycleData)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -758,13 +759,13 @@ func (s *peerRESTServer) SetBucketSSEConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	var encConfig bucketsse.BucketSSEConfig
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&encConfig)
+	var encConfig = &bucketsse.BucketSSEConfig{}
+	err := gob.NewDecoder(r.Body).Decode(encConfig)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -860,13 +861,13 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 		return
 	}
 
-	var retention objectlock.Retention
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&retention)
+	var retention = &objectlock.Retention{}
+	err := gob.NewDecoder(r.Body).Decode(retention)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
