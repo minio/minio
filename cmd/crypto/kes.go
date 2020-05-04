@@ -112,6 +112,7 @@ func NewKes(cfg KesConfig) (KMS, error) {
 		Certificates: []tls.Certificate{cert},
 		RootCAs:      certPool,
 	}
+	cfg.Transport.ForceAttemptHTTP2 = true
 	return &kesService{
 		client: &kesClient{
 			addr: cfg.Endpoint,
