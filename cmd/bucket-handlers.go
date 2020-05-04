@@ -293,9 +293,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 		for i := range bucketsInfo {
 			meta, err := loadBucketMetadata(ctx, objectAPI, bucketsInfo[i].Name)
-			logger.LogIf(ctx, err)
 			if err == nil {
 				bucketsInfo[i].Created = meta.Created
+			}
+			if err != errMetaDataConverted {
+				logger.LogIf(ctx, err)
 			}
 		}
 	}
@@ -1103,7 +1105,7 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 	}
 
 	meta, err := loadBucketMetadata(ctx, objectAPI, bucket)
-	if err != nil {
+	if err != nil && err != errMetaDataConverted {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

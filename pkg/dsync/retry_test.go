@@ -17,25 +17,26 @@
 package dsync
 
 import (
+	"context"
 	"testing"
 	"time"
 )
 
 // Tests for retry timer.
 func TestRetryTimerSimple(t *testing.T) {
-	doneCh := make(chan struct{})
-	attemptCh := newRetryTimerSimple(doneCh)
+	rctx, cancel := context.WithCancel(context.Background())
+	attemptCh := newRetryTimerSimple(rctx)
 	i := <-attemptCh
 	if i != 0 {
-		close(doneCh)
+		cancel()
 		t.Fatalf("Invalid attempt counter returned should be 0, found %d instead", i)
 	}
 	i = <-attemptCh
 	if i <= 0 {
-		close(doneCh)
+		cancel()
 		t.Fatalf("Invalid attempt counter returned should be greater than 0, found %d instead", i)
 	}
-	close(doneCh)
+	cancel()
 	_, ok := <-attemptCh
 	if ok {
 		t.Fatal("Attempt counter should be closed")
@@ -44,18 +45,19 @@ func TestRetryTimerSimple(t *testing.T) {
 
 // Test retry time with no jitter.
 func TestRetryTimerWithNoJitter(t *testing.T) {
-	doneCh := make(chan struct{})
+	rctx, cancel := context.WithCancel(context.Background())
+
 	// No jitter
-	attemptCh := newRetryTimerWithJitter(time.Millisecond, 5*time.Millisecond, NoJitter, doneCh)
+	attemptCh := newRetryTimerWithJitter(rctx, time.Millisecond, 5*time.Millisecond, NoJitter)
 	i := <-attemptCh
 	if i != 0 {
-		close(doneCh)
+		cancel()
 		t.Fatalf("Invalid attempt counter returned should be 0, found %d instead", i)
 	}
 	// Loop through the maximum possible attempt.
 	for i = range attemptCh {
 		if i == 30 {
-			close(doneCh)
+			cancel()
 		}
 	}
 	_, ok := <-attemptCh
@@ -66,15 +68,16 @@ func TestRetryTimerWithNoJitter(t *testing.T) {
 
 // Test retry time with Jitter greater than MaxJitter.
 func TestRetryTimerWithJitter(t *testing.T) {
-	doneCh := make(chan struct{})
+	rctx, cancel := context.WithCancel(context.Background())
+
 	// Jitter will be set back to 1.0
-	attemptCh := newRetryTimerWithJitter(time.Second, 30*time.Second, 2.0, doneCh)
+	attemptCh := newRetryTimerWithJitter(rctx, time.Second, 30*time.Second, 2.0)
 	i := <-attemptCh
 	if i != 0 {
-		close(doneCh)
+		cancel()
 		t.Fatalf("Invalid attempt counter returned should be 0, found %d instead", i)
 	}
-	close(doneCh)
+	cancel()
 	_, ok := <-attemptCh
 	if ok {
 		t.Fatal("Attempt counter should be closed")

@@ -77,7 +77,7 @@ func (sys *BucketQuotaSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error 
 		return errServerNotInitialized
 	}
 
-	// In gateway mode, we always fetch the bucket lifecycle configuration from the gateway backend.
+	// In gateway mode, we do not support bucket quota.
 	// So, this is a no-op for gateway servers.
 	if globalIsGateway {
 		return nil

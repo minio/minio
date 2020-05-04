@@ -352,7 +352,9 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	// Version
 	if _, err := io.ReadFull(src, tmp[:1]); err != nil {
 		if d.debug {
-			logger.LogIf(ctx, err)
+			if err != io.EOF {
+				logger.LogIf(ctx, err)
+			}
 		}
 		return err
 	}
