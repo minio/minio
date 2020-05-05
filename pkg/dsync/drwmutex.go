@@ -128,13 +128,16 @@ func (dm *DRWMutex) GetRLock(id, source string, timeout time.Duration) (locked b
 // algorithm until either the lock is acquired successfully or more
 // time has elapsed than the timeout value.
 func (dm *DRWMutex) lockBlocking(timeout time.Duration, id, source string, isReadLock bool) (locked bool) {
-	doneCh, start := make(chan struct{}), time.Now().UTC()
-	defer close(doneCh)
+	start := time.Now().UTC()
 
 	restClnts := dm.clnt.GetLockersFn()
 
+	retryCtx, cancel := context.WithCancel(dm.ctx)
+
+	defer cancel()
+
 	// Use incremental back-off algorithm for repeated attempts to acquire the lock
-	for range newRetryTimerSimple(doneCh) {
+	for range newRetryTimerSimple(retryCtx) {
 		select {
 		case <-dm.ctx.Done():
 			return

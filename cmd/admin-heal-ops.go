@@ -715,7 +715,6 @@ func (h *healSequence) healItemsFromSourceCh() error {
 
 func (h *healSequence) healFromSourceCh() {
 	h.healItemsFromSourceCh()
-	close(h.traverseAndHealDoneCh)
 }
 
 func (h *healSequence) healItems(bucketsOnly bool) error {

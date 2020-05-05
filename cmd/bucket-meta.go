@@ -115,13 +115,15 @@ func (b *bucketMetadata) convertLegacyLockconfig(ctx context.Context, objectAPI 
 			return err
 		}
 
-		logger.LogIf(ctx, deleteConfig(ctx, objectAPI, configFile))
+		if err := deleteConfig(ctx, objectAPI, configFile); err != nil && !errors.Is(err, errConfigNotFound) {
+			logger.LogIf(ctx, err)
+		}
 		return nil
 	}
 
 	configData, err := readConfig(ctx, objectAPI, configFile)
 	if err != nil {
-		if err != errConfigNotFound {
+		if !errors.Is(err, errConfigNotFound) {
 			return err
 		}
 
