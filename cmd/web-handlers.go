@@ -719,6 +719,9 @@ next:
 			}
 
 			apiErr := enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms)
+			if apiErr == ErrObjectLocked {
+				return toJSONError(ctx, errLockedObject)
+			}
 			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				return toJSONError(ctx, errAccessDenied)
 			}
@@ -2140,7 +2143,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Description:    err.Error(),
 		}
 	case errAuthentication, auth.ErrInvalidAccessKeyLength,
-		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
+		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID, errAccessDenied, errLockedObject:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
