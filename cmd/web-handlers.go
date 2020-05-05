@@ -2140,7 +2140,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Description:    err.Error(),
 		}
 	case errAuthentication, auth.ErrInvalidAccessKeyLength,
-		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
+		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID, errAccessDenied:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,
