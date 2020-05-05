@@ -36,42 +36,10 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		return nil
 	}
 
-	// If its server mode or nas gateway, migrate the backend.
-	doneCh := make(chan struct{})
-
-	var encrypted bool
-	var err error
-
-	// Migrating Config backend needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	var stop bool
-
-	rquorum := InsufficientReadQuorum{}
-	wquorum := InsufficientWriteQuorum{}
-
-	for !stop {
-		select {
-		case <-retryTimerCh:
-			if encrypted, err = checkBackendEncrypted(objAPI); err != nil {
-				if errors.Is(err, errDiskNotFound) ||
-					errors.As(err, &rquorum) ||
-					isErrBucketNotFound(err) {
-					logger.Info("Waiting for config backend to be encrypted..")
-					continue
-				}
-				close(doneCh)
-				return err
-			}
-			stop = true
-		case <-globalOSSignalCh:
-			close(doneCh)
-			return fmt.Errorf("Config encryption process stopped gracefully")
-		}
+	encrypted, err := checkBackendEncrypted(objAPI)
+	if err != nil {
+		return fmt.Errorf("Unable to encrypt config %w", err)
 	}
-	close(doneCh)
 
 	if encrypted {
 		// backend is encrypted, but credentials are not specified
@@ -91,34 +59,12 @@ func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
 		}
 	}
 
-	doneCh = make(chan struct{})
-	defer close(doneCh)
-
-	retryTimerCh = newRetryTimerSimple(doneCh)
-
-	// Migrating Config backend needs a retry mechanism for
-	// the following reasons:
-	//  - Read quorum is lost just after the initialization
-	//    of the object layer.
-	for {
-		select {
-		case <-retryTimerCh:
-			// Migrate IAM configuration
-			if err = migrateConfigPrefixToEncrypted(objAPI, globalOldCred, encrypted); err != nil {
-				if errors.Is(err, errDiskNotFound) ||
-					errors.As(err, &rquorum) ||
-					errors.As(err, &wquorum) ||
-					isErrBucketNotFound(err) {
-					logger.Info("Waiting for config backend to be encrypted..")
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			return fmt.Errorf("Config encryption process stopped gracefully")
-		}
+	// Migrate IAM configuration
+	if err = migrateConfigPrefixToEncrypted(objAPI, globalOldCred, encrypted); err != nil {
+		return fmt.Errorf("Unable to migrate all config at .minio.sys/config/: %w", err)
 	}
+
+	return nil
 }
 
 const (

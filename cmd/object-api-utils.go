@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -842,16 +843,17 @@ func newS2CompressReader(r io.Reader) io.ReadCloser {
 	return pr
 }
 
-// Returns error if the cancelCh has been closed (indicating that S3 client has disconnected)
-type detectDisconnect struct {
+// Returns error if the context is canceled, indicating
+// either client has disconnected
+type contextReader struct {
 	io.ReadCloser
-	cancelCh <-chan struct{}
+	ctx context.Context
 }
 
-func (d *detectDisconnect) Read(p []byte) (int, error) {
+func (d *contextReader) Read(p []byte) (int, error) {
 	select {
-	case <-d.cancelCh:
-		return 0, io.ErrUnexpectedEOF
+	case <-d.ctx.Done():
+		return 0, d.ctx.Err()
 	default:
 		return d.ReadCloser.Read(p)
 	}

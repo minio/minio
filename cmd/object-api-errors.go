@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -105,6 +106,8 @@ func toObjectErr(err error, params ...string) error {
 	case errXLWriteQuorum:
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
+		err = IncompleteBody{}
+	case context.Canceled, context.DeadlineExceeded:
 		err = IncompleteBody{}
 	}
 	return err

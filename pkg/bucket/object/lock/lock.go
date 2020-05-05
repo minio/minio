@@ -161,18 +161,18 @@ func (r Retention) Retain(created time.Time) bool {
 // BucketObjectLockConfig - map of bucket and retention configuration.
 type BucketObjectLockConfig struct {
 	sync.RWMutex
-	retentionMap map[string]Retention
+	retentionMap map[string]*Retention
 }
 
 // Set - set retention configuration.
-func (config *BucketObjectLockConfig) Set(bucketName string, retention Retention) {
+func (config *BucketObjectLockConfig) Set(bucketName string, retention *Retention) {
 	config.Lock()
 	config.retentionMap[bucketName] = retention
 	config.Unlock()
 }
 
 // Get - Get retention configuration.
-func (config *BucketObjectLockConfig) Get(bucketName string) (r Retention, ok bool) {
+func (config *BucketObjectLockConfig) Get(bucketName string) (r *Retention, ok bool) {
 	config.RLock()
 	defer config.RUnlock()
 	r, ok = config.retentionMap[bucketName]
@@ -189,7 +189,7 @@ func (config *BucketObjectLockConfig) Remove(bucketName string) {
 // NewBucketObjectLockConfig returns initialized BucketObjectLockConfig
 func NewBucketObjectLockConfig() *BucketObjectLockConfig {
 	return &BucketObjectLockConfig{
-		retentionMap: map[string]Retention{},
+		retentionMap: make(map[string]*Retention),
 	}
 }
 
@@ -280,7 +280,8 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 }
 
 // ToRetention - convert to Retention type.
-func (config *Config) ToRetention() (r Retention) {
+func (config *Config) ToRetention() (r *Retention) {
+	r = &Retention{}
 	if config.Rule != nil {
 		r.Mode = config.Rule.DefaultRetention.Mode
 

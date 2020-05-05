@@ -656,12 +656,12 @@ func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap even
 }
 
 // PutBucketObjectLockConfig - PUT bucket object lock configuration.
-func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention objectlock.Retention) error {
+func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention *objectlock.Retention) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
 
 	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(&retention)
+	err := gob.NewEncoder(&reader).Encode(retention)
 	if err != nil {
 		return err
 	}

@@ -1750,7 +1750,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
 		t.Fatalf("unexpected error. %v", err)
 	}
-	globalPolicySys.Set(bucketName, *bucketPolicy)
+	globalPolicySys.Set(bucketName, bucketPolicy)
 	defer globalPolicySys.Remove(bucketName)
 
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.

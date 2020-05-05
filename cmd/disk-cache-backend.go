@@ -29,6 +29,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/djherbis/atime"
@@ -37,7 +38,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/sio"
-	"go.uber.org/atomic"
 )
 
 const (
@@ -125,17 +125,16 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 
 // represents disk cache struct
 type diskCache struct {
-	dir      string // caching directory
-	quotaPct int    // max usage in %
-	// mark false if drive is offline
-	online bool
-	// mutex to protect updates to online variable
-	onlineMutex   *sync.RWMutex
+	gcCounter uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	// is set to 0 if drive is offline
+	online uint32
+
+	dir           string // caching directory
+	quotaPct      int    // max usage in %
 	pool          sync.Pool
 	after         int // minimum accesses before an object is cached.
 	lowWatermark  int
 	highWatermark int
-	gcCounter     atomic.Uint64
 	// nsMutex namespace lock
 	nsMutex *nsLockMap
 	// Object functions pointing to the corresponding functions of backend implementation.
@@ -153,8 +152,7 @@ func newDiskCache(dir string, quotaPct, after, lowWatermark, highWatermark int) 
 		after:         after,
 		lowWatermark:  lowWatermark,
 		highWatermark: highWatermark,
-		online:        true,
-		onlineMutex:   &sync.RWMutex{},
+		online:        1,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(int(cacheBlkSize))
@@ -340,27 +338,25 @@ func (c *diskCache) purge(ctx context.Context) {
 }
 
 func (c *diskCache) incGCCounter() {
-	c.gcCounter.Add(uint64(1))
+	atomic.AddUint64(&c.gcCounter, 1)
 }
+
 func (c *diskCache) resetGCCounter() {
-	c.gcCounter.Store(uint64(0))
+	atomic.StoreUint64(&c.gcCounter, 0)
 }
+
 func (c *diskCache) gcCount() uint64 {
-	return c.gcCounter.Load()
+	return atomic.LoadUint64(&c.gcCounter)
 }
 
 // sets cache drive status
-func (c *diskCache) setOnline(status bool) {
-	c.onlineMutex.Lock()
-	c.online = status
-	c.onlineMutex.Unlock()
+func (c *diskCache) setOffline() {
+	atomic.StoreUint32(&c.online, 0)
 }
 
 // returns true if cache drive is online
 func (c *diskCache) IsOnline() bool {
-	c.onlineMutex.RLock()
-	defer c.onlineMutex.RUnlock()
-	return c.online
+	return atomic.LoadUint32(&c.online) != 0
 }
 
 // Stat returns ObjectInfo from disk cache
@@ -680,7 +676,8 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	}
 	n, err := c.bitrotWriteToCache(cachePath, cacheDataFile, reader, actualSize)
 	if IsErr(err, baseErrs...) {
-		c.setOnline(false)
+		// take the cache drive offline
+		c.setOffline()
 	}
 	if err != nil {
 		removeAll(cachePath)
@@ -727,7 +724,8 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	cacheFile := MustGetUUID()
 	n, err := c.bitrotWriteToCache(cachePath, cacheFile, reader, actualSize)
 	if IsErr(err, baseErrs...) {
-		c.setOnline(false)
+		// take the cache drive offline
+		c.setOffline()
 	}
 	if err != nil {
 		removeAll(cachePath)
