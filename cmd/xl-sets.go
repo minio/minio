@@ -22,6 +22,7 @@ import (
 	"hash/crc32"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1689,20 +1690,18 @@ func (s *xlSets) HealObject(ctx context.Context, bucket, object string, opts mad
 
 // Lists all buckets which need healing.
 func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	listBuckets := []BucketInfo{}
-	var healBuckets = map[string]BucketInfo{}
+	var listBuckets []BucketInfo
+	var healBuckets = make(map[string]VolInfo)
 	for _, set := range s.sets {
-		buckets, _, err := listAllBuckets(set.getDisks())
-		if err != nil {
+		// lists all unique buckets across drives.
+		if err := listAllBuckets(set.getDisks(), healBuckets); err != nil {
 			return nil, err
 		}
-		for _, currBucket := range buckets {
-			healBuckets[currBucket.Name] = BucketInfo(currBucket)
-		}
 	}
-	for _, bucketInfo := range healBuckets {
-		listBuckets = append(listBuckets, bucketInfo)
+	for _, v := range healBuckets {
+		listBuckets = append(listBuckets, BucketInfo(v))
 	}
+	sort.Sort(byBucketName(listBuckets))
 	return listBuckets, nil
 }
 
