@@ -57,9 +57,11 @@ func TestRetryTimerWithNoJitter(t *testing.T) {
 	// Loop through the maximum possible attempt.
 	for i = range attemptCh {
 		if i == 30 {
-			cancel()
+			break
 		}
 	}
+	cancel()
+
 	_, ok := <-attemptCh
 	if ok {
 		t.Fatal("Attempt counter should be closed")
