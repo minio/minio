@@ -601,7 +601,8 @@ func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) 
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
-		ETag:     etag,
+		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
+		ETag: "\"" + etag + "\"",
 	}
 }
 
