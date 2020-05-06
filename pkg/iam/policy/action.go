@@ -115,6 +115,12 @@ const (
 	// PutBucketObjectLockConfigurationAction - PutBucketObjectLockConfiguration Rest API action
 	PutBucketObjectLockConfigurationAction = "s3:PutBucketObjectLockConfiguration"
 
+	// GetBucketTaggingAction - GetBucketTagging Rest API action
+	GetBucketTaggingAction = "s3:GetBucketTagging"
+
+	// PutBucketTaggingAction - PutBucketTagging Rest API action
+	PutBucketTaggingAction = "s3:PutBucketTagging"
+
 	// GetObjectTaggingAction - Get Object Tags API action
 	GetObjectTaggingAction = "s3:GetObjectTagging"
 
@@ -164,6 +170,8 @@ var supportedActions = map[Action]struct{}{
 	PutObjectLegalHoldAction:               {},
 	PutBucketObjectLockConfigurationAction: {},
 	GetBucketObjectLockConfigurationAction: {},
+	PutBucketTaggingAction:                 {},
+	GetBucketTaggingAction:                 {},
 	BypassGovernanceRetentionAction:        {},
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
@@ -333,6 +341,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
+	GetBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
+	PutBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	GetObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	DeleteObjectTaggingAction:              condition.NewKeySet(condition.CommonKeys...),

@@ -194,7 +194,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketReplicationHandler - this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbucketreplication", httpTraceAll(api.GetBucketReplicationHandler)))).Queries("replication", "")
-		// GetBucketTaggingHandler - this is a dummy call.
+		// GetBucketTaggingHandler
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbuckettagging", httpTraceAll(api.GetBucketTaggingHandler)))).Queries("tagging", "")
 		//DeleteBucketWebsiteHandler
@@ -244,6 +244,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// PutBucketObjectLockConfig
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			maxClients(collectAPIStats("putbucketobjectlockconfig", httpTraceAll(api.PutBucketObjectLockConfigHandler)))).Queries("object-lock", "")
+		// PutBucketTaggingHandler
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			maxClients(collectAPIStats("putbuckettagging", httpTraceAll(api.PutBucketTaggingHandler)))).Queries("tagging", "")
 		// PutBucketVersioning
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			maxClients(collectAPIStats("putbucketversioning", httpTraceAll(api.PutBucketVersioningHandler)))).Queries("versioning", "")
