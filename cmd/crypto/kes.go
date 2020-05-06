@@ -1,4 +1,4 @@
-// MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+// MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +28,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	xhttp "github.com/minio/minio/cmd/http"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // KesConfig contains the configuration required
@@ -209,6 +214,18 @@ type kesClient struct {
 	httpClient http.Client
 }
 
+// Response KES response struct
+type response struct {
+	Plaintext  []byte `json:"plaintext"`
+	Ciphertext []byte `json:"ciphertext,omitempty"`
+}
+
+// Request KES request struct
+type request struct {
+	Ciphertext []byte `json:"ciphertext,omitempty"`
+	Context    []byte `json:"context"`
+}
+
 // GenerateDataKey requests a new data key from the KES server.
 // On success, the KES server will respond with the plaintext key
 // and the ciphertext key as the plaintext key encrypted with
@@ -218,10 +235,7 @@ type kesClient struct {
 // such that you have to provide the same context when decrypting
 // the data key.
 func (c *kesClient) GenerateDataKey(name string, context []byte) ([]byte, []byte, error) {
-	type Request struct {
-		Context []byte `json:"context"`
-	}
-	body, err := json.Marshal(Request{
+	body, err := json.Marshal(request{
 		Context: context,
 	})
 	if err != nil {
@@ -229,25 +243,57 @@ func (c *kesClient) GenerateDataKey(name string, context []byte) ([]byte, []byte
 	}
 
 	url := fmt.Sprintf("%s/v1/key/generate/%s", c.addr, url.PathEscape(name))
-	resp, err := c.httpClient.Post(url, "application/json", bytes.NewReader(body))
+
+	const limit = 1 << 20 // A plaintext/ciphertext key pair will never be larger than 1 MB
+	resp, err := c.postRetry(url, bytes.NewReader(body), limit)
 	if err != nil {
 		return nil, nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, nil, c.parseErrorResponse(resp)
-	}
-	defer resp.Body.Close()
 
-	type Response struct {
-		Plaintext  []byte `json:"plaintext"`
-		Ciphertext []byte `json:"ciphertext"`
+	return resp.Plaintext, resp.Ciphertext, nil
+}
+
+func (c *kesClient) post(url string, body io.Reader, limit int64) (*response, error) {
+	resp, err := c.httpClient.Post(url, "application/json", body)
+	if err != nil {
+		return nil, err
 	}
-	const limit = 1 << 20 // A plaintext/ciphertext key pair will never be larger than 1 MB
-	var response Response
-	if err = json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(&response); err != nil {
-		return nil, nil, err
+
+	// Drain the entire body to make sure we have re-use connections
+	defer xhttp.DrainBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseErrorResponse(resp)
 	}
-	return response.Plaintext, response.Ciphertext, nil
+
+	response := &response{}
+	if err = json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(response); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (c *kesClient) postRetry(url string, body io.ReadSeeker, limit int64) (*response, error) {
+	for i := 0; ; i++ {
+		body.Seek(0, io.SeekStart) // seek to the beginning of the body.
+
+		response, err := c.post(url, body, limit)
+		if err == nil {
+			return response, nil
+		}
+
+		if !xnet.IsNetworkOrHostDown(err) && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			return nil, err
+		}
+
+		// retriable network errors.
+		remain := retryMax - i
+		if remain <= 0 {
+			return response, err
+		}
+
+		<-time.After(LinearJitterBackoff(retryWaitMin, retryWaitMax, i))
+	}
 }
 
 // GenerateDataKey decrypts an encrypted data key with the key
@@ -257,11 +303,7 @@ func (c *kesClient) GenerateDataKey(name string, context []byte) ([]byte, []byte
 // The optional context must match the value you provided when
 // generating the data key.
 func (c *kesClient) DecryptDataKey(name string, ciphertext, context []byte) ([]byte, error) {
-	type Request struct {
-		Ciphertext []byte `json:"ciphertext"`
-		Context    []byte `json:"context"`
-	}
-	body, err := json.Marshal(Request{
+	body, err := json.Marshal(request{
 		Ciphertext: ciphertext,
 		Context:    context,
 	})
@@ -270,37 +312,26 @@ func (c *kesClient) DecryptDataKey(name string, ciphertext, context []byte) ([]b
 	}
 
 	url := fmt.Sprintf("%s/v1/key/decrypt/%s", c.addr, url.PathEscape(name))
-	resp, err := c.httpClient.Post(url, "application/json", bytes.NewReader(body))
+
+	const limit = 32 * 1024 // A data key will never be larger than 32 KB
+	resp, err := c.postRetry(url, bytes.NewReader(body), limit)
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseErrorResponse(resp)
-	}
-	defer resp.Body.Close()
-
-	type Response struct {
-		Plaintext []byte `json:"plaintext"`
-	}
-	const limit = 32 * 1024 // A data key will never be larger than 32 KB
-	var response Response
-	if err = json.NewDecoder(io.LimitReader(resp.Body, limit)).Decode(&response); err != nil {
-		return nil, err
-	}
-	return response.Plaintext, nil
+	return resp.Plaintext, nil
 }
 
 func (c *kesClient) parseErrorResponse(resp *http.Response) error {
 	if resp.Body == nil {
-		return nil
+		return Errorf("%s: no body", http.StatusText(resp.StatusCode))
 	}
-	defer resp.Body.Close()
 
 	const limit = 32 * 1024 // A (valid) error response will not be greater than 32 KB
 	var errMsg strings.Builder
 	if _, err := io.Copy(&errMsg, io.LimitReader(resp.Body, limit)); err != nil {
-		return err
+		return Errorf("%s: %s", http.StatusText(resp.StatusCode), err)
 	}
+
 	return Errorf("%s: %s", http.StatusText(resp.StatusCode), errMsg.String())
 }
 
