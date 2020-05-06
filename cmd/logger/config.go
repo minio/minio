@@ -112,9 +112,72 @@ func NewConfig() Config {
 	return cfg
 }
 
+func lookupLegacyConfig() (Config, error) {
+	cfg := NewConfig()
+
+	var loggerTargets []string
+	envs := env.List(legacyEnvLoggerHTTPEndpoint)
+	for _, k := range envs {
+		target := strings.TrimPrefix(k, legacyEnvLoggerHTTPEndpoint+config.Default)
+		if target == legacyEnvLoggerHTTPEndpoint {
+			target = config.Default
+		}
+		loggerTargets = append(loggerTargets, target)
+	}
+
+	// Load HTTP logger from the environment if found
+	for _, target := range loggerTargets {
+		endpointEnv := legacyEnvLoggerHTTPEndpoint
+		if target != config.Default {
+			endpointEnv = legacyEnvLoggerHTTPEndpoint + config.Default + target
+		}
+		endpoint := env.Get(endpointEnv, "")
+		if endpoint == "" {
+			continue
+		}
+		cfg.HTTP[target] = HTTP{
+			Enabled:  true,
+			Endpoint: endpoint,
+		}
+	}
+
+	// List legacy audit ENVs if any.
+	var loggerAuditTargets []string
+	envs = env.List(legacyEnvAuditLoggerHTTPEndpoint)
+	for _, k := range envs {
+		target := strings.TrimPrefix(k, legacyEnvAuditLoggerHTTPEndpoint+config.Default)
+		if target == legacyEnvAuditLoggerHTTPEndpoint {
+			target = config.Default
+		}
+		loggerAuditTargets = append(loggerAuditTargets, target)
+	}
+
+	for _, target := range loggerAuditTargets {
+		endpointEnv := legacyEnvAuditLoggerHTTPEndpoint
+		if target != config.Default {
+			endpointEnv = legacyEnvAuditLoggerHTTPEndpoint + config.Default + target
+		}
+		endpoint := env.Get(endpointEnv, "")
+		if endpoint == "" {
+			continue
+		}
+		cfg.Audit[target] = HTTP{
+			Enabled:  true,
+			Endpoint: endpoint,
+		}
+	}
+
+	return cfg, nil
+
+}
+
 // LookupConfig - lookup logger config, override with ENVs if set.
 func LookupConfig(scfg config.Config) (Config, error) {
-	cfg := NewConfig()
+	// Lookup for legacy environment variables first
+	cfg, err := lookupLegacyConfig()
+	if err != nil {
+		return cfg, err
+	}
 
 	envs := env.List(EnvLoggerWebhookEndpoint)
 	var loggerTargets []string
@@ -136,23 +199,18 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		loggerAuditTargets = append(loggerAuditTargets, target)
 	}
 
-	// List legacy ENVs if any.
-	envs = env.List(EnvAuditLoggerHTTPEndpoint)
-	for _, k := range envs {
-		target := strings.TrimPrefix(k, EnvAuditLoggerHTTPEndpoint+config.Default)
-		if target == EnvAuditLoggerHTTPEndpoint {
-			target = config.Default
-		}
-		loggerAuditTargets = append(loggerAuditTargets, target)
-	}
-
 	// Load HTTP logger from the environment if found
 	for _, target := range loggerTargets {
+		if v, ok := cfg.HTTP[target]; ok && v.Enabled {
+			// This target is already enabled using the
+			// legacy environment variables, ignore.
+			continue
+		}
 		enableEnv := EnvLoggerWebhookEnable
 		if target != config.Default {
 			enableEnv = EnvLoggerWebhookEnable + config.Default + target
 		}
-		enable, err := config.ParseBool(env.Get(enableEnv, config.EnableOn))
+		enable, err := config.ParseBool(env.Get(enableEnv, ""))
 		if err != nil || !enable {
 			continue
 		}
@@ -172,11 +230,16 @@ func LookupConfig(scfg config.Config) (Config, error) {
 	}
 
 	for _, target := range loggerAuditTargets {
+		if v, ok := cfg.Audit[target]; ok && v.Enabled {
+			// This target is already enabled using the
+			// legacy environment variables, ignore.
+			continue
+		}
 		enableEnv := EnvAuditWebhookEnable
 		if target != config.Default {
 			enableEnv = EnvAuditWebhookEnable + config.Default + target
 		}
-		enable, err := config.ParseBool(env.Get(enableEnv, config.EnableOn))
+		enable, err := config.ParseBool(env.Get(enableEnv, ""))
 		if err != nil || !enable {
 			continue
 		}
@@ -184,21 +247,13 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if target != config.Default {
 			endpointEnv = EnvAuditWebhookEndpoint + config.Default + target
 		}
-		legacyEndpointEnv := EnvAuditLoggerHTTPEndpoint
-		if target != config.Default {
-			legacyEndpointEnv = EnvAuditLoggerHTTPEndpoint + config.Default + target
-		}
-		endpoint := env.Get(legacyEndpointEnv, "")
-		if endpoint == "" {
-			endpoint = env.Get(endpointEnv, "")
-		}
 		authTokenEnv := EnvAuditWebhookAuthToken
 		if target != config.Default {
 			authTokenEnv = EnvAuditWebhookAuthToken + config.Default + target
 		}
 		cfg.Audit[target] = HTTP{
 			Enabled:   true,
-			Endpoint:  endpoint,
+			Endpoint:  env.Get(endpointEnv, ""),
 			AuthToken: env.Get(authTokenEnv, ""),
 		}
 	}
@@ -217,7 +272,6 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if err := config.CheckValidKeys(subSysTarget, kv, DefaultKVS); err != nil {
 			return cfg, err
 		}
-
 		enabled, err := config.ParseBool(kv.Get(config.Enable))
 		if err != nil {
 			return cfg, err

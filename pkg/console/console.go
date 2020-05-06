@@ -34,9 +34,10 @@ var (
 	DebugPrint = false
 
 	// Used by the caller to print multiple lines atomically. Exposed by Lock/Unlock methods.
-	publicMutex = &sync.Mutex{}
+	publicMutex sync.Mutex
+
 	// Used internally by console.
-	privateMutex = &sync.Mutex{}
+	privateMutex sync.Mutex
 
 	stderrColoredOutput = colorable.NewColorableStderr()
 

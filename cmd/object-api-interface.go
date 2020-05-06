@@ -22,9 +22,9 @@ import (
 	"net/http"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/tags"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -140,6 +140,6 @@ type ObjectLayer interface {
 
 	// ObjectTagging operations
 	PutObjectTag(context.Context, string, string, string) error
-	GetObjectTag(context.Context, string, string) (tagging.Tagging, error)
+	GetObjectTag(context.Context, string, string) (*tags.Tags, error)
 	DeleteObjectTag(context.Context, string, string) error
 }

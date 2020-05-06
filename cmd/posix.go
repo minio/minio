@@ -108,20 +108,34 @@ func checkPathLength(pathName string) error {
 		return errFileNameTooLong
 	}
 
+	// Disallow more than 1024 characters on windows, there
+	// are no known name_max limits on Windows.
 	if runtime.GOOS == "windows" {
-		// Convert any '\' to '/'.
-		pathName = filepath.ToSlash(pathName)
+		if len(pathName) <= 1024 {
+			return nil
+		}
+		return errFileNameTooLong
 	}
 
-	// Check each path segment length is > 255
-	for len(pathName) > 0 && pathName != "." && pathName != SlashSeparator {
-		dir, file := slashpath.Dir(pathName), slashpath.Base(pathName)
+	// On Unix we reject paths if they are just '.', '..' or '/'
+	if pathName == "." || pathName == ".." || pathName == slashSeparator {
+		return errFileAccessDenied
+	}
 
-		if len(file) > 255 {
-			return errFileNameTooLong
+	// Check each path segment length is > 255 on all Unix
+	// platforms, look for this value as NAME_MAX in
+	// /usr/include/linux/limits.h
+	var count int64
+	for _, p := range pathName {
+		switch p {
+		case '/':
+			count = 0 // Reset
+		default:
+			count++
+			if count > 255 {
+				return errFileNameTooLong
+			}
 		}
-
-		pathName = dir
 	} // Success.
 	return nil
 }
@@ -164,7 +178,7 @@ func getValidPath(path string) (string, error) {
 	var rnd [8]byte
 	_, _ = rand.Read(rnd[:])
 	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
-	file, err := os.Create(fn)
+	file, err := disk.OpenFileDirectIO(fn, os.O_CREATE, 0600)
 	if err != nil {
 		return path, err
 	}

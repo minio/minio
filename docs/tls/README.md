@@ -200,7 +200,7 @@ A response similar to this one should be displayed:
 Generating a 3072 bit RSA private key...
 ```
 
-####3.4.3 Generate a public certificate:
+#### 3.4.3 Generate a public certificate:
 
 Create a file called `cert.cnf` with the content below. This file contains all of the information necessary to generate a certificate using `certtool.exe`:
 

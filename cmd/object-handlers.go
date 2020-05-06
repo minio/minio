@@ -34,13 +34,13 @@ import (
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
@@ -647,24 +647,6 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	return defaultMeta, nil
 }
 
-// Extract tags relevant for an CopyObject operation based on conditional
-// header values specified in X-Amz-Tagging-Directive.
-func getCpObjTagsFromHeader(ctx context.Context, r *http.Request, tags string) (string, error) {
-	// if x-amz-tagging-directive says REPLACE then
-	// we extract tags from the input headers.
-	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
-		if tags := r.Header.Get(xhttp.AmzObjectTagging); tags != "" {
-			return extractTags(ctx, tags)
-		}
-		// If x-amz-tagging-directive is explicitly set to replace and  x-amz-tagging is not set.
-		// The S3 behavior is to unset the tags.
-		return "", nil
-	}
-
-	// Copy is default behavior if x-amz-tagging-directive is not set.
-	return tags, nil
-}
-
 // getRemoteInstanceTransport contains a singleton roundtripper.
 var getRemoteInstanceTransport http.RoundTripper
 var getRemoteInstanceTransportOnce sync.Once
@@ -899,6 +881,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		length = actualSize
 	}
+	if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
@@ -1052,25 +1038,19 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	tags, err := getCpObjTagsFromHeader(ctx, r, srcInfo.UserTags)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Tagging Directive in UserDefined needs to be assigned to REPLACE
-	// for the tags to be replaced for the object that is copied.
-
+	objTags := srcInfo.UserTags
+	// If x-amz-tagging-directive header is REPLACE, get passed tags.
 	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
+		objTags = r.Header.Get(xhttp.AmzObjectTagging)
 		srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
-	}
-
-	if tags != "" {
-		if !objectAPI.IsObjectTaggingSupported() {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		if _, err := tags.ParseObjectTags(objTags); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		srcInfo.UserDefined[xhttp.AmzObjectTagging] = tags
+	}
+
+	if objTags != "" {
+		srcInfo.UserDefined[xhttp.AmzObjectTagging] = objTags
 	}
 
 	srcInfo.UserDefined = objectlock.FilterObjectLockMetadata(srcInfo.UserDefined, true, true)
@@ -1216,7 +1196,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// To detect if the client has disconnected.
-	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
+	r.Body = &contextReader{r.Body, r.Context()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
@@ -1272,16 +1252,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if tags := r.Header.Get(xhttp.AmzObjectTagging); tags != "" {
-		if !objectAPI.IsObjectTaggingSupported() {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
-			return
-		}
-		metadata[xhttp.AmzObjectTagging], err = extractTags(ctx, tags)
-		if err != nil {
+	if objTags := r.Header.Get(xhttp.AmzObjectTagging); objTags != "" {
+		if _, err := tags.ParseObjectTags(objTags); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+
+		metadata[xhttp.AmzObjectTagging] = objTags
 	}
 
 	if rAuthType == authTypeStreamingSigned {
@@ -1343,7 +1320,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			sha256hex = getContentSha256Cksum(r, serviceS3)
 		}
 	}
-
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	// Check if bucket encryption is enabled
 	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
@@ -1777,7 +1757,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 	}
-
+	if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	// Special care for CopyObjectPart
 	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
 		writeCopyPartErr(ctx, w, partRangeErr, r.URL, guessIsBrowserReq(r))
@@ -1963,7 +1946,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	// To detect if the client has disconnected.
-	r.Body = &detectDisconnect{r.Body, r.Context().Done()}
+	r.Body = &contextReader{r.Body, r.Context()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
@@ -2056,6 +2039,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		if !skipContentSha256Cksum(r) {
 			sha256hex = getContentSha256Cksum(r, serviceS3)
 		}
+	}
+
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	actualSize := size
@@ -3002,14 +2990,14 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	tagging, err := tagging.ParseTagging(io.LimitReader(r.Body, r.ContentLength))
+	tags, err := tags.ParseObjectXML(io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Put object tags
-	err = objAPI.PutObjectTag(ctx, bucket, object, tagging.String())
+	err = objAPI.PutObjectTag(ctx, bucket, object, tags.String())
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -3048,8 +3036,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	// Delete object tags
-	err = objAPI.DeleteObjectTag(ctx, bucket, object)
-	if err != nil {
+	if err = objAPI.DeleteObjectTag(ctx, bucket, object); err != nil && err != errConfigNotFound {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

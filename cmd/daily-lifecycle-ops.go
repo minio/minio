@@ -89,7 +89,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 				}
 				// Find the action that need to be executed
 				if l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime) == lifecycle.DeleteAction {
-					if bucketHasLockConfig && enforceRetentionForLifecycle(ctx, obj) {
+					if bucketHasLockConfig && enforceRetentionForDeletion(ctx, obj) {
 						continue
 					}
 					objects = append(objects, obj.Name)

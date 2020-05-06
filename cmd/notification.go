@@ -567,6 +567,7 @@ func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName stri
 func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string) {
 	globalNotificationSys.RemoveNotification(bucketName)
 	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketQuotaSys.Remove(bucketName)
 	globalPolicySys.Remove(bucketName)
 	globalLifecycleSys.Remove(bucketName)
 
@@ -613,6 +614,23 @@ func (sys *NotificationSys) RemoveBucketObjectLockConfig(ctx context.Context, bu
 			client := client
 			ng.Go(ctx, func() error {
 				return client.RemoveBucketObjectLockConfig(bucketName)
+			}, idx, *client.host)
+		}
+		ng.Wait()
+	}()
+}
+
+// RemoveBucketQuotaConfig - calls RemoveBucketQuotaConfig RPC call on all peers.
+func (sys *NotificationSys) RemoveBucketQuotaConfig(ctx context.Context, bucketName string) {
+	go func() {
+		ng := WithNPeers(len(sys.peerClients))
+		for idx, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				return client.RemoveBucketQuotaConfig(bucketName)
 			}, idx, *client.host)
 		}
 		ng.Wait()
@@ -753,7 +771,7 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
 func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
-		return errInvalidArgument
+		return errServerNotInitialized
 	}
 
 	// In gateway mode, notifications are not supported.
@@ -887,7 +905,7 @@ func (sys *NotificationSys) Send(args eventArgs) {
 }
 
 // PutBucketObjectLockConfig - put bucket object lock configuration to all peers.
-func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention objectlock.Retention) {
+func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention *objectlock.Retention) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		if client == nil {
@@ -896,6 +914,26 @@ func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucke
 		index := index
 		g.Go(func() error {
 			return sys.peerClients[index].PutBucketObjectLockConfig(bucketName, retention)
+		}, index)
+	}
+	for i, err := range g.Wait() {
+		if err != nil {
+			logger.GetReqInfo(ctx).AppendTags("remotePeer", sys.peerClients[i].host.String())
+			logger.LogIf(ctx, err)
+		}
+	}
+}
+
+// PutBucketQuotaConfig - put bucket quota configuration to all peers.
+func (sys *NotificationSys) PutBucketQuotaConfig(ctx context.Context, bucketName string, q madmin.BucketQuota) {
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			return sys.peerClients[index].PutBucketQuotaConfig(bucketName, q)
 		}, index)
 	}
 	for i, err := range g.Wait() {

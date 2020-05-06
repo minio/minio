@@ -31,7 +31,7 @@ import (
 )
 
 // Similar to enforceRetentionBypassForDelete but for WebUI
-func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn) APIErrorCode {
+func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerms bool) APIErrorCode {
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
@@ -80,7 +80,7 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 			// and must explicitly include x-amz-bypass-governance-retention:true
 			// as a request header with any request that requires overriding
 			// governance mode.
-			byPassSet := objectlock.IsObjectLockGovernanceBypassSet(r.Header)
+			byPassSet := govBypassPerms && objectlock.IsObjectLockGovernanceBypassSet(r.Header)
 			if !byPassSet {
 				t, err := objectlock.UTCNowNTP()
 				if err != nil {
@@ -91,6 +91,11 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 				if !ret.RetainUntilDate.Before(t) {
 					return ErrObjectLocked
 				}
+
+				if !govBypassPerms {
+					return ErrObjectLocked
+				}
+
 				return ErrNone
 			}
 		}
@@ -98,9 +103,9 @@ func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bu
 	return ErrNone
 }
 
-// enforceRetentionForLifecycle checks if it is appropriate to remove an
-// object according to locking configuration when this is lifecycle asking.
-func enforceRetentionForLifecycle(ctx context.Context, objInfo ObjectInfo) (locked bool) {
+// enforceRetentionForDeletion checks if it is appropriate to remove an
+// object according to locking configuration when this is lifecycle/ bucket quota asking.
+func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locked bool) {
 	lhold := objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
 	if lhold.Status.Valid() && lhold.Status == objectlock.LegalHoldOn {
 		return true
@@ -376,26 +381,24 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketObjectLockEnabledConfigFile)
-		bucketObjLockData, err := readConfig(ctx, objAPI, configFile)
+		meta, err := loadBucketMetadata(ctx, objAPI, bucket.Name)
 		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
+			if err != errMetaDataConverted {
+				return err
 			}
-			return err
-		}
 
-		if string(bucketObjLockData) != bucketObjectLockEnabledConfig {
-			// this should never happen
-			logger.LogIf(ctx, objectlock.ErrMalformedBucketObjectConfig)
+			meta.Created = bucket.Created
+			logger.LogIf(ctx, meta.save(ctx, objAPI))
+		}
+		if !meta.LockEnabled {
 			continue
 		}
 
-		configFile = path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
+		configFile := path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
 		configData, err := readConfig(ctx, objAPI, configFile)
 		if err != nil {
 			if errors.Is(err, errConfigNotFound) {
-				globalBucketObjectLockConfig.Set(bucket.Name, objectlock.Retention{})
+				globalBucketObjectLockConfig.Set(bucket.Name, &objectlock.Retention{})
 				continue
 			}
 			return err
@@ -405,7 +408,7 @@ func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error 
 		if err != nil {
 			return err
 		}
-		retention := objectlock.Retention{}
+		retention := &objectlock.Retention{}
 		if config.Rule != nil {
 			retention = config.ToRetention()
 		}

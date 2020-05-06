@@ -92,7 +92,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	globalPolicySys.Set(bucket, *bucketPolicy)
+	globalPolicySys.Set(bucket, bucketPolicy)
 	globalNotificationSys.SetBucketPolicy(ctx, bucket, bucketPolicy)
 
 	// Success.

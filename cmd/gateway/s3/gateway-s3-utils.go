@@ -18,7 +18,6 @@ package s3
 
 import (
 	minio "github.com/minio/minio/cmd"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 )
 
 // List of header keys to be filtered, usually
@@ -47,19 +46,4 @@ func FromGatewayObjectPart(partID int, oi minio.ObjectInfo) (pi minio.PartInfo) 
 		LastModified: oi.ModTime,
 		PartNumber:   partID,
 	}
-}
-
-func getTagMap(tagStr string) (map[string]string, error) {
-	var tags tagging.Tagging
-	var err error
-	if tagStr == "" {
-		return nil, nil
-	}
-	if tags, err = tagging.FromString(tagStr); err != nil {
-		return nil, err
-	}
-	if err = tags.Validate(); err != nil {
-		return nil, err
-	}
-	return tagging.ToMap(tags), nil
 }

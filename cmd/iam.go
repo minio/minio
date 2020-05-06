@@ -145,8 +145,8 @@ type UserIdentity struct {
 	Credentials auth.Credentials `json:"credentials"`
 }
 
-func newUserIdentity(creds auth.Credentials) UserIdentity {
-	return UserIdentity{Version: 1, Credentials: creds}
+func newUserIdentity(cred auth.Credentials) UserIdentity {
+	return UserIdentity{Version: 1, Credentials: cred}
 }
 
 // GroupInfo contains info about a group
@@ -440,7 +440,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 				// This case cannot happen
 				return errNoSuchUser
 			}
-			// User is from STS if the creds are temporary
+			// User is from STS if the cred are temporary
 			if cr.IsTemp() {
 				usersType = append(usersType, stsUser)
 			} else {
@@ -553,6 +553,16 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 		return errIAMActionNotAllowed
 	}
 
+	// Delete any service accounts if any first.
+	for _, u := range sys.iamUsersMap {
+		if u.IsServiceAccount() {
+			if u.ParentUser == accessKey {
+				_ = sys.store.deleteUserIdentity(u.AccessKey, srvAccUser)
+				delete(sys.iamUsersMap, u.AccessKey)
+			}
+		}
+	}
+
 	// It is ok to ignore deletion error on the mapped policy
 	sys.store.deleteMappedPolicy(accessKey, regularUser, false)
 	err := sys.store.deleteUserIdentity(accessKey, regularUser)
@@ -563,15 +573,6 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 
 	delete(sys.iamUsersMap, accessKey)
 	delete(sys.iamUserPolicyMap, accessKey)
-
-	for _, u := range sys.iamUsersMap {
-		if u.IsServiceAccount() {
-			if u.ParentUser == accessKey {
-				_ = sys.store.deleteUserIdentity(u.AccessKey, srvAccUser)
-				delete(sys.iamUsersMap, u.AccessKey)
-			}
-		}
-	}
 
 	return err
 }
@@ -659,12 +660,12 @@ func (sys *IAMSys) IsTempUser(name string) (bool, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	creds, found := sys.iamUsersMap[name]
+	cred, found := sys.iamUsersMap[name]
 	if !found {
 		return false, errNoSuchUser
 	}
 
-	return creds.IsTemp(), nil
+	return cred.IsTemp(), nil
 }
 
 // IsServiceAccount - returns if given key is a service account
@@ -677,13 +678,13 @@ func (sys *IAMSys) IsServiceAccount(name string) (bool, string, error) {
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	creds, found := sys.iamUsersMap[name]
+	cred, found := sys.iamUsersMap[name]
 	if !found {
 		return false, "", errNoSuchUser
 	}
 
-	if creds.IsServiceAccount() {
-		return true, creds.ParentUser, nil
+	if cred.IsServiceAccount() {
+		return true, cred.ParentUser, nil
 	}
 
 	return false, "", nil
@@ -713,19 +714,19 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 		}, nil
 	}
 
-	creds, found := sys.iamUsersMap[name]
+	cred, found := sys.iamUsersMap[name]
 	if !found {
 		return u, errNoSuchUser
 	}
 
-	if creds.IsTemp() {
+	if cred.IsTemp() || cred.IsServiceAccount() {
 		return u, errIAMActionNotAllowed
 	}
 
 	u = madmin.UserInfo{
 		PolicyName: sys.iamUserPolicyMap[name].Policy,
 		Status: func() madmin.AccountStatus {
-			if creds.IsValid() {
+			if cred.IsValid() {
 				return madmin.AccountEnabled
 			}
 			return madmin.AccountDisabled
@@ -758,7 +759,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 		return errNoSuchUser
 	}
 
-	if cred.IsTemp() {
+	if cred.IsTemp() || cred.IsServiceAccount() {
 		return errIAMActionNotAllowed
 	}
 
@@ -806,10 +807,6 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
 	if parentUser == globalActiveCred.AccessKey {
 		return auth.Credentials{}, errIAMActionNotAllowed
 	}
@@ -819,7 +816,16 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 		return auth.Credentials{}, errNoSuchUser
 	}
 
-	if cr.IsTemp() {
+	// Disallow service accounts to further create more service accounts.
+	if cr.IsServiceAccount() {
+		return auth.Credentials{}, errIAMActionNotAllowed
+	}
+
+	// FIXME: Disallow temporary users with no parent, this is most
+	// probably with OpenID which we don't support to provide
+	// any parent user, LDAPUsersType and MinIOUsersType are
+	// currently supported.
+	if cr.ParentUser == "" && cr.IsTemp() {
 		return auth.Credentials{}, errIAMActionNotAllowed
 	}
 
@@ -838,8 +844,8 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 	if err != nil {
 		return auth.Credentials{}, err
 	}
-
 	cred.ParentUser = parentUser
+
 	u := newUserIdentity(cred)
 
 	if err := sys.store.saveUserIdentity(u.Credentials.AccessKey, srvAccUser, u); err != nil {
@@ -860,10 +866,6 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 
 	sys.store.rlock()
 	defer sys.store.runlock()
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return nil, errIAMActionNotAllowed
-	}
 
 	var serviceAccounts []string
 
@@ -886,16 +888,11 @@ func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string
 	sys.store.rlock()
 	defer sys.store.runlock()
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return "", errIAMActionNotAllowed
-	}
-
 	sa, ok := sys.iamUsersMap[accessKey]
-	if !ok || !sa.IsServiceAccount() {
-		return "", errNoSuchServiceAccount
+	if ok && sa.IsServiceAccount() {
+		return sa.ParentUser, nil
 	}
-
-	return sa.ParentUser, nil
+	return "", nil
 }
 
 // DeleteServiceAccount - delete a service account
@@ -908,13 +905,9 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotAllowed
-	}
-
 	sa, ok := sys.iamUsersMap[accessKey]
 	if !ok || !sa.IsServiceAccount() {
-		return errNoSuchServiceAccount
+		return nil
 	}
 
 	// It is ok to ignore deletion error on the mapped policy
@@ -1009,6 +1002,11 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	defer sys.store.runlock()
 
 	cred, ok = sys.iamUsersMap[accessKey]
+	if ok && cred.IsValid() {
+		if cred.ParentUser != "" {
+			_, ok = sys.iamUsersMap[cred.ParentUser]
+		}
+	}
 	return cred, ok && cred.IsValid()
 }
 
@@ -1362,7 +1360,6 @@ var iamAccountOtherAccessActions = iampolicy.NewActionSet(
 func (sys *IAMSys) GetAccountAccess(accountName, bucket string) (rd, wr, o bool) {
 	policies, err := sys.PolicyDBGet(accountName, false)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false, false, false
 	}
 
@@ -1509,7 +1506,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	// Check if the parent is allowed to perform this action, reject if not
 	parentUserPolicies, err := sys.PolicyDBGet(parent, false)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 
@@ -1730,7 +1726,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If the credential is temporary, perform STS related checks.
 	ok, err := sys.IsTempUser(args.AccountName)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 	if ok {
@@ -1740,7 +1735,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If the credential is for a service account, perform related check
 	ok, parentUser, err := sys.IsServiceAccount(args.AccountName)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 	if ok {
@@ -1750,7 +1744,6 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// Continue with the assumption of a regular user
 	policies, err := sys.PolicyDBGet(args.AccountName, false)
 	if err != nil {
-		logger.LogIf(context.Background(), err)
 		return false
 	}
 

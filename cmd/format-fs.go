@@ -190,7 +190,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
 	// Add a deployment ID, if it does not exist.
-	if err := formatFSFixDeploymentID(fsFormatPath); err != nil {
+	if err := formatFSFixDeploymentID(ctx, fsFormatPath); err != nil {
 		return nil, err
 	}
 
@@ -288,7 +288,7 @@ func formatFSGetDeploymentID(rlk *lock.RLockedFile) (id string, err error) {
 }
 
 // Generate a deployment ID if one does not exist already.
-func formatFSFixDeploymentID(fsFormatPath string) error {
+func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 	rlk, err := lock.RLockedOpenFile(fsFormatPath)
 	if err == nil {
 		// format.json can be empty in a rare condition when another
@@ -339,11 +339,12 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
+	retryCtx, cancel := context.WithCancel(ctx)
+	// Indicate to our routine to exit cleanly upon return.
+	defer cancel()
 
 	var wlk *lock.LockedFile
-	retryCh := newRetryTimerSimple(doneCh)
+	retryCh := newRetryTimerSimple(retryCtx)
 	var stop bool
 	for !stop {
 		select {
@@ -358,7 +359,7 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 				return err
 			}
 			stop = true
-		case <-globalOSSignalCh:
+		case <-ctx.Done():
 			return fmt.Errorf("Initializing FS format stopped gracefully")
 		}
 	}

@@ -25,9 +25,9 @@ import (
 	"path"
 	"sync"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -1018,7 +1018,7 @@ func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tag
 
 	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
 	if err != nil {
-		return err
+		return toObjectErr(err, bucket, object)
 	}
 
 	for i, xlMeta := range metaArr {
@@ -1052,16 +1052,12 @@ func (xl xlObjects) DeleteObjectTag(ctx context.Context, bucket, object string) 
 }
 
 // GetObjectTag - get object tags from an existing object
-func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	// GetObjectInfo will return tag value as well
 	oi, err := xl.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
-		return tagging.Tagging{}, err
+		return nil, err
 	}
 
-	tags, err := tagging.FromString(oi.UserTags)
-	if err != nil {
-		return tagging.Tagging{}, err
-	}
-	return tags, nil
+	return tags.ParseObjectTags(oi.UserTags)
 }

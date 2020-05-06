@@ -29,6 +29,7 @@ import (
 	"github.com/minio/cli"
 	miniogo "github.com/minio/minio-go/v6"
 	"github.com/minio/minio-go/v6/pkg/credentials"
+	"github.com/minio/minio-go/v6/pkg/tags"
 	minio "github.com/minio/minio/cmd"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
@@ -36,7 +37,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
@@ -526,14 +526,14 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 // NewMultipartUpload upload object in multiple parts
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	var tagMap map[string]string
-	var tagObj tagging.Tagging
-	tags, ok := o.UserDefined[xhttp.AmzObjectTagging]
+	var tagObj *tags.Tags
+	tagStr, ok := o.UserDefined[xhttp.AmzObjectTagging]
 	if ok {
 		delete(o.UserDefined, xhttp.AmzObjectTagging)
-		if tagObj, err = tagging.FromString(tags); err != nil {
+		if tagObj, err = tags.Parse(tagStr, true); err != nil {
 			return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
 		}
-		tagMap = tagging.ToMap(tagObj)
+		tagMap = tagObj.ToMap()
 	}
 	// Create PutObject options
 	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption, UserTags: tagMap}
@@ -649,35 +649,34 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 }
 
 // GetObjectTag gets the tags set on the object
-func (l *s3Objects) GetObjectTag(ctx context.Context, bucket string, object string) (tagging.Tagging, error) {
+func (l *s3Objects) GetObjectTag(ctx context.Context, bucket string, object string) (*tags.Tags, error) {
 	var err error
-	var tags *tagging.Tagging
+	var tagObj *tags.Tags
 	var tagStr string
 	var opts minio.ObjectOptions
 
 	if _, err = l.GetObjectInfo(ctx, bucket, object, opts); err != nil {
-		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
 	if tagStr, err = l.Client.GetObjectTagging(bucket, object); err != nil {
-		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	if tags, err = tagging.ParseTagging(strings.NewReader(tagStr)); err != nil {
-		return tagging.Tagging{}, minio.ErrorRespToObjectError(err, bucket, object)
+
+	if tagObj, err = tags.ParseObjectXML(strings.NewReader(tagStr)); err != nil {
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	if tags == nil {
-		return tagging.Tagging{}, nil
-	}
-	return *tags, err
+	return tagObj, err
 }
 
 //PutObjectTag attaches the tags to the object
 func (l *s3Objects) PutObjectTag(ctx context.Context, bucket, object string, tagStr string) error {
 	var err error
-	var tagMap map[string]string
-	if tagMap, err = getTagMap(tagStr); err != nil {
+	tagObj, err := tags.Parse(tagStr, true)
+	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
+	tagMap := tagObj.ToMap()
 	if err = l.Client.PutObjectTagging(bucket, object, tagMap); err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}

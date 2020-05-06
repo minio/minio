@@ -41,10 +41,10 @@ func TestPolicySysSet(t *testing.T) {
 		},
 	}
 	case1Result := NewPolicySys()
-	case1Result.bucketPolicyMap["mybucket"] = case1Policy
+	case1Result.bucketPolicyMap["mybucket"] = &case1Policy
 
 	case2PolicySys := NewPolicySys()
-	case2PolicySys.bucketPolicyMap["mybucket"] = case1Policy
+	case2PolicySys.bucketPolicyMap["mybucket"] = &case1Policy
 	case2Policy := policy.Policy{
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
@@ -58,10 +58,10 @@ func TestPolicySysSet(t *testing.T) {
 		},
 	}
 	case2Result := NewPolicySys()
-	case2Result.bucketPolicyMap["mybucket"] = case2Policy
+	case2Result.bucketPolicyMap["mybucket"] = &case2Policy
 
 	case3PolicySys := NewPolicySys()
-	case3PolicySys.bucketPolicyMap["mybucket"] = case2Policy
+	case3PolicySys.bucketPolicyMap["mybucket"] = &case2Policy
 	case3Policy := policy.Policy{
 		ID:      "MyPolicyForMyBucket",
 		Version: policy.DefaultVersion,
@@ -81,7 +81,7 @@ func TestPolicySysSet(t *testing.T) {
 
 	for i, testCase := range testCases {
 		result := testCase.policySys
-		result.Set(testCase.bucketName, testCase.bucketPolicy)
+		result.Set(testCase.bucketName, &testCase.bucketPolicy)
 
 		if !reflect.DeepEqual(result, testCase.expectedResult) {
 			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
@@ -103,7 +103,7 @@ func TestPolicySysRemove(t *testing.T) {
 		},
 	}
 	case1PolicySys := NewPolicySys()
-	case1PolicySys.bucketPolicyMap["mybucket"] = case1Policy
+	case1PolicySys.bucketPolicyMap["mybucket"] = &case1Policy
 	case1Result := NewPolicySys()
 
 	case2Policy := policy.Policy{
@@ -119,9 +119,9 @@ func TestPolicySysRemove(t *testing.T) {
 		},
 	}
 	case2PolicySys := NewPolicySys()
-	case2PolicySys.bucketPolicyMap["mybucket"] = case2Policy
+	case2PolicySys.bucketPolicyMap["mybucket"] = &case2Policy
 	case2Result := NewPolicySys()
-	case2Result.bucketPolicyMap["mybucket"] = case2Policy
+	case2Result.bucketPolicyMap["mybucket"] = &case2Policy
 
 	case3PolicySys := NewPolicySys()
 	case3Result := NewPolicySys()
@@ -148,7 +148,7 @@ func TestPolicySysRemove(t *testing.T) {
 
 func TestPolicySysIsAllowed(t *testing.T) {
 	policySys := NewPolicySys()
-	policySys.Set("mybucket", policy.Policy{
+	policySys.Set("mybucket", &policy.Policy{
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(

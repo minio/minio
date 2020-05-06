@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
@@ -333,12 +333,15 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 	for i := 0; i < setCount; i++ {
 		s.xlDisks[i] = make([]StorageAPI, drivesPerSet)
 		s.xlLockers[i] = make([]dsync.NetLocker, drivesPerSet)
+	}
 
+	for i := 0; i < setCount; i++ {
 		var endpoints Endpoints
 		for j := 0; j < drivesPerSet; j++ {
 			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
+
 			disk := storageDisks[i*drivesPerSet+j]
 			if disk == nil {
 				continue
@@ -1463,6 +1466,8 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 		if infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
+			logger.Info("Disk `%s` is a root disk. Please ensure the disk is mounted properly, refusing to use root disk.",
+				storageDisks[i].String())
 			storageDisks[i] = nil
 		}
 	}
@@ -1784,7 +1789,7 @@ func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) err
 }
 
 // GetObjectTag - get object tags from an existing object
-func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
 }
 
