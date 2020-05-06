@@ -44,16 +44,6 @@ func (z *xlZones) SingleZone() bool {
 	return len(z.zones) == 1
 }
 
-func (z *xlZones) quickHealBuckets(ctx context.Context) {
-	bucketsInfo, err := z.ListBucketsHeal(ctx)
-	if err != nil {
-		return
-	}
-	for _, bucket := range bucketsInfo {
-		z.MakeBucketWithLocation(ctx, bucket.Name, "")
-	}
-}
-
 // Initialize new zone of erasure sets.
 func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, error) {
 	var (
@@ -88,7 +78,6 @@ func newXLZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, 
 		}
 	}
 
-	z.quickHealBuckets(ctx)
 	go intDataUpdateTracker.start(GlobalContext, localDrives...)
 	return z, nil
 }

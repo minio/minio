@@ -173,11 +173,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 
 // listAllBuckets lists all buckets from all disks. It also
 // returns the occurrence of each buckets in all disks
-func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
-	bucketsOcc map[string]int, err error) {
-
-	buckets = make(map[string]VolInfo)
-	bucketsOcc = make(map[string]int)
+func listAllBuckets(storageDisks []StorageAPI, healBuckets map[string]VolInfo) (err error) {
 	for _, disk := range storageDisks {
 		if disk == nil {
 			continue
@@ -188,7 +184,7 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 			if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 				continue
 			}
-			return nil, nil, err
+			return err
 		}
 		for _, volInfo := range volsInfo {
 			// StorageAPI can send volume names which are
@@ -197,13 +193,14 @@ func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo,
 			if isReservedOrInvalidBucket(volInfo.Name, false) {
 				continue
 			}
-			// Increase counter per bucket name
-			bucketsOcc[volInfo.Name]++
-			// Save volume info under bucket name
-			buckets[volInfo.Name] = volInfo
+			// always save unique buckets across drives.
+			if _, ok := healBuckets[volInfo.Name]; !ok {
+				healBuckets[volInfo.Name] = volInfo
+			}
+
 		}
 	}
-	return buckets, bucketsOcc, nil
+	return nil
 }
 
 // Only heal on disks where we are sure that healing is needed. We can expand
