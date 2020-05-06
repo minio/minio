@@ -172,7 +172,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// Check if the part number is correct.
-	if opts.PartNumber > 0 && opts.PartNumber != len(objInfo.Parts) {
+	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 && opts.PartNumber != len(objInfo.Parts) {
 		writeHeaders()
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
 		return true
