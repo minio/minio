@@ -266,9 +266,9 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 
 	if l.serverStartTLS {
 		conn, err := ldap.Dial("tcp", l.ServerAddr)
-    if err != nil {
-        return nil, err
-    }
+		if err != nil {
+			return nil, err
+		}
 		err = conn.StartTLS(&tls.Config{
 			InsecureSkipVerify: l.tlsSkipVerify,
 			RootCAs:            l.rootCAs,
