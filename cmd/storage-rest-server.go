@@ -739,7 +739,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			storage, err := newPosix(endpoint.Path)
 			if err != nil {
 				if err == errMinDiskSize {
-					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to intialize backend")
+					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
 				} else if err == errUnsupportedDisk {
 					hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, refusing to use", endpoint.Path)
 					logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
