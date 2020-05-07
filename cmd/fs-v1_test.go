@@ -36,7 +36,7 @@ func TestFSParentDirIsObject(t *testing.T) {
 	bucketName := "testbucket"
 	objectName := "object"
 
-	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false); err != nil {
 		t.Fatal(err)
 	}
 	objectContent := "12345"
@@ -124,7 +124,7 @@ func TestFSShutdown(t *testing.T) {
 		fs := obj.(*FSObjects)
 
 		objectContent := "12345"
-		obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+		obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false)
 		obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), ObjectOptions{})
 		return fs, disk
 	}
@@ -155,12 +155,12 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, "a", "")
+	err := obj.MakeBucketWithLocation(GlobalContext, "a", "", false)
 	if !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("BucketNameInvalid error not returned")
 	}
 
-	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestFSPutObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "1/2/3/4/object"
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -267,7 +267,7 @@ func TestFSDeleteObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false)
 	obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 
 	// Test with invalid bucket name
@@ -311,7 +311,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false)
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -330,7 +330,7 @@ func TestFSDeleteBucket(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false)
 
 	// Delete bucket should get error disk not found.
 	os.RemoveAll(disk)
@@ -351,7 +351,7 @@ func TestFSListBuckets(t *testing.T) {
 	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 

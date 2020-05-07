@@ -156,6 +156,9 @@ func newAllSubsystems() {
 	// Create new bucket encryption subsystem
 	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
 
+	// Create new bucket object lock subsystem
+	globalBucketObjectLockSys = NewBucketObjectLockSys()
+
 	// Create new bucket quota subsystem
 	globalBucketQuotaSys = NewBucketQuotaSys()
 }
@@ -281,7 +284,7 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 		wquorum := &InsufficientWriteQuorum{}
 		rquorum := &InsufficientReadQuorum{}
 		for _, bucket := range buckets {
-			if err = newObject.MakeBucketWithLocation(GlobalContext, bucket.Name, ""); err != nil {
+			if err = newObject.MakeBucketWithLocation(GlobalContext, bucket.Name, "", false); err != nil {
 				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
 					// Retrun the error upwards for the caller to retry.
 					return fmt.Errorf("Unable to heal bucket: %w", err)
@@ -329,11 +332,6 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize policy system: %w", err)
 	}
 
-	// Initialize bucket object lock.
-	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize object lock system: %w", err)
-	}
-
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
@@ -342,6 +340,11 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 	// Initialize bucket encryption subsystem.
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
+	}
+
+	// Initialize bucket object lock.
+	if err = globalBucketObjectLockSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
 
 	// Initialize bucket quota system.

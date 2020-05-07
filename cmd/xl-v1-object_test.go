@@ -49,7 +49,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	// cleaning up of temporary test directories
 	defer removeRoots(disks)
 
-	err = objLayer.MakeBucketWithLocation(ctx, "bucket1", "")
+	err = objLayer.MakeBucketWithLocation(ctx, "bucket1", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = xl.MakeBucketWithLocation(ctx, "bucket", "")
+	err = xl.MakeBucketWithLocation(ctx, "bucket", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestXLDeleteObjectsXLSet(t *testing.T) {
 		{bucketName, "obj_4"},
 	}
 
-	err := xlSets.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	err := xlSets.MakeBucketWithLocation(GlobalContext, bucketName, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
+	err = obj.MakeBucketWithLocation(ctx, "bucket", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
+	err = obj.MakeBucketWithLocation(ctx, "bucket", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +340,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
+	err = obj.MakeBucketWithLocation(ctx, "bucket", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestHealing(t *testing.T) {
 	xl := z.zones[0].sets[0]
 
 	// Create "bucket"
-	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
+	err = obj.MakeBucketWithLocation(ctx, "bucket", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +511,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	xl := z.zones[0].sets[0]
 	xlDisks := xl.getDisks()
 
-	err := obj.MakeBucketWithLocation(GlobalContext, bucket, globalMinioDefaultRegion)
+	err := obj.MakeBucketWithLocation(GlobalContext, bucket, globalMinioDefaultRegion, false)
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}

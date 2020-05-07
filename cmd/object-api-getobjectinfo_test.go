@@ -30,7 +30,7 @@ func TestGetObjectInfo(t *testing.T) {
 // Testing GetObjectInfo().
 func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// This bucket is used for testing getObjectInfo operations.
-	err := obj.MakeBucketWithLocation(context.Background(), "test-getobjectinfo", "")
+	err := obj.MakeBucketWithLocation(context.Background(), "test-getobjectinfo", "", false)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}

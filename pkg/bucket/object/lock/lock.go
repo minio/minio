@@ -24,7 +24,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/beevik/ntp"
@@ -156,41 +155,6 @@ func (r Retention) Retain(created time.Time) bool {
 		return true
 	}
 	return created.Add(r.Validity).After(t)
-}
-
-// BucketObjectLockConfig - map of bucket and retention configuration.
-type BucketObjectLockConfig struct {
-	sync.RWMutex
-	retentionMap map[string]*Retention
-}
-
-// Set - set retention configuration.
-func (config *BucketObjectLockConfig) Set(bucketName string, retention *Retention) {
-	config.Lock()
-	config.retentionMap[bucketName] = retention
-	config.Unlock()
-}
-
-// Get - Get retention configuration.
-func (config *BucketObjectLockConfig) Get(bucketName string) (r *Retention, ok bool) {
-	config.RLock()
-	defer config.RUnlock()
-	r, ok = config.retentionMap[bucketName]
-	return r, ok
-}
-
-// Remove - removes retention configuration.
-func (config *BucketObjectLockConfig) Remove(bucketName string) {
-	config.Lock()
-	delete(config.retentionMap, bucketName)
-	config.Unlock()
-}
-
-// NewBucketObjectLockConfig returns initialized BucketObjectLockConfig
-func NewBucketObjectLockConfig() *BucketObjectLockConfig {
-	return &BucketObjectLockConfig{
-		retentionMap: make(map[string]*Retention),
-	}
 }
 
 // DefaultRetention - default retention configuration.

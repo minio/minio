@@ -566,7 +566,7 @@ func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName stri
 // DeleteBucket - calls DeleteBucket RPC call on all peers.
 func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string) {
 	globalNotificationSys.RemoveNotification(bucketName)
-	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketObjectLockSys.Remove(bucketName)
 	globalBucketQuotaSys.Remove(bucketName)
 	globalPolicySys.Remove(bucketName)
 	globalLifecycleSys.Remove(bucketName)
