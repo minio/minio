@@ -25,6 +25,9 @@ var errCorruptedFormat = StorageErr("corrupted backend format, please join https
 // errUnformattedDisk - unformatted disk found.
 var errUnformattedDisk = StorageErr("unformatted disk found")
 
+// errUnsupporteDisk - when disk does not support O_DIRECT flag.
+var errUnsupportedDisk = StorageErr("disk does not support O_DIRECT")
+
 // errDiskFull - cannot create volume or files when disk is full.
 var errDiskFull = StorageErr("disk path full")
 
@@ -81,7 +84,7 @@ var errBitrotHashAlgoInvalid = StorageErr("bit-rot hash algorithm is invalid")
 var errCrossDeviceLink = StorageErr("Rename across devices not allowed, please fix your backend configuration")
 
 // errMinDiskSize - cannot create volume or files when disk size is less than threshold.
-var errMinDiskSize = StorageErr("The disk size is less than the minimum threshold")
+var errMinDiskSize = StorageErr("The disk size is less than 900MiB threshold")
 
 // errLessData - returned when less data available than what was requested.
 var errLessData = StorageErr("less data available than what was requested")

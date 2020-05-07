@@ -738,6 +738,12 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			}
 			storage, err := newPosix(endpoint.Path)
 			if err != nil {
+				if err == errMinDiskSize {
+					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to intialize backend")
+				} else if err == errUnsupportedDisk {
+					hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, refusing to use", endpoint.Path)
+					logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
+				}
 				// Show a descriptive error with a hint about how to fix it.
 				var username string
 				if u, err := user.Current(); err == nil {
@@ -747,7 +753,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 				}
 				hint := fmt.Sprintf("Run the following command to add the convenient permissions: `sudo chown %s %s && sudo chmod u+rxw %s`",
 					username, endpoint.Path, endpoint.Path)
-				logger.Fatal(config.ErrUnableToWriteInBackend(err).Msg(err.Error()).Hint(hint),
+				logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint),
 					"Unable to initialize posix backend")
 			}
 
