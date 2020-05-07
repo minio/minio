@@ -266,6 +266,9 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 
 	if l.serverStartTLS {
 		conn, err := ldap.Dial("tcp", l.ServerAddr)
+    if err != nil {
+        return nil, err
+    }
 		err = conn.StartTLS(&tls.Config{
 			InsecureSkipVerify: l.tlsSkipVerify,
 			RootCAs:            l.rootCAs,
@@ -315,6 +318,12 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	}
 	if v := env.Get(EnvServerInsecure, kvs.Get(ServerInsecure)); v != "" {
 		l.serverInsecure, err = config.ParseBool(v)
+		if err != nil {
+			return l, err
+		}
+	}
+	if v := env.Get(EnvServerStartTLS, kvs.Get(ServerStartTLS)); v != "" {
+		l.serverStartTLS, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
 		}
