@@ -169,6 +169,12 @@ Example 1:
    $ minio server /data/minio/`,
 	)
 
+	ErrUnsupportedBackend = newErrFn(
+		"Unable to write to the backend",
+		"Please ensure your disk supports O_DIRECT",
+		"",
+	)
+
 	ErrUnableToWriteInBackend = newErrFn(
 		"Unable to write to the backend",
 		"Please ensure MinIO binary has write permissions for the backend",

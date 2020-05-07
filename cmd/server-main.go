@@ -215,7 +215,11 @@ func initSafeMode() (err error) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
-		logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+
+		// These messages only meant primarily for distributed setup, so only log during distributed setup.
+		if globalIsDistXL {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+		}
 
 		// Migrate all backend configs to encrypted backend configs, optionally
 		// handles rotating keys for encryption, if there is any retriable failure
@@ -225,6 +229,10 @@ func initSafeMode() (err error) {
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(newObject); err == nil {
 				// All successful return.
+				if globalIsDistXL {
+					// These messages only meant primarily for distributed setup, so only log during distributed setup.
+					logger.Info("All MinIO sub-systems initialized successfully")
+				}
 				return nil
 			}
 		}
