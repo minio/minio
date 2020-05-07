@@ -52,8 +52,8 @@ var md5Server = md5simd.NewServer()
 func newMd5(size int64) (md5simd.Hasher, *bufio.Writer) {
 	if true && (size < 0 || size > 32<<10) {
 		h := md5Server.NewHash()
+		// We add a 32 KB buffer
 		return h, bufio.NewWriterSize(h, 32<<10)
-		//return h, nil
 	}
 	return &md5stdWrapper{Hash: md5.New()}, nil
 }
