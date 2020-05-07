@@ -101,6 +101,14 @@ const (
 	AttachPolicyAdminAction = "admin:AttachUserOrGroupPolicy"
 	// ListUserPoliciesAdminAction - allows listing user policies
 	ListUserPoliciesAdminAction = "admin:ListUserPolicies"
+
+	// Bucket quota Actions
+
+	// SetBucketQuotaAdminAction - allow setting bucket quota
+	SetBucketQuotaAdminAction = "admin:SetBucketQuota"
+	// GetBucketQuotaAdminAction - allow getting bucket quota
+	GetBucketQuotaAdminAction = "admin:GetBucketQuota"
+
 	// AllAdminActions - provides all admin permissions
 	AllAdminActions = "admin:*"
 )
@@ -135,6 +143,8 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	DeletePolicyAdminAction:        {},
 	GetPolicyAdminAction:           {},
 	AttachPolicyAdminAction:        {},
+	SetBucketQuotaAdminAction:      {},
+	GetBucketQuotaAdminAction:      {},
 	ListUserPoliciesAdminAction:    {},
 }
 
@@ -184,4 +194,6 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	GetPolicyAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	AttachPolicyAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ListUserPoliciesAdminAction:    condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	SetBucketQuotaAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	GetBucketQuotaAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
 }

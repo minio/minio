@@ -667,10 +667,8 @@ next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !HasSuffix(objectName, SlashSeparator) && objectName != "" {
-			// Check for permissions only in the case of
-			// non-anonymous login. For anonymous login, policy has already
-			// been checked.
-			govBypassPerms := ErrAccessDenied
+			// Check permissions for non-anonymous user.
+			govBypassPerms := false
 			if authErr != errNoAuthToken {
 				if !globalIAMSys.IsAllowed(iampolicy.Args{
 					AccountName:     claims.AccessKey,
@@ -692,22 +690,12 @@ next:
 					ObjectName:      objectName,
 					Claims:          claims.Map(),
 				}) {
-					govBypassPerms = ErrNone
-				}
-				if globalIAMSys.IsAllowed(iampolicy.Args{
-					AccountName:     claims.AccessKey,
-					Action:          iampolicy.GetBucketObjectLockConfigurationAction,
-					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-					IsOwner:         owner,
-					ObjectName:      objectName,
-					Claims:          claims.Map(),
-				}) {
-					govBypassPerms = ErrNone
+					govBypassPerms = true
 				}
 			}
+
 			if authErr == errNoAuthToken {
-				// Check if object is allowed to be deleted anonymously
+				// Check if object is allowed to be deleted anonymously.
 				if !globalPolicySys.IsAllowed(policy.Args{
 					Action:          policy.DeleteObjectAction,
 					BucketName:      args.BucketName,
@@ -726,30 +714,16 @@ next:
 					IsOwner:         false,
 					ObjectName:      objectName,
 				}) {
-					govBypassPerms = ErrNone
-				}
-
-				// Check if object is allowed to be deleted anonymously
-				if globalPolicySys.IsAllowed(policy.Args{
-					Action:          policy.GetBucketObjectLockConfigurationAction,
-					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", "", nil),
-					IsOwner:         false,
-					ObjectName:      objectName,
-				}) {
-					govBypassPerms = ErrNone
+					govBypassPerms = true
 				}
 			}
-			if govBypassPerms != ErrNone {
+
+			apiErr := enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms)
+			if apiErr == ErrObjectLocked {
+				return toJSONError(ctx, errLockedObject)
+			}
+			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				return toJSONError(ctx, errAccessDenied)
-			}
-
-			apiErr := ErrNone
-			if _, ok := globalBucketObjectLockConfig.Get(args.BucketName); ok && (apiErr == ErrNone) {
-				apiErr = enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo)
-				if apiErr != ErrNone && apiErr != ErrNoSuchKey {
-					return toJSONError(ctx, errAccessDenied)
-				}
 			}
 			if apiErr == ErrNone {
 				if err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
@@ -1933,7 +1907,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		globalPolicySys.Set(args.BucketName, *bucketPolicy)
+		globalPolicySys.Set(args.BucketName, bucketPolicy)
 		globalNotificationSys.SetBucketPolicy(ctx, args.BucketName, bucketPolicy)
 	}
 
@@ -2058,12 +2032,6 @@ type LoginSTSArgs struct {
 	Token string `json:"token" form:"token"`
 }
 
-// LoginSTSRep - login reply.
-type LoginSTSRep struct {
-	Token     string `json:"token"`
-	UIVersion string `json:"uiVersion"`
-}
-
 // LoginSTS - STS user login handler.
 func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *LoginRep) error {
 	ctx := newWebContext(r, args, "WebLoginSTS")
@@ -2074,6 +2042,9 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	v.Set("Version", stsAPIVersion)
 
 	scheme := "http"
+	if sourceScheme := handlers.GetSourceScheme(r); sourceScheme != "" {
+		scheme = sourceScheme
+	}
 	if globalIsSSL {
 		scheme = "https"
 	}
@@ -2172,7 +2143,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Description:    err.Error(),
 		}
 	case errAuthentication, auth.ErrInvalidAccessKeyLength,
-		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
+		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID, errAccessDenied, errLockedObject:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,

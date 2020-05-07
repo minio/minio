@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
+ * MinIO Cloud Storage (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,11 @@
  * limitations under the License.
  */
 
-package tagging
+import { createSelector } from "reselect"
 
-import (
-	"encoding/xml"
+export const getServerInfo = state => state.browser.serverInfo
+
+export const hasServerPublicDomain = createSelector(
+  getServerInfo,
+  serverInfo => Boolean(serverInfo.info && serverInfo.info.domains && serverInfo.info.domains.length),
 )
-
-// TagSet - Set of tags under Tagging
-type TagSet struct {
-	XMLName xml.Name `xml:"TagSet"`
-	Tags    []Tag    `xml:"Tag"`
-}
-
-// ContainsDuplicateTag - returns true if duplicate keys are present in TagSet
-func (t TagSet) ContainsDuplicateTag() bool {
-	x := make(map[string]struct{}, len(t.Tags))
-
-	for _, t := range t.Tags {
-		if _, has := x[t.Key]; has {
-			return true
-		}
-		x[t.Key] = struct{}{}
-	}
-
-	return false
-}

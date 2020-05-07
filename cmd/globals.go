@@ -36,6 +36,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/pubsub"
@@ -217,6 +218,9 @@ var (
 
 	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
 
+	globalBucketQuotaSys     *BucketQuotaSys
+	globalBucketStorageCache bucketStorageCache
+
 	// Disk cache drives
 	globalCacheConfig cache.Config
 
@@ -287,6 +291,7 @@ var (
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
 		"serverRegion": globalServerRegion,
+		"domains":      globalDomainNames,
 		// Add more relevant global settings here.
 	}
 

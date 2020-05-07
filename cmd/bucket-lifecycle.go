@@ -35,11 +35,11 @@ const (
 // LifecycleSys - Bucket lifecycle subsystem.
 type LifecycleSys struct {
 	sync.RWMutex
-	bucketLifecycleMap map[string]lifecycle.Lifecycle
+	bucketLifecycleMap map[string]*lifecycle.Lifecycle
 }
 
 // Set - sets lifecycle config to given bucket name.
-func (sys *LifecycleSys) Set(bucketName string, lifecycle lifecycle.Lifecycle) {
+func (sys *LifecycleSys) Set(bucketName string, lifecycle *lifecycle.Lifecycle) {
 	if globalIsGateway {
 		// no-op
 		return
@@ -52,7 +52,7 @@ func (sys *LifecycleSys) Set(bucketName string, lifecycle lifecycle.Lifecycle) {
 }
 
 // Get - gets lifecycle config associated to a given bucket name.
-func (sys *LifecycleSys) Get(bucketName string) (lc lifecycle.Lifecycle, ok bool) {
+func (sys *LifecycleSys) Get(bucketName string) (lc *lifecycle.Lifecycle, ok bool) {
 	if globalIsGateway {
 		// When gateway is enabled, no cached value
 		// is used to validate life cycle policies.
@@ -65,7 +65,7 @@ func (sys *LifecycleSys) Get(bucketName string) (lc lifecycle.Lifecycle, ok bool
 		if err != nil {
 			return
 		}
-		return *l, true
+		return l, true
 	}
 
 	sys.Lock()
@@ -104,8 +104,8 @@ func removeLifecycleConfig(ctx context.Context, objAPI ObjectLayer, bucketName s
 	// Construct path to lifecycle.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucketName, bucketLifecycleConfig)
 
-	if err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
-		if _, ok := err.(ObjectNotFound); ok {
+	if err := deleteConfig(ctx, objAPI, configFile); err != nil {
+		if err == errConfigNotFound {
 			return BucketLifecycleNotFound{Bucket: bucketName}
 		}
 		return err
@@ -116,7 +116,7 @@ func removeLifecycleConfig(ctx context.Context, objAPI ObjectLayer, bucketName s
 // NewLifecycleSys - creates new lifecycle system.
 func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{
-		bucketLifecycleMap: make(map[string]lifecycle.Lifecycle),
+		bucketLifecycleMap: make(map[string]*lifecycle.Lifecycle),
 	}
 }
 
@@ -139,15 +139,16 @@ func (sys *LifecycleSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 // Loads lifecycle policies for all buckets into LifecycleSys.
 func (sys *LifecycleSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
-		config, err := objAPI.GetBucketLifecycle(GlobalContext, bucket.Name)
+		config, err := getLifecycleConfig(objAPI, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketLifecycleNotFound); ok {
-				sys.Remove(bucket.Name)
+				continue
 			}
-			continue
+			// Quorum errors should be returned.
+			return err
 		}
 
-		sys.Set(bucket.Name, *config)
+		sys.Set(bucket.Name, config)
 	}
 
 	return nil

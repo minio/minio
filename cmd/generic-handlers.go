@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/rs/cors"
@@ -490,7 +491,6 @@ var notImplementedBucketResourceNames = map[string]bool{
 	"metrics":        true,
 	"replication":    true,
 	"requestPayment": true,
-	"tagging":        true,
 	"versioning":     true,
 	"website":        true,
 }
@@ -535,12 +535,21 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 }
 
 func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
-	// record s3 connection stats.
-	r.Body = &recordTrafficRequest{ReadCloser: r.Body, isS3Request: isS3Request}
-	recordResponse := &recordTrafficResponse{ResponseWriter: w, isS3Request: isS3Request}
+	// Meters s3 connection stats.
+	meteredRequest := &stats.IncomingTrafficMeter{ReadCloser: r.Body}
+	meteredResponse := &stats.OutgoingTrafficMeter{ResponseWriter: w}
+
 	// Execute the request
-	h.handler.ServeHTTP(recordResponse, r)
+	r.Body = meteredRequest
+	h.handler.ServeHTTP(meteredResponse, r)
+
+	if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+		globalConnStats.incInputBytes(meteredRequest.BytesCount())
+		globalConnStats.incOutputBytes(meteredResponse.BytesCount())
+	} else {
+		globalConnStats.incS3InputBytes(meteredRequest.BytesCount())
+		globalConnStats.incS3OutputBytes(meteredResponse.BytesCount())
+	}
 }
 
 // requestValidityHandler validates all the incoming paths for

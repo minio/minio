@@ -322,7 +322,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
-	httpHandler, err := configureServerHandler(testServer.Disks)
+	httpHandler, err := configureServerHandler(testServer.Disks, false)
 	if err != nil {
 		t.Fatalf("Failed to configure one of the RPC services <ERROR> %s", err)
 	}
@@ -1750,7 +1750,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
 		t.Fatalf("unexpected error. %v", err)
 	}
-	globalPolicySys.Set(bucketName, *bucketPolicy)
+	globalPolicySys.Set(bucketName, bucketPolicy)
 	defer globalPolicySys.Remove(bucketName)
 
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
