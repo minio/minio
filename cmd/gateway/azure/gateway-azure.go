@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/minio/minio/pkg/env"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -34,6 +33,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio/pkg/env"
 
 	"github.com/Azure/azure-pipeline-go/pipeline"
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -863,7 +864,6 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-
 	blobURL := a.client.NewContainerURL(bucket).NewBlockBlobURL(object)
 
 	_, err = azblob.UploadStreamToBlockBlob(ctx, data, blobURL, azblob.UploadStreamToBlockBlobOptions{
@@ -885,17 +885,24 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
 	}
-	srcBlobURL := a.client.NewContainerURL(srcBucket).NewBlobURL(srcObject).URL()
+	srcBlob := a.client.NewContainerURL(srcBucket).NewBlobURL(srcObject)
+	srcBlobURL := srcBlob.URL()
+
+	srcProps, err := srcBlob.GetProperties(ctx, azblob.BlobAccessConditions{})
+	if err != nil {
+		return objInfo, azureToObjectError(err, srcBucket, srcObject)
+	}
 	destBlob := a.client.NewContainerURL(destBucket).NewBlobURL(destObject)
+
 	azureMeta, props, err := s3MetaToAzureProperties(ctx, srcInfo.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
+	props.ContentMD5 = srcProps.ContentMD5()
 	res, err := destBlob.StartCopyFromURL(ctx, srcBlobURL, azureMeta, azblob.ModifiedAccessConditions{}, azblob.BlobAccessConditions{})
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
-
 	// StartCopyFromURL is an asynchronous operation so need to poll for completion,
 	// see https://docs.microsoft.com/en-us/rest/api/storageservices/copy-blob#remarks.
 	copyStatus := res.CopyStatus()
