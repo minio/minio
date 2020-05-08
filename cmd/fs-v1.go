@@ -129,12 +129,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	var err error
-	if fsPath, err = getValidPath(fsPath); err != nil {
+	if fsPath, err = getValidPath(fsPath, false); err != nil {
 		if err == errMinDiskSize {
 			return nil, config.ErrUnableToWriteInBackend(err).Hint(err.Error())
-		} else if err == errUnsupportedDisk {
-			hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, refusing to use", fsPath)
-			return nil, config.ErrUnsupportedBackend(err).Hint(hint)
 		}
 
 		// Show a descriptive error with a hint about how to fix it.
