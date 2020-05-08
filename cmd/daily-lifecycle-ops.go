@@ -63,7 +63,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 			continue
 		}
 
-		_, bucketHasLockConfig := globalBucketObjectLockConfig.Get(bucket.Name)
+		_, bucketHasLockConfig := globalBucketObjectLockSys.Get(bucket.Name)
 
 		// Calculate the common prefix of all lifecycle rules
 		var prefixes []string

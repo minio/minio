@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
@@ -509,14 +510,14 @@ func (s *xlSets) Shutdown(ctx context.Context) error {
 // MakeBucketLocation - creates a new bucket across all sets simultaneously
 // even if one of the sets fail to create buckets, we proceed to undo a
 // successful operation.
-func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			return s.sets[index].MakeBucketWithLocation(ctx, bucket, location)
+			return s.sets[index].MakeBucketWithLocation(ctx, bucket, location, lockEnabled)
 		}, index)
 	}
 
@@ -657,6 +658,31 @@ func (s *xlSets) DeleteBucketSSEConfig(ctx context.Context, bucket string) error
 	return removeBucketSSEConfig(ctx, s, bucket)
 }
 
+// SetBucketObjectLockConfig enables/clears default object lock configuration
+func (s *xlSets) SetBucketObjectLockConfig(ctx context.Context, bucket string, config *objectlock.Config) error {
+	return saveBucketObjectLockConfig(ctx, s, bucket, config)
+}
+
+// GetBucketObjectLockConfig - returns current defaults for object lock configuration
+func (s *xlSets) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
+	return readBucketObjectLockConfig(ctx, s, bucket)
+}
+
+// SetBucketTagging sets bucket tags on given bucket
+func (s *xlSets) SetBucketTagging(ctx context.Context, bucket string, t *tags.Tags) error {
+	return saveBucketTagging(ctx, s, bucket, t)
+}
+
+// GetBucketTagging get bucket tags set on given bucket
+func (s *xlSets) GetBucketTagging(ctx context.Context, bucket string) (*tags.Tags, error) {
+	return readBucketTagging(ctx, s, bucket)
+}
+
+// DeleteBucketTagging delete bucket tags set if any.
+func (s *xlSets) DeleteBucketTagging(ctx context.Context, bucket string) error {
+	return deleteBucketTagging(ctx, s, bucket)
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (s *xlSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
@@ -717,7 +743,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "")
+				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "", false)
 			}
 			return nil
 		}, index)

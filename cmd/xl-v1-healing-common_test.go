@@ -181,7 +181,7 @@ func TestListOnlineDisks(t *testing.T) {
 		obj.DeleteObject(GlobalContext, bucket, object)
 		obj.DeleteBucket(GlobalContext, bucket, false)
 
-		err = obj.MakeBucketWithLocation(GlobalContext, "bucket", "")
+		err = obj.MakeBucketWithLocation(GlobalContext, "bucket", "", false)
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
@@ -276,7 +276,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	z := obj.(*xlZones)
 	xl := z.zones[0].sets[0]
 	xlDisks := xl.getDisks()
-	err = obj.MakeBucketWithLocation(ctx, "bucket", "")
+	err = obj.MakeBucketWithLocation(ctx, "bucket", "", false)
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}

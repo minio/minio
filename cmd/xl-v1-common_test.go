@@ -41,7 +41,7 @@ func TestXLParentDirIsObject(t *testing.T) {
 	bucketName := "testbucket"
 	objectName := "object"
 
-	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, "", false); err != nil {
 		t.Fatal(err)
 	}
 	objectContent := "12345"

@@ -85,7 +85,10 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 	removePolicyConfig(ctx, objAPI, bucket)
 
 	// Delete notification config, if present - ignore any errors.
-	removeNotificationConfig(ctx, objAPI, bucket)
+	logger.LogIf(ctx, removeNotificationConfig(ctx, objAPI, bucket))
+
+	// Delete bucket meta config, if present - ignore any errors.
+	logger.LogIf(ctx, removeBucketMeta(ctx, objAPI, bucket))
 }
 
 // Depending on the disk type network or local, initialize storage API.
@@ -144,13 +147,11 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.
 func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
-	// Verify bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
+	if err := deleteConfig(ctx, objAPI, ncPath); err != nil && err != errConfigNotFound {
+		return err
+	}
+	return nil
 }
 
 func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {

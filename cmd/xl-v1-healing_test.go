@@ -44,7 +44,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	}
 
 	bucketName := getRandomBucketName()
-	if err = obj.MakeBucketWithLocation(ctx, bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(ctx, bucketName, "", false); err != nil {
 		t.Fatal(err)
 	}
 	z := obj.(*xlZones)
@@ -88,7 +88,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = objLayer.MakeBucketWithLocation(ctx, bucket, "")
+	err = objLayer.MakeBucketWithLocation(ctx, bucket, "", false)
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -233,7 +233,7 @@ func TestHealObjectXL(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(ctx, bucket, "")
+	err = obj.MakeBucketWithLocation(ctx, bucket, "", false)
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
@@ -322,7 +322,7 @@ func TestHealEmptyDirectoryXL(t *testing.T) {
 	object := "empty-dir/"
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(ctx, bucket, "")
+	err = obj.MakeBucketWithLocation(ctx, bucket, "", false)
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
