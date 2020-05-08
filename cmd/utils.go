@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -450,25 +449,12 @@ func ToS3ETag(etag string) string {
 	return etag
 }
 
-type dialContext func(ctx context.Context, network, address string) (net.Conn, error)
-
-func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout:   dialTimeout,
-			KeepAlive: dialKeepAlive,
-		}
-
-		return dialer.DialContext(ctx, network, addr)
-	}
-}
-
 func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
+		DialContext:           xhttp.NewCustomDialContext(dialTimeout, 15*time.Second),
 		MaxIdleConnsPerHost:   16,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       1 * time.Minute,
