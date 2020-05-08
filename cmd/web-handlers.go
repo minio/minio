@@ -130,6 +130,18 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(ctx, authErr)
 	}
 	reply.StorageInfo = objectAPI.StorageInfo(ctx, false)
+	// StorageInfo calculation in distributed setup
+	if globalIsDistXL {
+		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+		if err != nil {
+			return toJSONError(ctx, errConfigNotFound)
+		}
+		if len(reply.StorageInfo.Used) > 1 {
+			reply.StorageInfo.Used = reply.StorageInfo.Used[:1]
+			reply.StorageInfo.Used[0] = dataUsageInfo.ObjectsTotalSize
+		}
+	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
