@@ -1649,7 +1649,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-	// Verify if the underlying error is signature mismatch.
+
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument

@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
@@ -164,6 +165,10 @@ func newGroupInfo(members []string) GroupInfo {
 type MappedPolicy struct {
 	Version int    `json:"version"`
 	Policy  string `json:"policy"`
+}
+
+func (mp MappedPolicy) policySet() set.StringSet {
+	return set.CreateStringSet(strings.Split(mp.Policy, ",")...)
 }
 
 func newMappedPolicy(policy string) MappedPolicy {
@@ -591,11 +596,26 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	// temporary user which match with pre-configured canned
 	// policies for this server.
 	if globalPolicyOPA == nil && policyName != "" {
-		p, ok := sys.iamPolicyDocsMap[policyName]
-		if !ok {
-			return errInvalidArgument
+		var availablePolicies []iampolicy.Policy
+		for _, pname := range strings.Split(policyName, ",") {
+			pname = strings.TrimSpace(pname)
+			if pname == "" {
+				continue
+			}
+			p, found := sys.iamPolicyDocsMap[pname]
+			if !found {
+				return fmt.Errorf("%w: (%s)", errNoSuchPolicy, pname)
+			}
+			availablePolicies = append(availablePolicies, p)
 		}
-		if p.IsEmpty() {
+
+		combinedPolicy := availablePolicies[0]
+		for i := 1; i < len(availablePolicies); i++ {
+			combinedPolicy.Statements = append(combinedPolicy.Statements,
+				availablePolicies[i].Statements...)
+		}
+
+		if combinedPolicy.IsEmpty() {
 			delete(sys.iamUserPolicyMap, accessKey)
 			return nil
 		}
@@ -1265,12 +1285,9 @@ func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
 
 // policyDBSet - sets a policy for user in the policy db. Assumes that caller
 // has sys.Lock(). If policy == "", then policy mapping is removed.
-func (sys *IAMSys) policyDBSet(name, policy string, userType IAMUserType, isGroup bool) error {
+func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, isGroup bool) error {
 	if name == "" {
 		return errInvalidArgument
-	}
-	if _, ok := sys.iamPolicyDocsMap[policy]; !ok && policy != "" {
-		return errNoSuchPolicy
 	}
 
 	if sys.usersSysType == MinIOUsersSysType {
@@ -1286,7 +1303,7 @@ func (sys *IAMSys) policyDBSet(name, policy string, userType IAMUserType, isGrou
 	}
 
 	// Handle policy mapping removal
-	if policy == "" {
+	if policyName == "" {
 		if err := sys.store.deleteMappedPolicy(name, userType, isGroup); err != nil && err != errNoSuchPolicy {
 			return err
 		}
@@ -1298,8 +1315,19 @@ func (sys *IAMSys) policyDBSet(name, policy string, userType IAMUserType, isGrou
 		return nil
 	}
 
+	for _, pname := range strings.Split(policyName, ",") {
+		pname = strings.TrimSpace(pname)
+		if pname == "" {
+			continue
+		}
+		if _, found := sys.iamPolicyDocsMap[pname]; !found {
+			logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, pname))
+			return errNoSuchPolicy
+		}
+	}
+
 	// Handle policy mapping set/update
-	mp := newMappedPolicy(policy)
+	mp := newMappedPolicy(policyName)
 	if err := sys.store.saveMappedPolicy(name, userType, isGroup, mp); err != nil {
 		return err
 	}
@@ -1644,14 +1672,15 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		return combinedPolicy.IsAllowed(args)
 	}
 
-	pnameSlice, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
+	policies, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
 	if !ok {
 		// When claims are set, it should have a policy claim field.
 		return false
 	}
 
-	// When claims are set, it should have a policy claim field.
-	if len(pnameSlice) == 0 {
+	// When claims are set, it should have policies as claim.
+	if policies.IsEmpty() {
+		// No policy, no access!
 		return false
 	}
 
@@ -1661,16 +1690,31 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	// If policy is available for given user, check the policy.
 	mp, ok := sys.iamUserPolicyMap[args.AccountName]
 	if !ok {
-		// No policy available reject.
+		// No policy set for the user that we can find, no access!
 		return false
 	}
-	name := mp.Policy
 
-	if pnameSlice[0] != name {
+	if !policies.Equals(mp.policySet()) {
 		// When claims has a policy, it should match the
 		// policy of args.AccountName which server remembers.
 		// if not reject such requests.
 		return false
+	}
+
+	var availablePolicies []iampolicy.Policy
+	for pname := range policies {
+		p, found := sys.iamPolicyDocsMap[pname]
+		if !found {
+			logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, pname))
+			return false
+		}
+		availablePolicies = append(availablePolicies, p)
+	}
+
+	combinedPolicy := availablePolicies[0]
+	for i := 1; i < len(availablePolicies); i++ {
+		combinedPolicy.Statements = append(combinedPolicy.Statements,
+			availablePolicies[i].Statements...)
 	}
 
 	// Now check if we have a sessionPolicy.
@@ -1697,14 +1741,12 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		}
 
 		// Sub policy is set and valid.
-		p, ok := sys.iamPolicyDocsMap[pnameSlice[0]]
-		return ok && p.IsAllowed(args) && subPolicy.IsAllowed(args)
+		return combinedPolicy.IsAllowed(args) && subPolicy.IsAllowed(args)
 	}
 
 	// Sub policy not set, this is most common since subPolicy
-	// is optional, use the top level policy only.
-	p, ok := sys.iamPolicyDocsMap[pnameSlice[0]]
-	return ok && p.IsAllowed(args)
+	// is optional, use the inherited policies.
+	return combinedPolicy.IsAllowed(args)
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
