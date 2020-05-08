@@ -98,3 +98,21 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
+
+func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ClusterCheckHandler")
+
+	objLayer := newObjectLayerWithoutSafeModeFn()
+	// Service not initialized yet
+	if objLayer == nil || !objLayer.IsReady(ctx) {
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+
+	if !objLayer.IsClusterReady(ctx) {
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+
+	writeResponse(w, http.StatusOK, nil, mimeNone)
+}

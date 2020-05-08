@@ -1794,6 +1794,33 @@ func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
+func (s *xlSets) IsClusterReady(_ context.Context) bool {
+	s.xlDisksMu.RLock()
+	defer s.xlDisksMu.RUnlock()
+
+	for i := 0; i < s.setCount; i++ {
+		parityDrives := globalStorageClass.GetParityForSC("")
+		if parityDrives == 0 {
+			parityDrives = getDefaultParityBlocks(len(s.xlDisks[i]))
+		}
+		dataDrives := len(s.xlDisks[i]) - parityDrives
+		activeDisks := 0
+		for j := 0; j < s.drivesPerSet; j++ {
+			if s.xlDisks[i][j] == nil {
+				continue
+			}
+			if s.xlDisks[i][j].IsOnline() {
+				activeDisks++
+			}
+		}
+		if activeDisks < dataDrives {
+			// If any of the set is down, we consider the cluster down and do site failover.
+			return false
+		}
+	}
+	return true
+}
+
 // IsReady - Returns true if atleast n/2 disks (read quorum) are online
 func (s *xlSets) IsReady(_ context.Context) bool {
 	s.xlDisksMu.RLock()

@@ -240,3 +240,8 @@ func (a GatewayUnsupported) IsCompressionSupported() bool {
 func (a GatewayUnsupported) IsReady(_ context.Context) bool {
 	return false
 }
+
+// IsReady - No Op.
+func (a GatewayUnsupported) IsClusterReady(_ context.Context) bool {
+	return false
+}

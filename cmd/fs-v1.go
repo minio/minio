@@ -1417,3 +1417,8 @@ func (fs *FSObjects) IsReady(_ context.Context) bool {
 
 	return res
 }
+
+// IsReady - Check if the backend disk is ready to accept traffic.
+func (fs *FSObjects) IsClusterReady(ctx context.Context) bool {
+	return fs.IsReady(ctx)
+}

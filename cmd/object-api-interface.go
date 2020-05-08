@@ -135,6 +135,7 @@ type ObjectLayer interface {
 
 	// Check Readiness
 	IsReady(ctx context.Context) bool
+	IsClusterReady(ctx context.Context) bool
 
 	// ObjectTagging operations
 	PutObjectTag(context.Context, string, string, string) error

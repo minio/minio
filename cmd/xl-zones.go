@@ -1536,6 +1536,15 @@ func (z *xlZones) IsReady(ctx context.Context) bool {
 	return z.zones[0].IsReady(ctx)
 }
 
+func (z *xlZones) IsClusterReady(ctx context.Context) bool {
+	for _, zone := range z.zones {
+		if !zone.IsClusterReady(ctx) {
+			return false
+		}
+	}
+	return true
+}
+
 // PutObjectTag - replace or add tags to an existing object
 func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
 	if z.SingleZone() {
