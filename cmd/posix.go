@@ -140,7 +140,7 @@ func checkPathLength(pathName string) error {
 	return nil
 }
 
-func getValidPath(path string) (string, error) {
+func getValidPath(path string, requireDirectIO bool) (string, error) {
 	if path == "" {
 		return path, errInvalidArgument
 	}
@@ -181,9 +181,16 @@ func getValidPath(path string) (string, error) {
 	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
 	defer os.Remove(fn)
 
+	var file *os.File
+
+	if requireDirectIO {
+		file, err = disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
+	} else {
+		file, err = os.OpenFile(fn, os.O_CREATE|os.O_EXCL, 0666)
+	}
+
 	// open file in direct I/O and use default umask, this also verifies
 	// if direct i/o failed.
-	file, err := disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		if isSysErrInvalidArg(err) {
 			return path, errUnsupportedDisk
@@ -222,7 +229,7 @@ func isDirEmpty(dirname string) bool {
 // Initialize a new storage disk.
 func newPosix(path string) (*posix, error) {
 	var err error
-	if path, err = getValidPath(path); err != nil {
+	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
 	}
 	_, err = os.Stat(path)
