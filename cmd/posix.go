@@ -177,13 +177,20 @@ func getValidPath(path string) (string, error) {
 	// check if backend is writable.
 	var rnd [8]byte
 	_, _ = rand.Read(rnd[:])
+
 	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
-	file, err := disk.OpenFileDirectIO(fn, os.O_CREATE, 0600)
+	defer os.Remove(fn)
+
+	// open file in direct I/O and use default umask, this also verifies
+	// if direct i/o failed.
+	file, err := disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
+		if isSysErrInvalidArg(err) {
+			return path, errUnsupportedDisk
+		}
 		return path, err
 	}
 	file.Close()
-	os.Remove(fn)
 
 	return path, nil
 }
@@ -1279,6 +1286,8 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 			return errFileAccessDenied
 		case isSysErrIO(err):
 			return errFaultyDisk
+		case isSysErrInvalidArg(err):
+			return errUnsupportedDisk
 		default:
 			return err
 		}
