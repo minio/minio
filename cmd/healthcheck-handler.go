@@ -37,7 +37,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, nil, mimeNone)
+	writeResponse(w, http.StatusNoContent, nil, mimeNone)
 }
 
 // LivenessCheckHandler -- checks if server can reach its disks internally.
@@ -66,7 +66,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 				writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 				return
 			}
-			writeResponse(w, http.StatusOK, nil, mimeNone)
+			writeResponse(w, http.StatusNoContent, nil, mimeNone)
 			return
 		}
 	}
@@ -96,5 +96,5 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeResponse(w, http.StatusOK, nil, mimeNone)
+	writeResponse(w, http.StatusNoContent, nil, mimeNone)
 }
