@@ -260,11 +260,11 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 	defer sys.store.unlock()
 
 	err := sys.store.loadGroup(group, sys.iamGroupsMap)
-	if err != nil && err != errConfigNotFound {
+	if err != nil && err != errNoSuchGroup {
 		return err
 	}
 
-	if err == errConfigNotFound {
+	if err == errNoSuchGroup {
 		// group does not exist - so remove from memory.
 		sys.removeGroupFromMembershipsMap(group)
 		delete(sys.iamGroupsMap, group)
@@ -322,7 +322,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 		}
 
 		// Ignore policy not mapped error
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}
@@ -346,7 +346,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 		}
 		err = sys.store.loadMappedPolicy(accessKey, userType, false, sys.iamUserPolicyMap)
 		// Ignore policy not mapped error
-		if err != nil && err != errConfigNotFound {
+		if err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}
