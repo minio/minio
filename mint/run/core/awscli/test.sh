@@ -671,7 +671,7 @@ function test_copy_object_storage_class() {
         rv=$?
         # if this functionality is not implemented return right away.
         if [ $rv -ne 0 ]; then
-            if echo "$out" | greq -q "NotImplemented"; then
+            if echo "$out" | grep -q "NotImplemented"; then
                 ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
                 return 0
             fi
@@ -741,7 +741,7 @@ function test_copy_object_storage_class_same() {
         rv=$?
         # if this functionality is not implemented return right away.
         if [ $rv -ne 0 ]; then
-            if echo "$out" | greq -q "NotImplemented"; then
+            if echo "$out" | grep -q "NotImplemented"; then
                 ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
                 return 0
             fi
@@ -1523,15 +1523,34 @@ function test_worm_bucket() {
     # log start time
     start_time=$(get_time)
 
-    function="make_bucket"
-    bucket_name=$(make_bucket)
+    # Make bucket
+    bucket_name="awscli-mint-test-bucket-$RANDOM"
+    function="${AWS} s3api create-bucket --bucket ${bucket_name} --object-lock-enabled-for-bucket"
+
+    # execute the test
+    out=$($function 2>&1)
     rv=$?
+
+    if [ $rv -ne 0 ]; then
+        # if this functionality is not implemented return right away.
+        if echo "$out" | grep -q "NotImplemented"; then
+            ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+            return 0
+        fi
+    fi
 
     # if make bucket succeeds set object lock configuration
     if [ $rv -eq 0 ]; then
-        args=( s3api put-object-lock-configuration --bucket "${bucket_name}" --object-lock-configuration 'ObjectLockEnabled="Enabled",Rule={DefaultRetention={Mode="GOVERNANCE",Days=1}}' )
-        out=$("${AWS}" "${args[@]}" 2>&1)
+        function="${AWS} s3api put-object-lock-configuration --bucket ${bucket_name} --object-lock-configuration ObjectLockEnabled=Enabled"
+        out=$($function 2>&1)
         rv=$?
+	if [ $rv -ne 0 ]; then
+            # if this functionality is not implemented return right away.
+            if echo "$out" | grep -q "NotImplemented"; then
+		${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
+		return 0
+            fi
+	fi
     else
         # if make bucket fails, $bucket_name has the error output
         out="${bucket_name}"
@@ -1556,13 +1575,11 @@ function test_worm_bucket() {
         out="First time object upload failed"
     fi
 
-    if [ $rv -ne 0 ]; then
+    if [ $rv -eq 0 ]; then
         log_success "$(get_duration "$start_time")" "${test_function}"
-        rv=0
     else
         # cleanup is not possible due to one day validity of object lock configurataion
         log_failure "$(get_duration "$start_time")" "${function}" "${out}"
-        rv=-1
     fi
 
     return $rv
@@ -1583,7 +1600,7 @@ function test_legal_hold() {
 
     if [ $rv -ne 0 ]; then
         # if this functionality is not implemented return right away.
-        if echo "$out" | greq -q "NotImplemented"; then
+        if echo "$out" | grep -q "NotImplemented"; then
             ${AWS} s3 rb s3://"${bucket_name}" --force > /dev/null 2>&1
             return 0
         fi
