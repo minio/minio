@@ -191,7 +191,7 @@ func TestErasureDecode(t *testing.T) {
 			}
 			if !test.shouldFailQuorum {
 				if content := writer.Bytes(); !bytes.Equal(content, data[test.offset:test.offset+test.length]) {
-					t.Errorf("Test %d: read retruns wrong file content", i)
+					t.Errorf("Test %d: read returns wrong file content", i)
 				}
 			}
 		}

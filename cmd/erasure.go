@@ -69,7 +69,7 @@ func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error)
 func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	needsReconstruction := false
 	for _, b := range data[:e.dataBlocks] {
-		if b == nil {
+		if len(b) == 0 {
 			needsReconstruction = true
 			break
 		}
