@@ -101,6 +101,8 @@ func updateServer(updateURL, sha256Hex string, latestReleaseTime time.Time) (us 
 func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ServerUpdate")
 
+	defer logger.AuditLog(w, r, "ServerUpdate", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
 	if objectAPI == nil {
 		return
@@ -174,19 +176,16 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// ServiceActionHandler - POST /minio/admin/v3/service?action={action}
+// ServiceHandler - POST /minio/admin/v3/service?action={action}
 // ----------
 // restarts/stops minio server gracefully. In a distributed setup,
-func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ServiceAction")
+func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "Service")
+
+	defer logger.AuditLog(w, r, "Service", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	action := vars["action"]
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, "")
-	if objectAPI == nil {
-		return
-	}
 
 	var serviceSig serviceSignal
 	switch madmin.ServiceAction(action) {
@@ -197,6 +196,16 @@ func (a adminAPIHandlers) ServiceActionHandler(w http.ResponseWriter, r *http.Re
 	default:
 		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		return
+	}
+
+	var objectAPI ObjectLayer
+	if serviceSig == serviceRestart {
+		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceRestartAdminAction)
+	} else {
+		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceStopAdminAction)
+	}
+	if objectAPI == nil {
 		return
 	}
 
@@ -268,6 +277,9 @@ type ServerInfo struct {
 // Get server information
 func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "StorageInfo")
+
+	defer logger.AuditLog(w, r, "StorageInfo", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.StorageInfoAdminAction)
 	if objectAPI == nil {
 		return
@@ -293,6 +305,9 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 // Get server/cluster data usage info
 func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DataUsageInfo")
+
+	defer logger.AuditLog(w, r, "DataUsageInfo", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DataUsageInfoAdminAction)
 	if objectAPI == nil {
 		return
@@ -315,6 +330,9 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 
 func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AccountingUsageInfo")
+
+	defer logger.AuditLog(w, r, "AccountingUsageInfo", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AccountingUsageInfoAdminAction)
 	if objectAPI == nil {
 		return
@@ -430,6 +448,8 @@ type PeerLocks struct {
 func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "TopLocks")
 
+	defer logger.AuditLog(w, r, "TopLocks", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.TopLocksAdminAction)
 	if objectAPI == nil {
 		return
@@ -474,6 +494,8 @@ type StartProfilingResult struct {
 // Enable server profiling
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "StartProfiling")
+
+	defer logger.AuditLog(w, r, "StartProfiling", mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ProfilingAdminAction)
 	if objectAPI == nil {
@@ -571,6 +593,8 @@ func (f dummyFileInfo) Sys() interface{}   { return f.sys }
 func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DownloadProfiling")
 
+	defer logger.AuditLog(w, r, "DownloadProfiling", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ProfilingAdminAction)
 	if objectAPI == nil {
 		return
@@ -662,6 +686,8 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 // aborts the running heal sequence and starts a new one.
 func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "Heal")
+
+	defer logger.AuditLog(w, r, "Heal", mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
 	if objectAPI == nil {
@@ -808,6 +834,8 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 
 func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HealBackgroundStatus")
+
+	defer logger.AuditLog(w, r, "HealBackgroundStatus", mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
 	if objectAPI == nil {
@@ -970,6 +998,7 @@ func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
 // The handler sends http trace to the connected HTTP client.
 func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HTTPTrace")
+
 	trcAll := r.URL.Query().Get("all") == "true"
 	trcErr := r.URL.Query().Get("err") == "true"
 
@@ -1024,6 +1053,8 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 // The handler sends console logs to the connected HTTP client.
 func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ConsoleLog")
+
+	defer logger.AuditLog(w, r, "ConsoleLog", mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConsoleLogAdminAction)
 	if objectAPI == nil {
@@ -1092,7 +1123,9 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 // KMSKeyStatusHandler - GET /minio/admin/v3/kms/key/status?key-id=<master-key-id>
 func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSKeyStatusHandler")
+	ctx := newContext(r, w, "KMSKeyStatus")
+
+	defer logger.AuditLog(w, r, "KMSKeyStatus", mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyStatusAdminAction)
 	if objectAPI == nil {
@@ -1164,6 +1197,9 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 // Get server on-board diagnostics
 func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "OBDInfo")
+
+	defer logger.AuditLog(w, r, "OBDInfo", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.OBDInfoAdminAction)
 	if objectAPI == nil {
 		return
@@ -1326,6 +1362,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 // Get server information
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ServerInfo")
+
+	defer logger.AuditLog(w, r, "ServerInfo", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction)
 	if objectAPI == nil {
 		return

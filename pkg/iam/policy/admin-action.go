@@ -52,17 +52,16 @@ const (
 
 	// ServerUpdateAdminAction - allow MinIO binary update
 	ServerUpdateAdminAction = "admin:ServerUpdate"
-
-	//Config Actions
+	// ServiceRestartAdminAction - allow restart of MinIO service.
+	ServiceRestartAdminAction = "admin:ServiceRestart"
+	// ServiceStopAdminAction - allow stopping MinIO service.
+	ServiceStopAdminAction = "admin:ServiceStop"
 
 	// ConfigUpdateAdminAction - allow MinIO config management
 	ConfigUpdateAdminAction = "admin:ConfigUpdate"
 
-	// User Actions
-
 	// CreateUserAdminAction - allow creating MinIO user
 	CreateUserAdminAction = "admin:CreateUser"
-
 	// DeleteUserAdminAction - allow deleting MinIO user
 	DeleteUserAdminAction = "admin:DeleteUser"
 	// ListUsersAdminAction - allow list users permission
@@ -127,6 +126,8 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	ConsoleLogAdminAction:          {},
 	KMSKeyStatusAdminAction:        {},
 	ServerUpdateAdminAction:        {},
+	ServiceRestartAdminAction:      {},
+	ServiceStopAdminAction:         {},
 	ConfigUpdateAdminAction:        {},
 	CreateUserAdminAction:          {},
 	DeleteUserAdminAction:          {},
@@ -177,6 +178,8 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	ConsoleLogAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	KMSKeyStatusAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServiceRestartAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServiceStopAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ConfigUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	CreateUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	DeleteUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
