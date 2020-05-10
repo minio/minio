@@ -103,19 +103,7 @@ func (iamp Policy) isValid() error {
 			return err
 		}
 	}
-
 	return nil
-}
-
-// MarshalJSON - encodes Policy to JSON data.
-func (iamp Policy) MarshalJSON() ([]byte, error) {
-	if err := iamp.isValid(); err != nil {
-		return nil, err
-	}
-
-	// subtype to avoid recursive call to MarshalJSON()
-	type subPolicy Policy
-	return json.Marshal(subPolicy(iamp))
 }
 
 func (iamp *Policy) dropDuplicateStatements() {
@@ -153,30 +141,14 @@ func (iamp *Policy) UnmarshalJSON(data []byte) error {
 	}
 
 	p := Policy(sp)
-	if err := p.isValid(); err != nil {
-		return err
-	}
-
 	p.dropDuplicateStatements()
-
 	*iamp = p
-
 	return nil
 }
 
 // Validate - validates all statements are for given bucket or not.
 func (iamp Policy) Validate() error {
-	if err := iamp.isValid(); err != nil {
-		return err
-	}
-
-	for _, statement := range iamp.Statements {
-		if err := statement.Validate(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return iamp.isValid()
 }
 
 // ParseConfig - parses data in given reader to Iamp.

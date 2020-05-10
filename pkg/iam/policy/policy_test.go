@@ -387,226 +387,7 @@ func TestPolicyIsValid(t *testing.T) {
 	}
 }
 
-func TestPolicyMarshalJSON(t *testing.T) {
-	case1Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case1Policy.Statements[0].SID = "SomeId1"
-	case1Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Sid":"SomeId1","Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]}]}`)
-
-	_, IPNet1, err := net.ParseCIDR("192.168.1.0/24")
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-	func1, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
-		IPNet1,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-
-	case2Policy := Policy{
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-			NewStatement(
-				policy.Deny,
-				NewActionSet(GetObjectAction),
-				NewResourceSet(NewResource("mybucket", "/yourobject*")),
-				condition.NewFunctions(func1),
-			),
-		},
-	}
-	case2Data := []byte(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]},{"Effect":"Deny","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::mybucket/yourobject*"],"Condition":{"IpAddress":{"aws:SourceIp":["192.168.1.0/24"]}}}]}`)
-
-	case3Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(GetObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case3Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]},{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]}]}`)
-
-	case4Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-			NewStatement(
-				policy.Allow,
-				NewActionSet(GetObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case4Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]},{"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]}]}`)
-
-	case5Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/yourobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case5Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]},{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/yourobject*"]}]}`)
-
-	_, IPNet2, err := net.ParseCIDR("192.168.2.0/24")
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-	func2, err := condition.NewIPAddressFunc(
-		condition.AWSSourceIP,
-		IPNet2,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-
-	case6Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(func1),
-			),
-			NewStatement(
-				policy.Allow,
-				NewActionSet(PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(func2),
-			),
-		},
-	}
-	case6Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"],"Condition":{"IpAddress":{"aws:SourceIp":["192.168.1.0/24"]}}},{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"],"Condition":{"IpAddress":{"aws:SourceIp":["192.168.2.0/24"]}}}]}`)
-
-	case7Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(GetBucketLocationAction),
-				NewResourceSet(NewResource("mybucket", "")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case7Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetBucketLocation"],"Resource":["arn:aws:s3:::mybucket"]}]}`)
-
-	case8Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(GetBucketLocationAction),
-				NewResourceSet(NewResource("*", "")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case8Data := []byte(`{"ID":"MyPolicyForMyBucket1","Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetBucketLocation"],"Resource":["arn:aws:s3:::*"]}]}`)
-
-	func3, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
-		true,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-	case9Policy := Policy{
-		ID:      "MyPolicyForMyBucket1",
-		Version: DefaultVersion,
-		Statements: []Statement{
-			NewStatement(
-				policy.Allow,
-				NewActionSet(GetObjectAction, PutObjectAction),
-				NewResourceSet(NewResource("mybucket", "myobject*")),
-				condition.NewFunctions(func1, func2, func3),
-			),
-		},
-	}
-
-	testCases := []struct {
-		policy         Policy
-		expectedResult []byte
-		expectErr      bool
-	}{
-		{case1Policy, case1Data, false},
-		{case2Policy, case2Data, false},
-		{case3Policy, case3Data, false},
-		{case4Policy, case4Data, false},
-		{case5Policy, case5Data, false},
-		{case6Policy, case6Data, false},
-		{case7Policy, case7Data, false},
-		{case8Policy, case8Data, false},
-		{case9Policy, nil, true},
-	}
-
-	for i, testCase := range testCases {
-		result, err := json.Marshal(testCase.policy)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if !reflect.DeepEqual(result, testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v", i+1, string(testCase.expectedResult), string(result))
-			}
-		}
-	}
-}
-
-func TestPolicyUnmarshalJSON(t *testing.T) {
+func TestPolicyUnmarshalJSONAndValidate(t *testing.T) {
 	case1Data := []byte(`{
     "ID": "MyPolicyForMyBucket1",
     "Version": "2012-10-17",
@@ -973,24 +754,25 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
 	}
 
 	testCases := []struct {
-		data           []byte
-		expectedResult Policy
-		expectErr      bool
+		data                []byte
+		expectedResult      Policy
+		expectUnmarshalErr  bool
+		expectValidationErr bool
 	}{
-		{case1Data, case1Policy, false},
-		{case2Data, case2Policy, false},
-		{case3Data, case3Policy, false},
-		{case4Data, case4Policy, false},
-		{case5Data, case5Policy, false},
-		{case6Data, case6Policy, false},
-		{case7Data, case7Policy, false},
-		{case8Data, case8Policy, false},
+		{case1Data, case1Policy, false, false},
+		{case2Data, case2Policy, false, false},
+		{case3Data, case3Policy, false, false},
+		{case4Data, case4Policy, false, false},
+		{case5Data, case5Policy, false, false},
+		{case6Data, case6Policy, false, false},
+		{case7Data, case7Policy, false, false},
+		{case8Data, case8Policy, false, false},
 		// Invalid version error.
-		{case9Data, Policy{}, true},
+		{case9Data, Policy{}, false, true},
 		// Duplicate statement success, duplicate statement is removed.
-		{case10Data, case10Policy, false},
+		{case10Data, case10Policy, false, false},
 		// Duplicate statement success (Effect differs).
-		{case11Data, case11Policy, false},
+		{case11Data, case11Policy, false, false},
 	}
 
 	for i, testCase := range testCases {
@@ -998,11 +780,18 @@ func TestPolicyUnmarshalJSON(t *testing.T) {
 		err := json.Unmarshal(testCase.data, &result)
 		expectErr := (err != nil)
 
-		if expectErr != testCase.expectErr {
-			t.Errorf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+		if expectErr != testCase.expectUnmarshalErr {
+			t.Errorf("case %v: error during unmarshal: expected: %v, got: %v", i+1, testCase.expectUnmarshalErr, expectErr)
 		}
 
-		if !testCase.expectErr {
+		err = result.Validate()
+		expectErr = (err != nil)
+
+		if expectErr != testCase.expectValidationErr {
+			t.Errorf("case %v: error during validation: expected: %v, got: %v", i+1, testCase.expectValidationErr, expectErr)
+		}
+
+		if !testCase.expectUnmarshalErr && !testCase.expectValidationErr {
 			if !reflect.DeepEqual(result, testCase.expectedResult) {
 				t.Errorf("case %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 			}
