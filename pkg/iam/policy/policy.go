@@ -21,6 +21,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
@@ -39,17 +40,31 @@ type Args struct {
 }
 
 // GetPolicies get policies
-func (a Args) GetPolicies(policyClaimName string) ([]string, bool) {
+func (a Args) GetPolicies(policyClaimName string) (set.StringSet, bool) {
+	s := set.NewStringSet()
 	pname, ok := a.Claims[policyClaimName]
 	if !ok {
-		return nil, false
+		return s, false
 	}
-	pnameStr, ok := pname.(string)
-	if ok {
-		return strings.Split(pnameStr, ","), true
+	pnames, ok := pname.([]string)
+	if !ok {
+		pnameStr, ok := pname.(string)
+		if ok {
+			pnames = strings.Split(pnameStr, ",")
+		} else {
+			return s, false
+		}
 	}
-	pnameSlice, ok := pname.([]string)
-	return pnameSlice, ok
+	for _, pname := range pnames {
+		pname = strings.TrimSpace(pname)
+		if pname == "" {
+			// ignore any empty strings, considerate
+			// towards some user errors.
+			continue
+		}
+		s.Add(pname)
+	}
+	return s, true
 }
 
 // Policy - iam bucket iamp.
