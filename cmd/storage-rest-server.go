@@ -643,7 +643,8 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 		for {
 			select {
 			case <-ticker.C:
-				w.Write([]byte(" "))
+				// Response not ready, write a filler byte.
+				w.Write([]byte{32})
 				w.(http.Flusher).Flush()
 			case err := <-doneCh:
 				if err != nil {
@@ -682,21 +683,22 @@ func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		if b != ' ' {
-			if b == 1 {
-				errorText, err := ioutil.ReadAll(reader)
-				if err != nil {
-					return nil, err
-				}
-				return nil, errors.New(string(errorText))
+		// Check if we have a response ready or a filler byte.
+		switch b {
+		case 0:
+			return reader, nil
+		case 1:
+			errorText, err := ioutil.ReadAll(reader)
+			if err != nil {
+				return nil, err
 			}
-			if b != 0 {
-				reader.UnreadByte()
-			}
-			break
+			return nil, errors.New(string(errorText))
+		case 32:
+			continue
+		default:
+			return nil, fmt.Errorf("unexpected filler byte: %d", b)
 		}
 	}
-	return reader, nil
 }
 
 // VerifyFileResp - VerifyFile()'s response.
