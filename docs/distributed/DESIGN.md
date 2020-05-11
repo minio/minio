@@ -46,6 +46,8 @@ Expansion of ellipses and choice of erasure sets based on this expansion is an a
 
 - *If total disks has many common divisors the algorithm chooses the minimum amounts of erasure sets possible for a erasure set size of any N*.  In the example with 1024 disks - 4, 8, 16 are GCD factors. With 16 disks we get a total of 64 possible sets, with 8 disks we get a total of 128 possible sets, with 4 disks we get a total of 256 possible sets. So algorithm automatically chooses 64 sets, which is *16 * 64 = 1024* disks in total.
 
+- *If total number of nodes are of odd number then GCD algorithm provides affinity towards odd number erasure sets to provide for uniform distribution across nodes*. This is to ensure that same number of disks are pariticipating in any erasure set. For example if you have 2 nodes with 180 drives then GCD is 15 but this would lead to uneven distribution, one of the nodes would participate more drives. To avoid this the affinity is given towards nodes which leads to next best GCD factor of 12 which provides uniform distribution.
+
 - In this algorithm, we also make sure that we spread the disks out evenly. MinIO server expands ellipses passed as arguments. Here is a sample expansion to demonstrate the process.
 
 ```
