@@ -23,6 +23,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/env"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
@@ -38,6 +39,9 @@ const (
 // to enforce total quota for the specified bucket.
 func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketQuotaConfig")
+
+	defer logger.AuditLog(w, r, "PutBucketQuotaConfig", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -91,6 +95,8 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketQuotaConfig")
 
+	defer logger.AuditLog(w, r, "GetBucketQuotaConfig", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -122,6 +128,9 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 // Removes quota configuration on the specified bucket.
 func (a adminAPIHandlers) RemoveBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveBucketQuotaConfig")
+
+	defer logger.AuditLog(w, r, "RemoveBucketQuotaConfig", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
