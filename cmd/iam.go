@@ -1029,7 +1029,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		// for LDAP service accounts with ParentUser set
 		// we have no way to validate, either because user
 		// doesn't need an explicit policy as it can come
-		// automatically from a group. We are save to ignore
+		// automatically from a group. We are safe to ignore
 		// this and continue as policies would fail eventually
 		// the policies are missing or not configured.
 	}
