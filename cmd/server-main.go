@@ -378,7 +378,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	initDataUsageStats(ctx, objAPI)
-	initDailyLifecycle(ctx, objAPI)
 	initQuotaEnforcement(ctx, objAPI)
 }
 

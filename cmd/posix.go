@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -35,12 +36,14 @@ import (
 	"syscall"
 	"time"
 
-	"bytes"
+	"github.com/minio/minio/pkg/event"
 
 	humanize "github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/disk"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mountinfo"
@@ -351,15 +354,6 @@ func (s *posix) IsOnline() bool {
 	return true
 }
 
-func isQuitting(endCh chan struct{}) bool {
-	select {
-	case <-endCh:
-		return true
-	default:
-		return false
-	}
-}
-
 func (s *posix) waitForLowActiveIO() {
 	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
 		time.Sleep(lowActiveIOWaitTick)
@@ -367,6 +361,12 @@ func (s *posix) waitForLowActiveIO() {
 }
 
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	// Check if the current bucket has a configured lifecycle policy
+	lc, ok := globalLifecycleSys.Get(cache.Info.Name)
+	if ok && lc.HasActiveRules("") {
+		cache.Info.lifeCycle = lc
+	}
+
 	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Look for `xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
@@ -384,11 +384,60 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 			return 0, nil
 		}
 
+		if cache.Info.lifeCycle != nil {
+			objName, err := filepath.Rel(filepath.Join(s.diskPath, cache.Info.Name), item.Path)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return meta.Stat.Size, nil
+			}
+			objName = filepath.Dir(objName)
+
+			action := cache.Info.lifeCycle.ComputeAction(objName, meta.Meta[xhttp.AmzObjectTagging], meta.Stat.ModTime)
+			switch action {
+			case lifecycle.DeleteAction:
+			default:
+				// No action.
+				return meta.Stat.Size, nil
+			}
+
+			// These (expensive) operations should only run on items we are likely to delete.
+			// Load to ensure that we have the correct version and not an unsynced version.
+			obj, err := globalObjectAPI.GetObjectInfo(ctx, cache.Info.Name, objName, ObjectOptions{})
+			if err != nil {
+				// Do nothing
+				logger.LogIf(ctx, err)
+				return meta.Stat.Size, nil
+			}
+
+			// Check that modtime is reasonably correct.
+			if obj.ModTime.Round(time.Second).After(meta.Stat.ModTime.Round(time.Second)) {
+				// Do nothing.
+				return meta.Stat.Size, nil
+			}
+			err = globalObjectAPI.DeleteObject(ctx, cache.Info.Name, objName)
+			if err != nil {
+				// Assume it is still there.
+				logger.LogIf(ctx, err)
+				return meta.Stat.Size, nil
+			}
+
+			// Notify object deleted event.
+			sendEvent(eventArgs{
+				EventName:  event.ObjectRemovedDelete,
+				BucketName: cache.Info.Name,
+				Object: ObjectInfo{
+					Name: objName,
+				},
+				Host: "Internal: [ILM-EXPIRY]",
+			})
+			return 0, nil
+		}
 		return meta.Stat.Size, nil
 	})
 	if err != nil {
 		return dataUsageInfo, err
 	}
+
 	dataUsageInfo.Info.LastUpdate = time.Now()
 	total := dataUsageInfo.sizeRecursive(dataUsageInfo.Info.Name)
 	if total == nil {

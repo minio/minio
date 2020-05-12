@@ -46,9 +46,34 @@ type Lifecycle struct {
 	Rules   []Rule   `xml:"Rule"`
 }
 
-// IsEmpty - returns whether policy is empty or not.
-func (lc Lifecycle) IsEmpty() bool {
-	return len(lc.Rules) == 0
+// HasActiveRules - returns whether policy has active rules.
+// Optionally a prefix can be supplied.
+func (lc Lifecycle) HasActiveRules(prefix string) bool {
+	if len(lc.Rules) == 0 {
+		return false
+	}
+	for _, rule := range lc.Rules {
+		if rule.Status == Disabled {
+			continue
+		}
+		if len(prefix) > 0 && rule.Filter.Prefix != "" && !strings.HasPrefix(prefix, rule.Filter.Prefix) {
+			continue
+		}
+		if rule.NoncurrentVersionExpiration.NoncurrentDays > 0 {
+			return true
+		}
+		if rule.NoncurrentVersionTransition.NoncurrentDays > 0 {
+			return true
+		}
+		if rule.Expiration.IsNull() {
+			continue
+		}
+		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.After(time.Now()) {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 // ParseLifecycleConfig - parses data in given reader to Lifecycle.

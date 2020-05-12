@@ -28,6 +28,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+
 	"github.com/cespare/xxhash/v2"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
@@ -66,7 +68,8 @@ type dataUsageCacheInfo struct {
 	Name        string
 	LastUpdate  time.Time
 	NextCycle   uint32
-	BloomFilter []byte `msg:"BloomFilter,omitempty"`
+	BloomFilter []byte               `msg:"BloomFilter,omitempty"`
+	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
 }
 
 // merge other data usage entry into this, excluding children.

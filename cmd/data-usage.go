@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -161,6 +163,11 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 type Item struct {
 	Path string
 	Typ  os.FileMode
+
+	bucket    string
+	prefix    string
+	object    string
+	lifeCycle *lifecycle.Lifecycle
 }
 
 type getSizeFn func(item Item) (int64, error)
@@ -212,9 +219,17 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		}
 		thisHash := hashPath(folder.name)
 
-		if _, ok := f.oldCache.Cache[thisHash]; f.withFilter != nil && ok {
+		// If there are lifecycle rules for the prefix, remove the filter.
+		filter := f.withFilter
+		if f.oldCache.Info.lifeCycle != nil && filter != nil {
+			if f.oldCache.Info.lifeCycle.HasActiveRules(folder.name) {
+				filter = nil
+			}
+		}
+
+		if _, ok := f.oldCache.Cache[thisHash]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
-			if folder.name != dataUsageRoot && !f.withFilter.containsDir(folder.name) {
+			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
 				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
@@ -230,7 +245,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
 			entName = path.Clean(path.Join(folder.name, entName))
-			bucket, _ := path2BucketObjectWithBasePath(f.root, entName)
+			bucket, prefix := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" no bucket (%s,%s)", f.root, entName)
@@ -274,7 +289,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			t := UTCNow()
 
 			// Get file size, ignore errors.
-			size, err := f.getSize(Item{Path: path.Join(f.root, entName), Typ: typ})
+			item := Item{
+				Path:   path.Join(f.root, entName),
+				Typ:    typ,
+				bucket: bucket,
+				prefix: path.Dir(prefix),
+			}
+			size, err := f.getSize(item)
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 			if err == errSkipFile || err == errFileNotFound {
