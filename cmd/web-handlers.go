@@ -2199,6 +2199,12 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 		return getAPIError(ErrBadDigest)
 	case IncompleteBody:
 		return getAPIError(ErrIncompleteBody)
+	case PrefixAccessDenied:
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    err.Error(),
+		}
 	case ObjectExistsAsDirectory:
 		return getAPIError(ErrObjectExistsAsDirectory)
 	case ObjectNotFound:

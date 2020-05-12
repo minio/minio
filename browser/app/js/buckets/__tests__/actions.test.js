@@ -66,20 +66,6 @@ describe("Buckets actions", () => {
     })
   })
 
-  it("creates buckets/SET_CURRENT_BUCKET with first bucket when the bucket in url is not exists after fetching buckets", () => {
-    history.push("/test3")
-    const store = mockStore()
-    const expectedActions = [
-      { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
-      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
-    ]
-    window.location
-    return store.dispatch(actionsBuckets.fetchBuckets()).then(() => {
-      const actions = store.getActions()
-      expect(actions).toEqual(expectedActions)
-    })
-  })
-
   it("creates buckets/SET_CURRENT_BUCKET action when selectBucket is called", () => {
     const store = mockStore()
     const expectedActions = [
@@ -175,7 +161,7 @@ describe("Buckets actions", () => {
       { type: "alert/SET", alert: {id: 0, message: "Bucket 'test3' has been deleted.", type: "info"} },
       { type: "buckets/REMOVE", bucket: "test3" },
       { type: "buckets/SET_LIST", buckets: ["test1", "test2"] },
-      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test1" }
+      { type: "buckets/SET_CURRENT_BUCKET", bucket: "test2" }
     ]
     return store.dispatch(actionsBuckets.deleteBucket("test3")).then(() => {
       const actions = store.getActions()
