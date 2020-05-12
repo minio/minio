@@ -473,7 +473,7 @@ func (s *peerRESTServer) DispatchNetOBDInfoHandler(w http.ResponseWriter, r *htt
 	ctx := newContext(r, w, "DispatchNetOBDInfo")
 	info := globalNotificationSys.NetOBDInfo(ctx)
 
-	done()
+	done(nil)
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 	w.(http.Flusher).Flush()
 }
@@ -598,7 +598,7 @@ func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Requ
 
 	globalNotificationSys.RemoveNotification(bucketName)
 	globalPolicySys.Remove(bucketName)
-	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketObjectLockSys.Remove(bucketName)
 	globalBucketQuotaSys.Remove(bucketName)
 	globalLifecycleSys.Remove(bucketName)
 
@@ -843,7 +843,7 @@ func (s *peerRESTServer) RemoveBucketObjectLockConfigHandler(w http.ResponseWrit
 		return
 	}
 
-	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketObjectLockSys.Remove(bucketName)
 	w.(http.Flusher).Flush()
 }
 
@@ -873,7 +873,7 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 		return
 	}
 
-	globalBucketObjectLockConfig.Set(bucketName, retention)
+	globalBucketObjectLockSys.Set(bucketName, retention)
 	w.(http.Flusher).Flush()
 }
 

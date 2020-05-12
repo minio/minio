@@ -38,6 +38,11 @@ func isSysErrNoSpace(err error) bool {
 	return errors.Is(err, syscall.ENOSPC)
 }
 
+// Invalid argument, unsupported flags such as O_DIRECT
+func isSysErrInvalidArg(err error) bool {
+	return errors.Is(err, syscall.EINVAL)
+}
+
 // Input/output error
 func isSysErrIO(err error) bool {
 	return errors.Is(err, syscall.EIO)

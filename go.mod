@@ -51,11 +51,10 @@ require (
 	github.com/jonboulle/clockwork v0.1.0 // indirect
 	github.com/json-iterator/go v1.1.9
 	github.com/klauspost/compress v1.10.3
-	github.com/klauspost/cpuid v1.2.2
+	github.com/klauspost/cpuid v1.2.4
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
-	github.com/klauspost/reedsolomon v1.9.3
-	github.com/kurin/blazer v0.5.4-0.20200327014341-8f90a40f8af7
+	github.com/klauspost/reedsolomon v1.9.7
 	github.com/lib/pq v1.1.1
 	github.com/mattn/go-colorable v0.1.1
 	github.com/mattn/go-ieproxy v0.0.0-20190805055040-f9202b1cfdeb // indirect

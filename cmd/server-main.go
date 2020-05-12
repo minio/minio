@@ -156,6 +156,9 @@ func newAllSubsystems() {
 	// Create new bucket encryption subsystem
 	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
 
+	// Create new bucket object lock subsystem
+	globalBucketObjectLockSys = NewBucketObjectLockSys()
+
 	// Create new bucket quota subsystem
 	globalBucketQuotaSys = NewBucketQuotaSys()
 }
@@ -208,20 +211,32 @@ func initSafeMode() (err error) {
 	//    version is needed, migration is needed etc.
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	optimeout := OperationTimedOut{}
-	for n := range newRetryTimerSimple(retryCtx) {
+	for range newRetryTimerSimple(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(leaderLockTimeout); err == nil {
-			// Migrate all backend configs to encrypted backend configs, optionally
-			// handles rotating keys for encryption, if there is any retriable failure
-			// that shall be retried if there is an error.
-			if err = handleEncryptedConfigBackend(newObject, true); err == nil {
-				// Upon success migrating the config, initialize all sub-systems
-				// if all sub-systems initialized successfully return right away
-				if err = initAllSubsystems(newObject); err == nil {
-					return nil
+		if err = txnLk.GetLock(leaderLockTimeout); err != nil {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
+			continue
+		}
+
+		// These messages only meant primarily for distributed setup, so only log during distributed setup.
+		if globalIsDistXL {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+		}
+
+		// Migrate all backend configs to encrypted backend configs, optionally
+		// handles rotating keys for encryption, if there is any retriable failure
+		// that shall be retried if there is an error.
+		if err = handleEncryptedConfigBackend(newObject, true); err == nil {
+			// Upon success migrating the config, initialize all sub-systems
+			// if all sub-systems initialized successfully return right away
+			if err = initAllSubsystems(newObject); err == nil {
+				// All successful return.
+				if globalIsDistXL {
+					// These messages only meant primarily for distributed setup, so only log during distributed setup.
+					logger.Info("All MinIO sub-systems initialized successfully")
 				}
+				return nil
 			}
 		}
 
@@ -230,15 +245,11 @@ func initSafeMode() (err error) {
 			errors.Is(err, errConfigNotFound) ||
 			errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
-			errors.As(err, &optimeout) ||
 			errors.As(err, &rquorum) ||
 			errors.As(err, &wquorum) ||
 			isErrBucketNotFound(err) {
-			if n < 5 {
-				logger.Info("Waiting for all MinIO sub-systems to be initialized..")
-			} else {
-				logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
-			}
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
+			txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
 			continue
 		}
 
@@ -256,10 +267,41 @@ func initSafeMode() (err error) {
 }
 
 func initAllSubsystems(newObject ObjectLayer) (err error) {
-	// List buckets to be re-used for loading configs.
-	buckets, err := newObject.ListBuckets(GlobalContext)
-	if err != nil {
-		return fmt.Errorf("Unable to list buckets: %w", err)
+	// %w is used by all error returns here to make sure
+	// we wrap the underlying error, make sure when you
+	// are modifying this code that you do so, if and when
+	// you want to add extra context to your error. This
+	// ensures top level retry works accordingly.
+	var buckets []BucketInfo
+	if globalIsDistXL || globalIsXL {
+		// List buckets to heal, and be re-used for loading configs.
+		buckets, err = newObject.ListBucketsHeal(GlobalContext)
+		if err != nil {
+			return fmt.Errorf("Unable to list buckets to heal: %w", err)
+		}
+		// Attempt a heal if possible and re-use the bucket names
+		// to reload their config.
+		wquorum := &InsufficientWriteQuorum{}
+		rquorum := &InsufficientReadQuorum{}
+		for _, bucket := range buckets {
+			if err = newObject.MakeBucketWithLocation(GlobalContext, bucket.Name, "", false); err != nil {
+				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
+					// Retrun the error upwards for the caller to retry.
+					return fmt.Errorf("Unable to heal bucket: %w", err)
+				}
+				if _, ok := err.(BucketExists); !ok {
+					// ignore any other error and log for investigation.
+					logger.LogIf(GlobalContext, err)
+					continue
+				}
+				// Bucket already exists, nothing that needs to be done.
+			}
+		}
+	} else {
+		buckets, err = newObject.ListBuckets(GlobalContext)
+		if err != nil {
+			return fmt.Errorf("Unable to list buckets: %w", err)
+		}
 	}
 
 	// Initialize config system.
@@ -290,11 +332,6 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize policy system: %w", err)
 	}
 
-	// Initialize bucket object lock.
-	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize object lock system: %w", err)
-	}
-
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
@@ -303,6 +340,11 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 	// Initialize bucket encryption subsystem.
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
+	}
+
+	// Initialize bucket object lock.
+	if err = globalBucketObjectLockSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize object lock system: %w", err)
 	}
 
 	// Initialize bucket quota system.

@@ -1649,7 +1649,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-	// Verify if the underlying error is signature mismatch.
+
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
@@ -1808,6 +1808,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchLifecycleConfiguration
 	case BucketSSEConfigNotFound:
 		apiErr = ErrNoSuchBucketSSEConfig
+	case BucketTaggingNotFound:
+		apiErr = ErrBucketTaggingNotFound
+	case BucketObjectLockConfigNotFound:
+		apiErr = ErrObjectLockConfigurationNotFound
 	case BucketQuotaConfigNotFound:
 		apiErr = ErrAdminNoSuchQuotaConfiguration
 	case BucketQuotaExceeded:

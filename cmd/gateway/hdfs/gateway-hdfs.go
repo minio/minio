@@ -281,7 +281,11 @@ func (n *hdfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDele
 	return hdfsToObjectErr(ctx, n.clnt.Remove(minio.PathJoin(hdfsSeparator, bucket)), bucket)
 }
 
-func (n *hdfsObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (n *hdfsObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
+	if lockEnabled {
+		return minio.NotImplemented{}
+	}
+
 	if !hdfsIsValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
 	}

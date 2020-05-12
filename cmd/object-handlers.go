@@ -2594,7 +2594,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	apiErr := ErrNone
-	if _, ok := globalBucketObjectLockConfig.Get(bucket); ok {
+	if _, ok := globalBucketObjectLockSys.Get(bucket); ok {
 		apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, object, getObjectInfo)
 		if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL, guessIsBrowserReq(r))
@@ -2658,7 +2658,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if _, ok := globalBucketObjectLockConfig.Get(bucket); !ok {
+	if _, ok := globalBucketObjectLockSys.Get(bucket); !ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketObjectLockConfiguration), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -2740,7 +2740,7 @@ func (api objectAPIHandlers) GetObjectLegalHoldHandler(w http.ResponseWriter, r 
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	if _, ok := globalBucketObjectLockConfig.Get(bucket); !ok {
+	if _, ok := globalBucketObjectLockSys.Get(bucket); !ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketObjectLockConfiguration), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -2817,7 +2817,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if _, ok := globalBucketObjectLockConfig.Get(bucket); !ok {
+	if _, ok := globalBucketObjectLockSys.Get(bucket); !ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidBucketObjectLockConfiguration), r.URL, guessIsBrowserReq(r))
 		return
 	}

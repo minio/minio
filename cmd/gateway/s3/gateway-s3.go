@@ -283,7 +283,11 @@ func (l *s3Objects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageIn
 }
 
 // MakeBucket creates a new container on S3 backend.
-func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (l *s3Objects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
+	if lockEnabled {
+		return minio.NotImplemented{}
+	}
+
 	// Verify if bucket name is valid.
 	// We are using a separate helper function here to validate bucket
 	// names instead of IsValidBucketName() because there is a possibility

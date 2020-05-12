@@ -21,9 +21,11 @@ import (
 	"sort"
 
 	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -38,7 +40,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
 	// Verify if bucket is valid.
 	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 		return BucketNameInvalid{Bucket: bucket}
@@ -67,10 +69,6 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
-		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(storageDisks, bucket)
-	}
 	return toObjectErr(err, bucket)
 }
 
@@ -84,25 +82,6 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 		index := index
 		g.Go(func() error {
 			_ = storageDisks[index].MakeVol(bucket)
-			return nil
-		}, index)
-	}
-
-	// Wait for all make vol to finish.
-	g.Wait()
-}
-
-// undo make bucket operation upon quorum failure.
-func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
-	g := errgroup.WithNErrs(len(storageDisks))
-	// Undo previous make bucket entry on all underlying storage disks.
-	for index := range storageDisks {
-		if storageDisks[index] == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			_ = storageDisks[index].DeleteVol(bucket, false)
 			return nil
 		}, index)
 	}
@@ -319,6 +298,31 @@ func (xl xlObjects) SetBucketSSEConfig(ctx context.Context, bucket string, confi
 // DeleteBucketSSEConfig deletes bucket encryption config on given bucket
 func (xl xlObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
 	return removeBucketSSEConfig(ctx, xl, bucket)
+}
+
+// SetBucketObjectLockConfig enables/clears default object lock configuration
+func (xl xlObjects) SetBucketObjectLockConfig(ctx context.Context, bucket string, config *objectlock.Config) error {
+	return saveBucketObjectLockConfig(ctx, xl, bucket, config)
+}
+
+// GetBucketObjectLockConfig - returns current defaults for object lock configuration
+func (xl xlObjects) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
+	return readBucketObjectLockConfig(ctx, xl, bucket)
+}
+
+// SetBucketTagging sets bucket tags on given bucket
+func (xl xlObjects) SetBucketTagging(ctx context.Context, bucket string, t *tags.Tags) error {
+	return saveBucketTagging(ctx, xl, bucket, t)
+}
+
+// GetBucketTagging get bucket tags set on given bucket
+func (xl xlObjects) GetBucketTagging(ctx context.Context, bucket string) (*tags.Tags, error) {
+	return readBucketTagging(ctx, xl, bucket)
+}
+
+// DeleteBucketTagging delete bucket tags set if any.
+func (xl xlObjects) DeleteBucketTagging(ctx context.Context, bucket string) error {
+	return deleteBucketTagging(ctx, xl, bucket)
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

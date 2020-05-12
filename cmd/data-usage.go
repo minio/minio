@@ -277,7 +277,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			size, err := f.getSize(Item{Path: path.Join(f.root, entName), Typ: typ})
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-			if err == errSkipFile {
+			if err == errSkipFile || err == errFileNotFound {
 				return nil
 			}
 			logger.LogIf(ctx, err)

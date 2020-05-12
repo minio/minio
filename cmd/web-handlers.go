@@ -172,7 +172,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
 			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion); err != nil {
+				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion, false); err != nil {
 					return toJSONError(ctx, err)
 				}
 				if err = globalDNSConfig.Put(args.BucketName); err != nil {
@@ -188,7 +188,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(ctx, errBucketAlreadyExists)
 	}
 
-	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion); err != nil {
+	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion, false); err != nil {
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
@@ -261,7 +261,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
 			// Deleting DNS entry failed, attempt to create the bucket again.
-			objectAPI.MakeBucketWithLocation(ctx, args.BucketName, "")
+			objectAPI.MakeBucketWithLocation(ctx, args.BucketName, "", false)
 			return toJSONError(ctx, err)
 		}
 	}
@@ -719,6 +719,9 @@ next:
 			}
 
 			apiErr := enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms)
+			if apiErr == ErrObjectLocked {
+				return toJSONError(ctx, errLockedObject)
+			}
 			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				return toJSONError(ctx, errAccessDenied)
 			}
@@ -2140,7 +2143,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			Description:    err.Error(),
 		}
 	case errAuthentication, auth.ErrInvalidAccessKeyLength,
-		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID:
+		auth.ErrInvalidSecretKeyLength, errInvalidAccessKeyID, errAccessDenied, errLockedObject:
 		return APIError{
 			Code:           "AccessDenied",
 			HTTPStatusCode: http.StatusForbidden,

@@ -198,7 +198,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		if cfg.Type != madmin.FIFOQuota {
 			continue
 		}
-		_, bucketHasLockConfig := globalBucketObjectLockConfig.Get(bucket)
+		_, bucketHasLockConfig := globalBucketObjectLockSys.Get(bucket)
 
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err != nil {

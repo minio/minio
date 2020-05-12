@@ -154,14 +154,12 @@ func (b *bucketMetadata) save(ctx context.Context, o ObjectLayer) error {
 	return saveConfig(ctx, o, configFile, data)
 }
 
-// delete the config metadata.
+// removeBucketMeta bucket metadata.
 // If config does not exist no error is returned.
-func (b bucketMetadata) delete(ctx context.Context, o ObjectLayer) error {
-	configFile := path.Join(bucketConfigPrefix, b.Name, bucketMetadataFile)
-	err := deleteConfig(ctx, o, configFile)
-	if err == errConfigNotFound {
-		// We don't care
-		err = nil
+func removeBucketMeta(ctx context.Context, obj ObjectLayer, bucket string) error {
+	configFile := path.Join(bucketConfigPrefix, bucket, bucketMetadataFile)
+	if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
+		return err
 	}
-	return err
+	return nil
 }

@@ -42,7 +42,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	emptyDirName := "test-empty-dir/"
 
 	// create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -194,7 +194,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 	// Setup for the tests.
 	bucketName := getRandomBucketName()
 	// create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -304,7 +304,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	bucketName := getRandomBucketName()
 	objectName := "test-object"
 	// create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
