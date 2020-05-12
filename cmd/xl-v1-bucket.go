@@ -69,10 +69,6 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
-		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(storageDisks, bucket)
-	}
 	return toObjectErr(err, bucket)
 }
 
@@ -86,25 +82,6 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 		index := index
 		g.Go(func() error {
 			_ = storageDisks[index].MakeVol(bucket)
-			return nil
-		}, index)
-	}
-
-	// Wait for all make vol to finish.
-	g.Wait()
-}
-
-// undo make bucket operation upon quorum failure.
-func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
-	g := errgroup.WithNErrs(len(storageDisks))
-	// Undo previous make bucket entry on all underlying storage disks.
-	for index := range storageDisks {
-		if storageDisks[index] == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			_ = storageDisks[index].DeleteVol(bucket, false)
 			return nil
 		}, index)
 	}
