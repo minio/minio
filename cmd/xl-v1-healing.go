@@ -150,10 +150,6 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 
 	reducedErr = reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum)
 	if reducedErr != nil {
-		if reducedErr == errXLWriteQuorum {
-			// Purge successfully created buckets if we don't have writeQuorum.
-			undoMakeBucket(storageDisks, bucket)
-		}
 		return res, reducedErr
 	}
 
