@@ -1023,9 +1023,15 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 
 	cred, ok = sys.iamUsersMap[accessKey]
 	if ok && cred.IsValid() {
-		if cred.ParentUser != "" {
+		if cred.ParentUser != "" && sys.usersSysType == MinIOUsersSysType {
 			_, ok = sys.iamUsersMap[cred.ParentUser]
 		}
+		// for LDAP service accounts with ParentUser set
+		// we have no way to validate, either because user
+		// doesn't need an explicit policy as it can come
+		// automatically from a group. We are safe to ignore
+		// this and continue as policies would fail eventually
+		// the policies are missing or not configured.
 	}
 	return cred, ok && cred.IsValid()
 }
@@ -1617,59 +1623,74 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	// If it is an LDAP request, check that user and group
 	// policies allow the request.
-	if userIface, ok := args.Claims[ldapUser]; ok {
-		var user string
-		if u, ok := userIface.(string); ok {
-			user = u
-		} else {
-			return false
-		}
+	if sys.usersSysType == LDAPUsersSysType {
+		if userIface, ok := args.Claims[ldapUser]; ok {
+			var user string
+			if u, ok := userIface.(string); ok {
+				user = u
+			} else {
+				return false
+			}
 
-		var groups []string
-		groupsVal := args.Claims[ldapGroups]
-		if g, ok := groupsVal.([]interface{}); ok {
-			for _, eachG := range g {
-				if eachGStr, ok := eachG.(string); ok {
-					groups = append(groups, eachGStr)
+			var groups []string
+			groupsVal := args.Claims[ldapGroups]
+			if g, ok := groupsVal.([]interface{}); ok {
+				for _, eachG := range g {
+					if eachGStr, ok := eachG.(string); ok {
+						groups = append(groups, eachGStr)
+					}
 				}
 			}
-		} else {
-			return false
-		}
 
-		sys.store.rlock()
-		defer sys.store.runlock()
+			sys.store.rlock()
+			defer sys.store.runlock()
 
-		// We look up the policy mapping directly to bypass
-		// users exists, group exists validations that do not
-		// apply here.
-		var policies []iampolicy.Policy
-		if policy, ok := sys.iamUserPolicyMap[user]; ok {
-			p, found := sys.iamPolicyDocsMap[policy.Policy]
-			if found {
-				policies = append(policies, p)
+			// We look up the policy mapping directly to bypass
+			// users exists, group exists validations that do not
+			// apply here.
+			var policies []iampolicy.Policy
+			if mp, ok := sys.iamUserPolicyMap[user]; ok {
+				for _, pname := range strings.Split(mp.Policy, ",") {
+					pname = strings.TrimSpace(pname)
+					if pname == "" {
+						continue
+					}
+					p, found := sys.iamPolicyDocsMap[pname]
+					if !found {
+						return false
+					}
+					policies = append(policies, p)
+				}
 			}
-		}
-		for _, group := range groups {
-			policy, ok := sys.iamGroupPolicyMap[group]
-			if !ok {
-				continue
+			for _, group := range groups {
+				mp, ok := sys.iamGroupPolicyMap[group]
+				if !ok {
+					continue
+				}
+				for _, pname := range strings.Split(mp.Policy, ",") {
+					pname = strings.TrimSpace(pname)
+					if pname == "" {
+						continue
+					}
+					p, found := sys.iamPolicyDocsMap[pname]
+					if !found {
+						return false
+					}
+					policies = append(policies, p)
+				}
 			}
-			p, found := sys.iamPolicyDocsMap[policy.Policy]
-			if found {
-				policies = append(policies, p)
+			if len(policies) == 0 {
+				return false
 			}
+			combinedPolicy := policies[0]
+			for i := 1; i < len(policies); i++ {
+				combinedPolicy.Statements =
+					append(combinedPolicy.Statements,
+						policies[i].Statements...)
+			}
+			return combinedPolicy.IsAllowed(args)
 		}
-		if len(policies) == 0 {
-			return false
-		}
-		combinedPolicy := policies[0]
-		for i := 1; i < len(policies); i++ {
-			combinedPolicy.Statements =
-				append(combinedPolicy.Statements,
-					policies[i].Statements...)
-		}
-		return combinedPolicy.IsAllowed(args)
+		return false
 	}
 
 	policies, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
