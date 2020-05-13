@@ -16,6 +16,8 @@
 
 package hash
 
+import "fmt"
+
 // SHA256Mismatch - when content sha256 does not match with what was sent from client.
 type SHA256Mismatch struct {
 	ExpectedSHA256   string
@@ -34,4 +36,13 @@ type BadDigest struct {
 
 func (e BadDigest) Error() string {
 	return "Bad digest: Expected " + e.ExpectedMD5 + " does not match calculated " + e.CalculatedMD5
+}
+
+type ErrSizeMismatch struct {
+	Want int64
+	Got  int64
+}
+
+func (e ErrSizeMismatch) Error() string {
+	return fmt.Sprintf("Size mismatch: got %d, want %d", e.Got, e.Want)
 }

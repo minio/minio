@@ -134,15 +134,15 @@ func TestHashReaderVerification(t *testing.T) {
 		{
 			desc:       "Correct sha256, nested, truncated",
 			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", 4, false),
-			size:       0,
-			actualSize: 0,
+			size:       4,
+			actualSize: -1,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 		},
 		{
 			desc:       "Correct sha256, nested, truncated, swapped",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 0, "", "", 0, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", -1, false),
 			size:       4,
-			actualSize: 4,
+			actualSize: -1,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 		},
 		{
@@ -287,6 +287,14 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 			size:       4,
 			actualSize: 4,
 			success:    true,
+		},
+		{
+			desc:        "Nested, size mismatch",
+			src:         mustReader(t, bytes.NewReader([]byte("abcd-morestuff")), 4, "", "", -1, false),
+			size:        2,
+			actualSize:  -1,
+			success:     false,
+			expectedErr: ErrSizeMismatch{Want: 4, Got: 2},
 		},
 	}
 

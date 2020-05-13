@@ -28,8 +28,6 @@ import (
 	sha256 "github.com/minio/sha256-simd"
 )
 
-var errNestedReader = errors.New("Nesting of Reader detected, not allowed")
-
 // Reader writes what it reads from an io.Reader to an MD5 and SHA256 hash.Hash.
 // Reader verifies that the content of the io.Reader matches the expected checksums.
 type Reader struct {
@@ -51,7 +49,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 	}
 
 	// Create empty reader and merge into that.
-	r := Reader{src: src}
+	r := Reader{src: src, size: -1, actualSize: -1}
 	return r.merge(size, md5Hex, sha256Hex, actualSize, strictCompat)
 }
 
@@ -69,7 +67,7 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 
 	// At io.EOF verify if the checksums are right.
 	if err == io.EOF {
-		if cerr := r.Verify(); cerr != nil {
+		if cerr := r.verify(); cerr != nil {
 			return 0, cerr
 		}
 	}
@@ -122,9 +120,9 @@ func (r *Reader) SHA256HexString() string {
 	return hex.EncodeToString(r.sha256sum)
 }
 
-// Verify verifies if the computed MD5 sum and SHA256 sum are
+// verify verifies if the computed MD5 sum and SHA256 sum are
 // equal to the ones specified when creating the Reader.
-func (r *Reader) Verify() error {
+func (r *Reader) verify() error {
 	if r.sha256Hash != nil && len(r.sha256sum) > 0 {
 		if sum := r.sha256Hash.Sum(nil); !bytes.Equal(r.sha256sum, sum) {
 			return SHA256Mismatch{hex.EncodeToString(r.sha256sum), hex.EncodeToString(sum)}
@@ -141,13 +139,20 @@ func (r *Reader) Verify() error {
 // merge another hash into this one.
 // There cannot be conflicting information given.
 func (r *Reader) merge(size int64, md5Hex, sha256Hex string, actualSize int64, strictCompat bool) (*Reader, error) {
-	// Merge sizes.
-	if r.size <= 0 && size >= 0 {
-		r.size = size
-		if size > 0 {
-			r.src = io.LimitReader(r.src, size)
-		}
+	if r.bytesRead > 0 {
+		return nil, errors.New("internal error: Already read from hash reader")
 	}
+	// Merge sizes.
+	// If not set before, just add it.
+	if r.size < 0 && size >= 0 {
+		r.src = io.LimitReader(r.src, size)
+		r.size = size
+	}
+	// If set before and set now they must match.
+	if r.size >= 0 && size >= 0 && r.size != size {
+		return nil, ErrSizeMismatch{Want: r.size, Got: size}
+	}
+
 	if r.actualSize <= 0 && actualSize >= 0 {
 		r.actualSize = actualSize
 	}
