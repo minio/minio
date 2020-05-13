@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,72 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const defaultMonitorNewDiskInterval = time.Minute * 10
 
-func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
-	go monitorLocalDisksAndHeal(ctx, objAPI)
+func initDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
+	go monitorDisksAndHeal(ctx, objAPI)
 }
 
-// monitorLocalDisksAndHeal - ensures that detected new disks are healed
-//  1. Only the concerned erasure set will be listed and healed
-//  2. Only the node hosting the disk is responsible to perform the heal
-func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
+func runStartupHeal(ctx context.Context, objAPI ObjectLayer, healCh chan healSource) {
+	// Reformat disks and wait until it finishes
+	healCh <- healSource{path: SlashSeparator}
+	healCh <- healSource{path: nopHeal}
+
+	settings := madmin.HealOpts{Recursive: true, ScanMode: madmin.HealDeepScan}
+
+	// Heal all objects under .minio.sys/config/
+	objAPI.HealObjects(ctx, minioMetaBucket, minioConfigPrefix, settings, func(bucket string, object string) error {
+		healCh <- healSource{path: pathJoin(bucket, object)}
+		return nil
+	})
+
+	// Heal all objects under .minio.sys/buckets/
+	objAPI.HealObjects(ctx, minioMetaBucket, bucketConfigPrefix, settings, func(bucket string, object string) error {
+		healCh <- healSource{path: pathJoin(bucket, object)}
+		return nil
+	})
+
+	// Recreate buckets
+	buckets, err := objAPI.ListBucketsHeal(ctx)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
+
+	for _, bucket := range buckets {
+		_ = objAPI.MakeBucketWithLocation(ctx, bucket.Name, "", false)
+	}
+}
+
+func computeUnformattedDisks(endpoints EndpointZones) (disksInZoneHeal []Endpoints, unformattedDiskFound bool) {
+	disksInZoneHeal = make([]Endpoints, len(endpoints))
+	for i, ep := range endpoints {
+		disksToHeal := Endpoints{}
+		for _, endpoint := range ep.Endpoints {
+			// Try to connect to the current endpoint
+			// to check if it is unformatted or not
+			_, _, err := connectEndpoint(endpoint)
+			if err == errUnformattedDisk {
+				disksToHeal = append(disksToHeal, endpoint)
+			}
+		}
+		if len(disksToHeal) == 0 {
+			continue
+		}
+		disksInZoneHeal[i] = disksToHeal
+		unformattedDiskFound = true
+	}
+
+	return
+}
+
+// monitorDisksAndHeal - ensures that detected new disks are healed,
+// only the concerned erasure set will be listed and healed
+func monitorDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
+
 	z, ok := objAPI.(*xlZones)
 	if !ok {
 		return
@@ -49,51 +103,48 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 		time.Sleep(time.Second)
 	}
 
+	// Loop until all nodes are up
+	for {
+		info := z.StorageInfo(ctx, false)
+		for _, online := range info.Backend.OnlineDisks {
+			if online == 0 {
+				time.Sleep(5 * time.Second)
+				continue
+			}
+		}
+		break
+	}
+
+	// Save unformatted disks to heal them later, this is executed before
+	// runStartupHeal because this latter will format disks.
+	disksInZoneHeal, unformattedDiskFound := computeUnformattedDisks(globalEndpoints)
+
+	// Run the heal procedure of the startup mode
+	runStartupHeal(ctx, z, bgSeq.sourceCh)
+
 	// Perform automatic disk healing when a disk is replaced locally.
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(defaultMonitorNewDiskInterval):
-			// Attempt a heal as the server starts-up first.
-			localDisksInZoneHeal := make([]Endpoints, len(z.zones))
-			var healNewDisks bool
-			for i, ep := range globalEndpoints {
-				localDisksToHeal := Endpoints{}
-				for _, endpoint := range ep.Endpoints {
-					if !endpoint.IsLocal {
-						continue
-					}
-					// Try to connect to the current endpoint
-					// and reformat if the current disk is not formatted
-					_, _, err := connectEndpoint(endpoint)
-					if err == errUnformattedDisk {
-						localDisksToHeal = append(localDisksToHeal, endpoint)
-					}
-				}
-				if len(localDisksToHeal) == 0 {
-					continue
-				}
-				localDisksInZoneHeal[i] = localDisksToHeal
-				healNewDisks = true
+			if len(disksInZoneHeal) == 0 {
+				disksInZoneHeal, unformattedDiskFound = computeUnformattedDisks(globalEndpoints)
 			}
 
-			// Reformat disks only if needed.
-			if !healNewDisks {
-				continue
+			if !unformattedDiskFound {
+				break
 			}
 
-			// Reformat disks
+			// Reformat disks and wait until it finishes
 			bgSeq.sourceCh <- healSource{path: SlashSeparator}
-
-			// Ensure that reformatting disks is finished
 			bgSeq.sourceCh <- healSource{path: nopHeal}
 
-			var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
+			var erasureSetInZoneToHeal = make([][]int, len(disksInZoneHeal))
 			// Compute the list of erasure set to heal
-			for i, localDisksToHeal := range localDisksInZoneHeal {
+			for i, disksToHeal := range disksInZoneHeal {
 				var erasureSetToHeal []int
-				for _, endpoint := range localDisksToHeal {
+				for _, endpoint := range disksToHeal {
 					// Load the new format of this passed endpoint
 					_, format, err := connectEndpoint(endpoint)
 					if err != nil {
@@ -112,7 +163,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 				erasureSetInZoneToHeal[i] = erasureSetToHeal
 			}
 
-			// Heal all erasure sets that need
+			// Heal all needed erasure sets
 			for i, erasureSetToHeal := range erasureSetInZoneToHeal {
 				for _, setIndex := range erasureSetToHeal {
 					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex])
@@ -122,5 +173,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 				}
 			}
 		}
+
+		disksInZoneHeal, unformattedDiskFound = nil, false
 	}
 }

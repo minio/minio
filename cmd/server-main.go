@@ -272,36 +272,9 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 	// are modifying this code that you do so, if and when
 	// you want to add extra context to your error. This
 	// ensures top level retry works accordingly.
-	var buckets []BucketInfo
-	if globalIsDistXL || globalIsXL {
-		// List buckets to heal, and be re-used for loading configs.
-		buckets, err = newObject.ListBucketsHeal(GlobalContext)
-		if err != nil {
-			return fmt.Errorf("Unable to list buckets to heal: %w", err)
-		}
-		// Attempt a heal if possible and re-use the bucket names
-		// to reload their config.
-		wquorum := &InsufficientWriteQuorum{}
-		rquorum := &InsufficientReadQuorum{}
-		for _, bucket := range buckets {
-			if err = newObject.MakeBucketWithLocation(GlobalContext, bucket.Name, "", false); err != nil {
-				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
-					// Retrun the error upwards for the caller to retry.
-					return fmt.Errorf("Unable to heal bucket: %w", err)
-				}
-				if _, ok := err.(BucketExists); !ok {
-					// ignore any other error and log for investigation.
-					logger.LogIf(GlobalContext, err)
-					continue
-				}
-				// Bucket already exists, nothing that needs to be done.
-			}
-		}
-	} else {
-		buckets, err = newObject.ListBuckets(GlobalContext)
-		if err != nil {
-			return fmt.Errorf("Unable to list buckets: %w", err)
-		}
+	buckets, err := newObject.ListBuckets(GlobalContext)
+	if err != nil {
+		return fmt.Errorf("Unable to list buckets: %w", err)
 	}
 
 	// Initialize config system.
@@ -375,6 +348,7 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 
 	if globalIsXL {
 		initGlobalHeal(ctx, objAPI)
+		initDisksAutoHeal(ctx, objAPI)
 	}
 
 	initDataUsageStats(ctx, objAPI)
@@ -516,7 +490,6 @@ func serverMain(ctx *cli.Context) {
 	// Enable healing to heal drives if possible
 	if globalIsXL {
 		initBackgroundHealing(GlobalContext, newObject)
-		initLocalDisksAutoHeal(GlobalContext, newObject)
 	}
 
 	go startBackgroundOps(GlobalContext, newObject)

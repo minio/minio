@@ -678,11 +678,6 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 }
 
 func (h *healSequence) healItemsFromSourceCh() error {
-	bucketsOnly := true // heal buckets only, not objects.
-	if err := h.healItems(bucketsOnly); err != nil {
-		logger.LogIf(h.ctx, err)
-	}
-
 	for {
 		select {
 		case source, ok := <-h.sourceCh:
