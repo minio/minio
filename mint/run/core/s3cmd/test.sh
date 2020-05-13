@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Mint (C) 2017 Minio, Inc.
+# Mint (C) 2017-2020 Minio, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -289,21 +289,6 @@ function test_get_object_multipart()
     log_success "$start_time" "${FUNCNAME[0]}"
 }
 
-function test_copy_object()
-{
-    show "${FUNCNAME[0]}"
-
-    start_time=$(get_time)
-    object_name1="s3cmd-test-object-$RANDOM"
-    object_name2="s3cmd-test-object-$RANDOM"
-    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd put "${FILE_1_MB}" "s3://${BUCKET_NAME}/${object_name1}"
-    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd cp "s3://${BUCKET_NAME}/${object_name1}" "s3://${BUCKET_NAME}/${object_name2}"
-    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd info "s3://${BUCKET_NAME}/${object_name2}"
-    assert_success "$start_time" "${FUNCNAME[0]}" s3cmd_cmd rm "s3://${BUCKET_NAME}/${object_name1}" "s3://${BUCKET_NAME}/${object_name2}"
-
-    log_success "$start_time" "${FUNCNAME[0]}"
-}
-
 function test_sync_list_objects()
 {
     show "${FUNCNAME[0]}"
@@ -333,7 +318,6 @@ function run_test()
     test_put_object_multipart
     test_get_object
     test_get_object_multipart
-    test_copy_object
     test_sync_list_objects
 
     teardown
