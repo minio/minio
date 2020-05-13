@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"runtime"
 	"strings"
 
 	"github.com/google/uuid"
@@ -51,7 +52,7 @@ func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error
 		logger.LogIf(ctx, ObjectNameInvalid{Bucket: bucket, Object: object})
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	if strings.Contains(object, "\\") {
+	if runtime.GOOS == globalWindowsOSName && strings.Contains(object, "\\") {
 		// Objects cannot be contain \ in Windows and is listed as `Characters to Avoid`.
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}

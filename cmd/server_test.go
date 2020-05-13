@@ -599,6 +599,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, nil)
+	c.Assert(len(deleteResp.DeletedObjects), len(delObjReq.Objects))
 	for i := 0; i < 10; i++ {
 		c.Assert(deleteResp.DeletedObjects[i], delObjReq.Objects[i])
 	}

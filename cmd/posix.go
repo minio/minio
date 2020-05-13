@@ -128,7 +128,7 @@ func checkPathLength(pathName string) error {
 		case '/':
 			count = 0 // Reset
 		case '\\':
-			if runtime.GOOS == "windows" {
+			if runtime.GOOS == globalWindowsOSName {
 				count = 0
 			}
 		default:
