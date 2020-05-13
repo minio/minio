@@ -301,24 +301,6 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 	}
 }
 
-func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	writer, err := sio.DecryptWriter(client, sio.Config{
-		Key:            objectEncryptionKey,
-		SequenceNumber: seqNumber,
-	})
-	if err != nil {
-		return nil, crypto.ErrInvalidCustomerKey
-	}
-	delete(metadata, crypto.SSEIV)
-	delete(metadata, crypto.SSESealAlgorithm)
-	delete(metadata, crypto.SSECSealedKey)
-	delete(metadata, crypto.SSEMultipart)
-	delete(metadata, crypto.S3SealedKey)
-	delete(metadata, crypto.S3KMSSealedKey)
-	delete(metadata, crypto.S3KMSKeyID)
-	return writer, nil
-}
-
 // Adding support for reader based interface
 
 // DecryptRequestWithSequenceNumberR - same as
@@ -539,31 +521,6 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 		d.partDecRelOffset += int64(n1)
 	}
 	return len(p), nil
-}
-
-// getEncryptedSinglePartOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
-func getEncryptedSinglePartOffsetLength(offset, length int64, objInfo ObjectInfo) (seqNumber uint32, encOffset int64, encLength int64) {
-	onePkgSize := int64(SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
-
-	seqNumber = uint32(offset / SSEDAREPackageBlockSize)
-	encOffset = int64(seqNumber) * onePkgSize
-	// The math to compute the encrypted length is always
-	// originalLength i.e (offset+length-1) to be divided under
-	// 64KiB blocks which is the payload size for each encrypted
-	// block. This is then multiplied by final package size which
-	// is basically 64KiB + 32. Finally negate the encrypted offset
-	// to get the final encrypted length on disk.
-	encLength = ((offset+length)/SSEDAREPackageBlockSize)*onePkgSize - encOffset
-
-	// Check for the remainder, to figure if we need one extract package to read from.
-	if (offset+length)%SSEDAREPackageBlockSize > 0 {
-		encLength += onePkgSize
-	}
-
-	if encLength+encOffset > objInfo.EncryptedSize() {
-		encLength = objInfo.EncryptedSize() - encOffset
-	}
-	return seqNumber, encOffset, encLength
 }
 
 // DecryptedSize returns the size of the object after decryption in bytes.
