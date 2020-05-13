@@ -873,8 +873,6 @@ func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
 }
 
-var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
-
 // Get all UUIDs which are present in reference format should
 // be present in the list of formats provided, those are considered
 // as online UUIDs.

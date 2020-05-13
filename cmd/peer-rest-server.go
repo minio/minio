@@ -43,27 +43,6 @@ import (
 type peerRESTServer struct {
 }
 
-func getServerInfo() (*ServerInfoData, error) {
-	objLayer := newObjectLayerWithoutSafeModeFn()
-	if objLayer == nil {
-		return nil, errServerNotInitialized
-	}
-
-	// Server info data.
-	return &ServerInfoData{
-		ConnStats: globalConnStats.toServerConnStats(),
-		HTTPStats: globalHTTPStats.toServerHTTPStats(),
-		Properties: ServerProperties{
-			Uptime:       UTCNow().Unix() - globalBootTime.Unix(),
-			Version:      Version,
-			CommitID:     CommitID,
-			DeploymentID: globalDeploymentID,
-			SQSARN:       globalNotificationSys.GetARNList(false),
-			Region:       globalServerRegion,
-		},
-	}, nil
-}
-
 // GetLocksHandler - returns list of older lock from the server.
 func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -473,7 +452,7 @@ func (s *peerRESTServer) DispatchNetOBDInfoHandler(w http.ResponseWriter, r *htt
 	ctx := newContext(r, w, "DispatchNetOBDInfo")
 	info := globalNotificationSys.NetOBDInfo(ctx)
 
-	done()
+	done(nil)
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 	w.(http.Flusher).Flush()
 }

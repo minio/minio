@@ -34,9 +34,6 @@ import (
 // IPv4 addresses of local host.
 var localIP4 = mustGetLocalIP4()
 
-// IPv6 address of local host.
-var localIP6 = mustGetLocalIP6()
-
 // mustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
 func mustSplitHostPort(hostPort string) (host, port string) {
 	xh, err := xnet.ParseHost(hostPort)

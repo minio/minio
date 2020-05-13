@@ -315,25 +315,6 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, upd
 	return firstErr
 }
 
-// This function is used to undo a successful MakeBucket operation.
-func undoMakeBucketZones(bucket string, zones []*xlSets, errs []error) {
-	g := errgroup.WithNErrs(len(zones))
-
-	// Undo previous make bucket entry on all underlying zones.
-	for index := range zones {
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				return zones[index].DeleteBucket(GlobalContext, bucket, false)
-			}
-			return nil
-		}, index)
-	}
-
-	// Wait for all delete bucket to finish.
-	g.Wait()
-}
-
 // MakeBucketWithLocation - creates a new bucket across all zones simultaneously
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
@@ -363,12 +344,9 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 	}
 
 	errs := g.Wait()
-	// Upon even a single write quorum error we undo all previously created buckets.
+	// Return the first encountered error
 	for _, err := range errs {
 		if err != nil {
-			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoMakeBucketZones(bucket, z.zones, errs)
-			}
 			return err
 		}
 	}
