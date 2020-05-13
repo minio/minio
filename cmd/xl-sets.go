@@ -113,25 +113,6 @@ func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
 	return disk.IsOnline()
 }
 
-func (s *xlSets) getOnlineDisksCount() int {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-	count := 0
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			disk := s.xlDisks[i][j]
-			if disk == nil {
-				continue
-			}
-			if !disk.IsOnline() {
-				continue
-			}
-			count++
-		}
-	}
-	return count
-}
-
 func (s *xlSets) getDiskMap() map[string]StorageAPI {
 	diskMap := make(map[string]StorageAPI)
 

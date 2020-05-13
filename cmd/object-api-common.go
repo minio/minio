@@ -419,26 +419,3 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 	// Success.
 	return result, nil
 }
-
-// Fetch the histogram interval corresponding
-// to the passed object size.
-func objSizeToHistoInterval(usize uint64) string {
-	size := int64(usize)
-
-	var interval objectHistogramInterval
-	for _, interval = range ObjectsHistogramIntervals {
-		var cond1, cond2 bool
-		if size >= interval.start || interval.start == -1 {
-			cond1 = true
-		}
-		if size <= interval.end || interval.end == -1 {
-			cond2 = true
-		}
-		if cond1 && cond2 {
-			return interval.name
-		}
-	}
-
-	// This would be the last element of histogram intervals
-	return interval.name
-}

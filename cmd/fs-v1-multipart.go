@@ -112,7 +112,7 @@ func (fs *FSObjects) backgroundAppend(ctx context.Context, bucket, object, uploa
 		}
 
 		partPath := pathJoin(uploadIDDir, entry)
-		err = mioutil.AppendFile(file.filePath, partPath)
+		err = mioutil.AppendFile(file.filePath, partPath, globalFSOSync)
 		if err != nil {
 			reqInfo := logger.GetReqInfo(ctx).AppendTags("partPath", partPath)
 			reqInfo.AppendTags("filepath", file.filePath)
@@ -638,7 +638,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		}
 		for _, part := range parts {
 			partPath := getPartFile(entries, part.PartNumber, part.ETag)
-			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partPath)); err != nil {
+			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partPath), globalFSOSync); err != nil {
 				logger.LogIf(ctx, err)
 				return oi, toObjectErr(err)
 			}

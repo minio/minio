@@ -321,7 +321,11 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 		return 0, err
 	}
 
-	writer, err := lock.Open(filePath, os.O_CREATE|os.O_WRONLY, 0666)
+	flags := os.O_CREATE | os.O_WRONLY
+	if globalFSOSync {
+		flags = flags | os.O_SYNC
+	}
+	writer, err := lock.Open(filePath, flags, 0666)
 	if err != nil {
 		return 0, osErrToFSFileErr(err)
 	}
