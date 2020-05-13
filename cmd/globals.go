@@ -280,6 +280,8 @@ var (
 	// fix the system.
 	globalSafeMode bool
 
+	// If writes to FS backend should be O_SYNC.
+	globalFSOSync bool
 	// Add new variable global values here.
 )
 
