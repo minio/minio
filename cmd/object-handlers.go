@@ -2952,7 +2952,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Get object tags
-	tags, err := objAPI.GetObjectTag(ctx, bucket, object)
+	tags, err := objAPI.GetObjectTags(ctx, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -2997,7 +2997,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Put object tags
-	err = objAPI.PutObjectTag(ctx, bucket, object, tags.String())
+	err = objAPI.PutObjectTags(ctx, bucket, object, tags.String())
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -3036,7 +3036,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	// Delete object tags
-	if err = objAPI.DeleteObjectTag(ctx, bucket, object); err != nil && err != errConfigNotFound {
+	if err = objAPI.DeleteObjectTags(ctx, bucket, object); err != nil && err != errConfigNotFound {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

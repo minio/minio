@@ -1763,19 +1763,19 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, opts ma
 	return nil
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (s *xlSets) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
-	return s.getHashedSet(object).PutObjectTag(ctx, bucket, object, tags)
+// PutObjectTags - replace or add tags to an existing object
+func (s *xlSets) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
+	return s.getHashedSet(object).PutObjectTags(ctx, bucket, object, tags)
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return s.getHashedSet(object).DeleteObjectTag(ctx, bucket, object)
+// DeleteObjectTags - delete object tags from an existing object
+func (s *xlSets) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return s.getHashedSet(object).DeleteObjectTags(ctx, bucket, object)
 }
 
-// GetObjectTag - get object tags from an existing object
-func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
-	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
+// GetObjectTags - get object tags from an existing object
+func (s *xlSets) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+	return s.getHashedSet(object).GetObjectTags(ctx, bucket, object)
 }
 
 // GetMetrics - no op

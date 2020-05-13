@@ -1492,7 +1492,3 @@ func (l *gcsGateway) IsCompressionSupported() bool {
 func (l *gcsGateway) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
 }
-
-func (l *gcsGateway) IsObjectTaggingSupported() bool {
-	return false
-}

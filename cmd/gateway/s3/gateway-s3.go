@@ -530,17 +530,20 @@ func (l *s3Objects) ListMultipartUploads(ctx context.Context, bucket string, pre
 // NewMultipartUpload upload object in multiple parts
 func (l *s3Objects) NewMultipartUpload(ctx context.Context, bucket string, object string, o minio.ObjectOptions) (uploadID string, err error) {
 	var tagMap map[string]string
-	var tagObj *tags.Tags
-	tagStr, ok := o.UserDefined[xhttp.AmzObjectTagging]
-	if ok {
-		delete(o.UserDefined, xhttp.AmzObjectTagging)
-		if tagObj, err = tags.Parse(tagStr, true); err != nil {
+	if tagStr, ok := o.UserDefined[xhttp.AmzObjectTagging]; ok {
+		tagObj, err := tags.Parse(tagStr, true)
+		if err != nil {
 			return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
 		}
 		tagMap = tagObj.ToMap()
+		delete(o.UserDefined, xhttp.AmzObjectTagging)
 	}
 	// Create PutObject options
-	opts := miniogo.PutObjectOptions{UserMetadata: o.UserDefined, ServerSideEncryption: o.ServerSideEncryption, UserTags: tagMap}
+	opts := miniogo.PutObjectOptions{
+		UserMetadata:         o.UserDefined,
+		ServerSideEncryption: o.ServerSideEncryption,
+		UserTags:             tagMap,
+	}
 	uploadID, err = l.Client.NewMultipartUpload(bucket, object, opts)
 	if err != nil {
 		return uploadID, minio.ErrorRespToObjectError(err, bucket, object)
@@ -652,8 +655,8 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 	return nil
 }
 
-// GetObjectTag gets the tags set on the object
-func (l *s3Objects) GetObjectTag(ctx context.Context, bucket string, object string) (*tags.Tags, error) {
+// GetObjectTags gets the tags set on the object
+func (l *s3Objects) GetObjectTags(ctx context.Context, bucket string, object string) (*tags.Tags, error) {
 	var err error
 	var tagObj *tags.Tags
 	var tagStr string
@@ -673,8 +676,8 @@ func (l *s3Objects) GetObjectTag(ctx context.Context, bucket string, object stri
 	return tagObj, err
 }
 
-//PutObjectTag attaches the tags to the object
-func (l *s3Objects) PutObjectTag(ctx context.Context, bucket, object string, tagStr string) error {
+// PutObjectTags attaches the tags to the object
+func (l *s3Objects) PutObjectTags(ctx context.Context, bucket, object string, tagStr string) error {
 	var err error
 	tagObj, err := tags.Parse(tagStr, true)
 	if err != nil {
@@ -687,7 +690,8 @@ func (l *s3Objects) PutObjectTag(ctx context.Context, bucket, object string, tag
 	return nil
 }
 
-func (l *s3Objects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+// DeleteObjectTags removes the tags attached to the object
+func (l *s3Objects) DeleteObjectTags(ctx context.Context, bucket, object string) error {
 	if err := l.Client.RemoveObjectTagging(bucket, object); err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
