@@ -40,9 +40,6 @@ const (
 
 	// MinIO configuration file.
 	minioConfigFile = "config.json"
-
-	// MinIO configuration backup file
-	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
 func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (

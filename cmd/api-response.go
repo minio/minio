@@ -767,17 +767,6 @@ func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIE
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
 }
 
-// writeVersionMismatchResponse - writes custom error responses for version mismatches.
-func writeVersionMismatchResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, isJSON bool) {
-	if isJSON {
-		// Generate error response.
-		errorResponse := getAPIErrorResponse(ctx, err, reqURL.String(), w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
-		writeResponse(w, err.HTTPStatusCode, encodeResponseJSON(errorResponse), mimeJSON)
-	} else {
-		writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
-	}
-}
-
 // writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,
 // but accepts the error message directly (this allows messages to be
 // dynamically generated.)
