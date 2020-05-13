@@ -17,12 +17,10 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/prometheus/client_golang/prometheus"
@@ -142,10 +140,6 @@ type HTTPStats struct {
 	currentS3Requests HTTPAPIStats
 	totalS3Requests   HTTPAPIStats
 	totalS3Errors     HTTPAPIStats
-}
-
-func durationStr(totalDuration, totalCount float64) string {
-	return fmt.Sprint(time.Duration(totalDuration/totalCount) * time.Second)
 }
 
 // Converts http stats into struct to be sent back to the client.

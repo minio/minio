@@ -149,26 +149,6 @@ func formatXLCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 	return nil
 }
 
-// validate reference format against list of XL formats.
-func validateXLFormats(format *formatXLV3, formats []*formatXLV3, endpoints Endpoints, setCount, drivesPerSet int) error {
-	for i := range formats {
-		if formats[i] == nil {
-			continue
-		}
-		if err := formatXLV3Check(format, formats[i]); err != nil {
-			return fmt.Errorf("%s format error: %w", endpoints[i], err)
-		}
-	}
-	if len(format.XL.Sets) != setCount {
-		return fmt.Errorf("Current backend format is inconsistent with input args (%s), Expected set count %d, got %d", endpoints, len(format.XL.Sets), setCount)
-	}
-	if len(format.XL.Sets[0]) != drivesPerSet {
-		return fmt.Errorf("Current backend format is inconsistent with input args (%s), Expected drive count per set %d, got %d", endpoints, len(format.XL.Sets[0]), drivesPerSet)
-	}
-
-	return nil
-}
-
 // Following error message is added to fix a regression in release
 // RELEASE.2018-03-16T22-52-12Z after migrating v1 to v2 to v3. This
 // migration failed to capture '.This' field properly which indicates
