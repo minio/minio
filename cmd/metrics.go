@@ -86,6 +86,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	storageMetricsPrometheus(ch)
 	networkMetricsPrometheus(ch)
 	httpMetricsPrometheus(ch)
+	cacheMetricsPrometheus(ch)
 	gatewayMetricsPrometheus(ch)
 	healingMetricsPrometheus(ch)
 }

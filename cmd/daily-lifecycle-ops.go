@@ -27,7 +27,6 @@ import (
 
 const (
 	bgLifecycleInterval = 24 * time.Hour
-	bgLifecycleTick     = time.Hour
 )
 
 // initDailyLifecycle starts the routine that receives the daily
