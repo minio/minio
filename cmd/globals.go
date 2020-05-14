@@ -43,8 +43,6 @@ import (
 
 // minio configuration related constants.
 const (
-	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
-
 	globalMinioDefaultPort = "9000"
 
 	globalMinioDefaultRegion = ""
@@ -210,10 +208,9 @@ var (
 	globalDomainNames []string      // Root domains for virtual host style requests
 	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
 
-	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
-	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
-	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
-	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
+	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops
+	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)          // timeout for healing related ops
 
 	globalBucketObjectLockSys *BucketObjectLockSys
 	globalBucketQuotaSys      *BucketQuotaSys
@@ -234,11 +231,6 @@ var (
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig *dns.CoreDNS
-
-	// Default usage check interval value.
-	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours
-	// Usage check interval value.
-	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS

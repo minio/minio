@@ -106,7 +106,7 @@ func (target *NSQTarget) HasQueueStore() bool {
 
 // IsActive - Return true if target is up and active
 func (target *NSQTarget) IsActive() (bool, error) {
-	if target.producer != nil {
+	if target.producer == nil {
 		producer, err := nsq.NewProducer(target.args.NSQDAddress.String(), target.config)
 		if err != nil {
 			return false, err
