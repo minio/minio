@@ -163,7 +163,7 @@ func (r *Reader) merge(size int64, md5Hex, sha256Hex string, actualSize int64, s
 		return nil, SHA256Mismatch{}
 	}
 
-	// If both are set, they must expect the same.
+	// If both are set, they must be the same.
 	if r.sha256Hash != nil && len(sha256sum) > 0 {
 		if !bytes.Equal(r.sha256sum, sha256sum) {
 			return nil, SHA256Mismatch{}
