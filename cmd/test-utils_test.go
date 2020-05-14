@@ -222,6 +222,8 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
 type TestErrHandler interface {
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Failed() bool
