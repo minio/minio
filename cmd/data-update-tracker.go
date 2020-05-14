@@ -246,6 +246,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		if d.debug {
 			logger.Info(color.Green("dataUpdateTracker:")+" Saving: %v bytes, Current idx: %v", buf.Len(), d.Current.idx)
 		}
+		d.dirty = false
 		d.mu.Unlock()
 		if err != nil {
 			logger.LogIf(ctx, err, "Error serializing usage tracker data")
@@ -268,7 +269,6 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 				logger.LogIf(ctx, err)
 				continue
 			}
-			d.dirty = false
 		}
 		if exit {
 			return
