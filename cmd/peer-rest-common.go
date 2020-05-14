@@ -46,7 +46,6 @@ const (
 	peerRESTMethodLoadPolicy                   = "/loadpolicy"
 	peerRESTMethodLoadPolicyMapping            = "/loadpolicymapping"
 	peerRESTMethodDeletePolicy                 = "/deletepolicy"
-	peerRESTMethodLoadUsers                    = "/loadusers"
 	peerRESTMethodLoadGroup                    = "/loadgroup"
 	peerRESTMethodStartProfiling               = "/startprofiling"
 	peerRESTMethodDownloadProfilingData        = "/downloadprofilingdata"
@@ -68,8 +67,6 @@ const (
 )
 
 const (
-	peerRESTNetPerfSize   = "netperfsize"
-	peerRESTDrivePerfSize = "driveperfsize"
 	peerRESTBucket        = "bucket"
 	peerRESTUser          = "user"
 	peerRESTGroup         = "group"

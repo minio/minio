@@ -578,13 +578,6 @@ func restQueries(keys ...string) []string {
 	return accumulator
 }
 
-// Reverse the input order of a slice of string
-func reverseStringSlice(input []string) {
-	for left, right := 0, len(input)-1; left < right; left, right = left+1, right-1 {
-		input[left], input[right] = input[right], input[left]
-	}
-}
-
 // lcp finds the longest common prefix of the input strings.
 // It compares by bytes instead of runes (Unicode code points).
 // It's up to the caller to do Unicode normalization if desired

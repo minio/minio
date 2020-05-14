@@ -352,15 +352,6 @@ func (s *posix) IsOnline() bool {
 	return true
 }
 
-func isQuitting(endCh chan struct{}) bool {
-	select {
-	case <-endCh:
-		return true
-	default:
-		return false
-	}
-}
-
 func (s *posix) waitForLowActiveIO() {
 	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
 		time.Sleep(lowActiveIOWaitTick)

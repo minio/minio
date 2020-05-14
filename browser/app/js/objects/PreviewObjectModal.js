@@ -23,7 +23,10 @@ class PreviewObjectModal extends React.Component {
     this.state = {
       url: "",
     }
-    props.getObjectURL(props.object.name, (url) => {
+  }
+
+  componentDidMount() {
+    this.props.getObjectURL(this.props.object.name, (url) => {
       this.setState({
         url: url,
       })

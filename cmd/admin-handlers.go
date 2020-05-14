@@ -33,7 +33,6 @@ import (
 	"strings"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio/cmd/config"
@@ -52,7 +51,6 @@ import (
 
 const (
 	maxEConfigJSONSize = 262272
-	defaultNetPerfSize = 100 * humanize.MiByte
 )
 
 // Type-safe query params.
