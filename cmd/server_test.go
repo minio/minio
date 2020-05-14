@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -120,6 +121,9 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 }
 
 func TestServerSuite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("cannot set up server reliably on Windows")
+	}
 	testCases := []*TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
 		{serverType: "FS", signer: signerV4},
@@ -599,6 +603,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, nil)
+	c.Assert(len(deleteResp.DeletedObjects), len(delObjReq.Objects))
 	for i := 0; i < 10; i++ {
 		c.Assert(deleteResp.DeletedObjects[i], delObjReq.Objects[i])
 	}
