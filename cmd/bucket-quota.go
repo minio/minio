@@ -155,6 +155,9 @@ func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
 		return nil
 	}
 
+	if q.Type == madmin.FIFOQuota {
+		return nil
+	}
 	return globalBucketStorageCache.check(ctx, q, bucket, size)
 }
 

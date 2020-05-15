@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
@@ -247,14 +248,15 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitXLDisks(sErrs) && firstDisk {
-		logger.Info("Formatting %v zone, %v set(s), %v drives per set.",
-			zoneCount, setCount, drivesPerSet)
+		logger.Info("Formatting %s zone, %v set(s), %v drives per set.",
+			humanize.Ordinal(zoneCount), setCount, drivesPerSet)
 
 		// Initialize erasure code format on disks
 		format, err = initFormatXL(GlobalContext, storageDisks, setCount, drivesPerSet, deploymentID)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		// Assign globalDeploymentID on first run for the
 		// minio server managing the first disk
 		globalDeploymentID = format.ID

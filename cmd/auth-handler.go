@@ -423,7 +423,7 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}
-	r.Body = ioutil.NopCloser(reader)
+	r.Body = reader
 	return ErrNone
 }
 
