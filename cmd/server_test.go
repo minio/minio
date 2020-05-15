@@ -28,7 +28,6 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -121,9 +120,6 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 }
 
 func TestServerSuite(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("cannot set up server reliably on Windows")
-	}
 	testCases := []*TestSuiteCommon{
 		// Init and run test on FS backend with signature v4.
 		{serverType: "FS", signer: signerV4},

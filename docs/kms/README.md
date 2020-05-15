@@ -368,8 +368,8 @@ MinIO identity and the KES CLI.
 
 In a new terminal window become the MinIO identity via:
 ```
-export KES_CLIENT_TLS_KEY_FILE=minio.key
-export KES_CLIENT_TLS_CERT_FILE=minio.cert
+export KES_CLIENT_KEY=minio.key
+export KES_CLIENT_CERT=minio.cert
 ```
 
 Then create the master key by running:
