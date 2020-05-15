@@ -601,7 +601,7 @@ func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return minio.ObjectInfo{Bucket: bucket, Name: object, ETag: etag}, nil
+	return minio.ObjectInfo{Bucket: bucket, Name: object, ETag: strings.Trim(etag, "\"")}, nil
 }
 
 // SetBucketPolicy sets policy on bucket
