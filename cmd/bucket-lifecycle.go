@@ -23,6 +23,7 @@ import (
 	"path"
 	"sync"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 )
 
@@ -148,9 +149,15 @@ func (sys *LifecycleSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 			return err
 		}
 
+		// Do not load the lifecycle configuration if it is not valid
+		err = config.Validate()
+		if err != nil {
+			logger.LogIf(context.Background(), err)
+			continue
+		}
+
 		sys.Set(bucket.Name, config)
 	}
-
 	return nil
 }
 
