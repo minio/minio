@@ -314,7 +314,6 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if err != nil {
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
-	objInfo.UserDefined = minio.CleanMinioInternalMetadataKeys(objInfo.UserDefined)
 	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)
@@ -549,7 +548,7 @@ func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, objec
 		}
 		lpi.Parts[i].ETag = partMeta.ETag
 	}
-	lpi.UserDefined = dm.Meta
+	lpi.UserDefined = dm.ToObjectInfo(bucket, object).UserDefined
 	lpi.Object = object
 	return lpi, nil
 }
