@@ -325,12 +325,6 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 		return NotImplemented{}
 	}
 
-	bucketLock := fs.NewNSLock(ctx, bucket, "")
-	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-		return err
-	}
-	defer bucketLock.Unlock()
-
 	// Verify if bucket is valid.
 	if s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return BucketNameInvalid{Bucket: bucket}
@@ -361,12 +355,6 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 
 // GetBucketInfo - fetch bucket metadata info.
 func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi BucketInfo, e error) {
-	bucketLock := fs.NewNSLock(ctx, bucket, "")
-	if e := bucketLock.GetRLock(globalObjectTimeout); e != nil {
-		return bi, e
-	}
-	defer bucketLock.RUnlock()
-
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
@@ -443,15 +431,6 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 // DeleteBucket - delete a bucket and all the metadata associated
 // with the bucket including pending multipart, object metadata.
 func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
-	if !forceDelete {
-		bucketLock := fs.NewNSLock(ctx, bucket, "")
-		if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
-			logger.LogIf(ctx, err)
-			return err
-		}
-		defer bucketLock.Unlock()
-	}
-
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)

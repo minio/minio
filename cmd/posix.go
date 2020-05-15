@@ -109,10 +109,7 @@ func checkPathLength(pathName string) error {
 
 	// Disallow more than 1024 characters on windows, there
 	// are no known name_max limits on Windows.
-	if runtime.GOOS == "windows" {
-		if len(pathName) <= 1024 {
-			return nil
-		}
+	if runtime.GOOS == "windows" && len(pathName) > 1024 {
 		return errFileNameTooLong
 	}
 
@@ -129,6 +126,10 @@ func checkPathLength(pathName string) error {
 		switch p {
 		case '/':
 			count = 0 // Reset
+		case '\\':
+			if runtime.GOOS == globalWindowsOSName {
+				count = 0
+			}
 		default:
 			count++
 			if count > 255 {

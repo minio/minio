@@ -103,6 +103,13 @@ func (target *ElasticsearchTarget) IsActive() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	if target.client == nil {
+		client, err := newClient(target.args)
+		if err != nil {
+			return false, err
+		}
+		target.client = client
+	}
 	_, code, err := target.client.Ping(target.args.URL.String()).HttpHeadOnly(true).Do(ctx)
 	if err != nil {
 		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {

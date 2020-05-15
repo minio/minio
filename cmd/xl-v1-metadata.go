@@ -393,9 +393,6 @@ func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time,
 	return getXLMetaInQuorum(ctx, metaArr, modTime, quorum)
 }
 
-// list of all errors that can be ignored in a metadata operation.
-var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
-
 // writeXLMetadata - writes `xl.json` to a single disk.
 func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {
 	jsonFile := path.Join(prefix, xlMetaJSONFile)
