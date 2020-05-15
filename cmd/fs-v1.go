@@ -261,6 +261,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		b, _ := json.MarshalIndent(bf, "", "  ")
 		logger.Info("Bloom filter: %v", string(b))
 	}
+
 	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
@@ -268,6 +269,10 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		if err != nil {
 			return 0, errSkipFile
 		}
+		if sz := item.applyActions(ctx, fs, nil); sz >= 0 {
+			return sz, nil
+		}
+
 		return fi.Size(), nil
 	})
 	cache.Info.BloomFilter = nil

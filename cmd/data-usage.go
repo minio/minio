@@ -27,13 +27,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/willf/bloom"
 )
@@ -164,13 +165,78 @@ type Item struct {
 	Path string
 	Typ  os.FileMode
 
-	bucket    string
-	prefix    string
-	object    string
+	bucket    string // Bucket.
+	prefix    string // Only the prefix if any.
+	object    string // Only the object name without prefixes.
 	lifeCycle *lifecycle.Lifecycle
 }
 
 type getSizeFn func(item Item) (int64, error)
+
+// applyActions will apply lifecycle checks on to a scanned item.
+// The resulting size on disk will always be returned.
+// The metadata will be compared to consensus on the object layer before any changes are applied.
+// If no metadata is supplied, -1 is returned if no action is taken.
+func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta *xlMetaV1) (size int64) {
+	size = -1
+	if meta != nil {
+		size = meta.Stat.Size
+	}
+	if i.lifeCycle == nil {
+		return size
+	}
+	if meta != nil {
+		action := i.lifeCycle.ComputeAction(i.objectPath(), meta.Meta[xhttp.AmzObjectTagging], meta.Stat.ModTime)
+		switch action {
+		case lifecycle.DeleteAction:
+		default:
+			// No action.
+			return size
+		}
+	}
+
+	// These (expensive) operations should only run on items we are likely to delete.
+	// Load to ensure that we have the correct version and not an unsynced version.
+	obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{})
+	if err != nil {
+		// Do nothing - heal in the future.
+		logger.LogIf(ctx, err)
+		return size
+	}
+	size = obj.Size
+
+	// Recalculate action.
+	action := i.lifeCycle.ComputeAction(i.objectPath(), obj.UserTags, obj.ModTime)
+	switch action {
+	case lifecycle.DeleteAction:
+	default:
+		// No action.
+		return size
+	}
+
+	err = o.DeleteObject(ctx, i.bucket, i.objectPath())
+	if err != nil {
+		// Assume it is still there.
+		logger.LogIf(ctx, err)
+		return size
+	}
+
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:  event.ObjectRemovedDelete,
+		BucketName: i.bucket,
+		Object: ObjectInfo{
+			Name: i.object,
+		},
+		Host: "Internal: [ILM-EXPIRY]",
+	})
+	return 0
+}
+
+// objectPath returns the prefix and object name.
+func (i *Item) objectPath() string {
+	return path.Join(i.prefix, i.object)
+}
 
 type cachedFolder struct {
 	name   string
@@ -294,6 +360,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				Typ:    typ,
 				bucket: bucket,
 				prefix: path.Dir(prefix),
+				object: path.Base(entName),
 			}
 			size, err := f.getSize(item)
 
