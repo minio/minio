@@ -664,7 +664,7 @@ func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatX
 	// Compute the local disks eligible for meta volumes (re)initialization
 	var disksToInit []StorageAPI
 	for index := range storageDisks {
-		if formats[index] == nil || storageDisks[index] == nil || storageDisks[index].Hostname() != "" {
+		if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
 			// Ignore create meta volume on disks which are not found or not local.
 			continue
 		}

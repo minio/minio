@@ -94,7 +94,7 @@ func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
-		storage, err := newPosix(endpoint.Path)
+		storage, err := newPosix(endpoint.Path, endpoint.Host)
 		if err != nil {
 			return nil, err
 		}

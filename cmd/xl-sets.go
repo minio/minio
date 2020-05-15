@@ -319,9 +319,7 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 	}
 
 	for i := 0; i < setCount; i++ {
-		var endpoints Endpoints
 		for j := 0; j < drivesPerSet; j++ {
-			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
 
@@ -346,7 +344,6 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 		s.sets[i] = &xlObjects{
 			getDisks:    s.GetDisks(i),
 			getLockers:  s.GetLockers(i),
-			endpoints:   endpoints,
 			nsMutex:     mutex,
 			bp:          bp,
 			mrfUploadCh: make(chan partialUpload, 10000),
