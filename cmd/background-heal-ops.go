@@ -91,9 +91,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			if task.path != slashSeparator && task.path != nopHeal {
 				ObjectPathUpdated(task.path)
 			}
-			if task.responseCh != nil {
-				task.responseCh <- healResult{result: res, err: err}
-			}
+			task.responseCh <- healResult{result: res, err: err}
 		case <-h.doneCh:
 			return
 		case <-ctx.Done():

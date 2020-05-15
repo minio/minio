@@ -367,6 +367,11 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 		cache.Info.lifeCycle = lc
 	}
 
+	// Get object api
+	objApi := newObjectLayerWithoutSafeModeFn()
+	if objApi == nil {
+		return cache, errors.New("object layer not initialized")
+	}
 	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
 		// Look for `xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
@@ -402,7 +407,7 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 
 			// These (expensive) operations should only run on items we are likely to delete.
 			// Load to ensure that we have the correct version and not an unsynced version.
-			obj, err := globalObjectAPI.GetObjectInfo(ctx, cache.Info.Name, objName, ObjectOptions{})
+			obj, err := objApi.GetObjectInfo(ctx, cache.Info.Name, objName, ObjectOptions{})
 			if err != nil {
 				// Do nothing
 				logger.LogIf(ctx, err)
@@ -414,7 +419,7 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 				// Do nothing.
 				return meta.Stat.Size, nil
 			}
-			err = globalObjectAPI.DeleteObject(ctx, cache.Info.Name, objName)
+			err = objApi.DeleteObject(ctx, cache.Info.Name, objName)
 			if err != nil {
 				// Assume it is still there.
 				logger.LogIf(ctx, err)
