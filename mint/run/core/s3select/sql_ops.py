@@ -32,8 +32,8 @@ def test_sql_expressions_custom_input_output(client, input_bytes, sql_input, sql
     log_output.args['total_tests'] = 0
     log_output.args['total_success'] = 0
 
+    client.make_bucket(bucket_name)
     try:
-        client.make_bucket(bucket_name)
         content = io.BytesIO(bytes(input_bytes, 'utf-8'))
         client.put_object(bucket_name, object_name, content, len(input_bytes))
 
@@ -70,14 +70,9 @@ def test_sql_expressions_custom_input_output(client, input_bytes, sql_input, sql
             except Exception as err:
                 continue ## TODO, raise instead
                 # raise Exception(err)
-    except Exception as err:
-        raise Exception(err)
     finally:
-        try:
-            client.remove_object(bucket_name, object_name)
-            client.remove_bucket(bucket_name)
-        except Exception as err:
-            raise Exception(err)
+        client.remove_object(bucket_name, object_name)
+        client.remove_bucket(bucket_name)
 
 
 def test_sql_expressions(client, input_json_bytes, tests, log_output):

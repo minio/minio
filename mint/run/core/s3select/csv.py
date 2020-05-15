@@ -25,27 +25,29 @@ from minio.select.options import (SelectObjectOptions, CSVInput,
 
 from utils import *
 
-def exec_select(client, bucket_name, object_content, options, log_output):
-    log_output.args['object_name'] = object_name = generate_object_name()
+def test_sql_api(test_name, client, bucket_name, input_data, sql_opts, expected_output):
+    """ Test if the passed SQL request has the output equal to the passed execpted one"""
+    object_name = generate_object_name()
+    got_output = b''
     try:
-        bytes_content = io.BytesIO(object_content)
-        client.put_object(bucket_name, object_name, io.BytesIO(object_content), len(object_content))
-
-        data = client.select_object_content(bucket_name, object_name, options)
+        bytes_content = io.BytesIO(input_data)
+        client.put_object(bucket_name, object_name, io.BytesIO(input_data), len(input_data))
+        data = client.select_object_content(bucket_name, object_name, sql_opts)
         # Get the records
         records = io.BytesIO()
         for d in data.stream(10*1024):
             records.write(d.encode('utf-8'))
-
-        return records.getvalue()
-
-    except Exception as err:
-        raise Exception(err)
+        got_output = records.getvalue()
+    except Exception as select_err:
+        if not isinstance(expected_output, Exception):
+            raise ValueError('Test {} unexpectedly failed with: {}'.format(test_name, select_err))
+    else:
+        if isinstance(expected_output, Exception):
+            raise ValueError('Test {}: expected an exception, got {}'.format(test_name, got_output))
+        if got_output != expected_output:
+            raise ValueError('Test {}: data mismatch. Expected : {}, Received {}'.format(test_name, expected_output, got_output))
     finally:
-        try:
-            client.remove_object(bucket_name, object_name)
-        except Exception as err:
-            raise Exception(err)
+        client.remove_object(bucket_name, object_name)
 
 
 def test_csv_input_custom_quote_char(client, log_output):
@@ -56,7 +58,7 @@ def test_csv_input_custom_quote_char(client, log_output):
             # Invalid quote character, should fail
             ('""', '"', b'col1,col2,col3\n', Exception()),
             # UTF-8 quote character
-            ('ع', '"', b'\xd8\xb9col1\xd8\xb9,\xd8\xb9col2\xd8\xb9,\xd8\xb9col3\xd8\xb9\n', b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
+            ('ع', '"', 'عcol1ع,عcol2ع,عcol3ع\n'.encode(), b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
             # Only one field is quoted
             ('"', '"', b'"col1",col2,col3\n', b'{"_1":"col1","_2":"col2","_3":"col3"}\n'),
             ('"', '"', b'"col1,col2,col3"\n', b'{"_1":"col1,col2,col3"}\n'),
@@ -77,11 +79,11 @@ def test_csv_input_custom_quote_char(client, log_output):
             ('"', '\\', b'"A\\"","\\"B"\n', b'{"_1":"A\\"","_2":"\\"B"}\n'),
     ]
 
-    try:
-        client.make_bucket(bucket_name)
+    client.make_bucket(bucket_name)
 
-        for idx, (quote_char, escape_char, object_content, expected_output) in enumerate(tests):
-            options = SelectObjectOptions(
+    try:
+        for idx, (quote_char, escape_char, data, expected_output) in enumerate(tests):
+            sql_opts = SelectObjectOptions(
                     expression="select * from s3object",
                     input_serialization=InputSerialization(
                         compression_type="NONE",
@@ -103,26 +105,9 @@ def test_csv_input_custom_quote_char(client, log_output):
                         )
                     )
 
-            got_output = b''
-
-            try:
-                got_output = exec_select(client, bucket_name, object_content, options, log_output)
-            except Exception as select_err:
-                if not isinstance(expected_output, Exception):
-                    raise ValueError('Test {} unexpectedly failed with: {}'.format(idx+1, select_err))
-            else:
-                if isinstance(expected_output, Exception):
-                    raise ValueError('Test {}: expected an exception, got {}'.format(idx+1, got_output))
-                if got_output != expected_output:
-                    raise ValueError('Test {}: data mismatch. Expected : {}, Received {}'.format(idx+1, expected_output, got_output))
-
-    except Exception as err:
-        raise Exception(err)
+            test_sql_api(f'test_{idx}', client, bucket_name, data, sql_opts, expected_output)
     finally:
-        try:
-            client.remove_bucket(bucket_name)
-        except Exception as err:
-            raise Exception(err)
+        client.remove_bucket(bucket_name)
 
     # Test passes
     print(log_output.json_report())
@@ -149,11 +134,11 @@ def test_csv_output_custom_quote_char(client, log_output):
             ("'", "\\", b'"a"""""\n', b"'a\"\"'\n"),
     ]
 
-    try:
-        client.make_bucket(bucket_name)
+    client.make_bucket(bucket_name)
 
-        for idx, (quote_char, escape_char, object_content, expected_output) in enumerate(tests):
-            options = SelectObjectOptions(
+    try:
+        for idx, (quote_char, escape_char, input_data, expected_output) in enumerate(tests):
+            sql_opts = SelectObjectOptions(
                     expression="select * from s3object",
                     input_serialization=InputSerialization(
                         compression_type="NONE",
@@ -177,26 +162,9 @@ def test_csv_output_custom_quote_char(client, log_output):
                         )
                     )
 
-            got_output = b''
-
-            try:
-                got_output = exec_select(client, bucket_name, object_content, options, log_output)
-            except Exception as select_err:
-                if not isinstance(expected_output, Exception):
-                    raise ValueError('Test {} unexpectedly failed with: {}'.format(idx+1, select_err))
-            else:
-                if isinstance(expected_output, Exception):
-                    raise ValueError('Test {}: expected an exception, got {}'.format(idx+1, got_output))
-                if got_output != expected_output:
-                    raise ValueError('Test {}: data mismatch. Expected : {}. Received: {}.'.format(idx+1, expected_output, got_output))
-
-    except Exception as err:
-        raise Exception(err)
+            test_sql_api(f'test_{idx}', client, bucket_name, input_data, sql_opts, expected_output)
     finally:
-        try:
-            client.remove_bucket(bucket_name)
-        except Exception as err:
-            raise Exception(err)
+        client.remove_bucket(bucket_name)
 
     # Test passes
     print(log_output.json_report())

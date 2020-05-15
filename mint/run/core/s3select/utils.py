@@ -98,9 +98,9 @@ class LogOutput(object):
 
 
 def generate_bucket_name():
-    return "s3select-test-" + uuid.uuid4().__str__()
+    return "s3select-test-" + str(uuid.uuid4())
 
 def generate_object_name():
-    return "s3select-test-" + uuid.uuid4().__str__()
+    return str(uuid.uuid4())
 
 
