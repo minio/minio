@@ -31,8 +31,6 @@ const (
 
 	// StorageInfoAdminAction - allow listing server info
 	StorageInfoAdminAction = "admin:StorageInfo"
-	// AccountingUsageInfoAdminAction - allow listing accounting usage info
-	AccountingUsageInfoAdminAction = "admin:AccountingUsageInfo"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
 	// TopLocksAdminAction - allow listing top locks
@@ -114,17 +112,16 @@ const (
 
 // List of all supported admin actions.
 var supportedAdminActions = map[AdminAction]struct{}{
-	AllAdminActions:                {},
 	HealAdminAction:                {},
-	ServerInfoAdminAction:          {},
 	StorageInfoAdminAction:         {},
 	DataUsageInfoAdminAction:       {},
 	TopLocksAdminAction:            {},
 	ProfilingAdminAction:           {},
 	TraceAdminAction:               {},
-	OBDInfoAdminAction:             {},
 	ConsoleLogAdminAction:          {},
 	KMSKeyStatusAdminAction:        {},
+	ServerInfoAdminAction:          {},
+	OBDInfoAdminAction:             {},
 	ServerUpdateAdminAction:        {},
 	ServiceRestartAdminAction:      {},
 	ServiceStopAdminAction:         {},
@@ -137,6 +134,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	GetUserAdminAction:             {},
 	AddUserToGroupAdminAction:      {},
 	RemoveUserFromGroupAdminAction: {},
+	GetGroupAdminAction:            {},
 	ListGroupsAdminAction:          {},
 	EnableGroupAdminAction:         {},
 	DisableGroupAdminAction:        {},
@@ -144,9 +142,10 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	DeletePolicyAdminAction:        {},
 	GetPolicyAdminAction:           {},
 	AttachPolicyAdminAction:        {},
+	ListUserPoliciesAdminAction:    {},
 	SetBucketQuotaAdminAction:      {},
 	GetBucketQuotaAdminAction:      {},
-	ListUserPoliciesAdminAction:    {},
+	AllAdminActions:                {},
 }
 
 func parseAdminAction(s string) (AdminAction, error) {

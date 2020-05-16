@@ -38,6 +38,7 @@ func (e BadDigest) Error() string {
 	return "Bad digest: Expected " + e.ExpectedMD5 + " does not match calculated " + e.CalculatedMD5
 }
 
+// ErrSizeMismatch error size mismatch
 type ErrSizeMismatch struct {
 	Want int64
 	Got  int64
