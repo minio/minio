@@ -32,7 +32,7 @@ jobs:
           SIMPLE_CI: 1
         run: |
           go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
-          go test -v --timeout 30m ./...
+          go test -v --timeout 50m ./...
       - name: Build on ${{ matrix.os }}
         if: matrix.os == 'ubuntu-latest'
         env:
