@@ -23,10 +23,62 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
+
+// AccountAccess contains information about
+type AccountAccess struct {
+	Read  bool `json:"read"`
+	Write bool `json:"write"`
+}
+
+// BucketUsageInfo represents bucket usage of a bucket, and its relevant
+// access type for an account
+type BucketUsageInfo struct {
+	Name    string        `json:"name"`
+	Size    uint64        `json:"size"`
+	Created time.Time     `json:"created"`
+	Access  AccountAccess `json:"access"`
+}
+
+// AccountUsageInfo represents the account usage info of an
+// account across buckets.
+type AccountUsageInfo struct {
+	AccountName string
+	Buckets     []BucketUsageInfo
+}
+
+// AccountUsageInfo returns the usage info for the authenticating account.
+func (adm *AdminClient) AccountUsageInfo(ctx context.Context) (AccountUsageInfo, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountusageinfo"})
+	defer closeResponse(resp)
+	if err != nil {
+		return AccountUsageInfo{}, err
+	}
+
+	// Check response http status code
+	if resp.StatusCode != http.StatusOK {
+		return AccountUsageInfo{}, httpRespToErrorResponse(resp)
+	}
+
+	// Unmarshal the server's json response
+	var accountInfo AccountUsageInfo
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return AccountUsageInfo{}, err
+	}
+
+	err = json.Unmarshal(respBytes, &accountInfo)
+	if err != nil {
+		return AccountUsageInfo{}, err
+	}
+
+	return accountInfo, nil
+}
 
 // AccountStatus - account status.
 type AccountStatus string
