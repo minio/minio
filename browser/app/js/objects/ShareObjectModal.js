@@ -77,7 +77,8 @@ export class ShareObjectModal extends React.Component {
     hideShareObject()
   }
   render() {
-    const { shareObjectDetails, shareObject, hideShareObject } = this.props
+    const { shareObjectDetails, hideShareObject } = this.props
+    const url = `${window.location.protocol}//${shareObjectDetails.url}`
     return (
       <Modal
         show={true}
@@ -93,11 +94,12 @@ export class ShareObjectModal extends React.Component {
               type="text"
               ref={node => (this.copyTextInput = node)}
               readOnly="readOnly"
-              value={window.location.protocol + "//" + shareObjectDetails.url}
+              value={url}
               onClick={() => this.copyTextInput.select()}
             />
           </div>
-          <div
+          {shareObjectDetails.showExpiryDate && (
+            <div
             className="input-group"
             style={{ display: web.LoggedIn() ? "block" : "none" }}
           >
@@ -174,10 +176,11 @@ export class ShareObjectModal extends React.Component {
               </div>
             </div>
           </div>
+          )}
         </ModalBody>
         <div className="modal-footer">
           <CopyToClipboard
-            text={window.location.protocol + "//" + shareObjectDetails.url}
+            text={url}
             onCopy={this.onUrlCopied.bind(this)}
           >
             <button className="btn btn-success">Copy Link</button>

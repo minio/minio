@@ -155,55 +155,53 @@ func newAllSubsystems() {
 
 	// Create new bucket encryption subsystem
 	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+
+	// Create new bucket object lock subsystem
+	globalBucketObjectLockSys = NewBucketObjectLockSys()
+
+	// Create new bucket quota subsystem
+	globalBucketQuotaSys = NewBucketQuotaSys()
 }
 
-func initSafeMode(buckets []BucketInfo) (err error) {
+func initSafeMode() (err error) {
 	newObject := newObjectLayerWithoutSafeModeFn()
-
-	// Construct path to config/transaction.lock for locking
-	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
 
 	// Make sure to hold lock for entire migration to avoid
 	// such that only one server should migrate the entire config
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := newObject.NewNSLock(GlobalContext, minioMetaBucket, transactionConfigPrefix)
-	if err = objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-
-	defer func(objLock RWLocker) {
-		objLock.Unlock()
+	txnLk := newObject.NewNSLock(GlobalContext, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
+	defer func(txnLk RWLocker) {
+		txnLk.Unlock()
 
 		if err != nil {
 			var cerr config.Err
+			// For any config error, we don't need to drop into safe-mode
+			// instead its a user error and should be fixed by user.
 			if errors.As(err, &cerr) {
 				return
 			}
 
 			// Prints the formatted startup message in safe mode operation.
+			// Drops-into safe mode where users need to now manually recover
+			// the server.
 			printStartupSafeModeMessage(getAPIEndpoints(), err)
 
 			// Initialization returned error reaching safe mode and
 			// not proceeding waiting for admin action.
 			handleSignals()
 		}
-	}(objLock)
-
-	// Migrate all backend configs to encrypted backend configs, optionally
-	// handles rotating keys for encryption.
-	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
-		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
-	}
+	}(txnLk)
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
+	// Create cancel context to control 'newRetryTimer' go routine.
+	retryCtx, cancel := context.WithCancel(GlobalContext)
 
-	// Validate and initialize all subsystems.
-	doneCh := make(chan struct{})
-	defer close(doneCh)
+	// Indicate to our routine to exit cleanly upon return.
+	defer cancel()
 
 	// Initializing sub-systems needs a retry mechanism for
 	// the following reasons:
@@ -211,43 +209,106 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	//    of the object layer.
 	//  - Write quorum not met when upgrading configuration
 	//    version is needed, migration is needed etc.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		rquorum := InsufficientReadQuorum{}
-		wquorum := InsufficientWriteQuorum{}
-		bucketNotFound := BucketNotFound{}
-		var err error
-		select {
-		case n := <-retryTimerCh:
-			if err = initAllSubsystems(buckets, newObject); err != nil {
-				if errors.Is(err, errDiskNotFound) ||
-					errors.As(err, &rquorum) ||
-					errors.As(err, &wquorum) ||
-					errors.As(err, &bucketNotFound) {
-					if n < 5 {
-						logger.Info("Waiting for all sub-systems to be initialized..")
-					} else {
-						logger.Info("Waiting for all sub-systems to be initialized.. %v", err)
-					}
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			if err == nil {
-				return errors.New("Initializing sub-systems stopped gracefully")
-			}
-			return fmt.Errorf("Unable to initialize sub-systems: %w", err)
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+	for range newRetryTimerSimple(retryCtx) {
+		// let one of the server acquire the lock, if not let them timeout.
+		// which shall be retried again by this loop.
+		if err = txnLk.GetLock(leaderLockTimeout); err != nil {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
+			continue
 		}
+
+		// These messages only meant primarily for distributed setup, so only log during distributed setup.
+		if globalIsDistXL {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+		}
+
+		// Migrate all backend configs to encrypted backend configs, optionally
+		// handles rotating keys for encryption, if there is any retriable failure
+		// that shall be retried if there is an error.
+		if err = handleEncryptedConfigBackend(newObject, true); err == nil {
+			// Upon success migrating the config, initialize all sub-systems
+			// if all sub-systems initialized successfully return right away
+			if err = initAllSubsystems(newObject); err == nil {
+				// All successful return.
+				if globalIsDistXL {
+					// These messages only meant primarily for distributed setup, so only log during distributed setup.
+					logger.Info("All MinIO sub-systems initialized successfully")
+				}
+				return nil
+			}
+		}
+
+		// One of these retriable errors shall be retried.
+		if errors.Is(err, errDiskNotFound) ||
+			errors.Is(err, errConfigNotFound) ||
+			errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) ||
+			errors.As(err, &rquorum) ||
+			errors.As(err, &wquorum) ||
+			isErrBucketNotFound(err) {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
+			txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+			continue
+		}
+
+		// Any other unhandled return right here.
+		return fmt.Errorf("Unable to initialize sub-systems: %w", err)
 	}
+
+	// Return an error when retry is canceled or deadlined
+	if err = retryCtx.Err(); err != nil {
+		return fmt.Errorf("Unable to initialize sub-systems: %w", err)
+	}
+
+	// Retry was canceled successfully.
+	return errors.New("Initializing sub-systems stopped gracefully")
 }
 
-func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) {
+func initAllSubsystems(newObject ObjectLayer) (err error) {
+	// %w is used by all error returns here to make sure
+	// we wrap the underlying error, make sure when you
+	// are modifying this code that you do so, if and when
+	// you want to add extra context to your error. This
+	// ensures top level retry works accordingly.
+	var buckets []BucketInfo
+	if globalIsDistXL || globalIsXL {
+		// List buckets to heal, and be re-used for loading configs.
+		buckets, err = newObject.ListBucketsHeal(GlobalContext)
+		if err != nil {
+			return fmt.Errorf("Unable to list buckets to heal: %w", err)
+		}
+		// Attempt a heal if possible and re-use the bucket names
+		// to reload their config.
+		wquorum := &InsufficientWriteQuorum{}
+		rquorum := &InsufficientReadQuorum{}
+		for _, bucket := range buckets {
+			if err = newObject.MakeBucketWithLocation(GlobalContext, bucket.Name, "", false); err != nil {
+				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
+					// Retrun the error upwards for the caller to retry.
+					return fmt.Errorf("Unable to heal bucket: %w", err)
+				}
+				if _, ok := err.(BucketExists); !ok {
+					// ignore any other error and log for investigation.
+					logger.LogIf(GlobalContext, err)
+					continue
+				}
+				// Bucket already exists, nothing that needs to be done.
+			}
+		}
+	} else {
+		buckets, err = newObject.ListBuckets(GlobalContext)
+		if err != nil {
+			return fmt.Errorf("Unable to list buckets: %w", err)
+		}
+	}
+
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
 		return fmt.Errorf("Unable to initialize config system: %w", err)
 	}
+
 	if globalEtcdClient != nil {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
@@ -271,15 +332,6 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 		return fmt.Errorf("Unable to initialize policy system: %w", err)
 	}
 
-	// Initialize bucket object lock.
-	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize object lock system: %w", err)
-	}
-	// Initialize bucket quota system.
-	if err = initBucketQuotaSys(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
-	}
-
 	// Initialize lifecycle system.
 	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
@@ -288,6 +340,21 @@ func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) 
 	// Initialize bucket encryption subsystem.
 	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
+	}
+
+	// Initialize bucket object lock.
+	if err = globalBucketObjectLockSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize object lock system: %w", err)
+	}
+
+	// Initialize bucket quota system.
+	if err = globalBucketQuotaSys.Init(buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
+	}
+
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		initFederatorBackend(buckets, newObject)
 	}
 
 	return nil
@@ -454,13 +521,7 @@ func serverMain(ctx *cli.Context) {
 
 	go startBackgroundOps(GlobalContext, newObject)
 
-	// Calls New() and initializes all sub-systems.
-	buckets, err := newObject.ListBuckets(GlobalContext)
-	if err != nil {
-		logger.Fatal(err, "Unable to list buckets")
-	}
-
-	logger.FatalIf(initSafeMode(buckets), "Unable to initialize server switching into safe-mode")
+	logger.FatalIf(initSafeMode(), "Unable to initialize server switching into safe-mode")
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
@@ -471,11 +532,6 @@ func serverMain(ctx *cli.Context) {
 		globalObjLayerMutex.Lock()
 		globalCacheObjectAPI = cacheAPI
 		globalObjLayerMutex.Unlock()
-	}
-
-	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
-		initFederatorBackend(buckets, newObject)
 	}
 
 	// Disable safe mode operation, after all initialization is over.

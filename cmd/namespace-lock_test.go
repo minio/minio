@@ -27,7 +27,7 @@ import (
 // position will cause the line number to change and the test to FAIL
 // Tests getSource().
 func TestGetSource(t *testing.T) {
-	currentSource := func() string { return getSource() }
+	currentSource := func() string { return getSource(2) }
 	gotSource := currentSource()
 	// Hard coded line number, 31, in the "expectedSource" value
 	expectedSource := "[namespace-lock_test.go:31:TestGetSource()]"

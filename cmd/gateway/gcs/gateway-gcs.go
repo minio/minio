@@ -421,7 +421,11 @@ func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageI
 }
 
 // MakeBucketWithLocation - Create a new container on GCS backend.
-func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
+	if lockEnabled {
+		return minio.NotImplemented{}
+	}
+
 	bkt := l.client.Bucket(bucket)
 
 	// we'll default to the us multi-region in case of us-east-1

@@ -19,6 +19,7 @@ package cmd
 import (
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -85,6 +86,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	storageMetricsPrometheus(ch)
 	networkMetricsPrometheus(ch)
 	httpMetricsPrometheus(ch)
+	cacheMetricsPrometheus(ch)
 	gatewayMetricsPrometheus(ch)
 	healingMetricsPrometheus(ch)
 }
@@ -190,7 +192,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
-		float64(s.Get.Load()),
+		float64(atomic.LoadUint64(&s.Get)),
 		http.MethodGet,
 	)
 	ch <- prometheus.MustNewConstMetric(
@@ -199,7 +201,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
-		float64(s.Head.Load()),
+		float64(atomic.LoadUint64(&s.Head)),
 		http.MethodHead,
 	)
 	ch <- prometheus.MustNewConstMetric(
@@ -208,7 +210,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
-		float64(s.Put.Load()),
+		float64(atomic.LoadUint64(&s.Put)),
 		http.MethodPut,
 	)
 	ch <- prometheus.MustNewConstMetric(
@@ -217,7 +219,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
-		float64(s.Post.Load()),
+		float64(atomic.LoadUint64(&s.Post)),
 		http.MethodPost,
 	)
 }

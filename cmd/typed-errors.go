@@ -77,9 +77,6 @@ var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
 // error returned in IAM subsystem when user doesn't exist.
 var errNoSuchUser = errors.New("Specified user does not exist")
 
-// error returned in IAM subsystem when the service account doesn't exist.
-var errNoSuchServiceAccount = errors.New("Specified service account does not exist")
-
 // error returned in IAM subsystem when groups doesn't exist.
 var errNoSuchGroup = errors.New("Specified group does not exist")
 
@@ -95,3 +92,6 @@ var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed und
 
 // error returned when access is denied.
 var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
+
+// error returned when object is locked.
+var errLockedObject = errors.New("Object is WORM protected and cannot be overwritten or deleted")

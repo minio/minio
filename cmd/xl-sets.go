@@ -22,17 +22,19 @@ import (
 	"hash/crc32"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
@@ -109,25 +111,6 @@ func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
 		return false
 	}
 	return disk.IsOnline()
-}
-
-func (s *xlSets) getOnlineDisksCount() int {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-	count := 0
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			disk := s.xlDisks[i][j]
-			if disk == nil {
-				continue
-			}
-			if !disk.IsOnline() {
-				continue
-			}
-			count++
-		}
-	}
-	return count
 }
 
 func (s *xlSets) getDiskMap() map[string]StorageAPI {
@@ -505,51 +488,30 @@ func (s *xlSets) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// MakeBucketLocation - creates a new bucket across all sets simultaneously
-// even if one of the sets fail to create buckets, we proceed to undo a
-// successful operation.
-func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+// MakeBucketLocation - creates a new bucket across all sets simultaneously,
+// then return the first encountered error
+func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			return s.sets[index].MakeBucketWithLocation(ctx, bucket, location)
+			return s.sets[index].MakeBucketWithLocation(ctx, bucket, location, lockEnabled)
 		}, index)
 	}
 
 	errs := g.Wait()
-	// Upon any error we try to undo the make bucket operation if possible
-	// on all sets where it succeeded.
+
+	// Return the first encountered error
 	for _, err := range errs {
 		if err != nil {
-			undoMakeBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
 
 	// Success.
 	return nil
-}
-
-// This function is used to undo a successful MakeBucket operation.
-func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
-	g := errgroup.WithNErrs(len(sets))
-
-	// Undo previous make bucket entry on all underlying sets.
-	for index := range sets {
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				return sets[index].DeleteBucket(GlobalContext, bucket, false)
-			}
-			return nil
-		}, index)
-	}
-
-	// Wait for all delete bucket to finish.
-	g.Wait()
 }
 
 // hashes the key returning an integer based on the input algorithm.
@@ -656,6 +618,31 @@ func (s *xlSets) DeleteBucketSSEConfig(ctx context.Context, bucket string) error
 	return removeBucketSSEConfig(ctx, s, bucket)
 }
 
+// SetBucketObjectLockConfig enables/clears default object lock configuration
+func (s *xlSets) SetBucketObjectLockConfig(ctx context.Context, bucket string, config *objectlock.Config) error {
+	return saveBucketObjectLockConfig(ctx, s, bucket, config)
+}
+
+// GetBucketObjectLockConfig - returns current defaults for object lock configuration
+func (s *xlSets) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
+	return readBucketObjectLockConfig(ctx, s, bucket)
+}
+
+// SetBucketTagging sets bucket tags on given bucket
+func (s *xlSets) SetBucketTagging(ctx context.Context, bucket string, t *tags.Tags) error {
+	return saveBucketTagging(ctx, s, bucket, t)
+}
+
+// GetBucketTagging get bucket tags set on given bucket
+func (s *xlSets) GetBucketTagging(ctx context.Context, bucket string) (*tags.Tags, error) {
+	return readBucketTagging(ctx, s, bucket)
+}
+
+// DeleteBucketTagging delete bucket tags set if any.
+func (s *xlSets) DeleteBucketTagging(ctx context.Context, bucket string) error {
+	return deleteBucketTagging(ctx, s, bucket)
+}
+
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (s *xlSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
@@ -716,7 +703,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "")
+				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "", false)
 			}
 			return nil
 		}, index)
@@ -1689,20 +1676,18 @@ func (s *xlSets) HealObject(ctx context.Context, bucket, object string, opts mad
 
 // Lists all buckets which need healing.
 func (s *xlSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	listBuckets := []BucketInfo{}
-	var healBuckets = map[string]BucketInfo{}
+	var listBuckets []BucketInfo
+	var healBuckets = make(map[string]VolInfo)
 	for _, set := range s.sets {
-		buckets, _, err := listAllBuckets(set.getDisks())
-		if err != nil {
+		// lists all unique buckets across drives.
+		if err := listAllBuckets(set.getDisks(), healBuckets); err != nil {
 			return nil, err
 		}
-		for _, currBucket := range buckets {
-			healBuckets[currBucket.Name] = BucketInfo(currBucket)
-		}
 	}
-	for _, bucketInfo := range healBuckets {
-		listBuckets = append(listBuckets, bucketInfo)
+	for _, v := range healBuckets {
+		listBuckets = append(listBuckets, BucketInfo(v))
 	}
+	sort.Sort(byBucketName(listBuckets))
 	return listBuckets, nil
 }
 
@@ -1785,7 +1770,7 @@ func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) err
 }
 
 // GetObjectTag - get object tags from an existing object
-func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
 }
 

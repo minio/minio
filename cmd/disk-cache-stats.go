@@ -16,46 +16,44 @@
 
 package cmd
 
-import (
-	"go.uber.org/atomic"
-)
+import "sync/atomic"
 
 // CacheStats - represents bytes served from cache,
 // cache hits and cache misses.
 type CacheStats struct {
-	BytesServed atomic.Uint64
-	Hits        atomic.Uint64
-	Misses      atomic.Uint64
+	BytesServed uint64
+	Hits        uint64
+	Misses      uint64
 }
 
 // Increase total bytes served from cache
 func (s *CacheStats) incBytesServed(n int64) {
-	s.BytesServed.Add(uint64(n))
+	atomic.AddUint64(&s.BytesServed, uint64(n))
 }
 
 // Increase cache hit by 1
 func (s *CacheStats) incHit() {
-	s.Hits.Add(uint64(1))
+	atomic.AddUint64(&s.Hits, 1)
 }
 
 // Increase cache miss by 1
 func (s *CacheStats) incMiss() {
-	s.Misses.Add(uint64(1))
+	atomic.AddUint64(&s.Misses, 1)
 }
 
 // Get total bytes served
 func (s *CacheStats) getBytesServed() uint64 {
-	return s.BytesServed.Load()
+	return atomic.LoadUint64(&s.BytesServed)
 }
 
 // Get total cache hits
 func (s *CacheStats) getHits() uint64 {
-	return s.Hits.Load()
+	return atomic.LoadUint64(&s.Hits)
 }
 
 // Get total cache misses
 func (s *CacheStats) getMisses() uint64 {
-	return s.Misses.Load()
+	return atomic.LoadUint64(&s.Misses)
 }
 
 // Prepare new CacheStats structure

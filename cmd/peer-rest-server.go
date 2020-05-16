@@ -43,27 +43,6 @@ import (
 type peerRESTServer struct {
 }
 
-func getServerInfo() (*ServerInfoData, error) {
-	objLayer := newObjectLayerWithoutSafeModeFn()
-	if objLayer == nil {
-		return nil, errServerNotInitialized
-	}
-
-	// Server info data.
-	return &ServerInfoData{
-		ConnStats: globalConnStats.toServerConnStats(),
-		HTTPStats: globalHTTPStats.toServerHTTPStats(),
-		Properties: ServerProperties{
-			Uptime:       UTCNow().Unix() - globalBootTime.Unix(),
-			Version:      Version,
-			CommitID:     CommitID,
-			DeploymentID: globalDeploymentID,
-			SQSARN:       globalNotificationSys.GetARNList(false),
-			Region:       globalServerRegion,
-		},
-	}, nil
-}
-
 // GetLocksHandler - returns list of older lock from the server.
 func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -473,7 +452,7 @@ func (s *peerRESTServer) DispatchNetOBDInfoHandler(w http.ResponseWriter, r *htt
 	ctx := newContext(r, w, "DispatchNetOBDInfo")
 	info := globalNotificationSys.NetOBDInfo(ctx)
 
-	done()
+	done(nil)
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 	w.(http.Flusher).Flush()
 }
@@ -598,7 +577,7 @@ func (s *peerRESTServer) DeleteBucketHandler(w http.ResponseWriter, r *http.Requ
 
 	globalNotificationSys.RemoveNotification(bucketName)
 	globalPolicySys.Remove(bucketName)
-	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketObjectLockSys.Remove(bucketName)
 	globalBucketQuotaSys.Remove(bucketName)
 	globalLifecycleSys.Remove(bucketName)
 
@@ -675,13 +654,14 @@ func (s *peerRESTServer) SetBucketPolicyHandler(w http.ResponseWriter, r *http.R
 		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
 		return
 	}
-	var policyData policy.Policy
+
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&policyData)
+	var policyData = &policy.Policy{}
+	err := gob.NewDecoder(r.Body).Decode(policyData)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -716,13 +696,13 @@ func (s *peerRESTServer) SetBucketLifecycleHandler(w http.ResponseWriter, r *htt
 		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
 		return
 	}
-	var lifecycleData lifecycle.Lifecycle
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&lifecycleData)
+	var lifecycleData = &lifecycle.Lifecycle{}
+	err := gob.NewDecoder(r.Body).Decode(lifecycleData)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -758,13 +738,13 @@ func (s *peerRESTServer) SetBucketSSEConfigHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	var encConfig bucketsse.BucketSSEConfig
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&encConfig)
+	var encConfig = &bucketsse.BucketSSEConfig{}
+	err := gob.NewDecoder(r.Body).Decode(encConfig)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -842,7 +822,7 @@ func (s *peerRESTServer) RemoveBucketObjectLockConfigHandler(w http.ResponseWrit
 		return
 	}
 
-	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketObjectLockSys.Remove(bucketName)
 	w.(http.Flusher).Flush()
 }
 
@@ -860,19 +840,19 @@ func (s *peerRESTServer) PutBucketObjectLockConfigHandler(w http.ResponseWriter,
 		return
 	}
 
-	var retention objectlock.Retention
 	if r.ContentLength < 0 {
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
 
-	err := gob.NewDecoder(r.Body).Decode(&retention)
+	var retention = &objectlock.Retention{}
+	err := gob.NewDecoder(r.Body).Decode(retention)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	globalBucketObjectLockConfig.Set(bucketName, retention)
+	globalBucketObjectLockSys.Set(bucketName, retention)
 	w.(http.Flusher).Flush()
 }
 

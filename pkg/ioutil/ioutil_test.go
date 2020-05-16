@@ -61,7 +61,7 @@ func TestAppendFile(t *testing.T) {
 	f.WriteString("bbbbbbbbbb")
 	f.Close()
 
-	if err = AppendFile(name1, name2); err != nil {
+	if err = AppendFile(name1, name2, false); err != nil {
 		t.Error(err)
 	}
 

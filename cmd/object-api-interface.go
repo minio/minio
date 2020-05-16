@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,10 @@ import (
 	"net/http"
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v6/pkg/tags"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -64,7 +65,7 @@ type ObjectLayer interface {
 	StorageInfo(ctx context.Context, local bool) StorageInfo // local queries only local disks
 
 	// Bucket operations.
-	MakeBucketWithLocation(ctx context.Context, bucket string, location string) error
+	MakeBucketWithLocation(ctx context.Context, bucket string, location string, lockEnabled bool) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error
@@ -130,6 +131,15 @@ type ObjectLayer interface {
 	GetBucketSSEConfig(context.Context, string) (*bucketsse.BucketSSEConfig, error)
 	DeleteBucketSSEConfig(context.Context, string) error
 
+	// Bucket locking configuration operations
+	SetBucketObjectLockConfig(context.Context, string, *objectlock.Config) error
+	GetBucketObjectLockConfig(context.Context, string) (*objectlock.Config, error)
+
+	// Bucket tagging operations
+	SetBucketTagging(context.Context, string, *tags.Tags) error
+	GetBucketTagging(context.Context, string) (*tags.Tags, error)
+	DeleteBucketTagging(context.Context, string) error
+
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)
 
@@ -138,6 +148,6 @@ type ObjectLayer interface {
 
 	// ObjectTagging operations
 	PutObjectTag(context.Context, string, string, string) error
-	GetObjectTag(context.Context, string, string) (tagging.Tagging, error)
+	GetObjectTag(context.Context, string, string) (*tags.Tags, error)
 	DeleteObjectTag(context.Context, string, string) error
 }

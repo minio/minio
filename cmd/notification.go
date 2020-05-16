@@ -566,7 +566,7 @@ func (sys *NotificationSys) SetBucketPolicy(ctx context.Context, bucketName stri
 // DeleteBucket - calls DeleteBucket RPC call on all peers.
 func (sys *NotificationSys) DeleteBucket(ctx context.Context, bucketName string) {
 	globalNotificationSys.RemoveNotification(bucketName)
-	globalBucketObjectLockConfig.Remove(bucketName)
+	globalBucketObjectLockSys.Remove(bucketName)
 	globalBucketQuotaSys.Remove(bucketName)
 	globalPolicySys.Remove(bucketName)
 	globalLifecycleSys.Remove(bucketName)
@@ -771,7 +771,7 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 // Init - initializes notification system from notification.xml and listener.json of all buckets.
 func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
-		return errInvalidArgument
+		return errServerNotInitialized
 	}
 
 	// In gateway mode, notifications are not supported.
@@ -905,7 +905,7 @@ func (sys *NotificationSys) Send(args eventArgs) {
 }
 
 // PutBucketObjectLockConfig - put bucket object lock configuration to all peers.
-func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention objectlock.Retention) {
+func (sys *NotificationSys) PutBucketObjectLockConfig(ctx context.Context, bucketName string, retention *objectlock.Retention) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		if client == nil {

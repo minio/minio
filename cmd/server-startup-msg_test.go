@@ -17,16 +17,11 @@
 package cmd
 
 import (
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -39,55 +34,6 @@ func TestStorageInfoMsg(t *testing.T) {
 
 	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
 		t.Fatal("Unexpected storage info message, found:", msg)
-	}
-}
-
-// Tests if certificate expiry warning will be printed
-func TestCertificateExpiryInfo(t *testing.T) {
-	// given
-	var expiredDate = time.Now().Add(time.Hour * 24 * (30 - 1)) // 29 days.
-
-	var fakeCerts = []*x509.Certificate{
-		{
-			NotAfter: expiredDate,
-			Subject: pkix.Name{
-				CommonName: "Test cert",
-			},
-		},
-	}
-
-	expectedMsg := color.Blue("\nCertificate expiry info:\n") +
-		color.Bold(fmt.Sprintf("#1 Test cert will expire on %s\n", expiredDate))
-
-	// When
-	msg := getCertificateChainMsg(fakeCerts)
-
-	// Then
-	if msg != expectedMsg {
-		t.Fatalf("Expected message was: %s, got: %s", expectedMsg, msg)
-	}
-}
-
-// Tests if certificate expiry warning will not be printed if certificate not expired
-func TestCertificateNotExpired(t *testing.T) {
-	// given
-	var expiredDate = time.Now().Add(time.Hour * 24 * (30 + 1)) // 31 days.
-
-	var fakeCerts = []*x509.Certificate{
-		{
-			NotAfter: expiredDate,
-			Subject: pkix.Name{
-				CommonName: "Test cert",
-			},
-		},
-	}
-
-	// when
-	msg := getCertificateChainMsg(fakeCerts)
-
-	// then
-	if msg != "" {
-		t.Fatalf("Expected empty message was: %s", msg)
 	}
 }
 

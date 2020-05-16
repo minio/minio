@@ -49,7 +49,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		"test-bucket-single-object",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, "")
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -669,7 +669,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
 	if err != nil {
 		b.Fatal(err)
 	}

@@ -32,6 +32,7 @@ const (
 	EnvRegionName   = "MINIO_REGION_NAME"
 	EnvPublicIPs    = "MINIO_PUBLIC_IPS"
 	EnvEndpoints    = "MINIO_ENDPOINTS"
+	EnvFSOSync      = "MINIO_FS_OSYNC"
 
 	// API sub-system
 	EnvAPIRequestsMax      = "MINIO_API_REQUESTS_MAX"

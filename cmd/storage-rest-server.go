@@ -153,10 +153,9 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 
 	done := keepHTTPResponseAlive(w)
 	usageInfo, err := s.storage.CrawlAndGetDataUsage(r.Context(), cache)
-	done()
 
+	done(err)
 	if err != nil {
-		s.writeErrorResponse(w, err)
 		return
 	}
 	w.Write(usageInfo.serialize())
@@ -552,7 +551,7 @@ func (s *storageRESTServer) DeleteFileBulkHandler(w http.ResponseWriter, r *http
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	errs, err := s.storage.DeleteFileBulk(volume, filePaths)
-	done()
+	done(nil)
 
 	for idx := range filePaths {
 		if err != nil {
@@ -599,7 +598,7 @@ func (s *storageRESTServer) DeletePrefixesHandler(w http.ResponseWriter, r *http
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	errs, err := s.storage.DeletePrefixes(volume, prefixes)
-	done()
+	done(nil)
 	for idx := range prefixes {
 		if err != nil {
 			dErrsResp.Errs[idx] = StorageErr(err.Error())
@@ -633,29 +632,44 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 // operations, such as bitrot verification or data usage crawling.
 // Every 10 seconds a space character is sent.
 // The returned function should always be called to release resources.
+// An optional error can be sent which will be picked as text only error,
+// without its original type by the receiver.
 // waitForHTTPResponse should be used to the receiving side.
-func keepHTTPResponseAlive(w http.ResponseWriter) func() {
-	doneCh := make(chan struct{})
+func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
+	doneCh := make(chan error)
 	go func() {
 		defer close(doneCh)
 		ticker := time.NewTicker(time.Second * 10)
 		for {
 			select {
 			case <-ticker.C:
-				w.Write([]byte(" "))
+				// Response not ready, write a filler byte.
+				w.Write([]byte{32})
 				w.(http.Flusher).Flush()
-			case doneCh <- struct{}{}:
-				w.Write([]byte{0})
+			case err := <-doneCh:
+				if err != nil {
+					w.Write([]byte{1})
+					w.Write([]byte(err.Error()))
+				} else {
+					w.Write([]byte{0})
+				}
 				ticker.Stop()
 				return
 			}
 		}
 	}()
-	return func() {
+	return func(err error) {
+		if doneCh == nil {
+			return
+		}
 		// Indicate we are ready to write.
-		<-doneCh
+		doneCh <- err
+
 		// Wait for channel to be closed so we don't race on writes.
 		<-doneCh
+
+		// Clear so we can be called multiple times without crashing.
+		doneCh = nil
 	}
 }
 
@@ -669,14 +683,22 @@ func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		if b != ' ' {
-			if b != 0 {
-				reader.UnreadByte()
+		// Check if we have a response ready or a filler byte.
+		switch b {
+		case 0:
+			return reader, nil
+		case 1:
+			errorText, err := ioutil.ReadAll(reader)
+			if err != nil {
+				return nil, err
 			}
-			break
+			return nil, errors.New(string(errorText))
+		case 32:
+			continue
+		default:
+			return nil, fmt.Errorf("unexpected filler byte: %d", b)
 		}
 	}
-	return reader, nil
 }
 
 // VerifyFileResp - VerifyFile()'s response.
@@ -720,7 +742,7 @@ func (s *storageRESTServer) VerifyFile(w http.ResponseWriter, r *http.Request) {
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	err = s.storage.VerifyFile(volume, filePath, size, BitrotAlgorithmFromString(algoStr), hash, int64(shardSize))
-	done()
+	done(nil)
 	vresp := &VerifyFileResp{}
 	if err != nil {
 		vresp.Err = StorageErr(err.Error())
@@ -738,6 +760,12 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			}
 			storage, err := newPosix(endpoint.Path)
 			if err != nil {
+				if err == errMinDiskSize {
+					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
+				} else if err == errUnsupportedDisk {
+					hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, refusing to use", endpoint.Path)
+					logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
+				}
 				// Show a descriptive error with a hint about how to fix it.
 				var username string
 				if u, err := user.Current(); err == nil {

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -38,7 +37,7 @@ var leaderLockTimeout = newDynamicTimeout(time.Minute, time.Minute)
 func newBgHealSequence(numDisks int) *healSequence {
 
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
-	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+	ctx, cancelCtx := context.WithCancel(logger.SetReqInfo(GlobalContext, reqInfo))
 
 	hs := madmin.HealOpts{
 		// Remove objects that do not have read-quorum
@@ -48,6 +47,7 @@ func newBgHealSequence(numDisks int) *healSequence {
 
 	return &healSequence{
 		sourceCh:    make(chan healSource),
+		respCh:      make(chan healResult),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		settings:    hs,
@@ -55,15 +55,13 @@ func newBgHealSequence(numDisks int) *healSequence {
 			Summary:      healNotStartedStatus,
 			HealSettings: hs,
 			NumDisks:     numDisks,
-			updateLock:   &sync.RWMutex{},
 		},
-		traverseAndHealDoneCh: make(chan error),
-		stopSignalCh:          make(chan struct{}),
-		ctx:                   ctx,
-		reportProgress:        false,
-		scannedItemsMap:       make(map[madmin.HealItemType]int64),
-		healedItemsMap:        make(map[madmin.HealItemType]int64),
-		healFailedItemsMap:    make(map[string]int64),
+		cancelCtx:          cancelCtx,
+		ctx:                ctx,
+		reportProgress:     false,
+		scannedItemsMap:    make(map[madmin.HealItemType]int64),
+		healedItemsMap:     make(map[madmin.HealItemType]int64),
+		healFailedItemsMap: make(map[string]int64),
 	}
 }
 
@@ -95,7 +93,12 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 		if ok {
 			break
 		}
-		time.Sleep(time.Second)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(time.Second):
+			continue
+		}
 	}
 
 	// Heal all buckets with all objects
@@ -125,7 +128,7 @@ func deepHealObject(objectPath string) {
 
 	bgSeq.sourceCh <- healSource{
 		path: objectPath,
-		opts: &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+		opts: madmin.HealOpts{ScanMode: madmin.HealDeepScan},
 	}
 }
 
@@ -154,7 +157,12 @@ func execLeaderTasks(ctx context.Context, z *xlZones) {
 		if ok {
 			break
 		}
-		time.Sleep(time.Second)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+			continue
+		}
 	}
 	for {
 		select {

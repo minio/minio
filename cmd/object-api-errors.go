@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -105,6 +106,8 @@ func toObjectErr(err error, params ...string) error {
 	case errXLWriteQuorum:
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
+		err = IncompleteBody{}
+	case context.Canceled, context.DeadlineExceeded:
 		err = IncompleteBody{}
 	}
 	return err
@@ -252,21 +255,35 @@ func (e InvalidMarkerPrefixCombination) Error() string {
 type BucketPolicyNotFound GenericError
 
 func (e BucketPolicyNotFound) Error() string {
-	return "No bucket policy found for bucket: " + e.Bucket
+	return "No bucket policy configuration found for bucket: " + e.Bucket
 }
 
 // BucketLifecycleNotFound - no bucket lifecycle found.
 type BucketLifecycleNotFound GenericError
 
 func (e BucketLifecycleNotFound) Error() string {
-	return "No bucket life cycle found for bucket : " + e.Bucket
+	return "No bucket lifecycle configuration found for bucket : " + e.Bucket
 }
 
-// BucketSSEConfigNotFound - no bucket encryption config found
+// BucketSSEConfigNotFound - no bucket encryption found
 type BucketSSEConfigNotFound GenericError
 
 func (e BucketSSEConfigNotFound) Error() string {
-	return "No bucket encryption found for bucket: " + e.Bucket
+	return "No bucket encryption configuration found for bucket: " + e.Bucket
+}
+
+// BucketTaggingNotFound - no bucket tags found
+type BucketTaggingNotFound GenericError
+
+func (e BucketTaggingNotFound) Error() string {
+	return "No bucket tags found for bucket: " + e.Bucket
+}
+
+// BucketObjectLockConfigNotFound - no bucket object lock config found
+type BucketObjectLockConfigNotFound GenericError
+
+func (e BucketObjectLockConfigNotFound) Error() string {
+	return "No bucket object lock configuration found for bucket: " + e.Bucket
 }
 
 // BucketQuotaConfigNotFound - no bucket quota config found.

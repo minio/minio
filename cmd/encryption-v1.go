@@ -247,22 +247,6 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 }
 
-// DecryptCopyRequest decrypts the object with the client provided key. It also removes
-// the client-side-encryption metadata from the object and sets the correct headers.
-func DecryptCopyRequest(client io.Writer, r *http.Request, bucket, object string, metadata map[string]string) (io.WriteCloser, error) {
-	var (
-		key []byte
-		err error
-	)
-	if crypto.SSECopy.IsRequested(r.Header) {
-		key, err = ParseSSECopyCustomerRequest(r.Header, metadata)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return newDecryptWriter(client, key, bucket, object, 0, metadata)
-}
-
 func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch {
 	default:
@@ -315,32 +299,6 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 		}
 		return objectKey[:], nil
 	}
-}
-
-func newDecryptWriter(client io.Writer, key []byte, bucket, object string, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	objectEncryptionKey, err := decryptObjectInfo(key, bucket, object, metadata)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptWriterWithObjectKey(client, objectEncryptionKey, seqNumber, metadata)
-}
-
-func newDecryptWriterWithObjectKey(client io.Writer, objectEncryptionKey []byte, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	writer, err := sio.DecryptWriter(client, sio.Config{
-		Key:            objectEncryptionKey,
-		SequenceNumber: seqNumber,
-	})
-	if err != nil {
-		return nil, crypto.ErrInvalidCustomerKey
-	}
-	delete(metadata, crypto.SSEIV)
-	delete(metadata, crypto.SSESealAlgorithm)
-	delete(metadata, crypto.SSECSealedKey)
-	delete(metadata, crypto.SSEMultipart)
-	delete(metadata, crypto.S3SealedKey)
-	delete(metadata, crypto.S3KMSSealedKey)
-	delete(metadata, crypto.S3KMSKeyID)
-	return writer, nil
 }
 
 // Adding support for reader based interface
@@ -448,26 +406,6 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 	}
 
 	return w, nil
-}
-
-// DecryptRequestWithSequenceNumber decrypts the object with the client provided key. It also removes
-// the client-side-encryption metadata from the object and sets the correct headers.
-func DecryptRequestWithSequenceNumber(client io.Writer, r *http.Request, bucket, object string, seqNumber uint32, metadata map[string]string) (io.WriteCloser, error) {
-	if crypto.S3.IsEncrypted(metadata) {
-		return newDecryptWriter(client, nil, bucket, object, seqNumber, metadata)
-	}
-
-	key, err := ParseSSECustomerRequest(r)
-	if err != nil {
-		return nil, err
-	}
-	return newDecryptWriter(client, key, bucket, object, seqNumber, metadata)
-}
-
-// DecryptRequest decrypts the object with client provided key for SSE-C and SSE-S3. It also removes
-// the encryption metadata from the object and sets the correct headers.
-func DecryptRequest(client io.Writer, r *http.Request, bucket, object string, metadata map[string]string) (io.WriteCloser, error) {
-	return DecryptRequestWithSequenceNumber(client, r, bucket, object, 0, metadata)
 }
 
 // DecryptBlocksReader - decrypts multipart parts, while implementing
@@ -583,31 +521,6 @@ func (d *DecryptBlocksReader) Read(p []byte) (int, error) {
 		d.partDecRelOffset += int64(n1)
 	}
 	return len(p), nil
-}
-
-// getEncryptedSinglePartOffsetLength - fetch sequence number, encrypted start offset and encrypted length.
-func getEncryptedSinglePartOffsetLength(offset, length int64, objInfo ObjectInfo) (seqNumber uint32, encOffset int64, encLength int64) {
-	onePkgSize := int64(SSEDAREPackageBlockSize + SSEDAREPackageMetaSize)
-
-	seqNumber = uint32(offset / SSEDAREPackageBlockSize)
-	encOffset = int64(seqNumber) * onePkgSize
-	// The math to compute the encrypted length is always
-	// originalLength i.e (offset+length-1) to be divided under
-	// 64KiB blocks which is the payload size for each encrypted
-	// block. This is then multiplied by final package size which
-	// is basically 64KiB + 32. Finally negate the encrypted offset
-	// to get the final encrypted length on disk.
-	encLength = ((offset+length)/SSEDAREPackageBlockSize)*onePkgSize - encOffset
-
-	// Check for the remainder, to figure if we need one extract package to read from.
-	if (offset+length)%SSEDAREPackageBlockSize > 0 {
-		encLength += onePkgSize
-	}
-
-	if encLength+encOffset > objInfo.EncryptedSize() {
-		encLength = objInfo.EncryptedSize() - encOffset
-	}
-	return seqNumber, encOffset, encLength
 }
 
 // DecryptedSize returns the size of the object after decryption in bytes.

@@ -85,7 +85,7 @@ func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	for i, testCase := range testCases {
 
-		err := obj.MakeBucketWithLocation(context.Background(), testCase.bucketName, "")
+		err := obj.MakeBucketWithLocation(context.Background(), testCase.bucketName, "", false)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}

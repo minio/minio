@@ -491,7 +491,6 @@ var notImplementedBucketResourceNames = map[string]bool{
 	"metrics":        true,
 	"replication":    true,
 	"requestPayment": true,
-	"tagging":        true,
 	"versioning":     true,
 	"website":        true,
 }
@@ -680,9 +679,12 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	bucket, object := request2BucketObjectName(r)
 
-	// ListBucket requests should be handled at current endpoint as
-	// all buckets data can be fetched from here.
-	if r.Method == http.MethodGet && bucket == "" && object == "" {
+	// Requests in federated setups for STS type calls which are
+	// performed at '/' resource should be routed by the muxer,
+	// the assumption is simply such that requests without a bucket
+	// in a federated setup cannot be proxied, so serve them at
+	// current server.
+	if bucket == "" {
 		f.handler.ServeHTTP(w, r)
 		return
 	}

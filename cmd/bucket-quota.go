@@ -60,23 +60,50 @@ func (sys *BucketQuotaSys) Remove(bucketName string) {
 	sys.Unlock()
 }
 
-// Exists - bucketName has Quota config set
-func (sys *BucketQuotaSys) Exists(bucketName string) bool {
-	sys.RLock()
-	_, ok := sys.quotaMap[bucketName]
-	sys.RUnlock()
-	return ok
-}
-
-// Keys - list of buckets with quota configuration
-func (sys *BucketQuotaSys) Keys() []string {
+// Buckets - list of buckets with quota configuration
+func (sys *BucketQuotaSys) Buckets() []string {
 	sys.RLock()
 	defer sys.RUnlock()
-	var keys []string
+	var buckets []string
 	for k := range sys.quotaMap {
-		keys = append(keys, k)
+		buckets = append(buckets, k)
 	}
-	return keys
+	return buckets
+}
+
+// Init initialize bucket quota sys configuration with all buckets.
+func (sys *BucketQuotaSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	// In gateway mode, we do not support bucket quota.
+	// So, this is a no-op for gateway servers.
+	if globalIsGateway {
+		return nil
+	}
+
+	return sys.load(buckets, objAPI)
+}
+
+func (sys *BucketQuotaSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
+	for _, bucket := range buckets {
+		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
+		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketQuotaConfigFile)
+		configData, err := readConfig(ctx, objAPI, configFile)
+		if err != nil {
+			if errors.Is(err, errConfigNotFound) {
+				continue
+			}
+			return err
+		}
+		quotaCfg, err := parseBucketQuota(configData)
+		if err != nil {
+			return err
+		}
+		globalBucketQuotaSys.Set(bucket.Name, quotaCfg)
+	}
+	return nil
 }
 
 // NewBucketQuotaSys returns initialized BucketQuotaSys
@@ -128,27 +155,10 @@ func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
 		return nil
 	}
 
-	return globalBucketStorageCache.check(ctx, q, bucket, size)
-}
-
-func initBucketQuotaSys(buckets []BucketInfo, objAPI ObjectLayer) error {
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketQuotaConfigFile)
-		configData, err := readConfig(ctx, objAPI, configFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
-			return err
-		}
-		quotaCfg, err := parseBucketQuota(configData)
-		if err != nil {
-			return err
-		}
-		globalBucketQuotaSys.Set(bucket.Name, quotaCfg)
+	if q.Type == madmin.FIFOQuota {
+		return nil
 	}
-	return nil
+	return globalBucketStorageCache.check(ctx, q, bucket, size)
 }
 
 const (
@@ -182,7 +192,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
 		return nil
 	}
-	for _, bucket := range globalBucketQuotaSys.Keys() {
+	for _, bucket := range globalBucketQuotaSys.Buckets() {
 		// Check if the current bucket has quota restrictions, if not skip it
 		cfg, ok := globalBucketQuotaSys.Get(bucket)
 		if !ok {
@@ -191,7 +201,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		if cfg.Type != madmin.FIFOQuota {
 			continue
 		}
-		_, bucketHasLockConfig := globalBucketObjectLockConfig.Get(bucket)
+		_, bucketHasLockConfig := globalBucketObjectLockSys.Get(bucket)
 
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err != nil {

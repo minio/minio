@@ -35,7 +35,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
@@ -44,8 +43,6 @@ import (
 
 // minio configuration related constants.
 const (
-	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
-
 	globalMinioDefaultPort = "9000"
 
 	globalMinioDefaultRegion = ""
@@ -211,15 +208,13 @@ var (
 	globalDomainNames []string      // Root domains for virtual host style requests
 	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
 
-	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
-	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
-	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
-	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
+	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops
+	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)          // timeout for healing related ops
 
-	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
-
-	globalBucketQuotaSys     = NewBucketQuotaSys()
-	globalBucketStorageCache bucketStorageCache
+	globalBucketObjectLockSys *BucketObjectLockSys
+	globalBucketQuotaSys      *BucketQuotaSys
+	globalBucketStorageCache  bucketStorageCache
 
 	// Disk cache drives
 	globalCacheConfig cache.Config
@@ -236,11 +231,6 @@ var (
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig *dns.CoreDNS
-
-	// Default usage check interval value.
-	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours
-	// Usage check interval value.
-	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS
@@ -282,6 +272,8 @@ var (
 	// fix the system.
 	globalSafeMode bool
 
+	// If writes to FS backend should be O_SYNC.
+	globalFSOSync bool
 	// Add new variable global values here.
 )
 
@@ -291,6 +283,7 @@ var (
 func getGlobalInfo() (globalInfo map[string]interface{}) {
 	globalInfo = map[string]interface{}{
 		"serverRegion": globalServerRegion,
+		"domains":      globalDomainNames,
 		// Add more relevant global settings here.
 	}
 

@@ -89,7 +89,8 @@ export default (
         shareObject: {
           show: action.show,
           object: action.object,
-          url: action.url
+          url: action.url,
+          showExpiryDate: action.showExpiryDate
         }
       }
     case actionsObjects.CHECKED_LIST_ADD:

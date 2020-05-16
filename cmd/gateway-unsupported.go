@@ -22,9 +22,10 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -198,6 +199,35 @@ func (a GatewayUnsupported) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
+// SetBucketTagging - not implemented
+func (a GatewayUnsupported) SetBucketTagging(ctx context.Context, bucket string, t *tags.Tags) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// GetBucketObjectLockConfig - not implemented
+func (a GatewayUnsupported) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return nil, NotImplemented{}
+}
+
+// SetBucketObjectLockConfig - not implemented
+func (a GatewayUnsupported) SetBucketObjectLockConfig(ctx context.Context, bucket string, _ *objectlock.Config) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
+// GetBucketTagging - not implemented
+func (a GatewayUnsupported) GetBucketTagging(ctx context.Context, bucket string) (*tags.Tags, error) {
+	return nil, NotImplemented{}
+}
+
+// DeleteBucketTagging - not implemented.
+func (a GatewayUnsupported) DeleteBucketTagging(ctx context.Context, bucket string) error {
+	logger.LogIf(ctx, NotImplemented{})
+	return NotImplemented{}
+}
+
 // PutObjectTag - not implemented.
 func (a GatewayUnsupported) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
 	logger.LogIf(ctx, NotImplemented{})
@@ -205,9 +235,9 @@ func (a GatewayUnsupported) PutObjectTag(ctx context.Context, bucket, object str
 }
 
 // GetObjectTag - not implemented.
-func (a GatewayUnsupported) GetObjectTag(ctx context.Context, bucket, object string) (tagging.Tagging, error) {
+func (a GatewayUnsupported) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return tagging.Tagging{}, NotImplemented{}
+	return nil, NotImplemented{}
 }
 
 // DeleteObjectTag - not implemented.

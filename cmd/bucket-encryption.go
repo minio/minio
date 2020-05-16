@@ -31,13 +31,13 @@ import (
 // BucketSSEConfigSys - in-memory cache of bucket encryption config
 type BucketSSEConfigSys struct {
 	sync.RWMutex
-	bucketSSEConfigMap map[string]bucketsse.BucketSSEConfig
+	bucketSSEConfigMap map[string]*bucketsse.BucketSSEConfig
 }
 
 // NewBucketSSEConfigSys - Creates an empty in-memory bucket encryption configuration cache
 func NewBucketSSEConfigSys() *BucketSSEConfigSys {
 	return &BucketSSEConfigSys{
-		bucketSSEConfigMap: make(map[string]bucketsse.BucketSSEConfig),
+		bucketSSEConfigMap: make(map[string]*bucketsse.BucketSSEConfig),
 	}
 }
 
@@ -47,11 +47,12 @@ func (sys *BucketSSEConfigSys) load(buckets []BucketInfo, objAPI ObjectLayer) er
 		config, err := objAPI.GetBucketSSEConfig(GlobalContext, bucket.Name)
 		if err != nil {
 			if _, ok := err.(BucketSSEConfigNotFound); ok {
-				sys.Remove(bucket.Name)
+				continue
 			}
-			continue
+			// Quorum errors should be returned.
+			return err
 		}
-		sys.Set(bucket.Name, *config)
+		sys.Set(bucket.Name, config)
 	}
 
 	return nil
@@ -73,7 +74,7 @@ func (sys *BucketSSEConfigSys) Init(buckets []BucketInfo, objAPI ObjectLayer) er
 }
 
 // Get - gets bucket encryption config for the given bucket.
-func (sys *BucketSSEConfigSys) Get(bucket string) (config bucketsse.BucketSSEConfig, ok bool) {
+func (sys *BucketSSEConfigSys) Get(bucket string) (config *bucketsse.BucketSSEConfig, ok bool) {
 	// We don't cache bucket encryption config in gateway mode.
 	if globalIsGateway {
 		objAPI := newObjectLayerWithoutSafeModeFn()
@@ -85,7 +86,7 @@ func (sys *BucketSSEConfigSys) Get(bucket string) (config bucketsse.BucketSSECon
 		if err != nil {
 			return
 		}
-		return *cfg, true
+		return cfg, true
 	}
 
 	sys.Lock()
@@ -95,7 +96,7 @@ func (sys *BucketSSEConfigSys) Get(bucket string) (config bucketsse.BucketSSECon
 }
 
 // Set - sets bucket encryption config to given bucket name.
-func (sys *BucketSSEConfigSys) Set(bucket string, config bucketsse.BucketSSEConfig) {
+func (sys *BucketSSEConfigSys) Set(bucket string, config *bucketsse.BucketSSEConfig) {
 	// We don't cache bucket encryption config in gateway mode.
 	if globalIsGateway {
 		return
@@ -146,8 +147,8 @@ func removeBucketSSEConfig(ctx context.Context, objAPI ObjectLayer, bucket strin
 	// Path to bucket-encryption.xml for the given bucket.
 	configFile := path.Join(bucketConfigPrefix, bucket, bucketSSEConfig)
 
-	if err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
-		if _, ok := err.(ObjectNotFound); ok {
+	if err := deleteConfig(ctx, objAPI, configFile); err != nil {
+		if err == errConfigNotFound {
 			return BucketSSEConfigNotFound{Bucket: bucket}
 		}
 		return err

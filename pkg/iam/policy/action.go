@@ -17,8 +17,6 @@
 package iampolicy
 
 import (
-	"encoding/json"
-
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -115,6 +113,12 @@ const (
 	// PutBucketObjectLockConfigurationAction - PutBucketObjectLockConfiguration Rest API action
 	PutBucketObjectLockConfigurationAction = "s3:PutBucketObjectLockConfiguration"
 
+	// GetBucketTaggingAction - GetBucketTagging Rest API action
+	GetBucketTaggingAction = "s3:GetBucketTagging"
+
+	// PutBucketTaggingAction - PutBucketTagging Rest API action
+	PutBucketTaggingAction = "s3:PutBucketTagging"
+
 	// GetObjectTaggingAction - Get Object Tags API action
 	GetObjectTaggingAction = "s3:GetObjectTagging"
 
@@ -136,7 +140,6 @@ const (
 
 // List of all supported actions.
 var supportedActions = map[Action]struct{}{
-	AllActions:                             {},
 	AbortMultipartUploadAction:             {},
 	CreateBucketAction:                     {},
 	DeleteBucketAction:                     {},
@@ -153,23 +156,26 @@ var supportedActions = map[Action]struct{}{
 	ListBucketMultipartUploadsAction:       {},
 	ListenBucketNotificationAction:         {},
 	ListMultipartUploadPartsAction:         {},
+	PutBucketLifecycleAction:               {},
+	GetBucketLifecycleAction:               {},
 	PutBucketNotificationAction:            {},
 	PutBucketPolicyAction:                  {},
 	PutObjectAction:                        {},
-	GetBucketLifecycleAction:               {},
-	PutBucketLifecycleAction:               {},
+	BypassGovernanceRetentionAction:        {},
 	PutObjectRetentionAction:               {},
 	GetObjectRetentionAction:               {},
 	GetObjectLegalHoldAction:               {},
 	PutObjectLegalHoldAction:               {},
-	PutBucketObjectLockConfigurationAction: {},
 	GetBucketObjectLockConfigurationAction: {},
-	BypassGovernanceRetentionAction:        {},
+	PutBucketObjectLockConfigurationAction: {},
+	GetBucketTaggingAction:                 {},
+	PutBucketTaggingAction:                 {},
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
 	DeleteObjectTaggingAction:              {},
 	PutBucketEncryptionAction:              {},
 	GetBucketEncryptionAction:              {},
+	AllActions:                             {},
 }
 
 // List of all supported object actions.
@@ -205,47 +211,6 @@ func (action Action) Match(a Action) bool {
 func (action Action) IsValid() bool {
 	_, ok := supportedActions[action]
 	return ok
-}
-
-// MarshalJSON - encodes Action to JSON data.
-func (action Action) MarshalJSON() ([]byte, error) {
-	if action.IsValid() || AdminAction(action).IsValid() {
-		return json.Marshal(string(action))
-	}
-
-	return nil, Errorf("invalid action '%v'", action)
-}
-
-// UnmarshalJSON - decodes JSON data to Action.
-func (action *Action) UnmarshalJSON(data []byte) error {
-	var s string
-
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-
-	a := Action(s)
-	if !a.IsValid() {
-		return Errorf("invalid action '%v'", s)
-	}
-
-	*action = a
-
-	return nil
-}
-
-func parseAction(s string) (Action, error) {
-	adminAction, err := parseAdminAction(s)
-	if err == nil {
-		return Action(adminAction), nil
-	}
-	action := Action(s)
-
-	if action.IsValid() {
-		return action, nil
-	}
-
-	return action, Errorf("unsupported action '%v'", s)
 }
 
 // actionConditionKeyMap - holds mapping of supported condition key for an action.
@@ -333,6 +298,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 
 	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
+	GetBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
+	PutBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	GetObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	DeleteObjectTaggingAction:              condition.NewKeySet(condition.CommonKeys...),

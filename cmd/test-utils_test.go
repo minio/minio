@@ -57,6 +57,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio-go/v6/pkg/signer"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -65,6 +66,18 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	// disable ENVs which interfere with tests.
+	for _, env := range []string{
+		crypto.EnvAutoEncryptionLegacy,
+		crypto.EnvKMSAutoEncryption,
+		config.EnvAccessKey,
+		config.EnvAccessKeyOld,
+		config.EnvSecretKey,
+		config.EnvSecretKeyOld,
+	} {
+		os.Unsetenv(env)
+	}
+
 	// Set as non-distributed.
 	globalIsDistXL = false
 
@@ -222,6 +235,8 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
 type TestErrHandler interface {
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Failed() bool
@@ -340,27 +355,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	globalConfigSys = NewConfigSys()
+	newAllSubsystems()
 
-	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(ctx, objLayer)
-
-	buckets, err := objLayer.ListBuckets(ctx)
-	if err != nil {
-		t.Fatalf("Unable to list buckets on backend %s", err)
-	}
-
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(buckets, objLayer)
-
-	globalNotificationSys = NewNotificationSys(testServer.Disks)
-	globalNotificationSys.Init(buckets, objLayer)
-
-	globalLifecycleSys = NewLifecycleSys()
-	globalLifecycleSys.Init(buckets, objLayer)
-
-	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
-	globalBucketSSEConfigSys.Init(buckets, objLayer)
+	initAllSubsystems(objLayer)
 
 	return testServer
 }
@@ -1640,7 +1637,7 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
@@ -1750,7 +1747,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
 		t.Fatalf("unexpected error. %v", err)
 	}
-	globalPolicySys.Set(bucketName, *bucketPolicy)
+	globalPolicySys.Set(bucketName, bucketPolicy)
 	defer globalPolicySys.Remove(bucketName)
 
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.

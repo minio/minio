@@ -33,7 +33,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -159,26 +158,6 @@ func extractMetadataFromMap(ctx context.Context, v map[string][]string, m map[st
 		}
 	}
 	return nil
-}
-
-// extractTags extracts tag key and value from given http header. It then
-// - Parses the input format X-Amz-Tagging:"Key1=Value1&Key2=Value2" into a map[string]string
-// with entries in the format X-Amg-Tag-Key1:Value1, X-Amz-Tag-Key2:Value2
-// - Validates the tags
-// - Returns the Tag in original string format "Key1=Value1&Key2=Value2"
-func extractTags(ctx context.Context, tags string) (string, error) {
-	// Check if the metadata has tagging related header
-	if tags != "" {
-		tagging, err := tagging.FromString(tags)
-		if err != nil {
-			return "", err
-		}
-		if err := tagging.Validate(); err != nil {
-			return "", err
-		}
-		return tagging.String(), nil
-	}
-	return "", nil
 }
 
 // The Query string for the redirect URL the client is

@@ -69,6 +69,7 @@ type dataUpdateTracker struct {
 	save       chan struct{}
 	debug      bool
 	saveExited chan struct{}
+	dirty      bool
 
 	Current dataUpdateFilter
 	History dataUpdateTrackerHistory
@@ -87,6 +88,7 @@ func newDataUpdateTracker() *dataUpdateTracker {
 		saveExited: make(chan struct{}),
 	}
 	d.Current.bf = d.newBloomFilter()
+	d.dirty = true
 	return d
 }
 
@@ -206,7 +208,7 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 			continue
 		}
 		err = d.deserialize(f, d.Saved)
-		if err != nil {
+		if err != nil && err != io.EOF {
 			logger.LogIf(ctx, err)
 		}
 		f.Close()
@@ -235,11 +237,16 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		}
 		buf.Reset()
 		d.mu.Lock()
+		if !d.dirty {
+			d.mu.Unlock()
+			return
+		}
 		d.Saved = UTCNow()
 		err := d.serialize(&buf)
 		if d.debug {
 			logger.Info(color.Green("dataUpdateTracker:")+" Saving: %v bytes, Current idx: %v", buf.Len(), d.Current.idx)
 		}
+		d.dirty = false
 		d.mu.Unlock()
 		if err != nil {
 			logger.LogIf(ctx, err, "Error serializing usage tracker data")
@@ -352,7 +359,9 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	// Version
 	if _, err := io.ReadFull(src, tmp[:1]); err != nil {
 		if d.debug {
-			logger.LogIf(ctx, err)
+			if err != io.EOF {
+				logger.LogIf(ctx, err)
+			}
 		}
 		return err
 	}
@@ -457,6 +466,7 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 				hashPath(path.Join(split[:i+1]...)).bytes(tmp[:])
 				d.Current.bf.Add(tmp[:])
 			}
+			d.dirty = d.dirty || len(split) > 0
 			d.mu.Unlock()
 		}
 	}
@@ -525,7 +535,6 @@ func (d *dataUpdateTracker) filterFrom(ctx context.Context, oldest, newest uint6
 func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-
 	if current == 0 {
 		if len(d.History) == 0 {
 			return d.filterFrom(ctx, d.Current.idx, d.Current.idx), nil
@@ -536,6 +545,7 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, oldest, current uin
 
 	// Move current to history if new one requested
 	if d.Current.idx != current {
+		d.dirty = true
 		if d.debug {
 			logger.Info(color.Green("dataUpdateTracker:")+" cycle bloom filter: %v -> %v", d.Current.idx, current)
 		}
