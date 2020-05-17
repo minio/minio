@@ -493,9 +493,10 @@ func (s *peerRESTServer) CPUOBDInfoHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	ctx, cancel := context.WithCancel(newContext(r, w, "CpuOBDInfo"))
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	info := getLocalCPUOBDInfo(ctx)
+
+	info := getLocalCPUOBDInfo(ctx, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -508,9 +509,10 @@ func (s *peerRESTServer) DiskHwOBDInfoHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	ctx, cancel := context.WithCancel(newContext(r, w, "DiskHwOBDInfo"))
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	info := getLocalDiskHwOBD(ctx)
+
+	info := getLocalDiskHwOBD(ctx, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -523,9 +525,10 @@ func (s *peerRESTServer) OsOBDInfoHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ctx, cancel := context.WithCancel(newContext(r, w, "OsOBDInfo"))
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	info := getLocalOsInfoOBD(ctx)
+
+	info := getLocalOsInfoOBD(ctx, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -538,9 +541,10 @@ func (s *peerRESTServer) ProcOBDInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	ctx, cancel := context.WithCancel(newContext(r, w, "ProcOBDInfo"))
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	info := getLocalProcOBD(ctx)
+
+	info := getLocalProcOBD(ctx, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
@@ -553,9 +557,10 @@ func (s *peerRESTServer) MemOBDInfoHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	ctx, cancel := context.WithCancel(newContext(r, w, "MemOBDInfo"))
+	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	info := getLocalMemOBD(ctx)
+
+	info := getLocalMemOBD(ctx, r)
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))

@@ -494,8 +494,8 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	expectedLocation := redirectURL.String()
 
 	// Check the new location url
-	if rec.HeaderMap.Get("Location") != expectedLocation {
-		t.Errorf("Unexpected location, expected = %s, found = `%s`", rec.HeaderMap.Get("Location"), expectedLocation)
+	if rec.Header().Get("Location") != expectedLocation {
+		t.Errorf("Unexpected location, expected = %s, found = `%s`", rec.Header().Get("Location"), expectedLocation)
 	}
 
 }

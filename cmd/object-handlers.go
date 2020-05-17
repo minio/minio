@@ -955,7 +955,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
 		// - the object storage class is not changing
 		// then execute a key rotation.
-		var keyRotation bool
 		if cpSrcDstSame && (sseCopyC && sseC) && !chStorageClass {
 			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
 			if err != nil {
@@ -977,13 +976,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 			// Since we are rotating the keys, make sure to update the metadata.
 			srcInfo.metadataOnly = true
-			keyRotation = true
 		} else {
 			if isSourceEncrypted || isTargetEncrypted {
 				// We are not only copying just metadata instead
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
-				if !keyRotation {
+				if !srcInfo.metadataOnly {
 					srcInfo.metadataOnly = false
 				}
 			}
@@ -1512,15 +1510,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
-	// get gateway encryption options
-	var opts ObjectOptions
-
-	opts, err = putOpts(ctx, r, bucket, object, nil)
-	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-		return
-	}
-
 	// Validate storage class metadata if present
 	if sc := r.Header.Get(xhttp.AmzStorageClass); sc != "" {
 		if !storageclass.IsValid(sc) {
@@ -1585,7 +1574,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 	}
 
-	opts, err = putOpts(ctx, r, bucket, object, metadata)
+	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return

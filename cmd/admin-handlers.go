@@ -1185,7 +1185,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		defer close(obdInfoCh)
 
 		if cpu, ok := vars["syscpu"]; ok && cpu == "true" {
-			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx)
+			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)
 
 			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, cpuInfo)
 			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, globalNotificationSys.CPUOBDInfo(deadlinedCtx)...)
@@ -1193,7 +1193,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if diskHw, ok := vars["sysdiskhw"]; ok && diskHw == "true" {
-			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx)
+			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, diskHwInfo)
 			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, globalNotificationSys.DiskHwOBDInfo(deadlinedCtx)...)
@@ -1201,7 +1201,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if osInfo, ok := vars["sysosinfo"]; ok && osInfo == "true" {
-			osInfo := getLocalOsInfoOBD(deadlinedCtx)
+			osInfo := getLocalOsInfoOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, osInfo)
 			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, globalNotificationSys.OsOBDInfo(deadlinedCtx)...)
@@ -1209,7 +1209,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if mem, ok := vars["sysmem"]; ok && mem == "true" {
-			memInfo := getLocalMemOBD(deadlinedCtx)
+			memInfo := getLocalMemOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, memInfo)
 			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, globalNotificationSys.MemOBDInfo(deadlinedCtx)...)
@@ -1217,7 +1217,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if proc, ok := vars["sysprocess"]; ok && proc == "true" {
-			procInfo := getLocalProcOBD(deadlinedCtx)
+			procInfo := getLocalProcOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, procInfo)
 			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, globalNotificationSys.ProcOBDInfo(deadlinedCtx)...)
@@ -1321,7 +1321,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 	}
 
-	infoMsg := madmin.InfoMessage{}
 	vault := fetchVaultStatus(cfg)
 
 	ldap := madmin.LDAP{}
@@ -1426,7 +1425,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Notifications: notifyTarget,
 	}
 
-	infoMsg = madmin.InfoMessage{
+	infoMsg := madmin.InfoMessage{
 		Mode:         mode,
 		Domain:       domain,
 		Region:       globalServerRegion,

@@ -211,7 +211,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		if dataUsageInfo.BucketsSizes[bucket] > cfg.Quota {
 			toFree = dataUsageInfo.BucketsSizes[bucket] - cfg.Quota
 		}
-		if toFree <= 0 {
+		if toFree == 0 {
 			continue
 		}
 		// Allocate new results channel to receive ObjectInfo.

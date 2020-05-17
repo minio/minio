@@ -2425,11 +2425,16 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 			rec = httptest.NewRecorder()
 			apiRouter.ServeHTTP(rec, req)
 			checkRespErr(rec, http.StatusOK)
-			etag := rec.Header()["ETag"][0]
-			if etag == "" {
-				t.Fatalf("Unexpected empty etag")
+			header := rec.Header()
+			if v, ok := header["ETag"]; ok {
+				etag := v[0]
+				if etag == "" {
+					t.Fatalf("Unexpected empty etag")
+				}
+				cp = append(cp, CompletePart{partID, etag[1 : len(etag)-1]})
+			} else {
+				t.Fatalf("Missing etag header")
 			}
-			cp = append(cp, CompletePart{partID, etag[1 : len(etag)-1]})
 		}
 
 		// Call CompleteMultipart API

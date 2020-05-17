@@ -19,16 +19,15 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func getLocalDiskHwOBD(ctx context.Context) madmin.ServerDiskHwOBDInfo {
-	addr := ""
+func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHwOBDInfo {
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(globalEndpoints)
-	} else {
-		addr = "minio"
 	}
 
 	return madmin.ServerDiskHwOBDInfo{
