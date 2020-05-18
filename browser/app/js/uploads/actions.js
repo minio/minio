@@ -89,11 +89,12 @@ export const uploadFile = file => {
       return
     }
     const currentPrefix = getCurrentPrefix(state)
-    const objectName = `${currentPrefix}${file.name}`
+    const filePath = file.path || file.name
+    const objectName = `${currentPrefix}${filePath}`
     const uploadUrl = `${
       window.location.origin
     }${minioBrowserPrefix}/upload/${currentBucket}/${objectName}`
-    const slug = `${currentBucket}-${currentPrefix}-${file.name}`
+    const slug = `${currentBucket}-${currentPrefix}-${filePath}`
 
     let xhr = new XMLHttpRequest()
     xhr.open("PUT", uploadUrl, true)
@@ -141,7 +142,7 @@ export const uploadFile = file => {
         dispatch(
           alertActions.set({
             type: "success",
-            message: "File '" + file.name + "' uploaded successfully."
+            message: "File '" + filePath + "' uploaded successfully."
           })
         )
         dispatch(objectsActions.selectPrefix(currentPrefix))
@@ -153,7 +154,7 @@ export const uploadFile = file => {
       dispatch(
         alertActions.set({
           type: "danger",
-          message: "Error occurred uploading '" + file.name + "'."
+          message: "Error occurred uploading '" + filePath + "'."
         })
       )
     })
