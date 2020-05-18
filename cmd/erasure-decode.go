@@ -115,6 +115,9 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 	if p.offset+p.shardSize > p.shardFileSize {
 		p.shardSize = p.shardFileSize - p.offset
 	}
+	if p.shardSize == 0 {
+		return newBuf, nil
+	}
 
 	readTriggerCh := make(chan bool, len(p.readers))
 	for i := 0; i < p.dataBlocks; i++ {
@@ -264,6 +267,7 @@ func (e Erasure) decode(ctx context.Context, writer io.Writer, readers []io.Read
 		bufs, err = reader.Read(bufs)
 		if err != nil {
 			if errors.Is(err, errHealRequired) {
+				// errHealRequired is only returned if there are be enough data for reconstruction.
 				healRequired = true
 			} else {
 				return healRequired, err

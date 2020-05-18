@@ -87,14 +87,15 @@ func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error)
 // It only decodes the data blocks but does not verify them.
 // It returns an error if the decoding failed.
 func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
-	needsReconstruction := false
-	for _, b := range data[:e.dataBlocks] {
+	var isZero = 0
+	for _, b := range data[:] {
 		if len(b) == 0 {
-			needsReconstruction = true
+			isZero++
 			break
 		}
 	}
-	if !needsReconstruction {
+	if isZero == 0 || isZero == len(data) {
+		// If all are zero, payload is 0 bytes.
 		return nil
 	}
 	return e.encoder().ReconstructData(data)
