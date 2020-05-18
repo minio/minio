@@ -34,6 +34,7 @@ export class PrefixActions extends React.Component {
           <a
             href=""
             className="fiad-action"
+            title="Download as zip"
             onClick={this.handleDownload.bind(this)}
           >
             <i className="fas fa-cloud-download-alt" />
