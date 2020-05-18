@@ -365,8 +365,8 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 	}
 
 	// Get object api
-	objApi := newObjectLayerWithoutSafeModeFn()
-	if objApi == nil {
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
 		return cache, errors.New("object layer not initialized")
 	}
 	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
@@ -386,7 +386,7 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 			return 0, nil
 		}
 
-		return item.applyActions(ctx, objApi, &meta), nil
+		return item.applyActions(ctx, objAPI, &meta), nil
 	})
 	if err != nil {
 		return dataUsageInfo, err
