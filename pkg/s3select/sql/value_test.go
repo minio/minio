@@ -160,9 +160,6 @@ func TestValue_Equals(t *testing.T) {
 }
 
 func TestValue_CSVString(t *testing.T) {
-	type fields struct {
-		value interface{}
-	}
 	type test struct {
 		name    string
 		want    string

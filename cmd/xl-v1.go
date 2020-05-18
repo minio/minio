@@ -262,7 +262,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	}
 
 	close(bucketCh)
-	buckets = nil
 	bucketResults := make(chan dataUsageEntryInfo, len(disks))
 
 	// Start async collector/saver.

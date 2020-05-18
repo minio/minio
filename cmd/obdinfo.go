@@ -32,12 +32,10 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-func getLocalCPUOBDInfo(ctx context.Context) madmin.ServerCPUOBDInfo {
-	addr := ""
+func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOBDInfo {
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(globalEndpoints)
-	} else {
-		addr = "minio"
 	}
 
 	info, err := cpuhw.InfoWithContext(ctx)
@@ -60,16 +58,15 @@ func getLocalCPUOBDInfo(ctx context.Context) madmin.ServerCPUOBDInfo {
 		Addr:     addr,
 		CPUStat:  info,
 		TimeStat: time,
-		Error:    "",
 	}
 
 }
 
 func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones EndpointZones, r *http.Request) madmin.ServerDrivesOBDInfo {
 	var drivesOBDInfo []madmin.DriveOBDInfo
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	for _, ep := range endpointZones {
-		for i, endpoint := range ep.Endpoints {
+		for _, endpoint := range ep.Endpoints {
 			// Only proceed for local endpoints
 			if endpoint.IsLocal {
 				if _, err := os.Stat(endpoint.Path); err != nil {
@@ -81,34 +78,34 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 					continue
 				}
 				measurePath := pathJoin(minioMetaTmpBucket, mustGetUUID())
-				measure := func(index int, path string) {
-					var driveOBDInfo madmin.DriveOBDInfo
+				measure := func(path string) {
+					defer wg.Done()
+					driveOBDInfo := madmin.DriveOBDInfo{
+						Path: path,
+					}
 					latency, throughput, err := disk.GetOBDInfo(ctx, path, pathJoin(path, measurePath))
 					if err != nil {
 						driveOBDInfo.Error = err.Error()
+					} else {
+						driveOBDInfo.Latency = latency
+						driveOBDInfo.Throughput = throughput
 					}
-					driveOBDInfo.Path = path
-					driveOBDInfo.Latency = latency
-					driveOBDInfo.Throughput = throughput
 					drivesOBDInfo = append(drivesOBDInfo, driveOBDInfo)
-					wg.Done()
 				}
 				wg.Add(1)
 
 				if parallel {
-					go measure(i, endpoint.Path)
+					go measure(endpoint.Path)
 				} else {
-					measure(i, endpoint.Path)
+					measure(endpoint.Path)
 				}
 			}
 		}
 	}
 	wg.Wait()
-	addr := ""
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(endpointZones)
-	} else {
-		addr = "minio"
 	}
 	if parallel {
 		return madmin.ServerDrivesOBDInfo{
@@ -122,12 +119,10 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 	}
 }
 
-func getLocalMemOBD(ctx context.Context) madmin.ServerMemOBDInfo {
-	addr := ""
+func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInfo {
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(globalEndpoints)
-	} else {
-		addr = "minio"
 	}
 
 	swap, err := memhw.SwapMemoryWithContext(ctx)
@@ -150,16 +145,13 @@ func getLocalMemOBD(ctx context.Context) madmin.ServerMemOBDInfo {
 		Addr:       addr,
 		SwapMem:    swap,
 		VirtualMem: vm,
-		Error:      "",
 	}
 }
 
-func getLocalProcOBD(ctx context.Context) madmin.ServerProcOBDInfo {
-	addr := ""
+func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDInfo {
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(globalEndpoints)
-	} else {
-		addr = "minio"
 	}
 
 	errProcInfo := func(err error) madmin.ServerProcOBDInfo {
@@ -374,16 +366,13 @@ func getLocalProcOBD(ctx context.Context) madmin.ServerProcOBDInfo {
 	return madmin.ServerProcOBDInfo{
 		Addr:      addr,
 		Processes: sysProcs,
-		Error:     "",
 	}
 }
 
-func getLocalOsInfoOBD(ctx context.Context) madmin.ServerOsOBDInfo {
-	addr := ""
+func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(globalEndpoints)
-	} else {
-		addr = "minio"
 	}
 
 	info, err := host.InfoWithContext(ctx)
@@ -410,6 +399,5 @@ func getLocalOsInfoOBD(ctx context.Context) madmin.ServerOsOBDInfo {
 		Info:    info,
 		Sensors: sensors,
 		Users:   users,
-		Error:   "",
 	}
 }

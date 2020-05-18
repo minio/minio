@@ -534,7 +534,7 @@ func (client *peerRESTClient) cycleServerBloomFilter(ctx context.Context, req bl
 	if err != nil {
 		return nil, err
 	}
-	respBody, err := client.call(peerRESTMethodCycleBloom, nil, &reader, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodCycleBloom, nil, &reader, -1)
 	if err != nil {
 		return nil, err
 	}

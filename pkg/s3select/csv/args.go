@@ -26,9 +26,8 @@ import (
 )
 
 const (
-	none   = "none"
-	use    = "use"
-	ignore = "ignore"
+	none = "none"
+	use  = "use"
 
 	defaultRecordDelimiter      = "\n"
 	defaultFieldDelimiter       = ","
@@ -36,7 +35,6 @@ const (
 	defaultQuoteEscapeCharacter = `"`
 	defaultCommentCharacter     = "#"
 
-	always   = "always"
 	asneeded = "asneeded"
 )
 

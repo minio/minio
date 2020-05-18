@@ -204,7 +204,7 @@ func formatXLMigrate(export string) error {
 			return err
 		}
 		// Migrate successful v2 => v3, v3 is latest
-		version = formatXLVersionV3
+		// version = formatXLVersionV3
 		fallthrough
 	case formatXLVersionV3:
 		// v3 is the latest version, return.

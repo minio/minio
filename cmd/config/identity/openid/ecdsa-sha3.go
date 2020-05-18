@@ -18,7 +18,9 @@ package openid
 
 import (
 	"crypto"
+
 	"github.com/dgrijalva/jwt-go"
+
 	// Needed for SHA3 to work - See: https://golang.org/src/crypto/crypto.go?s=1034:1288
 	_ "golang.org/x/crypto/sha3"
 )
