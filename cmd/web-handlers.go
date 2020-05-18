@@ -1966,6 +1966,20 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 		return toJSONError(ctx, errInvalidBucketName)
 	}
 
+	// Check if the user indeed has GetObject access,
+	// if not we do not need to generate presigned URLs
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.AccessKey,
+		Action:          iampolicy.GetObjectAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+		IsOwner:         owner,
+		ObjectName:      args.ObjectName,
+		Claims:          claims.Map(),
+	}) {
+		return toJSONError(ctx, errPresignedNotAllowed)
+	}
+
 	reply.UIVersion = browser.UIVersion
 	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry, creds, region)
 	return nil
