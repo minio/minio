@@ -113,25 +113,6 @@ func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
 	return disk.IsOnline()
 }
 
-func (s *xlSets) getOnlineDisksCount() int {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-	count := 0
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			disk := s.xlDisks[i][j]
-			if disk == nil {
-				continue
-			}
-			if !disk.IsOnline() {
-				continue
-			}
-			count++
-		}
-	}
-	return count
-}
-
 func (s *xlSets) getDiskMap() map[string]StorageAPI {
 	diskMap := make(map[string]StorageAPI)
 
@@ -507,9 +488,8 @@ func (s *xlSets) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// MakeBucketLocation - creates a new bucket across all sets simultaneously
-// even if one of the sets fail to create buckets, we proceed to undo a
-// successful operation.
+// MakeBucketLocation - creates a new bucket across all sets simultaneously,
+// then return the first encountered error
 func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
@@ -522,36 +502,16 @@ func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location st
 	}
 
 	errs := g.Wait()
-	// Upon any error we try to undo the make bucket operation if possible
-	// on all sets where it succeeded.
+
+	// Return the first encountered error
 	for _, err := range errs {
 		if err != nil {
-			undoMakeBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
 
 	// Success.
 	return nil
-}
-
-// This function is used to undo a successful MakeBucket operation.
-func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
-	g := errgroup.WithNErrs(len(sets))
-
-	// Undo previous make bucket entry on all underlying sets.
-	for index := range sets {
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				return sets[index].DeleteBucket(GlobalContext, bucket, false)
-			}
-			return nil
-		}, index)
-	}
-
-	// Wait for all delete bucket to finish.
-	g.Wait()
 }
 
 // hashes the key returning an integer based on the input algorithm.

@@ -36,14 +36,6 @@ func (xl xlObjects) getUploadIDDir(bucket, object, uploadID string) string {
 	return pathJoin(xl.getMultipartSHADir(bucket, object), uploadID)
 }
 
-// getUploadIDLockPath returns the name of the Lock in the form of
-// bucket/object/uploadID. For locking, the path bucket/object/uploadID
-// is locked instead of multipart-sha256-Dir/uploadID as it is more
-// readable in the list-locks output which helps in debugging.
-func (xl xlObjects) getUploadIDLockPath(bucket, object, uploadID string) string {
-	return pathJoin(bucket, object, uploadID)
-}
-
 func (xl xlObjects) getMultipartSHADir(bucket, object string) string {
 	return getSHA256Hash([]byte(pathJoin(bucket, object)))
 }

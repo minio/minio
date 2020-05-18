@@ -17,8 +17,6 @@
 package policy
 
 import (
-	"encoding/json"
-	"reflect"
 	"testing"
 )
 
@@ -37,61 +35,6 @@ func TestIDIsValid(t *testing.T) {
 
 		if result != testCase.expectedResult {
 			t.Errorf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
-func TestIDMarshalJSON(t *testing.T) {
-	testCases := []struct {
-		id             ID
-		expectedResult []byte
-		expectErr      bool
-	}{
-		{ID("DenyEncryptionSt1"), []byte(`"DenyEncryptionSt1"`), false},
-		{ID(""), []byte(`""`), false},
-		{ID("aa\xe2"), nil, true}, // invalid utf-8
-	}
-
-	for i, testCase := range testCases {
-		result, err := json.Marshal(testCase.id)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v\n", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if !reflect.DeepEqual(result, testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, string(testCase.expectedResult), string(result))
-			}
-		}
-	}
-}
-
-func TestIDUnmarshalJSON(t *testing.T) {
-	testCases := []struct {
-		data           []byte
-		expectedResult ID
-		expectErr      bool
-	}{
-		{[]byte(`"DenyEncryptionSt1"`), ID("DenyEncryptionSt1"), false},
-		{[]byte(`""`), ID(""), false},
-		{[]byte(`"aa\xe2"`), ID(""), true},
-	}
-
-	for i, testCase := range testCases {
-		var result ID
-		err := json.Unmarshal(testCase.data, &result)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v\n", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if result != testCase.expectedResult {
-				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-			}
 		}
 	}
 }

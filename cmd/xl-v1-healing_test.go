@@ -25,43 +25,6 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-// Tests undoes and validates if the undoing completes successfully.
-func TestUndoMakeBucket(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	nDisks := 16
-	fsDirs, err := getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer removeRoots(fsDirs)
-
-	// Remove format.json on 16 disks.
-	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bucketName := getRandomBucketName()
-	if err = obj.MakeBucketWithLocation(ctx, bucketName, "", false); err != nil {
-		t.Fatal(err)
-	}
-	z := obj.(*xlZones)
-	xl := z.zones[0].sets[0]
-	undoMakeBucket(xl.getDisks(), bucketName)
-
-	// Validate if bucket was deleted properly.
-	_, err = obj.GetBucketInfo(ctx, bucketName)
-	if err != nil {
-		switch err.(type) {
-		case BucketNotFound:
-		default:
-			t.Fatal(err)
-		}
-	}
-}
-
 func TestHealObjectCorrupted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

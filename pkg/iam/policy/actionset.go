@@ -107,6 +107,16 @@ func (actionSet ActionSet) ToSlice() []Action {
 	return actions
 }
 
+// ToAdminSlice - returns slice of admin actions from the action set.
+func (actionSet ActionSet) ToAdminSlice() []AdminAction {
+	actions := []AdminAction{}
+	for action := range actionSet {
+		actions = append(actions, AdminAction(action))
+	}
+
+	return actions
+}
+
 // UnmarshalJSON - decodes JSON data to ActionSet.
 func (actionSet *ActionSet) UnmarshalJSON(data []byte) error {
 	var sset set.StringSet
@@ -120,14 +130,29 @@ func (actionSet *ActionSet) UnmarshalJSON(data []byte) error {
 
 	*actionSet = make(ActionSet)
 	for _, s := range sset.ToSlice() {
-		action, err := parseAction(s)
-		if err != nil {
-			return err
-		}
-
-		actionSet.Add(action)
+		actionSet.Add(Action(s))
 	}
 
+	return nil
+}
+
+// ValidateAdmin checks if all actions are valid Admin actions
+func (actionSet ActionSet) ValidateAdmin() error {
+	for _, action := range actionSet.ToAdminSlice() {
+		if !action.IsValid() {
+			return Errorf("unsupported admin action '%v'", action)
+		}
+	}
+	return nil
+}
+
+// Validate checks if all actions are valid
+func (actionSet ActionSet) Validate() error {
+	for _, action := range actionSet.ToSlice() {
+		if !action.IsValid() {
+			return Errorf("unsupported action '%v'", action)
+		}
+	}
 	return nil
 }
 

@@ -145,7 +145,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 	// Fetch address option
 	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+globalMinioDefaultPort {
+	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
 		globalCLIContext.Addr = ctx.String("address")
 	}
 
@@ -184,6 +184,11 @@ func handleCommonEnvVars() {
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
+	}
+
+	globalFSOSync, err = config.ParseBool(env.Get(config.EnvFSOSync, config.EnableOff))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
 
 	domains := env.Get(config.EnvDomain, "")
