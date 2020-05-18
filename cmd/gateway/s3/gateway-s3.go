@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018, 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,8 +91,12 @@ func s3GatewayMain(ctx *cli.Context) {
 		args = cli.Args{"https://s3.amazonaws.com"}
 	}
 
+	serverAddr := ctx.GlobalString("address")
+	if serverAddr == "" || serverAddr == ":"+minio.GlobalMinioDefaultPort {
+		serverAddr = ctx.String("address")
+	}
 	// Validate gateway arguments.
-	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), args.First()), "Invalid argument")
+	logger.FatalIf(minio.ValidateGatewayArguments(serverAddr, args.First()), "Invalid argument")
 
 	// Start the gateway..
 	minio.StartGateway(ctx, &S3{args.First()})
@@ -617,7 +621,7 @@ func (l *s3Objects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 		return oi, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	return minio.ObjectInfo{Bucket: bucket, Name: object, ETag: etag}, nil
+	return minio.ObjectInfo{Bucket: bucket, Name: object, ETag: strings.Trim(etag, "\"")}, nil
 }
 
 // SetBucketPolicy sets policy on bucket

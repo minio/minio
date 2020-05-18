@@ -326,70 +326,6 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func (a adminAPIHandlers) AccountingUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AccountingUsageInfo")
-
-	defer logger.AuditLog(w, r, "AccountingUsageInfo", mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.AccountingUsageInfoAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
-	var accountingUsageInfo = make(map[string]madmin.BucketAccountingUsage)
-
-	buckets, err := objectAPI.ListBuckets(ctx)
-	if err != nil {
-		// writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	users, err := globalIAMSys.ListUsers()
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Load the latest calculated data usage
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err != nil {
-		logger.LogIf(ctx, err)
-	}
-
-	// Calculate for each bucket, which users are allowed to access to it
-	for _, bucket := range buckets {
-		bucketUsageInfo := madmin.BucketAccountingUsage{}
-
-		// Fetch the data usage of the current bucket
-		if !dataUsageInfo.LastUpdate.IsZero() && dataUsageInfo.BucketsSizes != nil {
-			bucketUsageInfo.Size = dataUsageInfo.BucketsSizes[bucket.Name]
-		}
-
-		for user := range users {
-			rd, wr, custom := globalIAMSys.GetAccountAccess(user, bucket.Name)
-			if rd || wr || custom {
-				bucketUsageInfo.AccessList = append(bucketUsageInfo.AccessList, madmin.AccountAccess{
-					AccountName: user,
-					Read:        rd,
-					Write:       wr,
-					Custom:      custom,
-				})
-			}
-		}
-
-		accountingUsageInfo[bucket.Name] = bucketUsageInfo
-	}
-
-	usageInfoJSON, err := json.Marshal(accountingUsageInfo)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	writeSuccessResponseJSON(w, usageInfoJSON)
-}
-
 func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
@@ -1249,7 +1185,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		defer close(obdInfoCh)
 
 		if cpu, ok := vars["syscpu"]; ok && cpu == "true" {
-			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx)
+			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)
 
 			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, cpuInfo)
 			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, globalNotificationSys.CPUOBDInfo(deadlinedCtx)...)
@@ -1257,7 +1193,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if diskHw, ok := vars["sysdiskhw"]; ok && diskHw == "true" {
-			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx)
+			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, diskHwInfo)
 			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, globalNotificationSys.DiskHwOBDInfo(deadlinedCtx)...)
@@ -1265,7 +1201,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if osInfo, ok := vars["sysosinfo"]; ok && osInfo == "true" {
-			osInfo := getLocalOsInfoOBD(deadlinedCtx)
+			osInfo := getLocalOsInfoOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, osInfo)
 			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, globalNotificationSys.OsOBDInfo(deadlinedCtx)...)
@@ -1273,7 +1209,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if mem, ok := vars["sysmem"]; ok && mem == "true" {
-			memInfo := getLocalMemOBD(deadlinedCtx)
+			memInfo := getLocalMemOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, memInfo)
 			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, globalNotificationSys.MemOBDInfo(deadlinedCtx)...)
@@ -1281,7 +1217,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		if proc, ok := vars["sysprocess"]; ok && proc == "true" {
-			procInfo := getLocalProcOBD(deadlinedCtx)
+			procInfo := getLocalProcOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, procInfo)
 			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, globalNotificationSys.ProcOBDInfo(deadlinedCtx)...)
@@ -1385,7 +1321,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 	}
 
-	infoMsg := madmin.InfoMessage{}
 	vault := fetchVaultStatus(cfg)
 
 	ldap := madmin.LDAP{}
@@ -1490,7 +1425,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Notifications: notifyTarget,
 	}
 
-	infoMsg = madmin.InfoMessage{
+	infoMsg := madmin.InfoMessage{
 		Mode:         mode,
 		Domain:       domain,
 		Region:       globalServerRegion,

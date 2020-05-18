@@ -369,7 +369,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	if objectAPI.IsEncryptionSupported() {
-		objInfo.UserDefined = CleanMinioInternalMetadataKeys(objInfo.UserDefined)
 		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -545,7 +544,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 			return
 		}
-		objInfo.UserDefined = CleanMinioInternalMetadataKeys(objInfo.UserDefined)
 	}
 
 	// Set encryption response headers
@@ -881,9 +879,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		length = actualSize
 	}
-	if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
+	if !cpSrcDstSame {
+		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	var compressMetadata map[string]string
@@ -955,7 +955,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// - the object is encrypted using SSE-S3 and the SSE-S3 header is present
 		// - the object storage class is not changing
 		// then execute a key rotation.
-		var keyRotation bool
 		if cpSrcDstSame && (sseCopyC && sseC) && !chStorageClass {
 			oldKey, err = ParseSSECopyCustomerRequest(r.Header, srcInfo.UserDefined)
 			if err != nil {
@@ -977,13 +976,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 			// Since we are rotating the keys, make sure to update the metadata.
 			srcInfo.metadataOnly = true
-			keyRotation = true
 		} else {
 			if isSourceEncrypted || isTargetEncrypted {
 				// We are not only copying just metadata instead
 				// we are creating a new object at this point, even
 				// if source and destination are same objects.
-				if !keyRotation {
+				if !srcInfo.metadataOnly {
 					srcInfo.metadataOnly = false
 				}
 			}
@@ -1513,15 +1511,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
-	// get gateway encryption options
-	var opts ObjectOptions
-
-	opts, err = putOpts(ctx, r, bucket, object, nil)
-	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-		return
-	}
-
 	// Validate storage class metadata if present
 	if sc := r.Header.Get(xhttp.AmzStorageClass); sc != "" {
 		if !storageclass.IsValid(sc) {
@@ -1586,7 +1575,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 	}
 
-	opts, err = putOpts(ctx, r, bucket, object, metadata)
+	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
@@ -1821,8 +1810,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Read compression metadata preserved in the init multipart for the decision.
-	_, compressPart := li.UserDefined[ReservedMetadataPrefix+"compression"]
-	isCompressed := compressPart
+	_, isCompressed := li.UserDefined[ReservedMetadataPrefix+"compression"]
 	// Compress only if the compression is enabled during initial multipart.
 	if isCompressed {
 		s2c := newS2CompressReader(gr)
@@ -1839,64 +1827,57 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, li.UserDefined)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
-	isEncrypted := false
+	isEncrypted := crypto.IsEncrypted(li.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
-	if objectAPI.IsEncryptionSupported() && !isCompressed {
-		li, lerr := objectAPI.ListObjectParts(ctx, dstBucket, dstObject, uploadID, 0, 1, dstOpts)
-		if lerr != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, lerr), r.URL, guessIsBrowserReq(r))
+	if objectAPI.IsEncryptionSupported() && !isCompressed && isEncrypted {
+		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		li.UserDefined = CleanMinioInternalMetadataKeys(li.UserDefined)
-		dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, li.UserDefined)
+		if crypto.S3.IsEncrypted(li.UserDefined) && crypto.SSEC.IsRequested(r.Header) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		var key []byte
+		if crypto.SSEC.IsRequested(r.Header) {
+			key, err = ParseSSECustomerRequest(r)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
+		}
+		key, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		if crypto.IsEncrypted(li.UserDefined) {
-			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			if crypto.S3.IsEncrypted(li.UserDefined) && crypto.SSEC.IsRequested(r.Header) {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			isEncrypted = true
-			var key []byte
-			if crypto.SSEC.IsRequested(r.Header) {
-				key, err = ParseSSECustomerRequest(r)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
-				}
-			}
-			key, err = decryptObjectInfo(key, dstBucket, dstObject, li.UserDefined)
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			copy(objectEncryptionKey[:], key)
+		copy(objectEncryptionKey[:], key)
 
-			partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-			reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:]})
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-
-			info := ObjectInfo{Size: length}
-			srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length, globalCLIContext.StrictS3Compat)
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objectEncryptionKey)
+		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
+		reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:]})
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
+
+		info := ObjectInfo{Size: length}
+		srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length, globalCLIContext.StrictS3Compat)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objectEncryptionKey)
 	}
+
 	srcInfo.PutObjReader = pReader
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
@@ -2063,11 +2044,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	// Read compression metadata preserved in the init multipart for the decision.
-	_, compressPart := li.UserDefined[ReservedMetadataPrefix+"compression"]
 
-	isCompressed := false
-	if objectAPI.IsCompressionSupported() && compressPart {
+	// Read compression metadata preserved in the init multipart for the decision.
+	_, isCompressed := li.UserDefined[ReservedMetadataPrefix+"compression"]
+
+	if objectAPI.IsCompressionSupported() && isCompressed {
 		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2081,7 +2062,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
-		isCompressed = true
 	}
 
 	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
@@ -2092,67 +2072,57 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
-	isEncrypted := false
+	isEncrypted := crypto.IsEncrypted(li.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
-	if objectAPI.IsEncryptionSupported() && !isCompressed {
-		var li ListPartsInfo
-		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1, ObjectOptions{})
+	if objectAPI.IsEncryptionSupported() && !isCompressed && isEncrypted {
+		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		opts, err = putOpts(ctx, r, bucket, object, li.UserDefined)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		li.UserDefined = CleanMinioInternalMetadataKeys(li.UserDefined)
-		if crypto.IsEncrypted(li.UserDefined) {
-			if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(li.UserDefined) {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
-				return
-			}
 
-			isEncrypted = true // to detect SSE-S3 encryption
-			opts, err = putOpts(ctx, r, bucket, object, li.UserDefined)
+		var key []byte
+		if crypto.SSEC.IsRequested(r.Header) {
+			key, err = ParseSSECustomerRequest(r)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-
-			var key []byte
-			if crypto.SSEC.IsRequested(r.Header) {
-				key, err = ParseSSECustomerRequest(r)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
-				}
-			}
-
-			// Calculating object encryption key
-			key, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			copy(objectEncryptionKey[:], key)
-
-			partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-			in := io.Reader(hashReader)
-			if size > encryptBufferThreshold {
-				// The encryption reads in blocks of 64KB.
-				// We add a buffer on bigger files to reduce the number of syscalls upstream.
-				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
-			}
-			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:]})
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			info := ObjectInfo{Size: size}
-			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 		}
+
+		// Calculating object encryption key
+		key, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		copy(objectEncryptionKey[:], key)
+
+		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
+		in := io.Reader(hashReader)
+		if size > encryptBufferThreshold {
+			// The encryption reads in blocks of 64KB.
+			// We add a buffer on bigger files to reduce the number of syscalls upstream.
+			in = bufio.NewReaderSize(hashReader, encryptBufferSize)
+		}
+		reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:]})
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		info := ObjectInfo{Size: size}
+		// do not try to verify encrypted content
+		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
@@ -2250,42 +2220,36 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidMaxParts), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	var opts ObjectOptions
 	listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	var ssec bool
-	if objectAPI.IsEncryptionSupported() {
-		var li ListPartsInfo
-		li, err = objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, 1, opts)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
+	if objectAPI.IsEncryptionSupported() && crypto.IsEncrypted(listPartsInfo.UserDefined) {
+		var key []byte
+		if crypto.SSEC.IsEncrypted(listPartsInfo.UserDefined) {
+			ssec = true
 		}
-		if crypto.IsEncrypted(li.UserDefined) {
-			var key []byte
-			if crypto.SSEC.IsEncrypted(li.UserDefined) {
-				ssec = true
+		var objectEncryptionKey []byte
+		if crypto.S3.IsEncrypted(listPartsInfo.UserDefined) {
+			// Calculating object encryption key
+			objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, listPartsInfo.UserDefined)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
 			}
-			var objectEncryptionKey []byte
-			if crypto.S3.IsEncrypted(li.UserDefined) {
-				// Calculating object encryption key
-				objectEncryptionKey, err = decryptObjectInfo(key, bucket, object, li.UserDefined)
-				if err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
-				}
-			}
-			parts := make([]PartInfo, len(listPartsInfo.Parts))
-			for i, p := range listPartsInfo.Parts {
-				part := p
-				part.ETag = tryDecryptETag(objectEncryptionKey, p.ETag, ssec)
-				parts[i] = part
-			}
-			listPartsInfo.Parts = parts
 		}
+		parts := make([]PartInfo, len(listPartsInfo.Parts))
+		for i, p := range listPartsInfo.Parts {
+			part := p
+			part.ETag = tryDecryptETag(objectEncryptionKey, p.ETag, ssec)
+			parts[i] = part
+		}
+		listPartsInfo.Parts = parts
 	}
 
 	response := generateListPartsResponse(listPartsInfo, encodingType)

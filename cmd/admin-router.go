@@ -62,8 +62,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(httpTraceAll(adminAPI.DataUsageInfoHandler))
 
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountingusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountingUsageInfoHandler))
-
 		if globalIsDistXL || globalIsXL {
 			/// Heal operations
 
@@ -115,6 +113,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.AddCannedPolicy)).Queries("name", "{name:.*}")
 
 			// Add user IAM
+
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountUsageInfoHandler))
+
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
 
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")

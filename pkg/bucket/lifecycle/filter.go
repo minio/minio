@@ -18,8 +18,6 @@ package lifecycle
 
 import (
 	"encoding/xml"
-
-	"github.com/minio/minio-go/v6/pkg/tags"
 )
 
 var (
@@ -31,7 +29,7 @@ type Filter struct {
 	XMLName xml.Name `xml:"Filter"`
 	Prefix  string
 	And     And
-	Tag     tags.Tag
+	Tag     Tag
 }
 
 // MarshalXML - produces the xml representation of the Filter struct
@@ -85,9 +83,4 @@ func (f Filter) Validate() error {
 		}
 	}
 	return nil
-}
-
-// isEmpty - returns true if Filter tag is empty
-func (f Filter) isEmpty() bool {
-	return f.And.isEmpty() && f.Prefix == "" && f.Tag.IsEmpty()
 }

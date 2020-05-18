@@ -155,6 +155,9 @@ func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
 		return nil
 	}
 
+	if q.Type == madmin.FIFOQuota {
+		return nil
+	}
 	return globalBucketStorageCache.check(ctx, q, bucket, size)
 }
 
@@ -208,7 +211,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		if dataUsageInfo.BucketsSizes[bucket] > cfg.Quota {
 			toFree = dataUsageInfo.BucketsSizes[bucket] - cfg.Quota
 		}
-		if toFree <= 0 {
+		if toFree == 0 {
 			continue
 		}
 		// Allocate new results channel to receive ObjectInfo.

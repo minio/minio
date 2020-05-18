@@ -314,7 +314,7 @@ func benchmarkRWMutex(b *testing.B, localWork, writeRatio int) {
 				rwm.Unlock()
 			} else {
 				rwm.RLock(id, source)
-				for i := 0; i != localWork; i += 1 {
+				for i := 0; i != localWork; i++ {
 					foo *= 2
 					foo /= 2
 				}

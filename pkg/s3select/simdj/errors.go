@@ -45,15 +45,6 @@ func (err *s3Error) Error() string {
 	return err.message
 }
 
-func errInvalidJSONType(err error) *s3Error {
-	return &s3Error{
-		code:       "InvalidJsonType",
-		message:    "The JsonType is invalid. Only DOCUMENT and LINES are supported.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
 func errJSONParsingError(err error) *s3Error {
 	return &s3Error{
 		code:       "JSONParsingError",
