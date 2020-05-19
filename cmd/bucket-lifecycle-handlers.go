@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"errors"
 	"io"
 	"net/http"
 
@@ -78,13 +79,16 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if err = objAPI.SetBucketLifecycle(ctx, bucket, bucketLifecycle); err != nil {
+	configData, err := xml.Marshal(bucketLifecycle)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	globalLifecycleSys.Set(bucket, bucketLifecycle)
-	globalNotificationSys.SetBucketLifecycle(ctx, bucket, bucketLifecycle)
+	if err = globalBucketMetadataSys.Update(bucket, bucketLifecycleConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	// Success.
 	writeSuccessResponseHeadersOnly(w)
@@ -116,21 +120,17 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	// Read bucket access lifecycle.
-	bucketLifecycle, err := objAPI.GetBucketLifecycle(ctx, bucket)
+	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketLifecycleConfig)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	lifecycleData, err := xml.Marshal(bucketLifecycle)
-	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			err = BucketLifecycleNotFound{Bucket: bucket}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Write lifecycle configuration to client.
-	writeSuccessResponseXML(w, lifecycleData)
+	writeSuccessResponseXML(w, configData)
 }
 
 // DeleteBucketLifecycleHandler - This HTTP handler removes bucket lifecycle configuration.
@@ -159,13 +159,10 @@ func (api objectAPIHandlers) DeleteBucketLifecycleHandler(w http.ResponseWriter,
 		return
 	}
 
-	if err := objAPI.DeleteBucketLifecycle(ctx, bucket); err != nil {
+	if err := globalBucketMetadataSys.Update(bucket, bucketLifecycleConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	globalLifecycleSys.Remove(bucket)
-	globalNotificationSys.RemoveBucketLifecycle(ctx, bucket)
 
 	// Success.
 	writeSuccessNoContent(w)
