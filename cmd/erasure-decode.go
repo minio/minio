@@ -66,9 +66,7 @@ func (p *parallelReader) preferReaders(prefer []bool) {
 	}
 	// Copy so we don't change our input.
 	tmp := make([]io.ReaderAt, len(p.orgReaders))
-	for i, r := range p.orgReaders {
-		tmp[i] = r
-	}
+	copy(tmp, p.orgReaders)
 	p.readers = tmp
 	// next is the next non-preferred index.
 	next := 0
