@@ -51,6 +51,8 @@ type partialUpload struct {
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
+	GatewayUnsupported
+
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 
@@ -262,7 +264,6 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	}
 
 	close(bucketCh)
-	buckets = nil
 	bucketResults := make(chan dataUsageEntryInfo, len(disks))
 
 	// Start async collector/saver.

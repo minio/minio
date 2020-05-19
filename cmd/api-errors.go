@@ -100,6 +100,9 @@ const (
 	ErrNoSuchBucketLifecycle
 	ErrNoSuchLifecycleConfiguration
 	ErrNoSuchBucketSSEConfig
+	ErrNoSuchCORSConfiguration
+	ErrNoSuchWebsiteConfiguration
+	ErrReplicationConfigurationNotFoundError
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -792,6 +795,21 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidBucketState",
 		Description:    "Object Lock configuration cannot be enabled on existing buckets",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrNoSuchCORSConfiguration: {
+		Code:           "NoSuchCORSConfiguration",
+		Description:    "The CORS configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchWebsiteConfiguration: {
+		Code:           "NoSuchWebsiteConfiguration",
+		Description:    "The specified bucket does not have a website configuration",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationConfigurationNotFoundError: {
+		Code:           "ReplicationConfigurationNotFoundError",
+		Description:    "The replication configuration was not found",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchObjectLockConfiguration: {
 		Code:           "NoSuchObjectLockConfiguration",

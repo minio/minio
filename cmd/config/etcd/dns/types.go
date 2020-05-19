@@ -23,7 +23,6 @@ import (
 
 const (
 	defaultTTL            = 30
-	defaultPrefixPath     = "/skydns"
 	defaultContextTimeout = 5 * time.Minute
 )
 

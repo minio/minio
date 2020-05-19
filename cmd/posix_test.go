@@ -630,18 +630,17 @@ func TestPosixStatVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		var volInfo VolInfo
 		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
-		volInfo, err = posixStorage.StatVol(testCase.volName)
+		volInfo, err := posixStorage.StatVol(testCase.volName)
 		if err != testCase.expectedErr {
 			t.Fatalf("TestPosix case : %d, Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 
 		if err == nil {
-			if volInfo.Name != volInfo.Name {
-				t.Errorf("TestPosix case %d: Expected the volume name to be \"%s\", instead found \"%s\"", i+1, volInfo.Name, volInfo.Name)
+			if volInfo.Name != testCase.volName {
+				t.Errorf("TestPosix case %d: Expected the volume name to be \"%s\", instead found \"%s\"", i+1, volInfo.Name, testCase.volName)
 			}
 		}
 	}

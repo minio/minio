@@ -147,8 +147,9 @@ var (
 	// globalEnvTargetList has list of targets configured via env.
 	globalEnvTargetList *event.TargetList
 
-	globalPolicySys *PolicySys
-	globalIAMSys    *IAMSys
+	globalBucketMetadataSys *BucketMetadataSys
+	globalPolicySys         *PolicySys
+	globalIAMSys            *IAMSys
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys

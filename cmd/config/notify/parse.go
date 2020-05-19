@@ -36,7 +36,6 @@ import (
 
 const (
 	formatNamespace = "namespace"
-	formatAccess    = "access"
 )
 
 // ErrTargetsOffline - Indicates single/multiple target failures.

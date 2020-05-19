@@ -43,24 +43,6 @@ func (err *s3Error) Error() string {
 	return err.message
 }
 
-func errInvalidFileHeaderInfo(err error) *s3Error {
-	return &s3Error{
-		code:       "InvalidFileHeaderInfo",
-		message:    "The FileHeaderInfo is invalid. Only NONE, USE, and IGNORE are supported.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
-func errInvalidQuoteFields(err error) *s3Error {
-	return &s3Error{
-		code:       "InvalidQuoteFields",
-		message:    "The QuoteFields is invalid. Only ALWAYS and ASNEEDED are supported.",
-		statusCode: 400,
-		cause:      err,
-	}
-}
-
 func errCSVParsingError(err error) *s3Error {
 	return &s3Error{
 		code:       "CSVParsingError",

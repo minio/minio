@@ -21,18 +21,17 @@ package cmd
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/minio/minio/pkg/madmin"
 	diskhw "github.com/shirou/gopsutil/disk"
 )
 
-func getLocalDiskHwOBD(ctx context.Context) madmin.ServerDiskHwOBDInfo {
-	addr := ""
+func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHwOBDInfo {
+	addr := r.Host
 	if globalIsDistXL {
 		addr = GetLocalPeer(globalEndpoints)
-	} else {
-		addr = "minio"
 	}
 
 	partitions, err := diskhw.PartitionsWithContext(ctx, true)

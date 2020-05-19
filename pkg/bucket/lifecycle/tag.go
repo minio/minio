@@ -18,6 +18,7 @@ package lifecycle
 
 import (
 	"encoding/xml"
+	"unicode/utf8"
 )
 
 // Tag - a tag for a lifecycle configuration Rule filter.
@@ -27,15 +28,29 @@ type Tag struct {
 	Value   string   `xml:"Value,omitempty"`
 }
 
-var errTagUnsupported = Errorf("Specifying <Tag></Tag> is not supported")
+var (
+	errInvalidTagKey   = Errorf("The TagKey you have provided is invalid")
+	errInvalidTagValue = Errorf("The TagValue you have provided is invalid")
+)
 
-// UnmarshalXML is extended to indicate lack of support for Tag
-// xml tag in object lifecycle configuration
-func (t Tag) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	return errTagUnsupported
+func (tag Tag) String() string {
+	return tag.Key + "=" + tag.Value
 }
 
-// MarshalXML is extended to leave out <Tag></Tag> tags
-func (t Tag) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+// IsEmpty returns whether this tag is empty or not.
+func (tag Tag) IsEmpty() bool {
+	return tag.Key == ""
+}
+
+// Validate checks this tag.
+func (tag Tag) Validate() error {
+	if len(tag.Key) == 0 || utf8.RuneCountInString(tag.Key) > 128 {
+		return errInvalidTagKey
+	}
+
+	if utf8.RuneCountInString(tag.Value) > 256 {
+		return errInvalidTagValue
+	}
+
 	return nil
 }
