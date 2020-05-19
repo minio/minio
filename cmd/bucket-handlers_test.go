@@ -115,7 +115,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 			errorResponse: APIErrorResponse{
 				Resource: SlashSeparator + bucketName + SlashSeparator,
 				Code:     "InvalidAccessKeyId",
-				Message:  "The access key ID you provided does not exist in our records.",
+				Message:  "The Access Key Id you provided does not exist in our records.",
 			},
 			shouldPass: false,
 		},
