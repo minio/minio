@@ -171,6 +171,14 @@ type Reader struct {
 
 	// lastRecord is a record cache and only used when ReuseRecord == true.
 	lastRecord []string
+
+	// Caching some values between Read() calls for performance gain
+	cached               bool
+	cachedQuoteEscapeLen int
+	cachedQuoteLen       int
+	cachedEncodedQuote   []byte
+	cachedCommaLen       int
+	cachedQuotes         string
 }
 
 // NewReader returns a new Reader that reads from r.
@@ -295,21 +303,20 @@ func (r *Reader) readRecord(dst []string) ([]string, error) {
 		return nil, errRead
 	}
 
-	var quoteEscape = r.QuoteEscape
-	var quoteEscapeLen = utf8.RuneLen(quoteEscape)
-
-	var quote rune
-	var quoteLen int
-	if len(r.Quote) > 0 {
-		quote = r.Quote[0]
-		quoteLen = utf8.RuneLen(quote)
+	if !r.cached {
+		r.cachedQuoteEscapeLen = utf8.RuneLen(r.QuoteEscape)
+		if len(r.Quote) > 0 {
+			r.cachedQuoteLen = utf8.RuneLen(r.Quote[0])
+			r.cachedEncodedQuote = encodeRune(r.Quote[0])
+			r.cachedQuotes += string(r.Quote[0])
+		}
+		r.cachedCommaLen = utf8.RuneLen(r.Comma)
+		r.cachedQuotes += string(r.QuoteEscape)
+		r.cached = true
 	}
-
-	encodedQuote := encodeRune(quote)
 
 	// Parse each field in the record.
 	var err error
-	commaLen := utf8.RuneLen(r.Comma)
 	recLine := r.numLine // Starting line for record
 	r.recordBuffer = r.recordBuffer[:0]
 	r.fieldIndexes = r.fieldIndexes[:0]
@@ -318,7 +325,7 @@ parseField:
 		if r.TrimLeadingSpace {
 			line = bytes.TrimLeftFunc(line, unicode.IsSpace)
 		}
-		if len(line) == 0 || quoteLen == 0 || nextRune(line) != quote {
+		if len(line) == 0 || r.cachedQuoteLen == 0 || nextRune(line) != r.Quote[0] {
 			// Non-quoted string field
 			i := bytes.IndexRune(line, r.Comma)
 			field := line
@@ -329,7 +336,7 @@ parseField:
 			}
 			// Check to make sure a quote does not appear in field.
 			if !r.LazyQuotes {
-				if j := bytes.IndexRune(field, quote); j >= 0 {
+				if j := bytes.IndexRune(field, r.Quote[0]); j >= 0 {
 					col := utf8.RuneCount(fullLine[:len(fullLine)-len(line[j:])])
 					err = &ParseError{StartLine: recLine, Line: r.numLine, Column: col, Err: ErrBareQuote}
 					break parseField
@@ -338,37 +345,37 @@ parseField:
 			r.recordBuffer = append(r.recordBuffer, field...)
 			r.fieldIndexes = append(r.fieldIndexes, len(r.recordBuffer))
 			if i >= 0 {
-				line = line[i+commaLen:]
+				line = line[i+r.cachedCommaLen:]
 				continue parseField
 			}
 			break parseField
 		} else {
 			// Quoted string field
-			line = line[quoteLen:]
+			line = line[r.cachedQuoteLen:]
 			for {
-				i := bytes.IndexAny(line, string(quote)+string(quoteEscape))
+				i := bytes.IndexAny(line, r.cachedQuotes)
 				if i >= 0 {
 					// Hit next quote or escape quote
 					r.recordBuffer = append(r.recordBuffer, line[:i]...)
 
-					escape := nextRune(line[i:]) == quoteEscape
+					escape := nextRune(line[i:]) == r.QuoteEscape
 					if escape {
-						line = line[i+quoteEscapeLen:]
+						line = line[i+r.cachedQuoteEscapeLen:]
 					} else {
-						line = line[i+quoteLen:]
+						line = line[i+r.cachedQuoteLen:]
 					}
 
 					switch rn := nextRune(line); {
-					case escape && quoteEscape != quote:
+					case escape && r.QuoteEscape != r.Quote[0]:
 						r.recordBuffer = append(r.recordBuffer, encodeRune(rn)...)
 						line = line[utf8.RuneLen(rn):]
-					case rn == quote:
+					case rn == r.Quote[0]:
 						// `""` sequence (append quote).
-						r.recordBuffer = append(r.recordBuffer, encodedQuote...)
-						line = line[quoteLen:]
+						r.recordBuffer = append(r.recordBuffer, r.cachedEncodedQuote...)
+						line = line[r.cachedQuoteLen:]
 					case rn == r.Comma:
 						// `",` sequence (end of field).
-						line = line[commaLen:]
+						line = line[r.cachedCommaLen:]
 						r.fieldIndexes = append(r.fieldIndexes, len(r.recordBuffer))
 						continue parseField
 					case lengthNL(line) == len(line):
@@ -377,10 +384,10 @@ parseField:
 						break parseField
 					case r.LazyQuotes:
 						// `"` sequence (bare quote).
-						r.recordBuffer = append(r.recordBuffer, encodedQuote...)
+						r.recordBuffer = append(r.recordBuffer, r.cachedEncodedQuote...)
 					default:
 						// `"*` sequence (invalid non-escaped quote).
-						col := utf8.RuneCount(fullLine[:len(fullLine)-len(line)-quoteLen])
+						col := utf8.RuneCount(fullLine[:len(fullLine)-len(line)-r.cachedQuoteLen])
 						err = &ParseError{StartLine: recLine, Line: r.numLine, Column: col, Err: ErrQuote}
 						break parseField
 					}
