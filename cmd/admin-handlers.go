@@ -1251,17 +1251,28 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 				Error:    errStr,
 			}
 			obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBD)
+			partialWrite(obdInfo)
 
 			// Notify all other MinIO peers to report drive obd numbers
-			driveOBDs := globalNotificationSys.DriveOBDInfo(deadlinedCtx)
-			obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBDs...)
-
+			driveOBDs := globalNotificationSys.DriveOBDInfoChan(deadlinedCtx)
+			for obd := range driveOBDs {
+				obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, obd)
+				partialWrite(obdInfo)
+			}
 			partialWrite(obdInfo)
 		}
 
 		if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistXL {
 			obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
-			obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.DispatchNetOBDInfo(deadlinedCtx)...)
+			partialWrite(obdInfo)
+
+			netOBDs := globalNotificationSys.DispatchNetOBDChan(deadlinedCtx)
+			for obd := range netOBDs {
+				obdInfo.Perf.Net = append(obdInfo.Perf.Net, obd)
+				partialWrite(obdInfo)
+			}
+			partialWrite(obdInfo)
+
 			obdInfo.Perf.NetParallel = globalNotificationSys.NetOBDParallelInfo(deadlinedCtx)
 			partialWrite(obdInfo)
 		}
