@@ -138,6 +138,6 @@ func (n *nasObjects) IsReady(ctx context.Context) bool {
 	return sinfo.Backend.Type == minio.BackendFS
 }
 
-func (n *nasObjects) IsObjectTaggingSupported() bool {
+func (n *nasObjects) IsTaggingSupported() bool {
 	return true
 }

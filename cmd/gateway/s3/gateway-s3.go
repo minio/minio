@@ -461,14 +461,30 @@ func (l *s3Objects) GetObjectInfo(ctx context.Context, bucket string, object str
 // PutObject creates a new object with the incoming data,
 func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
-
-	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), minio.ToMinioClientMetadata(opts.UserDefined), opts.ServerSideEncryption)
+	var tagMap map[string]string
+	if tagstr, ok := opts.UserDefined[xhttp.AmzObjectTagging]; ok && tagstr != "" {
+		tagObj, err := tags.ParseObjectTags(tagstr)
+		if err != nil {
+			return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
+		}
+		tagMap = tagObj.ToMap()
+	}
+	putOpts := miniogo.PutObjectOptions{
+		UserMetadata:         opts.UserDefined,
+		ServerSideEncryption: opts.ServerSideEncryption,
+		UserTags:             tagMap,
+	}
+	oi, err := l.Client.PutObject(bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), putOpts)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
+
 	// On success, populate the key & metadata so they are present in the notification
 	oi.Key = object
 	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(opts.UserDefined)
+	if err != nil {
+		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
+	}
 
 	return minio.FromMinioClientObjectInfo(bucket, oi), nil
 }
@@ -717,6 +733,6 @@ func (l *s3Objects) IsReady(ctx context.Context) bool {
 	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 }
 
-func (l *s3Objects) IsObjectTaggingSupported() bool {
+func (l *s3Objects) IsTaggingSupported() bool {
 	return true
 }

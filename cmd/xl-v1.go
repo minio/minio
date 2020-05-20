@@ -51,13 +51,13 @@ type partialUpload struct {
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
+	GatewayUnsupported
+
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 
 	// getLockers returns list of remote and local lockers.
 	getLockers func() []dsync.NetLocker
-
-	endpoints Endpoints
 
 	// Locker mutex map.
 	nsMutex *nsLockMap
@@ -93,7 +93,7 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -123,7 +123,10 @@ func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo
 
 	// Wait for the routines.
 	for i, diskInfoErr := range g.Wait() {
-		peerAddr := endpoints[i].Host
+		if disks[i] == nil {
+			continue
+		}
+		peerAddr := disks[i].Hostname()
 		if _, ok := offlineDisks[peerAddr]; !ok {
 			offlineDisks[peerAddr] = 0
 		}
@@ -137,13 +140,29 @@ func getDisksInfo(disks []StorageAPI, endpoints Endpoints) (disksInfo []DiskInfo
 		onlineDisks[peerAddr]++
 	}
 
+	// Iterate over the passed endpoints arguments and check
+	// if there are still disks missing from the offline/online lists
+	// and update them accordingly.
+	missingOfflineDisks := make(map[string]int)
+	for _, zone := range globalEndpoints {
+		for _, endpoint := range zone.Endpoints {
+			if _, ok := offlineDisks[endpoint.Host]; !ok {
+				missingOfflineDisks[endpoint.Host]++
+			}
+		}
+	}
+	for missingDisk, n := range missingOfflineDisks {
+		onlineDisks[missingDisk] = 0
+		offlineDisks[missingDisk] = n
+	}
+
 	// Success.
 	return disksInfo, onlineDisks, offlineDisks
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, endpoints Endpoints) StorageInfo {
-	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
+func getStorageInfo(disks []StorageAPI) StorageInfo {
+	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -181,9 +200,9 @@ func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	disks := xl.getDisks()
 	if local {
 		var localDisks []StorageAPI
-		for i, disk := range disks {
+		for _, disk := range disks {
 			if disk != nil {
-				if xl.endpoints[i].IsLocal && disk.Hostname() == "" {
+				if disk.IsLocal() {
 					// Append this local disk since local flag is true
 					localDisks = append(localDisks, disk)
 				}
@@ -191,7 +210,7 @@ func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
 		}
 		disks = localDisks
 	}
-	return getStorageInfo(disks, xl.endpoints)
+	return getStorageInfo(disks)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.

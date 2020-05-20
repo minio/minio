@@ -261,8 +261,8 @@ func (a GatewayUnsupported) IsEncryptionSupported() bool {
 	return false
 }
 
-// IsObjectTaggingSupported returns whether object tagging is supported or not for this layer.
-func (a GatewayUnsupported) IsObjectTaggingSupported() bool {
+// IsTaggingSupported returns whether object tagging is supported or not for this layer.
+func (a GatewayUnsupported) IsTaggingSupported() bool {
 	return false
 }
 

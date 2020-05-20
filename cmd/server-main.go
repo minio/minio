@@ -141,6 +141,9 @@ func newAllSubsystems() {
 	// Create new notification system and initialize notification targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
+	// Create new bucket metadata system.
+	globalBucketMetadataSys = NewBucketMetadataSys()
+
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
 
@@ -320,6 +323,11 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 
 	if err = globalIAMSys.Init(GlobalContext, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize IAM system: %w", err)
+	}
+
+	// Initialize bucket metadata sub-system.
+	if err = globalBucketMetadataSys.Init(GlobalContext, buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket metadata sub-system: %w", err)
 	}
 
 	// Initialize notification system.
