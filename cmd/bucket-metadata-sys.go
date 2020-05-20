@@ -258,9 +258,9 @@ func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 		return newBucketMetadata(bucket), errInvalidArgument
 	}
 
-	sys.Lock()
-	defer sys.Unlock()
+	sys.RLock()
 	meta, ok := sys.metadataMap[bucket]
+	sys.RUnlock()
 	if ok {
 		return meta, nil
 	}
@@ -268,7 +268,9 @@ func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 	if err != nil {
 		return meta, err
 	}
+	sys.Lock()
 	sys.metadataMap[bucket] = meta
+	sys.Unlock()
 	return meta, nil
 }
 
