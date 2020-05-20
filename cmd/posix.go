@@ -87,7 +87,9 @@ type posix struct {
 	activeIOCount    int32
 
 	diskPath string
-	pool     sync.Pool
+	hostname string
+
+	pool sync.Pool
 
 	diskMount bool // indicates if the path is an actual mount.
 
@@ -228,7 +230,7 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(path string) (*posix, error) {
+func newPosix(path string, hostname string) (*posix, error) {
 	var err error
 	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
@@ -239,6 +241,7 @@ func newPosix(path string) (*posix, error) {
 	}
 	p := &posix{
 		diskPath: path,
+		hostname: hostname,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -339,8 +342,8 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-func (*posix) Hostname() string {
-	return ""
+func (s *posix) Hostname() string {
+	return s.hostname
 }
 
 func (s *posix) Close() error {
@@ -349,6 +352,10 @@ func (s *posix) Close() error {
 }
 
 func (s *posix) IsOnline() bool {
+	return true
+}
+
+func (s *posix) IsLocal() bool {
 	return true
 }
 
