@@ -836,7 +836,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	go func() {
 		defer close(ch)
 		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
-			entries, err := s.ListDir(GlobalContext, volume, dirPath, -1, leafFile, "", "")
+			entries, err := s.ListDir(GlobalContext, volume, dirPath, -1, leafFile, dirEntry, marker)
 			if err != nil {
 				return false, nil
 			}
