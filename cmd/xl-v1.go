@@ -231,7 +231,7 @@ func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, u
 func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	var disks []StorageAPI
 
-	for _, d := range xl.getLoadBalancedDisks() {
+	for _, d := range xl.getLoadBalancedDisks(-1) {
 		if d == nil || !d.IsOnline() {
 			continue
 		}

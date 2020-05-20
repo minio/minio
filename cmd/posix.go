@@ -836,7 +836,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	go func() {
 		defer close(ch)
 		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
-			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
+			entries, err := s.ListDir(GlobalContext, volume, dirPath, -1, leafFile, "", "")
 			if err != nil {
 				return false, nil
 			}
@@ -880,7 +880,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
-func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (s *posix) ListDir(ctx context.Context, volume, dirPath string, count int, leafFile, mustPrefix, marker string) (entries []string, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -911,9 +911,20 @@ func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (ent
 		return nil, err
 	}
 
+	if mustPrefix != "" {
+		entries = filterMatchingPrefix(entries, mustPrefix)
+	}
 	// If leaf file is specified, filter out the entries.
 	if leafFile != "" {
 		for i, entry := range entries {
+			if entry < marker {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
 			if _, serr := os.Stat(pathJoin(dirPath, entry, leafFile)); serr == nil {
 				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
 			}

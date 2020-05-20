@@ -63,6 +63,7 @@ const (
 	storageRESTCount       = "count"
 	storageRESTMarkerPath  = "marker"
 	storageRESTLeafFile    = "leaf-file"
+	storageRESTMustPrefix  = "must-prefix"
 	storageRESTRecursive   = "recursive"
 	storageRESTBitrotAlgo  = "bitrot-algo"
 	storageRESTBitrotHash  = "bitrot-hash"

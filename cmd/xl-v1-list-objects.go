@@ -19,26 +19,26 @@ package cmd
 import (
 	"context"
 	"sort"
+	"sync"
 )
 
 // Returns function "listDir" of the type listDirFunc.
-// disks - used for doing disk.ListDir()
+// disks - used for doing disk.ListDir().
+// Will list one disk at the time. For concurrent listing use listDirFactoryP.
 func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 	// Returns sorted merged entries from all the disks.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, mergedEntries []string) {
+	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, mergedEntries []string) {
 		for _, disk := range disks {
 			if disk == nil {
 				continue
 			}
-			var entries []string
-			var newEntries []string
-			var err error
-			entries, err = disk.ListDir(bucket, prefixDir, -1, xlMetaJSONFile)
+			entries, err := disk.ListDir(ctx, bucket, prefixDir, -1, xlMetaJSONFile, prefixEntry, "")
 			if err != nil || len(entries) == 0 {
 				continue
 			}
 
 			// Find elements in entries which are not in mergedEntries
+			newEntries := make([]string, 0, len(entries))
 			for _, entry := range entries {
 				idx := sort.SearchStrings(mergedEntries, entry)
 				// if entry is already present in mergedEntries don't add.
@@ -54,14 +54,63 @@ func listDirFactory(ctx context.Context, disks ...StorageAPI) ListDirFunc {
 				sort.Strings(mergedEntries)
 			}
 		}
-
 		if len(mergedEntries) == 0 {
 			return true, nil
 		}
 
 		return false, filterMatchingPrefix(mergedEntries, prefixEntry)
 	}
-	return listDir
+}
+
+// Returns function "listDir" of the type listDirFunc.
+// disks - used for doing disk.ListDir().
+// An optional marker can be given the results *may* be filtered by this.
+// All disks are listed concurrently.
+func listDirFactoryP(ctx context.Context, marker string, disks ...StorageAPI) ListDirFunc {
+	// Returns sorted merged entries from all the disks.
+	return func(bucket, prefixDir, prefixEntry string) (emptyDir bool, mergedEntries []string) {
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		wg.Add(len(disks))
+		for _, disk := range disks {
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				if disk == nil {
+					return
+				}
+				entries, err := disk.ListDir(ctx, bucket, prefixDir, -1, xlMetaJSONFile, prefixEntry, marker)
+				if err != nil || len(entries) == 0 {
+					return
+				}
+
+				mu.Lock()
+				defer mu.Unlock()
+
+				// Find elements in entries which are not in mergedEntries
+				newEntries := make([]string, 0, len(entries))
+				for _, entry := range entries {
+					idx := sort.SearchStrings(mergedEntries, entry)
+					// if entry is already present in mergedEntries don't add.
+					if idx < len(mergedEntries) && mergedEntries[idx] == entry {
+						continue
+					}
+					newEntries = append(newEntries, entry)
+				}
+
+				if len(newEntries) > 0 {
+					// Merge the entries and sort it.
+					mergedEntries = append(mergedEntries, newEntries...)
+					sort.Strings(mergedEntries)
+				}
+			}(disk)
+		}
+		wg.Wait()
+		if len(mergedEntries) == 0 {
+			return true, nil
+		}
+
+		return false, filterMatchingPrefix(mergedEntries, prefixEntry)
+	}
 }
 
 // listObjects - wrapper function implemented over file tree walk.
@@ -75,7 +124,8 @@ func (xl xlObjects) listObjects(ctx context.Context, bucket, prefix, marker, del
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		listDir := listDirFactory(ctx, xl.getLoadBalancedDisks()...)
+		// List on up to 3 random disks.
+		listDir := listDirFactoryP(ctx, marker, xl.getLoadBalancedDisks(3)...)
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, endWalkCh)
 	}
 

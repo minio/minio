@@ -149,11 +149,11 @@ func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, leafFile
 	return d.disk.Walk(volume, path, marker, recursive, leafFile, readMetadataFn, endWalkCh)
 }
 
-func (d *naughtyDisk) ListDir(volume, path string, count int, leafFile string) (entries []string, err error) {
+func (d *naughtyDisk) ListDir(ctx context.Context, volume, dirPath string, count int, leafFile, mustPrefix, marker string) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err
 	}
-	return d.disk.ListDir(volume, path, count, leafFile)
+	return d.disk.ListDir(ctx, volume, dirPath, count, leafFile, mustPrefix, marker)
 }
 
 func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {

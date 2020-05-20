@@ -24,11 +24,15 @@ import (
 )
 
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
-func (xl xlObjects) getLoadBalancedDisks() (newDisks []StorageAPI) {
+// If n <= 0 only up to n disks will be returned.
+func (xl xlObjects) getLoadBalancedDisks(n int) (newDisks []StorageAPI) {
 	disks := xl.getDisks()
 	// Based on the random shuffling return back randomized disks.
 	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
 		newDisks = append(newDisks, disks[i-1])
+	}
+	if n > 0 && len(newDisks) > n {
+		newDisks = newDisks[:n]
 	}
 	return newDisks
 }

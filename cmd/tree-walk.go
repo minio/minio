@@ -51,7 +51,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 		}
 		end--
 	}
-	sort.Strings(entries[start:end])
+	// Entries are already sorted, so returned slice should also be.
 	return entries[start:end]
 }
 

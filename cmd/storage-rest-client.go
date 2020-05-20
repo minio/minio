@@ -117,6 +117,13 @@ type storageRESTClient struct {
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
+	return client.callCtx(context.Background(), method, values, body, length)
+}
+
+// Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
+// permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
+// after verifying format.json
+func (client *storageRESTClient) callCtx(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
 	if !client.IsOnline() {
 		return nil, errDiskNotFound
 	}
@@ -124,7 +131,7 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 		values = make(url.Values)
 	}
 	values.Set(storageRESTDiskID, client.diskID)
-	respBody, err := client.restClient.Call(method, values, body, length)
+	respBody, err := client.restClient.CallWithContext(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
@@ -416,13 +423,15 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath string, count int, leafFile, mustPrefix, marker string) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
 	values.Set(storageRESTLeafFile, leafFile)
-	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
+	values.Set(storageRESTMustPrefix, mustPrefix)
+	values.Set(storageRESTMarkerPath, marker)
+	respBody, err := client.callCtx(ctx, storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}

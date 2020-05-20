@@ -337,7 +337,7 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 		index := index
 		g.Go(func() error {
 			// Check if 'prefix' is an object on this 'disk'.
-			entries, err := storageDisks[index].ListDir(bucket, object, 1, "")
+			entries, err := storageDisks[index].ListDir(ctx, bucket, object, 1, "", "", "")
 			if err != nil {
 				return err
 			}

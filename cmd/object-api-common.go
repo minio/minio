@@ -105,7 +105,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1, "")
+		entries, err := storage.ListDir(ctx, volume, entryPath, -1, "", "", "")
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil

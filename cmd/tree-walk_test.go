@@ -234,6 +234,9 @@ func TestListDir(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
+	if fsDir1 == fsDir2 {
+		t.Fatal(fsDir1, "==", fsDir2)
+	}
 	// Create two StorageAPIs disk1 and disk2.
 	endpoints := mustGetNewEndpoints(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
@@ -280,10 +283,10 @@ func TestListDir(t *testing.T) {
 	// Should list "file2" from fsDir2.
 	_, entries = listDir(volume, "", "")
 	if len(entries) != 1 {
-		t.Fatal("Expected the number of entries to be 1")
+		t.Fatal("Expected the number of entries to be 1, was", len(entries))
 	}
 	if entries[0] != file2 {
-		t.Fatal("Expected the entry to be file2")
+		t.Fatal("Expected the entry to be file2, was ", entries[0])
 	}
 	err = os.RemoveAll(fsDir2)
 	if err != nil {

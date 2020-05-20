@@ -109,7 +109,7 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 		}
 
 		// List all objects in the current bucket and heal them
-		listDir := listDirFactory(ctx, xlObj.getLoadBalancedDisks()...)
+		listDir := listDirFactory(ctx, xlObj.getLoadBalancedDisks(-1)...)
 		walkResultCh := startTreeWalk(ctx, bucket.Name, "", "", true, listDir, nil)
 		for walkEntry := range walkResultCh {
 			bgSeq.sourceCh <- healSource{

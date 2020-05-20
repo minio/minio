@@ -490,13 +490,15 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 	volume := vars[storageRESTVolume]
 	dirPath := vars[storageRESTDirPath]
 	leafFile := vars[storageRESTLeafFile]
+	mustPrefix := vars[storageRESTMustPrefix]
+	marker := vars[storageRESTMarkerPath]
 	count, err := strconv.Atoi(vars[storageRESTCount])
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	entries, err := s.storage.ListDir(volume, dirPath, count, leafFile)
+	entries, err := s.storage.ListDir(r.Context(), volume, dirPath, count, leafFile, mustPrefix, marker)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

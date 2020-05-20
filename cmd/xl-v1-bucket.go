@@ -88,7 +88,7 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (xl xlObjects) getBucketInfo(ctx context.Context, bucketName string) (bucketInfo BucketInfo, err error) {
 	var bucketErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
+	for _, disk := range xl.getLoadBalancedDisks(-1) {
 		if disk == nil {
 			bucketErrs = append(bucketErrs, errDiskNotFound)
 			continue
@@ -125,7 +125,7 @@ func (xl xlObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Bucket
 
 // listBuckets - returns list of all buckets from a disk picked at random.
 func (xl xlObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, err error) {
-	for _, disk := range xl.getLoadBalancedDisks() {
+	for _, disk := range xl.getLoadBalancedDisks(-1) {
 		if disk == nil {
 			continue
 		}

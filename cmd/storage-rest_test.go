@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io/ioutil"
 	"net/http/httptest"
 	"os"
@@ -261,7 +262,7 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1, "")
+		result, err := storage.ListDir(context.Background(), testCase.volumeName, testCase.prefix, -1, "", "", "")
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
