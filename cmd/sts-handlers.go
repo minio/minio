@@ -61,8 +61,7 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser   = "ldapUser"
-	ldapGroups = "ldapGroups"
+	ldapUser = "ldapUser"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -491,9 +490,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
-		expClaim:   UTCNow().Add(expiryDur).Unix(),
-		ldapUser:   ldapUsername,
-		ldapGroups: groups,
+		expClaim: UTCNow().Add(expiryDur).Unix(),
+		ldapUser: ldapUsername,
 	}
 
 	if len(sessionPolicyStr) > 0 {
@@ -510,6 +508,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	// Set the parent of the temporary access key, this is useful
 	// in obtaining service accounts by this cred.
 	cred.ParentUser = ldapUsername
+
+	// Set this value to LDAP groups, LDAP user can be part
+	// of large number of groups
+	cred.Groups = groups
 
 	// Set the newly generated credentials, policyName is empty on purpose
 	// LDAP policies are applied automatically using their ldapUser, ldapGroups
