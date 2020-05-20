@@ -410,7 +410,6 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		if err == nil {
 			created = meta.Created
 		}
-		globalBucketMetadataSys.Set(fi.Name(), meta)
 
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name:    fi.Name(),

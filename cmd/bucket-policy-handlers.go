@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 
@@ -165,11 +164,14 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketPolicyConfig)
+	config, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			err = BucketPolicyNotFound{Bucket: bucket}
-		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configData, err := json.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
