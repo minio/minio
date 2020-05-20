@@ -130,8 +130,13 @@ func isAzureMarker(marker string) bool {
 func azureGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	host := ctx.Args().First()
+
+	serverAddr := ctx.GlobalString("address")
+	if serverAddr == "" || serverAddr == ":"+minio.GlobalMinioDefaultPort {
+		serverAddr = ctx.String("address")
+	}
 	// Validate gateway arguments.
-	logger.FatalIf(minio.ValidateGatewayArguments(ctx.GlobalString("address"), host), "Invalid argument")
+	logger.FatalIf(minio.ValidateGatewayArguments(serverAddr, host), "Invalid argument")
 
 	minio.StartGateway(ctx, &Azure{host})
 }

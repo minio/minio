@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"time"
 )
@@ -128,23 +127,6 @@ func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
 	return storageInfo, nil
 }
 
-type objectHistogramInterval struct {
-	name       string
-	start, end int64
-}
-
-// ObjectsHistogramIntervals contains the list of intervals
-// of an histogram analysis of objects sizes.
-var ObjectsHistogramIntervals = []objectHistogramInterval{
-	{"LESS_THAN_1024_B", -1, 1024 - 1},
-	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
-	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
-	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
-	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
-	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
-	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
-}
-
 // DataUsageInfo represents data usage of an Object API
 type DataUsageInfo struct {
 	// LastUpdate is the timestamp of when the data usage info was last updated.
@@ -190,50 +172,6 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 	}
 
 	return dataUsageInfo, nil
-}
-
-// AccountAccess contains information about
-type AccountAccess struct {
-	AccountName string `json:"accountName"`
-	Read        bool   `json:"read"`
-	Write       bool   `json:"write"`
-	Custom      bool   `json:"custom"`
-}
-
-// BucketAccountingUsage represents the accounting usage of a particular bucket
-type BucketAccountingUsage struct {
-	Size       uint64          `json:"size"`
-	AccessList []AccountAccess `json:"accessList"`
-}
-
-// AccountingUsageInfo returns the accounting usage info, currently it returns
-// the type of access of different accounts to the different buckets.
-func (adm *AdminClient) AccountingUsageInfo(ctx context.Context) (map[string]BucketAccountingUsage, error) {
-	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
-	defer closeResponse(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check response http status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpRespToErrorResponse(resp)
-	}
-
-	// Unmarshal the server's json response
-	var accountingUsageInfo map[string]BucketAccountingUsage
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(respBytes, &accountingUsageInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	return accountingUsageInfo, nil
 }
 
 // InfoMessage container to hold server admin related information.

@@ -18,17 +18,18 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	pathutil "path"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"fmt"
 	"time"
 
 	"github.com/minio/lsync"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dsync"
 )
 
@@ -57,7 +58,7 @@ func newNSLock(isDistXL bool) *nsLockMap {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	ref uint32
+	ref int32
 	*lsync.LRWMutex
 }
 
@@ -72,21 +73,18 @@ type nsLockMap struct {
 
 // Lock the namespace resource.
 func (n *nsLockMap) lock(ctx context.Context, volume string, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
-	var nsLk *nsLock
-
 	resource := pathJoin(volume, path)
 
 	n.lockMapMutex.Lock()
-	if _, found := n.lockMap[resource]; !found {
-		n.lockMap[resource] = &nsLock{
+	nsLk, found := n.lockMap[resource]
+	if !found {
+		nsLk = &nsLock{
 			LRWMutex: lsync.NewLRWMutex(ctx),
-			ref:      1,
 		}
-	} else {
-		// Update ref count here to avoid multiple races.
-		atomic.AddUint32(&n.lockMap[resource].ref, 1)
+		// Add a count to indicate that a parallel unlock doesn't clear this entry.
 	}
-	nsLk = n.lockMap[resource]
+	nsLk.ref++
+	n.lockMap[resource] = nsLk
 	n.lockMapMutex.Unlock()
 
 	// Locking here will block (until timeout).
@@ -97,15 +95,19 @@ func (n *nsLockMap) lock(ctx context.Context, volume string, path string, lockSo
 	}
 
 	if !locked { // We failed to get the lock
-
 		// Decrement ref count since we failed to get the lock
-		if atomic.AddUint32(&nsLk.ref, ^uint32(0)) == 0 {
-			// Remove from the map if there are no more references.
-			n.lockMapMutex.Lock()
-			delete(n.lockMap, resource)
-			n.lockMapMutex.Unlock()
+		n.lockMapMutex.Lock()
+		n.lockMap[resource].ref--
+		if n.lockMap[resource].ref < 0 {
+			logger.CriticalIf(GlobalContext, errors.New("resource reference count was lower than 0"))
 		}
+		if n.lockMap[resource].ref == 0 {
+			// Remove from the map if there are no more references.
+			delete(n.lockMap, resource)
+		}
+		n.lockMapMutex.Unlock()
 	}
+
 	return
 }
 
@@ -123,7 +125,11 @@ func (n *nsLockMap) unlock(volume string, path string, readLock bool) {
 	} else {
 		n.lockMap[resource].Unlock()
 	}
-	if atomic.AddUint32(&n.lockMap[resource].ref, ^uint32(0)) == 0 {
+	n.lockMap[resource].ref--
+	if n.lockMap[resource].ref < 0 {
+		logger.CriticalIf(GlobalContext, errors.New("resource reference count was lower than 0"))
+	}
+	if n.lockMap[resource].ref == 0 {
 		// Remove from the map if there are no more references.
 		delete(n.lockMap, resource)
 	}

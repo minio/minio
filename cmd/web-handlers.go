@@ -266,7 +266,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		}
 	}
 
-	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
+	globalNotificationSys.DeleteBucketMetadata(ctx, args.BucketName)
 
 	return nil
 }
@@ -330,8 +330,43 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	} else {
 		buckets, err := listBuckets(ctx)
 		if err != nil {
+			if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
+				bucket, prefix := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
+				if bucket != "" && bucket != u.Path {
+					readable := globalIAMSys.IsAllowed(iampolicy.Args{
+						AccountName:     claims.AccessKey,
+						Action:          iampolicy.ListBucketAction,
+						BucketName:      bucket,
+						ObjectName:      prefix + SlashSeparator,
+						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+						IsOwner:         owner,
+						Claims:          claims.Map(),
+					})
+					if !strings.HasSuffix(prefix, slashSeparator) {
+						prefix += slashSeparator
+					}
+					writable := globalIAMSys.IsAllowed(iampolicy.Args{
+						AccountName:     claims.AccessKey,
+						Action:          iampolicy.PutObjectAction,
+						BucketName:      bucket,
+						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+						IsOwner:         owner,
+						ObjectName:      prefix,
+						Claims:          claims.Map(),
+					})
+					if !readable && !writable {
+						return toJSONError(ctx, errAccessDenied)
+					}
+					reply.Buckets = append(reply.Buckets, WebBucketInfo{
+						Name: bucket,
+					})
+					reply.UIVersion = browser.UIVersion
+					return nil
+				}
+			}
 			return toJSONError(ctx, err)
 		}
+
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.AccessKey,
@@ -528,6 +563,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
+
 		for i := range lo.Objects {
 			if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
 				lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
@@ -1034,8 +1070,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if bucket encryption is enabled
-	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
-	if (globalAutoEncryption || encEnabled) && !crypto.SSEC.IsRequested(r.Header) {
+	_, err = globalBucketSSEConfigSys.Get(bucket)
+	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1655,12 +1691,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 	} else {
-		bucketPolicy, err := objectAPI.GetBucketPolicy(ctx, args.BucketName)
+		bucketPolicy, err := globalPolicySys.Get(args.BucketName)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); !ok {
 				return toJSONError(ctx, err, args.BucketName)
 			}
-			return err
 		}
 
 		policyInfo, err = PolicyToBucketAccessPolicy(bucketPolicy)
@@ -1750,7 +1785,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 			}
 		}
 	} else {
-		bucketPolicy, err := objectAPI.GetBucketPolicy(ctx, args.BucketName)
+		bucketPolicy, err := globalPolicySys.Get(args.BucketName)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); !ok {
 				return toJSONError(ctx, err, args.BucketName)
@@ -1874,7 +1909,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 
 	} else {
-		bucketPolicy, err := objectAPI.GetBucketPolicy(ctx, args.BucketName)
+		bucketPolicy, err := globalPolicySys.Get(args.BucketName)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); !ok {
 				return toJSONError(ctx, err, args.BucketName)
@@ -1888,11 +1923,10 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 		policyInfo.Statements = miniogopolicy.SetPolicy(policyInfo.Statements, policyType, args.BucketName, args.Prefix)
 		if len(policyInfo.Statements) == 0 {
-			if err = objectAPI.DeleteBucketPolicy(ctx, args.BucketName); err != nil {
+			if err = globalBucketMetadataSys.Update(args.BucketName, bucketPolicyConfig, nil); err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
 
-			globalPolicySys.Remove(args.BucketName)
 			return nil
 		}
 
@@ -1902,13 +1936,15 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		// Parse validate and save bucket policy.
-		if err := objectAPI.SetBucketPolicy(ctx, args.BucketName, bucketPolicy); err != nil {
+		configData, err := json.Marshal(bucketPolicy)
+		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		globalPolicySys.Set(args.BucketName, bucketPolicy)
-		globalNotificationSys.SetBucketPolicy(ctx, args.BucketName, bucketPolicy)
+		// Parse validate and save bucket policy.
+		if err = globalBucketMetadataSys.Update(args.BucketName, bucketPolicyConfig, configData); err != nil {
+			return toJSONError(ctx, err, args.BucketName)
+		}
 	}
 
 	return nil
@@ -1964,6 +2000,20 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
 		return toJSONError(ctx, errInvalidBucketName)
+	}
+
+	// Check if the user indeed has GetObject access,
+	// if not we do not need to generate presigned URLs
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.AccessKey,
+		Action:          iampolicy.GetObjectAction,
+		BucketName:      args.BucketName,
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+		IsOwner:         owner,
+		ObjectName:      args.ObjectName,
+		Claims:          claims.Map(),
+	}) {
+		return toJSONError(ctx, errPresignedNotAllowed)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -2200,11 +2250,7 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 	case IncompleteBody:
 		return getAPIError(ErrIncompleteBody)
 	case PrefixAccessDenied:
-		return APIError{
-			Code:           "AccessDenied",
-			HTTPStatusCode: http.StatusBadRequest,
-			Description:    err.Error(),
-		}
+		return getAPIError(ErrAccessDenied)
 	case ObjectExistsAsDirectory:
 		return getAPIError(ErrObjectExistsAsDirectory)
 	case ObjectNotFound:

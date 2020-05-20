@@ -140,7 +140,6 @@ const (
 
 // List of all supported actions.
 var supportedActions = map[Action]struct{}{
-	AllActions:                             {},
 	AbortMultipartUploadAction:             {},
 	CreateBucketAction:                     {},
 	DeleteBucketAction:                     {},
@@ -157,25 +156,26 @@ var supportedActions = map[Action]struct{}{
 	ListBucketMultipartUploadsAction:       {},
 	ListenBucketNotificationAction:         {},
 	ListMultipartUploadPartsAction:         {},
+	PutBucketLifecycleAction:               {},
+	GetBucketLifecycleAction:               {},
 	PutBucketNotificationAction:            {},
 	PutBucketPolicyAction:                  {},
 	PutObjectAction:                        {},
-	GetBucketLifecycleAction:               {},
-	PutBucketLifecycleAction:               {},
+	BypassGovernanceRetentionAction:        {},
 	PutObjectRetentionAction:               {},
 	GetObjectRetentionAction:               {},
 	GetObjectLegalHoldAction:               {},
 	PutObjectLegalHoldAction:               {},
-	PutBucketObjectLockConfigurationAction: {},
 	GetBucketObjectLockConfigurationAction: {},
-	PutBucketTaggingAction:                 {},
+	PutBucketObjectLockConfigurationAction: {},
 	GetBucketTaggingAction:                 {},
-	BypassGovernanceRetentionAction:        {},
+	PutBucketTaggingAction:                 {},
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
 	DeleteObjectTaggingAction:              {},
 	PutBucketEncryptionAction:              {},
 	GetBucketEncryptionAction:              {},
+	AllActions:                             {},
 }
 
 // List of all supported object actions.

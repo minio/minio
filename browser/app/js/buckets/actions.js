@@ -29,22 +29,16 @@ export const SHOW_MAKE_BUCKET_MODAL = "buckets/SHOW_MAKE_BUCKET_MODAL"
 export const SHOW_BUCKET_POLICY = "buckets/SHOW_BUCKET_POLICY"
 export const SET_POLICIES = "buckets/SET_POLICIES"
 
-export const fetchBuckets = (removeOp = false) => {
+export const fetchBuckets = () => {
   return function(dispatch) {
     return web.ListBuckets().then(res => {
       const buckets = res.buckets ? res.buckets.map(bucket => bucket.name) : []
       dispatch(setList(buckets))
       if (buckets.length > 0) {
         const { bucket, prefix } = pathSlice(history.location.pathname)
-        if (bucket) {
-          if (buckets.indexOf(bucket) > -1) {
-            dispatch(selectBucket(bucket, prefix))
-          } else if (removeOp == true) {
-            dispatch(selectBucket(buckets[0]))
-          } else {
-            dispatch(selectBucket(bucket, ""))
-          }
-        }else {
+        if (bucket && buckets.indexOf(bucket) > -1) {
+          dispatch(selectBucket(bucket, prefix))
+        } else {
           dispatch(selectBucket(buckets[0]))
         }
       } else {
@@ -118,7 +112,7 @@ export const deleteBucket = bucket => {
           })
         )
         dispatch(removeBucket(bucket))
-        dispatch(fetchBuckets(true))
+        dispatch(fetchBuckets())
       })
       .catch(err => { 
         dispatch(

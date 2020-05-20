@@ -572,6 +572,111 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	writeSuccessNoContent(w)
 }
 
+// AccountUsageInfoHandler returns usage
+func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AccountUsageInfo")
+
+	defer logger.AuditLog(w, r, "AccountUsageInfo", mustGetClaimsFromToken(r))
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerWithoutSafeModeFn()
+	if objectAPI == nil || globalNotificationSys == nil || globalIAMSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	// Set prefix value for "s3:prefix" policy conditionals.
+	r.Header.Set("prefix", "")
+
+	// Set delimiter value for "s3:delimiter" policy conditionals.
+	r.Header.Set("delimiter", SlashSeparator)
+
+	isAllowedAccess := func(bucketName string) (rd, wr bool) {
+		// Use the following trick to filter in place
+		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
+		if globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          iampolicy.ListBucketAction,
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          claims,
+		}) {
+			rd = true
+		}
+
+		if globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          iampolicy.PutObjectAction,
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          claims,
+		}) {
+			wr = true
+		}
+
+		return rd, wr
+	}
+
+	buckets, err := objectAPI.ListBuckets(ctx)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Load the latest calculated data usage
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	accountName := cred.AccessKey
+	if cred.ParentUser != "" {
+		accountName = cred.ParentUser
+	}
+
+	acctInfo := madmin.AccountUsageInfo{
+		AccountName: accountName,
+	}
+
+	for _, bucket := range buckets {
+		rd, wr := isAllowedAccess(bucket.Name)
+		if rd || wr {
+			var size uint64
+			// Fetch the data usage of the current bucket
+			if !dataUsageInfo.LastUpdate.IsZero() && len(dataUsageInfo.BucketsSizes) > 0 {
+				size = dataUsageInfo.BucketsSizes[bucket.Name]
+			}
+			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketUsageInfo{
+				Name:    bucket.Name,
+				Created: bucket.Created,
+				Size:    size,
+				Access: madmin.AccountAccess{
+					Read:  rd,
+					Write: wr,
+				},
+			})
+		}
+	}
+
+	usageInfoJSON, err := json.Marshal(acctInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, usageInfoJSON)
+}
+
 // InfoCannedPolicyV2 - GET /minio/admin/v2/info-canned-policy?name={policyName}
 func (a adminAPIHandlers) InfoCannedPolicyV2(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "InfoCannedPolicyV2")

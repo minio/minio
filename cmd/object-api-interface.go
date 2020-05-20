@@ -23,11 +23,8 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/tags"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
 
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -105,7 +102,6 @@ type ObjectLayer interface {
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn healObjectFn) error
-
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 
 	// Policy operations
@@ -120,25 +116,6 @@ type ObjectLayer interface {
 
 	// Compression support check.
 	IsCompressionSupported() bool
-
-	// Lifecycle operations
-	SetBucketLifecycle(context.Context, string, *lifecycle.Lifecycle) error
-	GetBucketLifecycle(context.Context, string) (*lifecycle.Lifecycle, error)
-	DeleteBucketLifecycle(context.Context, string) error
-
-	// Bucket Encryption operations
-	SetBucketSSEConfig(context.Context, string, *bucketsse.BucketSSEConfig) error
-	GetBucketSSEConfig(context.Context, string) (*bucketsse.BucketSSEConfig, error)
-	DeleteBucketSSEConfig(context.Context, string) error
-
-	// Bucket locking configuration operations
-	SetBucketObjectLockConfig(context.Context, string, *objectlock.Config) error
-	GetBucketObjectLockConfig(context.Context, string) (*objectlock.Config, error)
-
-	// Bucket tagging operations
-	SetBucketTagging(context.Context, string, *tags.Tags) error
-	GetBucketTagging(context.Context, string) (*tags.Tags, error)
-	DeleteBucketTagging(context.Context, string) error
 
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)

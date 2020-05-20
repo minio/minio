@@ -145,7 +145,7 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 	// Fetch address option
 	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+globalMinioDefaultPort {
+	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
 		globalCLIContext.Addr = ctx.String("address")
 	}
 
