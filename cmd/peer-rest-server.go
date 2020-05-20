@@ -601,10 +601,8 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 
 	meta, err := loadBucketMetadata(r.Context(), objAPI, bucketName)
 	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
-			s.writeErrorResponse(w, err)
-			return
-		}
+		s.writeErrorResponse(w, err)
+		return
 	}
 
 	globalBucketMetadataSys.Set(bucketName, meta)
