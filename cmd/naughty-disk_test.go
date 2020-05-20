@@ -54,8 +54,12 @@ func (d *naughtyDisk) IsOnline() bool {
 	return d.disk.IsOnline()
 }
 
-func (*naughtyDisk) Hostname() string {
-	return ""
+func (d *naughtyDisk) IsLocal() bool {
+	return d.disk.IsLocal()
+}
+
+func (d *naughtyDisk) Hostname() string {
+	return d.disk.Hostname()
 }
 
 func (d *naughtyDisk) Close() (err error) {

@@ -86,7 +86,9 @@ type posix struct {
 	activeIOCount    int32
 
 	diskPath string
-	pool     sync.Pool
+	hostname string
+
+	pool sync.Pool
 
 	diskMount bool // indicates if the path is an actual mount.
 
@@ -227,7 +229,7 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(path string) (*posix, error) {
+func newPosix(path string, hostname string) (*posix, error) {
 	var err error
 	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
@@ -238,6 +240,7 @@ func newPosix(path string) (*posix, error) {
 	}
 	p := &posix{
 		diskPath: path,
+		hostname: hostname,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -338,8 +341,8 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-func (*posix) Hostname() string {
-	return ""
+func (s *posix) Hostname() string {
+	return s.hostname
 }
 
 func (s *posix) Close() error {
@@ -351,6 +354,10 @@ func (s *posix) IsOnline() bool {
 	return true
 }
 
+func (s *posix) IsLocal() bool {
+	return true
+}
+
 func (s *posix) waitForLowActiveIO() {
 	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
 		time.Sleep(lowActiveIOWaitTick)
@@ -359,8 +366,8 @@ func (s *posix) waitForLowActiveIO() {
 
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	// Check if the current bucket has a configured lifecycle policy
-	lc, ok := globalLifecycleSys.Get(cache.Info.Name)
-	if ok && lc.HasActiveRules("") {
+	lc, err := globalLifecycleSys.Get(cache.Info.Name)
+	if err == nil && lc.HasActiveRules("") {
 		cache.Info.lifeCycle = lc
 	}
 

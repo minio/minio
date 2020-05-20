@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-func TestParseLifecycleConfig(t *testing.T) {
+func TestParseAndValidateLifecycleConfig(t *testing.T) {
 	// Test for  lifecycle config with more than 1000 rules
 	var manyRules []Rule
 	rule := Rule{
@@ -64,8 +64,9 @@ func TestParseLifecycleConfig(t *testing.T) {
 	}
 
 	testCases := []struct {
-		inputConfig string
-		expectedErr error
+		inputConfig           string
+		expectedParsingErr    error
+		expectedValidationErr error
 	}{
 		{ // Valid lifecycle config
 			inputConfig: `<LifecycleConfiguration>
@@ -84,28 +85,36 @@ func TestParseLifecycleConfig(t *testing.T) {
 		                          <Expiration><Days>3</Days></Expiration>
 		                          </Rule>
 		                          </LifecycleConfiguration>`,
-			expectedErr: nil,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
 		},
 		{ // lifecycle config with no rules
 			inputConfig: `<LifecycleConfiguration>
 		                          </LifecycleConfiguration>`,
-			expectedErr: errLifecycleNoRule,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleNoRule,
 		},
 		{ // lifecycle config with more than 1000 rules
-			inputConfig: string(manyRuleLcConfig),
-			expectedErr: errLifecycleTooManyRules,
+			inputConfig:           string(manyRuleLcConfig),
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleTooManyRules,
 		},
 		{ // lifecycle config with rules having overlapping prefix
-			inputConfig: string(overlappingLcConfig),
-			expectedErr: errLifecycleOverlappingPrefix,
+			inputConfig:           string(overlappingLcConfig),
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleOverlappingPrefix,
 		},
 	}
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
-			var err error
-			if _, err = ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig))); err != tc.expectedErr {
-				t.Fatalf("%d: Expected %v but got %v", i+1, tc.expectedErr, err)
+			lc, err := ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig)))
+			if err != tc.expectedParsingErr {
+				t.Fatalf("%d: Expected %v during parsing but got %v", i+1, tc.expectedParsingErr, err)
+			}
+			err = lc.Validate()
+			if err != tc.expectedValidationErr {
+				t.Fatalf("%d: Expected %v during parsing but got %v", i+1, tc.expectedValidationErr, err)
 			}
 		})
 	}

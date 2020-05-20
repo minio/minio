@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path"
 	"sync"
 	"time"
 
@@ -34,36 +33,35 @@ import (
 
 // BucketQuotaSys - map of bucket and quota configuration.
 type BucketQuotaSys struct {
-	sync.RWMutex
 	quotaMap map[string]madmin.BucketQuota
 }
 
-// Set - set quota configuration.
-func (sys *BucketQuotaSys) Set(bucketName string, q madmin.BucketQuota) {
-	sys.Lock()
-	sys.quotaMap[bucketName] = q
-	sys.Unlock()
-}
-
 // Get - Get quota configuration.
-func (sys *BucketQuotaSys) Get(bucketName string) (q madmin.BucketQuota, ok bool) {
-	sys.RLock()
-	defer sys.RUnlock()
-	q, ok = sys.quotaMap[bucketName]
-	return
-}
+func (sys *BucketQuotaSys) Get(bucketName string) (q madmin.BucketQuota, err error) {
+	if globalIsGateway {
+		objAPI := newObjectLayerFn()
+		if objAPI == nil {
+			return q, errServerNotInitialized
+		}
+		return q, BucketQuotaConfigNotFound{Bucket: bucketName}
+	}
 
-// Remove - removes quota configuration.
-func (sys *BucketQuotaSys) Remove(bucketName string) {
-	sys.Lock()
-	delete(sys.quotaMap, bucketName)
-	sys.Unlock()
+	q, ok := sys.quotaMap[bucketName]
+	if !ok {
+		configData, err := globalBucketMetadataSys.GetConfig(bucketName, bucketQuotaConfigFile)
+		if err != nil {
+			if errors.Is(err, errConfigNotFound) {
+				return q, BucketQuotaConfigNotFound{Bucket: bucketName}
+			}
+			return q, err
+		}
+		return parseBucketQuota(bucketName, configData)
+	}
+	return q, nil
 }
 
 // Buckets - list of buckets with quota configuration
 func (sys *BucketQuotaSys) Buckets() []string {
-	sys.RLock()
-	defer sys.RUnlock()
 	var buckets []string
 	for k := range sys.quotaMap {
 		buckets = append(buckets, k)
@@ -89,19 +87,21 @@ func (sys *BucketQuotaSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error 
 func (sys *BucketQuotaSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, bucketQuotaConfigFile)
-		configData, err := readConfig(ctx, objAPI, configFile)
+		configData, err := globalBucketMetadataSys.GetConfig(bucket.Name, bucketQuotaConfigFile)
 		if err != nil {
 			if errors.Is(err, errConfigNotFound) {
 				continue
 			}
 			return err
 		}
-		quotaCfg, err := parseBucketQuota(configData)
+		quotaCfg, err := parseBucketQuota(bucket.Name, configData)
 		if err != nil {
-			return err
+			if _, ok := err.(BucketQuotaConfigNotFound); !ok {
+				logger.LogIf(ctx, err)
+			}
+			continue
 		}
-		globalBucketQuotaSys.Set(bucket.Name, quotaCfg)
+		sys.quotaMap[bucket.Name] = quotaCfg
 	}
 	return nil
 }
@@ -112,10 +112,12 @@ func NewBucketQuotaSys() *BucketQuotaSys {
 }
 
 // parseBucketQuota parses BucketQuota from json
-func parseBucketQuota(data []byte) (quotaCfg madmin.BucketQuota, err error) {
-	err = json.Unmarshal(data, &quotaCfg)
-	if err != nil {
-		return
+func parseBucketQuota(bucket string, data []byte) (quotaCfg madmin.BucketQuota, err error) {
+	if len(data) == 0 {
+		return quotaCfg, BucketQuotaConfigNotFound{Bucket: bucket}
+	}
+	if err = json.Unmarshal(data, &quotaCfg); err != nil {
+		return quotaCfg, err
 	}
 	if !quotaCfg.Type.IsValid() {
 		return quotaCfg, fmt.Errorf("Invalid quota type %s", quotaCfg.Type)
@@ -141,7 +143,7 @@ func (b *bucketStorageCache) check(ctx context.Context, q madmin.BucketQuota, bu
 		b.bucketsSizes = dui.BucketsSizes
 	}
 	currUsage := b.bucketsSizes[bucket]
-	if (currUsage + uint64(size)) > q.Quota {
+	if (currUsage+uint64(size)) > q.Quota && q.Quota > 0 {
 		return BucketQuotaExceeded{Bucket: bucket}
 	}
 	return nil
@@ -150,8 +152,12 @@ func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
 	if size < 0 {
 		return nil
 	}
-	q, ok := globalBucketQuotaSys.Get(bucket)
-	if !ok {
+
+	q, err := globalBucketQuotaSys.Get(bucket)
+	if err != nil {
+		if _, ok := err.(BucketQuotaConfigNotFound); !ok {
+			return err
+		}
 		return nil
 	}
 
@@ -194,26 +200,28 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 	}
 	for _, bucket := range globalBucketQuotaSys.Buckets() {
 		// Check if the current bucket has quota restrictions, if not skip it
-		cfg, ok := globalBucketQuotaSys.Get(bucket)
-		if !ok {
+		cfg, err := globalBucketQuotaSys.Get(bucket)
+		if err != nil {
 			continue
 		}
 		if cfg.Type != madmin.FIFOQuota {
 			continue
 		}
-		_, bucketHasLockConfig := globalBucketObjectLockSys.Get(bucket)
 
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err != nil {
 			return err
 		}
+
 		var toFree uint64
-		if dataUsageInfo.BucketsSizes[bucket] > cfg.Quota {
+		if dataUsageInfo.BucketsSizes[bucket] > cfg.Quota && cfg.Quota > 0 {
 			toFree = dataUsageInfo.BucketsSizes[bucket] - cfg.Quota
 		}
-		if toFree <= 0 {
+
+		if toFree == 0 {
 			continue
 		}
+
 		// Allocate new results channel to receive ObjectInfo.
 		objInfoCh := make(chan ObjectInfo)
 
@@ -230,9 +238,11 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 			return err
 		}
 
+		rcfg, _ := globalBucketObjectLockSys.Get(bucket)
+
 		for obj := range objInfoCh {
 			// skip objects currently under retention
-			if bucketHasLockConfig && enforceRetentionForDeletion(ctx, obj) {
+			if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 				continue
 			}
 			scorer.addFile(obj.Name, obj.ModTime, obj.Size, 1)

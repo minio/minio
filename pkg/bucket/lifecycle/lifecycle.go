@@ -82,9 +82,6 @@ func ParseLifecycleConfig(reader io.Reader) (*Lifecycle, error) {
 	if err := xml.NewDecoder(reader).Decode(&lc); err != nil {
 		return nil, err
 	}
-	if err := lc.Validate(); err != nil {
-		return nil, err
-	}
 	return &lc, nil
 }
 

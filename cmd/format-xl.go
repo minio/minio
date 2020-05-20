@@ -204,7 +204,7 @@ func formatXLMigrate(export string) error {
 			return err
 		}
 		// Migrate successful v2 => v3, v3 is latest
-		version = formatXLVersionV3
+		// version = formatXLVersionV3
 		fallthrough
 	case formatXLVersionV3:
 		// v3 is the latest version, return.
@@ -664,7 +664,7 @@ func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatX
 	// Compute the local disks eligible for meta volumes (re)initialization
 	var disksToInit []StorageAPI
 	for index := range storageDisks {
-		if formats[index] == nil || storageDisks[index] == nil || storageDisks[index].Hostname() != "" {
+		if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
 			// Ignore create meta volume on disks which are not found or not local.
 			continue
 		}

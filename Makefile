@@ -18,22 +18,12 @@ checks:
 
 getdeps:
 	@mkdir -p ${GOPATH}/bin
-	@which golint 1>/dev/null || (echo "Installing golint" && GO111MODULE=off go get -u golang.org/x/lint/golint)
-ifeq ($(GOARCH),s390x)
-	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && GO111MODULE=off go get honnef.co/go/tools/cmd/staticcheck)
-else
-	@which staticcheck 1>/dev/null || (echo "Installing staticcheck" && wget --quiet https://github.com/dominikh/go-tools/releases/download/2020.1.3/staticcheck_${GOOS}_${GOARCH}.tar.gz && tar xf staticcheck_${GOOS}_${GOARCH}.tar.gz && mv staticcheck/staticcheck ${GOPATH}/bin/staticcheck && chmod +x ${GOPATH}/bin/staticcheck && rm -f staticcheck_${GOOS}_${GOARCH}.tar.gz && rm -rf staticcheck)
-endif
-	@which misspell 1>/dev/null || (echo "Installing misspell" && GO111MODULE=off go get -u github.com/client9/misspell/cmd/misspell)
+	@which golangci-lint 1>/dev/null || (echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.27.0)
 
 crosscompile:
 	@(env bash $(PWD)/buildscripts/cross-compile.sh)
 
-verifiers: getdeps vet fmt lint staticcheck spelling
-
-vet:
-	@echo "Running $@ check"
-	@GO111MODULE=on go vet github.com/minio/minio/...
+verifiers: getdeps fmt lint
 
 fmt:
 	@echo "Running $@ check"
@@ -42,21 +32,8 @@ fmt:
 
 lint:
 	@echo "Running $@ check"
-	@GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd/...
-	@GO111MODULE=on ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg/...
-
-staticcheck:
-	@echo "Running $@ check"
-	@GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/cmd/...
-	@GO111MODULE=on ${GOPATH}/bin/staticcheck github.com/minio/minio/pkg/...
-
-spelling:
-	@echo "Running $@ check"
-	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find cmd/`
-	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find pkg/`
-	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find docs/`
-	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find buildscripts/`
-	@GO111MODULE=on ${GOPATH}/bin/misspell -locale US -error `find dockerscripts/`
+	@GO111MODULE=on ${GOPATH}/bin/golangci-lint cache clean
+	@GO111MODULE=on ${GOPATH}/bin/golangci-lint run --timeout=5m --config ./.golangci.yml
 
 # Builds minio, runs the verifiers then runs the tests.
 check: test

@@ -39,10 +39,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
@@ -55,6 +51,8 @@ var defaultEtag = "00000000000000000000000000000000-1"
 
 // FSObjects - Implements fs object layer.
 type FSObjects struct {
+	GatewayUnsupported
+
 	// Disk usage metrics
 	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
@@ -345,10 +343,11 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket, locatio
 	}
 
 	meta := newBucketMetadata(bucket)
-	meta.LockEnabled = false
-	if err := meta.save(ctx, fs); err != nil {
+	if err := meta.Save(ctx, fs); err != nil {
 		return toObjectErr(err, bucket)
 	}
+
+	globalBucketMetadataSys.Set(bucket, meta)
 
 	return nil
 }
@@ -365,8 +364,12 @@ func (fs *FSObjects) GetBucketInfo(ctx context.Context, bucket string) (bi Bucke
 		return bi, toObjectErr(err, bucket)
 	}
 
-	// As os.Stat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
 	createdTime := st.ModTime()
+	meta, err := globalBucketMetadataSys.Get(bucket)
+	if err == nil {
+		createdTime = meta.Created
+	}
+
 	return BucketInfo{
 		Name:    bucket,
 		Created: createdTime,
@@ -408,13 +411,12 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 			continue
 		}
 		var created = fi.ModTime()
-		meta, err := loadBucketMetadata(ctx, fs, fi.Name())
+		meta, err := globalBucketMetadataSys.Get(fi.Name())
 		if err == nil {
 			created = meta.Created
 		}
-		if err != errMetaDataConverted {
-			logger.LogIf(ctx, err)
-		}
+		globalBucketMetadataSys.Set(fi.Name(), meta)
+
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name:    fi.Name(),
 			Created: created,
@@ -464,7 +466,7 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, forceDelet
 	}
 
 	// Delete all bucket metadata.
-	deleteBucketMetadata(ctx, bucket, fs)
+	deleteBucketMetadata(ctx, fs, bucket)
 
 	return nil
 }
@@ -1320,76 +1322,6 @@ func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) 
 func (fs *FSObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
-}
-
-// SetBucketPolicy sets policy on bucket
-func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
-	return savePolicyConfig(ctx, fs, bucket, policy)
-}
-
-// GetBucketPolicy will get policy on bucket
-func (fs *FSObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return getPolicyConfig(fs, bucket)
-}
-
-// DeleteBucketPolicy deletes all policies on bucket
-func (fs *FSObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return removePolicyConfig(ctx, fs, bucket)
-}
-
-// SetBucketLifecycle sets lifecycle on bucket
-func (fs *FSObjects) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
-	return saveLifecycleConfig(ctx, fs, bucket, lifecycle)
-}
-
-// GetBucketLifecycle will get lifecycle on bucket
-func (fs *FSObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
-	return getLifecycleConfig(fs, bucket)
-}
-
-// DeleteBucketLifecycle deletes all lifecycle on bucket
-func (fs *FSObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
-	return removeLifecycleConfig(ctx, fs, bucket)
-}
-
-// GetBucketSSEConfig returns bucket encryption config on given bucket
-func (fs *FSObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
-	return getBucketSSEConfig(fs, bucket)
-}
-
-// SetBucketSSEConfig sets bucket encryption config on given bucket
-func (fs *FSObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
-	return saveBucketSSEConfig(ctx, fs, bucket, config)
-}
-
-// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
-func (fs *FSObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
-	return removeBucketSSEConfig(ctx, fs, bucket)
-}
-
-// SetBucketObjectLockConfig enables/clears default object lock configuration
-func (fs *FSObjects) SetBucketObjectLockConfig(ctx context.Context, bucket string, config *objectlock.Config) error {
-	return saveBucketObjectLockConfig(ctx, fs, bucket, config)
-}
-
-// GetBucketObjectLockConfig - returns current defaults for object lock configuration
-func (fs *FSObjects) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
-	return readBucketObjectLockConfig(ctx, fs, bucket)
-}
-
-// SetBucketTagging sets bucket tags on given bucket
-func (fs *FSObjects) SetBucketTagging(ctx context.Context, bucket string, t *tags.Tags) error {
-	return saveBucketTagging(ctx, fs, bucket, t)
-}
-
-// GetBucketTagging get bucket tags set on given bucket
-func (fs *FSObjects) GetBucketTagging(ctx context.Context, bucket string) (*tags.Tags, error) {
-	return readBucketTagging(ctx, fs, bucket)
-}
-
-// DeleteBucketTagging delete bucket tags set if any.
-func (fs *FSObjects) DeleteBucketTagging(ctx context.Context, bucket string) error {
-	return deleteBucketTagging(ctx, fs, bucket)
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix

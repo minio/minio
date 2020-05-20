@@ -100,18 +100,18 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 		}
 
 		if len(acl.AccessControlList.Grants) == 0 {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
 		if acl.AccessControlList.Grants[0].Permission != "FULL_CONTROL" {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 
 	if aclHeader != "" && aclHeader != "private" {
-		writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -159,6 +159,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 		},
 		Permission: "FULL_CONTROL",
 	})
+
 	if err := xml.NewEncoder(w).Encode(acl); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -214,18 +215,18 @@ func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.
 		}
 
 		if len(acl.AccessControlList.Grants) == 0 {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
 		if acl.AccessControlList.Grants[0].Permission != "FULL_CONTROL" {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
 
 	if aclHeader != "" && aclHeader != "private" {
-		writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidArgument), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(ctx, w, toAPIError(ctx, NotImplemented{}), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
