@@ -81,7 +81,7 @@
     "react-copy-to-clipboard": "^5.0.2",
     "react-custom-scrollbars": "^4.2.1",
     "react-dom": "^16.13.1",
-    "react-dropzone": "^8.2.0",
+    "react-dropzone": "^11.0.1",
     "react-infinite-scroller": "^1.2.4",
     "react-onclickout": "^2.0.8",
     "react-redux": "^5.1.2",
