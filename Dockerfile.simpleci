@@ -1,7 +1,7 @@
 #-------------------------------------------------------------
-# Stage 1: Build and Unit tests
+# Stage 0: Build and Unit tests
 #-------------------------------------------------------------
-FROM golang:1.13
+FROM golang:1.13 AS core
 
 COPY . /go/src/github.com/minio/minio
 WORKDIR /go/src/github.com/minio/minio
@@ -42,9 +42,9 @@ RUN make verify
 RUN make verify-healing
 
 #-------------------------------------------------------------
-# Stage 2: Test Frontend
+# Stage 1: Test Frontend
 #-------------------------------------------------------------
-FROM node:10.15-stretch-slim
+FROM node:10.15-stretch-slim AS frontend
 
 ENV SIMPLE_CI 1
 
@@ -55,9 +55,9 @@ RUN yarn
 RUN yarn test
 
 #-------------------------------------------------------------
-# Stage 3: Run Gateway Tests
+# Stage 2: Run Gateway Tests
 #-------------------------------------------------------------
-FROM ubuntu:18.04
+FROM ubuntu:18.04 AS gateway
 
 COPY --from=0 /go/src/github.com/minio/minio/minio /usr/bin/minio
 COPY buildscripts/gateway-tests.sh /usr/bin/gateway-tests.sh
