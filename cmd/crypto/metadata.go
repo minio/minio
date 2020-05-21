@@ -44,6 +44,8 @@ func RemoveSensitiveEntries(metadata map[string]string) { // The functions is te
 // header entries from the metadata map.
 func RemoveSSEHeaders(metadata map[string]string) {
 	delete(metadata, SSEHeader)
+	delete(metadata, SSEKmsID)
+	delete(metadata, SSEKmsContext)
 	delete(metadata, SSECKeyMD5)
 	delete(metadata, SSECAlgorithm)
 }
