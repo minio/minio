@@ -148,15 +148,6 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	AllAdminActions:                {},
 }
 
-func parseAdminAction(s string) (AdminAction, error) {
-	action := AdminAction(s)
-	if action.IsValid() {
-		return action, nil
-	}
-
-	return action, Errorf("unsupported action '%v'", s)
-}
-
 // IsValid - checks if action is valid or not.
 func (action AdminAction) IsValid() bool {
 	_, ok := supportedAdminActions[action]

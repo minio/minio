@@ -11,6 +11,11 @@ exec -l $SHELL
 nvm install stable
 ```
 
+### Install node dependencies
+```sh
+npm install
+```
+
 ### Install `go-bindata` and `go-bindata-assetfs`
 
 If you do not have a working Golang environment, please follow [Install Golang](https://golang.org/doc/install)
@@ -71,3 +76,29 @@ npm run dev
 ```
 
 Open [http://localhost:8888/minio/](http://localhost:8888/minio/) in your browser to play with the application
+
+### Run MinIO Browser with live reload on any IP
+
+Edit `browser/webpack.config.js`
+
+```diff
+diff --git a/browser/webpack.config.js b/browser/webpack.config.js
+index 8bdbba53..139f6049 100644
+--- a/browser/webpack.config.js
++++ b/browser/webpack.config.js
+@@ -71,6 +71,7 @@ var exports = {
+     historyApiFallback: {
+       index: '/minio/'
+     },
++    host: '0.0.0.0',
+     proxy: {
+       '/minio/webrpc': {
+        target: 'http://localhost:9000',
+
+```
+
+```sh
+npm run dev
+```
+
+Open [http://IP:8080/minio/](http://IP:8080/minio/) in your browser to play with the application

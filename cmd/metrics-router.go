@@ -48,6 +48,8 @@ func registerMetricsRouter(router *mux.Router) {
 	switch prometheusAuthType(authType) {
 	case prometheusPublic:
 		metricsRouter.Handle(prometheusMetricsPath, metricsHandler())
+	case prometheusJWT:
+		fallthrough
 	default:
 		metricsRouter.Handle(prometheusMetricsPath, AuthMiddleware(metricsHandler()))
 	}

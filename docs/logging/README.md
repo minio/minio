@@ -57,6 +57,9 @@ minio server /mnt/data
 ```
 
 Setting this environment variable automatically enables audit logging to the HTTP target. The audit logging is in JSON format as described below.
+
+NOTE: `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
+
 ```json
 {
   "version": "1",
@@ -68,8 +71,8 @@ Setting this environment variable automatically enables audit logging to the HTT
     "object": "hosts",
     "status": "OK",
     "statusCode": 200,
-    "timeToFirstByte": "0s",
-    "timeToResponse": "2.143308ms"
+    "timeToFirstByte": "366333ns",
+    "timeToResponse": "16438202ns"
   },
   "remotehost": "127.0.0.1",
   "requestID": "15BA4A72C0C70AFC",

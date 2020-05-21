@@ -48,7 +48,7 @@ func TestUNCPaths(t *testing.T) {
 
 	// Instantiate posix object to manage a disk
 	var fs StorageAPI
-	fs, err = newPosix(dir)
+	fs, err = newPosix(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	var fs StorageAPI
-	fs, err = newPosix(dir)
+	fs, err = newPosix(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}

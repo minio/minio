@@ -642,7 +642,6 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	for {
 		loi, lerr := l.s3Objects.ListObjectsV2(ctx, bucket, uploadPrefix, continuationToken, delimiter, 1000, false, startAfter)
 		if lerr != nil {
-			done = true
 			break
 		}
 		for _, obj := range loi.Objects {

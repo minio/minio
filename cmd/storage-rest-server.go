@@ -758,7 +758,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			if !endpoint.IsLocal {
 				continue
 			}
-			storage, err := newPosix(endpoint.Path)
+			storage, err := newPosix(endpoint.Path, endpoint.Host)
 			if err != nil {
 				if err == errMinDiskSize {
 					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")

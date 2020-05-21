@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -166,8 +167,11 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 	entry.API.Object = object
 	entry.API.Status = http.StatusText(statusCode)
 	entry.API.StatusCode = statusCode
-	entry.API.TimeToFirstByte = timeToFirstByte.String()
-	entry.API.TimeToResponse = timeToResponse.String()
+	entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
+	// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
+	if timeToFirstByte != 0 {
+		entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"
+	}
 
 	// Send audit logs only to http targets.
 	for _, t := range AuditTargets {
