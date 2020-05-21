@@ -44,7 +44,7 @@ RUN make verify-healing
 #-------------------------------------------------------------
 # Stage 1: Test Frontend
 #-------------------------------------------------------------
-FROM node:10.15-stretch-slim AS frontend
+FROM node:10.17-stretch-slim AS frontend
 
 ENV SIMPLE_CI 1
 
