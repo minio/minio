@@ -325,7 +325,7 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 		// If it doesn't exist we get a new, so ignore errors
 		meta := newBucketMetadata(bucket)
 		if lockEnabled {
-			meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+			meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
 		}
 		if err := meta.Save(ctx, z); err != nil {
 			return toObjectErr(err, bucket)
@@ -355,7 +355,7 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 	// If it doesn't exist we get a new, so ignore errors
 	meta := newBucketMetadata(bucket)
 	if lockEnabled {
-		meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
 	}
 	if err := meta.Save(ctx, z); err != nil {
 		return toObjectErr(err, bucket)

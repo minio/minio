@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	defaultBucketObjectLockConfig = []byte(`<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled></ObjectLockConfiguration>`)
+	enabledBucketObjectLockConfig = []byte(`<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled></ObjectLockConfiguration>`)
 )
 
 //go:generate msgp -file $GOFILE
@@ -57,16 +57,16 @@ var (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
-	Name                       string
-	Created                    time.Time
-	LockEnabled                bool // legacy not used anymore.
-	PolicyConfigJSON           []byte
-	NotificationXML            []byte
-	LifecycleConfigXML         []byte
-	ObjectLockConfigurationXML []byte
-	EncryptionConfigXML        []byte
-	TaggingConfigXML           []byte
-	QuotaConfigJSON            []byte
+	Name                  string
+	Created               time.Time
+	LockEnabled           bool // legacy not used anymore.
+	PolicyConfigJSON      []byte
+	NotificationConfigXML []byte
+	LifecycleConfigXML    []byte
+	ObjectLockConfigXML   []byte
+	EncryptionConfigXML   []byte
+	TaggingConfigXML      []byte
+	QuotaConfigJSON       []byte
 
 	// Unexported fields. Must be updated atomically.
 	policyConfig       *policy.Policy
@@ -83,6 +83,10 @@ func newBucketMetadata(name string) BucketMetadata {
 	return BucketMetadata{
 		Name:    name,
 		Created: UTCNow(),
+		notificationConfig: &event.Config{
+			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		},
+		quotaConfig: &madmin.BucketQuota{},
 	}
 }
 
@@ -142,15 +146,10 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.policyConfig = nil
 	}
 
-	if len(b.NotificationXML) != 0 {
-		if err = xml.Unmarshal(b.NotificationXML, b.notificationConfig); err != nil {
+	if len(b.NotificationConfigXML) != 0 {
+		if err = xml.Unmarshal(b.NotificationConfigXML, b.notificationConfig); err != nil {
 			return err
 		}
-	} else {
-		b.notificationConfig = &event.Config{
-			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
-		}
-		b.notificationConfig.SetRegion(globalServerRegion)
 	}
 
 	if len(b.LifecycleConfigXML) != 0 {
@@ -180,23 +179,22 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.taggingConfig = nil
 	}
 
-	if len(b.ObjectLockConfigurationXML) != 0 {
-		b.objectLockConfig, err = objectlock.ParseObjectLockConfig(bytes.NewReader(b.ObjectLockConfigurationXML))
+	if len(b.ObjectLockConfigXML) != 0 {
+		b.objectLockConfig, err = objectlock.ParseObjectLockConfig(bytes.NewReader(b.ObjectLockConfigXML))
 		if err != nil {
 			return err
 		}
 	} else {
 		b.objectLockConfig = nil
 	}
+
 	if len(b.QuotaConfigJSON) != 0 {
-		qcfg, err := parseBucketQuota(b.Name, b.QuotaConfigJSON)
+		b.quotaConfig, err = parseBucketQuota(b.Name, b.QuotaConfigJSON)
 		if err != nil {
 			return err
 		}
-		b.quotaConfig = qcfg
-	} else {
-		b.quotaConfig = &madmin.BucketQuota{}
 	}
+
 	return nil
 }
 
@@ -216,9 +214,9 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 	// Handle migration from lockEnabled to newer format.
 	if b.LockEnabled {
-		configs[objectLockConfig] = defaultBucketObjectLockConfig
+		configs[objectLockConfig] = enabledBucketObjectLockConfig
 		b.LockEnabled = false // legacy value unset it
-		// we are only interested in b.ObjectLockConfigurationXML or objectLockConfig value
+		// we are only interested in b.ObjectLockConfigXML or objectLockConfig value
 	}
 
 	for _, legacyFile := range legacyConfigs {
@@ -245,14 +243,14 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		switch legacyFile {
 		case legacyBucketObjectLockEnabledConfigFile:
 			if string(configData) == legacyBucketObjectLockEnabledConfig {
-				b.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+				b.ObjectLockConfigXML = enabledBucketObjectLockConfig
 				b.LockEnabled = false // legacy value unset it
-				// we are only interested in b.ObjectLockConfigurationXML
+				// we are only interested in b.ObjectLockConfigXML
 			}
 		case bucketPolicyConfig:
 			b.PolicyConfigJSON = configData
 		case bucketNotificationConfig:
-			b.NotificationXML = configData
+			b.NotificationConfigXML = configData
 		case bucketLifecycleConfig:
 			b.LifecycleConfigXML = configData
 		case bucketSSEConfig:
@@ -260,7 +258,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		case bucketTaggingConfigFile:
 			b.TaggingConfigXML = configData
 		case objectLockConfig:
-			b.ObjectLockConfigurationXML = configData
+			b.ObjectLockConfigXML = configData
 		case bucketQuotaConfigFile:
 			b.QuotaConfigJSON = configData
 		}
