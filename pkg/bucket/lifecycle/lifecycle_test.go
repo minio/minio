@@ -168,6 +168,35 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 	}
 }
 
+func TestExpectedExpiryTime(t *testing.T) {
+	testCases := []struct {
+		modTime  time.Time
+		days     ExpirationDays
+		expected time.Time
+	}{
+		{
+			time.Date(2020, time.March, 15, 10, 10, 10, 0, time.UTC),
+			4,
+			time.Date(2020, time.March, 20, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			time.Date(2020, time.March, 15, 0, 0, 0, 0, time.UTC),
+			1,
+			time.Date(2020, time.March, 17, 0, 0, 0, 0, time.UTC),
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
+			got := expectedExpiryTime(tc.modTime, tc.days)
+			if got != tc.expected {
+				t.Fatalf("Expected %v to be equal to %v", got, tc.expected)
+			}
+		})
+	}
+
+}
+
 func TestComputeActions(t *testing.T) {
 	testCases := []struct {
 		inputConfig    string
