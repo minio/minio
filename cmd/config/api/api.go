@@ -19,6 +19,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 const (
 	apiRequestsMax      = "requests_max"
 	apiRequestsDeadline = "requests_deadline"
+	apiReadyDeadline    = "ready_deadline"
 )
 
 // DefaultKVS - default storage class config
@@ -42,6 +44,10 @@ var (
 			Key:   apiRequestsDeadline,
 			Value: "10s",
 		},
+		config.KV{
+			Key:   apiReadyDeadline,
+			Value: "10s",
+		},
 	}
 )
 
@@ -49,6 +55,7 @@ var (
 type Config struct {
 	APIRequestsMax      int           `json:"requests_max"`
 	APIRequestsDeadline time.Duration `json:"requests_deadline"`
+	APIReadyDeadline    time.Duration `json:"ready_deadline"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -64,6 +71,8 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
+	fmt.Println(kvs)
+
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
@@ -83,9 +92,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	readyDeadline, err := time.ParseDuration(env.Get(config.EnvAPIReadyDeadline, kvs.Get(apiReadyDeadline)))
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println(kvs.Get(apiReadyDeadline))
+		return cfg, err
+	}
+
 	cfg = Config{
 		APIRequestsMax:      requestsMax,
 		APIRequestsDeadline: requestsDeadline,
+		APIReadyDeadline:    readyDeadline,
 	}
 	return cfg, nil
 }

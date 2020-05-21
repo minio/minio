@@ -1098,6 +1098,29 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 	return reply
 }
 
+// GetLocalDiskIDs - return disk ids of the local disks of the peers.
+func (sys NotificationSys) GetLocalDiskIDs() []string {
+	var diskIDs []string
+	var mu sync.Mutex
+
+	var wg sync.WaitGroup
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient) {
+			defer wg.Done()
+			ids := client.GetLocalDiskIDs()
+			mu.Lock()
+			diskIDs = append(diskIDs, ids...)
+			mu.Unlock()
+		}(client)
+	}
+	wg.Wait()
+	return diskIDs
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(endpoints EndpointZones) *NotificationSys {
 	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()

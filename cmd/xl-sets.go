@@ -1705,30 +1705,6 @@ func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns true if atleast n/2 disks (read quorum) are online
-func (s *xlSets) IsReady(_ context.Context) bool {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-
-	var activeDisks int
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			if s.xlDisks[i][j] == nil {
-				continue
-			}
-			if s.xlDisks[i][j].IsOnline() {
-				activeDisks++
-			}
-			// Return true if read quorum is available.
-			if activeDisks >= len(s.endpoints)/2 {
-				return true
-			}
-		}
-	}
-	// Disks are not ready
-	return false
-}
-
 // maintainMRFList gathers the list of successful partial uploads
 // from all underlying xl sets and puts them in a global map which
 // should not have more than 10000 entries.
