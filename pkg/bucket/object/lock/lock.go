@@ -337,7 +337,7 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 	if err := xml.NewDecoder(io.LimitReader(reader, maxObjectRetentionSize)).Decode(&ret); err != nil {
 		return nil, err
 	}
-	if !ret.Mode.Valid() {
+	if ret.Mode != "" && !ret.Mode.Valid() {
 		return &ret, ErrUnknownWORMModeDirective
 	}
 
@@ -347,7 +347,7 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 		return &ret, ErrPastObjectLockRetainDate
 	}
 
-	if ret.RetainUntilDate.Before(t) {
+	if !ret.RetainUntilDate.IsZero() && ret.RetainUntilDate.Before(t) {
 		return &ret, ErrPastObjectLockRetainDate
 	}
 
