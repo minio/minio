@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/xml"
-	"errors"
 	"io"
 	"net/http"
 
@@ -120,11 +119,14 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketLifecycleConfig)
+	config, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			err = BucketLifecycleNotFound{Bucket: bucket}
-		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configData, err := xml.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

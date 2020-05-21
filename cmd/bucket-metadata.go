@@ -17,14 +17,23 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"path"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -58,6 +67,15 @@ type BucketMetadata struct {
 	EncryptionConfigXML        []byte
 	TaggingConfigXML           []byte
 	QuotaConfigJSON            []byte
+
+	// Unexported fields. Must be updated atomically.
+	policyConfig       *policy.Policy
+	notificationConfig *event.Config
+	lifecycleConfig    *lifecycle.Lifecycle
+	objectLockConfig   *objectlock.Config
+	sseConfig          *bucketsse.BucketSSEConfig
+	taggingConfig      *tags.Tags
+	quotaConfig        *madmin.BucketQuota
 }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.
@@ -112,6 +130,76 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	return b, b.convertLegacyConfigs(ctx, objectAPI)
 }
 
+// parseAllConfigs will parse all configs and populate the private fields.
+// The first error encountered is returned.
+func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLayer) (err error) {
+	if len(b.PolicyConfigJSON) != 0 {
+		b.policyConfig, err = policy.ParseConfig(bytes.NewReader(b.PolicyConfigJSON), b.Name)
+		if err != nil {
+			return err
+		}
+	} else {
+		b.policyConfig = nil
+	}
+
+	if len(b.NotificationXML) != 0 {
+		if err = xml.Unmarshal(b.NotificationXML, b.notificationConfig); err != nil {
+			return err
+		}
+	} else {
+		b.notificationConfig = &event.Config{
+			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		}
+		b.notificationConfig.SetRegion(globalServerRegion)
+	}
+
+	if len(b.LifecycleConfigXML) != 0 {
+		b.lifecycleConfig, err = lifecycle.ParseLifecycleConfig(bytes.NewReader(b.LifecycleConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.lifecycleConfig = nil
+	}
+
+	if len(b.EncryptionConfigXML) != 0 {
+		b.sseConfig, err = bucketsse.ParseBucketSSEConfig(bytes.NewReader(b.EncryptionConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.sseConfig = nil
+	}
+
+	if len(b.TaggingConfigXML) != 0 {
+		b.taggingConfig, err = tags.ParseBucketXML(bytes.NewReader(b.TaggingConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.taggingConfig = nil
+	}
+
+	if len(b.ObjectLockConfigurationXML) != 0 {
+		b.objectLockConfig, err = objectlock.ParseObjectLockConfig(bytes.NewReader(b.ObjectLockConfigurationXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.objectLockConfig = nil
+	}
+	if len(b.QuotaConfigJSON) != 0 {
+		qcfg, err := parseBucketQuota(b.Name, b.QuotaConfigJSON)
+		if err != nil {
+			return err
+		}
+		b.quotaConfig = qcfg
+	} else {
+		b.quotaConfig = &madmin.BucketQuota{}
+	}
+	return nil
+}
+
 func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI ObjectLayer) error {
 	legacyConfigs := []string{
 		legacyBucketObjectLockEnabledConfigFile,
@@ -150,7 +238,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 	if len(configs) == 0 {
 		// nothing to update, return right away.
-		return nil
+		return b.parseAllConfigs(ctx, objectAPI)
 	}
 
 	for legacyFile, configData := range configs {
@@ -194,6 +282,10 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 // Save config to supplied ObjectLayer api.
 func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
+	if err := b.parseAllConfigs(ctx, api); err != nil {
+		return err
+	}
+
 	data := make([]byte, 4, b.Msgsize()+4)
 
 	// Initialize the header.

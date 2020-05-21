@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -613,15 +612,11 @@ func (sys *NotificationSys) AddRemoteTarget(bucketName string, target event.Targ
 func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configData, err := globalBucketMetadataSys.GetConfig(bucket.Name, bucketNotificationConfig)
+		config, err := globalBucketMetadataSys.GetNotificationConfig(bucket.Name)
 		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
 			return err
 		}
-		config, err := event.ParseConfig(bytes.NewReader(configData), globalServerRegion, globalNotificationSys.targetList)
-		if err != nil {
+		if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
 			if _, ok := err.(*event.ErrARNNotFound); !ok {
 				logger.LogIf(ctx, err)
 			}

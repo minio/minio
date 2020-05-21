@@ -17,9 +17,7 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,9 +33,7 @@ import (
 )
 
 // PolicySys - policy subsystem.
-type PolicySys struct {
-	bucketPolicyMap map[string]*policy.Policy
-}
+type PolicySys struct{}
 
 // Get returns stored bucket policy
 func (sys *PolicySys) Get(bucket string) (*policy.Policy, error) {
@@ -48,48 +44,19 @@ func (sys *PolicySys) Get(bucket string) (*policy.Policy, error) {
 		}
 		return objAPI.GetBucketPolicy(GlobalContext, bucket)
 	}
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketPolicyConfig)
-	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
-			return nil, err
-		}
-		return nil, BucketPolicyNotFound{Bucket: bucket}
-	}
-	return policy.ParseConfig(bytes.NewReader(configData), bucket)
+	return globalBucketMetadataSys.GetPolicyConfig(bucket)
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *PolicySys) IsAllowed(args policy.Args) bool {
-	if globalIsGateway {
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			return false
-		}
-		p, err := objAPI.GetBucketPolicy(GlobalContext, args.BucketName)
-		if err == nil {
-			return p.IsAllowed(args)
-		}
-		return args.IsOwner
-	}
-
-	// If policy is available for given bucket, check the policy.
-	p, found := sys.bucketPolicyMap[args.BucketName]
-	if found {
+	p, err := sys.Get(args.BucketName)
+	if err == nil {
 		return p.IsAllowed(args)
 	}
 
-	configData, err := globalBucketMetadataSys.GetConfig(args.BucketName, bucketPolicyConfig)
-	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
-			logger.LogIf(GlobalContext, err)
-		}
-	} else {
-		p, err = policy.ParseConfig(bytes.NewReader(configData), args.BucketName)
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
-		} else {
-			return p.IsAllowed(args)
-		}
+	// Log unhandled errors.
+	if _, ok := err.(BucketPolicyNotFound); !ok {
+		logger.LogIf(GlobalContext, err)
 	}
 
 	// As policy is not available for given bucket name, returns IsOwner i.e.
@@ -97,47 +64,9 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 	return args.IsOwner
 }
 
-// Loads policies for all buckets into PolicySys.
-func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
-	for _, bucket := range buckets {
-		configData, err := globalBucketMetadataSys.GetConfig(bucket.Name, bucketPolicyConfig)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
-			return err
-		}
-		config, err := policy.ParseConfig(bytes.NewReader(configData), bucket.Name)
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
-			continue
-		}
-		sys.bucketPolicyMap[bucket.Name] = config
-	}
-	return nil
-}
-
-// Init - initializes policy system from policy.json of all buckets.
-func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// In gateway mode, we don't need to load the policies
-	// from the backend.
-	if globalIsGateway {
-		return nil
-	}
-
-	// Load PolicySys once during boot.
-	return sys.load(buckets, objAPI)
-}
-
 // NewPolicySys - creates new policy system.
 func NewPolicySys() *PolicySys {
-	return &PolicySys{
-		bucketPolicyMap: make(map[string]*policy.Policy),
-	}
+	return &PolicySys{}
 }
 
 func getConditionValues(r *http.Request, lc string, username string, claims map[string]interface{}) map[string][]string {

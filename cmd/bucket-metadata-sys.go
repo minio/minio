@@ -19,19 +19,23 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.
 type BucketMetadataSys struct {
 	sync.RWMutex
 	metadataMap map[string]BucketMetadata
-
-	// Do fallback to old config when unable to find a bucket config
-	fallback bool
 }
 
 // Remove bucket metadata from memory.
@@ -84,13 +88,9 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		return errInvalidArgument
 	}
 
-	defer globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
-
-	sys.Lock()
-	meta, ok := sys.metadataMap[bucket]
-	sys.Unlock()
-	if !ok {
-		return BucketNotFound{Bucket: bucket}
+	meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+	if err != nil {
+		return err
 	}
 
 	switch configFile {
@@ -116,9 +116,8 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		return err
 	}
 
-	sys.Lock()
-	sys.metadataMap[bucket] = meta
-	sys.Unlock()
+	sys.Set(bucket, meta)
+	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	return nil
 }
@@ -143,62 +142,136 @@ func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
 	return meta, nil
 }
 
+// GetTaggingConfig returns configured tagging config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetTaggingConfig(bucket string) (*tags.Tags, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, BucketTaggingNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+	if meta.taggingConfig == nil {
+		return nil, BucketTaggingNotFound{Bucket: bucket}
+	}
+	return meta.taggingConfig, nil
+}
+
+// GetObjectLockConfig returns configured object lock config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetObjectLockConfig(bucket string) (*objectlock.Config, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, BucketObjectLockConfigNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+	if meta.objectLockConfig == nil {
+		return nil, BucketObjectLockConfigNotFound{Bucket: bucket}
+	}
+	return meta.objectLockConfig, nil
+}
+
+// GetLifecycleConfig returns configured lifecycle config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, BucketLifecycleNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+	if meta.lifecycleConfig == nil {
+		return nil, BucketLifecycleNotFound{Bucket: bucket}
+	}
+	return meta.lifecycleConfig, nil
+}
+
+// GetNotificationConfig returns configured notification config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetNotificationConfig(bucket string) (*event.Config, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		return nil, err
+	}
+	return meta.notificationConfig, nil
+}
+
+// GetSSEConfig returns configured SSE config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetSSEConfig(bucket string) (*bucketsse.BucketSSEConfig, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, BucketSSEConfigNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+	if meta.sseConfig == nil {
+		return nil, BucketSSEConfigNotFound{Bucket: bucket}
+	}
+	return meta.sseConfig, nil
+}
+
+// GetPolicyConfig returns configured bucket policy
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetPolicyConfig(bucket string) (*policy.Policy, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, BucketPolicyNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+	if meta.policyConfig == nil {
+		return nil, BucketPolicyNotFound{Bucket: bucket}
+	}
+	return meta.policyConfig, nil
+}
+
+// GetQuotaConfig returns configured bucket quota
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetQuotaConfig(bucket string) (*madmin.BucketQuota, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		return nil, err
+	}
+	return meta.quotaConfig, nil
+}
+
 // GetConfig returns a specific configuration from the bucket metadata.
-// The returned data should be copied before being modified.
-func (sys *BucketMetadataSys) GetConfig(bucket string, configFile string) ([]byte, error) {
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		return newBucketMetadata(bucket), errServerNotInitialized
+	}
+
 	if globalIsGateway {
-		return nil, NotImplemented{}
+		return newBucketMetadata(bucket), NotImplemented{}
 	}
 
 	if bucket == minioMetaBucket {
-		return nil, errInvalidArgument
+		return newBucketMetadata(bucket), errInvalidArgument
 	}
 
 	sys.RLock()
-	defer sys.RUnlock()
-
 	meta, ok := sys.metadataMap[bucket]
-	if !ok {
-		if !sys.fallback {
-			return nil, errConfigNotFound
-		}
-		objAPI := newObjectLayerWithoutSafeModeFn()
-		if objAPI == nil {
-			return nil, errServerNotInitialized
-		}
-		var err error
-		meta, err = loadBucketMetadata(GlobalContext, objAPI, bucket)
-		if err != nil {
-			return nil, err
-		}
-		sys.metadataMap[bucket] = meta
+	sys.RUnlock()
+	if ok {
+		return meta, nil
 	}
-
-	var configData []byte
-	switch configFile {
-	case bucketPolicyConfig:
-		configData = meta.PolicyConfigJSON
-	case bucketNotificationConfig:
-		configData = meta.NotificationXML
-	case bucketLifecycleConfig:
-		configData = meta.LifecycleConfigXML
-	case bucketSSEConfig:
-		configData = meta.EncryptionConfigXML
-	case bucketTaggingConfigFile:
-		configData = meta.TaggingConfigXML
-	case objectLockConfig:
-		configData = meta.ObjectLockConfigurationXML
-	case bucketQuotaConfigFile:
-		configData = meta.QuotaConfigJSON
-	default:
-		return nil, fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
+	meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+	if err != nil {
+		return meta, err
 	}
-
-	if len(configData) == 0 {
-		return nil, errConfigNotFound
-	}
-
-	return configData, nil
+	sys.Lock()
+	sys.metadataMap[bucket] = meta
+	sys.Unlock()
+	return meta, nil
 }
 
 // Init - initializes bucket metadata system for all buckets.
@@ -218,7 +291,6 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 }
 
 // Loads bucket metadata for all buckets into BucketMetadataSys.
-// When if done successfully fallback will be disabled.
 func (sys *BucketMetadataSys) load(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
 	sys.Lock()
 	defer sys.Unlock()
@@ -230,7 +302,6 @@ func (sys *BucketMetadataSys) load(ctx context.Context, buckets []BucketInfo, ob
 		}
 		sys.metadataMap[bucket.Name] = meta
 	}
-	sys.fallback = false
 	return nil
 }
 
@@ -238,8 +309,5 @@ func (sys *BucketMetadataSys) load(ctx context.Context, buckets []BucketInfo, ob
 func NewBucketMetadataSys() *BucketMetadataSys {
 	return &BucketMetadataSys{
 		metadataMap: make(map[string]BucketMetadata),
-
-		// Do fallback until all buckets have been loaded.
-		fallback: true,
 	}
 }

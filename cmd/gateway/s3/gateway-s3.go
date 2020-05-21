@@ -698,13 +698,11 @@ func (l *s3Objects) GetObjectTags(ctx context.Context, bucket string, object str
 
 // PutObjectTags attaches the tags to the object
 func (l *s3Objects) PutObjectTags(ctx context.Context, bucket, object string, tagStr string) error {
-	var err error
 	tagObj, err := tags.Parse(tagStr, true)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	tagMap := tagObj.ToMap()
-	if err = l.Client.PutObjectTagging(bucket, object, tagMap); err != nil {
+	if err = l.Client.PutObjectTagging(bucket, object, tagObj.ToMap()); err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	return nil

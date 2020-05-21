@@ -27,8 +27,7 @@ import (
 )
 
 func TestPolicySysIsAllowed(t *testing.T) {
-	policySys := NewPolicySys()
-	policySys.bucketPolicyMap["mybucket"] = &policy.Policy{
+	p := &policy.Policy{
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(
@@ -121,22 +120,21 @@ func TestPolicySysIsAllowed(t *testing.T) {
 	}
 
 	testCases := []struct {
-		policySys      *PolicySys
 		args           policy.Args
 		expectedResult bool
 	}{
-		{policySys, anonGetBucketLocationArgs, true},
-		{policySys, anonPutObjectActionArgs, true},
-		{policySys, anonGetObjectActionArgs, false},
-		{policySys, getBucketLocationArgs, true},
-		{policySys, putObjectActionArgs, true},
-		{policySys, getObjectActionArgs, true},
-		{policySys, yourbucketAnonGetObjectActionArgs, false},
-		{policySys, yourbucketGetObjectActionArgs, true},
+		{anonGetBucketLocationArgs, true},
+		{anonPutObjectActionArgs, true},
+		{anonGetObjectActionArgs, false},
+		{getBucketLocationArgs, true},
+		{putObjectActionArgs, true},
+		{getObjectActionArgs, true},
+		{yourbucketAnonGetObjectActionArgs, false},
+		{yourbucketGetObjectActionArgs, true},
 	}
 
 	for i, testCase := range testCases {
-		result := testCase.policySys.IsAllowed(testCase.args)
+		result := p.IsAllowed(testCase.args)
 
 		if result != testCase.expectedResult {
 			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)

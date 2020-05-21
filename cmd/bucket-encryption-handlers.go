@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -128,11 +127,14 @@ func (api objectAPIHandlers) GetBucketEncryptionHandler(w http.ResponseWriter, r
 		return
 	}
 
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketSSEConfig)
+	config, err := globalBucketMetadataSys.GetSSEConfig(bucket)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			err = BucketSSEConfigNotFound{Bucket: bucket}
-		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configData, err := xml.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

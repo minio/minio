@@ -323,8 +323,10 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 		}
 
 		// If it doesn't exist we get a new, so ignore errors
-		meta, _ := globalBucketMetadataSys.Get(bucket)
-		meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+		meta := newBucketMetadata(bucket)
+		if lockEnabled {
+			meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+		}
 		if err := meta.Save(ctx, z); err != nil {
 			return toObjectErr(err, bucket)
 		}
@@ -351,8 +353,10 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 	}
 
 	// If it doesn't exist we get a new, so ignore errors
-	meta, _ := globalBucketMetadataSys.Get(bucket)
-	meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+	meta := newBucketMetadata(bucket)
+	if lockEnabled {
+		meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+	}
 	if err := meta.Save(ctx, z); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -1300,7 +1304,6 @@ func (z *xlZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, err er
 		if err == nil {
 			buckets[i].Created = meta.Created
 		}
-		globalBucketMetadataSys.Set(buckets[i].Name, meta)
 	}
 	return buckets, nil
 }
@@ -1523,7 +1526,6 @@ func (z *xlZones) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 		if err == nil {
 			healBuckets[i].Created = meta.Created
 		}
-		globalBucketMetadataSys.Set(healBuckets[i].Name, meta)
 	}
 
 	return healBuckets, nil
