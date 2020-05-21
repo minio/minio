@@ -49,7 +49,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 	testCase := testCases[0]
 
 	// Initialize a new posix layer.
-	disk, err := newPosix(tmpPath)
+	disk, err := newPosix(tmpPath, "")
 	if err != nil {
 		t.Fatalf("Initializing posix failed with %s.", err)
 	}
@@ -91,7 +91,7 @@ func TestIsValidUmaskFile(t *testing.T) {
 	testCase := testCases[0]
 
 	// Initialize a new posix layer.
-	disk, err := newPosix(tmpPath)
+	disk, err := newPosix(tmpPath, "")
 	if err != nil {
 		t.Fatalf("Initializing posix failed with %s.", err)
 	}

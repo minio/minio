@@ -91,6 +91,7 @@ type Credentials struct {
 	SessionToken string    `xml:"SessionToken" json:"sessionToken,omitempty"`
 	Status       string    `xml:"-" json:"status,omitempty"`
 	ParentUser   string    `xml:"-" json:"parentUser,omitempty"`
+	Groups       []string  `xml:"-" json:"groups,omitempty"`
 }
 
 func (cred Credentials) String() string {

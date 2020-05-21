@@ -34,10 +34,6 @@ import (
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -471,11 +467,23 @@ func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err
 	return data, err
 }
 
-// DeleteBucket - Delete notification and policies related to the bucket.
-func (client *peerRESTClient) DeleteBucket(bucket string) error {
+// LoadBucketMetadata - load bucket metadata
+func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodDeleteBucket, values, nil, -1)
+	respBody, err := client.call(peerRESTMethodLoadBucketMetadata, values, nil, -1)
+	if err != nil {
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
+// DeleteBucketMetadata - Delete bucket metadata
+func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
+	values := make(url.Values)
+	values.Set(peerRESTBucket, bucket)
+	respBody, err := client.call(peerRESTMethodDeleteBucketMetadata, values, nil, -1)
 	if err != nil {
 		return err
 	}
@@ -500,30 +508,6 @@ func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	return nil
 }
 
-// RemoveBucketPolicy - Remove bucket policy on the peer node.
-func (client *peerRESTClient) RemoveBucketPolicy(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodBucketPolicyRemove, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// RemoveBucketObjectLockConfig - Remove bucket object lock config on the peer node.
-func (client *peerRESTClient) RemoveBucketObjectLockConfig(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodBucketObjectLockConfigRemove, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
 // cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
 // The response will contain a bloom filter starting at index x up to, but not including index y.
 // If y is 0, the response will not update y, but return the currently recorded information
@@ -541,156 +525,6 @@ func (client *peerRESTClient) cycleServerBloomFilter(ctx context.Context, req bl
 	var resp bloomFilterResponse
 	defer http.DrainBody(respBody)
 	return &resp, gob.NewDecoder(respBody).Decode(&resp)
-}
-
-// RemoveBucketQuotaConfig - Remove bucket quota config on the peer node.
-func (client *peerRESTClient) RemoveBucketQuotaConfig(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodBucketQuotaConfigRemove, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// SetBucketPolicy - Set bucket policy on the peer node.
-func (client *peerRESTClient) SetBucketPolicy(bucket string, bucketPolicy *policy.Policy) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(bucketPolicy)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodBucketPolicySet, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// RemoveBucketLifecycle - Remove bucket lifecycle configuration on the peer node
-func (client *peerRESTClient) RemoveBucketLifecycle(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodBucketLifecycleRemove, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// SetBucketLifecycle - Set bucket lifecycle configuration on the peer node
-func (client *peerRESTClient) SetBucketLifecycle(bucket string, bucketLifecycle *lifecycle.Lifecycle) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(bucketLifecycle)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodBucketLifecycleSet, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// RemoveBucketSSEConfig - Remove bucket encryption configuration on the peer node
-func (client *peerRESTClient) RemoveBucketSSEConfig(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodBucketEncryptionRemove, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// SetBucketSSEConfig - Set bucket encryption configuration on the peer node
-func (client *peerRESTClient) SetBucketSSEConfig(bucket string, encConfig *bucketsse.BucketSSEConfig) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(encConfig)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodBucketEncryptionSet, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// PutBucketNotification - Put bucket notification on the peer node.
-func (client *peerRESTClient) PutBucketNotification(bucket string, rulesMap event.RulesMap) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(&rulesMap)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodBucketNotificationPut, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// PutBucketObjectLockConfig - PUT bucket object lock configuration.
-func (client *peerRESTClient) PutBucketObjectLockConfig(bucket string, retention *objectlock.Retention) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(retention)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodPutBucketObjectLockConfig, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// PutBucketQuotaConfig - PUT bucket quota configuration.
-func (client *peerRESTClient) PutBucketQuotaConfig(bucket string, q madmin.BucketQuota) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-
-	var reader bytes.Buffer
-	err := gob.NewEncoder(&reader).Encode(&q)
-	if err != nil {
-		return err
-	}
-
-	respBody, err := client.call(peerRESTMethodPutBucketQuotaConfig, values, &reader, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
 }
 
 // DeletePolicy - delete a specific canned policy.
