@@ -40,7 +40,7 @@
     "babel-preset-react": "^6.11.1",
     "babel-register": "^6.26.0",
     "copy-webpack-plugin": "^4.6.0",
-    "css-loader": "^0.23.1",
+    "css-loader": "^3.5.3",
     "enzyme": "^3.11.0",
     "enzyme-adapter-react-16": "^1.15.2",
     "esformatter": "^0.11.3",
