@@ -19,7 +19,6 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -71,8 +70,6 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	fmt.Println(kvs)
-
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
@@ -94,8 +91,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 
 	readyDeadline, err := time.ParseDuration(env.Get(config.EnvAPIReadyDeadline, kvs.Get(apiReadyDeadline)))
 	if err != nil {
-		fmt.Println(err)
-		fmt.Println(kvs.Get(apiReadyDeadline))
 		return cfg, err
 	}
 
