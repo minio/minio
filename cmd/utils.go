@@ -631,3 +631,60 @@ func iamPolicyClaimNameOpenID() string {
 func iamPolicyClaimNameSA() string {
 	return "sa-policy"
 }
+
+// timedValue contains a synchronized value that is considered valid
+// for a specific amount of time.
+// An Update function must be set to provide an updated value when needed.
+type timedValue struct {
+	// Update must return an updated value.
+	// If an error is returned the cached value is not set.
+	// Only one caller will call this function at any time, others will be blocking.
+	// The returned value can no longer be modified once returned.
+	// Should be set before calling Get().
+	Update func() (interface{}, error)
+
+	// TTL for a cached value.
+	// If not set 1 second TTL is assumed.
+	// Should be set before calling Get().
+	TTL time.Duration
+
+	// Once can be used to initialize values for lazy initialization.
+	// Should be set before calling Get().
+	Once sync.Once
+
+	// Managed values.
+	value      interface{}
+	lastUpdate time.Time
+	mu         sync.Mutex
+}
+
+// Get will return a cached value or fetch a new one.
+// If the Update function returns an error the value is forwarded as is and not cached.
+func (t *timedValue) Get() (interface{}, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.TTL <= 0 {
+		t.TTL = time.Second
+	}
+	if t.value != nil {
+		if time.Since(t.lastUpdate) < t.TTL {
+			v := t.value
+			return v, nil
+		}
+		t.value = nil
+	}
+	v, err := t.Update()
+	if err != nil {
+		return v, err
+	}
+	t.value = v
+	t.lastUpdate = time.Now()
+	return v, nil
+}
+
+// Invalidate the value in the cache.
+func (t *timedValue) Invalidate() {
+	t.mu.Lock()
+	t.value = nil
+	t.mu.Unlock()
+}
