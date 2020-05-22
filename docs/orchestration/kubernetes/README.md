@@ -10,8 +10,6 @@ There are multiple options to deploy MinIO on Kubernetes:
 
 - Helm Chart: MinIO Helm Chart offers customizable and easy MinIO deployment with a single command. Refer [MinIO Helm Chart documentation](https://github.com/helm/charts/tree/master/stable/minio) for more details.
 
-- YAML File: MinIO can be deployed with `YAML` files via `kubectl`. Refer to the [MinIO `YAML` file documentation](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/k8s-yaml.md) for more details.
-
 ## Monitoring MinIO in Kubernetes
 
 MinIO server exposes un-authenticated readiness and liveness endpoints so Kubernetes can natively identify unhealthy MinIO containers. MinIO also exposes Prometheus compatible data on a different endpoint to enable Prometheus users to natively monitor their MinIO deployments.
