@@ -130,7 +130,7 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 //     "/.dockerenv":      "file",
 //
 func IsDocker() bool {
-	if env.Get("SIMPLE_CI", "") == "" {
+	if env.Get("MINIO_CI_CD", "") == "" {
 		_, err := os.Stat("/.dockerenv")
 		if os.IsNotExist(err) {
 			return false
@@ -146,7 +146,7 @@ func IsDocker() bool {
 
 // IsDCOS returns true if minio is running in DCOS.
 func IsDCOS() bool {
-	if env.Get("SIMPLE_CI", "") == "" {
+	if env.Get("MINIO_CI_CD", "") == "" {
 		// http://mesos.apache.org/documentation/latest/docker-containerizer/
 		// Mesos docker containerizer sets this value
 		return env.Get("MESOS_CONTAINER_NAME", "") != ""
@@ -161,7 +161,7 @@ func IsKubernetesReplicaSet() bool {
 
 // IsKubernetes returns true if minio is running in kubernetes.
 func IsKubernetes() bool {
-	if env.Get("SIMPLE_CI", "") == "" {
+	if env.Get("MINIO_CI_CD", "") == "" {
 		// Kubernetes env used to validate if we are
 		// indeed running inside a kubernetes pod
 		// is KUBERNETES_SERVICE_HOST but in future
