@@ -107,6 +107,11 @@ npm run dev
 Open [http://IP:8080/minio/](http://IP:8080/minio/) in your browser to play with the application.
 
 
+## Run tests
+
+    npm run test
+
+
 ## Docker development environment
 
 This approach will download the sources on your machine such that you are able to use your IDE or editor of choice.
@@ -173,10 +178,3 @@ npm run dev
 
 Open [http://IP:8080/minio/](http://IP:8080/minio/) in your browser to play with the application.
 
-### Run tests
-
-Run
-
-    docker build --no-cache -f Dockerfile.simpleci --target frontend .
-
-When using [BuildKit](https://docs.docker.com/develop/develop-images/build_enhancements/), you can add the option `--progress plain` to see all output.
