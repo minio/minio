@@ -483,9 +483,6 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 	// On success, populate the key & metadata so they are present in the notification
 	oi.Key = object
 	oi.Metadata = minio.ToMinioClientObjectInfoMetadata(opts.UserDefined)
-	if err != nil {
-		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
-	}
 
 	return minio.FromMinioClientObjectInfo(bucket, oi), nil
 }

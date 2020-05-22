@@ -589,7 +589,7 @@ func (s *xlSets) IsCompressionSupported() bool {
 }
 
 func (s *xlSets) IsTaggingSupported() bool {
-	return s.getHashedSet("").IsTaggingSupported()
+	return true
 }
 
 // DeleteBucket - deletes a bucket on all sets simultaneously,
