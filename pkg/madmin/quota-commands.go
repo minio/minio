@@ -91,11 +91,8 @@ func (adm *AdminClient) GetBucketQuota(ctx context.Context, bucket string) (q Bu
 
 // SetBucketQuota - sets a bucket's quota, if quota is set to '0'
 // quota is disabled.
-func (adm *AdminClient) SetBucketQuota(ctx context.Context, bucket string, quota uint64, quotaType QuotaType) error {
-	data, err := json.Marshal(BucketQuota{
-		Quota: quota,
-		Type:  quotaType,
-	})
+func (adm *AdminClient) SetBucketQuota(ctx context.Context, bucket string, quota *BucketQuota) error {
+	data, err := json.Marshal(quota)
 	if err != nil {
 		return err
 	}

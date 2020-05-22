@@ -616,6 +616,7 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 		if err != nil {
 			return err
 		}
+		config.SetRegion(globalServerRegion)
 		if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
 			if _, ok := err.(*event.ErrARNNotFound); !ok {
 				logger.LogIf(ctx, err)

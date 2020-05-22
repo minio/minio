@@ -66,7 +66,7 @@ require (
 	github.com/minio/hdfs/v3 v3.0.1
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/lsync v1.0.1
-	github.com/minio/minio-go/v6 v6.0.55-0.20200425081427-89eebdef2af0
+	github.com/minio/minio-go/v6 v6.0.56-0.20200522164946-44a5f2e3b76b
 	github.com/minio/parquet-go v0.0.0-20200414234858-838cfa8aae61
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37

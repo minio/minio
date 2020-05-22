@@ -468,6 +468,7 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 			return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 		}
 		tagMap = tagObj.ToMap()
+		delete(opts.UserDefined, xhttp.AmzObjectTagging)
 	}
 	putOpts := miniogo.PutObjectOptions{
 		UserMetadata:         opts.UserDefined,

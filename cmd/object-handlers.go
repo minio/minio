@@ -427,6 +427,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setHeadGetRespHeaders(w, r.URL.Query())
+	setAmzExpirationHeader(w, bucket, objInfo)
 
 	statusCodeWritten := false
 	httpWriter := ioutil.WriteOnClose(w)
@@ -605,6 +606,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set any additional requested response headers.
 	setHeadGetRespHeaders(w, r.URL.Query())
+
+	// Set the expiration header
+	setAmzExpirationHeader(w, bucket, objInfo)
 
 	// Successful response.
 	if rs != nil {
@@ -1176,6 +1180,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	setAmzExpirationHeader(w, dstBucket, objInfo)
+
 	response := generateCopyObjectResponse(getDecryptedETag(r.Header, objInfo, false), objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 
@@ -1411,11 +1417,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-	metaTags, ok := opts.UserDefined["X-Amz-Meta-"+xhttp.AmzObjectTagging]
-	if ok {
-		delete(opts.UserDefined, "X-Amz-Meta-"+xhttp.AmzObjectTagging)
-		opts.UserDefined[xhttp.AmzObjectTagging] = metaTags
-	}
 
 	if api.CacheAPI() != nil {
 		putObject = api.CacheAPI().PutObject
@@ -1497,10 +1498,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
+
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
 	// Therefore, we have to set the ETag directly as map entry.
 	w.Header()[xhttp.ETag] = []string{`"` + etag + `"`}
+
+	setAmzExpirationHeader(w, bucket, objInfo)
+
 	writeSuccessResponseHeadersOnly(w)
 
 	// Notify object created event.
@@ -2546,6 +2551,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Set etag.
 	w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
+
+	setAmzExpirationHeader(w, bucket, objInfo)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)

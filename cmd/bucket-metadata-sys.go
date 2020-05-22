@@ -74,6 +74,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 	}
 
 	if globalIsGateway {
+		// This code is needed only for gateway implementations.
 		if configFile == bucketPolicyConfig {
 			config, err := policy.ParseConfig(bytes.NewReader(configData), bucket)
 			if err != nil {
@@ -97,7 +98,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 	case bucketPolicyConfig:
 		meta.PolicyConfigJSON = configData
 	case bucketNotificationConfig:
-		meta.NotificationXML = configData
+		meta.NotificationConfigXML = configData
 	case bucketLifecycleConfig:
 		meta.LifecycleConfigXML = configData
 	case bucketSSEConfig:
@@ -105,7 +106,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 	case bucketTaggingConfigFile:
 		meta.TaggingConfigXML = configData
 	case objectLockConfig:
-		meta.ObjectLockConfigurationXML = configData
+		meta.ObjectLockConfigXML = configData
 	case bucketQuotaConfigFile:
 		meta.QuotaConfigJSON = configData
 	default:

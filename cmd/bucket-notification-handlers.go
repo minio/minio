@@ -74,6 +74,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	config.SetRegion(globalServerRegion)
 	if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
 		arnErr, ok := err.(*event.ErrARNNotFound)
 		if ok {
