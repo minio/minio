@@ -34,7 +34,7 @@ func getFSType(path string) string {
 	volumeNameSize, nFileSystemNameSize := uint32(260), uint32(260)
 	var lpVolumeSerialNumber uint32
 	var lpFileSystemFlags, lpMaximumComponentLength uint32
-	var lpFileSystemNameBuffer, volumeName [130]uint16
+	var lpFileSystemNameBuffer, volumeName [260]uint16
 	var ps = syscall.StringToUTF16Ptr(filepath.VolumeName(path))
 
 	// Extract values safely
