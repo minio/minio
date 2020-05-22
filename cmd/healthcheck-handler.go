@@ -20,7 +20,7 @@ import (
 	"net/http"
 )
 
-// ReadinessCheckHandler:
+// ReadinessCheckHandler returns if the server is ready to receive requests.
 // For FS - Checks if the backend disk is available
 // For Erasure backend - Checks if all the erasure sets are writable
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {

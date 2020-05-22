@@ -1099,7 +1099,7 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 }
 
 // GetLocalDiskIDs - return disk ids of the local disks of the peers.
-func (sys NotificationSys) GetLocalDiskIDs() []string {
+func (sys *NotificationSys) GetLocalDiskIDs() []string {
 	var diskIDs []string
 	var mu sync.Mutex
 

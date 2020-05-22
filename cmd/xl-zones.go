@@ -1550,8 +1550,7 @@ func (z *xlZones) getZoneAndSet(id string) (int, int, error) {
 
 // IsReady - Returns true all the erasure sets are writable.
 func (z *xlZones) IsReady(ctx context.Context) bool {
-	var erasureSetUpCount [][]int
-	erasureSetUpCount = make([][]int, len(z.zones))
+	erasureSetUpCount := make([][]int, len(z.zones))
 	for i := range z.zones {
 		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
 	}
