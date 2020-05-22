@@ -399,9 +399,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			continue
 		}
 
-		if _, ok := globalBucketObjectLockSys.Get(bucket); ok {
-			if err := enforceRetentionBypassForDelete(ctx, r, bucket, object.ObjectName, getObjectInfoFn); err != ErrNone {
-				dErrs[index] = err
+		if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+			if apiErr := enforceRetentionBypassForDelete(ctx, r, bucket, object.ObjectName, getObjectInfoFn); apiErr != ErrNone {
+				dErrs[index] = apiErr
 				continue
 			}
 		}
@@ -538,6 +538,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 
+				// Load updated bucket metadata into memory.
+				globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
+
 				// Make sure to add Location information here only for bucket
 				w.Header().Set(xhttp.Location,
 					getObjectLocation(r, globalDomainNames, bucket, ""))
@@ -568,11 +571,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if objectLockEnabled && !globalIsGateway {
-		ret := &objectlock.Retention{}
-		globalBucketObjectLockSys.Set(bucket, ret)
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, ret)
-	}
+	// Load updated bucket metadata into memory.
+	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Make sure to add Location information here only for bucket
 	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
@@ -746,11 +746,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
-	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
-	// This request header needs to be set prior to setting ObjectOptions
-	if (globalAutoEncryption || encEnabled) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || globalAutoEncryption {
+		// This request header needs to be set prior to setting ObjectOptions
+		if !crypto.SSEC.IsRequested(r.Header) {
+			r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		}
 	}
+
 	// get gateway encryption options
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
@@ -908,9 +910,11 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if _, ok := globalBucketObjectLockSys.Get(bucket); ok && forceDelete {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
-		return
+	if forceDelete {
+		if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	deleteBucket := objectAPI.DeleteBucket
@@ -930,7 +934,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	globalNotificationSys.DeleteBucket(ctx, bucket)
+	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 
 	// Write success response.
 	writeSuccessNoContent(w)
@@ -1022,18 +1026,15 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	if err = objectAPI.SetBucketObjectLockConfig(ctx, bucket, config); err != nil {
+	configData, err := xml.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	if config.Rule != nil {
-		retention := config.ToRetention()
-		globalBucketObjectLockSys.Set(bucket, retention)
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, retention)
-	} else {
-		globalBucketObjectLockSys.Set(bucket, &objectlock.Retention{})
-		globalNotificationSys.PutBucketObjectLockConfig(ctx, bucket, &objectlock.Retention{})
+	if err = globalBucketMetadataSys.Update(bucket, objectLockConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
 	// Write success response.
@@ -1058,19 +1059,20 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// check if user has permissions to perform this operation
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketObjectLockConfigurationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	lkCfg, err := objectAPI.GetBucketObjectLockConfig(ctx, bucket)
+	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	configData, err := xml.Marshal(lkCfg)
+	configData, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1109,7 +1111,13 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err = objectAPI.SetBucketTagging(ctx, bucket, tags); err != nil {
+	configData, err := xml.Marshal(tags)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if err = globalBucketMetadataSys.Update(bucket, bucketTaggingConfigFile, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1140,13 +1148,13 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	t, err := objectAPI.GetBucketTagging(ctx, bucket)
+	config, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	configData, err := xml.Marshal(t)
+	configData, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1177,7 +1185,7 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err := objectAPI.DeleteBucketTagging(ctx, bucket); err != nil {
+	if err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfigFile, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
