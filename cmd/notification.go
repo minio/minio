@@ -864,6 +864,35 @@ func (sys *NotificationSys) DispatchNetOBDInfo(ctx context.Context) []madmin.Ser
 	return serverNetOBDs
 }
 
+// DispatchNetOBDChan - Net OBD information from other nodes
+func (sys *NotificationSys) DispatchNetOBDChan(ctx context.Context) chan madmin.ServerNetOBDInfo {
+	serverNetOBDs := make(chan madmin.ServerNetOBDInfo)
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			serverNetOBD, err := client.DispatchNetOBDInfo(ctx)
+			if err != nil {
+				serverNetOBD.Addr = client.host.String()
+				serverNetOBD.Error = err.Error()
+			}
+			serverNetOBDs <- serverNetOBD
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		wg.Wait()
+		close(serverNetOBDs)
+	}()
+
+	return serverNetOBDs
+}
+
 // NetOBDParallelInfo - Performs NetOBD tests
 func (sys *NotificationSys) NetOBDParallelInfo(ctx context.Context) madmin.ServerNetOBDInfo {
 	netOBDs := []madmin.NetOBDInfo{}
@@ -921,6 +950,42 @@ func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDri
 		}
 	}
 	return reply
+}
+
+// DriveOBDInfoChan - Drive OBD information
+func (sys *NotificationSys) DriveOBDInfoChan(ctx context.Context) chan madmin.ServerDrivesOBDInfo {
+	updateChan := make(chan madmin.ServerDrivesOBDInfo)
+	wg := sync.WaitGroup{}
+
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient) {
+			reply, err := client.DriveOBDInfo(ctx)
+
+			addr := client.host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+			logger.LogIf(ctx, err)
+
+			reply.Addr = addr
+			if err != nil {
+				reply.Error = err.Error()
+			}
+
+			updateChan <- reply
+			wg.Done()
+		}(client)
+	}
+
+	go func() {
+		wg.Wait()
+		close(updateChan)
+	}()
+
+	return updateChan
 }
 
 // CPUOBDInfo - CPU OBD information
