@@ -1224,6 +1224,10 @@ func (z *xlZones) IsCompressionSupported() bool {
 	return true
 }
 
+func (z *xlZones) IsTaggingSupported() bool {
+	return true
+}
+
 // DeleteBucket - deletes a bucket on all zones simultaneously,
 // even if one of the zones fail to delete buckets, we proceed to
 // undo a successful operation.
@@ -1587,13 +1591,13 @@ func (z *xlZones) IsReady(ctx context.Context) bool {
 	return true
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - replace or add tags to an existing object
+func (z *xlZones) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	if z.SingleZone() {
-		return z.zones[0].PutObjectTag(ctx, bucket, object, tags)
+		return z.zones[0].PutObjectTags(ctx, bucket, object, tags)
 	}
 	for _, zone := range z.zones {
-		err := zone.PutObjectTag(ctx, bucket, object, tags)
+		err := zone.PutObjectTags(ctx, bucket, object, tags)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue
@@ -1607,13 +1611,13 @@ func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags 
 	}
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+// DeleteObjectTags - delete object tags from an existing object
+func (z *xlZones) DeleteObjectTags(ctx context.Context, bucket, object string) error {
 	if z.SingleZone() {
-		return z.zones[0].DeleteObjectTag(ctx, bucket, object)
+		return z.zones[0].DeleteObjectTags(ctx, bucket, object)
 	}
 	for _, zone := range z.zones {
-		err := zone.DeleteObjectTag(ctx, bucket, object)
+		err := zone.DeleteObjectTags(ctx, bucket, object)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue
@@ -1627,13 +1631,13 @@ func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) er
 	}
 }
 
-// GetObjectTag - get object tags from an existing object
-func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - get object tags from an existing object
+func (z *xlZones) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	if z.SingleZone() {
-		return z.zones[0].GetObjectTag(ctx, bucket, object)
+		return z.zones[0].GetObjectTags(ctx, bucket, object)
 	}
 	for _, zone := range z.zones {
-		tags, err := zone.GetObjectTag(ctx, bucket, object)
+		tags, err := zone.GetObjectTags(ctx, bucket, object)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue
