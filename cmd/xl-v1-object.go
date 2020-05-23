@@ -1009,8 +1009,8 @@ func (xl xlObjects) addPartialUpload(bucket, key string) {
 	}
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - replace or add tags to an existing object
+func (xl xlObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	disks := xl.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -1046,13 +1046,13 @@ func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tag
 	return nil
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (xl xlObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return xl.PutObjectTag(ctx, bucket, object, "")
+// DeleteObjectTags - delete object tags from an existing object
+func (xl xlObjects) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return xl.PutObjectTags(ctx, bucket, object, "")
 }
 
-// GetObjectTag - get object tags from an existing object
-func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - get object tags from an existing object
+func (xl xlObjects) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	// GetObjectInfo will return tag value as well
 	oi, err := xl.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {

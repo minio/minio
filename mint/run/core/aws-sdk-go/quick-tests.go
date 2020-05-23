@@ -626,7 +626,7 @@ func testObjectTagging(s3Client *s3.S3) {
 
 func testObjectTaggingErrors(s3Client *s3.S3) {
 	startTime := time.Now()
-	function := "testObjectTagging"
+	function := "testObjectTaggingErrors"
 	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
 	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
 	args := map[string]interface{}{
