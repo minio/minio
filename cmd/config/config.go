@@ -440,16 +440,15 @@ func LookupWorm() (bool, error) {
 func (c Config) Merge() Config {
 	cp := New()
 	for subSys, tgtKV := range c {
-		for tgt, kvs := range cp[subSys] {
-			cp[subSys][tgt] = append(cp[subSys][tgt], kvs...)
-		}
-		for tgt, kvs := range tgtKV {
-			for i, kv := range kvs {
-				_, ok := cp[subSys][tgt].Lookup(kv.Key)
-				if ok {
-					cp[subSys][tgt][i] = kv
+		for tgt := range tgtKV {
+			ckvs := c[subSys][tgt]
+			for _, kv := range cp[subSys][Default] {
+				_, ok := c[subSys][tgt].Lookup(kv.Key)
+				if !ok {
+					ckvs.Set(kv.Key, kv.Value)
 				}
 			}
+			cp[subSys][tgt] = ckvs
 		}
 	}
 	return cp
