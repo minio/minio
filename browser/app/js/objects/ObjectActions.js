@@ -47,6 +47,11 @@ export class ObjectActions extends React.Component {
       SHARE_OBJECT_EXPIRY_MINUTES
     )
   }
+  handleDownload(e) {
+    e.preventDefault()
+    const { object, downloadObject } = this.props
+    downloadObject(object.name)
+  }
   deleteObject() {
     const { object, deleteObject } = this.props
     deleteObject(object.name)
@@ -100,6 +105,14 @@ export class ObjectActions extends React.Component {
           <a
             href=""
             className="fiad-action"
+            title="Download"
+            onClick={this.handleDownload.bind(this)}
+          >
+            <i className="fas fa-cloud-download-alt" />
+          </a>
+          <a
+            href=""
+            className="fiad-action"
             title="Delete"
             onClick={this.showDeleteConfirmModal.bind(this)}
           >
@@ -137,6 +150,7 @@ const mapStateToProps = (state, ownProps) => {
 
 const mapDispatchToProps = (dispatch) => {
   return {
+    downloadObject: object => dispatch(objectsActions.downloadObject(object)),
     shareObject: (object, days, hours, minutes) =>
       dispatch(objectsActions.shareObject(object, days, hours, minutes)),
     deleteObject: (object) => dispatch(objectsActions.deleteObject(object)),
