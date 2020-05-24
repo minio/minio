@@ -1188,10 +1188,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
-	if objInfo.IsCompressed() {
-		objInfo.Size = actualSize
-	}
-
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedCopy,
@@ -1507,6 +1503,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	setAmzExpirationHeader(w, bucket, objInfo)
 
 	writeSuccessResponseHeadersOnly(w)
+
+	// Set the etag sent to the client as part of the event.
+	objInfo.ETag = etag
 
 	// Notify object created event.
 	sendEvent(eventArgs{

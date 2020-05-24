@@ -529,17 +529,9 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			return &json2.Error{Message: err.Error()}
 		}
 		for i := range lo.Objects {
-			if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
-				lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
-				if err != nil {
-					return toJSONError(ctx, err)
-				}
-			} else if lo.Objects[i].IsCompressed() {
-				actualSize := lo.Objects[i].GetActualSize()
-				if actualSize < 0 {
-					return toJSONError(ctx, errInvalidDecompressedSize)
-				}
-				lo.Objects[i].Size = actualSize
+			lo.Objects[i].Size, err = lo.Objects[i].GetActualSize()
+			if err != nil {
+				return toJSONError(ctx, err)
 			}
 		}
 
@@ -1505,10 +1497,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			info := gr.ObjInfo
 			// filter object lock metadata if permission does not permit
 			info.UserDefined = objectlock.FilterObjectLockMetadata(info.UserDefined, getRetPerms[i] != ErrNone, legalHoldPerms[i] != ErrNone)
-
-			if info.IsCompressed() {
-				// For reporting, set the file size to the uncompressed size.
-				info.Size = info.GetActualSize()
+			// For reporting, set the file size to the uncompressed size.
+			info.Size, err = info.GetActualSize()
+			if err != nil {
+				return err
 			}
 			header := &zip.FileHeader{
 				Name:     strings.TrimPrefix(objectName, args.Prefix),

@@ -120,20 +120,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		w.Header().Set(k, v)
 	}
 
-	var totalObjectSize int64
-	switch {
-	case crypto.IsEncrypted(objInfo.UserDefined):
-		totalObjectSize, err = objInfo.DecryptedSize()
-		if err != nil {
-			return err
-		}
-	case objInfo.IsCompressed():
-		totalObjectSize = objInfo.GetActualSize()
-		if totalObjectSize < 0 {
-			return errInvalidDecompressedSize
-		}
-	default:
-		totalObjectSize = objInfo.Size
+	totalObjectSize, err := objInfo.GetActualSize()
+	if err != nil {
+		return err
 	}
 
 	// for providing ranged content

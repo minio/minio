@@ -106,7 +106,7 @@ require (
 	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/tinylib/msgp v1.1.1
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
-	github.com/ugorji/go/codec v1.1.5-pre // indirect
+	github.com/ugorji/go v1.1.5-pre // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.10 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
