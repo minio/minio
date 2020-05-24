@@ -33,5 +33,11 @@ var (
 			Optional:    true,
 			Type:        "duration",
 		},
+		config.HelpKV{
+			Key:         apiReadyDeadline,
+			Description: `set the deadline for health check API /minio/health/ready e.g. "1m"`,
+			Optional:    true,
+			Type:        "duration",
+		},
 	}
 )

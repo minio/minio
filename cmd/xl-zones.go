@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
@@ -1537,9 +1538,57 @@ func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns true if first zone returns true
+func (z *xlZones) getZoneAndSet(id string) (int, int, error) {
+	for zoneIdx := range z.zones {
+		format := z.zones[zoneIdx].format
+		for setIdx, set := range format.XL.Sets {
+			for _, diskID := range set {
+				if diskID == id {
+					return zoneIdx, setIdx, nil
+				}
+			}
+		}
+	}
+	return 0, 0, errDiskNotFound
+}
+
+// IsReady - Returns true all the erasure sets are writable.
 func (z *xlZones) IsReady(ctx context.Context) bool {
-	return z.zones[0].IsReady(ctx)
+	erasureSetUpCount := make([][]int, len(z.zones))
+	for i := range z.zones {
+		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
+	}
+
+	diskIDs := globalNotificationSys.GetLocalDiskIDs()
+
+	diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
+
+	for _, id := range diskIDs {
+		zoneIdx, setIdx, err := z.getZoneAndSet(id)
+		if err != nil {
+			continue
+		}
+		erasureSetUpCount[zoneIdx][setIdx]++
+	}
+
+	for zoneIdx := range erasureSetUpCount {
+		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+		diskCount := len(z.zones[zoneIdx].format.XL.Sets[0])
+		if parityDrives == 0 {
+			parityDrives = getDefaultParityBlocks(diskCount)
+		}
+		dataDrives := diskCount - parityDrives
+		writeQuorum := dataDrives
+		if dataDrives == parityDrives {
+			writeQuorum++
+		}
+		for setIdx := range erasureSetUpCount[zoneIdx] {
+			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // PutObjectTags - replace or add tags to an existing object
