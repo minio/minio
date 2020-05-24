@@ -1260,9 +1260,6 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 	if args.EventName != event.ObjectRemovedDelete {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
-		if args.Object.IsCompressed() {
-			newEvent.S3.Object.Size = args.Object.GetActualSize()
-		}
 		newEvent.S3.Object.ContentType = args.Object.ContentType
 		newEvent.S3.Object.UserMetadata = args.Object.UserDefined
 	}
@@ -1271,16 +1268,9 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 }
 
 func sendEvent(args eventArgs) {
-	// remove sensitive encryption entries in metadata.
-	switch {
-	case crypto.IsEncrypted(args.Object.UserDefined):
-		if totalObjectSize, err := args.Object.DecryptedSize(); err == nil {
-			args.Object.Size = totalObjectSize
-		}
-	case args.Object.IsCompressed():
-		args.Object.Size = args.Object.GetActualSize()
-	}
+	args.Object.Size, _ = args.Object.GetActualSize()
 
+	// remove sensitive encryption entries in metadata.
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
 
