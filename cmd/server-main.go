@@ -24,7 +24,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -441,9 +440,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Configure server.
-	var handler http.Handler
-	enableBucketQuotaOps := env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn
-	handler, err = configureServerHandler(globalEndpoints, enableBucketQuotaOps)
+	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {
 		logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}

@@ -311,7 +311,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
-	httpHandler, err := configureServerHandler(testServer.Disks, false)
+	httpHandler, err := configureServerHandler(testServer.Disks)
 	if err != nil {
 		t.Fatalf("Failed to configure one of the RPC services <ERROR> %s", err)
 	}
