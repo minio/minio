@@ -183,8 +183,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
-	//
-	// quota opts are disabled in gateway mode.
 	registerAdminRouter(router, enableConfigOps, enableIAMOps)
 
 	// Add healthcheck router
