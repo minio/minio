@@ -33,7 +33,7 @@ const HTTP_NOCONTENT = "204";
 const HTTP_BADREQUEST = "400";
 const HTTP_NOTIMPLEMENTED = "501";
 const HTTP_INTERNAL_ERROR = "500";
-const TEST_METADATA = ['Param_1' => 'val-1'];
+const TEST_METADATA = ['param_1' => 'val-1'];
 
 /**
  * ClientConfig abstracts configuration details to connect to a
