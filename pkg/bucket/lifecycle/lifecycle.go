@@ -57,9 +57,6 @@ func ParseLifecycleConfig(reader io.Reader) (*Lifecycle, error) {
 	if err := xml.NewDecoder(reader).Decode(&lc); err != nil {
 		return nil, err
 	}
-	if err := lc.Validate(); err != nil {
-		return nil, err
-	}
 	return &lc, nil
 }
 
@@ -98,9 +95,9 @@ func (lc Lifecycle) Validate() error {
 
 // FilterRuleActions returns the expiration and transition from the object name
 // after evaluating all rules.
-func (lc Lifecycle) FilterRuleActions(objName, objTags string) (Expiration, Transition) {
+func (lc Lifecycle) FilterRuleActions(objName, objTags string) (string, Expiration, Transition) {
 	if objName == "" {
-		return Expiration{}, Transition{}
+		return "", Expiration{}, Transition{}
 	}
 	for _, rule := range lc.Rules {
 		if rule.Status == Disabled {
@@ -110,14 +107,14 @@ func (lc Lifecycle) FilterRuleActions(objName, objTags string) (Expiration, Tran
 		if strings.HasPrefix(objName, rule.Prefix()) {
 			if tags != "" {
 				if strings.Contains(objTags, tags) {
-					return rule.Expiration, Transition{}
+					return rule.ID, rule.Expiration, Transition{}
 				}
 			} else {
-				return rule.Expiration, Transition{}
+				return rule.ID, rule.Expiration, Transition{}
 			}
 		}
 	}
-	return Expiration{}, Transition{}
+	return "", Expiration{}, Transition{}
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
@@ -127,16 +124,38 @@ func (lc Lifecycle) ComputeAction(objName, objTags string, modTime time.Time) Ac
 	if modTime.IsZero() {
 		return action
 	}
-	exp, _ := lc.FilterRuleActions(objName, objTags)
+	_, exp, _ := lc.FilterRuleActions(objName, objTags)
 	if !exp.IsDateNull() {
 		if time.Now().After(exp.Date.Time) {
 			action = DeleteAction
 		}
 	}
 	if !exp.IsDaysNull() {
-		if time.Now().After(modTime.Add(time.Duration(exp.Days) * 24 * time.Hour)) {
+		if time.Now().After(expectedExpiryTime(modTime, exp.Days)) {
 			action = DeleteAction
 		}
 	}
 	return action
+}
+
+// expectedExpiryTime calculates the expiry date/time based on a object modtime.
+// The expected expiry time is always a midnight time following the the object
+// modification time plus the number of expiration days.
+//   e.g. If the object modtime is `Thu May 21 13:42:50 GMT 2020` and the object should
+//        expire in 1 day, then the expected expiry time is `Fri, 23 May 2020 00:00:00 GMT`
+func expectedExpiryTime(modTime time.Time, days ExpirationDays) time.Time {
+	t := modTime.UTC().Add(time.Duration(days+1) * 24 * time.Hour)
+	return t.Truncate(24 * time.Hour)
+}
+
+// PredictExpiryTime returns the expiry date/time of a given object
+func (lc Lifecycle) PredictExpiryTime(objName, objTags string) (string, time.Time) {
+	ruleID, exp, _ := lc.FilterRuleActions(objName, objTags)
+	if !exp.IsDateNull() {
+		return ruleID, exp.Date.Time
+	}
+	if !exp.IsDaysNull() {
+		return ruleID, expectedExpiryTime(time.Now(), exp.Days)
+	}
+	return "", time.Time{}
 }

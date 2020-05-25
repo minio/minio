@@ -371,6 +371,7 @@ func lookupConfigs(s config.Config) {
 	}
 
 	globalAPIThrottling.init(apiRequestsMax, apiConfig.APIRequestsDeadline)
+	globalReadyDeadline = apiConfig.APIReadyDeadline
 
 	if globalIsXL {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],

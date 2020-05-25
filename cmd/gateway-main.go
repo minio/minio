@@ -96,6 +96,10 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
+	// This is only to uniquely identify each gateway deployments.
+	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
+	logger.SetDeploymentID(globalDeploymentID)
+
 	if gw == nil {
 		logger.FatalIf(errUnexpected, "Gateway implementation not initialized")
 	}
@@ -176,11 +180,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	enableIAMOps := globalEtcdClient != nil
-	enableBucketQuotaOps := env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
-	registerAdminRouter(router, enableConfigOps, enableIAMOps, enableBucketQuotaOps)
+	//
+	// quota opts are disabled in gateway mode.
+	registerAdminRouter(router, enableConfigOps, enableIAMOps)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)
@@ -260,9 +265,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		// is only enabled for "NAS" gateway.
 		globalConfigSys.WatchConfigNASDisk(GlobalContext, newObject)
 	}
-	// This is only to uniquely identify each gateway deployments.
-	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
-	logger.SetDeploymentID(globalDeploymentID)
 
 	if globalEtcdClient != nil {
 		// ****  WARNING ****

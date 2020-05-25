@@ -43,32 +43,17 @@ func (t QuotaType) IsValid() bool {
 // BucketQuota holds bucket quota restrictions
 type BucketQuota struct {
 	Quota uint64    `json:"quota"`
-	Type  QuotaType `json:"quotatype"`
+	Type  QuotaType `json:"quotatype,omitempty"`
 }
 
-// RemoveBucketQuota - removes quota config on a bucket.
-func (adm *AdminClient) RemoveBucketQuota(ctx context.Context, bucket string) error {
-
-	queryValues := url.Values{}
-	queryValues.Set("bucket", bucket)
-
-	reqData := requestData{
-		relPath:     adminAPIPrefix + "/remove-bucket-quota",
-		queryValues: queryValues,
+// IsValid returns false if quota is invalid
+// empty quota when Quota == 0 is always true.
+func (q BucketQuota) IsValid() bool {
+	if q.Quota > 0 {
+		return q.Type.IsValid()
 	}
-
-	// Execute DELETE on /minio/admin/v3/remove-bucket-quota to delete bucket quota.
-	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusNoContent {
-		return httpRespToErrorResponse(resp)
-	}
-
-	return nil
+	// Empty configs are valid.
+	return true
 }
 
 // GetBucketQuota - get info on a user
@@ -104,13 +89,10 @@ func (adm *AdminClient) GetBucketQuota(ctx context.Context, bucket string) (q Bu
 	return q, nil
 }
 
-// SetBucketQuota - sets a bucket's quota.
-func (adm *AdminClient) SetBucketQuota(ctx context.Context, bucket string, quota uint64, quotaType QuotaType) error {
-
-	data, err := json.Marshal(BucketQuota{
-		Quota: quota,
-		Type:  quotaType,
-	})
+// SetBucketQuota - sets a bucket's quota, if quota is set to '0'
+// quota is disabled.
+func (adm *AdminClient) SetBucketQuota(ctx context.Context, bucket string, quota *BucketQuota) error {
+	data, err := json.Marshal(quota)
 	if err != nil {
 		return err
 	}

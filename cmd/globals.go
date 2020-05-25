@@ -147,8 +147,9 @@ var (
 	// globalEnvTargetList has list of targets configured via env.
 	globalEnvTargetList *event.TargetList
 
-	globalPolicySys *PolicySys
-	globalIAMSys    *IAMSys
+	globalBucketMetadataSys *BucketMetadataSys
+	globalPolicySys         *PolicySys
+	globalIAMSys            *IAMSys
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
@@ -274,6 +275,9 @@ var (
 
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
+
+	// Deadline by which /minio/health/ready should respond.
+	globalReadyDeadline time.Duration
 	// Add new variable global values here.
 )
 

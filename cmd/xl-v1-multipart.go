@@ -106,10 +106,6 @@ func commitXLMetadata(ctx context.Context, disks []StorageAPI, srcBucket, srcPre
 // towards simplification of multipart APIs.
 // The resulting ListMultipartsInfo structure is unmarshalled directly as XML.
 func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, e error) {
-	if err := checkListMultipartArgs(ctx, bucket, object, keyMarker, uploadIDMarker, delimiter, xl); err != nil {
-		return result, err
-	}
-
 	result.MaxUploads = maxUploads
 	result.KeyMarker = keyMarker
 	result.Prefix = object
@@ -210,9 +206,6 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 //
 // Implements S3 compatible initiate multipart API.
 func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
-	if err := checkNewMultipartArgs(ctx, bucket, object, xl); err != nil {
-		return "", err
-	}
 	// No metadata is set, allocate a new one.
 	if opts.UserDefined == nil {
 		opts.UserDefined = make(map[string]string)
@@ -226,11 +219,6 @@ func (xl xlObjects) NewMultipartUpload(ctx context.Context, bucket, object strin
 //
 // Implements S3 compatible Upload Part Copy API.
 func (xl xlObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (pi PartInfo, e error) {
-
-	if err := checkNewMultipartArgs(ctx, srcBucket, srcObject, xl); err != nil {
-		return pi, err
-	}
-
 	partInfo, err := xl.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, NewPutObjReader(srcInfo.Reader, nil, nil), dstOpts)
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
@@ -432,9 +420,7 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 // ListPartsInfo structure is marshaled directly into XML and
 // replied back to the client.
 func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, e error) {
-	if err := checkListPartsArgs(ctx, bucket, object, xl); err != nil {
-		return result, err
-	}
+
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return result, toObjectErr(err, bucket, object, uploadID)
 	}
@@ -523,10 +509,6 @@ func (xl xlObjects) ListObjectParts(ctx context.Context, bucket, object, uploadI
 //
 // Implements S3 compatible Complete multipart API.
 func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart, opts ObjectOptions) (oi ObjectInfo, e error) {
-	if err := checkCompleteMultipartArgs(ctx, bucket, object, xl); err != nil {
-		return oi, err
-	}
-
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return oi, toObjectErr(err, bucket, object, uploadID)
 	}
@@ -723,9 +705,6 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 // that this is an atomic idempotent operation. Subsequent calls have
 // no affect and further requests to the same uploadID would not be honored.
 func (xl xlObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
-	if err := checkAbortMultipartArgs(ctx, bucket, object, xl); err != nil {
-		return err
-	}
 	// Validates if upload ID exists.
 	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object, uploadID)

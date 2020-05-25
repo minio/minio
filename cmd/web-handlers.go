@@ -266,7 +266,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		}
 	}
 
-	globalNotificationSys.DeleteBucket(ctx, args.BucketName)
+	globalNotificationSys.DeleteBucketMetadata(ctx, args.BucketName)
 
 	return nil
 }
@@ -529,17 +529,9 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			return &json2.Error{Message: err.Error()}
 		}
 		for i := range lo.Objects {
-			if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
-				lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
-				if err != nil {
-					return toJSONError(ctx, err)
-				}
-			} else if lo.Objects[i].IsCompressed() {
-				actualSize := lo.Objects[i].GetActualSize()
-				if actualSize < 0 {
-					return toJSONError(ctx, errInvalidDecompressedSize)
-				}
-				lo.Objects[i].Size = actualSize
+			lo.Objects[i].Size, err = lo.Objects[i].GetActualSize()
+			if err != nil {
+				return toJSONError(ctx, err)
 			}
 		}
 
@@ -1034,8 +1026,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if bucket encryption is enabled
-	_, encEnabled := globalBucketSSEConfigSys.Get(bucket)
-	if (globalAutoEncryption || encEnabled) && !crypto.SSEC.IsRequested(r.Header) {
+	_, err = globalBucketSSEConfigSys.Get(bucket)
+	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1505,10 +1497,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			info := gr.ObjInfo
 			// filter object lock metadata if permission does not permit
 			info.UserDefined = objectlock.FilterObjectLockMetadata(info.UserDefined, getRetPerms[i] != ErrNone, legalHoldPerms[i] != ErrNone)
-
-			if info.IsCompressed() {
-				// For reporting, set the file size to the uncompressed size.
-				info.Size = info.GetActualSize()
+			// For reporting, set the file size to the uncompressed size.
+			info.Size, err = info.GetActualSize()
+			if err != nil {
+				return err
 			}
 			header := &zip.FileHeader{
 				Name:     strings.TrimPrefix(objectName, args.Prefix),
@@ -1655,12 +1647,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 	} else {
-		bucketPolicy, err := objectAPI.GetBucketPolicy(ctx, args.BucketName)
+		bucketPolicy, err := globalPolicySys.Get(args.BucketName)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); !ok {
 				return toJSONError(ctx, err, args.BucketName)
 			}
-			return err
 		}
 
 		policyInfo, err = PolicyToBucketAccessPolicy(bucketPolicy)
@@ -1750,7 +1741,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 			}
 		}
 	} else {
-		bucketPolicy, err := objectAPI.GetBucketPolicy(ctx, args.BucketName)
+		bucketPolicy, err := globalPolicySys.Get(args.BucketName)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); !ok {
 				return toJSONError(ctx, err, args.BucketName)
@@ -1874,7 +1865,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 
 	} else {
-		bucketPolicy, err := objectAPI.GetBucketPolicy(ctx, args.BucketName)
+		bucketPolicy, err := globalPolicySys.Get(args.BucketName)
 		if err != nil {
 			if _, ok := err.(BucketPolicyNotFound); !ok {
 				return toJSONError(ctx, err, args.BucketName)
@@ -1888,11 +1879,10 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 		policyInfo.Statements = miniogopolicy.SetPolicy(policyInfo.Statements, policyType, args.BucketName, args.Prefix)
 		if len(policyInfo.Statements) == 0 {
-			if err = objectAPI.DeleteBucketPolicy(ctx, args.BucketName); err != nil {
+			if err = globalBucketMetadataSys.Update(args.BucketName, bucketPolicyConfig, nil); err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
 
-			globalPolicySys.Remove(args.BucketName)
 			return nil
 		}
 
@@ -1902,13 +1892,15 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		// Parse validate and save bucket policy.
-		if err := objectAPI.SetBucketPolicy(ctx, args.BucketName, bucketPolicy); err != nil {
+		configData, err := json.Marshal(bucketPolicy)
+		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		globalPolicySys.Set(args.BucketName, bucketPolicy)
-		globalNotificationSys.SetBucketPolicy(ctx, args.BucketName, bucketPolicy)
+		// Parse validate and save bucket policy.
+		if err = globalBucketMetadataSys.Update(args.BucketName, bucketPolicyConfig, configData); err != nil {
+			return toJSONError(ctx, err, args.BucketName)
+		}
 	}
 
 	return nil
