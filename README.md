@@ -22,7 +22,7 @@ docker run -p 9000:9000 minio/minio:edge server /data
 
 ## macOS
 ### Homebrew (recommended)
-Install minio packages using [Homebrew](http://brew.sh/)
+Install minio packages using [Homebrew](https://brew.sh/)
 ```sh
 brew install minio/stable/minio
 minio server /data

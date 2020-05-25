@@ -58,7 +58,7 @@ const (
 
 	// S3 object tagging
 	AmzObjectTagging = "X-Amz-Tagging"
-	AmzTagCount      = "X-Amz-Tag-Count"
+	AmzTagCount      = "X-Amz-Tagging-Count"
 	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
 	// S3 extensions

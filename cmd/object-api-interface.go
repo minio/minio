@@ -123,8 +123,11 @@ type ObjectLayer interface {
 	// Check Readiness
 	IsReady(ctx context.Context) bool
 
+	// Object Tagging Support check.
+	IsTaggingSupported() bool
+
 	// ObjectTagging operations
-	PutObjectTag(context.Context, string, string, string) error
-	GetObjectTag(context.Context, string, string) (*tags.Tags, error)
-	DeleteObjectTag(context.Context, string, string) error
+	PutObjectTags(context.Context, string, string, string) error
+	GetObjectTags(context.Context, string, string) (*tags.Tags, error)
+	DeleteObjectTags(context.Context, string, string) error
 }

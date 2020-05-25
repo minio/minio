@@ -16,7 +16,9 @@
 
 package s3
 
-import minio "github.com/minio/minio/cmd"
+import (
+	minio "github.com/minio/minio/cmd"
+)
 
 // List of header keys to be filtered, usually
 // from all S3 API http responses.

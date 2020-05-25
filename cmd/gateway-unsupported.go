@@ -228,20 +228,20 @@ func (a GatewayUnsupported) DeleteBucketTagging(ctx context.Context, bucket stri
 	return NotImplemented{}
 }
 
-// PutObjectTag - not implemented.
-func (a GatewayUnsupported) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - not implemented.
+func (a GatewayUnsupported) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
 
-// GetObjectTag - not implemented.
-func (a GatewayUnsupported) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - not implemented.
+func (a GatewayUnsupported) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return nil, NotImplemented{}
 }
 
-// DeleteObjectTag - not implemented.
-func (a GatewayUnsupported) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+// DeleteObjectTags - not implemented.
+func (a GatewayUnsupported) DeleteObjectTags(ctx context.Context, bucket, object string) error {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }
@@ -258,6 +258,11 @@ func (a GatewayUnsupported) IsListenBucketSupported() bool {
 
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (a GatewayUnsupported) IsEncryptionSupported() bool {
+	return false
+}
+
+// IsTaggingSupported returns whether object tagging is supported or not for this layer.
+func (a GatewayUnsupported) IsTaggingSupported() bool {
 	return false
 }
 

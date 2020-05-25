@@ -1032,6 +1032,12 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
+	// Deny object locking configuration settings on existing buckets without object lock enabled.
+	if _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	if err = globalBucketMetadataSys.Update(bucket, objectLockConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

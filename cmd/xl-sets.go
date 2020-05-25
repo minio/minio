@@ -588,6 +588,10 @@ func (s *xlSets) IsCompressionSupported() bool {
 	return s.getHashedSet("").IsCompressionSupported()
 }
 
+func (s *xlSets) IsTaggingSupported() bool {
+	return true
+}
+
 // DeleteBucket - deletes a bucket on all sets simultaneously,
 // even if one of the sets fail to delete buckets, we proceed to
 // undo a successful operation.
@@ -1684,49 +1688,25 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, opts ma
 	return nil
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (s *xlSets) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
-	return s.getHashedSet(object).PutObjectTag(ctx, bucket, object, tags)
+// PutObjectTags - replace or add tags to an existing object
+func (s *xlSets) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
+	return s.getHashedSet(object).PutObjectTags(ctx, bucket, object, tags)
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return s.getHashedSet(object).DeleteObjectTag(ctx, bucket, object)
+// DeleteObjectTags - delete object tags from an existing object
+func (s *xlSets) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return s.getHashedSet(object).DeleteObjectTags(ctx, bucket, object)
 }
 
-// GetObjectTag - get object tags from an existing object
-func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
-	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
+// GetObjectTags - get object tags from an existing object
+func (s *xlSets) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+	return s.getHashedSet(object).GetObjectTags(ctx, bucket, object)
 }
 
 // GetMetrics - no op
 func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
-}
-
-// IsReady - Returns true if atleast n/2 disks (read quorum) are online
-func (s *xlSets) IsReady(_ context.Context) bool {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-
-	var activeDisks int
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			if s.xlDisks[i][j] == nil {
-				continue
-			}
-			if s.xlDisks[i][j].IsOnline() {
-				activeDisks++
-			}
-			// Return true if read quorum is available.
-			if activeDisks >= len(s.endpoints)/2 {
-				return true
-			}
-		}
-	}
-	// Disks are not ready
-	return false
 }
 
 // maintainMRFList gathers the list of successful partial uploads
