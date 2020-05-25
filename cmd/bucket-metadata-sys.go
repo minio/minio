@@ -251,7 +251,7 @@ func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 		return newBucketMetadata(bucket), errServerNotInitialized
 	}
 
-	if globalIsGateway {
+	if globalIsGateway && globalGatewayName != "nas" {
 		return newBucketMetadata(bucket), NotImplemented{}
 	}
 

@@ -55,8 +55,12 @@ const (
 
 // initDataUsageStats will start the crawler unless disabled.
 func initDataUsageStats(ctx context.Context, objAPI ObjectLayer) {
-	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
-		go runDataUsageInfo(ctx, objAPI)
+	// data usage stats are only available erasure
+	// coded mode
+	if globalIsXL || globalIsDistXL {
+		if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
+			go runDataUsageInfo(ctx, objAPI)
+		}
 	}
 }
 

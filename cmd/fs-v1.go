@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
@@ -39,7 +37,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -229,61 +226,9 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) StorageInfo {
 	return storageInfo
 }
 
-func (fs *FSObjects) waitForLowActiveIO() {
-	for atomic.LoadInt64(&fs.activeIOCount) >= fs.maxActiveIOCount {
-		time.Sleep(lowActiveIOWaitTick)
-	}
-}
-
 // CrawlAndGetDataUsage returns data usage stats of the current FS deployment
 func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
-	// Load bucket totals
-	var oldCache dataUsageCache
-	err := oldCache.load(ctx, fs, dataUsageCacheName)
-	if err != nil {
-		return err
-	}
-	if oldCache.Info.Name == "" {
-		oldCache.Info.Name = dataUsageRoot
-	}
-	buckets, err := fs.ListBuckets(ctx)
-	if err != nil {
-		return err
-	}
-	oldCache.Info.BloomFilter = nil
-	if bf != nil {
-		oldCache.Info.BloomFilter = bf.bytes()
-	}
-
-	if false && intDataUpdateTracker.debug {
-		b, _ := json.MarshalIndent(bf, "", "  ")
-		logger.Info("Bloom filter: %v", string(b))
-	}
-	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
-		// Get file size, symlinks which cannot be
-		// followed are automatically filtered by fastwalk.
-		fi, err := os.Stat(item.Path)
-		if err != nil {
-			return 0, errSkipFile
-		}
-		return fi.Size(), nil
-	})
-	cache.Info.BloomFilter = nil
-
-	// Even if there was an error, the new cache may have better info.
-	if cache.Info.LastUpdate.After(oldCache.Info.LastUpdate) {
-		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving cache with %d entries", len(cache.Cache))
-		}
-		logger.LogIf(ctx, cache.save(ctx, fs, dataUsageCacheName))
-		updates <- cache.dui(dataUsageRoot, buckets)
-	} else {
-		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Cache not updated, %d entries", len(cache.Cache))
-		}
-	}
-
-	return err
+	return NotImplemented{}
 }
 
 /// Bucket operations
@@ -1218,8 +1163,8 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		fs.listDirFactory(), fs.getObjectInfo, fs.getObjectInfo)
 }
 
-// GetObjectTag - get object tags from an existing object
-func (fs *FSObjects) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - get object tags from an existing object
+func (fs *FSObjects) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	oi, err := fs.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		return nil, err
@@ -1228,8 +1173,8 @@ func (fs *FSObjects) GetObjectTag(ctx context.Context, bucket, object string) (*
 	return tags.ParseObjectTags(oi.UserTags)
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (fs *FSObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - replace or add tags to an existing object
+func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 	fsMeta := fsMetaV1{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
@@ -1260,9 +1205,9 @@ func (fs *FSObjects) PutObjectTag(ctx context.Context, bucket, object string, ta
 	return nil
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (fs *FSObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return fs.PutObjectTag(ctx, bucket, object, "")
+// DeleteObjectTags - delete object tags from an existing object
+func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return fs.PutObjectTags(ctx, bucket, object, "")
 }
 
 // ReloadFormat - no-op for fs, Valid only for XL.
@@ -1357,6 +1302,11 @@ func (fs *FSObjects) IsEncryptionSupported() bool {
 
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (fs *FSObjects) IsCompressionSupported() bool {
+	return true
+}
+
+// IsTaggingSupported returns true, object tagging is supported in fs object layer.
+func (fs *FSObjects) IsTaggingSupported() bool {
 	return true
 }
 

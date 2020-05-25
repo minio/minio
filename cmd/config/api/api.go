@@ -29,6 +29,7 @@ import (
 const (
 	apiRequestsMax      = "requests_max"
 	apiRequestsDeadline = "requests_deadline"
+	apiReadyDeadline    = "ready_deadline"
 )
 
 // DefaultKVS - default storage class config
@@ -42,6 +43,10 @@ var (
 			Key:   apiRequestsDeadline,
 			Value: "10s",
 		},
+		config.KV{
+			Key:   apiReadyDeadline,
+			Value: "10s",
+		},
 	}
 )
 
@@ -49,6 +54,7 @@ var (
 type Config struct {
 	APIRequestsMax      int           `json:"requests_max"`
 	APIRequestsDeadline time.Duration `json:"requests_deadline"`
+	APIReadyDeadline    time.Duration `json:"ready_deadline"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -83,9 +89,15 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	readyDeadline, err := time.ParseDuration(env.Get(config.EnvAPIReadyDeadline, kvs.Get(apiReadyDeadline)))
+	if err != nil {
+		return cfg, err
+	}
+
 	cfg = Config{
 		APIRequestsMax:      requestsMax,
 		APIRequestsDeadline: requestsDeadline,
+		APIReadyDeadline:    readyDeadline,
 	}
 	return cfg, nil
 }

@@ -139,7 +139,7 @@ minio server http://host{1...32}/export{1...32} http://host{33...64}/export{1...
 - [Minio纠删码快速入门](https://docs.min.io/cn/minio-erasure-code-quickstart-guide)
 - [使用 `mc`](https://docs.min.io/cn/minio-client-quickstart-guide)
 - [使用 `aws-cli`](https://docs.min.io/cn/aws-cli-with-minio)
-- [使用 `s3cmd](https://docs.min.io/cn/s3cmd-with-minio)
+- [使用 `s3cmd`](https://docs.min.io/cn/s3cmd-with-minio)
 - [使用 `minio-go` SDK ](https://docs.min.io/cn/golang-client-quickstart-guide)
 
 - [minio官方文档](https://docs.min.io)

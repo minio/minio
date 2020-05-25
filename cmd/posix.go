@@ -383,7 +383,15 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 			return 0, nil
 		}
 
-		return meta.Stat.Size, nil
+		// we don't necessarily care about the names
+		// of bucket and object, only interested in size.
+		// so use some dummy names.
+		size, err := meta.ToObjectInfo("dummy", "dummy").GetActualSize()
+		if err != nil {
+			return 0, errSkipFile
+		}
+		return size, nil
+
 	})
 	if err != nil {
 		return dataUsageInfo, err

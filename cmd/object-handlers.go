@@ -427,6 +427,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setHeadGetRespHeaders(w, r.URL.Query())
+	setAmzExpirationHeader(w, bucket, objInfo)
 
 	statusCodeWritten := false
 	httpWriter := ioutil.WriteOnClose(w)
@@ -605,6 +606,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set any additional requested response headers.
 	setHeadGetRespHeaders(w, r.URL.Query())
+
+	// Set the expiration header
+	setAmzExpirationHeader(w, bucket, objInfo)
 
 	// Successful response.
 	if rs != nil {
@@ -1068,6 +1072,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// If x-amz-tagging-directive header is REPLACE, get passed tags.
 	if isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) {
 		objTags = r.Header.Get(xhttp.AmzObjectTagging)
+		srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
 		if _, err := tags.ParseObjectTags(objTags); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1143,8 +1148,18 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		tag, err := tags.ParseObjectTags(objTags)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		opts := miniogo.PutObjectOptions{
+			UserMetadata:         srcInfo.UserDefined,
+			ServerSideEncryption: dstOpts.ServerSideEncryption,
+			UserTags:             tag.ToMap(),
+		}
 		remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
-			srcInfo.Size, "", "", srcInfo.UserDefined, dstOpts.ServerSideEncryption)
+			srcInfo.Size, "", "", opts)
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -1165,15 +1180,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	setAmzExpirationHeader(w, dstBucket, objInfo)
+
 	response := generateCopyObjectResponse(getDecryptedETag(r.Header, objInfo, false), objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
-
-	if objInfo.IsCompressed() {
-		objInfo.Size = actualSize
-	}
 
 	// Notify object created event.
 	sendEvent(eventArgs{
@@ -1278,6 +1291,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if objTags := r.Header.Get(xhttp.AmzObjectTagging); objTags != "" {
+		if !objectAPI.IsTaggingSupported() {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
 		if _, err := tags.ParseObjectTags(objTags); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1476,11 +1494,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
+
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
 	// Therefore, we have to set the ETag directly as map entry.
 	w.Header()[xhttp.ETag] = []string{`"` + etag + `"`}
+
+	setAmzExpirationHeader(w, bucket, objInfo)
+
 	writeSuccessResponseHeadersOnly(w)
+
+	// Set the etag sent to the client as part of the event.
+	objInfo.ETag = etag
 
 	// Notify object created event.
 	sendEvent(eventArgs{
@@ -2526,6 +2551,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Set etag.
 	w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 
+	setAmzExpirationHeader(w, bucket, objInfo)
+
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
@@ -2934,6 +2961,10 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	if !objAPI.IsTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
 	// Allow getObjectTagging if policy action is set.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectTaggingAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
@@ -2941,7 +2972,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Get object tags
-	tags, err := objAPI.GetObjectTag(ctx, bucket, object)
+	tags, err := objAPI.GetObjectTags(ctx, bucket, object)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -2968,6 +2999,10 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	if !objAPI.IsTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	// Allow putObjectTagging if policy action is set
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutObjectTaggingAction, bucket, object); s3Error != ErrNone {
@@ -2982,7 +3017,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	// Put object tags
-	err = objAPI.PutObjectTag(ctx, bucket, object, tags.String())
+	err = objAPI.PutObjectTags(ctx, bucket, object, tags.String())
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -3001,6 +3036,10 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	if !objAPI.IsTaggingSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -3017,7 +3056,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	// Delete object tags
-	if err = objAPI.DeleteObjectTag(ctx, bucket, object); err != nil && err != errConfigNotFound {
+	if err = objAPI.DeleteObjectTags(ctx, bucket, object); err != nil && err != errConfigNotFound {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

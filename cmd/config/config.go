@@ -434,6 +434,26 @@ func LookupWorm() (bool, error) {
 	return ParseBool(env.Get(EnvWorm, EnableOff))
 }
 
+// Merge - merges a new config with all the
+// missing values for default configs,
+// returns a config.
+func (c Config) Merge() Config {
+	cp := New()
+	for subSys, tgtKV := range c {
+		for tgt := range tgtKV {
+			ckvs := c[subSys][tgt]
+			for _, kv := range cp[subSys][Default] {
+				_, ok := c[subSys][tgt].Lookup(kv.Key)
+				if !ok {
+					ckvs.Set(kv.Key, kv.Value)
+				}
+			}
+			cp[subSys][tgt] = ckvs
+		}
+	}
+	return cp
+}
+
 // New - initialize a new server config.
 func New() Config {
 	srvCfg := make(Config)

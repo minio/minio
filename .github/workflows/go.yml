@@ -29,7 +29,7 @@ jobs:
         env:
           CGO_ENABLED: 0
           GO111MODULE: on
-          SIMPLE_CI: 1
+          MINIO_CI_CD: 1
         run: |
           go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
           go test -v --timeout 50m ./...
@@ -38,7 +38,7 @@ jobs:
         env:
           CGO_ENABLED: 0
           GO111MODULE: on
-          SIMPLE_CI: 1
+          MINIO_CI_CD: 1
         run: |
           sudo apt-get install devscripts shellcheck
           make
