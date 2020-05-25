@@ -85,7 +85,7 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		for {
 			var objects []string
 			for obj := range objInfoCh {
-				if len(objects) == maxObjectList {
+				if len(objects) == maxDeleteList {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}

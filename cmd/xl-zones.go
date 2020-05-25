@@ -1046,7 +1046,7 @@ func (z *xlZones) PutObjectPart(ctx context.Context, bucket, object, uploadID st
 		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return PartInfo{}, err
 		}
@@ -1078,7 +1078,7 @@ func (z *xlZones) ListObjectParts(ctx context.Context, bucket, object, uploadID 
 		return z.zones[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return ListPartsInfo{}, err
 		}
@@ -1110,7 +1110,7 @@ func (z *xlZones) AbortMultipartUpload(ctx context.Context, bucket, object, uplo
 	}
 
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return err
 		}
@@ -1157,7 +1157,7 @@ func (z *xlZones) CompleteMultipartUpload(ctx context.Context, bucket, object, u
 	}
 
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return objInfo, err
 		}

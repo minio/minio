@@ -409,8 +409,8 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		nextMarker := ""
 		// Fetch all the objects
 		for {
-			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator,
-				maxObjectList)
+			// Let listObjects reply back the maximum from server implementation
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 0)
 			if err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
@@ -524,7 +524,8 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, maxObjectList)
+		// Limit browser to 1000 batches to be more responsive, scrolling friendly.
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
@@ -761,7 +762,7 @@ next:
 		for {
 			var objects []string
 			for obj := range objInfoCh {
-				if len(objects) == maxObjectList {
+				if len(objects) == maxDeleteList {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
@@ -1122,7 +1123,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		retentionMode, retentionDate, legalHold, s3Err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
 		if s3Err == ErrNone && retentionMode != "" {
 			opts.UserDefined[xhttp.AmzObjectLockMode] = string(retentionMode)
-			opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(time.RFC3339)
+			opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(iso8601TimeFormat)
 		}
 		if s3Err == ErrNone && legalHold.Status != "" {
 			opts.UserDefined[xhttp.AmzObjectLockLegalHold] = string(legalHold.Status)

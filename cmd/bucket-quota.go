@@ -197,7 +197,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		numKeys := len(scorer.fileNames())
 		for i, key := range scorer.fileNames() {
 			objects = append(objects, key)
-			if len(objects) < maxObjectList && (i < numKeys-1) {
+			if len(objects) < maxDeleteList && (i < numKeys-1) {
 				// skip deletion until maxObjectList or end of slice
 				continue
 			}

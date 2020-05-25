@@ -24,7 +24,7 @@ const (
 	AccessFormat = "access"
 
 	// AMZTimeFormat - event time format.
-	AMZTimeFormat = "2006-01-02T15:04:05Z"
+	AMZTimeFormat = "2006-01-02T15:04:05.000Z"
 )
 
 // Identity represents access key who caused the event.
