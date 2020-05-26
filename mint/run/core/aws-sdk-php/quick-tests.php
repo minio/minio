@@ -186,7 +186,7 @@ function testHeadObject($s3Client, $objects) {
         if (getStatusCode($result) != HTTP_OK)
             throw new Exception('headObject API failed for ' .
                                 $bucket . '/' . $object);
-        if ($result['Metadata'] != TEST_METADATA) {
+        if (strtolower($result['Metadata']) != strtolower(TEST_METADATA)) {
             throw new Exception("headObject API Metadata didn't match for " .
                                 $bucket . '/' . $object);
         }
