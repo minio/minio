@@ -511,12 +511,6 @@ func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject 
 		srcInfo.UserDefined[k] = v[0]
 	}
 
-	if _, ok := srcInfo.UserDefined[xhttp.AmzObjectTagging]; ok {
-		// Tags are set by user. Default behavior is copy for the existing tags.
-		// If tags are set the x-amz-tagging-directive header is set to REPLACE.
-		srcInfo.UserDefined[xhttp.AmzTagDirective] = "REPLACE"
-	}
-
 	if _, err = l.Client.CopyObject(srcBucket, srcObject, dstBucket, dstObject, srcInfo.UserDefined); err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, srcBucket, srcObject)
 	}

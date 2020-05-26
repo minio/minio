@@ -1076,8 +1076,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		if globalIsGateway && globalGatewayName == "s3" && objTags == "" {
-			srcInfo.UserDefined[xhttp.AmzObjectTagging] = objTags
+		if globalIsGateway {
+			srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
 		}
 	}
 

@@ -95,6 +95,8 @@ type xlSets struct {
 	// Distribution algorithm of choice.
 	distributionAlgo string
 
+	disksStorageInfoCache timedValue
+
 	// Merge tree walk
 	pool       *MergeWalkPool
 	poolSplunk *MergeWalkPool
@@ -368,7 +370,21 @@ func (s *xlSets) NewNSLock(ctx context.Context, bucket string, objects ...string
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
+// Caches values for 1 second.
 func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
+	s.disksStorageInfoCache.Once.Do(func() {
+		s.disksStorageInfoCache.TTL = time.Second
+		s.disksStorageInfoCache.Update = func() (interface{}, error) {
+			return s.storageInfo(ctx, local), nil
+		}
+	})
+	v, _ := s.disksStorageInfoCache.Get()
+	return v.(StorageInfo)
+}
+
+// storageInfo - combines output of StorageInfo across all erasure coded object sets.
+// Use StorageInfo for a cached version.
+func (s *xlSets) storageInfo(ctx context.Context, local bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
