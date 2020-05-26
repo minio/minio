@@ -498,10 +498,14 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 	}
 	// increment hits
 	if rs != nil {
-		if m.Ranges == nil {
-			m.Ranges = make(map[string]string)
+		// rsFileName gets set by putRange. Check for blank values here
+		// coming from other code paths that set rs only (eg initial creation or hit increment).
+		if rsFileName != "" {
+			if m.Ranges == nil {
+				m.Ranges = make(map[string]string)
+			}
+			m.Ranges[rs.String(actualSize)] = rsFileName
 		}
-		m.Ranges[rs.String(actualSize)] = rsFileName
 	} else {
 		// this is necessary cleanup of range files if entire object is cached.
 		for _, f := range m.Ranges {

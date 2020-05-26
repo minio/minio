@@ -1236,7 +1236,7 @@ func (s *TestSuiteCommon) TestListBuckets(c *check) {
 	c.Assert(createdBucket.Name != "", true)
 
 	// Parse the bucket modtime
-	creationTime, err := time.Parse(timeFormatAMZLong, createdBucket.CreationDate)
+	creationTime, err := time.Parse(iso8601TimeFormat, createdBucket.CreationDate)
 	c.Assert(err, nil)
 
 	// Check if bucket modtime is consistent (not less than current time and not late more than 5 minutes)

@@ -221,8 +221,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 	// Check if new heal sequence to be started overlaps with any
 	// existing, running sequence
 	for k, hSeq := range ahs.healSeqMap {
-		if !hSeq.hasEnded() && (strings.HasPrefix(k, h.path) ||
-			strings.HasPrefix(h.path, k)) {
+		if !hSeq.hasEnded() && (HasPrefix(k, h.path) || HasPrefix(h.path, k)) {
 
 			errMsg = "The provided heal sequence path overlaps with an existing " +
 				fmt.Sprintf("heal path: %s", k)

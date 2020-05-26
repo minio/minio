@@ -260,13 +260,27 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		logger.Info("Bloom filter: %v", string(b))
 	}
 	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
+		bucket, object := path2BucketObject(strings.TrimPrefix(item.Path, fs.fsPath))
+		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
+		if err != nil && !os.IsNotExist(err) {
+			return 0, errSkipFile
+		}
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
 		fi, err := os.Stat(item.Path)
 		if err != nil {
 			return 0, errSkipFile
 		}
+		if len(fsMetaBytes) > 0 {
+			fsMeta := newFSMetaV1()
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
+				return 0, errSkipFile
+			}
+			return fsMeta.ToObjectInfo(bucket, object, fi).GetActualSize()
+		}
 		return fi.Size(), nil
+
 	})
 	cache.Info.BloomFilter = nil
 
