@@ -71,7 +71,7 @@ func httpRespToErrorResponse(resp *http.Response) error {
 	if err != nil {
 		return ErrorResponse{
 			Code:    resp.Status,
-			Message: fmt.Sprintf("Failed to parse server response: %s.", err.Error()),
+			Message: fmt.Sprintf("Failed to parse server response: %s.", err),
 		}
 	}
 	closeResponse(resp)
