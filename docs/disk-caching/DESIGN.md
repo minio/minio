@@ -34,7 +34,7 @@ minio gateway <name> -h
 
 ### Run MinIO gateway with cache on Docker Container
 ### Stable
-Cache drives need to have `strictatime` or `relatime` enabled for disk caching feature. In this example,mount xfs file system on /mnt/cache with `strictatime` or `relatime` enabled.
+Cache drives need to have `strictatime` or `relatime` enabled for disk caching feature. In this example, mount the xfs file system on /mnt/cache with `strictatime` or `relatime` enabled.
 
 ```
 truncate -s 4G /tmp/data
