@@ -173,7 +173,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx = newContext(r, w, action)
-	defer logger.AuditLog(w, r, action, nil)
+	defer stsAuditLog(w, r, action)
 
 	sessionPolicyStr := r.Form.Get(stsPolicy)
 	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -258,6 +258,15 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseXML(w, encodeResponse(assumeRoleResponse))
 }
 
+func stsAuditLog(w http.ResponseWriter, r *http.Request, action string) {
+	for _, k := range []string{
+		stsLDAPPassword, // cleanup any passwords before sending to audit logs.
+	} {
+		r.URL.Query().Del(k)
+	}
+	logger.AuditLog(w, r, action, nil)
+}
+
 func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleJWTCommon")
 
@@ -281,7 +290,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	}
 
 	ctx = newContext(r, w, action)
-	defer logger.AuditLog(w, r, action, nil)
+	defer stsAuditLog(w, r, action)
 
 	if globalOpenIDValidators == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errServerNotInitialized)
@@ -448,7 +457,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	ctx = newContext(r, w, action)
-	defer logger.AuditLog(w, r, action, nil)
+	defer stsAuditLog(w, r, action)
 
 	ldapUsername := r.Form.Get(stsLDAPUsername)
 	ldapPassword := r.Form.Get(stsLDAPPassword)

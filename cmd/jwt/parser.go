@@ -130,6 +130,9 @@ func NewMapClaims() *MapClaims {
 
 // Lookup returns the value and if the key is found.
 func (c *MapClaims) Lookup(key string) (value string, ok bool) {
+	if c == nil {
+		return "", false
+	}
 	var vinterface interface{}
 	vinterface, ok = c.MapClaims[key]
 	if ok {
@@ -167,6 +170,9 @@ func (c *MapClaims) Valid() error {
 
 // Map returns underlying low-level map claims.
 func (c *MapClaims) Map() map[string]interface{} {
+	if c == nil {
+		return nil
+	}
 	return c.MapClaims
 }
 

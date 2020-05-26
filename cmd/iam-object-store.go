@@ -457,17 +457,46 @@ func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
 		return err
 	}
 
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(iamPolicyDocsMap)
-
 	iamOS.lock()
 	defer iamOS.unlock()
 
-	sys.iamUsersMap = iamUsersMap
-	sys.iamPolicyDocsMap = iamPolicyDocsMap
-	sys.iamUserPolicyMap = iamUserPolicyMap
-	sys.iamGroupPolicyMap = iamGroupPolicyMap
-	sys.iamGroupsMap = iamGroupsMap
+	// Merge the new reloaded entries into global map.
+	// See issue https://github.com/minio/minio/issues/9651
+	// where the present list of entries on disk are not yet
+	// latest, there is a small window where this can make
+	// valid users invalid.
+	for k, v := range iamUsersMap {
+		sys.iamUsersMap[k] = v
+	}
+
+	for k, v := range iamPolicyDocsMap {
+		sys.iamPolicyDocsMap[k] = v
+	}
+
+	// Sets default canned policies, if none are set.
+	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
+
+	for k, v := range iamUserPolicyMap {
+		sys.iamUserPolicyMap[k] = v
+	}
+
+	// purge any expired entries which became expired now.
+	for k, v := range sys.iamUsersMap {
+		if v.IsExpired() {
+			delete(sys.iamUsersMap, k)
+			delete(sys.iamUserPolicyMap, k)
+			// Deleting on the disk is taken care of in the next cycle
+		}
+	}
+
+	for k, v := range iamGroupPolicyMap {
+		sys.iamGroupPolicyMap[k] = v
+	}
+
+	for k, v := range iamGroupsMap {
+		sys.iamGroupsMap[k] = v
+	}
+
 	sys.buildUserGroupMemberships()
 
 	return nil
