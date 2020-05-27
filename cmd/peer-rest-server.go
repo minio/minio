@@ -601,10 +601,8 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 
 	meta, err := loadBucketMetadata(r.Context(), objAPI, bucketName)
 	if err != nil {
-		if !errors.Is(err, errConfigNotFound) {
-			s.writeErrorResponse(w, err)
-			return
-		}
+		s.writeErrorResponse(w, err)
+		return
 	}
 
 	globalBucketMetadataSys.Set(bucketName, meta)
@@ -700,6 +698,62 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 	}
 
 	globalNotificationSys.AddRulesMap(bucketName, rulesMap)
+	w.(http.Flusher).Flush()
+}
+
+// Return disk IDs of all the local disks.
+func getLocalDiskIDs(z *xlZones) []string {
+	var ids []string
+
+	for zoneIdx := range z.zones {
+		for _, set := range z.zones[zoneIdx].sets {
+			disks := set.getDisks()
+			for _, disk := range disks {
+				if disk == nil {
+					continue
+				}
+				if disk.IsLocal() {
+					id, err := disk.GetDiskID()
+					if err != nil {
+						continue
+					}
+					if id == "" {
+						continue
+					}
+					ids = append(ids, id)
+				}
+			}
+		}
+	}
+
+	return ids
+}
+
+// GetLocalDiskIDs - Return disk IDs of all the local disks.
+func (s *peerRESTServer) GetLocalDiskIDs(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+
+	ctx := newContext(r, w, "GetLocalDiskIDs")
+
+	objLayer := newObjectLayerWithoutSafeModeFn()
+
+	// Service not initialized yet
+	if objLayer == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	z, ok := objLayer.(*xlZones)
+	if !ok {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	ids := getLocalDiskIDs(z)
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(ids))
 	w.(http.Flusher).Flush()
 }
 
@@ -998,4 +1052,5 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodListen).HandlerFunc(httpTraceHdrs(server.ListenHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocalDiskIDs).HandlerFunc(httpTraceHdrs(server.GetLocalDiskIDs))
 }

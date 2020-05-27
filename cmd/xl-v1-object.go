@@ -265,6 +265,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		return toObjectErr(err, bucket, object)
 	}
 
+	var healOnce sync.Once
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -284,6 +285,7 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 		tillOffset := erasure.ShardFileTillOffset(partOffset, partLength, partSize)
 		// Get the checksums of the current part.
 		readers := make([]io.ReaderAt, len(onlineDisks))
+		prefer := make([]bool, len(onlineDisks))
 		for index, disk := range onlineDisks {
 			if disk == OfflineDisk {
 				continue
@@ -292,14 +294,19 @@ func (xl xlObjects) getObject(ctx context.Context, bucket, object string, startO
 			partPath := pathJoin(object, fmt.Sprintf("part.%d", partNumber))
 			readers[index] = newBitrotReader(disk, bucket, partPath, tillOffset,
 				checksumInfo.Algorithm, checksumInfo.Hash, erasure.ShardSize())
+
+			// Prefer local disks
+			prefer[index] = disk.Hostname() == ""
 		}
-		err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize)
+		err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize, prefer)
 		// Note: we should not be defer'ing the following closeBitrotReaders() call as we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
 		// we return from this function.
 		closeBitrotReaders(readers)
 		if err != nil {
 			if decodeHealErr, ok := err.(*errDecodeHealRequired); ok {
-				go deepHealObject(pathJoin(bucket, object))
+				healOnce.Do(func() {
+					go deepHealObject(pathJoin(bucket, object))
+				})
 				err = decodeHealErr.err
 			}
 			if err != nil {
@@ -1009,8 +1016,8 @@ func (xl xlObjects) addPartialUpload(bucket, key string) {
 	}
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - replace or add tags to an existing object
+func (xl xlObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	disks := xl.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -1046,13 +1053,13 @@ func (xl xlObjects) PutObjectTag(ctx context.Context, bucket, object string, tag
 	return nil
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (xl xlObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return xl.PutObjectTag(ctx, bucket, object, "")
+// DeleteObjectTags - delete object tags from an existing object
+func (xl xlObjects) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return xl.PutObjectTags(ctx, bucket, object, "")
 }
 
-// GetObjectTag - get object tags from an existing object
-func (xl xlObjects) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - get object tags from an existing object
+func (xl xlObjects) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	// GetObjectInfo will return tag value as well
 	oi, err := xl.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {

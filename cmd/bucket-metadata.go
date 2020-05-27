@@ -17,14 +17,23 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"path"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
+	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -37,7 +46,7 @@ const (
 )
 
 var (
-	defaultBucketObjectLockConfig = []byte(`<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled></ObjectLockConfiguration>`)
+	enabledBucketObjectLockConfig = []byte(`<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled></ObjectLockConfiguration>`)
 )
 
 //go:generate msgp -file $GOFILE
@@ -48,16 +57,25 @@ var (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
-	Name                       string
-	Created                    time.Time
-	LockEnabled                bool // legacy not used anymore.
-	PolicyConfigJSON           []byte
-	NotificationXML            []byte
-	LifecycleConfigXML         []byte
-	ObjectLockConfigurationXML []byte
-	EncryptionConfigXML        []byte
-	TaggingConfigXML           []byte
-	QuotaConfigJSON            []byte
+	Name                  string
+	Created               time.Time
+	LockEnabled           bool // legacy not used anymore.
+	PolicyConfigJSON      []byte
+	NotificationConfigXML []byte
+	LifecycleConfigXML    []byte
+	ObjectLockConfigXML   []byte
+	EncryptionConfigXML   []byte
+	TaggingConfigXML      []byte
+	QuotaConfigJSON       []byte
+
+	// Unexported fields. Must be updated atomically.
+	policyConfig       *policy.Policy
+	notificationConfig *event.Config
+	lifecycleConfig    *lifecycle.Lifecycle
+	objectLockConfig   *objectlock.Config
+	sseConfig          *bucketsse.BucketSSEConfig
+	taggingConfig      *tags.Tags
+	quotaConfig        *madmin.BucketQuota
 }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.
@@ -65,6 +83,10 @@ func newBucketMetadata(name string) BucketMetadata {
 	return BucketMetadata{
 		Name:    name,
 		Created: UTCNow(),
+		notificationConfig: &event.Config{
+			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		},
+		quotaConfig: &madmin.BucketQuota{},
 	}
 }
 
@@ -112,6 +134,70 @@ func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket strin
 	return b, b.convertLegacyConfigs(ctx, objectAPI)
 }
 
+// parseAllConfigs will parse all configs and populate the private fields.
+// The first error encountered is returned.
+func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLayer) (err error) {
+	if len(b.PolicyConfigJSON) != 0 {
+		b.policyConfig, err = policy.ParseConfig(bytes.NewReader(b.PolicyConfigJSON), b.Name)
+		if err != nil {
+			return err
+		}
+	} else {
+		b.policyConfig = nil
+	}
+
+	if len(b.NotificationConfigXML) != 0 {
+		if err = xml.Unmarshal(b.NotificationConfigXML, b.notificationConfig); err != nil {
+			return err
+		}
+	}
+
+	if len(b.LifecycleConfigXML) != 0 {
+		b.lifecycleConfig, err = lifecycle.ParseLifecycleConfig(bytes.NewReader(b.LifecycleConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.lifecycleConfig = nil
+	}
+
+	if len(b.EncryptionConfigXML) != 0 {
+		b.sseConfig, err = bucketsse.ParseBucketSSEConfig(bytes.NewReader(b.EncryptionConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.sseConfig = nil
+	}
+
+	if len(b.TaggingConfigXML) != 0 {
+		b.taggingConfig, err = tags.ParseBucketXML(bytes.NewReader(b.TaggingConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.taggingConfig = nil
+	}
+
+	if len(b.ObjectLockConfigXML) != 0 {
+		b.objectLockConfig, err = objectlock.ParseObjectLockConfig(bytes.NewReader(b.ObjectLockConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.objectLockConfig = nil
+	}
+
+	if len(b.QuotaConfigJSON) != 0 {
+		b.quotaConfig, err = parseBucketQuota(b.Name, b.QuotaConfigJSON)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI ObjectLayer) error {
 	legacyConfigs := []string{
 		legacyBucketObjectLockEnabledConfigFile,
@@ -128,9 +214,9 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 	// Handle migration from lockEnabled to newer format.
 	if b.LockEnabled {
-		configs[objectLockConfig] = defaultBucketObjectLockConfig
+		configs[objectLockConfig] = enabledBucketObjectLockConfig
 		b.LockEnabled = false // legacy value unset it
-		// we are only interested in b.ObjectLockConfigurationXML or objectLockConfig value
+		// we are only interested in b.ObjectLockConfigXML or objectLockConfig value
 	}
 
 	for _, legacyFile := range legacyConfigs {
@@ -150,21 +236,21 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 	if len(configs) == 0 {
 		// nothing to update, return right away.
-		return nil
+		return b.parseAllConfigs(ctx, objectAPI)
 	}
 
 	for legacyFile, configData := range configs {
 		switch legacyFile {
 		case legacyBucketObjectLockEnabledConfigFile:
 			if string(configData) == legacyBucketObjectLockEnabledConfig {
-				b.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+				b.ObjectLockConfigXML = enabledBucketObjectLockConfig
 				b.LockEnabled = false // legacy value unset it
-				// we are only interested in b.ObjectLockConfigurationXML
+				// we are only interested in b.ObjectLockConfigXML
 			}
 		case bucketPolicyConfig:
 			b.PolicyConfigJSON = configData
 		case bucketNotificationConfig:
-			b.NotificationXML = configData
+			b.NotificationConfigXML = configData
 		case bucketLifecycleConfig:
 			b.LifecycleConfigXML = configData
 		case bucketSSEConfig:
@@ -172,7 +258,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		case bucketTaggingConfigFile:
 			b.TaggingConfigXML = configData
 		case objectLockConfig:
-			b.ObjectLockConfigurationXML = configData
+			b.ObjectLockConfigXML = configData
 		case bucketQuotaConfigFile:
 			b.QuotaConfigJSON = configData
 		}
@@ -194,6 +280,10 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 // Save config to supplied ObjectLayer api.
 func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
+	if err := b.parseAllConfigs(ctx, api); err != nil {
+		return err
+	}
+
 	data := make([]byte, 4, b.Msgsize()+4)
 
 	// Initialize the header.

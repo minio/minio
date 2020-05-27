@@ -260,13 +260,27 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		logger.Info("Bloom filter: %v", string(b))
 	}
 	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
+		bucket, object := path2BucketObject(strings.TrimPrefix(item.Path, fs.fsPath))
+		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
+		if err != nil && !os.IsNotExist(err) {
+			return 0, errSkipFile
+		}
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
 		fi, err := os.Stat(item.Path)
 		if err != nil {
 			return 0, errSkipFile
 		}
+		if len(fsMetaBytes) > 0 {
+			fsMeta := newFSMetaV1()
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
+				return 0, errSkipFile
+			}
+			return fsMeta.ToObjectInfo(bucket, object, fi).GetActualSize()
+		}
 		return fi.Size(), nil
+
 	})
 	cache.Info.BloomFilter = nil
 
@@ -410,7 +424,6 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		if err == nil {
 			created = meta.Created
 		}
-		globalBucketMetadataSys.Set(fi.Name(), meta)
 
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name:    fi.Name(),
@@ -1219,8 +1232,8 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 		fs.listDirFactory(), fs.getObjectInfo, fs.getObjectInfo)
 }
 
-// GetObjectTag - get object tags from an existing object
-func (fs *FSObjects) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - get object tags from an existing object
+func (fs *FSObjects) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	oi, err := fs.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		return nil, err
@@ -1229,8 +1242,8 @@ func (fs *FSObjects) GetObjectTag(ctx context.Context, bucket, object string) (*
 	return tags.ParseObjectTags(oi.UserTags)
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (fs *FSObjects) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - replace or add tags to an existing object
+func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 	fsMeta := fsMetaV1{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
@@ -1261,9 +1274,9 @@ func (fs *FSObjects) PutObjectTag(ctx context.Context, bucket, object string, ta
 	return nil
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (fs *FSObjects) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return fs.PutObjectTag(ctx, bucket, object, "")
+// DeleteObjectTags - delete object tags from an existing object
+func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return fs.PutObjectTags(ctx, bucket, object, "")
 }
 
 // ReloadFormat - no-op for fs, Valid only for XL.
@@ -1358,6 +1371,11 @@ func (fs *FSObjects) IsEncryptionSupported() bool {
 
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (fs *FSObjects) IsCompressionSupported() bool {
+	return true
+}
+
+// IsTaggingSupported returns true, object tagging is supported in fs object layer.
+func (fs *FSObjects) IsTaggingSupported() bool {
 	return true
 }
 

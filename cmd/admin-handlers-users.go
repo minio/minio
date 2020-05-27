@@ -636,6 +636,7 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 	// Load the latest calculated data usage
 	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 	if err != nil {
+		// log the error, continue with the accounting response
 		logger.LogIf(ctx, err)
 	}
 

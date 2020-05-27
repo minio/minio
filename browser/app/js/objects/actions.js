@@ -360,6 +360,19 @@ export const downloadObject = (object) => {
   }
 }
 
+export const downloadPrefix = (object) => {
+  return function (dispatch, getState) {
+    return downloadObjects(
+      getCurrentBucket(getState()),
+      getCurrentPrefix(getState()),
+      [object],
+      `${object.slice(0, -1)}.zip`,
+      dispatch
+    )
+  }
+}
+
+
 export const checkObject = (object) => ({
   type: CHECKED_LIST_ADD,
   object,
@@ -376,21 +389,28 @@ export const resetCheckedList = () => ({
 
 export const downloadCheckedObjects = () => {
   return function (dispatch, getState) {
-    const state = getState()
+    return downloadObjects(
+      getCurrentBucket(getState()),
+      getCurrentPrefix(getState()),
+      getCheckedList(getState()),
+      null,
+      dispatch
+    )
+  }
+}
+
+const downloadObjects = (bucketName, prefix, objects, filename, dispatch) => {
     const req = {
-      bucketName: getCurrentBucket(state),
-      prefix: getCurrentPrefix(state),
-      objects: getCheckedList(state),
+      bucketName: bucketName,
+      prefix: prefix,
+      objects: objects,
     }
-    if (!web.LoggedIn()) {
-      const requestUrl = location.origin + "/minio/zip?token="
-      downloadZip(requestUrl, req, dispatch)
-    } else {
+    if (web.LoggedIn()) {
       return web
         .CreateURLToken()
         .then((res) => {
           const requestUrl = `${location.origin}${minioBrowserPrefix}/zip?token=${res.token}`
-          downloadZip(requestUrl, req, dispatch)
+          downloadZip(requestUrl, req, filename, dispatch)
         })
         .catch((err) =>
           dispatch(
@@ -400,11 +420,13 @@ export const downloadCheckedObjects = () => {
             })
           )
         )
+    } else {
+      const requestUrl = `${location.origin}${minioBrowserPrefix}/zip?token=`
+      downloadZip(requestUrl, req, filename, dispatch)
     }
-  }
 }
 
-const downloadZip = (url, req, dispatch) => {
+const downloadZip = (url, req, filename, dispatch) => {
   var anchor = document.createElement("a")
   document.body.appendChild(anchor)
 
@@ -422,7 +444,7 @@ const downloadZip = (url, req, dispatch) => {
       var separator = req.prefix.length > 1 ? "-" : ""
 
       anchor.href = blobUrl
-      anchor.download =
+      anchor.download = filename ||
         req.bucketName + separator + req.prefix.slice(0, -1) + ".zip"
 
       anchor.click()

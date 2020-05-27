@@ -81,10 +81,10 @@ func TestReleaseTagToNFromTimeConversion(t *testing.T) {
 }
 
 func TestDownloadURL(t *testing.T) {
-	sci := os.Getenv("SIMPLE_CI")
+	sci := os.Getenv("MINIO_CI_CD")
 
-	os.Setenv("SIMPLE_CI", "")
-	defer os.Setenv("SIMPLE_CI", sci)
+	os.Setenv("MINIO_CI_CD", "")
+	defer os.Setenv("MINIO_CI_CD", sci)
 
 	minioVersion1 := releaseTimeToReleaseTag(UTCNow())
 	durl := getDownloadURL(minioVersion1)
@@ -148,8 +148,8 @@ func TestUserAgent(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		sci := os.Getenv("SIMPLE_CI")
-		os.Setenv("SIMPLE_CI", "")
+		sci := os.Getenv("MINIO_CI_CD")
+		os.Setenv("MINIO_CI_CD", "")
 
 		os.Setenv(testCase.envName, testCase.envValue)
 		if testCase.envName == "MESOS_CONTAINER_NAME" {
@@ -163,7 +163,7 @@ func TestUserAgent(t *testing.T) {
 		if str != expectedStr {
 			t.Errorf("Test %d: expected: %s, got: %s", i+1, expectedStr, str)
 		}
-		os.Setenv("SIMPLE_CI", sci)
+		os.Setenv("MINIO_CI_CD", sci)
 		os.Unsetenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION")
 		os.Unsetenv(testCase.envName)
 	}
@@ -171,9 +171,9 @@ func TestUserAgent(t *testing.T) {
 
 // Tests if the environment we are running is in DCOS.
 func TestIsDCOS(t *testing.T) {
-	sci := os.Getenv("SIMPLE_CI")
-	os.Setenv("SIMPLE_CI", "")
-	defer os.Setenv("SIMPLE_CI", sci)
+	sci := os.Getenv("MINIO_CI_CD")
+	os.Setenv("MINIO_CI_CD", "")
+	defer os.Setenv("MINIO_CI_CD", sci)
 
 	os.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
 	dcos := IsDCOS()
@@ -190,9 +190,9 @@ func TestIsDCOS(t *testing.T) {
 
 // Tests if the environment we are running is in kubernetes.
 func TestIsKubernetes(t *testing.T) {
-	sci := os.Getenv("SIMPLE_CI")
-	os.Setenv("SIMPLE_CI", "")
-	defer os.Setenv("SIMPLE_CI", sci)
+	sci := os.Getenv("MINIO_CI_CD")
+	os.Setenv("MINIO_CI_CD", "")
+	defer os.Setenv("MINIO_CI_CD", sci)
 
 	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
 	kubernetes := IsKubernetes()

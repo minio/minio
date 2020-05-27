@@ -459,7 +459,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrInvalidAccessKeyID: {
 		Code:           "InvalidAccessKeyId",
-		Description:    "The access key ID you provided does not exist in our records.",
+		Description:    "The Access Key Id you provided does not exist in our records.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrInvalidBucketName: {

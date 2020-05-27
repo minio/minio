@@ -68,25 +68,13 @@ func prepareAdminXLTestBed(ctx context.Context) (*adminXLTestBed, error) {
 
 	globalEndpoints = mustGetZoneEndpoints(xlDirs...)
 
-	globalConfigSys = NewConfigSys()
+	newAllSubsystems()
 
-	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(ctx, objLayer)
-
-	buckets, err := objLayer.ListBuckets(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(buckets, objLayer)
-
-	globalNotificationSys = NewNotificationSys(globalEndpoints)
-	globalNotificationSys.Init(buckets, objLayer)
+	initAllSubsystems(objLayer)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
-	registerAdminRouter(adminRouter, true, true, false)
+	registerAdminRouter(adminRouter, true, true)
 
 	return &adminXLTestBed{
 		xlDirs:   xlDirs,

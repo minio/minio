@@ -54,6 +54,7 @@ const (
 	peerRESTMethodTrace                 = "/trace"
 	peerRESTMethodListen                = "/listen"
 	peerRESTMethodLog                   = "/log"
+	peerRESTMethodGetLocalDiskIDs       = "/getlocaldiskids"
 )
 
 const (

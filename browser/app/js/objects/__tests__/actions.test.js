@@ -70,6 +70,9 @@ jest.mock("../../web", () => ({
     })
     .mockImplementationOnce(() => {
       return Promise.resolve({ token: "test" })
+    })
+    .mockImplementationOnce(() => {
+      return Promise.resolve({ token: "test" })
     }),
   GetBucketPolicy: jest.fn(({ bucketName, prefix }) => {
     if (!bucketName) {
@@ -482,6 +485,34 @@ describe("Objects actions", () => {
         const actions = store.getActions()
         expect(actions).toEqual(expectedActions)
       })
+    })
+  })
+
+  it("should download prefix", () => {
+    const open = jest.fn()
+    const send = jest.fn()
+    const xhrMockClass = () => ({
+      open: open,
+      send: send
+    })
+    window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
+
+    const store = mockStore({
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/" }
+    })
+    return store.dispatch(actionsObjects.downloadPrefix("pre2/")).then(() => {
+      const requestUrl = `${
+        location.origin
+      }${minioBrowserPrefix}/zip?token=test`
+      expect(open).toHaveBeenCalledWith("POST", requestUrl, true)
+      expect(send).toHaveBeenCalledWith(
+        JSON.stringify({
+          bucketName: "bk1",
+          prefix: "pre1/",
+          objects: ["pre2/"]
+        })
+      )
     })
   })
 

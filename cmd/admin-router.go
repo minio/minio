@@ -20,6 +20,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -35,7 +37,7 @@ const (
 type adminAPIHandlers struct{}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
-func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enableBucketQuotaOps bool) {
+func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
@@ -170,16 +172,15 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 		}
 
 		// Quota operations
-		if enableConfigOps && enableBucketQuotaOps {
-			// GetBucketQuotaConfig
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
-			// PutBucketQuotaConfig
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
-			// RemoveBucketQuotaConfig
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.RemoveBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+		if globalIsXL || globalIsDistXL {
+			if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
+				// GetBucketQuotaConfig
+				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
+					httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+				// PutBucketQuotaConfig
+				adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
+					httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+			}
 		}
 
 		// -- Top APIs --

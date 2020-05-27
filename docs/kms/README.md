@@ -12,25 +12,31 @@ a KMS just fetch the root identity, set the following environment variables and 
 If you havn't installed MinIO, yet, then follow the MinIO [install instructions](https://docs.min.io/docs/minio-quickstart-guide)
 first.
 
-1. As initial step fetch the private key and certificate of the root identity:
-   ```sh
-   curl -sSL --tlsv1.2 \
-        -O 'https://raw.githubusercontent.com/minio/kes/master/root.key' \
-        -O 'https://raw.githubusercontent.com/minio/kes/master/root.cert'
-   ```
-2. Set the MinIO-KES related environment variables:
-   ```sh
-   export MINIO_KMS_KES_ENDPOINT=https://play.min.io:7373
-   export MINIO_KMS_KES_KEY_FILE=root.key
-   export MINIO_KMS_KES_CERT_FILE=root.cert
-   export MINIO_KMS_KES_KEY_NAME=my-minio-key
-   ```
-3. Start the MinIO server:
-   ```sh
-   export MINIO_ACCESS_KEY=minio
-   export MINIO_SECRET_KEY=minio123
-   minio server ~/export
-   ```
+#### 1. Fetch the root identity
+As the initial step, fetch the private key and certificate of the root identity:
+
+```sh
+curl -sSL --tlsv1.2 \
+     -O 'https://raw.githubusercontent.com/minio/kes/master/root.key' \
+     -O 'https://raw.githubusercontent.com/minio/kes/master/root.cert'
+```
+
+#### 2. Set the MinIO-KES configuration
+
+```sh
+export MINIO_KMS_KES_ENDPOINT=https://play.min.io:7373
+export MINIO_KMS_KES_KEY_FILE=root.key
+export MINIO_KMS_KES_CERT_FILE=root.cert
+export MINIO_KMS_KES_KEY_NAME=my-minio-key
+```
+
+#### 3. Start the MinIO Server
+
+```sh
+export MINIO_ACCESS_KEY=minio
+export MINIO_SECRET_KEY=minio123
+minio server ~/export
+```
 
 > The KES instance at `https://play.min.io:7373` is meant to experiment and provides a way to get started quickly.
 > Note that anyone can access or delete master keys at `https://play.min.io:7373`. You should run your own KES
@@ -49,7 +55,7 @@ A typical MinIO deployment that uses a KMS for SSE-S3 looks like this:
                                                                 └─────────┘
 ``` 
 
-So, there are `n` MinIO instances talking to `m` KES servers but only `1` central KMS. The most simple
+In a given setup, there are `n` MinIO instances talking to `m` KES servers but only `1` central KMS. The most simple
 setup consists of `1` MinIO server or cluster talking to `1` KMS via `1` KES server.
 
 The main difference between various MinIO-KMS deployments is the KMS implementation. The following table

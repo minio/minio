@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -335,31 +337,6 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
-	// Initialize policy system.
-	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize policy system: %w", err)
-	}
-
-	// Initialize lifecycle system.
-	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
-	}
-
-	// Initialize bucket encryption subsystem.
-	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
-	}
-
-	// Initialize bucket object lock.
-	if err = globalBucketObjectLockSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize object lock system: %w", err)
-	}
-
-	// Initialize bucket quota system.
-	if err = globalBucketQuotaSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
-	}
-
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
 		initFederatorBackend(buckets, newObject)
@@ -463,9 +440,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Configure server.
-	var handler http.Handler
-	enableBucketQuotaOps := env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn
-	handler, err = configureServerHandler(globalEndpoints, enableBucketQuotaOps)
+	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {
 		logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
@@ -475,7 +450,27 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
+	// Annonying hack to ensure that Go doesn't write its own logging,
+	// interleaved with our formatted logging, this allows us to
+	// honor --json and --quiet flag properly.
+	//
+	// Unfortunately we have to resort to this sort of hacky approach
+	// because, Go automatically initializes ErrorLog on its own
+	// and can log without application control.
+	//
+	// This is an implementation issue in Go and should be fixed, but
+	// until then this hack is okay and works for our needs.
+	pr, pw := io.Pipe()
+	go func() {
+		defer pr.Close()
+		scanner := bufio.NewScanner(&contextReader{pr, GlobalContext})
+		for scanner.Scan() {
+			logger.LogIf(GlobalContext, errors.New(scanner.Text()))
+		}
+	}()
+
 	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	httpServer.ErrorLog = log.New(pw, "", 0)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}

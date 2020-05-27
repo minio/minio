@@ -67,6 +67,20 @@ describe("ObjectActions", () => {
   })
 
 
+  it("should call downloadObject when single object is selected and download button is clicked", () => {
+    const downloadObject = jest.fn()
+    const wrapper = shallow(
+      <ObjectActions
+        object={{ name: "obj1" }}
+        currentPrefix={"pre1/"}
+        downloadObject={downloadObject} />
+    )
+    wrapper
+      .find("a")
+      .at(1)
+      .simulate("click", { preventDefault: jest.fn() })
+    expect(downloadObject).toHaveBeenCalled()
+  })
 
 
   it("should show PreviewObjectModal when preview action is clicked", () => {
@@ -106,7 +120,7 @@ describe("ObjectActions", () => {
     )
     expect(wrapper
       .find("a")
-      .length).toBe(2) // find only the other 2
+      .length).toBe(3) // find only the other 2
   })
 
   it("should call shareObject with object and expiry", () => {

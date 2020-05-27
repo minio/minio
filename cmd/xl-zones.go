@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
@@ -323,8 +324,10 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 		}
 
 		// If it doesn't exist we get a new, so ignore errors
-		meta, _ := globalBucketMetadataSys.Get(bucket)
-		meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+		meta := newBucketMetadata(bucket)
+		if lockEnabled {
+			meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
+		}
 		if err := meta.Save(ctx, z); err != nil {
 			return toObjectErr(err, bucket)
 		}
@@ -351,8 +354,10 @@ func (z *xlZones) MakeBucketWithLocation(ctx context.Context, bucket, location s
 	}
 
 	// If it doesn't exist we get a new, so ignore errors
-	meta, _ := globalBucketMetadataSys.Get(bucket)
-	meta.ObjectLockConfigurationXML = defaultBucketObjectLockConfig
+	meta := newBucketMetadata(bucket)
+	if lockEnabled {
+		meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
+	}
 	if err := meta.Save(ctx, z); err != nil {
 		return toObjectErr(err, bucket)
 	}
@@ -1041,7 +1046,7 @@ func (z *xlZones) PutObjectPart(ctx context.Context, bucket, object, uploadID st
 		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return PartInfo{}, err
 		}
@@ -1073,7 +1078,7 @@ func (z *xlZones) ListObjectParts(ctx context.Context, bucket, object, uploadID 
 		return z.zones[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return ListPartsInfo{}, err
 		}
@@ -1105,7 +1110,7 @@ func (z *xlZones) AbortMultipartUpload(ctx context.Context, bucket, object, uplo
 	}
 
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return err
 		}
@@ -1152,7 +1157,7 @@ func (z *xlZones) CompleteMultipartUpload(ctx context.Context, bucket, object, u
 	}
 
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxObjectList)
+		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return objInfo, err
 		}
@@ -1216,6 +1221,10 @@ func (z *xlZones) IsEncryptionSupported() bool {
 
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (z *xlZones) IsCompressionSupported() bool {
+	return true
+}
+
+func (z *xlZones) IsTaggingSupported() bool {
 	return true
 }
 
@@ -1296,7 +1305,6 @@ func (z *xlZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, err er
 		if err == nil {
 			buckets[i].Created = meta.Created
 		}
-		globalBucketMetadataSys.Set(buckets[i].Name, meta)
 	}
 	return buckets, nil
 }
@@ -1519,7 +1527,6 @@ func (z *xlZones) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 		if err == nil {
 			healBuckets[i].Created = meta.Created
 		}
-		globalBucketMetadataSys.Set(healBuckets[i].Name, meta)
 	}
 
 	return healBuckets, nil
@@ -1531,18 +1538,66 @@ func (z *xlZones) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns true if first zone returns true
+func (z *xlZones) getZoneAndSet(id string) (int, int, error) {
+	for zoneIdx := range z.zones {
+		format := z.zones[zoneIdx].format
+		for setIdx, set := range format.XL.Sets {
+			for _, diskID := range set {
+				if diskID == id {
+					return zoneIdx, setIdx, nil
+				}
+			}
+		}
+	}
+	return 0, 0, errDiskNotFound
+}
+
+// IsReady - Returns true all the erasure sets are writable.
 func (z *xlZones) IsReady(ctx context.Context) bool {
-	return z.zones[0].IsReady(ctx)
+	erasureSetUpCount := make([][]int, len(z.zones))
+	for i := range z.zones {
+		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
+	}
+
+	diskIDs := globalNotificationSys.GetLocalDiskIDs()
+
+	diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
+
+	for _, id := range diskIDs {
+		zoneIdx, setIdx, err := z.getZoneAndSet(id)
+		if err != nil {
+			continue
+		}
+		erasureSetUpCount[zoneIdx][setIdx]++
+	}
+
+	for zoneIdx := range erasureSetUpCount {
+		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+		diskCount := len(z.zones[zoneIdx].format.XL.Sets[0])
+		if parityDrives == 0 {
+			parityDrives = getDefaultParityBlocks(diskCount)
+		}
+		dataDrives := diskCount - parityDrives
+		writeQuorum := dataDrives
+		if dataDrives == parityDrives {
+			writeQuorum++
+		}
+		for setIdx := range erasureSetUpCount[zoneIdx] {
+			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
+				return false
+			}
+		}
+	}
+	return true
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
+// PutObjectTags - replace or add tags to an existing object
+func (z *xlZones) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
 	if z.SingleZone() {
-		return z.zones[0].PutObjectTag(ctx, bucket, object, tags)
+		return z.zones[0].PutObjectTags(ctx, bucket, object, tags)
 	}
 	for _, zone := range z.zones {
-		err := zone.PutObjectTag(ctx, bucket, object, tags)
+		err := zone.PutObjectTags(ctx, bucket, object, tags)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue
@@ -1556,13 +1611,13 @@ func (z *xlZones) PutObjectTag(ctx context.Context, bucket, object string, tags 
 	}
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) error {
+// DeleteObjectTags - delete object tags from an existing object
+func (z *xlZones) DeleteObjectTags(ctx context.Context, bucket, object string) error {
 	if z.SingleZone() {
-		return z.zones[0].DeleteObjectTag(ctx, bucket, object)
+		return z.zones[0].DeleteObjectTags(ctx, bucket, object)
 	}
 	for _, zone := range z.zones {
-		err := zone.DeleteObjectTag(ctx, bucket, object)
+		err := zone.DeleteObjectTags(ctx, bucket, object)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue
@@ -1576,13 +1631,13 @@ func (z *xlZones) DeleteObjectTag(ctx context.Context, bucket, object string) er
 	}
 }
 
-// GetObjectTag - get object tags from an existing object
-func (z *xlZones) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+// GetObjectTags - get object tags from an existing object
+func (z *xlZones) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
 	if z.SingleZone() {
-		return z.zones[0].GetObjectTag(ctx, bucket, object)
+		return z.zones[0].GetObjectTags(ctx, bucket, object)
 	}
 	for _, zone := range z.zones {
-		tags, err := zone.GetObjectTag(ctx, bucket, object)
+		tags, err := zone.GetObjectTags(ctx, bucket, object)
 		if err != nil {
 			if isErrBucketNotFound(err) {
 				continue

@@ -275,6 +275,9 @@ var (
 
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
+
+	// Deadline by which /minio/health/ready should respond.
+	globalReadyDeadline time.Duration
 	// Add new variable global values here.
 )
 

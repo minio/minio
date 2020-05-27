@@ -17,9 +17,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"math"
 	"net/http"
 
@@ -30,9 +28,7 @@ import (
 )
 
 // BucketObjectLockSys - map of bucket and retention configuration.
-type BucketObjectLockSys struct {
-	retentionMap map[string]objectlock.Retention
-}
+type BucketObjectLockSys struct{}
 
 // Get - Get retention configuration.
 func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, err error) {
@@ -45,20 +41,13 @@ func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, 
 		return r, nil
 	}
 
-	r, ok := sys.retentionMap[bucketName]
-	if ok {
-		return r, nil
-	}
-	configData, err := globalBucketMetadataSys.GetConfig(bucketName, objectLockConfig)
+	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucketName)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
+		if _, ok := err.(BucketObjectLockConfigNotFound); ok {
 			return r, nil
 		}
 		return r, err
-	}
-	config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
-	if err != nil {
-		return r, err
+
 	}
 	return config.ToRetention(), nil
 }
@@ -418,46 +407,5 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 
 // NewBucketObjectLockSys returns initialized BucketObjectLockSys
 func NewBucketObjectLockSys() *BucketObjectLockSys {
-	return &BucketObjectLockSys{
-		retentionMap: make(map[string]objectlock.Retention),
-	}
-}
-
-// Init - initializes bucket object lock config system for all buckets
-func (sys *BucketObjectLockSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// In gateway mode, we always fetch the bucket object lock configuration from the gateway backend.
-	// So, this is a no-op for gateway servers.
-	if globalIsGateway {
-		return nil
-	}
-
-	// Load BucketObjectLockSys once during boot.
-	return sys.load(buckets, objAPI)
-}
-
-func (sys *BucketObjectLockSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configData, err := globalBucketMetadataSys.GetConfig(bucket.Name, objectLockConfig)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
-			return err
-		}
-
-		retention := objectlock.Retention{}
-		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
-		if err != nil {
-			logger.LogIf(ctx, err)
-			sys.retentionMap[bucket.Name] = retention
-			continue
-		}
-		sys.retentionMap[bucket.Name] = config.ToRetention()
-	}
-	return nil
+	return &BucketObjectLockSys{}
 }

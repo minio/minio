@@ -81,7 +81,7 @@ var globalHandlers = []HandlerFunc{
 }
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(endpointZones EndpointZones, enableBucketQuotaOps bool) (http.Handler, error) {
+func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
@@ -95,7 +95,7 @@ func configureServerHandler(endpointZones EndpointZones, enableBucketQuotaOps bo
 	registerSTSRouter(router)
 
 	// Add Admin router, all APIs are enabled in server mode.
-	registerAdminRouter(router, true, true, enableBucketQuotaOps)
+	registerAdminRouter(router, true, true)
 
 	// Add healthcheck router
 	registerHealthCheckRouter(router)

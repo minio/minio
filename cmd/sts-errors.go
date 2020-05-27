@@ -27,9 +27,12 @@ import (
 )
 
 // writeSTSErrorRespone writes error headers
-func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, errCtxt error) {
-	err := stsErrCodes.ToSTSErr(errCode)
-	if err.Code == "InternalError" {
+func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, isErrCodeSTS bool, errCode STSErrorCode, errCtxt error) {
+	var err STSError
+	if isErrCodeSTS {
+		err = stsErrCodes.ToSTSErr(errCode)
+	}
+	if err.Code == "InternalError" || !isErrCodeSTS {
 		aerr := getAPIError(APIErrorCode(errCode))
 		if aerr.Code != "InternalError" {
 			err.Code = aerr.Code
@@ -81,7 +84,6 @@ type STSErrorCode int
 // Error codes, non exhaustive list - http://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithSAML.html
 const (
 	ErrSTSNone STSErrorCode = iota
-	ErrSTSInvalidService
 	ErrSTSAccessDenied
 	ErrSTSMissingParameter
 	ErrSTSInvalidParameterValue
