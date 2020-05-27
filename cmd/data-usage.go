@@ -154,6 +154,22 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 		return DataUsageInfo{}, err
 	}
 
+	// For forward compatibility reasons, we need to add this code.
+	if len(dataUsageInfo.BucketsUsage) == 0 {
+		dataUsageInfo.BucketsUsage = make(map[string]BucketUsageInfo, len(dataUsageInfo.BucketSizes))
+		for bucket, size := range dataUsageInfo.BucketSizes {
+			dataUsageInfo.BucketsUsage[bucket] = BucketUsageInfo{Size: size}
+		}
+	}
+
+	// For backward compatibility reasons, we need to add this code.
+	if len(dataUsageInfo.BucketSizes) == 0 {
+		dataUsageInfo.BucketSizes = make(map[string]uint64, len(dataUsageInfo.BucketsUsage))
+		for bucket, bui := range dataUsageInfo.BucketsUsage {
+			dataUsageInfo.BucketSizes[bucket] = bui.Size
+		}
+	}
+
 	return dataUsageInfo, nil
 }
 
