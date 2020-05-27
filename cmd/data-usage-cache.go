@@ -33,8 +33,6 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-const dataUsageHashLen = 8
-
 //go:generate msgp -file $GOFILE -unexported
 
 // dataUsageHash is the hash type used.
