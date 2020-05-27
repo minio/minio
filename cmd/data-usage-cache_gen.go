@@ -372,21 +372,17 @@ func (z *dataUsageEntry) Msgsize() (s int) {
 
 // DecodeMsg implements msgp.Decodable
 func (z *dataUsageHash) DecodeMsg(dc *msgp.Reader) (err error) {
-	{
-		var zb0001 uint64
-		zb0001, err = dc.ReadUint64()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = dataUsageHash(zb0001)
+	err = dc.ReadExactBytes((z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
 	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z dataUsageHash) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteUint64(uint64(z))
+func (z *dataUsageHash) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteBytes((z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
@@ -395,30 +391,26 @@ func (z dataUsageHash) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z dataUsageHash) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *dataUsageHash) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendUint64(o, uint64(z))
+	o = msgp.AppendBytes(o, (z)[:])
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *dataUsageHash) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 uint64
-		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = dataUsageHash(zb0001)
+	bts, err = msgp.ReadExactBytes(bts, (z)[:])
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
 	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z dataUsageHash) Msgsize() (s int) {
-	s = msgp.Uint64Size
+func (z *dataUsageHash) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize + (16 * (msgp.ByteSize))
 	return
 }
 

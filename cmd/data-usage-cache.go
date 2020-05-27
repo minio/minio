@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -28,18 +29,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
+	"github.com/dchest/siphash"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
 )
 
-const dataUsageHashLen = 8
+const dataUsageHashLen = 16
 
 //go:generate msgp -file $GOFILE -unexported
 
 // dataUsageHash is the hash type used.
-type dataUsageHash uint64
+type dataUsageHash [16]byte
 
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
@@ -80,7 +81,7 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 
 // mod returns true if the hash mod cycles == cycle.
 func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
-	return uint32(h)%cycles == cycle%cycles
+	return binary.LittleEndian.Uint32(h[:4])%cycles == cycle%cycles
 }
 
 // addChildString will add a child based on its name.
@@ -199,12 +200,12 @@ func (d *dataUsageCache) StringAll() string {
 // insert the hash into dst.
 // dst must be at least dataUsageHashLen bytes long.
 func (h dataUsageHash) bytes(dst []byte) {
-	binary.LittleEndian.PutUint64(dst, uint64(h))
+	copy(dst, h[:])
 }
 
 // String returns a human readable representation of the string.
 func (h dataUsageHash) String() string {
-	return fmt.Sprintf("%x", uint64(h))
+	return fmt.Sprintf("%s", hex.EncodeToString(h[:]))
 }
 
 // flatten all children of the root into the root element and return it.
@@ -369,7 +370,7 @@ func (d *dataUsageCache) save(ctx context.Context, store ObjectLayer, name strin
 // dataUsageCacheVer indicates the cache version.
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
-const dataUsageCacheVer = 1
+const dataUsageCacheVer = 2
 
 // serialize the contents of the cache.
 func (d *dataUsageCache) serialize() []byte {
@@ -401,8 +402,7 @@ func (d *dataUsageCache) serialize() []byte {
 
 	for k, v := range d.Cache {
 		// Put key
-		binary.LittleEndian.PutUint64(tmp[:dataUsageHashLen], uint64(k))
-		dst = append(dst, tmp[:8]...)
+		dst = append(dst, k[:]...)
 		tmp, err = v.MarshalMsg(tmp[:0])
 		if err != nil {
 			panic(err)
@@ -419,8 +419,11 @@ func (d *dataUsageCache) deserialize(b []byte) error {
 	if len(b) < 1 {
 		return io.ErrUnexpectedEOF
 	}
+	var skipHashes = false
 	switch b[0] {
 	case 1:
+		skipHashes = true
+	case dataUsageCacheVer:
 	default:
 		return fmt.Errorf("dataUsageCache: unknown version: %d", int(b[0]))
 	}
@@ -430,6 +433,10 @@ func (d *dataUsageCache) deserialize(b []byte) error {
 	b, err := d.Info.UnmarshalMsg(b)
 	if err != nil {
 		return err
+	}
+	if skipHashes {
+		d.Cache = make(map[dataUsageHash]dataUsageEntry)
+		return nil
 	}
 	cacheLen, n := binary.Uvarint(b)
 	if n <= 0 {
@@ -442,14 +449,15 @@ func (d *dataUsageCache) deserialize(b []byte) error {
 		if len(b) <= dataUsageHashLen {
 			return io.ErrUnexpectedEOF
 		}
-		k := binary.LittleEndian.Uint64(b[:dataUsageHashLen])
+		var k dataUsageHash
+		copy(k[:], b[:dataUsageHashLen])
 		b = b[dataUsageHashLen:]
 		var v dataUsageEntry
 		b, err = v.UnmarshalMsg(b)
 		if err != nil {
 			return err
 		}
-		d.Cache[dataUsageHash(k)] = v
+		d.Cache[k] = v
 	}
 	return nil
 }
@@ -469,7 +477,11 @@ func hashPath(data string) dataUsageHash {
 		data = strings.Trim(data, hashPathCutSet)
 	}
 	data = path.Clean(data)
-	return dataUsageHash(xxhash.Sum64String(data))
+	a, b := siphash.Hash128(0, 0, []byte(data))
+	var k dataUsageHash
+	binary.LittleEndian.PutUint64(k[:8], a)
+	binary.LittleEndian.PutUint64(k[8:], b)
+	return k
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -484,10 +496,8 @@ func (d dataUsageHashMap) MarshalMsg(b []byte) (o []byte, err error) {
 	sz := uint32(len(d)) * dataUsageHashLen
 	o = append(o, mbin32, byte(sz>>24), byte(sz>>16), byte(sz>>8), byte(sz))
 
-	var tmp [dataUsageHashLen]byte
 	for k := range d {
-		binary.LittleEndian.PutUint64(tmp[:], uint64(k))
-		o = append(o, tmp[:]...)
+		o = append(o, k[:]...)
 	}
 	return
 }
@@ -508,8 +518,10 @@ func (d *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 
 	var dst = make(dataUsageHashMap, len(hashes)/dataUsageHashLen)
+	var k dataUsageHash
 	for len(hashes) >= dataUsageHashLen {
-		dst[dataUsageHash(binary.LittleEndian.Uint64(hashes[:dataUsageHashLen]))] = struct{}{}
+		copy(k[:], hashes[:dataUsageHashLen])
+		dst[k] = struct{}{}
 		hashes = hashes[dataUsageHashLen:]
 	}
 	*d = dst
@@ -525,14 +537,14 @@ func (d *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
 		return
 	}
 	var dst = make(dataUsageHashMap, zb0001)
-	var tmp [8]byte
+	var k dataUsageHash
 	for i := uint32(0); i < zb0001; i++ {
-		_, err = io.ReadFull(dc, tmp[:])
+		_, err = io.ReadFull(dc, k[:])
 		if err != nil {
 			err = msgp.WrapError(err, "dataUsageHashMap")
 			return
 		}
-		dst[dataUsageHash(binary.LittleEndian.Uint64(tmp[:]))] = struct{}{}
+		dst[k] = struct{}{}
 	}
 	return nil
 }
@@ -542,10 +554,8 @@ func (d dataUsageHashMap) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	var tmp [dataUsageHashLen]byte
 	for k := range d {
-		binary.LittleEndian.PutUint64(tmp[:], uint64(k))
-		_, err = en.Write(tmp[:])
+		_, err = en.Write(k[:])
 		if err != nil {
 			err = msgp.WrapError(err)
 			return

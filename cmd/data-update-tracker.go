@@ -46,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 1
+	dataUpdateTrackerVersion      = 2
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 
 	// Reset bloom filters every n cycle
