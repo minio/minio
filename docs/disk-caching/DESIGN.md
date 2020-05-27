@@ -20,7 +20,7 @@ minio gateway <name> -h
 ...
 ...
 
-  7. Start MinIO gateway to s3 with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24',
+  Start MinIO gateway to s3 with edge caching enabled on '/mnt/drive1', '/mnt/drive2' and '/mnt/export1 ... /mnt/export24',
      exclude all objects under 'mybucket', exclude all objects with '.pdf' as extension. Cache only those objects accessed atleast 3 times. Garbage collection triggers in at high water mark (i.e. cache disk usage reaches 90% of cache quota) or at 72% and evicts oldest objects by access time until low watermark is reached ( 70% of cache quota) , i.e. 63% of disk usage.
      $ export MINIO_CACHE_DRIVES="/mnt/drive1,/mnt/drive2,/mnt/export{1..24}"
      $ export MINIO_CACHE_EXCLUDE="mybucket/*,*.pdf"
@@ -30,6 +30,20 @@ minio gateway <name> -h
      $ export MINIO_CACHE_WATERMARK_HIGH=90
 
      $ minio gateway s3
+```
+
+### Run MinIO gateway with cache on Docker Container
+### Stable
+Cache drives need to have `strictatime` or `relatime` enabled for disk caching feature. In this example, mount the xfs file system on /mnt/cache with `strictatime` or `relatime` enabled.
+
+```
+truncate -s 4G /tmp/data
+mkfs.xfs /tmp/data     # build xfs filesystem on /tmp/data
+sudo mkdir /mnt/cache  # create mount dir
+sudo mount -o relatime /tmp/data /mnt/cache # mount xfs on /mnt/cache with atime.
+docker pull minio/minio
+docker run --net=host -e MINIO_ACCESS_KEY={s3-access-key} -e MINIO_SECRET_KEY={s3-secret-key} -e MINIO_CACHE_DRIVES=/cache -e MINIO_CACHE_QUOTA=99 -e MINIO_CACHE_AFTER=0 -e MINIO_CACHE_WATERMARK_LOW=90 -e MINIO_CACHE_WATERMARK_HIGH=95  -v /mnt/cache:/cache  minio/minio:latest gateway s3
+
 ```
 
 ## Assumptions
