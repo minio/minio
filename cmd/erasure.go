@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"sync"
 
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/minio/cmd/logger"
@@ -25,7 +26,7 @@ import (
 
 // Erasure - erasure encoding details.
 type Erasure struct {
-	encoder                  reedsolomon.Encoder
+	encoder                  func() reedsolomon.Encoder
 	dataBlocks, parityBlocks int
 	blockSize                int64
 }
@@ -37,10 +38,29 @@ func NewErasure(ctx context.Context, dataBlocks, parityBlocks int, blockSize int
 		parityBlocks: parityBlocks,
 		blockSize:    blockSize,
 	}
-	e.encoder, err = reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(int(e.ShardSize())))
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return e, err
+
+	// Check the parameters for sanity now.
+	if dataBlocks <= 0 || parityBlocks <= 0 {
+		return e, reedsolomon.ErrInvShardNum
+	}
+
+	if dataBlocks+parityBlocks > 256 {
+		return e, reedsolomon.ErrMaxShardNum
+	}
+
+	// Encoder when needed.
+	var enc reedsolomon.Encoder
+	var once sync.Once
+	e.encoder = func() reedsolomon.Encoder {
+		once.Do(func() {
+			e, err := reedsolomon.New(dataBlocks, parityBlocks, reedsolomon.WithAutoGoroutines(int(e.ShardSize())))
+			if err != nil {
+				// Error conditions should be checked above.
+				panic(err)
+			}
+			enc = e
+		})
+		return enc
 	}
 	return
 }
@@ -51,12 +71,12 @@ func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error)
 	if len(data) == 0 {
 		return make([][]byte, e.dataBlocks+e.parityBlocks), nil
 	}
-	encoded, err := e.encoder.Split(data)
+	encoded, err := e.encoder().Split(data)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
-	if err = e.encoder.Encode(encoded); err != nil {
+	if err = e.encoder().Encode(encoded); err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
@@ -67,8 +87,25 @@ func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error)
 // It only decodes the data blocks but does not verify them.
 // It returns an error if the decoding failed.
 func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
+	var isZero = 0
+	for _, b := range data[:] {
+		if len(b) == 0 {
+			isZero++
+			break
+		}
+	}
+	if isZero == 0 || isZero == len(data) {
+		// If all are zero, payload is 0 bytes.
+		return nil
+	}
+	return e.encoder().ReconstructData(data)
+}
+
+// DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
+// It returns an error if the decoding failed.
+func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) error {
 	needsReconstruction := false
-	for _, b := range data[:e.dataBlocks] {
+	for _, b := range data {
 		if b == nil {
 			needsReconstruction = true
 			break
@@ -77,13 +114,7 @@ func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	if !needsReconstruction {
 		return nil
 	}
-	return e.encoder.ReconstructData(data)
-}
-
-// DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
-// It returns an error if the decoding failed.
-func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) error {
-	if err := e.encoder.Reconstruct(data); err != nil {
+	if err := e.encoder().Reconstruct(data); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}

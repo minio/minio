@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"path"
 	"sync"
 
 	"strings"
@@ -80,18 +79,10 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 	}
 }
 
-func deleteBucketMetadata(ctx context.Context, bucket string, objAPI ObjectLayer) {
-	// Delete bucket access policy, if present - ignore any errors.
-	removePolicyConfig(ctx, objAPI, bucket)
-
-	// Delete notification config, if present - ignore any errors.
-	removeNotificationConfig(ctx, objAPI, bucket)
-}
-
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
-		storage, err := newPosix(endpoint.Path)
+		storage, err := newPosix(endpoint.Path, endpoint.Host)
 		if err != nil {
 			return nil, err
 		}
@@ -140,17 +131,6 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 	}
 	err := delFunc(retainSlash(pathJoin(dirPath)))
 	return err
-}
-
-// Removes notification.xml for a given bucket, only used during DeleteBucket.
-func removeNotificationConfig(ctx context.Context, objAPI ObjectLayer, bucket string) error {
-	// Verify bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-
-	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, ncPath)
 }
 
 func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, tpool *TreeWalkPool, listDir ListDirFunc, getObjInfo func(context.Context, string, string) (ObjectInfo, error), getObjectInfoDirs ...func(context.Context, string, string) (ObjectInfo, error)) (loi ListObjectsInfo, err error) {
@@ -417,27 +397,4 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	// Success.
 	return result, nil
-}
-
-// Fetch the histogram interval corresponding
-// to the passed object size.
-func objSizeToHistoInterval(usize uint64) string {
-	size := int64(usize)
-
-	var interval objectHistogramInterval
-	for _, interval = range ObjectsHistogramIntervals {
-		var cond1, cond2 bool
-		if size >= interval.start || interval.start == -1 {
-			cond1 = true
-		}
-		if size <= interval.end || interval.end == -1 {
-			cond2 = true
-		}
-		if cond1 && cond2 {
-			return interval.name
-		}
-	}
-
-	// This would be the last element of histogram intervals
-	return interval.name
 }

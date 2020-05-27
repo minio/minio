@@ -17,12 +17,13 @@
 package cmd
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"path"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/env"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
@@ -38,6 +39,9 @@ const (
 // to enforce total quota for the specified bucket.
 func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketQuotaConfig")
+
+	defer logger.AuditLog(w, r, "PutBucketQuotaConfig", mustGetClaimsFromToken(r))
+
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
@@ -57,30 +61,21 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	defer r.Body.Close()
+
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
-	quotaCfg, err := parseBucketQuota(data)
-	if err != nil {
+
+	if _, err = parseBucketQuota(bucket, data); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketQuotaConfigFile)
-	if err = saveConfig(ctx, objectAPI, configFile, data); err != nil {
+
+	if err = globalBucketMetadataSys.Update(bucket, bucketQuotaConfigFile, data); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
-	}
-	if quotaCfg.Quota > 0 {
-		globalBucketQuotaSys.Set(bucket, quotaCfg)
-		globalNotificationSys.PutBucketQuotaConfig(ctx, bucket, quotaCfg)
-
-	} else {
-		globalBucketQuotaSys.Remove(bucket)
-		globalNotificationSys.RemoveBucketQuotaConfig(ctx, bucket)
-
 	}
 
 	// Write success response.
@@ -90,6 +85,8 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 // GetBucketQuotaConfigHandler - gets bucket quota configuration
 func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketQuotaConfig")
+
+	defer logger.AuditLog(w, r, "GetBucketQuotaConfig", mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketQuotaAdminAction)
 	if objectAPI == nil {
@@ -103,48 +100,19 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketQuotaConfigFile)
-	configData, err := readConfig(ctx, objectAPI, configFile)
+
+	config, err := globalBucketMetadataSys.GetQuotaConfig(bucket)
 	if err != nil {
-		if err != errConfigNotFound {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, BucketQuotaConfigNotFound{Bucket: bucket}), r.URL)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	configData, err := json.Marshal(config)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
 	// Write success response.
 	writeSuccessResponseJSON(w, configData)
-}
-
-// RemoveBucketQuotaConfigHandler - removes Bucket quota configuration.
-// ----------
-// Removes quota configuration on the specified bucket.
-func (a adminAPIHandlers) RemoveBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RemoveBucketQuotaConfig")
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
-	if objectAPI == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketQuotaConfigFile)
-	if err := deleteConfig(ctx, objectAPI, configFile); err != nil {
-		if err != errConfigNotFound {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, BucketQuotaConfigNotFound{Bucket: bucket}), r.URL)
-		return
-	}
-	globalBucketQuotaSys.Remove(bucket)
-	globalNotificationSys.RemoveBucketQuotaConfig(ctx, bucket)
-	// Write success response.
-	writeSuccessNoContent(w)
 }

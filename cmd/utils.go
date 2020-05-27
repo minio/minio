@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -450,25 +449,12 @@ func ToS3ETag(etag string) string {
 	return etag
 }
 
-type dialContext func(ctx context.Context, network, address string) (net.Conn, error)
-
-func newCustomDialContext(dialTimeout, dialKeepAlive time.Duration) dialContext {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout:   dialTimeout,
-			KeepAlive: dialKeepAlive,
-		}
-
-		return dialer.DialContext(ctx, network, addr)
-	}
-}
-
 func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           newCustomDialContext(dialTimeout, 15*time.Second),
+		DialContext:           xhttp.NewCustomDialContext(dialTimeout, 15*time.Second),
 		MaxIdleConnsPerHost:   16,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       1 * time.Minute,
@@ -592,13 +578,6 @@ func restQueries(keys ...string) []string {
 	return accumulator
 }
 
-// Reverse the input order of a slice of string
-func reverseStringSlice(input []string) {
-	for left, right := 0, len(input)-1; left < right; left, right = left+1, right-1 {
-		input[left], input[right] = input[right], input[left]
-	}
-}
-
 // lcp finds the longest common prefix of the input strings.
 // It compares by bytes instead of runes (Unicode code points).
 // It's up to the caller to do Unicode normalization if desired
@@ -651,4 +630,61 @@ func iamPolicyClaimNameOpenID() string {
 
 func iamPolicyClaimNameSA() string {
 	return "sa-policy"
+}
+
+// timedValue contains a synchronized value that is considered valid
+// for a specific amount of time.
+// An Update function must be set to provide an updated value when needed.
+type timedValue struct {
+	// Update must return an updated value.
+	// If an error is returned the cached value is not set.
+	// Only one caller will call this function at any time, others will be blocking.
+	// The returned value can no longer be modified once returned.
+	// Should be set before calling Get().
+	Update func() (interface{}, error)
+
+	// TTL for a cached value.
+	// If not set 1 second TTL is assumed.
+	// Should be set before calling Get().
+	TTL time.Duration
+
+	// Once can be used to initialize values for lazy initialization.
+	// Should be set before calling Get().
+	Once sync.Once
+
+	// Managed values.
+	value      interface{}
+	lastUpdate time.Time
+	mu         sync.Mutex
+}
+
+// Get will return a cached value or fetch a new one.
+// If the Update function returns an error the value is forwarded as is and not cached.
+func (t *timedValue) Get() (interface{}, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.TTL <= 0 {
+		t.TTL = time.Second
+	}
+	if t.value != nil {
+		if time.Since(t.lastUpdate) < t.TTL {
+			v := t.value
+			return v, nil
+		}
+		t.value = nil
+	}
+	v, err := t.Update()
+	if err != nil {
+		return v, err
+	}
+	t.value = v
+	t.lastUpdate = time.Now()
+	return v, nil
+}
+
+// Invalidate the value in the cache.
+func (t *timedValue) Invalidate() {
+	t.mu.Lock()
+	t.value = nil
+	t.mu.Unlock()
 }

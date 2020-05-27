@@ -28,7 +28,7 @@ import (
 func (e Erasure) Heal(ctx context.Context, readers []io.ReaderAt, writers []io.Writer, size int64) error {
 	r, w := io.Pipe()
 	go func() {
-		if err := e.Decode(ctx, w, readers, 0, size, size); err != nil {
+		if err := e.Decode(ctx, w, readers, 0, size, size, nil); err != nil {
 			w.CloseWithError(err)
 			return
 		}

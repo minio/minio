@@ -100,6 +100,9 @@ const (
 	ErrNoSuchBucketLifecycle
 	ErrNoSuchLifecycleConfiguration
 	ErrNoSuchBucketSSEConfig
+	ErrNoSuchCORSConfiguration
+	ErrNoSuchWebsiteConfiguration
+	ErrReplicationConfigurationNotFoundError
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -456,7 +459,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrInvalidAccessKeyID: {
 		Code:           "InvalidAccessKeyId",
-		Description:    "The access key ID you provided does not exist in our records.",
+		Description:    "The Access Key Id you provided does not exist in our records.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrInvalidBucketName: {
@@ -792,6 +795,21 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidBucketState",
 		Description:    "Object Lock configuration cannot be enabled on existing buckets",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrNoSuchCORSConfiguration: {
+		Code:           "NoSuchCORSConfiguration",
+		Description:    "The CORS configuration does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrNoSuchWebsiteConfiguration: {
+		Code:           "NoSuchWebsiteConfiguration",
+		Description:    "The specified bucket does not have a website configuration",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationConfigurationNotFoundError: {
+		Code:           "ReplicationConfigurationNotFoundError",
+		Description:    "The replication configuration was not found",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchObjectLockConfiguration: {
 		Code:           "NoSuchObjectLockConfiguration",
@@ -1649,7 +1667,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
-	// Verify if the underlying error is signature mismatch.
+
 	switch err {
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
@@ -1808,6 +1826,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchLifecycleConfiguration
 	case BucketSSEConfigNotFound:
 		apiErr = ErrNoSuchBucketSSEConfig
+	case BucketTaggingNotFound:
+		apiErr = ErrBucketTaggingNotFound
+	case BucketObjectLockConfigNotFound:
+		apiErr = ErrObjectLockConfigurationNotFound
 	case BucketQuotaConfigNotFound:
 		apiErr = ErrAdminNoSuchQuotaConfiguration
 	case BucketQuotaExceeded:

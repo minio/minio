@@ -17,15 +17,11 @@
 package cmd
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -37,56 +33,30 @@ import (
 )
 
 // PolicySys - policy subsystem.
-type PolicySys struct {
-	sync.RWMutex
-	bucketPolicyMap map[string]*policy.Policy
-}
+type PolicySys struct{}
 
-// Set - sets policy to given bucket name.  If policy is empty, existing policy is removed.
-func (sys *PolicySys) Set(bucketName string, policy *policy.Policy) {
+// Get returns stored bucket policy
+func (sys *PolicySys) Get(bucket string) (*policy.Policy, error) {
 	if globalIsGateway {
-		// Set policy is a non-op under gateway mode.
-		return
+		objAPI := newObjectLayerFn()
+		if objAPI == nil {
+			return nil, errServerNotInitialized
+		}
+		return objAPI.GetBucketPolicy(GlobalContext, bucket)
 	}
-
-	sys.Lock()
-	defer sys.Unlock()
-
-	if policy.IsEmpty() {
-		delete(sys.bucketPolicyMap, bucketName)
-	} else {
-		sys.bucketPolicyMap[bucketName] = policy
-	}
-}
-
-// Remove - removes policy for given bucket name.
-func (sys *PolicySys) Remove(bucketName string) {
-	sys.Lock()
-	defer sys.Unlock()
-
-	delete(sys.bucketPolicyMap, bucketName)
+	return globalBucketMetadataSys.GetPolicyConfig(bucket)
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *PolicySys) IsAllowed(args policy.Args) bool {
-	if globalIsGateway {
-		// When gateway is enabled, no cached value
-		// is used to validate bucket policies.
-		objAPI := newObjectLayerFn()
-		if objAPI != nil {
-			config, err := objAPI.GetBucketPolicy(GlobalContext, args.BucketName)
-			if err == nil {
-				return config.IsAllowed(args)
-			}
-		}
-	} else {
-		sys.RLock()
-		defer sys.RUnlock()
+	p, err := sys.Get(args.BucketName)
+	if err == nil {
+		return p.IsAllowed(args)
+	}
 
-		// If policy is available for given bucket, check the policy.
-		if p, found := sys.bucketPolicyMap[args.BucketName]; found {
-			return p.IsAllowed(args)
-		}
+	// Log unhandled errors.
+	if _, ok := err.(BucketPolicyNotFound); !ok {
+		logger.LogIf(GlobalContext, err)
 	}
 
 	// As policy is not available for given bucket name, returns IsOwner i.e.
@@ -94,56 +64,9 @@ func (sys *PolicySys) IsAllowed(args policy.Args) bool {
 	return args.IsOwner
 }
 
-// Loads policies for all buckets into PolicySys.
-func (sys *PolicySys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
-	for _, bucket := range buckets {
-		config, err := getPolicyConfig(objAPI, bucket.Name)
-		if err != nil {
-			if _, ok := err.(BucketPolicyNotFound); ok {
-				continue
-			}
-			return err
-		}
-		// This part is specifically written to handle migration
-		// when the Version string is empty, this was allowed
-		// in all previous minio releases but we need to migrate
-		// those policies by properly setting the Version string
-		// from now on.
-		if config.Version == "" {
-			logger.Info("Found in-consistent bucket policies, Migrating them for Bucket: (%s)", bucket.Name)
-			config.Version = policy.DefaultVersion
-
-			if err = savePolicyConfig(GlobalContext, objAPI, bucket.Name, config); err != nil {
-				logger.LogIf(GlobalContext, err)
-				return err
-			}
-		}
-		sys.Set(bucket.Name, config)
-	}
-	return nil
-}
-
-// Init - initializes policy system from policy.json of all buckets.
-func (sys *PolicySys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// In gateway mode, we don't need to load the policies
-	// from the backend.
-	if globalIsGateway {
-		return nil
-	}
-
-	// Load PolicySys once during boot.
-	return sys.load(buckets, objAPI)
-}
-
 // NewPolicySys - creates new policy system.
 func NewPolicySys() *PolicySys {
-	return &PolicySys{
-		bucketPolicyMap: make(map[string]*policy.Policy),
-	}
+	return &PolicySys{}
 }
 
 func getConditionValues(r *http.Request, lc string, username string, claims map[string]interface{}) map[string][]string {
@@ -224,50 +147,6 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 	}
 
 	return args
-}
-
-// getPolicyConfig - get policy config for given bucket name.
-func getPolicyConfig(objAPI ObjectLayer, bucketName string) (*policy.Policy, error) {
-	// Construct path to policy.json for the given bucket.
-	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
-
-	configData, err := readConfig(GlobalContext, objAPI, configFile)
-	if err != nil {
-		if err == errConfigNotFound {
-			err = BucketPolicyNotFound{Bucket: bucketName}
-		}
-
-		return nil, err
-	}
-
-	return policy.ParseConfig(bytes.NewReader(configData), bucketName)
-}
-
-func savePolicyConfig(ctx context.Context, objAPI ObjectLayer, bucketName string, bucketPolicy *policy.Policy) error {
-	data, err := json.Marshal(bucketPolicy)
-	if err != nil {
-		return err
-	}
-
-	// Construct path to policy.json for the given bucket.
-	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
-
-	return saveConfig(ctx, objAPI, configFile, data)
-}
-
-func removePolicyConfig(ctx context.Context, objAPI ObjectLayer, bucketName string) error {
-	// Construct path to policy.json for the given bucket.
-	configFile := path.Join(bucketConfigPrefix, bucketName, bucketPolicyConfig)
-
-	if err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile); err != nil {
-		if _, ok := err.(ObjectNotFound); ok {
-			return BucketPolicyNotFound{Bucket: bucketName}
-		}
-
-		return err
-	}
-
-	return nil
 }
 
 // PolicyToBucketAccessPolicy - converts policy.Policy to minio-go/policy.BucketAccessPolicy.

@@ -46,13 +46,14 @@ const (
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
+
+// different kinds of test failures
 const (
 	PASS = "PASS" // Indicate that a test passed
 	FAIL = "FAIL" // Indicate that a test failed
-	NA   = "NA"   // Indicate that a test is not applicable
 )
 
-type ErrorResponse struct {
+type errorResponse struct {
 	XMLName    xml.Name `xml:"Error" json:"-"`
 	Code       string
 	Message    string
@@ -250,7 +251,7 @@ func testPresignedPutInvalidHash(s3Client *s3.S3) {
 	defer resp.Body.Close()
 
 	dec := xml.NewDecoder(resp.Body)
-	errResp := ErrorResponse{}
+	errResp := errorResponse{}
 	err = dec.Decode(&errResp)
 	if err != nil {
 		failureLog(function, args, startTime, "", "AWS SDK Go unmarshalling xml failed", err).Fatal()
@@ -625,7 +626,7 @@ func testObjectTagging(s3Client *s3.S3) {
 
 func testObjectTaggingErrors(s3Client *s3.S3) {
 	startTime := time.Now()
-	function := "testObjectTagging"
+	function := "testObjectTaggingErrors"
 	bucket := randString(60, rand.NewSource(time.Now().UnixNano()), "aws-sdk-go-test-")
 	object := randString(60, rand.NewSource(time.Now().UnixNano()), "")
 	args := map[string]interface{}{

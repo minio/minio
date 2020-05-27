@@ -24,6 +24,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	ErrInvalidFSOSyncValue = newErrFn(
+		"Invalid O_SYNC value",
+		"Please check the passed value",
+		"Can only accept `on` and `off` values. To enable O_SYNC for fs backend, set this value to `on`",
+	)
+
 	ErrInvalidDomainValue = newErrFn(
 		"Invalid domain value",
 		"Please check the passed value",
@@ -172,6 +178,12 @@ Example 1:
 	ErrUnsupportedBackend = newErrFn(
 		"Unable to write to the backend",
 		"Please ensure your disk supports O_DIRECT",
+		"",
+	)
+
+	ErrCorruptedBackend = newErrFn(
+		"Unable to use the specified backend, pre-existing content detected",
+		"Please ensure your disk mount does not have any pre-existing content",
 		"",
 	)
 

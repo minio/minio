@@ -27,7 +27,6 @@ import (
 
 const (
 	bgLifecycleInterval = 24 * time.Hour
-	bgLifecycleTick     = time.Hour
 )
 
 // initDailyLifecycle starts the routine that receives the daily
@@ -58,12 +57,15 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 
 	for _, bucket := range buckets {
 		// Check if the current bucket has a configured lifecycle policy, skip otherwise
-		l, ok := globalLifecycleSys.Get(bucket.Name)
-		if !ok {
+		l, err := globalLifecycleSys.Get(bucket.Name)
+		if err != nil {
+			if _, ok := err.(BucketLifecycleNotFound); !ok {
+				logger.LogIf(ctx, err)
+			}
 			continue
 		}
 
-		_, bucketHasLockConfig := globalBucketObjectLockConfig.Get(bucket.Name)
+		rcfg, _ := globalBucketObjectLockSys.Get(bucket.Name)
 
 		// Calculate the common prefix of all lifecycle rules
 		var prefixes []string
@@ -83,13 +85,13 @@ func lifecycleRound(ctx context.Context, objAPI ObjectLayer) error {
 		for {
 			var objects []string
 			for obj := range objInfoCh {
-				if len(objects) == maxObjectList {
+				if len(objects) == maxDeleteList {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
 				// Find the action that need to be executed
 				if l.ComputeAction(obj.Name, obj.UserTags, obj.ModTime) == lifecycle.DeleteAction {
-					if bucketHasLockConfig && enforceRetentionForDeletion(ctx, obj) {
+					if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 						continue
 					}
 					objects = append(objects, obj.Name)

@@ -58,7 +58,7 @@ const (
 
 	// S3 object tagging
 	AmzObjectTagging = "X-Amz-Tagging"
-	AmzTagCount      = "X-Amz-Tag-Count"
+	AmzTagCount      = "x-amz-tagging-count"
 	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
 	// S3 extensions
@@ -79,6 +79,9 @@ const (
 
 	// Multipart parts count
 	AmzMpPartsCount = "x-amz-mp-parts-count"
+
+	// Object date/time of expiration
+	AmzExpiration = "x-amz-expiration"
 
 	// Dummy putBucketACL
 	AmzACL = "x-amz-acl"

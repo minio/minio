@@ -87,7 +87,9 @@ type posix struct {
 	activeIOCount    int32
 
 	diskPath string
-	pool     sync.Pool
+	hostname string
+
+	pool sync.Pool
 
 	diskMount bool // indicates if the path is an actual mount.
 
@@ -110,10 +112,7 @@ func checkPathLength(pathName string) error {
 
 	// Disallow more than 1024 characters on windows, there
 	// are no known name_max limits on Windows.
-	if runtime.GOOS == "windows" {
-		if len(pathName) <= 1024 {
-			return nil
-		}
+	if runtime.GOOS == "windows" && len(pathName) > 1024 {
 		return errFileNameTooLong
 	}
 
@@ -130,6 +129,10 @@ func checkPathLength(pathName string) error {
 		switch p {
 		case '/':
 			count = 0 // Reset
+		case '\\':
+			if runtime.GOOS == globalWindowsOSName {
+				count = 0
+			}
 		default:
 			count++
 			if count > 255 {
@@ -140,7 +143,7 @@ func checkPathLength(pathName string) error {
 	return nil
 }
 
-func getValidPath(path string) (string, error) {
+func getValidPath(path string, requireDirectIO bool) (string, error) {
 	if path == "" {
 		return path, errInvalidArgument
 	}
@@ -181,9 +184,16 @@ func getValidPath(path string) (string, error) {
 	fn := pathJoin(path, ".writable-check-"+hex.EncodeToString(rnd[:])+".tmp")
 	defer os.Remove(fn)
 
+	var file *os.File
+
+	if requireDirectIO {
+		file, err = disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
+	} else {
+		file, err = os.OpenFile(fn, os.O_CREATE|os.O_EXCL, 0666)
+	}
+
 	// open file in direct I/O and use default umask, this also verifies
 	// if direct i/o failed.
-	file, err := disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		if isSysErrInvalidArg(err) {
 			return path, errUnsupportedDisk
@@ -220,9 +230,9 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(path string) (*posix, error) {
+func newPosix(path string, hostname string) (*posix, error) {
 	var err error
-	if path, err = getValidPath(path); err != nil {
+	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
 	}
 	_, err = os.Stat(path)
@@ -231,6 +241,7 @@ func newPosix(path string) (*posix, error) {
 	}
 	p := &posix{
 		diskPath: path,
+		hostname: hostname,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -331,8 +342,8 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-func (*posix) Hostname() string {
-	return ""
+func (s *posix) Hostname() string {
+	return s.hostname
 }
 
 func (s *posix) Close() error {
@@ -344,13 +355,8 @@ func (s *posix) IsOnline() bool {
 	return true
 }
 
-func isQuitting(endCh chan struct{}) bool {
-	select {
-	case <-endCh:
-		return true
-	default:
-		return false
-	}
+func (s *posix) IsLocal() bool {
+	return true
 }
 
 func (s *posix) waitForLowActiveIO() {
@@ -377,7 +383,15 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 			return 0, nil
 		}
 
-		return meta.Stat.Size, nil
+		// we don't necessarily care about the names
+		// of bucket and object, only interested in size.
+		// so use some dummy names.
+		size, err := meta.ToObjectInfo("dummy", "dummy").GetActualSize()
+		if err != nil {
+			return 0, errSkipFile
+		}
+		return size, nil
+
 	})
 	if err != nil {
 		return dataUsageInfo, err

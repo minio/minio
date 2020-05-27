@@ -57,6 +57,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio-go/v6/pkg/signer"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -65,6 +66,18 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	// disable ENVs which interfere with tests.
+	for _, env := range []string{
+		crypto.EnvAutoEncryptionLegacy,
+		crypto.EnvKMSAutoEncryption,
+		config.EnvAccessKey,
+		config.EnvAccessKeyOld,
+		config.EnvSecretKey,
+		config.EnvSecretKeyOld,
+	} {
+		os.Unsetenv(env)
+	}
+
 	// Set as non-distributed.
 	globalIsDistXL = false
 
@@ -161,33 +174,7 @@ func prepareFS() (ObjectLayer, string, error) {
 }
 
 func prepareXLSets32(ctx context.Context) (ObjectLayer, []string, error) {
-	fsDirs1, err := getRandomDisks(16)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	endpoints1 := mustGetNewEndpoints(fsDirs1...)
-	fsDirs2, err := getRandomDisks(16)
-	if err != nil {
-		removeRoots(fsDirs1)
-		return nil, nil, err
-	}
-	endpoints2 := mustGetNewEndpoints(fsDirs2...)
-
-	endpoints := append(endpoints1, endpoints2...)
-	fsDirs := append(fsDirs1, fsDirs2...)
-	storageDisks, format, err := waitForFormatXL(true, endpoints, 1, 2, 16, "")
-	if err != nil {
-		removeRoots(fsDirs)
-		return nil, nil, err
-	}
-
-	objAPI, err := newXLSets(ctx, endpoints, storageDisks, format)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return objAPI, fsDirs, nil
+	return prepareXL(ctx, 32)
 }
 
 func prepareXL(ctx context.Context, nDisks int) (ObjectLayer, []string, error) {
@@ -222,6 +209,8 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
 type TestErrHandler interface {
+	Log(args ...interface{})
+	Logf(format string, args ...interface{})
 	Error(args ...interface{})
 	Errorf(format string, args ...interface{})
 	Failed() bool
@@ -322,7 +311,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
-	httpHandler, err := configureServerHandler(testServer.Disks, false)
+	httpHandler, err := configureServerHandler(testServer.Disks)
 	if err != nil {
 		t.Fatalf("Failed to configure one of the RPC services <ERROR> %s", err)
 	}
@@ -340,27 +329,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
 
-	globalConfigSys = NewConfigSys()
+	newAllSubsystems()
 
-	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(ctx, objLayer)
-
-	buckets, err := objLayer.ListBuckets(ctx)
-	if err != nil {
-		t.Fatalf("Unable to list buckets on backend %s", err)
-	}
-
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(buckets, objLayer)
-
-	globalNotificationSys = NewNotificationSys(testServer.Disks)
-	globalNotificationSys.Init(buckets, objLayer)
-
-	globalLifecycleSys = NewLifecycleSys()
-	globalLifecycleSys.Init(buckets, objLayer)
-
-	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
-	globalBucketSSEConfigSys.Init(buckets, objLayer)
+	initAllSubsystems(objLayer)
 
 	return testServer
 }
@@ -1583,16 +1554,9 @@ func newTestObjectLayer(ctx context.Context, endpointZones EndpointZones) (newOb
 		return nil, err
 	}
 
-	globalConfigSys = NewConfigSys()
+	newAllSubsystems()
 
-	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(GlobalContext, z)
-
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(nil, z)
-
-	globalNotificationSys = NewNotificationSys(endpointZones)
-	globalNotificationSys.Init(nil, z)
+	initAllSubsystems(z)
 
 	return z, nil
 }
@@ -1636,11 +1600,15 @@ func removeDiskN(disks []string, n int) {
 // initialies the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
+	newAllSubsystems()
+
+	initAllSubsystems(obj)
+
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
@@ -1685,8 +1653,6 @@ func prepareTestBackend(ctx context.Context, instanceType string) (ObjectLayer, 
 //   policyFunc    - function to return bucketPolicy statement which would permit the anonymous request to be served.
 // The test works in 2 steps, here is the description of the steps.
 //   STEP 1: Call the handler with the unsigned HTTP request (anonReq), assert for the `ErrAccessDenied` error response.
-//   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call
-//           the handler again to verify its success.
 func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
 	anonReq *http.Request, bucketPolicy *policy.Policy) {
 
@@ -1711,7 +1677,6 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// creating 2 read closer (to set as request body) from the body content.
 	readerOne := ioutil.NopCloser(bytes.NewBuffer(buf))
 	readerTwo := ioutil.NopCloser(bytes.NewBuffer(buf))
-	readerThree := ioutil.NopCloser(bytes.NewBuffer(buf))
 
 	anonReq.Body = readerOne
 
@@ -1747,39 +1712,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		}
 	}
 
-	if err := obj.SetBucketPolicy(context.Background(), bucketName, bucketPolicy); err != nil {
-		t.Fatalf("unexpected error. %v", err)
-	}
-	globalPolicySys.Set(bucketName, bucketPolicy)
-	defer globalPolicySys.Remove(bucketName)
-
-	// now call the handler again with the unsigned/anonymous request, it should be accepted.
-	rec = httptest.NewRecorder()
-
-	anonReq.Body = readerTwo
-
-	apiRouter.ServeHTTP(rec, anonReq)
-
-	var expectedHTTPStatus int
-	// expectedHTTPStatus returns 204 (http.StatusNoContent) on success.
-	if testName == "TestAPIDeleteObjectHandler" || testName == "TestAPIAbortMultipartHandler" {
-		expectedHTTPStatus = http.StatusNoContent
-	} else if strings.Contains(testName, "BucketPolicyHandler") || testName == "ListBucketsHandler" {
-		// BucketPolicyHandlers and `ListBucketsHandler` doesn't support anonymous request, policy changes should allow unsigned requests.
-		expectedHTTPStatus = http.StatusForbidden
-	} else {
-		// other API handlers return 200OK on success.
-		expectedHTTPStatus = http.StatusOK
-	}
-
-	// compare the HTTP response status code with the expected one.
-	if rec.Code != expectedHTTPStatus {
-		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d",
-			expectedHTTPStatus, rec.Code)))
-	}
-
 	// test for unknown auth case.
-	anonReq.Body = readerThree
+	anonReq.Body = readerTwo
 	// Setting the `Authorization` header to a random value so that the signature falls into unknown auth case.
 	anonReq.Header.Set("Authorization", "nothingElse")
 	// initialize new response recorder.
@@ -1880,6 +1814,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
+
 	bucketFS, fsAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
 		t.Fatalf("Initialization of API handler tests failed: <ERROR> %s", err)
@@ -1891,17 +1826,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
 
-	newAllSubsystems()
-
-	globalIAMSys.Init(GlobalContext, objLayer)
-
-	buckets, err := objLayer.ListBuckets(context.Background())
-	if err != nil {
-		t.Fatalf("Unable to list buckets on backend %s", err)
-	}
-
-	globalPolicySys.Init(buckets, objLayer)
-
 	credentials := globalActiveCred
 
 	// Executing the object layer tests for single node setup.
@@ -1911,6 +1835,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
+
 	bucketXL, xlAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
@@ -1945,33 +1870,28 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
 
+	newAllSubsystems()
+
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatal("Unexpected error", err)
 	}
 
-	globalIAMSys = NewIAMSys()
-	globalIAMSys.Init(ctx, objLayer)
-
-	buckets, err := objLayer.ListBuckets(context.Background())
-	if err != nil {
-		t.Fatalf("Unable to list buckets on backend %s", err)
-	}
-
-	globalPolicySys = NewPolicySys()
-	globalPolicySys.Init(buckets, objLayer)
-
-	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
-	globalBucketSSEConfigSys.Init(buckets, objLayer)
+	initAllSubsystems(objLayer)
 
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
+
+	newAllSubsystems()
 
 	objLayer, fsDirs, err := prepareXLSets32(ctx)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
+
+	initAllSubsystems(objLayer)
+
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, t)
@@ -2428,11 +2348,16 @@ func uploadTestObject(t *testing.T, apiRouter http.Handler, creds auth.Credentia
 			rec = httptest.NewRecorder()
 			apiRouter.ServeHTTP(rec, req)
 			checkRespErr(rec, http.StatusOK)
-			etag := rec.Header()["ETag"][0]
-			if etag == "" {
-				t.Fatalf("Unexpected empty etag")
+			header := rec.Header()
+			if v, ok := header["ETag"]; ok {
+				etag := v[0]
+				if etag == "" {
+					t.Fatalf("Unexpected empty etag")
+				}
+				cp = append(cp, CompletePart{partID, etag[1 : len(etag)-1]})
+			} else {
+				t.Fatalf("Missing etag header")
 			}
-			cp = append(cp, CompletePart{partID, etag[1 : len(etag)-1]})
 		}
 
 		// Call CompleteMultipart API

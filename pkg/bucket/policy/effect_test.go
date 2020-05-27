@@ -17,8 +17,6 @@
 package policy
 
 import (
-	"encoding/json"
-	"reflect"
 	"testing"
 )
 
@@ -60,63 +58,6 @@ func TestEffectIsValid(t *testing.T) {
 
 		if result != testCase.expectedResult {
 			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
-func TestEffectMarshalJSON(t *testing.T) {
-	testCases := []struct {
-		effect         Effect
-		expectedResult []byte
-		expectErr      bool
-	}{
-		{Allow, []byte(`"Allow"`), false},
-		{Deny, []byte(`"Deny"`), false},
-		{Effect(""), nil, true},
-		{Effect("foo"), nil, true},
-	}
-
-	for i, testCase := range testCases {
-		result, err := json.Marshal(testCase.effect)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v\n", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if !reflect.DeepEqual(result, testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, string(testCase.expectedResult), string(result))
-			}
-		}
-	}
-}
-
-func TestEffectUnmarshalJSON(t *testing.T) {
-	testCases := []struct {
-		data           []byte
-		expectedResult Effect
-		expectErr      bool
-	}{
-		{[]byte(`"Allow"`), Allow, false},
-		{[]byte(`"Deny"`), Deny, false},
-		{[]byte(`""`), Effect(""), true},
-		{[]byte(`"foo"`), Effect(""), true},
-	}
-
-	for i, testCase := range testCases {
-		var result Effect
-		err := json.Unmarshal(testCase.data, &result)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v\n", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if result != testCase.expectedResult {
-				t.Fatalf("case %v: result: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-			}
 		}
 	}
 }

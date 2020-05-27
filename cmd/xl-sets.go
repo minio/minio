@@ -32,9 +32,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -63,6 +60,8 @@ type diskConnectInfo struct {
 // object sets. NOTE: There is no dynamic scaling allowed or intended in
 // current design.
 type xlSets struct {
+	GatewayUnsupported
+
 	sets []*xlObjects
 
 	// Reference format.
@@ -96,6 +95,8 @@ type xlSets struct {
 	// Distribution algorithm of choice.
 	distributionAlgo string
 
+	disksStorageInfoCache timedValue
+
 	// Merge tree walk
 	pool       *MergeWalkPool
 	poolSplunk *MergeWalkPool
@@ -110,25 +111,6 @@ func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
 		return false
 	}
 	return disk.IsOnline()
-}
-
-func (s *xlSets) getOnlineDisksCount() int {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-	count := 0
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			disk := s.xlDisks[i][j]
-			if disk == nil {
-				continue
-			}
-			if !disk.IsOnline() {
-				continue
-			}
-			count++
-		}
-	}
-	return count
 }
 
 func (s *xlSets) getDiskMap() map[string]StorageAPI {
@@ -337,9 +319,7 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 	}
 
 	for i := 0; i < setCount; i++ {
-		var endpoints Endpoints
 		for j := 0; j < drivesPerSet; j++ {
-			endpoints = append(endpoints, s.endpoints[i*drivesPerSet+j])
 			// Rely on endpoints list to initialize, init lockers and available disks.
 			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
 
@@ -364,7 +344,6 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 		s.sets[i] = &xlObjects{
 			getDisks:    s.GetDisks(i),
 			getLockers:  s.GetLockers(i),
-			endpoints:   endpoints,
 			nsMutex:     mutex,
 			bp:          bp,
 			mrfUploadCh: make(chan partialUpload, 10000),
@@ -391,7 +370,21 @@ func (s *xlSets) NewNSLock(ctx context.Context, bucket string, objects ...string
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
+// Caches values for 1 second.
 func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
+	s.disksStorageInfoCache.Once.Do(func() {
+		s.disksStorageInfoCache.TTL = time.Second
+		s.disksStorageInfoCache.Update = func() (interface{}, error) {
+			return s.storageInfo(ctx, local), nil
+		}
+	})
+	v, _ := s.disksStorageInfoCache.Get()
+	return v.(StorageInfo)
+}
+
+// storageInfo - combines output of StorageInfo across all erasure coded object sets.
+// Use StorageInfo for a cached version.
+func (s *xlSets) storageInfo(ctx context.Context, local bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
@@ -506,51 +499,30 @@ func (s *xlSets) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// MakeBucketLocation - creates a new bucket across all sets simultaneously
-// even if one of the sets fail to create buckets, we proceed to undo a
-// successful operation.
-func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+// MakeBucketLocation - creates a new bucket across all sets simultaneously,
+// then return the first encountered error
+func (s *xlSets) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			return s.sets[index].MakeBucketWithLocation(ctx, bucket, location)
+			return s.sets[index].MakeBucketWithLocation(ctx, bucket, location, lockEnabled)
 		}, index)
 	}
 
 	errs := g.Wait()
-	// Upon any error we try to undo the make bucket operation if possible
-	// on all sets where it succeeded.
+
+	// Return the first encountered error
 	for _, err := range errs {
 		if err != nil {
-			undoMakeBucketSets(bucket, s.sets, errs)
 			return err
 		}
 	}
 
 	// Success.
 	return nil
-}
-
-// This function is used to undo a successful MakeBucket operation.
-func undoMakeBucketSets(bucket string, sets []*xlObjects, errs []error) {
-	g := errgroup.WithNErrs(len(sets))
-
-	// Undo previous make bucket entry on all underlying sets.
-	for index := range sets {
-		index := index
-		g.Go(func() error {
-			if errs[index] == nil {
-				return sets[index].DeleteBucket(GlobalContext, bucket, false)
-			}
-			return nil
-		}, index)
-	}
-
-	// Wait for all delete bucket to finish.
-	g.Wait()
 }
 
 // hashes the key returning an integer based on the input algorithm.
@@ -612,51 +584,6 @@ func (s *xlSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuation
 	return listObjectsV2Info, err
 }
 
-// SetBucketPolicy persist the new policy on the bucket.
-func (s *xlSets) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
-	return savePolicyConfig(ctx, s, bucket, policy)
-}
-
-// GetBucketPolicy will return a policy on a bucket
-func (s *xlSets) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return getPolicyConfig(s, bucket)
-}
-
-// DeleteBucketPolicy deletes all policies on bucket
-func (s *xlSets) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return removePolicyConfig(ctx, s, bucket)
-}
-
-// SetBucketLifecycle sets lifecycle on bucket
-func (s *xlSets) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
-	return saveLifecycleConfig(ctx, s, bucket, lifecycle)
-}
-
-// GetBucketLifecycle will get lifecycle on bucket
-func (s *xlSets) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
-	return getLifecycleConfig(s, bucket)
-}
-
-// DeleteBucketLifecycle deletes all lifecycle on bucket
-func (s *xlSets) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
-	return removeLifecycleConfig(ctx, s, bucket)
-}
-
-// GetBucketSSEConfig returns bucket encryption config on given bucket
-func (s *xlSets) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
-	return getBucketSSEConfig(s, bucket)
-}
-
-// SetBucketSSEConfig sets bucket encryption config on given bucket
-func (s *xlSets) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
-	return saveBucketSSEConfig(ctx, s, bucket, config)
-}
-
-// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
-func (s *xlSets) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
-	return removeBucketSSEConfig(ctx, s, bucket)
-}
-
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (s *xlSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
@@ -675,6 +602,10 @@ func (s *xlSets) IsEncryptionSupported() bool {
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (s *xlSets) IsCompressionSupported() bool {
 	return s.getHashedSet("").IsCompressionSupported()
+}
+
+func (s *xlSets) IsTaggingSupported() bool {
+	return true
 }
 
 // DeleteBucket - deletes a bucket on all sets simultaneously,
@@ -702,7 +633,7 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bo
 	}
 
 	// Delete all bucket metadata.
-	deleteBucketMetadata(ctx, bucket, s)
+	deleteBucketMetadata(ctx, s, bucket)
 
 	// Success.
 	return nil
@@ -717,7 +648,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "")
+				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "", false)
 			}
 			return nil
 		}, index)
@@ -1773,49 +1704,25 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, opts ma
 	return nil
 }
 
-// PutObjectTag - replace or add tags to an existing object
-func (s *xlSets) PutObjectTag(ctx context.Context, bucket, object string, tags string) error {
-	return s.getHashedSet(object).PutObjectTag(ctx, bucket, object, tags)
+// PutObjectTags - replace or add tags to an existing object
+func (s *xlSets) PutObjectTags(ctx context.Context, bucket, object string, tags string) error {
+	return s.getHashedSet(object).PutObjectTags(ctx, bucket, object, tags)
 }
 
-// DeleteObjectTag - delete object tags from an existing object
-func (s *xlSets) DeleteObjectTag(ctx context.Context, bucket, object string) error {
-	return s.getHashedSet(object).DeleteObjectTag(ctx, bucket, object)
+// DeleteObjectTags - delete object tags from an existing object
+func (s *xlSets) DeleteObjectTags(ctx context.Context, bucket, object string) error {
+	return s.getHashedSet(object).DeleteObjectTags(ctx, bucket, object)
 }
 
-// GetObjectTag - get object tags from an existing object
-func (s *xlSets) GetObjectTag(ctx context.Context, bucket, object string) (*tags.Tags, error) {
-	return s.getHashedSet(object).GetObjectTag(ctx, bucket, object)
+// GetObjectTags - get object tags from an existing object
+func (s *xlSets) GetObjectTags(ctx context.Context, bucket, object string) (*tags.Tags, error) {
+	return s.getHashedSet(object).GetObjectTags(ctx, bucket, object)
 }
 
 // GetMetrics - no op
 func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
-}
-
-// IsReady - Returns true if atleast n/2 disks (read quorum) are online
-func (s *xlSets) IsReady(_ context.Context) bool {
-	s.xlDisksMu.RLock()
-	defer s.xlDisksMu.RUnlock()
-
-	var activeDisks int
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			if s.xlDisks[i][j] == nil {
-				continue
-			}
-			if s.xlDisks[i][j].IsOnline() {
-				activeDisks++
-			}
-			// Return true if read quorum is available.
-			if activeDisks >= len(s.endpoints)/2 {
-				return true
-			}
-		}
-	}
-	// Disks are not ready
-	return false
 }
 
 // maintainMRFList gathers the list of successful partial uploads

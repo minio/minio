@@ -421,7 +421,11 @@ func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageI
 }
 
 // MakeBucketWithLocation - Create a new container on GCS backend.
-func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
+	if lockEnabled {
+		return minio.NotImplemented{}
+	}
+
 	bkt := l.client.Bucket(bucket)
 
 	// we'll default to the us multi-region in case of us-east-1
@@ -895,16 +899,20 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r *minio.PutObjReader, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	data := r.Reader
 
+	nctx, cancel := context.WithCancel(ctx)
+
+	defer cancel()
+
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
-	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
+	if _, err := l.client.Bucket(bucket).Attrs(nctx); err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
 	object := l.client.Bucket(bucket).Object(key)
 
-	w := object.NewWriter(ctx)
+	w := object.NewWriter(nctx)
 
 	// Disable "chunked" uploading in GCS client if the size of the data to be uploaded is below
 	// the current chunk-size of the writer. This avoids an unnecessary memory allocation.
@@ -915,7 +923,6 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 
 	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
-		w.CloseWithError(err)
 		logger.LogIf(ctx, err)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}

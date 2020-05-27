@@ -41,4 +41,22 @@ describe("PrefixContainer", () => {
     wrapper.find("Connect(ObjectItem)").prop("onClick")()
     expect(selectPrefix).toHaveBeenCalledWith("xyz/abc/")
   })
+
+  it("should pass actions to ObjectItem", () => {
+    const wrapper = shallow(
+      <PrefixContainer object={{ name: "abc/" }} checkedObjectsCount={0} />
+    )
+    expect(wrapper.find("Connect(ObjectItem)").prop("actionButtons")).not.toBe(
+      undefined
+    )
+  })
+
+  it("should pass empty actions to ObjectItem when checkedObjectCount is more than 0", () => {
+    const wrapper = shallow(
+      <PrefixContainer object={{ name: "abc/" }} checkedObjectsCount={1} />
+    )
+    expect(wrapper.find("Connect(ObjectItem)").prop("actionButtons")).toBe(
+      undefined
+    )
+  })
 })

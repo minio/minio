@@ -996,7 +996,7 @@ func TestParquetInput(t *testing.T) {
 					offset = fi.Size() + offset
 				}
 
-				if _, err = file.Seek(offset, os.SEEK_SET); err != nil {
+				if _, err = file.Seek(offset, io.SeekStart); err != nil {
 					return nil, err
 				}
 

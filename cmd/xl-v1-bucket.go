@@ -22,9 +22,6 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/policy"
 
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -38,7 +35,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
 	// Verify if bucket is valid.
 	if err := s3utils.CheckValidBucketNameStrict(bucket); err != nil {
 		return BucketNameInvalid{Bucket: bucket}
@@ -67,10 +64,6 @@ func (xl xlObjects) MakeBucketWithLocation(ctx context.Context, bucket, location
 
 	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
-	if err == errXLWriteQuorum {
-		// Purge successfully created buckets if we don't have writeQuorum.
-		undoMakeBucket(storageDisks, bucket)
-	}
 	return toObjectErr(err, bucket)
 }
 
@@ -84,25 +77,6 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 		index := index
 		g.Go(func() error {
 			_ = storageDisks[index].MakeVol(bucket)
-			return nil
-		}, index)
-	}
-
-	// Wait for all make vol to finish.
-	g.Wait()
-}
-
-// undo make bucket operation upon quorum failure.
-func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
-	g := errgroup.WithNErrs(len(storageDisks))
-	// Undo previous make bucket entry on all underlying storage disks.
-	for index := range storageDisks {
-		if storageDisks[index] == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			_ = storageDisks[index].DeleteVol(bucket, false)
 			return nil
 		}, index)
 	}
@@ -276,51 +250,6 @@ func (xl xlObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete
 	return nil
 }
 
-// SetBucketPolicy sets policy on bucket
-func (xl xlObjects) SetBucketPolicy(ctx context.Context, bucket string, policy *policy.Policy) error {
-	return savePolicyConfig(ctx, xl, bucket, policy)
-}
-
-// GetBucketPolicy will get policy on bucket
-func (xl xlObjects) GetBucketPolicy(ctx context.Context, bucket string) (*policy.Policy, error) {
-	return getPolicyConfig(xl, bucket)
-}
-
-// DeleteBucketPolicy deletes all policies on bucket
-func (xl xlObjects) DeleteBucketPolicy(ctx context.Context, bucket string) error {
-	return removePolicyConfig(ctx, xl, bucket)
-}
-
-// SetBucketLifecycle sets lifecycle on bucket
-func (xl xlObjects) SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error {
-	return saveLifecycleConfig(ctx, xl, bucket, lifecycle)
-}
-
-// GetBucketLifecycle will get lifecycle on bucket
-func (xl xlObjects) GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error) {
-	return getLifecycleConfig(xl, bucket)
-}
-
-// DeleteBucketLifecycle deletes all lifecycle on bucket
-func (xl xlObjects) DeleteBucketLifecycle(ctx context.Context, bucket string) error {
-	return removeLifecycleConfig(ctx, xl, bucket)
-}
-
-// GetBucketSSEConfig returns bucket encryption config on given bucket
-func (xl xlObjects) GetBucketSSEConfig(ctx context.Context, bucket string) (*bucketsse.BucketSSEConfig, error) {
-	return getBucketSSEConfig(xl, bucket)
-}
-
-// SetBucketSSEConfig sets bucket encryption config on given bucket
-func (xl xlObjects) SetBucketSSEConfig(ctx context.Context, bucket string, config *bucketsse.BucketSSEConfig) error {
-	return saveBucketSSEConfig(ctx, xl, bucket, config)
-}
-
-// DeleteBucketSSEConfig deletes bucket encryption config on given bucket
-func (xl xlObjects) DeleteBucketSSEConfig(ctx context.Context, bucket string) error {
-	return removeBucketSSEConfig(ctx, xl, bucket)
-}
-
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
 func (xl xlObjects) IsNotificationSupported() bool {
 	return true
@@ -338,5 +267,9 @@ func (xl xlObjects) IsEncryptionSupported() bool {
 
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (xl xlObjects) IsCompressionSupported() bool {
+	return true
+}
+
+func (xl xlObjects) IsTaggingSupported() bool {
 	return true
 }

@@ -58,7 +58,7 @@ type check struct {
 // Assert - checks if gotValue is same as expectedValue, if not fails the test.
 func (c *check) Assert(gotValue interface{}, expectedValue interface{}) {
 	if !reflect.DeepEqual(gotValue, expectedValue) {
-		c.Fatalf("Test %s:%s expected %v, got %v", getSource(), c.testType, expectedValue, gotValue)
+		c.Fatalf("Test %s:%s expected %v, got %v", getSource(2), c.testType, expectedValue, gotValue)
 	}
 }
 
@@ -599,6 +599,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, nil)
+	c.Assert(len(deleteResp.DeletedObjects), len(delObjReq.Objects))
 	for i := 0; i < 10; i++ {
 		c.Assert(deleteResp.DeletedObjects[i], delObjReq.Objects[i])
 	}
@@ -1235,7 +1236,7 @@ func (s *TestSuiteCommon) TestListBuckets(c *check) {
 	c.Assert(createdBucket.Name != "", true)
 
 	// Parse the bucket modtime
-	creationTime, err := time.Parse(timeFormatAMZLong, createdBucket.CreationDate)
+	creationTime, err := time.Parse(iso8601TimeFormat, createdBucket.CreationDate)
 	c.Assert(err, nil)
 
 	// Check if bucket modtime is consistent (not less than current time and not late more than 5 minutes)

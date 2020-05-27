@@ -3,7 +3,7 @@
 
 [![MinIO](https://raw.githubusercontent.com/minio/minio/master/.github/logo.svg?sanitize=true)](https://min.io)
 
-MinIO is High Performance Object Storage released under Apache License v2.0. It is API compatible with Amazon S3 cloud storage service. Using MinIO build high performance infrastructure for machine learning, analytics and application data workloads.
+MinIO is a High Performance Object Storage released under Apache License v2.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
 
 ## Docker Container
 ### Stable
@@ -22,7 +22,7 @@ docker run -p 9000:9000 minio/minio:edge server /data
 
 ## macOS
 ### Homebrew (recommended)
-Install minio packages using [Homebrew](http://brew.sh/)
+Install minio packages using [Homebrew](https://brew.sh/)
 ```sh
 brew install minio/stable/minio
 minio server /data

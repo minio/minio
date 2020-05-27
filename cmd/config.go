@@ -40,9 +40,6 @@ const (
 
 	// MinIO configuration file.
 	minioConfigFile = "config.json"
-
-	// MinIO configuration backup file
-	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
 func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (
@@ -168,13 +165,14 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		}
 	}
 
-	var config = config.New()
+	var srvCfg = config.New()
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err = json.Unmarshal(configData, &config); err != nil {
+	if err = json.Unmarshal(configData, &srvCfg); err != nil {
 		return nil, err
 	}
 
-	return config, nil
+	// Add any missing entries
+	return srvCfg.Merge(), nil
 }
 
 // ConfigSys - config system.

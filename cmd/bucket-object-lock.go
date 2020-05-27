@@ -17,18 +17,40 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"math"
 	"net/http"
-	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
+
+// BucketObjectLockSys - map of bucket and retention configuration.
+type BucketObjectLockSys struct{}
+
+// Get - Get retention configuration.
+func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, err error) {
+	if globalIsGateway {
+		objAPI := newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			return r, errServerNotInitialized
+		}
+
+		return r, nil
+	}
+
+	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucketName)
+	if err != nil {
+		if _, ok := err.(BucketObjectLockConfigNotFound); ok {
+			return r, nil
+		}
+		return r, err
+
+	}
+	return config.ToRetention(), nil
+}
 
 // Similar to enforceRetentionBypassForDelete but for WebUI
 func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerms bool) APIErrorCode {
@@ -295,11 +317,16 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 	retentionRequested := objectlock.IsObjectLockRetentionRequested(r.Header)
 	legalHoldRequested := objectlock.IsObjectLockLegalHoldRequested(r.Header)
 
-	retentionCfg, isWORMBucket := globalBucketObjectLockConfig.Get(bucket)
-	if !isWORMBucket {
+	retentionCfg, err := globalBucketObjectLockSys.Get(bucket)
+	if err != nil {
+		return mode, retainDate, legalHold, ErrInvalidBucketObjectLockConfiguration
+	}
+
+	if !retentionCfg.LockEnabled {
 		if legalHoldRequested || retentionRequested {
 			return mode, retainDate, legalHold, ErrInvalidBucketObjectLockConfiguration
 		}
+
 		// If this not a WORM enabled bucket, we should return right here.
 		return mode, retainDate, legalHold, ErrNone
 	}
@@ -356,7 +383,7 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		return rMode, rDate, legalHold, ErrNone
 	}
 
-	if !retentionRequested && isWORMBucket {
+	if !retentionRequested && retentionCfg.Validity > 0 {
 		if retentionPermErr != ErrNone {
 			return mode, retainDate, legalHold, retentionPermErr
 		}
@@ -369,7 +396,7 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		if objExists && retainDate.After(t) {
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
-		if !legalHoldRequested && !retentionCfg.IsEmpty() {
+		if !legalHoldRequested {
 			// inherit retention from bucket configuration
 			return retentionCfg.Mode, objectlock.RetentionDate{Time: t.Add(retentionCfg.Validity)}, legalHold, ErrNone
 		}
@@ -378,41 +405,7 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 	return mode, retainDate, legalHold, ErrNone
 }
 
-func initBucketObjectLockConfig(buckets []BucketInfo, objAPI ObjectLayer) error {
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		meta, err := loadBucketMetadata(ctx, objAPI, bucket.Name)
-		if err != nil {
-			if err != errMetaDataConverted {
-				return err
-			}
-
-			meta.Created = bucket.Created
-			logger.LogIf(ctx, meta.save(ctx, objAPI))
-		}
-		if !meta.LockEnabled {
-			continue
-		}
-
-		configFile := path.Join(bucketConfigPrefix, bucket.Name, objectLockConfig)
-		configData, err := readConfig(ctx, objAPI, configFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				globalBucketObjectLockConfig.Set(bucket.Name, &objectlock.Retention{})
-				continue
-			}
-			return err
-		}
-
-		config, err := objectlock.ParseObjectLockConfig(bytes.NewReader(configData))
-		if err != nil {
-			return err
-		}
-		retention := &objectlock.Retention{}
-		if config.Rule != nil {
-			retention = config.ToRetention()
-		}
-		globalBucketObjectLockConfig.Set(bucket.Name, retention)
-	}
-	return nil
+// NewBucketObjectLockSys returns initialized BucketObjectLockSys
+func NewBucketObjectLockSys() *BucketObjectLockSys {
+	return &BucketObjectLockSys{}
 }

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,8 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/tags"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/bucket/policy"
 
+	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -64,7 +62,7 @@ type ObjectLayer interface {
 	StorageInfo(ctx context.Context, local bool) StorageInfo // local queries only local disks
 
 	// Bucket operations.
-	MakeBucketWithLocation(ctx context.Context, bucket string, location string) error
+	MakeBucketWithLocation(ctx context.Context, bucket string, location string, lockEnabled bool) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error
@@ -104,7 +102,6 @@ type ObjectLayer interface {
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn healObjectFn) error
-
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 
 	// Policy operations
@@ -120,24 +117,17 @@ type ObjectLayer interface {
 	// Compression support check.
 	IsCompressionSupported() bool
 
-	// Lifecycle operations
-	SetBucketLifecycle(context.Context, string, *lifecycle.Lifecycle) error
-	GetBucketLifecycle(context.Context, string) (*lifecycle.Lifecycle, error)
-	DeleteBucketLifecycle(context.Context, string) error
-
-	// Bucket Encryption operations
-	SetBucketSSEConfig(context.Context, string, *bucketsse.BucketSSEConfig) error
-	GetBucketSSEConfig(context.Context, string) (*bucketsse.BucketSSEConfig, error)
-	DeleteBucketSSEConfig(context.Context, string) error
-
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)
 
 	// Check Readiness
 	IsReady(ctx context.Context) bool
 
+	// Object Tagging Support check.
+	IsTaggingSupported() bool
+
 	// ObjectTagging operations
-	PutObjectTag(context.Context, string, string, string) error
-	GetObjectTag(context.Context, string, string) (*tags.Tags, error)
-	DeleteObjectTag(context.Context, string, string) error
+	PutObjectTags(context.Context, string, string, string) error
+	GetObjectTags(context.Context, string, string) (*tags.Tags, error)
+	DeleteObjectTags(context.Context, string, string) error
 }

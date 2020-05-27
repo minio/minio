@@ -31,8 +31,6 @@ const (
 
 	// StorageInfoAdminAction - allow listing server info
 	StorageInfoAdminAction = "admin:StorageInfo"
-	// AccountingUsageInfoAdminAction - allow listing accounting usage info
-	AccountingUsageInfoAdminAction = "admin:AccountingUsageInfo"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
 	// TopLocksAdminAction - allow listing top locks
@@ -52,17 +50,16 @@ const (
 
 	// ServerUpdateAdminAction - allow MinIO binary update
 	ServerUpdateAdminAction = "admin:ServerUpdate"
-
-	//Config Actions
+	// ServiceRestartAdminAction - allow restart of MinIO service.
+	ServiceRestartAdminAction = "admin:ServiceRestart"
+	// ServiceStopAdminAction - allow stopping MinIO service.
+	ServiceStopAdminAction = "admin:ServiceStop"
 
 	// ConfigUpdateAdminAction - allow MinIO config management
 	ConfigUpdateAdminAction = "admin:ConfigUpdate"
 
-	// User Actions
-
 	// CreateUserAdminAction - allow creating MinIO user
 	CreateUserAdminAction = "admin:CreateUser"
-
 	// DeleteUserAdminAction - allow deleting MinIO user
 	DeleteUserAdminAction = "admin:DeleteUser"
 	// ListUsersAdminAction - allow list users permission
@@ -115,18 +112,19 @@ const (
 
 // List of all supported admin actions.
 var supportedAdminActions = map[AdminAction]struct{}{
-	AllAdminActions:                {},
 	HealAdminAction:                {},
-	ServerInfoAdminAction:          {},
 	StorageInfoAdminAction:         {},
 	DataUsageInfoAdminAction:       {},
 	TopLocksAdminAction:            {},
 	ProfilingAdminAction:           {},
 	TraceAdminAction:               {},
-	OBDInfoAdminAction:             {},
 	ConsoleLogAdminAction:          {},
 	KMSKeyStatusAdminAction:        {},
+	ServerInfoAdminAction:          {},
+	OBDInfoAdminAction:             {},
 	ServerUpdateAdminAction:        {},
+	ServiceRestartAdminAction:      {},
+	ServiceStopAdminAction:         {},
 	ConfigUpdateAdminAction:        {},
 	CreateUserAdminAction:          {},
 	DeleteUserAdminAction:          {},
@@ -136,6 +134,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	GetUserAdminAction:             {},
 	AddUserToGroupAdminAction:      {},
 	RemoveUserFromGroupAdminAction: {},
+	GetGroupAdminAction:            {},
 	ListGroupsAdminAction:          {},
 	EnableGroupAdminAction:         {},
 	DisableGroupAdminAction:        {},
@@ -143,18 +142,10 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	DeletePolicyAdminAction:        {},
 	GetPolicyAdminAction:           {},
 	AttachPolicyAdminAction:        {},
+	ListUserPoliciesAdminAction:    {},
 	SetBucketQuotaAdminAction:      {},
 	GetBucketQuotaAdminAction:      {},
-	ListUserPoliciesAdminAction:    {},
-}
-
-func parseAdminAction(s string) (AdminAction, error) {
-	action := AdminAction(s)
-	if action.IsValid() {
-		return action, nil
-	}
-
-	return action, Errorf("unsupported action '%v'", s)
+	AllAdminActions:                {},
 }
 
 // IsValid - checks if action is valid or not.
@@ -177,6 +168,8 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	ConsoleLogAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	KMSKeyStatusAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServiceRestartAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ServiceStopAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ConfigUpdateAdminAction:        condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	CreateUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	DeleteUserAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),

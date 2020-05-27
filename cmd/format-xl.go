@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
@@ -204,7 +205,7 @@ func formatXLMigrate(export string) error {
 			return err
 		}
 		// Migrate successful v2 => v3, v3 is latest
-		version = formatXLVersionV3
+		// version = formatXLVersionV3
 		fallthrough
 	case formatXLVersionV3:
 		// v3 is the latest version, return.
@@ -379,11 +380,12 @@ func saveFormatXL(disk StorageAPI, format interface{}, diskID string) error {
 }
 
 var ignoredHiddenDirectories = map[string]struct{}{
-	minioMetaBucket:             {},
-	".snapshot":                 {},
-	"lost+found":                {},
-	"$RECYCLE.BIN":              {},
-	"System Volume Information": {},
+	minioMetaBucket:             {}, // metabucket '.minio.sys'
+	".minio":                    {}, // users may choose to double down the backend as the config folder for certs
+	".snapshot":                 {}, // .snapshot for ignoring NetApp based persistent volumes WAFL snapshot
+	"lost+found":                {}, // 'lost+found' directory default on ext4 filesystems
+	"$RECYCLE.BIN":              {}, // windows specific directory for each drive (hidden)
+	"System Volume Information": {}, // windows specific directory for each drive (hidden)
 }
 
 func isHiddenDirectories(vols ...VolInfo) bool {
@@ -499,7 +501,7 @@ func formatXLFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, ref
 	formats, sErrs := loadFormatXLAll(storageDisks, false)
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
-			return fmt.Errorf("Disk %s: %w", endpoints[i], sErr)
+			return config.ErrCorruptedBackend(err).Hint(fmt.Sprintf("Clear any pre-existing content on %s", endpoints[i]))
 		}
 	}
 
@@ -664,7 +666,7 @@ func initXLMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*formatX
 	// Compute the local disks eligible for meta volumes (re)initialization
 	var disksToInit []StorageAPI
 	for index := range storageDisks {
-		if formats[index] == nil || storageDisks[index] == nil || storageDisks[index].Hostname() != "" {
+		if formats[index] == nil || storageDisks[index] == nil || !storageDisks[index].IsLocal() {
 			// Ignore create meta volume on disks which are not found or not local.
 			continue
 		}
@@ -872,8 +874,6 @@ func makeFormatXLMetaVolumes(disk StorageAPI) error {
 	// Attempt to create MinIO internal buckets.
 	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
 }
-
-var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
 
 // Get all UUIDs which are present in reference format should
 // be present in the list of formats provided, those are considered

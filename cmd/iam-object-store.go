@@ -140,7 +140,7 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 		// then the parsed auth.Credentials will have
 		// the zero value for the struct.
 		var zeroCred auth.Credentials
-		if cred == zeroCred {
+		if cred.Equal(zeroCred) {
 			// nothing to do
 			continue
 		}
@@ -398,7 +398,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
 		err := iamOS.loadMappedPolicy(userOrGroupName, userType, isGroup, m)
-		if err != nil {
+		if err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}

@@ -18,7 +18,7 @@ Compression can be enabled by updating the `compress` config settings for MinIO 
 
 ```
 $ mc admin config get myminio compression
-compression extensions=".txt,.log,.csv,.json,.tar,.xml,.bin" mime_types="text/*,application/json,application/xml"```
+compression extensions=".txt,.log,.csv,.json,.tar,.xml,.bin" mime_types="text/*,application/json,application/xml"
 ```
 
 Default config includes most common highly compressible content extensions and mime-types.

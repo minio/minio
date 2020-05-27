@@ -55,7 +55,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	}
 
 	// Create bucket before intiating NewMultipartUpload.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -89,7 +89,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 	object := "minio-object"
 	opts := ObjectOptions{}
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -135,7 +135,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	object := "minio-object"
 
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -166,7 +166,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	object := "minio-object"
 	opts := ObjectOptions{}
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucket, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -178,7 +178,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Creating a dummy bucket for tests.
-	err = obj.MakeBucketWithLocation(context.Background(), "unused-bucket", "")
+	err = obj.MakeBucketWithLocation(context.Background(), "unused-bucket", "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -302,7 +302,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -320,7 +320,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// objectNames[0].
 	// uploadIds [1-3].
 	// Bucket to test for mutiple upload Id's for a given object.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketNames[1], "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucketNames[1], "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -341,7 +341,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// bucketnames[2].
 	// objectNames[0-2].
 	// uploadIds [4-9].
-	err = obj.MakeBucketWithLocation(context.Background(), bucketNames[2], "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucketNames[2], "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1166,7 +1166,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1411,7 +1411,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1657,7 +1657,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucketNames[0], "", false)
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -1799,28 +1799,31 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// Expecting to fail due to bad
 	}
 
-	for i, testCase := range testCases {
-		actualResult, actualErr := obj.CompleteMultipartUpload(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
-		if actualErr != nil && testCase.shouldPass {
-			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, actualErr)
-		}
-		if actualErr == nil && !testCase.shouldPass {
-			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.expectedErr)
-		}
-		// Failed as expected, but does it fail for the expected reason.
-		if actualErr != nil && !testCase.shouldPass {
-			if reflect.TypeOf(actualErr) != reflect.TypeOf(testCase.expectedErr) {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\"", i+1, instanceType, testCase.expectedErr, actualErr)
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.(*testing.T).Run("", func(t *testing.T) {
+			actualResult, actualErr := obj.CompleteMultipartUpload(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
+			if actualErr != nil && testCase.shouldPass {
+				t.Errorf("%s: Expected to pass, but failed with: <ERROR> %s", instanceType, actualErr)
 			}
-		}
-		// Passes as expected, but asserting the results.
-		if actualErr == nil && testCase.shouldPass {
+			if actualErr == nil && !testCase.shouldPass {
+				t.Errorf("%s: Expected to fail with <ERROR> \"%s\", but passed instead", instanceType, testCase.expectedErr)
+			}
+			// Failed as expected, but does it fail for the expected reason.
+			if actualErr != nil && !testCase.shouldPass {
+				if reflect.TypeOf(actualErr) != reflect.TypeOf(testCase.expectedErr) {
+					t.Errorf("%s: Expected to fail with error \"%s\", but instead failed with error \"%s\"", instanceType, testCase.expectedErr, actualErr)
+				}
+			}
+			// Passes as expected, but asserting the results.
+			if actualErr == nil && testCase.shouldPass {
 
-			// Asserting IsTruncated.
-			if actualResult.ETag != testCase.expectedS3MD5 {
-				t.Errorf("Test %d: %s: Expected the result to be \"%v\", but found it to \"%v\"", i+1, instanceType, testCase.expectedS3MD5, actualResult)
+				// Asserting IsTruncated.
+				if actualResult.ETag != testCase.expectedS3MD5 {
+					t.Errorf("%s: Expected the result to be \"%v\", but found it to \"%v\"", instanceType, testCase.expectedS3MD5, actualResult)
+				}
 			}
-		}
+		})
 	}
 }
 

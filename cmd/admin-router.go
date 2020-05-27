@@ -20,6 +20,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -35,7 +37,7 @@ const (
 type adminAPIHandlers struct{}
 
 // registerAdminRouter - Add handler functions for each service REST API routes.
-func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enableBucketQuotaOps bool) {
+func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
@@ -50,7 +52,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 
 	for _, adminVersion := range adminVersions {
 		// Restart and stop MinIO service.
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/service").HandlerFunc(httpTraceAll(adminAPI.ServiceActionHandler)).Queries("action", "{action:.*}")
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/service").HandlerFunc(httpTraceAll(adminAPI.ServiceHandler)).Queries("action", "{action:.*}")
 		// Update MinIO servers.
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
 
@@ -61,8 +63,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/storageinfo").HandlerFunc(httpTraceAll(adminAPI.StorageInfoHandler))
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(httpTraceAll(adminAPI.DataUsageInfoHandler))
-
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountingusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountingUsageInfoHandler))
 
 		if globalIsDistXL || globalIsXL {
 			/// Heal operations
@@ -115,6 +115,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.AddCannedPolicy)).Queries("name", "{name:.*}")
 
 			// Add user IAM
+
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountUsageInfoHandler))
+
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
 
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
@@ -169,16 +172,15 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 		}
 
 		// Quota operations
-		if enableConfigOps && enableBucketQuotaOps {
-			// GetBucketQuotaConfig
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
-			// PutBucketQuotaConfig
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
-			// RemoveBucketQuotaConfig
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.RemoveBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+		if globalIsXL || globalIsDistXL {
+			if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
+				// GetBucketQuotaConfig
+				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
+					httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+				// PutBucketQuotaConfig
+				adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
+					httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+			}
 		}
 
 		// -- Top APIs --

@@ -138,7 +138,7 @@ func TestErasureDecode(t *testing.T) {
 		}
 
 		writer := bytes.NewBuffer(nil)
-		err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data)
+		err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data, nil)
 		closeBitrotReaders(bitrotReaders)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
@@ -181,7 +181,7 @@ func TestErasureDecode(t *testing.T) {
 				bitrotReaders[0] = nil
 			}
 			writer.Reset()
-			err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data)
+			err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data, nil)
 			closeBitrotReaders(bitrotReaders)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
@@ -191,7 +191,7 @@ func TestErasureDecode(t *testing.T) {
 			}
 			if !test.shouldFailQuorum {
 				if content := writer.Bytes(); !bytes.Equal(content, data[test.offset:test.offset+test.length]) {
-					t.Errorf("Test %d: read retruns wrong file content", i)
+					t.Errorf("Test %d: read returns wrong file content", i)
 				}
 			}
 		}
@@ -271,7 +271,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 			tillOffset := erasure.ShardFileTillOffset(offset, readLen, length)
 			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
-		err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length)
+		err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length, nil)
 		closeBitrotReaders(bitrotReaders)
 		if err != nil {
 			t.Fatal(err, offset, readLen)
@@ -333,7 +333,7 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 			tillOffset := erasure.ShardFileTillOffset(0, size, size)
 			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
-		if err = erasure.Decode(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size); err != nil {
+		if err = erasure.Decode(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size, nil); err != nil {
 			panic(err)
 		}
 		closeBitrotReaders(bitrotReaders)

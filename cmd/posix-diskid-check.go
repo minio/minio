@@ -39,6 +39,10 @@ func (p *posixDiskIDCheck) IsOnline() bool {
 	return storedDiskID == p.diskID
 }
 
+func (p *posixDiskIDCheck) IsLocal() bool {
+	return p.storage.IsLocal()
+}
+
 func (p *posixDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	return p.storage.CrawlAndGetDataUsage(ctx, cache)
 }
@@ -52,7 +56,7 @@ func (p *posixDiskIDCheck) Close() error {
 }
 
 func (p *posixDiskIDCheck) GetDiskID() (string, error) {
-	return p.diskID, nil
+	return p.storage.GetDiskID()
 }
 
 func (p *posixDiskIDCheck) SetDiskID(id string) {

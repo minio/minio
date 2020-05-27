@@ -31,10 +31,10 @@ var (
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
 func getFSType(path string) string {
-	var volumeNameSize uint32 = 260
-	var nFileSystemNameSize, lpVolumeSerialNumber uint32
+	volumeNameSize, nFileSystemNameSize := uint32(260), uint32(260)
+	var lpVolumeSerialNumber uint32
 	var lpFileSystemFlags, lpMaximumComponentLength uint32
-	var lpFileSystemNameBuffer, volumeName [260]byte
+	var lpFileSystemNameBuffer, volumeName [260]uint16
 	var ps = syscall.StringToUTF16Ptr(filepath.VolumeName(path))
 
 	// Extract values safely
@@ -56,15 +56,7 @@ func getFSType(path string) string {
 		uintptr(unsafe.Pointer(&lpMaximumComponentLength)),
 		uintptr(unsafe.Pointer(&lpFileSystemFlags)),
 		uintptr(unsafe.Pointer(&lpFileSystemNameBuffer)),
-		uintptr(unsafe.Pointer(&nFileSystemNameSize)), 0)
-	var bytes []byte
-	if lpFileSystemNameBuffer[6] == 0 {
-		bytes = []byte{lpFileSystemNameBuffer[0], lpFileSystemNameBuffer[2],
-			lpFileSystemNameBuffer[4]}
-	} else {
-		bytes = []byte{lpFileSystemNameBuffer[0], lpFileSystemNameBuffer[2],
-			lpFileSystemNameBuffer[4], lpFileSystemNameBuffer[6]}
-	}
+		uintptr(nFileSystemNameSize))
 
-	return string(bytes)
+	return syscall.UTF16ToString(lpFileSystemNameBuffer[:])
 }

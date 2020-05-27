@@ -139,6 +139,25 @@ func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 	return ChecksumInfo{}
 }
 
+// ShardFileSize - returns final erasure size from original size.
+func (e ErasureInfo) ShardFileSize(totalLength int64) int64 {
+	if totalLength == 0 {
+		return 0
+	}
+	if totalLength == -1 {
+		return -1
+	}
+	numShards := totalLength / e.BlockSize
+	lastBlockSize := totalLength % e.BlockSize
+	lastShardSize := ceilFrac(lastBlockSize, int64(e.DataBlocks))
+	return numShards*e.ShardSize() + lastShardSize
+}
+
+// ShardSize - returns actual shared size from erasure blockSize.
+func (e ErasureInfo) ShardSize() int64 {
+	return ceilFrac(e.BlockSize, int64(e.DataBlocks))
+}
+
 // statInfo - carries stat information of the object.
 type statInfo struct {
 	Size    int64     `json:"size"`    // Size of the object `xl.json`.
@@ -373,9 +392,6 @@ func getXLMetaInQuorum(ctx context.Context, metaArr []xlMetaV1, modTime time.Tim
 func pickValidXLMeta(ctx context.Context, metaArr []xlMetaV1, modTime time.Time, quorum int) (xmv xlMetaV1, e error) {
 	return getXLMetaInQuorum(ctx, metaArr, modTime, quorum)
 }
-
-// list of all errors that can be ignored in a metadata operation.
-var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
 // writeXLMetadata - writes `xl.json` to a single disk.
 func writeXLMetadata(ctx context.Context, disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) error {

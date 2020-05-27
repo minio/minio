@@ -99,24 +99,13 @@ func (api objectAPIHandlers) ListBucketObjectVersionsHandler(w http.ResponseWrit
 	}
 
 	for i := range listObjectsInfo.Objects {
-		var actualSize int64
-		if listObjectsInfo.Objects[i].IsCompressed() {
-			// Read the decompressed size from the meta.json.
-			actualSize = listObjectsInfo.Objects[i].GetActualSize()
-			if actualSize < 0 {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize),
-					r.URL, guessIsBrowserReq(r))
-				return
-			}
-			// Set the info.Size to the actualSize.
-			listObjectsInfo.Objects[i].Size = actualSize
-		} else if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
+		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
 			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
-			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
+		}
+		listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].GetActualSize()
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
@@ -181,23 +170,13 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 	}
 
 	for i := range listObjectsV2Info.Objects {
-		var actualSize int64
-		if listObjectsV2Info.Objects[i].IsCompressed() {
-			// Read the decompressed size from the meta.json.
-			actualSize = listObjectsV2Info.Objects[i].GetActualSize()
-			if actualSize < 0 {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			// Set the info.Size to the actualSize.
-			listObjectsV2Info.Objects[i].Size = actualSize
-		} else if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
+		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
 			listObjectsV2Info.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsV2Info.Objects[i], false)
-			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
+		}
+		listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].GetActualSize()
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
@@ -265,23 +244,13 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsV2Info.Objects {
-		var actualSize int64
-		if listObjectsV2Info.Objects[i].IsCompressed() {
-			// Read the decompressed size from the meta.json.
-			actualSize = listObjectsV2Info.Objects[i].GetActualSize()
-			if actualSize < 0 {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			// Set the info.Size to the actualSize.
-			listObjectsV2Info.Objects[i].Size = actualSize
-		} else if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
+		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
 			listObjectsV2Info.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsV2Info.Objects[i], false)
-			listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].DecryptedSize()
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
+		}
+		listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].GetActualSize()
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
@@ -344,25 +313,16 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	}
 
 	for i := range listObjectsInfo.Objects {
-		var actualSize int64
-		if listObjectsInfo.Objects[i].IsCompressed() {
-			// Read the decompressed size from the meta.json.
-			actualSize = listObjectsInfo.Objects[i].GetActualSize()
-			if actualSize < 0 {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDecompressedSize), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			// Set the info.Size to the actualSize.
-			listObjectsInfo.Objects[i].Size = actualSize
-		} else if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
+		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
 			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
-			listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].DecryptedSize()
-			if err != nil {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
+		}
+		listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].GetActualSize()
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
+
 	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType, maxKeys, listObjectsInfo)
 
 	// Write success response.

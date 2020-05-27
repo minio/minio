@@ -20,6 +20,8 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -34,20 +36,19 @@ func TestUNCPaths(t *testing.T) {
 		{"/a/b/c/d/e/f/g", true},
 		{string(bytes.Repeat([]byte("界"), 85)), true},
 		// Each path component must be <= 255 bytes long.
-		{string(bytes.Repeat([]byte("界"), 100)), false},
+		{string(bytes.Repeat([]byte("界"), 280)), false},
 		{`/p/q/r/s/t`, true},
 	}
-	// Instantiate posix object to manage a disk
-	var err error
-	err = os.Mkdir("c:\\testdisk", 0700)
+	dir, err := ioutil.TempDir("", "testdisk-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Cleanup on exit of test
-	defer os.RemoveAll("c:\\testdisk")
+	defer os.RemoveAll(dir)
 
+	// Instantiate posix object to manage a disk
 	var fs StorageAPI
-	fs, err = newPosix(`c:\testdisk`)
+	fs, err = newPosix(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,30 +59,31 @@ func TestUNCPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, test := range testCases {
-		err = fs.AppendFile("voldir", test.objName, []byte("hello"))
-		if err != nil && test.pass {
-			t.Error(err)
-		} else if err == nil && !test.pass {
-			t.Error(err)
-		}
-		fs.DeleteFile("voldir", test.objName)
+	for i, test := range testCases {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			err = fs.AppendFile("voldir", test.objName, []byte("hello"))
+			if err != nil && test.pass {
+				t.Error(err)
+			} else if err == nil && !test.pass {
+				t.Error(err)
+			}
+			fs.DeleteFile("voldir", test.objName)
+		})
 	}
 }
 
 // Test to validate posix behavior on windows when a non-final path component is a file.
 func TestUNCPathENOTDIR(t *testing.T) {
-	var err error
 	// Instantiate posix object to manage a disk
-	err = os.Mkdir("c:\\testdisk", 0700)
+	dir, err := ioutil.TempDir("", "testdisk-")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Cleanup on exit of test
-	defer os.RemoveAll("c:\\testdisk")
+	defer os.RemoveAll(dir)
 
 	var fs StorageAPI
-	fs, err = newPosix(`c:\testdisk`)
+	fs, err = newPosix(dir, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,7 +35,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
@@ -44,9 +43,7 @@ import (
 
 // minio configuration related constants.
 const (
-	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
-
-	globalMinioDefaultPort = "9000"
+	GlobalMinioDefaultPort = "9000"
 
 	globalMinioDefaultRegion = ""
 	// This is a sha256 output of ``arn:aws:iam::minio:user/admin``,
@@ -136,7 +133,7 @@ var (
 	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
 	// MinIO default port, can be changed through command line.
-	globalMinioPort = globalMinioDefaultPort
+	globalMinioPort = GlobalMinioDefaultPort
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
 	// Holds the possible host endpoint.
@@ -150,8 +147,9 @@ var (
 	// globalEnvTargetList has list of targets configured via env.
 	globalEnvTargetList *event.TargetList
 
-	globalPolicySys *PolicySys
-	globalIAMSys    *IAMSys
+	globalBucketMetadataSys *BucketMetadataSys
+	globalPolicySys         *PolicySys
+	globalIAMSys            *IAMSys
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
@@ -211,15 +209,13 @@ var (
 	globalDomainNames []string      // Root domains for virtual host style requests
 	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
 
-	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops
-	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second)  // timeout for Object API related ops
-	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)         // default timeout for general ops
-	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)           // timeout for healing related ops
+	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops
+	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)          // timeout for healing related ops
 
-	globalBucketObjectLockConfig = objectlock.NewBucketObjectLockConfig()
-
-	globalBucketQuotaSys     *BucketQuotaSys
-	globalBucketStorageCache bucketStorageCache
+	globalBucketObjectLockSys *BucketObjectLockSys
+	globalBucketQuotaSys      *BucketQuotaSys
+	globalBucketStorageCache  bucketStorageCache
 
 	// Disk cache drives
 	globalCacheConfig cache.Config
@@ -236,11 +232,6 @@ var (
 
 	// Allocated DNS config wrapper over etcd client.
 	globalDNSConfig *dns.CoreDNS
-
-	// Default usage check interval value.
-	globalDefaultUsageCheckInterval = 12 * time.Hour // 12 hours
-	// Usage check interval value.
-	globalUsageCheckInterval = globalDefaultUsageCheckInterval
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS
@@ -282,6 +273,11 @@ var (
 	// fix the system.
 	globalSafeMode bool
 
+	// If writes to FS backend should be O_SYNC.
+	globalFSOSync bool
+
+	// Deadline by which /minio/health/ready should respond.
+	globalReadyDeadline time.Duration
 	// Add new variable global values here.
 )
 

@@ -16,10 +16,6 @@
 
 package policy
 
-import (
-	"encoding/json"
-)
-
 // Effect - policy statement effect Allow or Deny.
 type Effect string
 
@@ -48,30 +44,4 @@ func (effect Effect) IsValid() bool {
 	}
 
 	return false
-}
-
-// MarshalJSON - encodes Effect to JSON data.
-func (effect Effect) MarshalJSON() ([]byte, error) {
-	if !effect.IsValid() {
-		return nil, Errorf("invalid effect '%v'", effect)
-	}
-
-	return json.Marshal(string(effect))
-}
-
-// UnmarshalJSON - decodes JSON data to Effect.
-func (effect *Effect) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-
-	e := Effect(s)
-	if !e.IsValid() {
-		return Errorf("invalid effect '%v'", s)
-	}
-
-	*effect = e
-
-	return nil
 }

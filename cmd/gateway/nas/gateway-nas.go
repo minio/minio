@@ -22,6 +22,7 @@ import (
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
+	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 )
 
 const (
@@ -121,8 +122,22 @@ type nasObjects struct {
 	minio.ObjectLayer
 }
 
+// GetBucketObjectLockConfig - not implemented
+func (n *nasObjects) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
+	return nil, minio.NotImplemented{}
+}
+
+// SetBucketObjectLockConfig - not implemented
+func (n *nasObjects) SetBucketObjectLockConfig(ctx context.Context, bucket string, _ *objectlock.Config) error {
+	return minio.NotImplemented{}
+}
+
 // IsReady returns whether the layer is ready to take requests.
 func (n *nasObjects) IsReady(ctx context.Context) bool {
 	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
 	return sinfo.Backend.Type == minio.BackendFS
+}
+
+func (n *nasObjects) IsTaggingSupported() bool {
+	return true
 }

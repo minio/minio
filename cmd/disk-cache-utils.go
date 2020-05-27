@@ -358,7 +358,7 @@ func (f *fileScorer) adjustSaveBytes(n int64) bool {
 	} else {
 		f.saveBytes += uint64(n)
 	}
-	if f.saveBytes <= 0 {
+	if f.saveBytes == 0 {
 		f.queue.Init()
 		f.saveBytes = 0
 		return false
