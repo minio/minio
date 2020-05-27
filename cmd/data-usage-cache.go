@@ -29,7 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dchest/siphash"
+	"github.com/minio/sha256-simd"
+
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
@@ -477,10 +478,9 @@ func hashPath(data string) dataUsageHash {
 		data = strings.Trim(data, hashPathCutSet)
 	}
 	data = path.Clean(data)
-	a, b := siphash.Hash128(0, 0, []byte(data))
+	res := sha256.Sum256([]byte(data))
 	var k dataUsageHash
-	binary.LittleEndian.PutUint64(k[:8], a)
-	binary.LittleEndian.PutUint64(k[8:], b)
+	copy(k[:], res[:dataUsageHashLen])
 	return k
 }
 

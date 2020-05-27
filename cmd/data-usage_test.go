@@ -601,6 +601,31 @@ func createUsageTestFiles(t *testing.T, base string, files []usageTestFile) {
 	}
 }
 
+func BenchmarkHashPath(b *testing.B) {
+	var files = []usageTestFile{
+		{name: "rootfile", size: 10000},
+		{name: "rootfile2", size: 10000},
+		{name: "dir1/d1file", size: 2000},
+		{name: "dir2/d2file", size: 300},
+		{name: "dir1/dira/dafile", size: 100000},
+		{name: "dir1/dira/dbfile", size: 200000},
+		{name: "dir1/dira/dirasub/dcfile", size: 1000000},
+		{name: "dir1/dira/dirasub/sublevel3/dccccfile", size: 10},
+		{name: "dir1/dira/dirasub/sublevel3/dccccfile/sdjkfhsjkfhsdhfhsdhsdhjhsdjhfsdsdf h hsd hsdf hsd h sdf jhsdf hj jhf s jh.obj", size: 10},
+	}
+	bytes := 0
+	for _, f := range files {
+		bytes += len(f.name)
+	}
+	b.SetBytes(int64(bytes))
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		for j := range files {
+			_ = hashPath(files[j].name)
+		}
+	}
+}
+
 func TestDataUsageCacheSerialize(t *testing.T) {
 	base, err := ioutil.TempDir("", "TestDataUsageCacheSerialize")
 	if err != nil {
