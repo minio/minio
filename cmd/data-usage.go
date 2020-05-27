@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -80,6 +81,7 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-time.NewTimer(dataUsageStartDelay).C:
+			globalBucketQuotaSys.startCollectingFIFOUsage(ctx)
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
@@ -88,6 +90,7 @@ func runDataUsageInfo(ctx context.Context, objAPI ObjectLayer) {
 			err = objAPI.CrawlAndGetDataUsage(ctx, bf, results)
 			close(results)
 			logger.LogIf(ctx, err)
+			globalBucketQuotaSys.endCollectingFIFOUsage(ctx, objAPI)
 			if err == nil {
 				// Store new cycle...
 				nextBloomCycle++
@@ -179,7 +182,7 @@ type Item struct {
 	Typ  os.FileMode
 }
 
-type getSizeFn func(item Item) (int64, error)
+type getStatFn func(item Item) (int64, time.Time, error)
 
 type cachedFolder struct {
 	name   string
@@ -188,7 +191,7 @@ type cachedFolder struct {
 
 type folderScanner struct {
 	root               string
-	getSize            getSizeFn
+	getStat            getStatFn
 	oldCache           dataUsageCache
 	newCache           dataUsageCache
 	withFilter         *bloomFilter
@@ -246,7 +249,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
 			entName = path.Clean(path.Join(folder.name, entName))
-			bucket, _ := path2BucketObjectWithBasePath(f.root, entName)
+			bucket, prefix := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("data-usage:")+" no bucket (%s,%s)", f.root, entName)
@@ -290,7 +293,10 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			t := UTCNow()
 
 			// Get file size, ignore errors.
-			size, err := f.getSize(Item{Path: path.Join(f.root, entName), Typ: typ})
+			size, modTime, err := f.getStat(Item{Path: path.Join(f.root, entName), Typ: typ})
+			if strings.HasSuffix(prefix, xlMetaJSONFile) {
+				globalBucketQuotaSys.sendUsage(bucket, strings.TrimSuffix(prefix, slashSeparator+xlMetaJSONFile), size, modTime)
+			}
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 			if err == errSkipFile || err == errFileNotFound {
@@ -344,7 +350,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 		fileName := path.Join(dirStack...)
 		dirStack = dirStack[:len(dirStack)-1]
 
-		size, err := f.getSize(Item{Path: fileName, Typ: typ})
+		size, _, err := f.getStat(Item{Path: fileName, Typ: typ})
 
 		// Don't sleep for really small amount of time
 		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
@@ -369,7 +375,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation waitForLowActiveIO is called which can be used to temporarily halt the crawler.
 // If the supplied context is canceled the function will return at the first chance.
-func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, waitForLowActiveIO func(), getSize getSizeFn) (dataUsageCache, error) {
+func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, waitForLowActiveIO func(), getStat getStatFn) (dataUsageCache, error) {
 	t := UTCNow()
 
 	dataUsageDebug := env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn
@@ -394,7 +400,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 
 	s := folderScanner{
 		root:                basePath,
-		getSize:             getSize,
+		getStat:             getStat,
 		oldCache:            cache,
 		newCache:            dataUsageCache{Info: cache.Info},
 		waitForLowActiveIO:  waitForLowActiveIO,

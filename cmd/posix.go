@@ -366,31 +366,32 @@ func (s *posix) waitForLowActiveIO() {
 }
 
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
-	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
+	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, time.Time, error) {
 		// Look for `xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
 			// if no xl.json found, skip the file.
-			return 0, errSkipFile
+			return 0, timeSentinel, errSkipFile
 		}
 
 		xlMetaBuf, err := ioutil.ReadFile(item.Path)
 		if err != nil {
-			return 0, errSkipFile
+			return 0, timeSentinel, errSkipFile
 		}
 
 		meta, err := xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 		if err != nil {
-			return 0, nil
+			return 0, timeSentinel, nil
 		}
 
 		// we don't necessarily care about the names
 		// of bucket and object, only interested in size.
 		// so use some dummy names.
-		size, err := meta.ToObjectInfo("dummy", "dummy").GetActualSize()
+		oi := meta.ToObjectInfo("dummy", "dummy")
+		size, err := oi.GetActualSize()
 		if err != nil {
-			return 0, errSkipFile
+			return 0, timeSentinel, errSkipFile
 		}
-		return size, nil
+		return size, oi.ModTime, nil
 
 	})
 	if err != nil {

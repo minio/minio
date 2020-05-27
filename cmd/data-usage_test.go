@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 type usageTestFile struct {
@@ -47,18 +48,18 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, files)
 
-	getSize := func(item Item) (i int64, err error) {
+	getStat := func(item Item) (i int64, tm time.Time, err error) {
 		if item.Typ&os.ModeDir == 0 {
 			s, err := os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return 0, timeSentinel, err
 			}
-			return s.Size(), nil
+			return s.Size(), timeSentinel, nil
 		}
-		return 0, nil
+		return 0, timeSentinel, nil
 	}
 
-	got, err := updateUsage(context.Background(), base, dataUsageCache{}, func() {}, getSize)
+	got, err := updateUsage(context.Background(), base, dataUsageCache{}, func() {}, getStat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func TestDataUsageUpdate(t *testing.T) {
 		},
 	}
 	createUsageTestFiles(t, base, files)
-	got, err = updateUsage(context.Background(), base, got, func() {}, getSize)
+	got, err = updateUsage(context.Background(), base, got, func() {}, getStat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +262,7 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 	// Changed dir must be picked up in this many cycles.
 	for i := 0; i < dataUsageUpdateDirCycles; i++ {
-		got, err = updateUsage(context.Background(), base, got, func() {}, getSize)
+		got, err = updateUsage(context.Background(), base, got, func() {}, getStat)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -337,17 +338,17 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, files)
 
-	getSize := func(item Item) (i int64, err error) {
+	getStat := func(item Item) (i int64, tm time.Time, err error) {
 		if item.Typ&os.ModeDir == 0 {
 			s, err := os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return 0, timeSentinel, err
 			}
-			return s.Size(), nil
+			return s.Size(), timeSentinel, nil
 		}
-		return 0, nil
+		return 0, timeSentinel, nil
 	}
-	got, err := updateUsage(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: "bucket"}}, func() {}, getSize)
+	got, err := updateUsage(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: "bucket"}}, func() {}, getStat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +451,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 		},
 	}
 	createUsageTestFiles(t, base, files)
-	got, err = updateUsage(context.Background(), base, got, func() {}, getSize)
+	got, err = updateUsage(context.Background(), base, got, func() {}, getStat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +534,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	}
 	// Changed dir must be picked up in this many cycles.
 	for i := 0; i < dataUsageUpdateDirCycles; i++ {
-		got, err = updateUsage(context.Background(), base, got, func() {}, getSize)
+		got, err = updateUsage(context.Background(), base, got, func() {}, getStat)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -619,17 +620,17 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, files)
 
-	getSize := func(item Item) (i int64, err error) {
+	getStat := func(item Item) (i int64, tm time.Time, err error) {
 		if item.Typ&os.ModeDir == 0 {
 			s, err := os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return 0, timeSentinel, err
 			}
-			return s.Size(), nil
+			return s.Size(), timeSentinel, nil
 		}
-		return 0, nil
+		return 0, timeSentinel, nil
 	}
-	want, err := updateUsage(context.Background(), base, dataUsageCache{}, func() {}, getSize)
+	want, err := updateUsage(context.Background(), base, dataUsageCache{}, func() {}, getStat)
 	if err != nil {
 		t.Fatal(err)
 	}

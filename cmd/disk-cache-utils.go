@@ -295,6 +295,7 @@ type fileScorer struct {
 	// The list is kept sorted according to score, highest at top, lowest at bottom.
 	queue       list.List
 	queuedBytes uint64
+	omitSize    bool // specify if scoring metric excludes size
 }
 
 type queuedFile struct {
@@ -320,7 +321,9 @@ func newFileScorer(saveBytes uint64, now int64, maxHits int) (*fileScorer, error
 	f.queue.Init()
 	return &f, nil
 }
-
+func (f *fileScorer) skipSizeScore() {
+	f.omitSize = true
+}
 func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits int) {
 	// Calculate how much we want to delete this object.
 	file := queuedFile{
@@ -332,7 +335,11 @@ func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits
 	szWeight := math.Max(0, (math.Min(1, float64(size)*f.sizeMult)))
 	// 0 at f.maxHits, 1 at 0.
 	hitsWeight := (1.0 - math.Max(0, math.Min(1.0, float64(hits)/float64(f.maxHits))))
-	file.score = score * (1 + 0.25*szWeight + 0.25*hitsWeight)
+	file.score = score * (1 + 0.25*hitsWeight)
+	if !f.omitSize {
+		file.score += score * (0.25 * szWeight)
+	}
+
 	// If we still haven't saved enough, just add the file
 	if f.queuedBytes < f.saveBytes {
 		f.insertFile(file)

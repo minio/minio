@@ -337,6 +337,11 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
+	// Initialize bucket quota system
+	if err = globalBucketQuotaSys.Init(GlobalContext, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket quota system system: %w", err)
+
+	}
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
 		initFederatorBackend(buckets, newObject)

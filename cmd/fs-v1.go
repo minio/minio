@@ -259,27 +259,29 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		b, _ := json.MarshalIndent(bf, "", "  ")
 		logger.Info("Bloom filter: %v", string(b))
 	}
-	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
+	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, time.Time, error) {
 		bucket, object := path2BucketObject(strings.TrimPrefix(item.Path, fs.fsPath))
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !os.IsNotExist(err) {
-			return 0, errSkipFile
+			return 0, timeSentinel, errSkipFile
 		}
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
 		fi, err := os.Stat(item.Path)
 		if err != nil {
-			return 0, errSkipFile
+			return 0, timeSentinel, errSkipFile
 		}
 		if len(fsMetaBytes) > 0 {
 			fsMeta := newFSMetaV1()
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
-				return 0, errSkipFile
+				return 0, timeSentinel, errSkipFile
 			}
-			return fsMeta.ToObjectInfo(bucket, object, fi).GetActualSize()
+			oi := fsMeta.ToObjectInfo(bucket, object, fi)
+			size, err := oi.GetActualSize()
+			return size, oi.ModTime, err
 		}
-		return fi.Size(), nil
+		return fi.Size(), fi.ModTime(), nil
 
 	})
 	cache.Info.BloomFilter = nil
