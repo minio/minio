@@ -46,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 1
+	dataUpdateTrackerVersion      = 2
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 
 	// Reset bloom filters every n cycle
@@ -364,6 +364,8 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
+	case 1:
+		return errors.New("dataUpdateTracker: deprecated data version, updating.")
 	case dataUpdateTrackerVersion:
 	default:
 		return errors.New("dataUpdateTracker: Unknown data version")
