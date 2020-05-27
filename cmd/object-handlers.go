@@ -1076,6 +1076,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		if globalIsGateway {
+			srcInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
+		}
 	}
 
 	if objTags != "" {
