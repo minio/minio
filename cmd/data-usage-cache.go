@@ -205,7 +205,7 @@ func (h dataUsageHash) bytes(dst []byte) {
 
 // String returns a human readable representation of the string.
 func (h dataUsageHash) String() string {
-	return fmt.Sprintf("%s", hex.EncodeToString(h[:]))
+	return hex.EncodeToString(h[:])
 }
 
 // flatten all children of the root into the root element and return it.
