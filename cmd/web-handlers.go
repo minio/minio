@@ -980,13 +980,17 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
-	defer logger.AuditLog(w, r, "WebUpload", mustGetClaimsFromToken(r))
+	// obtain the claims here if possible, for audit logging.
+	claims, owner, authErr := webRequestAuthenticate(r)
+
+	defer logger.AuditLog(w, r, "WebUpload", claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -997,8 +1001,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	retPerms := ErrAccessDenied
 	holdPerms := ErrAccessDenied
-
-	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		if authErr == errNoAuthToken {
 			// Check if anonymous (non-owner) has access to upload objects.
@@ -1203,7 +1205,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	defer logger.AuditLog(w, r, "WebDownload", mustGetClaimsFromToken(r))
+	vars := mux.Vars(r)
+
+	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
+	defer logger.AuditLog(w, r, "WebDownload", claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -1211,19 +1216,16 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
-	token := r.URL.Query().Get("token")
 
 	getRetPerms := ErrAccessDenied
 	legalHoldPerms := ErrAccessDenied
 
-	claims, owner, authErr := webTokenAuthenticate(token)
 	if authErr != nil {
 		if authErr == errNoAuthToken {
 			// Check if anonymous (non-owner) has access to download objects.
@@ -1395,8 +1397,10 @@ type DownloadZipArgs struct {
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	host := handlers.GetSourceIP(r)
 
+	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
+
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "WebDownloadZip", claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -1413,8 +1417,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, decodeErr)
 		return
 	}
-	token := r.URL.Query().Get("token")
-	claims, owner, authErr := webTokenAuthenticate(token)
+
 	var getRetPerms []APIErrorCode
 	var legalHoldPerms []APIErrorCode
 
@@ -1628,6 +1631,7 @@ type GetBucketPolicyRep struct {
 // GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	ctx := newWebContext(r, args, "WebGetBucketPolicy")
+
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)
