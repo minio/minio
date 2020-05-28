@@ -416,8 +416,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	// Fetch disk space info
-	storageInfo := objLayer.StorageInfo(GlobalContext, true)
+	// Fetch disk space info, ignore errors
+	storageInfo, _ := objLayer.StorageInfo(GlobalContext, true)
 
 	offlineDisks := storageInfo.Backend.OfflineDisks
 	onlineDisks := storageInfo.Backend.OnlineDisks

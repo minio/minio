@@ -205,16 +205,15 @@ func (n *hdfsObjects) Shutdown(ctx context.Context) error {
 	return n.clnt.Close()
 }
 
-func (n *hdfsObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
+func (n *hdfsObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, errs []error) {
 	fsInfo, err := n.clnt.StatFs()
 	if err != nil {
-		return minio.StorageInfo{}
+		return minio.StorageInfo{}, []error{err}
 	}
-	sinfo := minio.StorageInfo{}
-	sinfo.Used = []uint64{fsInfo.Used}
-	sinfo.Backend.Type = minio.BackendGateway
-	sinfo.Backend.GatewayOnline = true
-	return sinfo
+	si.Used = []uint64{fsInfo.Used}
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = true
+	return si, nil
 }
 
 // hdfsObjects implements gateway for Minio and S3 compatible object storage servers.
@@ -741,6 +740,7 @@ func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, 
 }
 
 // IsReady returns whether the layer is ready to take requests.
-func (n *hdfsObjects) IsReady(_ context.Context) bool {
-	return true
+func (n *hdfsObjects) IsReady(ctx context.Context) bool {
+	si, _ := n.StorageInfo(ctx, false)
+	return si.Backend.GatewayOnline
 }

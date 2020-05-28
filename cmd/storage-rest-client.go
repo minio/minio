@@ -177,19 +177,11 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
-	respBody, err := client.call(storageRESTMethodGetDiskID, nil, nil, -1)
-	if err != nil {
-		// Ignore when other nodes does not support GetDiskID call, this check
-		// can be removed when the storage API version is bumped.
-		if strings.Contains(err.Error(), "404 page not found") {
-			return client.diskID, nil
-		}
-		return "", err
-	}
-	defer http.DrainBody(respBody)
-	var s string
-	err = gob.NewDecoder(respBody).Decode(&s)
-	return s, err
+	// This call should never be over the network, this is always
+	// a cached value - caller should make sure to use this
+	// function on a fresh disk or make sure to look at the error
+	// from a different networked call to validate the GetDiskID()
+	return client.diskID, nil
 }
 
 func (client *storageRESTClient) SetDiskID(id string) {

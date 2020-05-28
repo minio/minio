@@ -24,7 +24,6 @@ const (
 
 const (
 	storageRESTMethodDiskInfo             = "/diskinfo"
-	storageRESTMethodGetDiskID            = "/getdiskid"
 	storageRESTMethodCrawlAndGetDataUsage = "/crawlandgetdatausage"
 	storageRESTMethodMakeVol              = "/makevol"
 	storageRESTMethodMakeVolBulk          = "/makevolbulk"
