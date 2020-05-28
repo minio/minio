@@ -47,6 +47,11 @@ func getFormatStr(strLen int, padding int) string {
 	return "%" + formatStr
 }
 
+func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
+	storageInfo, _ := objAPI.StorageInfo(GlobalContext, false)
+	return storageInfo
+}
+
 func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	logStartupMessage(color.RedBold("Server startup failed with '%v'", err))
 	logStartupMessage(color.RedBold("Server switching to safe mode"))
@@ -55,7 +60,7 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo in safe mode.
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI != nil {
-		if msg := getStorageInfoMsgSafeMode(objAPI.StorageInfo(GlobalContext, false)); msg != "" {
+		if msg := getStorageInfoMsgSafeMode(mustGetStorageInfo(objAPI)); msg != "" {
 			logStartupMessage(msg)
 		}
 	}
@@ -117,7 +122,7 @@ func printStartupMessage(apiEndpoints []string) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(GlobalContext, false))
+		printStorageInfo(mustGetStorageInfo(objAPI))
 	}
 
 	// Prints credential, region and browser access.

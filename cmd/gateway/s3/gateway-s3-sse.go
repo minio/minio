@@ -528,6 +528,21 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 	return l.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (l *s3EncObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	// We do not store parts uploaded so far in the dare.meta. Only CompleteMultipartUpload finalizes the parts under upload prefix.Otherwise,
+	// there could be situations of dare.meta getting corrupted by competing upload parts.
+	dm, err := l.getGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID))
+	if err != nil {
+		return l.s3Objects.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+	}
+	result.UserDefined = dm.ToObjectInfo(bucket, object).UserDefined
+	return result, nil
+}
+
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
 	// We do not store parts uploaded so far in the dare.meta. Only CompleteMultipartUpload finalizes the parts under upload prefix.Otherwise,

@@ -129,7 +129,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
-	reply.StorageInfo = objectAPI.StorageInfo(ctx, false)
+	reply.StorageInfo, _ = objectAPI.StorageInfo(ctx, false)
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -333,18 +333,18 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 			if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
 				bucket, prefix := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
 				if bucket != "" && bucket != u.Path {
+					if !strings.HasSuffix(prefix, slashSeparator) {
+						prefix += slashSeparator
+					}
 					readable := globalIAMSys.IsAllowed(iampolicy.Args{
 						AccountName:     claims.AccessKey,
 						Action:          iampolicy.ListBucketAction,
 						BucketName:      bucket,
-						ObjectName:      prefix + SlashSeparator,
+						ObjectName:      prefix,
 						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 						IsOwner:         owner,
 						Claims:          claims.Map(),
 					})
-					if !strings.HasSuffix(prefix, slashSeparator) {
-						prefix += slashSeparator
-					}
 					writable := globalIAMSys.IsAllowed(iampolicy.Args{
 						AccountName:     claims.AccessKey,
 						Action:          iampolicy.PutObjectAction,
@@ -475,6 +475,14 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
+		// Handle prefix access denied error (in the specific case of URL containing bucket & prefix )
+		if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
+			bucket, _ := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
+			_, err := objectAPI.ListBuckets(ctx)
+			if _, ok := err.(PrefixAccessDenied); bucket != "" && err != nil && ok {
+				return toJSONError(ctx, err)
+			}
+		}
 		if authErr == errNoAuthToken {
 			// Set prefix value for "s3:prefix" policy conditionals.
 			r.Header.Set("prefix", args.Prefix)

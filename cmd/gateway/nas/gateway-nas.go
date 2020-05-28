@@ -110,11 +110,11 @@ func (n *nasObjects) IsListenBucketSupported() bool {
 	return false
 }
 
-func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
-	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
-	sinfo.Backend.GatewayOnline = sinfo.Backend.Type == minio.BackendFS
-	sinfo.Backend.Type = minio.BackendGateway
-	return sinfo
+func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
+	si, errs := n.ObjectLayer.StorageInfo(ctx, false)
+	si.Backend.GatewayOnline = si.Backend.Type == minio.BackendFS
+	si.Backend.Type = minio.BackendGateway
+	return si, errs
 }
 
 // nasObjects implements gateway for MinIO and S3 compatible object storage servers.
@@ -134,8 +134,8 @@ func (n *nasObjects) SetBucketObjectLockConfig(ctx context.Context, bucket strin
 
 // IsReady returns whether the layer is ready to take requests.
 func (n *nasObjects) IsReady(ctx context.Context) bool {
-	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
-	return sinfo.Backend.Type == minio.BackendFS
+	si, _ := n.StorageInfo(ctx, false)
+	return si.Backend.GatewayOnline
 }
 
 func (n *nasObjects) IsTaggingSupported() bool {

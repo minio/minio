@@ -40,7 +40,7 @@ type BucketMetadataSys struct {
 
 // Remove bucket metadata from memory.
 func (sys *BucketMetadataSys) Remove(bucket string) {
-	if globalIsGateway {
+	if globalIsGateway && globalGatewayName != "nas" {
 		return
 	}
 	sys.Lock()
@@ -73,7 +73,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		return errServerNotInitialized
 	}
 
-	if globalIsGateway {
+	if globalIsGateway && globalGatewayName != "nas" {
 		// This code is needed only for gateway implementations.
 		if configFile == bucketPolicyConfig {
 			config, err := policy.ParseConfig(bytes.NewReader(configData), bucket)
