@@ -268,26 +268,33 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		}
 		// Get file size, symlinks which cannot be
 		// followed are automatically filtered by fastwalk.
-		fi, err := os.Stat(item.Path)
-		if err != nil {
-			return 0, errSkipFile
-		}
-		if len(fsMetaBytes) > 0 {
+		if err == nil && len(fsMetaBytes) > 0 {
 			fsMeta := newFSMetaV1()
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
 				return 0, errSkipFile
 			}
-			return fsMeta.ToObjectInfo(bucket, object, fi).GetActualSize()
+			sz, err := fsMeta.ToObjectInfo(bucket, object, nil).GetActualSize()
+			if err == nil {
+				return sz, nil
+			}
+			if sz := item.applyActions(ctx, fs, nil); sz >= 0 {
+				return sz, nil
+			}
+
 		}
-		//FIXME:
+
+		// Fallback to stat.
+		fi, err := os.Stat(item.Path)
+		if err != nil {
+			return 0, errSkipFile
+		}
 		if sz := item.applyActions(ctx, fs, nil); sz >= 0 {
 			return sz, nil
 		}
-
 		return fi.Size(), nil
-
 	})
+
 	cache.Info.BloomFilter = nil
 
 	// Even if there was an error, the new cache may have better info.

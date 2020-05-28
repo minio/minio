@@ -390,15 +390,6 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 
 		meta, err := xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 		if err != nil {
-			return 0, nil
-		}
-
-		// we don't necessarily care about the names
-		// of bucket and object, only interested in size.
-		// so use some dummy names.
-		// FIXME:
-		size, err := meta.ToObjectInfo("dummy", "dummy")
-		if err != nil {
 			return 0, errSkipFile
 		}
 		return item.applyActions(ctx, objAPI, &meta), nil

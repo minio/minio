@@ -196,7 +196,10 @@ type getSizeFn func(item Item) (int64, error)
 func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta *xlMetaV1) (size int64) {
 	size = -1
 	if meta != nil {
-		size = meta.Stat.Size
+		sz, err := meta.ToObjectInfo("a", "b").GetActualSize()
+		if err == nil {
+			size = sz
+		}
 	}
 	if i.lifeCycle == nil {
 		return size
