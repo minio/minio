@@ -116,7 +116,10 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 
 // ReservedMetadataPrefix is the prefix of a metadata key which
 // is reserved and for internal use only.
-const ReservedMetadataPrefix = "X-Minio-Internal-"
+const (
+	ReservedMetadataPrefix      = "X-Minio-Internal-"
+	ReservedMetadataPrefixLower = "x-minio-internal-"
+)
 
 type reservedMetadataHandler struct {
 	http.Handler
@@ -141,7 +144,7 @@ func (h reservedMetadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
-		if HasPrefix(key, ReservedMetadataPrefix) {
+		if strings.HasPrefix(strings.ToLower(key), ReservedMetadataPrefixLower) {
 			return true
 		}
 	}

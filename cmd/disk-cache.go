@@ -99,14 +99,14 @@ func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *disk
 	bkMeta := make(map[string]string)
 	cacheMeta := make(map[string]string)
 	for k, v := range bkObjectInfo.UserDefined {
-		if strings.HasPrefix(k, ReservedMetadataPrefix) {
+		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
 			continue
 		}
 		bkMeta[http.CanonicalHeaderKey(k)] = v
 	}
 	for k, v := range cacheObjInfo.UserDefined {
-		if strings.HasPrefix(k, ReservedMetadataPrefix) {
+		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
 			continue
 		}
