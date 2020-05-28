@@ -1092,6 +1092,18 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	return info, nil
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (a *azureObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, err
+	}
+
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
+}
+
 // ListObjectParts - Use Azure equivalent `ContainerURL.ListBlobsHierarchySegment`.
 func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (result minio.ListPartsInfo, err error) {
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {

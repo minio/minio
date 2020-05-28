@@ -612,14 +612,40 @@ func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, de
 	return p, nil
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (l *s3Objects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
+}
+
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *s3Objects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
 	result, err := l.Client.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
-		return lpi, minio.ErrorRespToObjectError(err, bucket, object)
+		return lpi, err
 	}
+	lpi = minio.FromMinioClientListPartsInfo(result)
+	if lpi.IsTruncated && maxParts > len(lpi.Parts) {
+		partNumberMarker = lpi.NextPartNumberMarker
+		for {
+			result, err = l.Client.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
+			if err != nil {
+				return lpi, err
+			}
 
-	return minio.FromMinioClientListPartsInfo(result), nil
+			nlpi := minio.FromMinioClientListPartsInfo(result)
+
+			partNumberMarker = nlpi.NextPartNumberMarker
+
+			lpi.Parts = append(lpi.Parts, nlpi.Parts...)
+			if !nlpi.IsTruncated {
+				break
+			}
+		}
+	}
+	return lpi, nil
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload

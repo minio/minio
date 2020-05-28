@@ -634,6 +634,23 @@ func (n *hdfsObjects) checkUploadIDExists(ctx context.Context, bucket, object, u
 	return nil
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (n *hdfsObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	_, err = n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket))
+	if err != nil {
+		return result, hdfsToObjectErr(ctx, err, bucket)
+	}
+
+	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, err
+	}
+
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
+}
+
 func (n *hdfsObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (result minio.ListPartsInfo, err error) {
 	_, err = n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket))
 	if err != nil {
