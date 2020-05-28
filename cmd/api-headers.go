@@ -112,7 +112,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
-		if strings.HasPrefix(k, ReservedMetadataPrefix) {
+		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
 			// values to client.
 			continue

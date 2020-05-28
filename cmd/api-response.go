@@ -541,7 +541,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		if metadata {
 			content.UserMetadata = make(StringMap)
 			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
-				if strings.HasPrefix(k, ReservedMetadataPrefix) {
+				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 					// Do not need to send any internal metadata
 					// values to client.
 					continue
