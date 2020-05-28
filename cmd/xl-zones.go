@@ -533,11 +533,11 @@ func (z *xlZones) DeleteObjects(ctx context.Context, bucket string, objects []st
 	return derrs, nil
 }
 
-func (z *xlZones) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (z *xlZones) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Check if this request is only metadata update.
-	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
+	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if !cpSrcDstSame {
-		lk := z.NewNSLock(ctx, destBucket, destObject)
+		lk := z.NewNSLock(ctx, dstBucket, dstObject)
 		if err := lk.GetLock(globalObjectTimeout); err != nil {
 			return objInfo, err
 		}
@@ -545,24 +545,30 @@ func (z *xlZones) CopyObject(ctx context.Context, srcBucket, srcObject, destBuck
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
+		return z.zones[0].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
-	if cpSrcDstSame && srcInfo.metadataOnly {
-		for _, zone := range z.zones {
-			objInfo, err = zone.CopyObject(ctx, srcBucket, srcObject, destBucket,
-				destObject, srcInfo, srcOpts, dstOpts)
-			if err != nil {
-				if isErrObjectNotFound(err) {
-					continue
-				}
-				return objInfo, err
+
+	zoneIndex := -1
+	for i, zone := range z.zones {
+		objInfo, err := zone.GetObjectInfo(ctx, dstBucket, dstObject, srcOpts)
+		if err != nil {
+			if isErrObjectNotFound(err) {
+				continue
 			}
-			return objInfo, nil
+			return objInfo, err
 		}
-		return objInfo, ObjectNotFound{Bucket: srcBucket, Object: srcObject}
+		zoneIndex = i
+		break
 	}
-	return z.zones[z.getAvailableZoneIdx(ctx)].CopyObject(ctx, srcBucket, srcObject,
-		destBucket, destObject, srcInfo, srcOpts, dstOpts)
+
+	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
+	if zoneIndex >= 0 {
+		if cpSrcDstSame && srcInfo.metadataOnly {
+			return z.zones[zoneIndex].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		return z.zones[zoneIndex].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
+	}
+	return z.zones[z.getAvailableZoneIdx(ctx)].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
 func (z *xlZones) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
@@ -1050,6 +1056,7 @@ func (z *xlZones) PutObjectPart(ctx context.Context, bucket, object, uploadID st
 	if z.SingleZone() {
 		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
+
 	for _, zone := range z.zones {
 		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {

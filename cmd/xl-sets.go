@@ -773,18 +773,17 @@ func (s *xlSets) DeleteObjects(ctx context.Context, bucket string, objects []str
 }
 
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
-func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	srcSet := s.getHashedSet(srcObject)
-	destSet := s.getHashedSet(destObject)
+	dstSet := s.getHashedSet(dstObject)
 
 	// Check if this request is only metadata update.
-	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
-	if cpSrcDstSame && srcInfo.metadataOnly {
-		return srcSet.CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
+	if srcSet == dstSet && srcInfo.metadataOnly {
+		return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
 
 	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
-	return destSet.putObject(ctx, destBucket, destObject, srcInfo.PutObjReader, putOpts)
+	return dstSet.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
 // FileInfoCh - file info channel
