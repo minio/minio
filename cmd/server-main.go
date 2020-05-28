@@ -141,6 +141,9 @@ func newAllSubsystems() {
 	// Create new notification system and initialize notification targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
+	// Create new bucket metadata system.
+	globalBucketMetadataSys = NewBucketMetadataSys()
+
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
 
@@ -322,34 +325,14 @@ func initAllSubsystems(newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize IAM system: %w", err)
 	}
 
+	// Initialize bucket metadata sub-system.
+	if err = globalBucketMetadataSys.Init(GlobalContext, buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket metadata sub-system: %w", err)
+	}
+
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
-	}
-
-	// Initialize policy system.
-	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize policy system: %w", err)
-	}
-
-	// Initialize lifecycle system.
-	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
-	}
-
-	// Initialize bucket encryption subsystem.
-	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
-	}
-
-	// Initialize bucket object lock.
-	if err = globalBucketObjectLockSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize object lock system: %w", err)
-	}
-
-	// Initialize bucket quota system.
-	if err = globalBucketQuotaSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket quota system: %w", err)
 	}
 
 	// Populate existing buckets to the etcd backend

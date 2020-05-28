@@ -33,19 +33,15 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-// Signature and API related constants.
-const (
-	signV2Algorithm = "AWS"
-)
-
-// AWS S3 Signature V2 calculation rule is give here:
-// http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
-
 // Whitelist resource list that will be used in query string for signature-V2 calculation.
-// The list should be alphabetically sorted
+//
+// This list should be kept alphabetically sorted, do not hastily edit.
 var resourceList = []string{
 	"acl",
+	"cors",
 	"delete",
+	"encryption",
+	"legal-hold",
 	"lifecycle",
 	"location",
 	"logging",
@@ -59,6 +55,10 @@ var resourceList = []string{
 	"response-content-language",
 	"response-content-type",
 	"response-expires",
+	"retention",
+	"select",
+	"select-type",
+	"tagging",
 	"torrent",
 	"uploadId",
 	"uploads",
@@ -67,6 +67,14 @@ var resourceList = []string{
 	"versions",
 	"website",
 }
+
+// Signature and API related constants.
+const (
+	signV2Algorithm = "AWS"
+)
+
+// AWS S3 Signature V2 calculation rule is give here:
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
 
 func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
 	cred := globalActiveCred

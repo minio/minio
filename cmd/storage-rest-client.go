@@ -147,6 +147,10 @@ func (client *storageRESTClient) IsOnline() bool {
 	return atomic.LoadInt32(&client.connected) == 1
 }
 
+func (client *storageRESTClient) IsLocal() bool {
+	return false
+}
+
 func (client *storageRESTClient) Hostname() string {
 	return client.endpoint.Host
 }

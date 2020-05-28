@@ -137,13 +137,9 @@ func UTCNowNTP() (time.Time, error) {
 
 // Retention - bucket level retention configuration.
 type Retention struct {
-	Mode     RetMode
-	Validity time.Duration
-}
-
-// IsEmpty - returns whether retention is empty or not.
-func (r Retention) IsEmpty() bool {
-	return !r.Mode.Valid() || r.Validity == 0
+	Mode        RetMode
+	Validity    time.Duration
+	LockEnabled bool
 }
 
 // Retain - check whether given date is retainable by validity time.
@@ -236,7 +232,7 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 	}
 
 	if parsedConfig.ObjectLockEnabled != "Enabled" {
-		return fmt.Errorf("only 'Enabled' value is allowd to ObjectLockEnabled element")
+		return fmt.Errorf("only 'Enabled' value is allowed to ObjectLockEnabled element")
 	}
 
 	*config = Config(parsedConfig)
@@ -244,8 +240,10 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 }
 
 // ToRetention - convert to Retention type.
-func (config *Config) ToRetention() (r *Retention) {
-	r = &Retention{}
+func (config *Config) ToRetention() Retention {
+	r := Retention{
+		LockEnabled: config.ObjectLockEnabled == "Enabled",
+	}
 	if config.Rule != nil {
 		r.Mode = config.Rule.DefaultRetention.Mode
 
@@ -339,7 +337,7 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 	if err := xml.NewDecoder(io.LimitReader(reader, maxObjectRetentionSize)).Decode(&ret); err != nil {
 		return nil, err
 	}
-	if !ret.Mode.Valid() {
+	if ret.Mode != "" && !ret.Mode.Valid() {
 		return &ret, ErrUnknownWORMModeDirective
 	}
 
@@ -349,7 +347,7 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 		return &ret, ErrPastObjectLockRetainDate
 	}
 
-	if ret.RetainUntilDate.Before(t) {
+	if !ret.RetainUntilDate.IsZero() && ret.RetainUntilDate.Before(t) {
 		return &ret, ErrPastObjectLockRetainDate
 	}
 

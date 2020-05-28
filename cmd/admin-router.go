@@ -177,9 +177,6 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps, enab
 			// PutBucketQuotaConfig
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
 				httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
-			// RemoveBucketQuotaConfig
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-bucket-quota").HandlerFunc(
-				httpTraceHdrs(adminAPI.RemoveBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
 		}
 
 		// -- Top APIs --

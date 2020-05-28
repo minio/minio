@@ -58,11 +58,15 @@ export class Dropzone extends React.Component {
     // the user clicks on a file.
     return (
       <ReactDropzone
-        disableClick={true}
         onDrop={this.onDrop.bind(this)}
       >
         {({getRootProps, getInputProps, isDragActive, isDragAccept, isDragReject}) => (
-          <div {...getRootProps()} style={getStyle(isDragActive, isDragAccept, isDragReject)}>
+          <div
+            {...getRootProps({
+              onClick: event => event.stopPropagation()
+            })}
+            style={getStyle(isDragActive, isDragAccept, isDragReject)}
+          >
             <input {...getInputProps()} />
             {this.props.children}
           </div>
