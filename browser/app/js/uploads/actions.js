@@ -89,7 +89,11 @@ export const uploadFile = file => {
       return
     }
     const currentPrefix = getCurrentPrefix(state)
-    const filePath = file.path || file.name
+    var _filePath = file.path || file.name
+    if (_filePath.charAt(0) == '/') {
+      _filePath = _filePath.substring(1)
+    }
+    const filePath = _filePath
     const objectName = `${currentPrefix}${filePath}`
     const uploadUrl = `${
       window.location.origin
