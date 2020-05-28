@@ -636,6 +636,7 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 	// Load the latest calculated data usage
 	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 	if err != nil {
+		// log the error, continue with the accounting response
 		logger.LogIf(ctx, err)
 	}
 
@@ -653,8 +654,8 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 		if rd || wr {
 			var size uint64
 			// Fetch the data usage of the current bucket
-			if !dataUsageInfo.LastUpdate.IsZero() && len(dataUsageInfo.BucketsSizes) > 0 {
-				size = dataUsageInfo.BucketsSizes[bucket.Name]
+			if !dataUsageInfo.LastUpdate.IsZero() {
+				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
 			}
 			acctInfo.Buckets = append(acctInfo.Buckets, madmin.BucketUsageInfo{
 				Name:    bucket.Name,

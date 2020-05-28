@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
@@ -379,11 +380,12 @@ func saveFormatXL(disk StorageAPI, format interface{}, diskID string) error {
 }
 
 var ignoredHiddenDirectories = map[string]struct{}{
-	minioMetaBucket:             {},
-	".snapshot":                 {},
-	"lost+found":                {},
-	"$RECYCLE.BIN":              {},
-	"System Volume Information": {},
+	minioMetaBucket:             {}, // metabucket '.minio.sys'
+	".minio":                    {}, // users may choose to double down the backend as the config folder for certs
+	".snapshot":                 {}, // .snapshot for ignoring NetApp based persistent volumes WAFL snapshot
+	"lost+found":                {}, // 'lost+found' directory default on ext4 filesystems
+	"$RECYCLE.BIN":              {}, // windows specific directory for each drive (hidden)
+	"System Volume Information": {}, // windows specific directory for each drive (hidden)
 }
 
 func isHiddenDirectories(vols ...VolInfo) bool {
@@ -499,7 +501,7 @@ func formatXLFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, ref
 	formats, sErrs := loadFormatXLAll(storageDisks, false)
 	for i, sErr := range sErrs {
 		if _, ok := formatCriticalErrors[sErr]; ok {
-			return fmt.Errorf("Disk %s: %w", endpoints[i], sErr)
+			return config.ErrCorruptedBackend(err).Hint(fmt.Sprintf("Clear any pre-existing content on %s", endpoints[i]))
 		}
 	}
 

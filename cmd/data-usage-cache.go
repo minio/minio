@@ -119,16 +119,16 @@ func (d *dataUsageCache) find(path string) *dataUsageEntry {
 func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	e := d.find(path)
 	if e == nil {
-		return DataUsageInfo{LastUpdate: UTCNow()}
+		// No entry found, return empty.
+		return DataUsageInfo{}
 	}
 	flat := d.flatten(*e)
 	return DataUsageInfo{
-		LastUpdate:            d.Info.LastUpdate,
-		ObjectsCount:          flat.Objects,
-		ObjectsTotalSize:      uint64(flat.Size),
-		ObjectsSizesHistogram: flat.ObjSizes.asMap(),
-		BucketsCount:          uint64(len(e.Children)),
-		BucketsSizes:          d.pathSizes(buckets),
+		LastUpdate:        d.Info.LastUpdate,
+		ObjectsTotalCount: flat.Objects,
+		ObjectsTotalSize:  uint64(flat.Size),
+		BucketsCount:      uint64(len(e.Children)),
+		BucketsUsage:      d.bucketsUsageInfo(buckets),
 	}
 }
 
@@ -235,25 +235,30 @@ func (h *sizeHistogram) add(size int64) {
 	}
 }
 
-// asMap returns the map as a map[string]uint64.
-func (h *sizeHistogram) asMap() map[string]uint64 {
-	res := make(map[string]uint64, 7)
+// toMap returns the map to a map[string]uint64.
+func (h *sizeHistogram) toMap() map[string]uint64 {
+	res := make(map[string]uint64, dataUsageBucketLen)
 	for i, count := range h {
 		res[ObjectsHistogramIntervals[i].name] = count
 	}
 	return res
 }
 
-// pathSizes returns the path sizes as a map.
-func (d *dataUsageCache) pathSizes(buckets []BucketInfo) map[string]uint64 {
-	var dst = make(map[string]uint64, len(buckets))
+// bucketsUsageInfo returns the buckets usage info as a map, with
+// key as bucket name
+func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]BucketUsageInfo {
+	var dst = make(map[string]BucketUsageInfo, len(buckets))
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)
 		if e == nil {
 			continue
 		}
 		flat := d.flatten(*e)
-		dst[bucket.Name] = uint64(flat.Size)
+		dst[bucket.Name] = BucketUsageInfo{
+			Size:                 uint64(flat.Size),
+			ObjectsCount:         uint64(flat.Objects),
+			ObjectSizesHistogram: flat.ObjSizes.toMap(),
+		}
 	}
 	return dst
 }

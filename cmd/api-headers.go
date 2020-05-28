@@ -83,7 +83,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	if strings.Contains(objInfo.ETag, "-") && len(objInfo.Parts) > 0 {
-		w.Header().Set(xhttp.AmzMpPartsCount, strconv.Itoa(len(objInfo.Parts)))
+		w.Header()[xhttp.AmzMpPartsCount] = []string{strconv.Itoa(len(objInfo.Parts))}
 	}
 
 	if objInfo.ContentType != "" {
@@ -106,34 +106,34 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	// Set tag count if object has tags
 	tags, _ := url.ParseQuery(objInfo.UserTags)
 	tagCount := len(tags)
-	if tagCount != 0 {
-		w.Header().Set(xhttp.AmzTagCount, strconv.Itoa(tagCount))
+	if tagCount > 0 {
+		w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(tagCount)}
 	}
 
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
-		if HasPrefix(k, ReservedMetadataPrefix) {
+		if strings.HasPrefix(k, ReservedMetadataPrefix) {
 			// Do not need to send any internal metadata
 			// values to client.
 			continue
 		}
-		w.Header().Set(k, v)
+		var isSet bool
+		for _, userMetadataPrefix := range userMetadataKeyPrefixes {
+			if !strings.HasPrefix(k, userMetadataPrefix) {
+				continue
+			}
+			w.Header()[strings.ToLower(k)] = []string{v}
+			isSet = true
+			break
+		}
+		if !isSet {
+			w.Header().Set(k, v)
+		}
 	}
 
-	var totalObjectSize int64
-	switch {
-	case crypto.IsEncrypted(objInfo.UserDefined):
-		totalObjectSize, err = objInfo.DecryptedSize()
-		if err != nil {
-			return err
-		}
-	case objInfo.IsCompressed():
-		totalObjectSize = objInfo.GetActualSize()
-		if totalObjectSize < 0 {
-			return errInvalidDecompressedSize
-		}
-	default:
-		totalObjectSize = objInfo.Size
+	totalObjectSize, err := objInfo.GetActualSize()
+	if err != nil {
+		return err
 	}
 
 	// for providing ranged content

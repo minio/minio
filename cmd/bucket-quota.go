@@ -19,9 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/config"
@@ -33,138 +31,93 @@ import (
 
 // BucketQuotaSys - map of bucket and quota configuration.
 type BucketQuotaSys struct {
-	quotaMap map[string]madmin.BucketQuota
+	bucketStorageCache timedValue
 }
 
 // Get - Get quota configuration.
-func (sys *BucketQuotaSys) Get(bucketName string) (q madmin.BucketQuota, err error) {
+func (sys *BucketQuotaSys) Get(bucketName string) (*madmin.BucketQuota, error) {
 	if globalIsGateway {
 		objAPI := newObjectLayerFn()
 		if objAPI == nil {
-			return q, errServerNotInitialized
+			return nil, errServerNotInitialized
 		}
-		return q, BucketQuotaConfigNotFound{Bucket: bucketName}
+		return &madmin.BucketQuota{}, nil
 	}
 
-	q, ok := sys.quotaMap[bucketName]
-	if !ok {
-		configData, err := globalBucketMetadataSys.GetConfig(bucketName, bucketQuotaConfigFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				return q, BucketQuotaConfigNotFound{Bucket: bucketName}
-			}
-			return q, err
-		}
-		return parseBucketQuota(bucketName, configData)
-	}
-	return q, nil
-}
-
-// Buckets - list of buckets with quota configuration
-func (sys *BucketQuotaSys) Buckets() []string {
-	var buckets []string
-	for k := range sys.quotaMap {
-		buckets = append(buckets, k)
-	}
-	return buckets
-}
-
-// Init initialize bucket quota sys configuration with all buckets.
-func (sys *BucketQuotaSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	// In gateway mode, we do not support bucket quota.
-	// So, this is a no-op for gateway servers.
-	if globalIsGateway {
-		return nil
-	}
-
-	return sys.load(buckets, objAPI)
-}
-
-func (sys *BucketQuotaSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
-	for _, bucket := range buckets {
-		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configData, err := globalBucketMetadataSys.GetConfig(bucket.Name, bucketQuotaConfigFile)
-		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
-			return err
-		}
-		quotaCfg, err := parseBucketQuota(bucket.Name, configData)
-		if err != nil {
-			if _, ok := err.(BucketQuotaConfigNotFound); !ok {
-				logger.LogIf(ctx, err)
-			}
-			continue
-		}
-		sys.quotaMap[bucket.Name] = quotaCfg
-	}
-	return nil
+	return globalBucketMetadataSys.GetQuotaConfig(bucketName)
 }
 
 // NewBucketQuotaSys returns initialized BucketQuotaSys
 func NewBucketQuotaSys() *BucketQuotaSys {
-	return &BucketQuotaSys{quotaMap: map[string]madmin.BucketQuota{}}
+	return &BucketQuotaSys{}
 }
 
 // parseBucketQuota parses BucketQuota from json
-func parseBucketQuota(bucket string, data []byte) (quotaCfg madmin.BucketQuota, err error) {
-	if len(data) == 0 {
-		return quotaCfg, BucketQuotaConfigNotFound{Bucket: bucket}
-	}
-	if err = json.Unmarshal(data, &quotaCfg); err != nil {
+func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota, err error) {
+	quotaCfg = &madmin.BucketQuota{}
+	if err = json.Unmarshal(data, quotaCfg); err != nil {
 		return quotaCfg, err
 	}
-	if !quotaCfg.Type.IsValid() {
-		return quotaCfg, fmt.Errorf("Invalid quota type %s", quotaCfg.Type)
+	if !quotaCfg.IsValid() {
+		return quotaCfg, fmt.Errorf("Invalid quota config %#v", quotaCfg)
 	}
 	return
 }
 
-type bucketStorageCache struct {
-	bucketsSizes map[string]uint64
-	lastUpdate   time.Time
-	mu           sync.Mutex
-}
-
-func (b *bucketStorageCache) check(ctx context.Context, q madmin.BucketQuota, bucket string, size int64) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if time.Since(b.lastUpdate) > 10*time.Second {
-		dui, err := loadDataUsageFromBackend(ctx, newObjectLayerWithoutSafeModeFn())
-		if err != nil {
-			return err
-		}
-		b.lastUpdate = time.Now()
-		b.bucketsSizes = dui.BucketsSizes
-	}
-	currUsage := b.bucketsSizes[bucket]
-	if (currUsage+uint64(size)) > q.Quota && q.Quota > 0 {
-		return BucketQuotaExceeded{Bucket: bucket}
-	}
-	return nil
-}
-func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
-	if size < 0 {
-		return nil
+func (sys *BucketQuotaSys) check(ctx context.Context, bucket string, size int64) error {
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		return errServerNotInitialized
 	}
 
-	q, err := globalBucketQuotaSys.Get(bucket)
+	q, err := sys.Get(bucket)
 	if err != nil {
-		if _, ok := err.(BucketQuotaConfigNotFound); !ok {
-			return err
-		}
 		return nil
 	}
 
 	if q.Type == madmin.FIFOQuota {
 		return nil
 	}
-	return globalBucketStorageCache.check(ctx, q, bucket, size)
+
+	if q.Quota == 0 {
+		// No quota set return quickly.
+		return nil
+	}
+
+	sys.bucketStorageCache.Once.Do(func() {
+		sys.bucketStorageCache.TTL = 10 * time.Second
+		sys.bucketStorageCache.Update = func() (interface{}, error) {
+			return loadDataUsageFromBackend(ctx, objAPI)
+		}
+	})
+
+	v, err := sys.bucketStorageCache.Get()
+	if err != nil {
+		return err
+	}
+
+	dui := v.(DataUsageInfo)
+
+	bui, ok := dui.BucketsUsage[bucket]
+	if !ok {
+		// bucket not found, cannot enforce quota
+		// call will fail anyways later.
+		return nil
+	}
+
+	if (bui.Size + uint64(size)) > q.Quota {
+		return BucketQuotaExceeded{Bucket: bucket}
+	}
+
+	return nil
+}
+
+func enforceBucketQuota(ctx context.Context, bucket string, size int64) error {
+	if size < 0 {
+		return nil
+	}
+
+	return globalBucketQuotaSys.check(ctx, bucket, size)
 }
 
 const (
@@ -198,24 +151,40 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
 		return nil
 	}
-	for _, bucket := range globalBucketQuotaSys.Buckets() {
+
+	buckets, err := objectAPI.ListBuckets(ctx)
+	if err != nil {
+		return err
+	}
+
+	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+	if err != nil {
+		return err
+	}
+
+	for _, binfo := range buckets {
+		bucket := binfo.Name
+
+		bui, ok := dataUsageInfo.BucketsUsage[bucket]
+		if !ok {
+			// bucket doesn't exist anymore, or we
+			// do not have any information to proceed.
+			continue
+		}
+
 		// Check if the current bucket has quota restrictions, if not skip it
 		cfg, err := globalBucketQuotaSys.Get(bucket)
 		if err != nil {
 			continue
 		}
+
 		if cfg.Type != madmin.FIFOQuota {
 			continue
 		}
 
-		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-		if err != nil {
-			return err
-		}
-
 		var toFree uint64
-		if dataUsageInfo.BucketsSizes[bucket] > cfg.Quota && cfg.Quota > 0 {
-			toFree = dataUsageInfo.BucketsSizes[bucket] - cfg.Quota
+		if bui.Size > cfg.Quota && cfg.Quota > 0 {
+			toFree = bui.Size - cfg.Quota
 		}
 
 		if toFree == 0 {
@@ -229,6 +198,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		if err := objectAPI.Walk(ctx, bucket, "", objInfoCh); err != nil {
 			return err
 		}
+
 		// reuse the fileScorer used by disk cache to score entries by
 		// ModTime to find the oldest objects in bucket to delete. In
 		// the context of bucket quota enforcement - number of hits are
@@ -251,7 +221,7 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		numKeys := len(scorer.fileNames())
 		for i, key := range scorer.fileNames() {
 			objects = append(objects, key)
-			if len(objects) < maxObjectList && (i < numKeys-1) {
+			if len(objects) < maxDeleteList && (i < numKeys-1) {
 				// skip deletion until maxObjectList or end of slice
 				continue
 			}

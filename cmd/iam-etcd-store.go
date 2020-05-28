@@ -197,7 +197,7 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool)
 		// then the parsed auth.Credentials will have
 		// the zero value for the struct.
 		var zeroCred auth.Credentials
-		if cred == zeroCred {
+		if cred.Equal(zeroCred) {
 			// nothing to do
 			continue
 		}
@@ -494,17 +494,46 @@ func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 		return err
 	}
 
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(iamPolicyDocsMap)
-
 	ies.lock()
 	defer ies.Unlock()
 
-	sys.iamUsersMap = iamUsersMap
-	sys.iamGroupsMap = iamGroupsMap
-	sys.iamUserPolicyMap = iamUserPolicyMap
-	sys.iamPolicyDocsMap = iamPolicyDocsMap
-	sys.iamGroupPolicyMap = iamGroupPolicyMap
+	// Merge the new reloaded entries into global map.
+	// See issue https://github.com/minio/minio/issues/9651
+	// where the present list of entries on disk are not yet
+	// latest, there is a small window where this can make
+	// valid users invalid.
+	for k, v := range iamUsersMap {
+		sys.iamUsersMap[k] = v
+	}
+
+	for k, v := range iamPolicyDocsMap {
+		sys.iamPolicyDocsMap[k] = v
+	}
+
+	// Sets default canned policies, if none are set.
+	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
+
+	for k, v := range iamUserPolicyMap {
+		sys.iamUserPolicyMap[k] = v
+	}
+
+	// purge any expired entries which became expired now.
+	for k, v := range sys.iamUsersMap {
+		if v.IsExpired() {
+			delete(sys.iamUsersMap, k)
+			delete(sys.iamUserPolicyMap, k)
+			// Deleting on the etcd is taken care of in the next cycle
+		}
+	}
+
+	for k, v := range iamGroupPolicyMap {
+		sys.iamGroupPolicyMap[k] = v
+	}
+
+	for k, v := range iamGroupsMap {
+		sys.iamGroupsMap[k] = v
+	}
+
 	sys.buildUserGroupMemberships()
 
 	return nil

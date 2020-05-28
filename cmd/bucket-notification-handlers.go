@@ -69,56 +69,44 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	var config = event.Config{
-		XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+	config, err := globalBucketMetadataSys.GetNotificationConfig(bucketName)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
 	config.SetRegion(globalServerRegion)
-
-	configData, err := globalBucketMetadataSys.GetConfig(bucketName, bucketNotificationConfig)
-	if err != nil {
-		if err != errConfigNotFound {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	} else {
-		if err = xml.Unmarshal(configData, &config); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-
-		if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
-			arnErr, ok := err.(*event.ErrARNNotFound)
-			if ok {
-				for i, queue := range config.QueueList {
-					// Remove ARN not found queues, because we previously allowed
-					// adding unexpected entries into the config.
-					//
-					// With newer config disallowing changing / turning off
-					// notification targets without removing ARN in notification
-					// configuration we won't see this problem anymore.
-					if reflect.DeepEqual(queue.ARN, arnErr.ARN) && i < len(config.QueueList) {
-						config.QueueList = append(config.QueueList[:i],
-							config.QueueList[i+1:]...)
-					}
-					// This is a one time activity we shall do this
-					// here and allow stale ARN to be removed. We shall
-					// never reach a stage where we will have stale
-					// notification configs.
+	if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
+		arnErr, ok := err.(*event.ErrARNNotFound)
+		if ok {
+			for i, queue := range config.QueueList {
+				// Remove ARN not found queues, because we previously allowed
+				// adding unexpected entries into the config.
+				//
+				// With newer config disallowing changing / turning off
+				// notification targets without removing ARN in notification
+				// configuration we won't see this problem anymore.
+				if reflect.DeepEqual(queue.ARN, arnErr.ARN) && i < len(config.QueueList) {
+					config.QueueList = append(config.QueueList[:i],
+						config.QueueList[i+1:]...)
 				}
-			} else {
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
+				// This is a one time activity we shall do this
+				// here and allow stale ARN to be removed. We shall
+				// never reach a stage where we will have stale
+				// notification configs.
 			}
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
 		}
 	}
 
-	notificationBytes, err := xml.Marshal(config)
+	configData, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	writeSuccessResponseXML(w, notificationBytes)
+	writeSuccessResponseXML(w, configData)
 }
 
 // PutBucketNotificationHandler - This HTTP handler stores given notification configuration as per

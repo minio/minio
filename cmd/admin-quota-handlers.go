@@ -17,7 +17,7 @@
 package cmd
 
 import (
-	"errors"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
@@ -101,46 +101,18 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketQuotaConfigFile)
+	config, err := globalBucketMetadataSys.GetQuotaConfig(bucket)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, BucketQuotaConfigNotFound{Bucket: bucket}), r.URL)
-		} else {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		}
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	// Write success response.
-	writeSuccessResponseJSON(w, configData)
-}
-
-// RemoveBucketQuotaConfigHandler - removes Bucket quota configuration.
-// ----------
-// Removes quota configuration on the specified bucket.
-func (a adminAPIHandlers) RemoveBucketQuotaConfigHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RemoveBucketQuotaConfig")
-
-	defer logger.AuditLog(w, r, "RemoveBucketQuotaConfig", mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.SetBucketQuotaAdminAction)
-	if objectAPI == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
-		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
-	if err := globalBucketMetadataSys.Update(bucket, bucketQuotaConfigFile, nil); err != nil {
+	configData, err := json.Marshal(config)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
 	// Write success response.
-	writeSuccessNoContent(w)
+	writeSuccessResponseJSON(w, configData)
 }

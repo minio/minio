@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -539,9 +538,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 
-				if objectLockEnabled {
-					globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
-				}
+				// Load updated bucket metadata into memory.
+				globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 				// Make sure to add Location information here only for bucket
 				w.Header().Set(xhttp.Location,
@@ -573,9 +571,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if objectLockEnabled {
-		globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
-	}
+	// Load updated bucket metadata into memory.
+	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Make sure to add Location information here only for bucket
 	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
@@ -1035,6 +1032,12 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
+	// Deny object locking configuration settings on existing buckets without object lock enabled.
+	if _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	if err = globalBucketMetadataSys.Update(bucket, objectLockConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1069,11 +1072,14 @@ func (api objectAPIHandlers) GetBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, objectLockConfig)
+	config, err := globalBucketMetadataSys.GetObjectLockConfig(bucket)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			err = BucketObjectLockConfigNotFound{Bucket: bucket}
-		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configData, err := xml.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1148,11 +1154,14 @@ func (api objectAPIHandlers) GetBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	configData, err := globalBucketMetadataSys.GetConfig(bucket, bucketTaggingConfigFile)
+	config, err := globalBucketMetadataSys.GetTaggingConfig(bucket)
 	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			err = BucketTaggingNotFound{Bucket: bucket}
-		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configData, err := xml.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

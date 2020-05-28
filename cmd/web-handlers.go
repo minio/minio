@@ -409,8 +409,8 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		nextMarker := ""
 		// Fetch all the objects
 		for {
-			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator,
-				maxObjectList)
+			// Let listObjects reply back the maximum from server implementation
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 0)
 			if err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
@@ -524,22 +524,15 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, maxObjectList)
+		// Limit browser to 1000 batches to be more responsive, scrolling friendly.
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
 		for i := range lo.Objects {
-			if crypto.IsEncrypted(lo.Objects[i].UserDefined) {
-				lo.Objects[i].Size, err = lo.Objects[i].DecryptedSize()
-				if err != nil {
-					return toJSONError(ctx, err)
-				}
-			} else if lo.Objects[i].IsCompressed() {
-				actualSize := lo.Objects[i].GetActualSize()
-				if actualSize < 0 {
-					return toJSONError(ctx, errInvalidDecompressedSize)
-				}
-				lo.Objects[i].Size = actualSize
+			lo.Objects[i].Size, err = lo.Objects[i].GetActualSize()
+			if err != nil {
+				return toJSONError(ctx, err)
 			}
 		}
 
@@ -769,7 +762,7 @@ next:
 		for {
 			var objects []string
 			for obj := range objInfoCh {
-				if len(objects) == maxObjectList {
+				if len(objects) == maxDeleteList {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
@@ -951,13 +944,17 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebUpload")
 
-	defer logger.AuditLog(w, r, "WebUpload", mustGetClaimsFromToken(r))
+	// obtain the claims here if possible, for audit logging.
+	claims, owner, authErr := webRequestAuthenticate(r)
+
+	defer logger.AuditLog(w, r, "WebUpload", claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -968,8 +965,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	retPerms := ErrAccessDenied
 	holdPerms := ErrAccessDenied
-
-	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		if authErr == errNoAuthToken {
 			// Check if anonymous (non-owner) has access to upload objects.
@@ -1130,7 +1125,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		retentionMode, retentionDate, legalHold, s3Err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
 		if s3Err == ErrNone && retentionMode != "" {
 			opts.UserDefined[xhttp.AmzObjectLockMode] = string(retentionMode)
-			opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(time.RFC3339)
+			opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(iso8601TimeFormat)
 		}
 		if s3Err == ErrNone && legalHold.Status != "" {
 			opts.UserDefined[xhttp.AmzObjectLockLegalHold] = string(legalHold.Status)
@@ -1174,7 +1169,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	defer logger.AuditLog(w, r, "WebDownload", mustGetClaimsFromToken(r))
+	vars := mux.Vars(r)
+
+	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
+	defer logger.AuditLog(w, r, "WebDownload", claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -1182,19 +1180,16 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
-	token := r.URL.Query().Get("token")
 
 	getRetPerms := ErrAccessDenied
 	legalHoldPerms := ErrAccessDenied
 
-	claims, owner, authErr := webTokenAuthenticate(token)
 	if authErr != nil {
 		if authErr == errNoAuthToken {
 			// Check if anonymous (non-owner) has access to download objects.
@@ -1366,8 +1361,10 @@ type DownloadZipArgs struct {
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	host := handlers.GetSourceIP(r)
 
+	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
+
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(w, r, "WebDownloadZip", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "WebDownloadZip", claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -1384,8 +1381,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, decodeErr)
 		return
 	}
-	token := r.URL.Query().Get("token")
-	claims, owner, authErr := webTokenAuthenticate(token)
+
 	var getRetPerms []APIErrorCode
 	var legalHoldPerms []APIErrorCode
 
@@ -1505,10 +1501,10 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			info := gr.ObjInfo
 			// filter object lock metadata if permission does not permit
 			info.UserDefined = objectlock.FilterObjectLockMetadata(info.UserDefined, getRetPerms[i] != ErrNone, legalHoldPerms[i] != ErrNone)
-
-			if info.IsCompressed() {
-				// For reporting, set the file size to the uncompressed size.
-				info.Size = info.GetActualSize()
+			// For reporting, set the file size to the uncompressed size.
+			info.Size, err = info.GetActualSize()
+			if err != nil {
+				return err
 			}
 			header := &zip.FileHeader{
 				Name:     strings.TrimPrefix(objectName, args.Prefix),
@@ -1599,6 +1595,7 @@ type GetBucketPolicyRep struct {
 // GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	ctx := newWebContext(r, args, "WebGetBucketPolicy")
+
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(ctx, errServerNotInitialized)

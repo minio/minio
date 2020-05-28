@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -613,15 +612,12 @@ func (sys *NotificationSys) AddRemoteTarget(bucketName string, target event.Targ
 func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
-		configData, err := globalBucketMetadataSys.GetConfig(bucket.Name, bucketNotificationConfig)
+		config, err := globalBucketMetadataSys.GetNotificationConfig(bucket.Name)
 		if err != nil {
-			if errors.Is(err, errConfigNotFound) {
-				continue
-			}
 			return err
 		}
-		config, err := event.ParseConfig(bytes.NewReader(configData), globalServerRegion, globalNotificationSys.targetList)
-		if err != nil {
+		config.SetRegion(globalServerRegion)
+		if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
 			if _, ok := err.(*event.ErrARNNotFound); !ok {
 				logger.LogIf(ctx, err)
 			}
@@ -868,6 +864,35 @@ func (sys *NotificationSys) DispatchNetOBDInfo(ctx context.Context) []madmin.Ser
 	return serverNetOBDs
 }
 
+// DispatchNetOBDChan - Net OBD information from other nodes
+func (sys *NotificationSys) DispatchNetOBDChan(ctx context.Context) chan madmin.ServerNetOBDInfo {
+	serverNetOBDs := make(chan madmin.ServerNetOBDInfo)
+	wg := sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		for _, client := range sys.peerClients {
+			if client == nil {
+				continue
+			}
+			serverNetOBD, err := client.DispatchNetOBDInfo(ctx)
+			if err != nil {
+				serverNetOBD.Addr = client.host.String()
+				serverNetOBD.Error = err.Error()
+			}
+			serverNetOBDs <- serverNetOBD
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		wg.Wait()
+		close(serverNetOBDs)
+	}()
+
+	return serverNetOBDs
+}
+
 // NetOBDParallelInfo - Performs NetOBD tests
 func (sys *NotificationSys) NetOBDParallelInfo(ctx context.Context) madmin.ServerNetOBDInfo {
 	netOBDs := []madmin.NetOBDInfo{}
@@ -925,6 +950,42 @@ func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDri
 		}
 	}
 	return reply
+}
+
+// DriveOBDInfoChan - Drive OBD information
+func (sys *NotificationSys) DriveOBDInfoChan(ctx context.Context) chan madmin.ServerDrivesOBDInfo {
+	updateChan := make(chan madmin.ServerDrivesOBDInfo)
+	wg := sync.WaitGroup{}
+
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient) {
+			reply, err := client.DriveOBDInfo(ctx)
+
+			addr := client.host.String()
+			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+			logger.LogIf(ctx, err)
+
+			reply.Addr = addr
+			if err != nil {
+				reply.Error = err.Error()
+			}
+
+			updateChan <- reply
+			wg.Done()
+		}(client)
+	}
+
+	go func() {
+		wg.Wait()
+		close(updateChan)
+	}()
+
+	return updateChan
 }
 
 // CPUOBDInfo - CPU OBD information
@@ -1102,6 +1163,29 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 	return reply
 }
 
+// GetLocalDiskIDs - return disk ids of the local disks of the peers.
+func (sys *NotificationSys) GetLocalDiskIDs() []string {
+	var diskIDs []string
+	var mu sync.Mutex
+
+	var wg sync.WaitGroup
+	for _, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(client *peerRESTClient) {
+			defer wg.Done()
+			ids := client.GetLocalDiskIDs()
+			mu.Lock()
+			diskIDs = append(diskIDs, ids...)
+			mu.Unlock()
+		}(client)
+	}
+	wg.Wait()
+	return diskIDs
+}
+
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(endpoints EndpointZones) *NotificationSys {
 	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()
@@ -1176,9 +1260,6 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 	if args.EventName != event.ObjectRemovedDelete {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
-		if args.Object.IsCompressed() {
-			newEvent.S3.Object.Size = args.Object.GetActualSize()
-		}
 		newEvent.S3.Object.ContentType = args.Object.ContentType
 		newEvent.S3.Object.UserMetadata = args.Object.UserDefined
 	}
@@ -1187,16 +1268,9 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 }
 
 func sendEvent(args eventArgs) {
-	// remove sensitive encryption entries in metadata.
-	switch {
-	case crypto.IsEncrypted(args.Object.UserDefined):
-		if totalObjectSize, err := args.Object.DecryptedSize(); err == nil {
-			args.Object.Size = totalObjectSize
-		}
-	case args.Object.IsCompressed():
-		args.Object.Size = args.Object.GetActualSize()
-	}
+	args.Object.Size, _ = args.Object.GetActualSize()
 
+	// remove sensitive encryption entries in metadata.
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
 

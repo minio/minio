@@ -21,6 +21,7 @@ import (
 	"math"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -86,13 +87,23 @@ const (
 // ObjectsHistogramIntervals is the list of all intervals
 // of object sizes to be included in objects histogram.
 var ObjectsHistogramIntervals = []objectHistogramInterval{
-	{"LESS_THAN_1024_B", -1, 1024 - 1},
-	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
-	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
-	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
-	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
-	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
-	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
+	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
+	{"BETWEEN_1024_B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
+	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", humanize.MiByte * 10, humanize.MiByte*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", humanize.MiByte * 128, humanize.MiByte*512 - 1},
+	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
+}
+
+// BucketUsageInfo - bucket usage info provides
+// - total size of the bucket
+// - total objects in a bucket
+// - object size histogram per bucket
+type BucketUsageInfo struct {
+	Size                 uint64            `json:"size"`
+	ObjectsCount         uint64            `json:"objectsCount"`
+	ObjectSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
@@ -101,17 +112,23 @@ type DataUsageInfo struct {
 	// This does not indicate a full scan.
 	LastUpdate time.Time `json:"lastUpdate"`
 
-	ObjectsCount uint64 `json:"objectsCount"`
-	// Objects total size
+	// Objects total count across all buckets
+	ObjectsTotalCount uint64 `json:"objectsCount"`
+
+	// Objects total size across all buckets
 	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
 
-	// ObjectsSizesHistogram contains information on objects across all buckets.
-	// See ObjectsHistogramIntervals.
-	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
-
+	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
-	// BucketsSizes is "bucket name" -> size.
-	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
+
+	// Buckets usage info provides following information across all buckets
+	// - total size of the bucket
+	// - total objects in a bucket
+	// - object size histogram per bucket
+	BucketsUsage map[string]BucketUsageInfo `json:"bucketsUsageInfo"`
+
+	// Deprecated kept here for backward compatibility reasons.
+	BucketSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
 // BucketInfo - represents bucket metadata.

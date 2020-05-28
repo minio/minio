@@ -285,6 +285,11 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(
 		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
 
+	// S3 browser with signature v4 adds '//' for ListBuckets request, so rather
+	// than failing with UnknownAPIRequest we simply handle it for now.
+	apiRouter.Methods(http.MethodGet).Path(SlashSeparator + SlashSeparator).HandlerFunc(
+		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
+
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = http.HandlerFunc(collectAPIStats("notfound", httpTraceAll(errorResponseHandler)))
 	apiRouter.MethodNotAllowedHandler = http.HandlerFunc(collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler)))
