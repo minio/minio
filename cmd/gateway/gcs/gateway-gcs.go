@@ -1152,6 +1152,14 @@ func gcsGetPartInfo(ctx context.Context, attrs *storage.ObjectAttrs) (minio.Part
 	}, nil
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (l *gcsGateway) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
+}
+
 //  ListObjectParts returns all object parts for specified object in specified bucket
 func (l *gcsGateway) ListObjectParts(ctx context.Context, bucket string, key string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (minio.ListPartsInfo, error) {
 	it := l.client.Bucket(bucket).Objects(ctx, &storage.Query{

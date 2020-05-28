@@ -1046,13 +1046,17 @@ func (z *xlZones) PutObjectPart(ctx context.Context, bucket, object, uploadID st
 		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
-		if err != nil {
-			return PartInfo{}, err
-		}
-		if result.Lookup(uploadID) {
+		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		if err == nil {
 			return zone.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 		}
+		switch err.(type) {
+		case InvalidUploadID:
+			// Look for information on the next zone
+			continue
+		}
+		// Any other unhandled errors such as quorum return.
+		return PartInfo{}, err
 	}
 
 	return PartInfo{}, InvalidUploadID{
@@ -1060,6 +1064,41 @@ func (z *xlZones) PutObjectPart(ctx context.Context, bucket, object, uploadID st
 		Object:   object,
 		UploadID: uploadID,
 	}
+}
+
+func (z *xlZones) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
+	if err := checkListPartsArgs(ctx, bucket, object, z); err != nil {
+		return MultipartInfo{}, err
+	}
+
+	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
+	if err := uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
+		return MultipartInfo{}, err
+	}
+	defer uploadIDLock.RUnlock()
+
+	if z.SingleZone() {
+		return z.zones[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+	}
+	for _, zone := range z.zones {
+		mi, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		if err == nil {
+			return mi, nil
+		}
+		switch err.(type) {
+		case InvalidUploadID:
+			// upload id not found, continue to the next zone.
+			continue
+		}
+		// any other unhandled error return right here.
+		return MultipartInfo{}, err
+	}
+	return MultipartInfo{}, InvalidUploadID{
+		Bucket:   bucket,
+		Object:   object,
+		UploadID: uploadID,
+	}
+
 }
 
 // ListObjectParts - lists all uploaded parts to an object in hashedSet.
@@ -1078,13 +1117,15 @@ func (z *xlZones) ListObjectParts(ctx context.Context, bucket, object, uploadID 
 		return z.zones[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
-		if err != nil {
-			return ListPartsInfo{}, err
-		}
-		if result.Lookup(uploadID) {
+		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		if err == nil {
 			return zone.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 		}
+		switch err.(type) {
+		case InvalidUploadID:
+			continue
+		}
+		return ListPartsInfo{}, err
 	}
 	return ListPartsInfo{}, InvalidUploadID{
 		Bucket:   bucket,
@@ -1110,13 +1151,16 @@ func (z *xlZones) AbortMultipartUpload(ctx context.Context, bucket, object, uplo
 	}
 
 	for _, zone := range z.zones {
-		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
-		if err != nil {
-			return err
-		}
-		if result.Lookup(uploadID) {
+		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
+		if err == nil {
 			return zone.AbortMultipartUpload(ctx, bucket, object, uploadID)
 		}
+		switch err.(type) {
+		case InvalidUploadID:
+			// upload id not found move to next zone
+			continue
+		}
+		return err
 	}
 	return InvalidUploadID{
 		Bucket:   bucket,

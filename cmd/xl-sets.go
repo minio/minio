@@ -1169,6 +1169,11 @@ func (s *xlSets) PutObjectPart(ctx context.Context, bucket, object, uploadID str
 	return s.getHashedSet(object).PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 }
 
+// GetMultipartInfo - return multipart metadata info uploaded at hashedSet.
+func (s *xlSets) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (result MultipartInfo, err error) {
+	return s.getHashedSet(object).GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+}
+
 // ListObjectParts - lists all uploaded parts to an object in hashedSet.
 func (s *xlSets) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	return s.getHashedSet(object).ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
