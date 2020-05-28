@@ -31,7 +31,7 @@ type StorageAPI interface {
 	IsLocal() bool
 	Hostname() string // Returns host name if remote host.
 	Close() error
-	GetDiskID() (string, error) // Could be expensive
+	GetDiskID() (string, error)
 	SetDiskID(id string)
 
 	DiskInfo() (info DiskInfo, err error)

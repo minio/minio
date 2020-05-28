@@ -93,8 +93,9 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
+	errs = make([]error, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
@@ -106,12 +107,12 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 			}
 			info, err := disks[index].DiskInfo()
 			if err != nil {
-				if IsErr(err, baseErrs...) {
-					return err
+				if !IsErr(err, baseErrs...) {
+					reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
+					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+					logger.LogIf(ctx, err)
 				}
-				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
-				ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-				logger.LogIf(ctx, err)
+				return err
 			}
 			disksInfo[index] = info
 			return nil
@@ -121,8 +122,9 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
+	errs = g.Wait()
 	// Wait for the routines.
-	for i, diskInfoErr := range g.Wait() {
+	for i, diskInfoErr := range errs {
 		if disks[i] == nil {
 			continue
 		}
@@ -157,12 +159,12 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, onlineDisks, offlin
 	}
 
 	// Success.
-	return disksInfo, onlineDisks, offlineDisks
+	return disksInfo, errs, onlineDisks, offlineDisks
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI) StorageInfo {
-	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
+func getStorageInfo(disks []StorageAPI) (StorageInfo, []error) {
+	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -191,11 +193,11 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
 
-	return storageInfo
+	return storageInfo, errs
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (xl xlObjects) StorageInfo(ctx context.Context, local bool) StorageInfo {
+func (xl xlObjects) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 
 	disks := xl.getDisks()
 	if local {

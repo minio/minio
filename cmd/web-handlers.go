@@ -129,7 +129,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
-	reply.StorageInfo = objectAPI.StorageInfo(ctx, false)
+	reply.StorageInfo, _ = objectAPI.StorageInfo(ctx, false)
 	reply.UIVersion = browser.UIVersion
 	return nil
 }

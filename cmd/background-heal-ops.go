@@ -114,8 +114,9 @@ func startBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 	go globalBackgroundHealRoutine.run(ctx, objAPI)
 
 	// Launch the background healer sequence to track
-	// background healing operations
-	info := objAPI.StorageInfo(ctx, false)
+	// background healing operations, ignore errors
+	// errors are handled into offline disks already.
+	info, _ := objAPI.StorageInfo(ctx, false)
 	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
 	nh := newBgHealSequence(numDisks)
 	globalBackgroundHealState.LaunchNewHealSequence(nh)

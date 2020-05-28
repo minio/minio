@@ -130,7 +130,7 @@ func (z *xlZones) getZonesAvailableSpace(ctx context.Context) zonesAvailableSpac
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageInfo(ctx, false)
+			storageInfos[index] = z.zones[index].StorageUsageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -175,7 +175,7 @@ func (z *xlZones) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
+func (z *xlZones) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 	if z.SingleZone() {
 		return z.zones[0].StorageInfo(ctx, local)
 	}
@@ -183,11 +183,12 @@ func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(z.zones))
+	storageInfosErrs := make([][]error, len(z.zones))
 	g := errgroup.WithNErrs(len(z.zones))
 	for index := range z.zones {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageInfo(ctx, local)
+			storageInfos[index], storageInfosErrs[index] = z.zones[index].StorageInfo(ctx, local)
 			return nil
 		}, index)
 	}
@@ -211,7 +212,11 @@ func (z *xlZones) StorageInfo(ctx context.Context, local bool) StorageInfo {
 	storageInfo.Backend.RRSCData = storageInfos[0].Backend.RRSCData
 	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
 
-	return storageInfo
+	var errs []error
+	for i := range z.zones {
+		errs = append(errs, storageInfosErrs[i]...)
+	}
+	return storageInfo, errs
 }
 
 func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
