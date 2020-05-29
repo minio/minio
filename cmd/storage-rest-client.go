@@ -168,12 +168,8 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	if err != nil {
 		return cache, err
 	}
-	b, err = ioutil.ReadAll(reader)
-	if err != nil {
-		return cache, err
-	}
 	var newCache dataUsageCache
-	return newCache, newCache.deserialize(b)
+	return newCache, newCache.deserialize(reader)
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {

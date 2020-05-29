@@ -254,7 +254,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 			Name:      dataUsageRoot,
 			NextCycle: oldCache.Info.NextCycle,
 		},
-		Cache: make(map[dataUsageHash]dataUsageEntry, len(oldCache.Cache)),
+		Cache: make(map[string]dataUsageEntry, len(oldCache.Cache)),
 	}
 
 	// Put all buckets into channel.

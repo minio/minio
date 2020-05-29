@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -612,10 +614,17 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 		{name: "rootfile2", size: 10000},
 		{name: "dir1/d1file", size: 2000},
 		{name: "dir2/d2file", size: 300},
+		{name: "dir2/d2file2", size: 300},
+		{name: "dir2/d2file3/", size: 300},
+		{name: "dir2/d2file4/", size: 300},
+		{name: "dir2/d2file5", size: 300},
 		{name: "dir1/dira/dafile", size: 100000},
 		{name: "dir1/dira/dbfile", size: 200000},
 		{name: "dir1/dira/dirasub/dcfile", size: 1000000},
 		{name: "dir1/dira/dirasub/sublevel3/dccccfile", size: 10},
+		{name: "dir1/dira/dirasub/sublevel3/dccccfile20", size: 20},
+		{name: "dir1/dira/dirasub/sublevel3/dccccfile30", size: 30},
+		{name: "dir1/dira/dirasub/sublevel3/dccccfile40", size: 40},
 	}
 	createUsageTestFiles(t, base, files)
 
@@ -636,16 +645,26 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 
 	b := want.serialize()
 	var got dataUsageCache
-	err = got.deserialize(b)
+	err = got.deserialize(bytes.NewBuffer(b))
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	t.Log("serialized size:", len(b), "bytes")
 	if got.Info.LastUpdate.IsZero() {
 		t.Error("lastupdate not set")
 	}
 
 	if !want.Info.LastUpdate.Equal(got.Info.LastUpdate) {
-		t.Fatalf("deserialize mismatch\nwant: %+v\ngot:  %+v", want, got)
+		t.Fatalf("deserialize LastUpdate mismatch\nwant: %+v\ngot:  %+v", want, got)
 	}
+	if len(want.Cache) != len(got.Cache) {
+		t.Errorf("deserialize mismatch length\nwant: %+v\ngot:  %+v", len(want.Cache), len(got.Cache))
+	}
+	for wkey, wval := range want.Cache {
+		gotv := got.Cache[wkey]
+		if fmt.Sprint(gotv) != fmt.Sprint(wval) {
+			t.Errorf("deserialize mismatch, key %v\nwant: %+v\ngot:  %+v", wkey, wval, gotv)
+		}
+	}
+
 }

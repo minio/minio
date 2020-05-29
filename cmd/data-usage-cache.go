@@ -27,10 +27,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/bucket/lifecycle"
-
 	"github.com/cespare/xxhash/v2"
+	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -51,6 +51,12 @@ type dataUsageEntry struct {
 	ObjSizes sizeHistogram
 
 	Children dataUsageHashMap
+}
+
+// dataUsageCache contains a cache of data usage entries.
+type dataUsageCache struct {
+	Info  dataUsageCacheInfo
+	Cache map[string]dataUsageEntry
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -92,19 +98,19 @@ func (e *dataUsageEntry) addChildString(name string) {
 // addChild will add a child based on its hash.
 // If it already exists it will not be added again.
 func (e *dataUsageEntry) addChild(hash dataUsageHash) {
-	if _, ok := e.Children[hash]; ok {
+	if _, ok := e.Children[hash.Key()]; ok {
 		return
 	}
 	if e.Children == nil {
 		e.Children = make(dataUsageHashMap, 1)
 	}
-	e.Children[hash] = struct{}{}
+	e.Children[hash.Key()] = struct{}{}
 }
 
 // find a path in the cache.
 // Returns nil if not found.
 func (d *dataUsageCache) find(path string) *dataUsageEntry {
-	due, ok := d.Cache[hashPath(path)]
+	due, ok := d.Cache[hashPath(path).Key()]
 	if !ok {
 		return nil
 	}
@@ -135,14 +141,14 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 	hash := hashPath(path)
 	if d.Cache == nil {
-		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
+		d.Cache = make(map[string]dataUsageEntry, 100)
 	}
-	d.Cache[hash] = e
+	d.Cache[hash.Key()] = e
 	if parent != "" {
 		phash := hashPath(parent)
-		p := d.Cache[phash]
+		p := d.Cache[phash.Key()]
 		p.addChild(hash)
-		d.Cache[phash] = p
+		d.Cache[phash.Key()] = p
 	}
 }
 
@@ -151,13 +157,13 @@ func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 // If the parent does not exist, it will be added.
 func (d *dataUsageCache) replaceHashed(hash dataUsageHash, parent *dataUsageHash, e dataUsageEntry) {
 	if d.Cache == nil {
-		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
+		d.Cache = make(map[string]dataUsageEntry, 100)
 	}
-	d.Cache[hash] = e
+	d.Cache[hash.Key()] = e
 	if parent != nil {
-		p := d.Cache[*parent]
+		p := d.Cache[parent.Key()]
 		p.addChild(hash)
-		d.Cache[*parent] = p
+		d.Cache[parent.Key()] = p
 	}
 }
 
@@ -166,24 +172,24 @@ func (d *dataUsageCache) replaceHashed(hash dataUsageHash, parent *dataUsageHash
 // If the parent does not exist, it will be added.
 func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHash, parent *dataUsageHash) {
 	if d.Cache == nil {
-		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
+		d.Cache = make(map[string]dataUsageEntry, 100)
 	}
-	e, ok := src.Cache[hash]
+	e, ok := src.Cache[hash.String()]
 	if !ok {
 		return
 	}
-	d.Cache[hash] = e
+	d.Cache[hash.Key()] = e
 	for ch := range e.Children {
-		if ch == hash {
+		if ch == hash.Key() {
 			logger.LogIf(GlobalContext, errors.New("dataUsageCache.copyWithChildren: Circular reference"))
 			return
 		}
-		d.copyWithChildren(src, ch, &hash)
+		d.copyWithChildren(src, dataUsageHash(ch), &hash)
 	}
 	if parent != nil {
-		p := d.Cache[*parent]
+		p := d.Cache[parent.Key()]
 		p.addChild(hash)
-		d.Cache[*parent] = p
+		d.Cache[parent.Key()] = p
 	}
 }
 
@@ -198,6 +204,11 @@ func (d *dataUsageCache) StringAll() string {
 
 // String returns a human readable representation of the string.
 func (h dataUsageHash) String() string {
+	return string(h)
+}
+
+// String returns a human readable representation of the string.
+func (h dataUsageHash) Key() string {
 	return string(h)
 }
 
@@ -264,12 +275,6 @@ func (d *dataUsageCache) sizeRecursive(path string) *dataUsageEntry {
 	return &flat
 }
 
-// dataUsageCache contains a cache of data usage entries.
-type dataUsageCache struct {
-	Info  dataUsageCacheInfo
-	Cache map[dataUsageHash]dataUsageEntry
-}
-
 // root returns the root of the cache.
 func (d *dataUsageCache) root() *dataUsageEntry {
 	return d.find(d.Info.Name)
@@ -284,7 +289,7 @@ func (d *dataUsageCache) rootHash() dataUsageHash {
 func (d *dataUsageCache) clone() dataUsageCache {
 	clone := dataUsageCache{
 		Info:  d.Info,
-		Cache: make(map[dataUsageHash]dataUsageEntry, len(d.Cache)),
+		Cache: make(map[string]dataUsageEntry, len(d.Cache)),
 	}
 	for k, v := range d.Cache {
 		clone.Cache[k] = v
@@ -319,7 +324,7 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 		existing := d.Cache[key]
 		// If not found, merging simply adds.
 		existing.merge(flat)
-		d.replaceHashed(key, &eHash, existing)
+		d.replaceHashed(dataUsageHash(key), &eHash, existing)
 	}
 }
 
@@ -336,7 +341,7 @@ func (d *dataUsageCache) load(ctx context.Context, store ObjectLayer, name strin
 		*d = dataUsageCache{}
 		return nil
 	}
-	err = d.deserialize(buf.Bytes())
+	err = d.deserialize(&buf)
 	if err != nil {
 		*d = dataUsageCache{}
 		logger.LogIf(ctx, err)
@@ -371,20 +376,38 @@ const dataUsageCacheVer = 2
 
 // serialize the contents of the cache.
 func (d *dataUsageCache) serialize() []byte {
+	// Prepend version and compress.
 	dst := make([]byte, 0, d.Msgsize()+1)
 	dst = append(dst, dataUsageCacheVer)
-
-	// TODO: Compress this payload, switch to streaming serialization...
-	b, err := d.MarshalMsg(dst)
+	buf := bytes.NewBuffer(dst)
+	enc, err := zstd.NewWriter(buf,
+		zstd.WithEncoderLevel(zstd.SpeedFastest),
+		zstd.WithWindowSize(1<<20),
+		zstd.WithEncoderConcurrency(2))
 	if err != nil {
-		panic(err)
+		logger.LogIf(GlobalContext, err)
+		return nil
 	}
-	return b
+	mEnc := msgp.NewWriter(enc)
+	err = d.EncodeMsg(mEnc)
+	if err != nil {
+		logger.LogIf(GlobalContext, err)
+		return nil
+	}
+	mEnc.Flush()
+	err = enc.Close()
+	if err != nil {
+		logger.LogIf(GlobalContext, err)
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // deserialize the supplied byte slice into the cache.
-func (d *dataUsageCache) deserialize(b []byte) error {
-	if len(b) < 1 {
+func (d *dataUsageCache) deserialize(r io.Reader) error {
+	var b [1]byte
+	n, err := r.Read(b[:])
+	if n != 1 {
 		return io.ErrUnexpectedEOF
 	}
 	switch b[0] {
@@ -394,11 +417,15 @@ func (d *dataUsageCache) deserialize(b []byte) error {
 	default:
 		return fmt.Errorf("dataUsageCache: unknown version: %d", int(b[0]))
 	}
-	b = b[1:]
 
-	// All
-	_, err := d.UnmarshalMsg(b)
-	return err
+	// Zstd compressed.
+	dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+	if err != nil {
+		return err
+	}
+	defer dec.Close()
+
+	return d.DecodeMsg(msgp.NewReader(dec))
 }
 
 // Trim this from start+end of hashes.
@@ -419,7 +446,7 @@ func hashPath(data string) dataUsageHash {
 }
 
 //msgp:ignore dataUsageHashMap
-type dataUsageHashMap map[dataUsageHash]struct{}
+type dataUsageHashMap map[string]struct{}
 
 // DecodeMsg implements msgp.Decodable
 func (z *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
@@ -438,7 +465,7 @@ func (z *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err)
 				return
 			}
-			(*z)[dataUsageHash(zb0003)] = struct{}{}
+			(*z)[zb0003] = struct{}{}
 		}
 	}
 	return
@@ -452,7 +479,7 @@ func (z dataUsageHashMap) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for zb0004 := range z {
-		err = en.WriteString(zb0004.String())
+		err = en.WriteString(zb0004)
 		if err != nil {
 			err = msgp.WrapError(err, zb0004)
 			return
@@ -466,7 +493,7 @@ func (z dataUsageHashMap) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	for zb0004 := range z {
-		o = msgp.AppendString(o, zb0004.String())
+		o = msgp.AppendString(o, zb0004)
 	}
 	return
 }
@@ -488,7 +515,7 @@ func (z *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err)
 				return
 			}
-			(*z)[dataUsageHash(zb0003)] = struct{}{}
+			(*z)[zb0003] = struct{}{}
 		}
 	}
 	o = bts

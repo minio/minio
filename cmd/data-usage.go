@@ -312,7 +312,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 		}
 
-		if _, ok := f.oldCache.Cache[thisHash]; filter != nil && ok {
+		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
 				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
@@ -353,7 +353,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 			if typ&os.ModeDir != 0 {
 				h := hashPath(entName)
-				_, exists := f.oldCache.Cache[h]
+				_, exists := f.oldCache.Cache[h.Key()]
 				cache.addChildString(entName)
 
 				this := cachedFolder{name: entName, parent: &thisHash}
@@ -562,7 +562,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		s.newCache.replace(folder.name, "", *du)
 		// Add to parent manually
 		if folder.parent != nil {
-			parent := s.newCache.Cache[*folder.parent]
+			parent := s.newCache.Cache[folder.parent.Key()]
 			parent.addChildString(folder.name)
 		}
 	}
@@ -580,7 +580,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 		h := hashPath(folder.name)
 		if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-			s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h])
+			s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
 			continue
 		}
 
@@ -590,7 +590,7 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 				if s.dataUsageCrawlDebug {
 					logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
 				}
-				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h])
+				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
 				continue
 			}
 		}
