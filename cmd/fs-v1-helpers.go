@@ -367,7 +367,7 @@ func fsFAllocate(fd int, offset int64, len int64) (err error) {
 		switch {
 		case isSysErrNoSpace(e):
 			err = errDiskFull
-		case isSysErrNoSys(e) && !isSysErrOpNotSupported(e):
+		case isSysErrNoSys(e) || isSysErrOpNotSupported(e):
 			// Ignore errors when Fallocate is not supported in the current system
 		case isSysErrInvalidArg(e):
 			// Workaround for Windows Docker Engine 19.03.8.
