@@ -46,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 1
+	dataUpdateTrackerVersion      = 2
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 
 	// Reset bloom filters every n cycle
@@ -116,9 +116,7 @@ func (b bloomFilter) containsDir(in string) bool {
 	if len(split) == 0 {
 		return false
 	}
-	var tmp [dataUsageHashLen]byte
-	hashPath(path.Join(split...)).bytes(tmp[:])
-	return b.Test(tmp[:])
+	return b.TestString(hashPath(path.Join(split...)).String())
 }
 
 // bytes returns the bloom filter serialized as a byte slice.
@@ -366,6 +364,8 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
+	case 1:
+		return errors.New("dataUpdateTracker: deprecated data version, updating.")
 	case dataUpdateTrackerVersion:
 	default:
 		return errors.New("dataUpdateTracker: Unknown data version")
@@ -435,7 +435,6 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 // start a collector that picks up entries from objectUpdatedCh
 // and adds them  to the current bloom filter.
 func (d *dataUpdateTracker) startCollector(ctx context.Context) {
-	var tmp [dataUsageHashLen]byte
 	for {
 		select {
 		case <-ctx.Done():
@@ -463,8 +462,7 @@ func (d *dataUpdateTracker) startCollector(ctx context.Context) {
 				if d.debug && false {
 					logger.Info(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
 				}
-				hashPath(path.Join(split[:i+1]...)).bytes(tmp[:])
-				d.Current.bf.Add(tmp[:])
+				d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
 			}
 			d.dirty = d.dirty || len(split) > 0
 			d.mu.Unlock()
