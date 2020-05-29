@@ -37,19 +37,8 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
-// setsStorageAPI is encapsulated type for Close()
-type setsStorageAPI [][]StorageAPI
-
 // setsDsyncLockers is encapsulated type for Close()
 type setsDsyncLockers [][]dsync.NetLocker
-
-func (s setsStorageAPI) Copy() [][]StorageAPI {
-	copyS := make(setsStorageAPI, len(s))
-	for i, disks := range s {
-		copyS[i] = append(copyS[i], disks...)
-	}
-	return copyS
-}
 
 // Information of a new disk connection
 type diskConnectInfo struct {
@@ -71,7 +60,7 @@ type xlSets struct {
 	xlDisksMu sync.RWMutex
 
 	// Re-ordered list of disks per set.
-	xlDisks setsStorageAPI
+	xlDisks [][]StorageAPI
 
 	// Distributed locker clients.
 	xlLockers setsDsyncLockers
@@ -369,32 +358,65 @@ func (s *xlSets) NewNSLock(ctx context.Context, bucket string, objects ...string
 	return s.getHashedSet("").NewNSLock(ctx, bucket, objects...)
 }
 
-// StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-// Caches values for 1 second.
-func (s *xlSets) StorageInfo(ctx context.Context, local bool) StorageInfo {
+// StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
+// This only returns disk usage info for Zones to perform placement decision, this call
+// is not implemented in Object interface and is not meant to be used by other object
+// layer implementations.
+func (s *xlSets) StorageUsageInfo(ctx context.Context) StorageInfo {
+	storageUsageInfo := func() StorageInfo {
+		var storageInfo StorageInfo
+		storageInfos := make([]StorageInfo, len(s.sets))
+		storageInfo.Backend.Type = BackendErasure
+
+		g := errgroup.WithNErrs(len(s.sets))
+		for index := range s.sets {
+			index := index
+			g.Go(func() error {
+				// ignoring errors on purpose
+				storageInfos[index], _ = s.sets[index].StorageInfo(ctx, false)
+				return nil
+			}, index)
+		}
+
+		// Wait for the go routines.
+		g.Wait()
+
+		for _, lstorageInfo := range storageInfos {
+			storageInfo.Used = append(storageInfo.Used, lstorageInfo.Used...)
+			storageInfo.Total = append(storageInfo.Total, lstorageInfo.Total...)
+			storageInfo.Available = append(storageInfo.Available, lstorageInfo.Available...)
+			storageInfo.MountPaths = append(storageInfo.MountPaths, lstorageInfo.MountPaths...)
+			storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
+			storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
+		}
+
+		return storageInfo
+	}
+
 	s.disksStorageInfoCache.Once.Do(func() {
 		s.disksStorageInfoCache.TTL = time.Second
 		s.disksStorageInfoCache.Update = func() (interface{}, error) {
-			return s.storageInfo(ctx, local), nil
+			return storageUsageInfo(), nil
 		}
 	})
+
 	v, _ := s.disksStorageInfoCache.Get()
 	return v.(StorageInfo)
 }
 
-// storageInfo - combines output of StorageInfo across all erasure coded object sets.
-// Use StorageInfo for a cached version.
-func (s *xlSets) storageInfo(ctx context.Context, local bool) StorageInfo {
+// StorageInfo - combines output of StorageInfo across all erasure coded object sets.
+func (s *xlSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
+	storageInfoErrs := make([][]error, len(s.sets))
 	storageInfo.Backend.Type = BackendErasure
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = s.sets[index].StorageInfo(ctx, local)
+			storageInfos[index], storageInfoErrs[index] = s.sets[index].StorageInfo(ctx, local)
 			return nil
 		}, index)
 	}
@@ -428,49 +450,56 @@ func (s *xlSets) storageInfo(ctx context.Context, local bool) StorageInfo {
 	}
 
 	if local {
-		// if local is true, we don't need to read format.json
-		return storageInfo
+		// if local is true, we are not interested in the drive UUID info.
+		// this is called primarily by prometheus
+		return storageInfo, nil
 	}
 
-	s.xlDisksMu.RLock()
-	storageDisks := s.xlDisks.Copy()
-	s.xlDisksMu.RUnlock()
-
-	for i := 0; i < s.setCount; i++ {
-		for j := 0; j < s.drivesPerSet; j++ {
-			if storageDisks[i][j] == nil {
+	for i, set := range s.sets {
+		storageDisks := set.getDisks()
+		for j, storageErr := range storageInfoErrs[i] {
+			if storageDisks[j] == OfflineDisk {
 				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
 					State:    madmin.DriveStateOffline,
 					Endpoint: s.endpointStrings[i*s.drivesPerSet+j],
 				}
 				continue
 			}
-			diskID, err := storageDisks[i][j].GetDiskID()
-			if err != nil {
-				if err == errUnformattedDisk {
-					storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-						State:    madmin.DriveStateUnformatted,
-						Endpoint: storageDisks[i][j].String(),
-						UUID:     "",
-					}
-				} else {
-					storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-						State:    madmin.DriveStateCorrupt,
-						Endpoint: storageDisks[i][j].String(),
-						UUID:     "",
-					}
+			var diskID string
+			if storageErr == nil {
+				// No errors returned by storage, look for its DiskID()
+				diskID, storageErr = storageDisks[j].GetDiskID()
+			}
+			if storageErr == nil {
+				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
+					State:    madmin.DriveStateOk,
+					Endpoint: storageDisks[j].String(),
+					UUID:     diskID,
 				}
 				continue
 			}
-			storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-				State:    madmin.DriveStateOk,
-				Endpoint: storageDisks[i][j].String(),
-				UUID:     diskID,
+			if storageErr == errUnformattedDisk {
+				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
+					State:    madmin.DriveStateUnformatted,
+					Endpoint: storageDisks[j].String(),
+					UUID:     "",
+				}
+			} else {
+				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
+					State:    madmin.DriveStateCorrupt,
+					Endpoint: storageDisks[j].String(),
+					UUID:     "",
+				}
 			}
 		}
 	}
 
-	return storageInfo
+	var errs []error
+	for i := range s.sets {
+		errs = append(errs, storageInfoErrs[i]...)
+	}
+
+	return storageInfo, errs
 }
 
 func (s *xlSets) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
@@ -744,18 +773,17 @@ func (s *xlSets) DeleteObjects(ctx context.Context, bucket string, objects []str
 }
 
 // CopyObject - copies objects from one hashedSet to another hashedSet, on server side.
-func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (s *xlSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	srcSet := s.getHashedSet(srcObject)
-	destSet := s.getHashedSet(destObject)
+	dstSet := s.getHashedSet(dstObject)
 
 	// Check if this request is only metadata update.
-	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(destBucket, destObject))
-	if cpSrcDstSame && srcInfo.metadataOnly {
-		return srcSet.CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
+	if srcSet == dstSet && srcInfo.metadataOnly {
+		return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
 
 	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
-	return destSet.putObject(ctx, destBucket, destObject, srcInfo.PutObjReader, putOpts)
+	return dstSet.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
 // FileInfoCh - file info channel
@@ -1167,6 +1195,11 @@ func (s *xlSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destB
 // PutObjectPart - writes part of an object to hashedSet based on the object name.
 func (s *xlSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error) {
 	return s.getHashedSet(object).PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
+}
+
+// GetMultipartInfo - return multipart metadata info uploaded at hashedSet.
+func (s *xlSets) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (result MultipartInfo, err error) {
+	return s.getHashedSet(object).GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 }
 
 // ListObjectParts - lists all uploaded parts to an object in hashedSet.

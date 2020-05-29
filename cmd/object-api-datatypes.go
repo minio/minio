@@ -194,12 +194,35 @@ type ObjectInfo struct {
 	PutObjReader *PutObjReader  `json:"-"`
 
 	metadataOnly bool
+	keyRotation  bool
 
 	// Date and time when the object was last accessed.
 	AccTime time.Time
 
 	// backendType indicates which backend filled this structure
 	backendType BackendType
+}
+
+// MultipartInfo captures metadata information about the uploadId
+// this data structure is used primarily for some internal purposes
+// for verifying upload type such as was the upload
+// - encrypted
+// - compressed
+type MultipartInfo struct {
+	// Name of the bucket.
+	Bucket string
+
+	// Name of the object.
+	Object string
+
+	// Upload ID identifying the multipart upload whose parts are being listed.
+	UploadID string
+
+	// Date and time at which the multipart upload was initiated.
+	Initiated time.Time
+
+	// Any metadata set during InitMultipartUpload, including encryption headers.
+	UserDefined map[string]string
 }
 
 // ListPartsInfo - represents list of all parts.
@@ -235,8 +258,6 @@ type ListPartsInfo struct {
 
 	// Any metadata set during InitMultipartUpload, including encryption headers.
 	UserDefined map[string]string
-
-	EncodingType string // Not supported yet.
 }
 
 // Lookup - returns if uploadID is valid
@@ -360,20 +381,6 @@ type PartInfo struct {
 
 	// Decompressed Size.
 	ActualSize int64
-}
-
-// MultipartInfo - represents metadata in progress multipart upload.
-type MultipartInfo struct {
-	// Object name for which the multipart upload was initiated.
-	Object string
-
-	// Unique identifier for this multipart upload.
-	UploadID string
-
-	// Date and time at which the multipart upload was initiated.
-	Initiated time.Time
-
-	StorageClass string // Not supported yet.
 }
 
 // CompletePart - represents the part that was completed, this is sent by the client

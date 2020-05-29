@@ -203,7 +203,7 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) StorageInfo {
+func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []error) {
 
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
@@ -212,7 +212,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) StorageInfo {
 
 	di, err := getDiskInfo(fs.fsPath)
 	if err != nil {
-		return StorageInfo{}
+		return StorageInfo{}, []error{err}
 	}
 	used := di.Total - di.Free
 	if !fs.diskMount {
@@ -226,7 +226,7 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) StorageInfo {
 		MountPaths: []string{fs.fsPath},
 	}
 	storageInfo.Backend.Type = BackendFS
-	return storageInfo
+	return storageInfo, nil
 }
 
 func (fs *FSObjects) waitForLowActiveIO() {

@@ -65,64 +65,61 @@ func (xl xlObjects) putObjectDir(ctx context.Context, bucket, object string, wri
 // if source object and destination object are same we only
 // update metadata.
 func (xl xlObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
-	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-
-	// Check if this request is only metadata update.
-	if cpSrcDstSame {
-		defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
-
-		// Read metadata associated with the object from all disks.
-		storageDisks := xl.getDisks()
-
-		metaArr, errs := readAllXLMetadata(ctx, storageDisks, srcBucket, srcObject)
-
-		// get Quorum for this object
-		readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
-		if err != nil {
-			return oi, toObjectErr(err, srcBucket, srcObject)
-		}
-
-		if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
-			return oi, toObjectErr(reducedErr, srcBucket, srcObject)
-		}
-
-		// List all online disks.
-		_, modTime := listOnlineDisks(storageDisks, metaArr, errs)
-
-		// Pick latest valid metadata.
-		xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
-		if err != nil {
-			return oi, toObjectErr(err, srcBucket, srcObject)
-		}
-
-		// Update `xl.json` content on each disks.
-		for index := range metaArr {
-			metaArr[index].Meta = srcInfo.UserDefined
-			metaArr[index].Meta["etag"] = srcInfo.ETag
-		}
-
-		var onlineDisks []StorageAPI
-
-		tempObj := mustGetUUID()
-
-		// Cleanup in case of xl.json writing failure
-		defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
-
-		// Write unique `xl.json` for each disk.
-		if onlineDisks, err = writeUniqueXLMetadata(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-			return oi, toObjectErr(err, srcBucket, srcObject)
-		}
-
-		// Rename atomically `xl.json` from tmp location to destination for each disk.
-		if _, err = renameXLMetadata(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
-			return oi, toObjectErr(err, srcBucket, srcObject)
-		}
-
-		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
+	// This call shouldn't be used for anything other than metadata updates.
+	if !srcInfo.metadataOnly {
+		return oi, NotImplemented{}
 	}
 
-	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
-	return xl.PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
+	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+
+	// Read metadata associated with the object from all disks.
+	storageDisks := xl.getDisks()
+
+	metaArr, errs := readAllXLMetadata(ctx, storageDisks, srcBucket, srcObject)
+
+	// get Quorum for this object
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, xl, metaArr, errs)
+	if err != nil {
+		return oi, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+		return oi, toObjectErr(reducedErr, srcBucket, srcObject)
+	}
+
+	// List all online disks.
+	_, modTime := listOnlineDisks(storageDisks, metaArr, errs)
+
+	// Pick latest valid metadata.
+	xlMeta, err := pickValidXLMeta(ctx, metaArr, modTime, readQuorum)
+	if err != nil {
+		return oi, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	// Update `xl.json` content on each disks.
+	for index := range metaArr {
+		metaArr[index].Meta = srcInfo.UserDefined
+		metaArr[index].Meta["etag"] = srcInfo.ETag
+	}
+
+	var onlineDisks []StorageAPI
+
+	tempObj := mustGetUUID()
+
+	// Cleanup in case of xl.json writing failure
+	defer xl.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum, false)
+
+	// Write unique `xl.json` for each disk.
+	if onlineDisks, err = writeUniqueXLMetadata(ctx, storageDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+		return oi, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	// Rename atomically `xl.json` from tmp location to destination for each disk.
+	if _, err = renameXLMetadata(ctx, onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, writeQuorum); err != nil {
+		return oi, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
 }
 
 // GetObjectNInfo - returns object info and an object
