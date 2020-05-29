@@ -215,7 +215,6 @@ var (
 
 	globalBucketObjectLockSys *BucketObjectLockSys
 	globalBucketQuotaSys      *BucketQuotaSys
-	globalBucketStorageCache  bucketStorageCache
 
 	// Disk cache drives
 	globalCacheConfig cache.Config

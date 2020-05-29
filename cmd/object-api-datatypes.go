@@ -21,6 +21,7 @@ import (
 	"math"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -86,13 +87,23 @@ const (
 // ObjectsHistogramIntervals is the list of all intervals
 // of object sizes to be included in objects histogram.
 var ObjectsHistogramIntervals = []objectHistogramInterval{
-	{"LESS_THAN_1024_B", -1, 1024 - 1},
-	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
-	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
-	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
-	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
-	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
-	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
+	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
+	{"BETWEEN_1024_B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
+	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", humanize.MiByte * 10, humanize.MiByte*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", humanize.MiByte * 128, humanize.MiByte*512 - 1},
+	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
+}
+
+// BucketUsageInfo - bucket usage info provides
+// - total size of the bucket
+// - total objects in a bucket
+// - object size histogram per bucket
+type BucketUsageInfo struct {
+	Size                 uint64            `json:"size"`
+	ObjectsCount         uint64            `json:"objectsCount"`
+	ObjectSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
@@ -101,17 +112,23 @@ type DataUsageInfo struct {
 	// This does not indicate a full scan.
 	LastUpdate time.Time `json:"lastUpdate"`
 
-	ObjectsCount uint64 `json:"objectsCount"`
-	// Objects total size
+	// Objects total count across all buckets
+	ObjectsTotalCount uint64 `json:"objectsCount"`
+
+	// Objects total size across all buckets
 	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
 
-	// ObjectsSizesHistogram contains information on objects across all buckets.
-	// See ObjectsHistogramIntervals.
-	ObjectsSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
-
+	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
-	// BucketsSizes is "bucket name" -> size.
-	BucketsSizes map[string]uint64 `json:"bucketsSizes"`
+
+	// Buckets usage info provides following information across all buckets
+	// - total size of the bucket
+	// - total objects in a bucket
+	// - object size histogram per bucket
+	BucketsUsage map[string]BucketUsageInfo `json:"bucketsUsageInfo"`
+
+	// Deprecated kept here for backward compatibility reasons.
+	BucketSizes map[string]uint64 `json:"bucketsSizes"`
 }
 
 // BucketInfo - represents bucket metadata.
@@ -177,12 +194,35 @@ type ObjectInfo struct {
 	PutObjReader *PutObjReader  `json:"-"`
 
 	metadataOnly bool
+	keyRotation  bool
 
 	// Date and time when the object was last accessed.
 	AccTime time.Time
 
 	// backendType indicates which backend filled this structure
 	backendType BackendType
+}
+
+// MultipartInfo captures metadata information about the uploadId
+// this data structure is used primarily for some internal purposes
+// for verifying upload type such as was the upload
+// - encrypted
+// - compressed
+type MultipartInfo struct {
+	// Name of the bucket.
+	Bucket string
+
+	// Name of the object.
+	Object string
+
+	// Upload ID identifying the multipart upload whose parts are being listed.
+	UploadID string
+
+	// Date and time at which the multipart upload was initiated.
+	Initiated time.Time
+
+	// Any metadata set during InitMultipartUpload, including encryption headers.
+	UserDefined map[string]string
 }
 
 // ListPartsInfo - represents list of all parts.
@@ -218,8 +258,6 @@ type ListPartsInfo struct {
 
 	// Any metadata set during InitMultipartUpload, including encryption headers.
 	UserDefined map[string]string
-
-	EncodingType string // Not supported yet.
 }
 
 // Lookup - returns if uploadID is valid
@@ -343,20 +381,6 @@ type PartInfo struct {
 
 	// Decompressed Size.
 	ActualSize int64
-}
-
-// MultipartInfo - represents metadata in progress multipart upload.
-type MultipartInfo struct {
-	// Object name for which the multipart upload was initiated.
-	Object string
-
-	// Unique identifier for this multipart upload.
-	UploadID string
-
-	// Date and time at which the multipart upload was initiated.
-	Initiated time.Time
-
-	StorageClass string // Not supported yet.
 }
 
 // CompletePart - represents the part that was completed, this is sent by the client

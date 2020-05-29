@@ -414,10 +414,10 @@ func (l *gcsGateway) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to GCS backend.
-func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
+func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
-	return si
+	return si, nil
 }
 
 // MakeBucketWithLocation - Create a new container on GCS backend.
@@ -1150,6 +1150,14 @@ func gcsGetPartInfo(ctx context.Context, attrs *storage.ObjectAttrs) (minio.Part
 		Size:         attrs.Size,
 		ETag:         partComps[1],
 	}, nil
+}
+
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (l *gcsGateway) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
 }
 
 //  ListObjectParts returns all object parts for specified object in specified bucket

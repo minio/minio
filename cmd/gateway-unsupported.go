@@ -83,6 +83,12 @@ func (a GatewayUnsupported) PutObjectPart(ctx context.Context, bucket string, ob
 	return pi, NotImplemented{}
 }
 
+// GetMultipartInfo returns metadata associated with the uploadId
+func (a GatewayUnsupported) GetMultipartInfo(ctx context.Context, bucket string, object string, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
+	logger.LogIf(ctx, NotImplemented{})
+	return MultipartInfo{}, NotImplemented{}
+}
+
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (a GatewayUnsupported) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (lpi ListPartsInfo, err error) {
 	logger.LogIf(ctx, NotImplemented{})

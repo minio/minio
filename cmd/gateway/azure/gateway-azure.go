@@ -542,10 +542,10 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
+func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, a.httpClient, a.endpoint)
-	return si
+	return si, nil
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
@@ -1090,6 +1090,18 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	info.LastModified = minio.UTCNow()
 	info.Size = data.Size()
 	return info, nil
+}
+
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (a *azureObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, err
+	}
+
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
 }
 
 // ListObjectParts - Use Azure equivalent `ContainerURL.ListBlobsHierarchySegment`.

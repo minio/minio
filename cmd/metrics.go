@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/env"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -84,6 +86,7 @@ func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 	minioVersionInfo.WithLabelValues(Version, CommitID).Set(float64(1.0))
 
 	storageMetricsPrometheus(ch)
+	bucketUsageMetricsPrometheus(ch)
 	networkMetricsPrometheus(ch)
 	httpMetricsPrometheus(ch)
 	cacheMetricsPrometheus(ch)
@@ -345,6 +348,65 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 }
 
+// Populates prometheus with bucket usage metrics, this metrics
+// is only enabled if crawler is enabled.
+func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
+	objLayer := newObjectLayerWithoutSafeModeFn()
+	// Service not initialized yet
+	if objLayer == nil {
+		return
+	}
+
+	// Crawler disabled, nothing to do.
+	if env.Get(envDataUsageCrawlConf, config.EnableOn) != config.EnableOn {
+		return
+	}
+
+	dataUsageInfo, err := loadDataUsageFromBackend(GlobalContext, objLayer)
+	if err != nil {
+		return
+	}
+
+	// data usage has not captured any data yet.
+	if dataUsageInfo.LastUpdate.IsZero() {
+		return
+	}
+
+	for bucket, usageInfo := range dataUsageInfo.BucketsUsage {
+		// Total space used by bucket
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("bucket", "usage", "size"),
+				"Total bucket size",
+				[]string{"bucket"}, nil),
+			prometheus.GaugeValue,
+			float64(usageInfo.Size),
+			bucket,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("bucket", "objects", "count"),
+				"Total number of objects in a bucket",
+				[]string{"bucket"}, nil),
+			prometheus.GaugeValue,
+			float64(usageInfo.ObjectsCount),
+			bucket,
+		)
+		for k, v := range usageInfo.ObjectSizesHistogram {
+			ch <- prometheus.MustNewConstMetric(
+				prometheus.NewDesc(
+					prometheus.BuildFQName("bucket", "objects", "histogram"),
+					"Total number of objects of different sizes in a bucket",
+					[]string{"bucket", "object_size"}, nil),
+				prometheus.GaugeValue,
+				float64(v),
+				bucket,
+				k,
+			)
+		}
+	}
+}
+
 // collects storage metrics for MinIO server in Prometheus specific format
 // and sends to given channel
 func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
@@ -354,8 +416,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	// Fetch disk space info
-	storageInfo := objLayer.StorageInfo(GlobalContext, true)
+	// Fetch disk space info, ignore errors
+	storageInfo, _ := objLayer.StorageInfo(GlobalContext, true)
 
 	offlineDisks := storageInfo.Backend.OfflineDisks
 	onlineDisks := storageInfo.Backend.OnlineDisks
