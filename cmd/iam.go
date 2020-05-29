@@ -1798,6 +1798,7 @@ func NewIAMSys() *IAMSys {
 		iamUsersMap:             make(map[string]auth.Credentials),
 		iamPolicyDocsMap:        make(map[string]iampolicy.Policy),
 		iamUserPolicyMap:        make(map[string]MappedPolicy),
+		iamGroupPolicyMap:       make(map[string]MappedPolicy),
 		iamGroupsMap:            make(map[string]GroupInfo),
 		iamUserGroupMemberships: make(map[string]set.StringSet),
 	}
