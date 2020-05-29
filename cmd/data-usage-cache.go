@@ -406,7 +406,7 @@ func (d *dataUsageCache) serialize() []byte {
 // deserialize the supplied byte slice into the cache.
 func (d *dataUsageCache) deserialize(r io.Reader) error {
 	var b [1]byte
-	n, err := r.Read(b[:])
+	n, _ := r.Read(b[:])
 	if n != 1 {
 		return io.ErrUnexpectedEOF
 	}
