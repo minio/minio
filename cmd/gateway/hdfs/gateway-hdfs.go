@@ -31,18 +31,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/colinmarc/hdfs/v2"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 	"github.com/minio/cli"
-	krb "github.com/minio/gokrb5/v7/client"
-	"github.com/minio/gokrb5/v7/config"
-	"github.com/minio/gokrb5/v7/credentials"
-	"github.com/minio/hdfs/v3"
-	"github.com/minio/hdfs/v3/hadoopconf"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+	krb "gopkg.in/jcmturner/gokrb5.v7/client"
+	"gopkg.in/jcmturner/gokrb5.v7/config"
+	"gopkg.in/jcmturner/gokrb5.v7/credentials"
 )
 
 const (
@@ -276,6 +276,9 @@ func hdfsIsValidBucketName(bucket string) bool {
 func (n *hdfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	if !hdfsIsValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+	if forceDelete {
+		return hdfsToObjectErr(ctx, n.clnt.RemoveAll(minio.PathJoin(hdfsSeparator, bucket)), bucket)
 	}
 	return hdfsToObjectErr(ctx, n.clnt.Remove(minio.PathJoin(hdfsSeparator, bucket)), bucket)
 }
