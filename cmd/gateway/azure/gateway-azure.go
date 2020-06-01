@@ -1046,6 +1046,11 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 	return uploadID, nil
 }
 
+func (a *azureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, uploadID string, partID int,
+	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (info minio.PartInfo, err error) {
+	return a.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
+}
+
 // PutObjectPart - Use Azure equivalent `BlobURL.StageBlock`.
 func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjReader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
 	data := r.Reader
