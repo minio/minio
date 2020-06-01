@@ -21,14 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/djherbis/atime"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
@@ -538,31 +535,6 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 	return caches, migrating, nil
 }
 
-// Return error if Atime is disabled on the O/S
-func checkAtimeSupport(dir string) (err error) {
-	file, err := ioutil.TempFile(dir, "prefix")
-	if err != nil {
-		return
-	}
-	defer os.Remove(file.Name())
-	finfo1, err := os.Stat(file.Name())
-	if err != nil {
-		return
-	}
-	// add a sleep to ensure atime change is detected
-	time.Sleep(10 * time.Millisecond)
-
-	if _, err = io.Copy(ioutil.Discard, file); err != nil {
-		return
-	}
-
-	finfo2, err := os.Stat(file.Name())
-
-	if atime.Get(finfo2).Equal(atime.Get(finfo1)) {
-		return errors.New("Atime not supported")
-	}
-	return
-}
 func (c *cacheObjects) migrateCacheFromV1toV2(ctx context.Context) {
 	logStartupMessage(color.Blue("Cache migration initiated ...."))
 

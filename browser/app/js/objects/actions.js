@@ -113,7 +113,12 @@ export const fetchObjects = () => {
                 autoClear: true,
               })
             )
-            dispatch(resetList())
+            if (err.message.indexOf('Prefix access is denied') > -1) {
+              dispatch(setList([]))
+              history.push("/")
+            } else {
+              dispatch(resetList())
+            }
           } else {
             history.push("/login")
           }

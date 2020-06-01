@@ -330,32 +330,23 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	} else {
 		buckets, err := listBuckets(ctx)
 		if err != nil {
+			_, ok := err.(PrefixAccessDenied)
 			if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
 				bucket, prefix := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
-				if bucket != "" && bucket != u.Path {
+				if bucket != "" && bucket != u.Path && ok {
 					if !strings.HasSuffix(prefix, slashSeparator) {
 						prefix += slashSeparator
 					}
-					readable := globalIAMSys.IsAllowed(iampolicy.Args{
+					if !globalIAMSys.IsAllowed(iampolicy.Args{
 						AccountName:     claims.AccessKey,
 						Action:          iampolicy.ListBucketAction,
 						BucketName:      bucket,
-						ObjectName:      prefix,
-						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-						IsOwner:         owner,
-						Claims:          claims.Map(),
-					})
-					writable := globalIAMSys.IsAllowed(iampolicy.Args{
-						AccountName:     claims.AccessKey,
-						Action:          iampolicy.PutObjectAction,
-						BucketName:      bucket,
 						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 						IsOwner:         owner,
 						ObjectName:      prefix,
 						Claims:          claims.Map(),
-					})
-					if !readable && !writable {
-						return toJSONError(ctx, errAccessDenied)
+					}) {
+						return &json2.Error{Message: err.Error()}
 					}
 					reply.Buckets = append(reply.Buckets, WebBucketInfo{
 						Name: bucket,
@@ -478,9 +469,12 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		// Handle prefix access denied error (in the specific case of URL containing bucket & prefix )
 		if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
 			bucket, _ := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
-			_, err := objectAPI.ListBuckets(ctx)
-			if _, ok := err.(PrefixAccessDenied); bucket != "" && err != nil && ok {
-				return toJSONError(ctx, err)
+			if bucket != "" && bucket != u.Path {
+				_, err := objectAPI.ListBuckets(ctx)
+				if _, ok := err.(PrefixAccessDenied); ok {
+					return toJSONError(ctx, errAccessDenied)
+				}
+				return nil
 			}
 		}
 		if authErr == errNoAuthToken {
@@ -572,7 +566,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
-
 		for i := range lo.Objects {
 			lo.Objects[i].Size, err = lo.Objects[i].GetActualSize()
 			if err != nil {

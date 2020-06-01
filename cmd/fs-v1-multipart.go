@@ -731,9 +731,18 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, bucket, object)
 	}
-	fsRemoveAll(ctx, uploadIDDir)
-	// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
-	fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+
+	// Purge multipart folders
+	{
+		fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
+		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
+
+		fsSimpleRenameFile(ctx, uploadIDDir, fsTmpObjPath)
+
+		// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
+		fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+	}
+
 	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
@@ -782,12 +791,16 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Ignore the error returned as Windows fails to remove directory if a file in it
-	// is Open()ed by the backgroundAppend()
-	fsRemoveAll(ctx, uploadIDDir)
+	// Purge multipart folders
+	{
+		fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
+		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
 
-	// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
-	fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+		fsSimpleRenameFile(ctx, uploadIDDir, fsTmpObjPath)
+
+		// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
+		fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+	}
 
 	return nil
 }

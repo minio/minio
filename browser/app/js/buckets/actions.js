@@ -46,6 +46,21 @@ export const fetchBuckets = () => {
         history.replace("/")
       }
     })
+    .catch(err => {
+      if (err.message === "Access Denied." || err.message.indexOf('Prefix access is denied') > -1 || err.message === "Do not have enough permissions to access this resource") {
+        dispatch(
+          alertActions.set({
+            type: "danger",
+            message: err.message,
+            autoClear: true,
+          })
+        )
+        if (web.LoggedIn() && err.message.indexOf('Prefix access is denied') > -1) {
+          dispatch(selectBucket(""))
+          history.replace("/")
+        }
+      }
+    })
   }
 }
 
