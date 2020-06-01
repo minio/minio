@@ -93,15 +93,29 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
-	errs = make([]error, len(disks))
+	onlineDisks = make(madmin.BackendDisks)
+	offlineDisks = make(madmin.BackendDisks)
+
+	for _, disk := range disks {
+		if disk == OfflineDisk {
+			continue
+		}
+		peerAddr := disk.Hostname()
+		if _, ok := offlineDisks[peerAddr]; !ok {
+			offlineDisks[peerAddr] = 0
+		}
+		if _, ok := onlineDisks[peerAddr]; !ok {
+			onlineDisks[peerAddr] = 0
+		}
+	}
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
 		index := index
 		g.Go(func() error {
-			if disks[index] == nil {
+			if disks[index] == OfflineDisk {
 				// Storage disk is empty, perhaps ignored disk or not available.
 				return errDiskNotFound
 			}
@@ -119,27 +133,17 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, errs []error, onlin
 		}, index)
 	}
 
-	onlineDisks = make(madmin.BackendDisks)
-	offlineDisks = make(madmin.BackendDisks)
-
 	errs = g.Wait()
 	// Wait for the routines.
 	for i, diskInfoErr := range errs {
-		if disks[i] == nil {
+		if disks[i] == OfflineDisk {
 			continue
 		}
-		peerAddr := disks[i].Hostname()
-		if _, ok := offlineDisks[peerAddr]; !ok {
-			offlineDisks[peerAddr] = 0
-		}
-		if _, ok := onlineDisks[peerAddr]; !ok {
-			onlineDisks[peerAddr] = 0
-		}
-		if disks[i] == nil || diskInfoErr != nil {
-			offlineDisks[peerAddr]++
+		if diskInfoErr != nil {
+			offlineDisks[disks[i].Hostname()]++
 			continue
 		}
-		onlineDisks[peerAddr]++
+		onlineDisks[disks[i].Hostname()]++
 	}
 
 	// Iterate over the passed endpoints arguments and check
@@ -148,6 +152,11 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, errs []error, onlin
 	missingOfflineDisks := make(map[string]int)
 	for _, zone := range globalEndpoints {
 		for _, endpoint := range zone.Endpoints {
+			// if local is set and endpoint is not local
+			// we are not interested in remote disks.
+			if local && !endpoint.IsLocal {
+				continue
+			}
 			if _, ok := offlineDisks[endpoint.Host]; !ok {
 				missingOfflineDisks[endpoint.Host]++
 			}
@@ -163,8 +172,8 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []DiskInfo, errs []error, onlin
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI) (StorageInfo, []error) {
-	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks)
+func getStorageInfo(disks []StorageAPI, local bool) (StorageInfo, []error) {
+	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks, local)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -212,7 +221,7 @@ func (xl xlObjects) StorageInfo(ctx context.Context, local bool) (StorageInfo, [
 		}
 		disks = localDisks
 	}
-	return getStorageInfo(disks)
+	return getStorageInfo(disks, local)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.
