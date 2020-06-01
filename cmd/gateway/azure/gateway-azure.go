@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -181,6 +182,9 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	credential, err := azblob.NewSharedKeyCredential(creds.AccessKey, creds.SecretKey)
 	if err != nil {
+		if _, ok := err.(base64.CorruptInputError); ok {
+			return &azureObjects{}, errors.New("invalid Azure credentials")
+		}
 		return &azureObjects{}, err
 	}
 
