@@ -185,7 +185,7 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 	// Fire a migrateConfig()
 	if err := migrateConfig(); err == nil {
-		t.Fatal("migration should fail with corrupted config file")
+		t.Fatal("migration should fail with corrupted config file:", err)
 	}
 
 	accessKey := "accessfoo"

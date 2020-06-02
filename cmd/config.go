@@ -17,9 +17,9 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"path"
 	"sort"
 	"strings"
@@ -28,6 +28,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/secure-io/sio-go"
 )
 
 const (
@@ -42,10 +43,23 @@ const (
 	minioConfigFile = "config.json"
 )
 
-func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (
-	[]madmin.ConfigHistoryEntry, error) {
-
+func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) ([]madmin.ConfigHistoryEntry, error) {
 	var configHistory []madmin.ConfigHistoryEntry
+
+	var masterKey config.MasterKey
+	if globalConfigEncrypted {
+		backend, err := readBackendEncrypted(GlobalContext, objAPI)
+		if err != nil {
+			return nil, err
+		}
+		if backend.DerivationParams == nil {
+			return nil, errors.New("backend is encrypted but no key derivation parameters were found")
+		}
+		masterKey, err = config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// List all kvs
 	marker := ""
@@ -65,7 +79,7 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData b
 					return nil, err
 				}
 				if globalConfigEncrypted {
-					data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+					data, err = masterKey.DecryptBytes(data)
 					if err != nil {
 						return nil, err
 					}
@@ -103,9 +117,25 @@ func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV str
 	}
 
 	if globalConfigEncrypted {
-		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+		backend, err := readBackendEncrypted(GlobalContext, objAPI)
+		if err != nil {
+			return nil, err
+		}
+		if backend.DerivationParams == nil {
+			return nil, errors.New("backend is encrypted but no key derivation parameters were found")
+		}
+		key, err := config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return nil, err
+		}
+		data, err = key.DecryptBytes(data)
+		if err != nil {
+			if err == sio.NotAuthentic {
+				return nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
+			}
+			return nil, err
+		}
 	}
-
 	return data, err
 }
 
@@ -113,9 +143,19 @@ func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte)
 	uuidKV := mustGetUUID() + kvPrefix
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV)
 
-	var err error
 	if globalConfigEncrypted {
-		kv, err = madmin.EncryptData(globalActiveCred.String(), kv)
+		backend, err := readBackendEncrypted(GlobalContext, objAPI)
+		if err != nil {
+			return err
+		}
+		if backend.DerivationParams == nil {
+			return errors.New("backend is encrypted but no key derivation parameters were found")
+		}
+		key, err := config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return err
+		}
+		kv, err = key.EncryptBytes(kv)
 		if err != nil {
 			return err
 		}
@@ -125,16 +165,32 @@ func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte)
 	return saveConfig(ctx, objAPI, historyFile, kv)
 }
 
-func saveServerConfig(ctx context.Context, objAPI ObjectLayer, config interface{}) error {
-	data, err := json.Marshal(config)
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) error {
+	data, err := json.Marshal(cfg)
 	if err != nil {
 		return err
 	}
 
 	if globalConfigEncrypted {
-		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+		backend, err := readBackendEncrypted(GlobalContext, objAPI)
 		if err != nil {
 			return err
+		}
+		if backend.DerivationParams == nil {
+			return errors.New("backend is encrypted but no key derivation parameters were found")
+		}
+		key, err := config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return err
+		}
+		data, err = key.EncryptBytes(data)
+		if err != nil {
+			return err
+		}
+		if backend.Status == config.BackendEncryptionMissing {
+			if err = createBackendEncrypted(GlobalContext, objAPI, backend); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -156,9 +212,21 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	}
 
 	if globalConfigEncrypted {
-		configData, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(configData))
+		backend, err := readBackendEncrypted(GlobalContext, objAPI)
 		if err != nil {
-			if err == madmin.ErrMaliciousData {
+			return nil, err
+		}
+		if backend.DerivationParams == nil {
+			return nil, errors.New("backend is encrypted but no key derivation parameters were found")
+		}
+		key, err := config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return nil, err
+		}
+
+		configData, err = key.DecryptBytes(configData)
+		if err != nil {
+			if err == sio.NotAuthentic {
 				return nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
 			}
 			return nil, err
@@ -245,6 +313,5 @@ func initConfig(objAPI ObjectLayer) error {
 	if err := migrateMinioSysConfigToKV(objAPI); err != nil {
 		return err
 	}
-
 	return loadConfig(objAPI)
 }

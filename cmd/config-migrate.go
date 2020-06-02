@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,9 +37,9 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/event/target"
-	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/quick"
+	"github.com/secure-io/sio-go"
 )
 
 // DO NOT EDIT following message template, please open a github issue to discuss instead.
@@ -2448,9 +2447,9 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		getConfigFile() + ".deprecated",
 		configFile,
 	}
-	var config = &serverConfigV27{}
+	var cfg = &serverConfigV27{}
 	for _, cfgFile := range configFiles {
-		if _, err = Load(cfgFile, config); err != nil {
+		if _, err = Load(cfgFile, cfg); err != nil {
 			if !os.IsNotExist(err) && !os.IsPermission(err) {
 				return err
 			}
@@ -2465,7 +2464,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 		// Initialize the server config, if no config exists.
 		return newSrvConfig(objAPI)
 	}
-	return saveServerConfig(GlobalContext, objAPI, config)
+	return saveServerConfig(GlobalContext, objAPI, cfg)
 }
 
 // Migrates '.minio.sys/config.json' to v33.
@@ -2507,9 +2506,18 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 	}
 
 	if globalConfigEncrypted {
-		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+		backend, err := readBackendEncrypted(GlobalContext, objAPI)
 		if err != nil {
-			if err == madmin.ErrMaliciousData {
+			return false, nil, err
+		}
+		key, err := config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return false, nil, err
+		}
+
+		data, err = key.DecryptBytes(data)
+		if err != nil {
+			if err == sio.NotAuthentic {
 				return false, nil, config.ErrInvalidCredentialsBackendEncrypted(nil)
 			}
 			return false, nil, err

@@ -155,9 +155,17 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	// Make sure to write backend is encrypted
 	if globalConfigEncrypted {
-		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+		backend, err := readBackendEncrypted(GlobalContext, objectAPI)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		backend.Status = config.BackendEncryptionComplete
+		if err = createBackendEncrypted(GlobalContext, objectAPI, backend); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
-
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -402,7 +410,16 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 
 	// Make sure to write backend is encrypted
 	if globalConfigEncrypted {
-		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
+		backend, err := readBackendEncrypted(GlobalContext, objectAPI)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		backend.Status = config.BackendEncryptionComplete
+		if err = createBackendEncrypted(GlobalContext, objectAPI, backend); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	writeSuccessResponseHeadersOnly(w)

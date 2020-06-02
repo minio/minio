@@ -410,7 +410,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 	}
 
 	if globalEtcdClient == nil {
-		sys.store = newIAMObjectStore(ctx, objAPI)
+		var err error
+		sys.store, err = newIAMObjectStore(ctx, objAPI)
+		if err != nil {
+			return err
+		}
 	} else {
 		sys.store = newIAMEtcdStore(ctx)
 	}

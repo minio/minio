@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,11 +25,12 @@ import (
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
+	"github.com/secure-io/sio-go"
 
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -38,12 +38,31 @@ type IAMObjectStore struct {
 	// Protect assignment to objAPI
 	sync.RWMutex
 
-	ctx    context.Context
-	objAPI ObjectLayer
+	ctx       context.Context
+	objAPI    ObjectLayer
+	masterKey config.MasterKey
 }
 
-func newIAMObjectStore(ctx context.Context, objAPI ObjectLayer) *IAMObjectStore {
-	return &IAMObjectStore{ctx: ctx, objAPI: objAPI}
+func newIAMObjectStore(ctx context.Context, objAPI ObjectLayer) (*IAMObjectStore, error) {
+	iam := &IAMObjectStore{
+		ctx:    ctx,
+		objAPI: objAPI,
+	}
+
+	backend, err := readBackendEncrypted(ctx, objAPI)
+	if err != nil {
+		return nil, err
+	}
+	if globalConfigEncrypted && backend.IsEncrypted() {
+		if backend.DerivationParams == nil {
+			return nil, errors.New("backend is encrypted but no key derivation parameters were found")
+		}
+		iam.masterKey, err = config.DeriveMasterKey(globalActiveCred.SecretKey, *backend.DerivationParams)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return iam, nil
 }
 
 func (iamOS *IAMObjectStore) lock() {
@@ -209,8 +228,8 @@ func (iamOS *IAMObjectStore) saveIAMConfig(item interface{}, path string) error 
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted {
-		data, err = madmin.EncryptData(globalActiveCred.String(), data)
+	if globalConfigEncrypted && iamOS.masterKey != nil {
+		data, err = iamOS.masterKey.EncryptBytes(data)
 		if err != nil {
 			return err
 		}
@@ -223,9 +242,12 @@ func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error 
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted {
-		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
+	if globalConfigEncrypted && iamOS.masterKey != nil {
+		data, err = iamOS.masterKey.DecryptBytes(data)
 		if err != nil {
+			if err == sio.NotAuthentic {
+				return config.ErrInvalidCredentialsBackendEncrypted(nil)
+			}
 			return err
 		}
 	}

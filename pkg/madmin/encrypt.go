@@ -19,7 +19,6 @@ package madmin
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
 
@@ -78,7 +77,7 @@ func EncryptData(password string, data []byte) ([]byte, error) {
 
 // ErrMaliciousData indicates that the stream cannot be
 // decrypted by provided credentials.
-var ErrMaliciousData = sio.NotAuthentic
+const ErrMaliciousData = sio.NotAuthentic
 
 // DecryptData decrypts the data with the key derived
 // from the salt (part of data) and the password using
@@ -115,7 +114,7 @@ func DecryptData(password string, data io.Reader) ([]byte, error) {
 	case c20p1305:
 		stream, err = sio.ChaCha20Poly1305.Stream(key)
 	default:
-		err = errors.New("madmin: invalid AEAD algorithm ID")
+		err = ErrMaliciousData
 	}
 	if err != nil {
 		return nil, err
