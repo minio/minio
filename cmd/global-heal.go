@@ -128,7 +128,7 @@ func deepHealObject(objectPath string) {
 
 	bgSeq.sourceCh <- healSource{
 		path: objectPath,
-		opts: madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+		opts: &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
 	}
 }
 
