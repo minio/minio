@@ -48,7 +48,7 @@ func (xl xlObjects) checkUploadIDExists(ctx context.Context, bucket, object, upl
 
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
 func (xl xlObjects) removeObjectPart(bucket, object, uploadID string, partNumber int) {
-	curpartPath := pathJoin(bucket, object, uploadID, fmt.Sprintf("part.%d", partNumber))
+	curpartPath := pathJoin(xl.getUploadIDDir(bucket, object, uploadID), fmt.Sprintf("part.%d", partNumber))
 	storageDisks := xl.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -731,6 +731,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] == nil || storageDisks[i] == nil {
 			xl.addPartialUpload(bucket, object)
+			break
 		}
 	}
 
