@@ -37,13 +37,6 @@ type PolicySys struct{}
 
 // Get returns stored bucket policy
 func (sys *PolicySys) Get(bucket string) (*policy.Policy, error) {
-	if globalIsGateway {
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			return nil, errServerNotInitialized
-		}
-		return objAPI.GetBucketPolicy(GlobalContext, bucket)
-	}
 	return globalBucketMetadataSys.GetPolicyConfig(bucket)
 }
 

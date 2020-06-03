@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -181,6 +182,9 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	credential, err := azblob.NewSharedKeyCredential(creds.AccessKey, creds.SecretKey)
 	if err != nil {
+		if _, ok := err.(base64.CorruptInputError); ok {
+			return &azureObjects{}, errors.New("invalid Azure credentials")
+		}
 		return &azureObjects{}, err
 	}
 
@@ -1044,6 +1048,11 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 	}
 
 	return uploadID, nil
+}
+
+func (a *azureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, uploadID string, partID int,
+	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (info minio.PartInfo, err error) {
+	return a.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
 }
 
 // PutObjectPart - Use Azure equivalent `BlobURL.StageBlock`.
