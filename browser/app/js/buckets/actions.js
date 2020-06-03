@@ -33,7 +33,6 @@ export const fetchBuckets = () => {
   return function(dispatch) {
     return web.ListBuckets().then(res => {
       const buckets = res.buckets ? res.buckets.map(bucket => bucket.name) : []
-      dispatch(setList(buckets))
       if (buckets.length > 0) {
         const { bucket, prefix } = pathSlice(history.location.pathname)
         if (bucket && buckets.indexOf(bucket) > -1) {
@@ -42,12 +41,18 @@ export const fetchBuckets = () => {
           dispatch(selectBucket(buckets[0]))
         }
       } else {
-        dispatch(selectBucket(""))
-        history.replace("/")
+        const { bucket, prefix } = pathSlice(history.location.pathname)
+        if (bucket) {
+          dispatch(setList([bucket]))
+          dispatch(selectBucket(bucket, prefix))
+        } else {
+          dispatch(selectBucket(""))
+          history.replace("/")
+        }
       }
     })
     .catch(err => {
-      if (err.message === "Access Denied." || err.message.indexOf('Prefix access is denied') > -1 || err.message === "Do not have enough permissions to access this resource") {
+      if (err.message === "Access Denied." || err.message.indexOf('Prefix access is denied') > -1 ) {
         dispatch(
           alertActions.set({
             type: "danger",
@@ -55,10 +60,6 @@ export const fetchBuckets = () => {
             autoClear: true,
           })
         )
-        if (web.LoggedIn() && err.message.indexOf('Prefix access is denied') > -1) {
-          dispatch(selectBucket(""))
-          history.replace("/")
-        }
       }
     })
   }

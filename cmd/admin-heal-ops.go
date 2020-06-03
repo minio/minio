@@ -296,8 +296,8 @@ func (ahs *allHealState) PopHealStatusJSON(path string,
 
 // healSource denotes single entity and heal option.
 type healSource struct {
-	path string          // entity path (format, buckets, objects) to heal
-	opts madmin.HealOpts // optional heal option overrides default setting
+	path string           // entity path (format, buckets, objects) to heal
+	opts *madmin.HealOpts // optional heal option overrides default setting
 }
 
 // healSequence - state for each heal sequence initiated on the
@@ -622,8 +622,8 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		opts:       h.settings,
 		responseCh: h.respCh,
 	}
-	if !source.opts.Equal(h.settings) {
-		task.opts = source.opts
+	if source.opts != nil {
+		task.opts = *source.opts
 	}
 	globalBackgroundHealRoutine.queueHealTask(task)
 

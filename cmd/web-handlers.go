@@ -330,34 +330,10 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	} else {
 		buckets, err := listBuckets(ctx)
 		if err != nil {
-			_, ok := err.(PrefixAccessDenied)
-			if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
-				bucket, prefix := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
-				if bucket != "" && bucket != u.Path && ok {
-					if !strings.HasSuffix(prefix, slashSeparator) {
-						prefix += slashSeparator
-					}
-					if !globalIAMSys.IsAllowed(iampolicy.Args{
-						AccountName:     claims.AccessKey,
-						Action:          iampolicy.ListBucketAction,
-						BucketName:      bucket,
-						ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-						IsOwner:         owner,
-						ObjectName:      prefix,
-						Claims:          claims.Map(),
-					}) {
-						return &json2.Error{Message: err.Error()}
-					}
-					reply.Buckets = append(reply.Buckets, WebBucketInfo{
-						Name: bucket,
-					})
-					reply.UIVersion = browser.UIVersion
-					return nil
-				}
+			if _, ok := err.(PrefixAccessDenied); !ok {
+				return toJSONError(ctx, err)
 			}
-			return toJSONError(ctx, err)
 		}
-
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.AccessKey,
@@ -466,17 +442,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
-		// Handle prefix access denied error (in the specific case of URL containing bucket & prefix )
-		if u, parseerr := url.Parse(r.Referer()); parseerr == nil {
-			bucket, _ := path2BucketObjectWithBasePath(minioReservedBucketPath, u.Path)
-			if bucket != "" && bucket != u.Path {
-				_, err := objectAPI.ListBuckets(ctx)
-				if _, ok := err.(PrefixAccessDenied); ok {
-					return toJSONError(ctx, errAccessDenied)
-				}
-				return nil
-			}
-		}
 		if authErr == errNoAuthToken {
 			// Set prefix value for "s3:prefix" policy conditionals.
 			r.Header.Set("prefix", args.Prefix)
