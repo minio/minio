@@ -22,7 +22,6 @@ import (
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 )
 
 const (
@@ -120,16 +119,6 @@ func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageI
 // nasObjects implements gateway for MinIO and S3 compatible object storage servers.
 type nasObjects struct {
 	minio.ObjectLayer
-}
-
-// GetBucketObjectLockConfig - not implemented
-func (n *nasObjects) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
-	return nil, minio.NotImplemented{}
-}
-
-// SetBucketObjectLockConfig - not implemented
-func (n *nasObjects) SetBucketObjectLockConfig(ctx context.Context, bucket string, _ *objectlock.Config) error {
-	return minio.NotImplemented{}
 }
 
 // IsReady returns whether the layer is ready to take requests.
