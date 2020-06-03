@@ -18,13 +18,12 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"crypto"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -409,19 +408,15 @@ const updateTimeout = 10 * time.Second
 
 func getUpdateTransport(timeout time.Duration) http.RoundTripper {
 	var updateTransport http.RoundTripper = &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			dialer := &net.Dialer{
-				Timeout:   timeout,
-				KeepAlive: timeout,
-				DualStack: true,
-			}
-			return dialer.DialContext(ctx, network, addr)
-		},
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           xhttp.NewCustomDialContext(timeout, timeout),
 		IdleConnTimeout:       timeout,
 		TLSHandshakeTimeout:   timeout,
 		ExpectContinueTimeout: timeout,
-		DisableCompression:    true,
+		TLSClientConfig: &tls.Config{
+			RootCAs: globalRootCAs,
+		},
+		DisableCompression: true,
 	}
 	return updateTransport
 }
@@ -502,7 +497,9 @@ func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 		}
 	}
 
-	clnt := &http.Client{Transport: getUpdateTransport(30 * time.Second)}
+	clnt := &http.Client{
+		Transport: getUpdateTransport(30 * time.Second),
+	}
 	req, err := http.NewRequest(http.MethodGet, updateURL, nil)
 	if err != nil {
 		return AdminError{

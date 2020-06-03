@@ -41,7 +41,7 @@ type BucketMetadataSys struct {
 
 // Remove bucket metadata from memory.
 func (sys *BucketMetadataSys) Remove(bucket string) {
-	if globalIsGateway && globalGatewayName != "nas" {
+	if globalIsGateway {
 		return
 	}
 	sys.Lock()
@@ -74,9 +74,12 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		return errServerNotInitialized
 	}
 
-	if globalIsGateway && globalGatewayName != "nas" {
+	if globalIsGateway {
 		// This code is needed only for gateway implementations.
 		if configFile == bucketPolicyConfig {
+			if configData == nil {
+				return objAPI.DeleteBucketPolicy(GlobalContext, bucket)
+			}
 			config, err := policy.ParseConfig(bytes.NewReader(configData), bucket)
 			if err != nil {
 				return err
@@ -195,6 +198,19 @@ func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Life
 // GetNotificationConfig returns configured notification config
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetNotificationConfig(bucket string) (*event.Config, error) {
+	if globalIsGateway && globalGatewayName == "nas" {
+		// Only needed in case of NAS gateway.
+		objAPI := newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			return nil, errServerNotInitialized
+		}
+		meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+		if err != nil {
+			return nil, err
+		}
+		return meta.notificationConfig, nil
+	}
+
 	meta, err := sys.GetConfig(bucket)
 	if err != nil {
 		return nil, err
@@ -221,6 +237,14 @@ func (sys *BucketMetadataSys) GetSSEConfig(bucket string) (*bucketsse.BucketSSEC
 // GetPolicyConfig returns configured bucket policy
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetPolicyConfig(bucket string) (*policy.Policy, error) {
+	if globalIsGateway {
+		objAPI := newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			return nil, errServerNotInitialized
+		}
+		return objAPI.GetBucketPolicy(GlobalContext, bucket)
+	}
+
 	meta, err := sys.GetConfig(bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {
@@ -244,7 +268,7 @@ func (sys *BucketMetadataSys) GetQuotaConfig(bucket string) (*madmin.BucketQuota
 	return meta.quotaConfig, nil
 }
 
-// GetConfig returns a specific configuration from the bucket metadata.
+// GetConfig returns the current bucket metadata
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 	objAPI := newObjectLayerWithoutSafeModeFn()
@@ -252,7 +276,7 @@ func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 		return newBucketMetadata(bucket), errServerNotInitialized
 	}
 
-	if globalIsGateway && globalGatewayName != "nas" {
+	if globalIsGateway {
 		return newBucketMetadata(bucket), NotImplemented{}
 	}
 

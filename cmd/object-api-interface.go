@@ -114,8 +114,7 @@ type ObjectLayer interface {
 	IsNotificationSupported() bool
 	IsListenBucketSupported() bool
 	IsEncryptionSupported() bool
-
-	// Compression support check.
+	IsTaggingSupported() bool
 	IsCompressionSupported() bool
 
 	// Backend related metrics
@@ -123,9 +122,6 @@ type ObjectLayer interface {
 
 	// Check Readiness
 	IsReady(ctx context.Context) bool
-
-	// Object Tagging Support check.
-	IsTaggingSupported() bool
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string) error
