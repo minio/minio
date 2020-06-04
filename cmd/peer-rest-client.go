@@ -677,19 +677,7 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 }
 
 // GetLocalDiskIDs - get a peer's local disks' IDs.
-func (client *peerRESTClient) GetLocalDiskIDs() []string {
-	doneCh := make(chan struct{})
-	defer close(doneCh)
-
-	ctx, cancel := context.WithCancel(GlobalContext)
-	go func() {
-		select {
-		case <-doneCh:
-			return
-		case <-time.After(globalReadyDeadline):
-			cancel()
-		}
-	}()
+func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) []string {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetLocalDiskIDs, nil, nil, -1)
 	if err != nil {
 		return nil

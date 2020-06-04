@@ -172,7 +172,6 @@ MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 
 ### API
-
 By default, there is no limitation on the number of concurrents requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
 
 ```
@@ -180,16 +179,19 @@ KEY:
 api  manage global HTTP API call specific features, such as throttling, authentication types, etc.
 
 ARGS:
-requests_max       (number)     set the maximum number of concurrent requests
-requests_deadline  (duration)   set the deadline for API requests waiting to be processed
+requests_max       (number)    set the maximum number of concurrent requests, e.g. "1600"
+requests_deadline  (duration)  set the deadline for API requests waiting to be processed e.g. "1m"
+ready_deadline     (duration)  set the deadline for health check API /minio/health/ready e.g. "1m"
+cors_allow_origin  (csv)       set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"
 ```
 
 or environment variables
 
 ```
-MINIO_API_REQUESTS_MAX        (number)     set the maximum number of concurrent requests
-MINIO_API_REQUESTS_DEADLINE   (duration)   set the deadline for API requests waiting to be processed
-
+MINIO_API_REQUESTS_MAX       (number)    set the maximum number of concurrent requests, e.g. "1600"
+MINIO_API_REQUESTS_DEADLINE  (duration)  set the deadline for API requests waiting to be processed e.g. "1m"
+MINIO_API_READY_DEADLINE     (duration)  set the deadline for health check API /minio/health/ready e.g. "1m"
+MINIO_API_CORS_ALLOW_ORIGIN  (csv)       set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"
 ```
 
 #### Notifications
