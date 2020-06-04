@@ -373,7 +373,7 @@ func (l *s3Objects) DeleteBucket(ctx context.Context, bucket string, forceDelete
 func (l *s3Objects) ListObjects(ctx context.Context, bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, e error) {
 	result, err := l.Client.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return loi, minio.ErrorRespToObjectError(err, bucket, prefix)
+		return loi, minio.ErrorRespToObjectError(err, bucket)
 	}
 
 	return minio.FromMinioClientListBucketResult(bucket, result), nil

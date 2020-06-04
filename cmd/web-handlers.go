@@ -330,9 +330,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	} else {
 		buckets, err := listBuckets(ctx)
 		if err != nil {
-			if _, ok := err.(PrefixAccessDenied); !ok {
-				return toJSONError(ctx, err)
-			}
+			return toJSONError(ctx, err)
 		}
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
@@ -2212,8 +2210,6 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 		return getAPIError(ErrBadDigest)
 	case IncompleteBody:
 		return getAPIError(ErrIncompleteBody)
-	case PrefixAccessDenied:
-		return getAPIError(ErrAccessDenied)
 	case ObjectExistsAsDirectory:
 		return getAPIError(ErrObjectExistsAsDirectory)
 	case ObjectNotFound:
