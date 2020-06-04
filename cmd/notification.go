@@ -1164,7 +1164,7 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 }
 
 // GetLocalDiskIDs - return disk ids of the local disks of the peers.
-func (sys *NotificationSys) GetLocalDiskIDs() []string {
+func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) []string {
 	var diskIDs []string
 	var mu sync.Mutex
 
@@ -1176,7 +1176,7 @@ func (sys *NotificationSys) GetLocalDiskIDs() []string {
 		wg.Add(1)
 		go func(client *peerRESTClient) {
 			defer wg.Done()
-			ids := client.GetLocalDiskIDs()
+			ids := client.GetLocalDiskIDs(ctx)
 			mu.Lock()
 			diskIDs = append(diskIDs, ids...)
 			mu.Unlock()

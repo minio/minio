@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 )
 
@@ -28,7 +29,15 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	objLayer := newObjectLayerWithoutSafeModeFn()
 	// Service not initialized yet
-	if objLayer == nil || !objLayer.IsReady(ctx) {
+	if objLayer == nil {
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getReadyDeadline())
+	defer cancel()
+
+	if !objLayer.IsReady(ctx) {
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}

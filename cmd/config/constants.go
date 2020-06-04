@@ -34,11 +34,6 @@ const (
 	EnvEndpoints    = "MINIO_ENDPOINTS"
 	EnvFSOSync      = "MINIO_FS_OSYNC"
 
-	// API sub-system
-	EnvAPIRequestsMax      = "MINIO_API_REQUESTS_MAX"
-	EnvAPIRequestsDeadline = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIReadyDeadline    = "MINIO_API_READY_DEADLINE"
-
 	EnvUpdate = "MINIO_UPDATE"
 
 	EnvWorm   = "MINIO_WORM"   // legacy

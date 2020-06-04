@@ -403,7 +403,7 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	return nil
 }
 
-// IsReady - No Op.
+// IsReady - shouldn't be called will panic.
 func (xl xlObjects) IsReady(ctx context.Context) bool {
 	logger.CriticalIf(ctx, NotImplemented{})
 	return true
