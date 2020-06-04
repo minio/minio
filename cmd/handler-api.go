@@ -20,34 +20,61 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/cmd/config/api"
 )
 
-type apiThrottling struct {
-	mu      sync.RWMutex
-	enabled bool
+type apiConfig struct {
+	mu sync.RWMutex
 
 	requestsDeadline time.Duration
 	requestsPool     chan struct{}
+	readyDeadline    time.Duration
+	corsAllowOrigins []string
 }
 
-func (t *apiThrottling) init(max int, deadline time.Duration) {
-	if max <= 0 {
-		return
-	}
-
+func (t *apiConfig) init(cfg api.Config) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.requestsPool = make(chan struct{}, max)
-	t.requestsDeadline = deadline
-	t.enabled = true
+	t.readyDeadline = cfg.APIReadyDeadline
+	t.corsAllowOrigins = cfg.APICorsAllowOrigin
+	if cfg.APIRequestsMax <= 0 {
+		return
+	}
+
+	apiRequestsMax := cfg.APIRequestsMax
+	if len(globalEndpoints.Hosts()) > 0 {
+		apiRequestsMax /= len(globalEndpoints.Hosts())
+	}
+
+	t.requestsPool = make(chan struct{}, apiRequestsMax)
+	t.requestsDeadline = cfg.APIRequestsDeadline
 }
 
-func (t *apiThrottling) get() (chan struct{}, <-chan time.Time) {
+func (t *apiConfig) getCorsAllowOrigins() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	if !t.enabled {
+	return t.corsAllowOrigins
+}
+
+func (t *apiConfig) getReadyDeadline() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.readyDeadline == 0 {
+		return 10 * time.Second
+	}
+
+	return t.readyDeadline
+}
+
+func (t *apiConfig) getRequestsPool() (chan struct{}, <-chan time.Time) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.requestsPool == nil {
 		return nil, nil
 	}
 
@@ -57,7 +84,7 @@ func (t *apiThrottling) get() (chan struct{}, <-chan time.Time) {
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pool, deadlineTimer := globalAPIThrottling.get()
+		pool, deadlineTimer := globalAPIConfig.getRequestsPool()
 		if pool == nil {
 			f.ServeHTTP(w, r)
 			return

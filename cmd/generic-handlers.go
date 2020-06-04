@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )
 
@@ -410,7 +411,14 @@ func setCorsHandler(h http.Handler) http.Handler {
 	}
 
 	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
+		AllowOriginFunc: func(origin string) bool {
+			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
+				if wildcard.MatchSimple(allowedOrigin, origin) {
+					return true
+				}
+			}
+			return false
+		},
 		AllowedMethods: []string{
 			http.MethodGet,
 			http.MethodPut,

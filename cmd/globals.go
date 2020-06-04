@@ -154,9 +154,9 @@ var (
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
 
-	// globalAPIThrottling controls S3 requests throttling when
-	// enabled in the config or in the shell environment.
-	globalAPIThrottling apiThrottling
+	// globalAPIConfig controls S3 API requests throttling,
+	// healthcheck readiness deadlines and cors settings.
+	globalAPIConfig apiConfig
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config
@@ -275,8 +275,6 @@ var (
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
-	// Deadline by which /minio/health/ready should respond.
-	globalReadyDeadline time.Duration
 	// Add new variable global values here.
 )
 

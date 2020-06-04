@@ -1615,7 +1615,7 @@ func (z *xlZones) IsReady(ctx context.Context) bool {
 		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
 	}
 
-	diskIDs := globalNotificationSys.GetLocalDiskIDs()
+	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
 
 	diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
 
