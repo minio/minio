@@ -364,6 +364,7 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 			Addr:                 args.Host.String() + ":" + args.Port,
 			DBName:               args.Database,
 			AllowNativePasswords: true,
+			CheckConnLiveness:    true,
 		}
 
 		args.DSN = config.FormatDSN()
