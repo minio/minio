@@ -365,13 +365,7 @@ func lookupConfigs(s config.Config) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	apiRequestsMax := apiConfig.APIRequestsMax
-	if len(globalEndpoints.Hosts()) > 0 {
-		apiRequestsMax /= len(globalEndpoints.Hosts())
-	}
-
-	globalAPIThrottling.init(apiRequestsMax, apiConfig.APIRequestsDeadline)
-	globalReadyDeadline = apiConfig.APIReadyDeadline
+	globalAPIConfig.init(apiConfig)
 
 	if globalIsXL {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
