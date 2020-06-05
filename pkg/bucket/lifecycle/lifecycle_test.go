@@ -88,6 +88,18 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
+		{ // Valid lifecycle config
+			inputConfig: `<LifecycleConfiguration>
+					  <Rule>
+					  <Filter>
+					  <And><Tag><Key>key1</Key><Value>val1</Value><Key>key2</Key><Value>val2</Value></Tag></And>
+		                          </Filter>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                          </LifecycleConfiguration>`,
+			expectedParsingErr:    errDuplicatedXMLTag,
+			expectedValidationErr: nil,
+		},
 		{ // lifecycle config with no rules
 			inputConfig: `<LifecycleConfiguration>
 		                          </LifecycleConfiguration>`,
@@ -111,6 +123,11 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			lc, err := ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig)))
 			if err != tc.expectedParsingErr {
 				t.Fatalf("%d: Expected %v during parsing but got %v", i+1, tc.expectedParsingErr, err)
+			}
+			if tc.expectedParsingErr != nil {
+				// We already expect a parsing error,
+				// no need to continue this test.
+				return
 			}
 			err = lc.Validate()
 			if err != tc.expectedValidationErr {
