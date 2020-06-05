@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018, 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,7 +173,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx = newContext(r, w, action)
-	defer stsAuditLog(w, r, action)
+	defer logger.AuditLog(w, r, action, nil)
 
 	sessionPolicyStr := r.Form.Get(stsPolicy)
 	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -258,15 +258,6 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseXML(w, encodeResponse(assumeRoleResponse))
 }
 
-func stsAuditLog(w http.ResponseWriter, r *http.Request, action string) {
-	for _, k := range []string{
-		stsLDAPPassword, // cleanup any passwords before sending to audit logs.
-	} {
-		r.URL.Query().Del(k)
-	}
-	logger.AuditLog(w, r, action, nil)
-}
-
 func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleJWTCommon")
 
@@ -290,7 +281,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	}
 
 	ctx = newContext(r, w, action)
-	defer stsAuditLog(w, r, action)
+	defer logger.AuditLog(w, r, action, nil)
 
 	if globalOpenIDValidators == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errServerNotInitialized)
@@ -437,6 +428,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithLDAPIdentity")
 
+	defer logger.AuditLog(w, r, "AssumeRoleWithLDAPIdentity", nil, stsLDAPPassword)
+
 	// Parse the incoming form data.
 	if err := r.ParseForm(); err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
@@ -444,7 +437,16 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	if r.Form.Get(stsVersion) != stsAPIVersion {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
+		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter,
+			fmt.Errorf("Invalid STS API version %s, expecting %s", r.Form.Get("Version"), stsAPIVersion))
+		return
+	}
+
+	ldapUsername := r.Form.Get(stsLDAPUsername)
+	ldapPassword := r.Form.Get(stsLDAPPassword)
+
+	if ldapUsername == "" || ldapPassword == "" {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, fmt.Errorf("LDAPUsername and LDAPPassword cannot be empty"))
 		return
 	}
 
@@ -453,17 +455,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	case ldapIdentity:
 	default:
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("Unsupported action %s", action))
-		return
-	}
-
-	ctx = newContext(r, w, action)
-	defer stsAuditLog(w, r, action)
-
-	ldapUsername := r.Form.Get(stsLDAPUsername)
-	ldapPassword := r.Form.Get(stsLDAPPassword)
-
-	if ldapUsername == "" || ldapPassword == "" {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSMissingParameter, fmt.Errorf("LDAPUsername and LDAPPassword cannot be empty"))
 		return
 	}
 
