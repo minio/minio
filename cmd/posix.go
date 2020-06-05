@@ -392,7 +392,10 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 		if err != nil {
 			return 0, errSkipFile
 		}
-		return item.applyActions(ctx, objAPI, &meta), nil
+		return item.applyActions(ctx, objAPI,
+			actionMeta{oi: meta.ToObjectInfo(item.bucket, item.objectPath()),
+				meta: meta.Meta,
+			}), nil
 	})
 	if err != nil {
 		return dataUsageInfo, err

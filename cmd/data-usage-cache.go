@@ -117,6 +117,73 @@ func (d *dataUsageCache) find(path string) *dataUsageEntry {
 	return &due
 }
 
+// Returns nil if not found.
+func (d *dataUsageCache) subCache(path string) dataUsageCache {
+	dst := dataUsageCache{Info: dataUsageCacheInfo{
+		Name:        path,
+		LastUpdate:  d.Info.LastUpdate,
+		BloomFilter: d.Info.BloomFilter,
+	}}
+	dst.copyWithChildren(d, dataUsageHash(hashPath(path).Key()), nil)
+	return dst
+}
+
+func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
+	if existing, ok := d.Cache[h.String()]; !ok {
+		// Delete first if there should be a loop.
+		delete(d.Cache, h.Key())
+		for child := range existing.Children {
+			d.deleteRecursive(dataUsageHash(child))
+		}
+	}
+}
+
+// replaceRootChild will replace the child of root in d with the root of 'other'.
+func (d *dataUsageCache) replaceRootChild(other dataUsageCache) {
+	otherRoot := other.root()
+	if otherRoot == nil {
+		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Source has no root"))
+		return
+	}
+	thisRoot := d.root()
+	if thisRoot == nil {
+		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of current not found"))
+		return
+	}
+	thisRootHash := d.rootHash()
+	otherRootHash := other.rootHash()
+	if thisRootHash == otherRootHash {
+		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of child matches root of destination"))
+		return
+	}
+	d.deleteRecursive(other.rootHash())
+	d.copyWithChildren(&other, other.rootHash(), &thisRootHash)
+}
+
+// keepBuckets will keep only the buckets specified specified by delete all others.
+func (d *dataUsageCache) keepBuckets(b []BucketInfo) {
+	lu := make(map[dataUsageHash]struct{})
+	for _, v := range b {
+		lu[hashPath(v.Name)] = struct{}{}
+	}
+	d.keepRootChildren(lu)
+}
+
+// keepRootChildren will keep the root children specified by delete all others.
+func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
+	thisRoot := d.root()
+	if thisRoot == nil {
+		return
+	}
+	for k := range d.Cache {
+		h := dataUsageHash(k)
+		if _, ok := list[h]; !ok {
+			d.deleteRecursive(h)
+			delete(d.Cache, k)
+		}
+	}
+}
+
 // dui converts the flattened version of the path to DataUsageInfo.
 // As a side effect d will be flattened, use a clone if this is not ok.
 func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {

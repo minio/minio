@@ -189,29 +189,28 @@ type Item struct {
 
 type getSizeFn func(item Item) (int64, error)
 
+// actionMeta contains information used to apply actions.
+type actionMeta struct {
+	oi   ObjectInfo
+	meta map[string]string
+}
+
 // applyActions will apply lifecycle checks on to a scanned item.
 // The resulting size on disk will always be returned.
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
-func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta *xlMetaV1) (size int64) {
-	size = -1
-	if meta != nil {
-		sz, err := meta.ToObjectInfo("a", "b").GetActualSize()
-		if err == nil {
-			size = sz
-		}
-	}
+func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta) (size int64) {
+	size, _ = meta.oi.GetActualSize()
 	if i.lifeCycle == nil {
 		return size
 	}
-	if meta != nil {
-		action := i.lifeCycle.ComputeAction(i.objectPath(), meta.Meta[xhttp.AmzObjectTagging], meta.Stat.ModTime)
-		switch action {
-		case lifecycle.DeleteAction:
-		default:
-			// No action.
-			return size
-		}
+
+	action := i.lifeCycle.ComputeAction(i.objectPath(), meta.meta[xhttp.AmzObjectTagging], meta.oi.ModTime)
+	switch action {
+	case lifecycle.DeleteAction:
+	default:
+		// No action.
+		return size
 	}
 
 	// These (expensive) operations should only run on items we are likely to delete.
@@ -225,7 +224,7 @@ func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta *xlMetaV1) 
 	size = obj.Size
 
 	// Recalculate action.
-	action := i.lifeCycle.ComputeAction(i.objectPath(), obj.UserTags, obj.ModTime)
+	action = i.lifeCycle.ComputeAction(i.objectPath(), obj.UserTags, obj.ModTime)
 	switch action {
 	case lifecycle.DeleteAction:
 	default:

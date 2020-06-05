@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +26,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -238,79 +238,118 @@ func (fs *FSObjects) waitForLowActiveIO() {
 // CrawlAndGetDataUsage returns data usage stats of the current FS deployment
 func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	// Load bucket totals
-	var oldCache dataUsageCache
-	err := oldCache.load(ctx, fs, dataUsageCacheName)
+	var totalCache dataUsageCache
+	err := totalCache.load(ctx, fs, dataUsageCacheName)
 	if err != nil {
 		return err
 	}
-	if oldCache.Info.Name == "" {
-		oldCache.Info.Name = dataUsageRoot
+	if totalCache.Info.Name == "" {
+		totalCache.Info.Name = dataUsageRoot
 	}
 	buckets, err := fs.ListBuckets(ctx)
 	if err != nil {
 		return err
 	}
-	oldCache.Info.BloomFilter = nil
+	totalCache.Info.BloomFilter = nil
 	if bf != nil {
-		oldCache.Info.BloomFilter = bf.bytes()
+		totalCache.Info.BloomFilter = bf.bytes()
+	}
+	// Delete all buckets that does not exist anymore.
+	totalCache.keepBuckets(buckets)
+
+	for _, b := range buckets {
+		// Load bucket cache.
+		var bCache dataUsageCache
+		err := bCache.load(ctx, fs, b.Name)
+		if err != nil {
+			return err
+		}
+		if bCache.Info.Name == "" {
+			bCache.Info.Name = b.Name
+		}
+
+		cache, err := fs.crawlBucket(ctx, b.Name, totalCache)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		logger.LogIf(ctx, err)
+		cache.Info.BloomFilter = nil
+		if cache.Info.LastUpdate.After(bCache.Info.LastUpdate) {
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving bucket %q cache with %d entries", b.Name, len(cache.Cache))
+			}
+			logger.LogIf(ctx, cache.save(ctx, fs, b.Name))
+		}
+		// Merge, save and send update.
+		// We do it even if unchanged.
+		totalCache.merge(cache.clone())
+		if intDataUpdateTracker.debug {
+			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving totals cache with %d entries", len(totalCache.Cache))
+		}
+		logger.LogIf(ctx, totalCache.save(ctx, fs, dataUsageCacheName))
+		cloned := totalCache.clone()
+		updates <- cloned.dui(dataUsageRoot, buckets)
 	}
 
-	if false && intDataUpdateTracker.debug {
-		b, _ := json.MarshalIndent(bf, "", "  ")
-		logger.Info("Bloom filter: %v", string(b))
+	return nil
+}
+
+// crawlBucket crawls a single bucket in FS mode.
+// The updated cache for the bucket is returned.
+// A partially updated bucket may be returned.
+func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataUsageCache) (dataUsageCache, error) {
+	bucketPath := filepath.Join(fs.fsPath, bucket)
+
+	// Get bucket policy
+	// Check if the current bucket has a configured lifecycle policy
+	lc, err := globalLifecycleSys.Get(bucket)
+	if err == nil && lc.HasActiveRules("") {
+		cache.Info.lifeCycle = lc
 	}
 
-	cache, err := updateUsage(ctx, fs.fsPath, oldCache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
+	// Load bucket info.
+	cache, err = updateUsage(ctx, bucketPath, cache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
 		bucket, object := path2BucketObject(strings.TrimPrefix(item.Path, fs.fsPath))
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !os.IsNotExist(err) {
 			return 0, errSkipFile
 		}
-		// Get file size, symlinks which cannot be
-		// followed are automatically filtered by fastwalk.
-		if err == nil && len(fsMetaBytes) > 0 {
-			fsMeta := newFSMetaV1()
+
+		fsMeta := newFSMetaV1()
+		metaOk := false
+		if len(fsMetaBytes) > 0 {
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
-				return 0, errSkipFile
+				metaOk = true
 			}
-			sz, err := fsMeta.ToObjectInfo(bucket, object, nil).GetActualSize()
-			if err == nil {
-				return sz, nil
-			}
-			if sz := item.applyActions(ctx, fs, nil); sz >= 0 {
-				return sz, nil
-			}
-
+		}
+		if !metaOk {
+			fsMeta = fs.defaultFsJSON(object)
 		}
 
-		// Fallback to stat.
-		fi, err := os.Stat(item.Path)
-		if err != nil {
+		// Stat the file.
+		fi, fiErr := os.Stat(item.Path)
+		if fiErr != nil {
 			return 0, errSkipFile
 		}
-		if sz := item.applyActions(ctx, fs, nil); sz >= 0 {
+
+		oi := fsMeta.ToObjectInfo(bucket, object, fi)
+		sz, err := oi.GetActualSize()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return fi.Size(), nil
+		}
+		sz = item.applyActions(ctx, fs, actionMeta{oi: ObjectInfo{}, meta: fsMeta.Meta})
+		if sz >= 0 {
 			return sz, nil
 		}
+
 		return fi.Size(), nil
 	})
 
-	cache.Info.BloomFilter = nil
-
-	// Even if there was an error, the new cache may have better info.
-	if cache.Info.LastUpdate.After(oldCache.Info.LastUpdate) {
-		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving cache with %d entries", len(cache.Cache))
-		}
-		logger.LogIf(ctx, cache.save(ctx, fs, dataUsageCacheName))
-		updates <- cache.dui(dataUsageRoot, buckets)
-	} else {
-		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Cache not updated, %d entries", len(cache.Cache))
-		}
-	}
-
-	return err
+	return cache, err
 }
 
 /// Bucket operations
