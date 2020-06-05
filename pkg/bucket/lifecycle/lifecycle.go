@@ -104,15 +104,12 @@ func (lc Lifecycle) FilterActionableRules(objName, objTags string) []Rule {
 		if rule.Status == Disabled {
 			continue
 		}
-		if strings.HasPrefix(objName, rule.Prefix()) {
-			tags := rule.Tags()
-			if tags != "" {
-				if strings.Contains(objTags, tags) {
-					rules = append(rules, rule)
-				}
-			} else {
-				rules = append(rules, rule)
-			}
+		if !strings.HasPrefix(objName, rule.Prefix()) {
+			continue
+		}
+		tags := strings.Split(objTags, "&")
+		if rule.Filter.TestTags(tags) {
+			rules = append(rules, rule)
 		}
 	}
 	return rules
