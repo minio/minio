@@ -135,7 +135,7 @@ func AddAuditTarget(t Target) {
 }
 
 // AuditLog - logs audit logs to all audit targets.
-func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}) {
+func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}, filterKeys ...string) {
 	// Fast exit if there is not audit target configured
 	if len(AuditTargets) == 0 {
 		return
@@ -162,6 +162,12 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 	}
 
 	entry := audit.ToEntry(w, r, reqClaims, globalDeploymentID)
+	for _, filterKey := range filterKeys {
+		delete(entry.ReqClaims, filterKey)
+		delete(entry.ReqQuery, filterKey)
+		delete(entry.ReqHeader, filterKey)
+		delete(entry.RespHeader, filterKey)
+	}
 	entry.API.Name = api
 	entry.API.Bucket = bucket
 	entry.API.Object = object
