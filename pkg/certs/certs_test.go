@@ -93,6 +93,16 @@ func TestValidPairAfterWrite(t *testing.T) {
 	if !reflect.DeepEqual(gcert.Certificate, expectedCert.Certificate) {
 		t.Error("certificate doesn't match expected certificate")
 	}
+
+	rInfo := &tls.CertificateRequestInfo{}
+	gcert, err = c.GetClientCertificate(rInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(gcert.Certificate, expectedCert.Certificate) {
+		t.Error("client certificate doesn't match expected certificate")
+	}
 }
 
 func TestStop(t *testing.T) {
