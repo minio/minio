@@ -182,7 +182,7 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 		setCounts = possibleSetCountsWithSymmetry(setCounts, argPatterns)
 
 		if len(setCounts) == 0 {
-			msg := fmt.Sprintf("No symmertric distribution detected with input endpoints provided %s, disks %d cannot be spread symmetrically by any supported erasure set sizes %d", args, commonSize, setSizes)
+			msg := fmt.Sprintf("No symmetric distribution detected with input endpoints provided %s, disks %d cannot be spread symmetrically by any supported erasure set sizes %d", args, commonSize, setSizes)
 			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
 		}
 
