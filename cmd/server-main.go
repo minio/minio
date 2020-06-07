@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/retry"
 )
 
 // ServerFlags - server command specific flags
@@ -216,10 +217,10 @@ func initSafeMode() (err error) {
 	//    version is needed, migration is needed etc.
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	for range newRetryTimerSimple(retryCtx) {
+	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(leaderLockTimeout); err != nil {
+		if err = txnLk.GetLock(newDynamicTimeout(5*time.Second, 30*time.Second)); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
