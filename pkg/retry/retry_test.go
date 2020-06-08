@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2020 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dsync
+package retry
 
 import (
 	"context"
@@ -24,8 +24,8 @@ import (
 
 // Tests for retry timer.
 func TestRetryTimerSimple(t *testing.T) {
-	rctx, cancel := context.WithCancel(context.Background())
-	attemptCh := newRetryTimerSimple(rctx)
+	retryCtx, cancel := context.WithCancel(context.Background())
+	attemptCh := NewTimer(retryCtx)
 	i := <-attemptCh
 	if i != 0 {
 		cancel()
@@ -45,10 +45,11 @@ func TestRetryTimerSimple(t *testing.T) {
 
 // Test retry time with no jitter.
 func TestRetryTimerWithNoJitter(t *testing.T) {
-	rctx, cancel := context.WithCancel(context.Background())
+	retryCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// No jitter
-	attemptCh := newRetryTimerWithJitter(rctx, time.Millisecond, 5*time.Millisecond, NoJitter)
+	attemptCh := NewTimerWithJitter(retryCtx, time.Millisecond, 5*time.Millisecond, NoJitter)
 	i := <-attemptCh
 	if i != 0 {
 		cancel()
@@ -57,11 +58,9 @@ func TestRetryTimerWithNoJitter(t *testing.T) {
 	// Loop through the maximum possible attempt.
 	for i = range attemptCh {
 		if i == 30 {
-			break
+			cancel()
 		}
 	}
-	cancel()
-
 	_, ok := <-attemptCh
 	if ok {
 		t.Fatal("Attempt counter should be closed")
@@ -70,10 +69,9 @@ func TestRetryTimerWithNoJitter(t *testing.T) {
 
 // Test retry time with Jitter greater than MaxJitter.
 func TestRetryTimerWithJitter(t *testing.T) {
-	rctx, cancel := context.WithCancel(context.Background())
-
+	retryCtx, cancel := context.WithCancel(context.Background())
 	// Jitter will be set back to 1.0
-	attemptCh := newRetryTimerWithJitter(rctx, time.Second, 30*time.Second, 2.0)
+	attemptCh := NewTimerWithJitter(retryCtx, time.Second, 30*time.Second, 2.0)
 	i := <-attemptCh
 	if i != 0 {
 		cancel()

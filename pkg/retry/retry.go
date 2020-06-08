@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
+ * Minio Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,37 +14,14 @@
  * limitations under the License.
  */
 
-package cmd
+package retry
 
 import (
 	"context"
+	"math"
 	"math/rand"
-	"sync"
 	"time"
 )
-
-// lockedRandSource provides protected rand source, implements rand.Source interface.
-type lockedRandSource struct {
-	lk  sync.Mutex
-	src rand.Source
-}
-
-// Int63 returns a non-negative pseudo-random 63-bit integer as an
-// int64.
-func (r *lockedRandSource) Int63() (n int64) {
-	r.lk.Lock()
-	n = r.src.Int63()
-	r.lk.Unlock()
-	return
-}
-
-// Seed uses the provided seed value to initialize the generator to a
-// deterministic state.
-func (r *lockedRandSource) Seed(seed int64) {
-	r.lk.Lock()
-	r.src.Seed(seed)
-	r.lk.Unlock()
-}
 
 // MaxJitter will randomize over the full exponential backoff time
 const MaxJitter = 1.0
@@ -53,31 +30,48 @@ const MaxJitter = 1.0
 // exponential backoff time
 const NoJitter = 0.0
 
-// Global random source for fetching random values.
-var globalRandomSource = rand.New(&lockedRandSource{
-	src: rand.NewSource(UTCNow().UnixNano()),
-})
+// defaultTimer implements Timer interface using time.Timer
+type defaultTimer struct {
+	timer *time.Timer
+}
 
-// newRetryTimerJitter creates a timer with exponentially increasing delays
+// C returns the timers channel which receives the current time when the timer fires.
+func (t *defaultTimer) C() <-chan time.Time {
+	return t.timer.C
+}
+
+// Start starts the timer to fire after the given duration
+// don't use this code concurrently.
+func (t *defaultTimer) Start(duration time.Duration) {
+	if t.timer == nil {
+		t.timer = time.NewTimer(duration)
+	} else {
+		t.timer.Reset(duration)
+	}
+}
+
+// Stop is called when the timer is not used anymore and resources may be freed.
+func (t *defaultTimer) Stop() {
+	if t.timer != nil {
+		t.timer.Stop()
+	}
+}
+
+// NewTimerWithJitter creates a timer with exponentially increasing delays
 // until the maximum retry attempts are reached. - this function is a fully
 // configurable version, meant for only advanced use cases. For the most part
 // one should use newRetryTimerSimple and newRetryTimer.
-func newRetryTimerWithJitter(ctx context.Context, unit time.Duration, cap time.Duration, jitter float64) <-chan int {
+func NewTimerWithJitter(ctx context.Context, unit time.Duration, cap time.Duration, jitter float64) <-chan int {
 	attemptCh := make(chan int)
 
 	// normalize jitter to the range [0, 1.0]
-	if jitter < NoJitter {
-		jitter = NoJitter
-	}
-	if jitter > MaxJitter {
-		jitter = MaxJitter
-	}
+	jitter = math.Max(NoJitter, math.Min(MaxJitter, jitter))
 
 	// computes the exponential backoff duration according to
 	// https://www.awsarchitectureblog.com/2015/03/backoff.html
 	exponentialBackoffWait := func(attempt int) time.Duration {
 		// 1<<uint(attempt) below could overflow, so limit the value of attempt
-		maxAttempt := 30
+		const maxAttempt = 30
 		if attempt > maxAttempt {
 			attempt = maxAttempt
 		}
@@ -87,34 +81,37 @@ func newRetryTimerWithJitter(ctx context.Context, unit time.Duration, cap time.D
 			sleep = cap
 		}
 		if jitter != NoJitter {
-			sleep -= time.Duration(globalRandomSource.Float64() * float64(sleep) * jitter)
+			sleep -= time.Duration(rand.Float64() * float64(sleep) * jitter)
 		}
 		return sleep
 	}
 
 	go func() {
-		defer close(attemptCh)
 		nextBackoff := 0
+		t := &defaultTimer{}
+
+		defer func() {
+			t.Stop()
+		}()
+
+		defer close(attemptCh)
+
 		// Channel used to signal after the expiry of backoff wait seconds.
-		var timer *time.Timer
 		for {
-			select { // Attempts starts.
+			select {
 			case attemptCh <- nextBackoff:
 				nextBackoff++
 			case <-ctx.Done():
-				// Stop the routine.
-				return
-			}
-			timer = time.NewTimer(exponentialBackoffWait(nextBackoff))
-			// wait till next backoff time or till doneCh gets a message.
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				// stop the timer and return.
-				timer.Stop()
 				return
 			}
 
+			t.Start(exponentialBackoffWait(nextBackoff))
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C():
+			}
 		}
 	}()
 
@@ -124,13 +121,13 @@ func newRetryTimerWithJitter(ctx context.Context, unit time.Duration, cap time.D
 
 // Default retry constants.
 const (
-	defaultRetryUnit = time.Second      // 1 second.
-	defaultRetryCap  = 30 * time.Second // 30 seconds.
+	defaultRetryUnit = 50 * time.Millisecond  // 50 millisecond.
+	defaultRetryCap  = 500 * time.Millisecond // 500 millisecond.
 )
 
-// newRetryTimerSimple creates a timer with exponentially increasing delays
+// NewTimer creates a timer with exponentially increasing delays
 // until the maximum retry attempts are reached. - this function is a
 // simpler version with all default values.
-func newRetryTimerSimple(ctx context.Context) <-chan int {
-	return newRetryTimerWithJitter(ctx, defaultRetryUnit, defaultRetryCap, MaxJitter)
+func NewTimer(ctx context.Context) <-chan int {
+	return NewTimerWithJitter(ctx, defaultRetryUnit, defaultRetryCap, MaxJitter)
 }

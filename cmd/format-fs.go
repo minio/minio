@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
+	"github.com/minio/minio/pkg/retry"
 )
 
 // FS format version strings.
@@ -344,7 +345,7 @@ func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 	defer cancel()
 
 	var wlk *lock.LockedFile
-	retryCh := newRetryTimerSimple(retryCtx)
+	retryCh := retry.NewTimerWithJitter(retryCtx, time.Second, 30*time.Second, retry.MaxJitter)
 	var stop bool
 	for !stop {
 		select {
