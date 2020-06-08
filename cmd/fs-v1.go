@@ -433,6 +433,7 @@ func (fs *FSObjects) SetBucketPolicy(ctx context.Context, bucket string, p *poli
 		return err
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	configData, err := json.Marshal(p)
 	if err != nil {
 		return err
