@@ -171,15 +171,18 @@ func (d *dataUsageCache) keepBuckets(b []BucketInfo) {
 
 // keepRootChildren will keep the root children specified by delete all others.
 func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
-	thisRoot := d.root()
-	if thisRoot == nil {
+	if d.root() == nil {
 		return
 	}
+	rh := d.rootHash()
 	for k := range d.Cache {
 		h := dataUsageHash(k)
+		if h == rh {
+			continue
+		}
 		if _, ok := list[h]; !ok {
-			d.deleteRecursive(h)
 			delete(d.Cache, k)
+			d.deleteRecursive(h)
 		}
 	}
 }

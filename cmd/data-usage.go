@@ -53,7 +53,8 @@ const (
 	dataUsageSleepPerFolder  = 1 * time.Millisecond
 	dataUsageSleepDefMult    = 10.0
 	dataUsageUpdateDirCycles = 16
-	dataUsageStartDelay      = 5 * time.Minute // Time to wait on startup and between cycles.
+	// FIXME: Set back to 5 mins when testing is done.
+	dataUsageStartDelay = 5 * time.Second // Time to wait on startup and between cycles.
 )
 
 // initDataUsageStats will start the crawler unless disabled.
@@ -185,6 +186,7 @@ type Item struct {
 	prefix    string // Only the prefix if any.
 	object    string // Only the object name without prefixes.
 	lifeCycle *lifecycle.Lifecycle
+	debug     bool
 }
 
 type getSizeFn func(item Item) (int64, error)
@@ -200,7 +202,10 @@ type actionMeta struct {
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
 func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta) (size int64) {
-	size, _ = meta.oi.GetActualSize()
+	size, err := meta.oi.GetActualSize()
+	if i.debug {
+		logger.LogIf(ctx, err)
+	}
 	if i.lifeCycle == nil {
 		return size
 	}
@@ -379,6 +384,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				bucket: bucket,
 				prefix: path.Dir(prefix),
 				object: path.Base(entName),
+				debug:  f.dataUsageCrawlDebug,
 			}
 			size, err := f.getSize(item)
 
