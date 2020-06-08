@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	"github.com/minio/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )
 
@@ -116,7 +117,10 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 
 // ReservedMetadataPrefix is the prefix of a metadata key which
 // is reserved and for internal use only.
-const ReservedMetadataPrefix = "X-Minio-Internal-"
+const (
+	ReservedMetadataPrefix      = "X-Minio-Internal-"
+	ReservedMetadataPrefixLower = "x-minio-internal-"
+)
 
 type reservedMetadataHandler struct {
 	http.Handler
@@ -141,7 +145,7 @@ func (h reservedMetadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
-		if HasPrefix(key, ReservedMetadataPrefix) {
+		if strings.HasPrefix(strings.ToLower(key), ReservedMetadataPrefixLower) {
 			return true
 		}
 	}
@@ -407,7 +411,14 @@ func setCorsHandler(h http.Handler) http.Handler {
 	}
 
 	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
+		AllowOriginFunc: func(origin string) bool {
+			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
+				if wildcard.MatchSimple(allowedOrigin, origin) {
+					return true
+				}
+			}
+			return false
+		},
 		AllowedMethods: []string{
 			http.MethodGet,
 			http.MethodPut,

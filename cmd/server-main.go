@@ -428,9 +428,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Set system resources to maximum.
-	if err = setMaxResources(); err != nil {
-		logger.Info("Unable to set system resources to maximum %s", err)
-	}
+	setMaxResources()
 
 	if globalIsXL {
 		// Init global heal state

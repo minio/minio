@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -181,6 +182,9 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 
 	credential, err := azblob.NewSharedKeyCredential(creds.AccessKey, creds.SecretKey)
 	if err != nil {
+		if _, ok := err.(base64.CorruptInputError); ok {
+			return &azureObjects{}, errors.New("invalid Azure credentials")
+		}
 		return &azureObjects{}, err
 	}
 
@@ -542,10 +546,10 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
+func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, a.httpClient, a.endpoint)
-	return si
+	return si, nil
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
@@ -624,6 +628,17 @@ func (a *azureObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketI
 
 // DeleteBucket - delete a container on azure, uses Azure equivalent `ContainerURL.Delete`.
 func (a *azureObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+	if !forceDelete {
+		// Check if the container is empty before deleting it.
+		result, err := a.ListObjects(ctx, bucket, "", "", "", 1)
+		if err != nil {
+			return azureToObjectError(err, bucket)
+		}
+		if len(result.Objects) > 0 {
+			return minio.BucketNotEmpty{Bucket: bucket}
+		}
+	}
+
 	containerURL := a.client.NewContainerURL(bucket)
 	_, err := containerURL.Delete(ctx, azblob.ContainerAccessConditions{})
 	return azureToObjectError(err, bucket)
@@ -1035,6 +1050,11 @@ func (a *azureObjects) NewMultipartUpload(ctx context.Context, bucket, object st
 	return uploadID, nil
 }
 
+func (a *azureObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, uploadID string, partID int,
+	startOffset int64, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (info minio.PartInfo, err error) {
+	return a.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
+}
+
 // PutObjectPart - Use Azure equivalent `BlobURL.StageBlock`.
 func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *minio.PutObjReader, opts minio.ObjectOptions) (info minio.PartInfo, err error) {
 	data := r.Reader
@@ -1090,6 +1110,18 @@ func (a *azureObjects) PutObjectPart(ctx context.Context, bucket, object, upload
 	info.LastModified = minio.UTCNow()
 	info.Size = data.Size()
 	return info, nil
+}
+
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (a *azureObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, err
+	}
+
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
 }
 
 // ListObjectParts - Use Azure equivalent `ContainerURL.ListBlobsHierarchySegment`.

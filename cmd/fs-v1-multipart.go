@@ -350,6 +350,50 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	}, nil
 }
 
+// GetMultipartInfo returns multipart metadata uploaded during newMultipartUpload, used
+// by callers to verify object states
+// - encrypted
+// - compressed
+func (fs *FSObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
+	minfo := MultipartInfo{
+		Bucket:   bucket,
+		Object:   object,
+		UploadID: uploadID,
+	}
+
+	if err := checkListPartsArgs(ctx, bucket, object, fs); err != nil {
+		return minfo, toObjectErr(err)
+	}
+
+	// Check if bucket exists
+	if _, err := fs.statBucketDir(ctx, bucket); err != nil {
+		return minfo, toObjectErr(err, bucket)
+	}
+
+	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
+	if _, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile)); err != nil {
+		if err == errFileNotFound || err == errFileAccessDenied {
+			return minfo, InvalidUploadID{UploadID: uploadID}
+		}
+		return minfo, toObjectErr(err, bucket, object)
+	}
+
+	fsMetaBytes, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return minfo, toObjectErr(err, bucket, object)
+	}
+
+	var fsMeta fsMetaV1
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
+		return minfo, toObjectErr(err, bucket, object)
+	}
+
+	minfo.UserDefined = fsMeta.Meta
+	return minfo, nil
+}
+
 // ListObjectParts - lists all previously uploaded parts for a given
 // object and uploadID.  Takes additional input of part-number-marker
 // to indicate where the listing should begin from.
@@ -687,9 +731,18 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, bucket, object)
 	}
-	fsRemoveAll(ctx, uploadIDDir)
-	// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
-	fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+
+	// Purge multipart folders
+	{
+		fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
+		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
+
+		fsSimpleRenameFile(ctx, uploadIDDir, fsTmpObjPath)
+
+		// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
+		fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+	}
+
 	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
@@ -738,12 +791,16 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Ignore the error returned as Windows fails to remove directory if a file in it
-	// is Open()ed by the backgroundAppend()
-	fsRemoveAll(ctx, uploadIDDir)
+	// Purge multipart folders
+	{
+		fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
+		defer fsRemoveAll(ctx, fsTmpObjPath) // remove multipart temporary files in background.
 
-	// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
-	fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+		fsSimpleRenameFile(ctx, uploadIDDir, fsTmpObjPath)
+
+		// It is safe to ignore any directory not empty error (in case there were multiple uploadIDs on the same object)
+		fsRemoveDir(ctx, fs.getMultipartSHADir(bucket, object))
+	}
 
 	return nil
 }

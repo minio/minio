@@ -23,7 +23,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
@@ -46,14 +45,13 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 		return
 	}
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	// PutBucketEncyrption API requires Content-Md5
-	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL, guessIsBrowserReq(r))
+	if !objAPI.IsEncryptionSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketEncryptionAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))

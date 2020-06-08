@@ -363,11 +363,15 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 // wrapper to handle various operating system specific errors.
 func fsFAllocate(fd int, offset int64, len int64) (err error) {
 	e := Fallocate(fd, offset, len)
-	// Ignore errors when Fallocate is not supported in the current system
-	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
+	if e != nil {
 		switch {
 		case isSysErrNoSpace(e):
 			err = errDiskFull
+		case isSysErrNoSys(e) || isSysErrOpNotSupported(e):
+			// Ignore errors when Fallocate is not supported in the current system
+		case isSysErrInvalidArg(e):
+			// Workaround for Windows Docker Engine 19.03.8.
+			// See https://github.com/minio/minio/issues/9726
 		case isSysErrIO(e):
 			err = e
 		default:

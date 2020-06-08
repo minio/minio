@@ -130,7 +130,6 @@ func FromMinioClientListPartsInfo(lopr minio.ListObjectPartsResult) ListPartsInf
 		NextPartNumberMarker: lopr.NextPartNumberMarker,
 		MaxParts:             lopr.MaxParts,
 		IsTruncated:          lopr.IsTruncated,
-		EncodingType:         lopr.EncodingType,
 		Parts:                fromMinioClientObjectParts(lopr.ObjectParts),
 	}
 }

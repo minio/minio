@@ -22,7 +22,6 @@ import (
 	"github.com/minio/cli"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/pkg/auth"
-	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 )
 
 const (
@@ -110,11 +109,11 @@ func (n *nasObjects) IsListenBucketSupported() bool {
 	return false
 }
 
-func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
-	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
-	sinfo.Backend.GatewayOnline = sinfo.Backend.Type == minio.BackendFS
-	sinfo.Backend.Type = minio.BackendGateway
-	return sinfo
+func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
+	si, errs := n.ObjectLayer.StorageInfo(ctx, false)
+	si.Backend.GatewayOnline = si.Backend.Type == minio.BackendFS
+	si.Backend.Type = minio.BackendGateway
+	return si, errs
 }
 
 // nasObjects implements gateway for MinIO and S3 compatible object storage servers.
@@ -122,20 +121,10 @@ type nasObjects struct {
 	minio.ObjectLayer
 }
 
-// GetBucketObjectLockConfig - not implemented
-func (n *nasObjects) GetBucketObjectLockConfig(ctx context.Context, bucket string) (*objectlock.Config, error) {
-	return nil, minio.NotImplemented{}
-}
-
-// SetBucketObjectLockConfig - not implemented
-func (n *nasObjects) SetBucketObjectLockConfig(ctx context.Context, bucket string, _ *objectlock.Config) error {
-	return minio.NotImplemented{}
-}
-
 // IsReady returns whether the layer is ready to take requests.
 func (n *nasObjects) IsReady(ctx context.Context) bool {
-	sinfo := n.ObjectLayer.StorageInfo(ctx, false)
-	return sinfo.Backend.Type == minio.BackendFS
+	si, _ := n.StorageInfo(ctx, false)
+	return si.Backend.GatewayOnline
 }
 
 func (n *nasObjects) IsTaggingSupported() bool {

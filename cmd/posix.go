@@ -418,6 +418,7 @@ type DiskInfo struct {
 	Used      uint64
 	RootDisk  bool
 	MountPath string
+	Error     string // reports any error returned by underlying disk
 }
 
 // DiskInfo provides current information about disk space usage,

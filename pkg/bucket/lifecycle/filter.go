@@ -30,6 +30,9 @@ type Filter struct {
 	Prefix  string
 	And     And
 	Tag     Tag
+
+	// Caching tags, only once
+	cachedTags []string
 }
 
 // MarshalXML - produces the xml representation of the Filter struct
@@ -83,4 +86,31 @@ func (f Filter) Validate() error {
 		}
 	}
 	return nil
+}
+
+// TestTags tests if the object tags satisfy the Filter tags requirement,
+// it returns true if there is no tags in the underlying Filter.
+func (f Filter) TestTags(tags []string) bool {
+	if f.cachedTags == nil {
+		tags := make([]string, 0)
+		for _, t := range append(f.And.Tags, f.Tag) {
+			if !t.IsEmpty() {
+				tags = append(tags, t.String())
+			}
+		}
+		f.cachedTags = tags
+	}
+	for _, ct := range f.cachedTags {
+		foundTag := false
+		for _, t := range tags {
+			if ct == t {
+				foundTag = true
+				break
+			}
+		}
+		if !foundTag {
+			return false
+		}
+	}
+	return true
 }

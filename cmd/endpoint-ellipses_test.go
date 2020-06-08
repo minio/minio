@@ -211,6 +211,12 @@ func TestGetSetIndexes(t *testing.T) {
 			nil,
 			false,
 		},
+		{
+			[]string{"data{1...17}/export{1...52}"},
+			[]uint64{14144},
+			nil,
+			false,
+		},
 		// Valid inputs.
 		{
 			[]string{"data{1...27}"},
@@ -270,6 +276,12 @@ func TestGetSetIndexes(t *testing.T) {
 			[]string{"data/controller1/export{1...10}, data/controller2/export{1...10}, data/controller3/export{1...10}"},
 			[]uint64{10, 10, 10},
 			[][]uint64{{10}, {10}, {10}},
+			true,
+		},
+		{
+			[]string{"data{1...16}/export{1...52}"},
+			[]uint64{832},
+			[][]uint64{{16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16}},
 			true,
 		},
 	}

@@ -31,18 +31,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/colinmarc/hdfs/v2"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 	"github.com/minio/cli"
-	krb "github.com/minio/gokrb5/v7/client"
-	"github.com/minio/gokrb5/v7/config"
-	"github.com/minio/gokrb5/v7/credentials"
-	"github.com/minio/hdfs/v3"
-	"github.com/minio/hdfs/v3/hadoopconf"
 	"github.com/minio/minio-go/v6/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
+	krb "gopkg.in/jcmturner/gokrb5.v7/client"
+	"gopkg.in/jcmturner/gokrb5.v7/config"
+	"gopkg.in/jcmturner/gokrb5.v7/credentials"
 )
 
 const (
@@ -205,16 +205,15 @@ func (n *hdfsObjects) Shutdown(ctx context.Context) error {
 	return n.clnt.Close()
 }
 
-func (n *hdfsObjects) StorageInfo(ctx context.Context, _ bool) minio.StorageInfo {
+func (n *hdfsObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, errs []error) {
 	fsInfo, err := n.clnt.StatFs()
 	if err != nil {
-		return minio.StorageInfo{}
+		return minio.StorageInfo{}, []error{err}
 	}
-	sinfo := minio.StorageInfo{}
-	sinfo.Used = []uint64{fsInfo.Used}
-	sinfo.Backend.Type = minio.BackendGateway
-	sinfo.Backend.GatewayOnline = true
-	return sinfo
+	si.Used = []uint64{fsInfo.Used}
+	si.Backend.Type = minio.BackendGateway
+	si.Backend.GatewayOnline = true
+	return si, nil
 }
 
 // hdfsObjects implements gateway for Minio and S3 compatible object storage servers.
@@ -277,6 +276,9 @@ func hdfsIsValidBucketName(bucket string) bool {
 func (n *hdfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	if !hdfsIsValidBucketName(bucket) {
 		return minio.BucketNameInvalid{Bucket: bucket}
+	}
+	if forceDelete {
+		return hdfsToObjectErr(ctx, n.clnt.RemoveAll(minio.PathJoin(hdfsSeparator, bucket)), bucket)
 	}
 	return hdfsToObjectErr(ctx, n.clnt.Remove(minio.PathJoin(hdfsSeparator, bucket)), bucket)
 }
@@ -634,6 +636,23 @@ func (n *hdfsObjects) checkUploadIDExists(ctx context.Context, bucket, object, u
 	return nil
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (n *hdfsObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	_, err = n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket))
+	if err != nil {
+		return result, hdfsToObjectErr(ctx, err, bucket)
+	}
+
+	if err = n.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, err
+	}
+
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
+}
+
 func (n *hdfsObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (result minio.ListPartsInfo, err error) {
 	_, err = n.clnt.Stat(minio.PathJoin(hdfsSeparator, bucket))
 	if err != nil {
@@ -741,6 +760,7 @@ func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, 
 }
 
 // IsReady returns whether the layer is ready to take requests.
-func (n *hdfsObjects) IsReady(_ context.Context) bool {
-	return true
+func (n *hdfsObjects) IsReady(ctx context.Context) bool {
+	si, _ := n.StorageInfo(ctx, false)
+	return si.Backend.GatewayOnline
 }

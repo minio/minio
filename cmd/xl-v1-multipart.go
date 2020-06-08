@@ -48,7 +48,7 @@ func (xl xlObjects) checkUploadIDExists(ctx context.Context, bucket, object, upl
 
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
 func (xl xlObjects) removeObjectPart(bucket, object, uploadID string, partNumber int) {
-	curpartPath := pathJoin(bucket, object, uploadID, fmt.Sprintf("part.%d", partNumber))
+	curpartPath := pathJoin(xl.getUploadIDDir(bucket, object, uploadID), fmt.Sprintf("part.%d", partNumber))
 	storageDisks := xl.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -412,6 +412,51 @@ func (xl xlObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID 
 	}, nil
 }
 
+// GetMultipartInfo returns multipart metadata uploaded during newMultipartUpload, used
+// by callers to verify object states
+// - encrypted
+// - compressed
+func (xl xlObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
+	result := MultipartInfo{
+		Bucket:   bucket,
+		Object:   object,
+		UploadID: uploadID,
+	}
+
+	if err := xl.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
+		return result, toObjectErr(err, bucket, object, uploadID)
+	}
+
+	uploadIDPath := xl.getUploadIDDir(bucket, object, uploadID)
+
+	storageDisks := xl.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	partsMetadata, errs := readAllXLMetadata(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath)
+
+	// get Quorum for this object
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, xl, partsMetadata, errs)
+	if err != nil {
+		return result, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
+	}
+
+	reducedErr := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
+	if reducedErr == errXLWriteQuorum {
+		return result, toObjectErr(reducedErr, minioMetaMultipartBucket, uploadIDPath)
+	}
+
+	_, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+
+	// Pick one from the first valid metadata.
+	xlMeta, err := pickValidXLMeta(ctx, partsMetadata, modTime, writeQuorum)
+	if err != nil {
+		return result, err
+	}
+
+	result.UserDefined = xlMeta.Meta
+	return result, nil
+}
+
 // ListObjectParts - lists all previously uploaded parts for a given
 // object and uploadID.  Takes additional input of part-number-marker
 // to indicate where the listing should begin from.
@@ -686,6 +731,7 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] == nil || storageDisks[i] == nil {
 			xl.addPartialUpload(bucket, object)
+			break
 		}
 	}
 
