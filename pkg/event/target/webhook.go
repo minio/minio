@@ -19,6 +19,7 @@ package target
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -40,12 +42,16 @@ const (
 	WebhookAuthToken  = "auth_token"
 	WebhookQueueDir   = "queue_dir"
 	WebhookQueueLimit = "queue_limit"
+	WebhookClientCert = "client_cert"
+	WebhookClientKey  = "client_key"
 
 	EnvWebhookEnable     = "MINIO_NOTIFY_WEBHOOK_ENABLE"
 	EnvWebhookEndpoint   = "MINIO_NOTIFY_WEBHOOK_ENDPOINT"
 	EnvWebhookAuthToken  = "MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN"
 	EnvWebhookQueueDir   = "MINIO_NOTIFY_WEBHOOK_QUEUE_DIR"
 	EnvWebhookQueueLimit = "MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT"
+	EnvWebhookClientCert = "MINIO_NOTIFY_WEBHOOK_CLIENT_CERT"
+	EnvWebhookClientKey  = "MINIO_NOTIFY_WEBHOOK_CLIENT_KEY"
 )
 
 // WebhookArgs - Webhook target arguments.
@@ -56,6 +62,8 @@ type WebhookArgs struct {
 	Transport  *http.Transport `json:"-"`
 	QueueDir   string          `json:"queueDir"`
 	QueueLimit uint64          `json:"queueLimit"`
+	ClientCert string          `json:"clientCert"`
+	ClientKey  string          `json:"clientKey"`
 }
 
 // Validate WebhookArgs fields
@@ -70,6 +78,9 @@ func (w WebhookArgs) Validate() error {
 		if !filepath.IsAbs(w.QueueDir) {
 			return errors.New("queueDir path should be absolute")
 		}
+	}
+	if w.ClientCert != "" && w.ClientKey == "" || w.ClientCert == "" && w.ClientKey != "" {
+		return errors.New("cert and key must be specified as a pair")
 	}
 	return nil
 }
@@ -209,13 +220,19 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 	var store Store
 
 	target := &WebhookTarget{
-		id:   event.TargetID{ID: id, Name: "webhook"},
-		args: args,
-		httpClient: &http.Client{
-			Transport: transport,
-		},
+		id:         event.TargetID{ID: id, Name: "webhook"},
+		args:       args,
 		loggerOnce: loggerOnce,
 	}
+
+	if target.args.ClientCert != "" && target.args.ClientKey != "" {
+		c, err := certs.New(target.args.ClientCert, target.args.ClientKey, tls.LoadX509KeyPair)
+		if err != nil {
+			return target, err
+		}
+		transport.TLSClientConfig.GetClientCertificate = c.GetClientCertificate
+	}
+	target.httpClient = &http.Client{Transport: transport}
 
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)

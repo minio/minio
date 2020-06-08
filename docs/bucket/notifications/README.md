@@ -1241,6 +1241,8 @@ endpoint*    (url)       webhook server endpoint e.g. http://localhost:8080/mini
 auth_token   (string)    opaque string or JWT authorization token
 queue_dir    (path)      staging dir for undelivered messages e.g. '/home/events'
 queue_limit  (number)    maximum limit for undelivered messages, defaults to '100000'
+client_cert  (string)    client cert for Webhook mTLS auth
+client_key   (string)    client cert key for Webhook mTLS auth
 comment      (sentence)  optionally add a comment to this setting
 ```
 
@@ -1256,11 +1258,13 @@ MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN   (string)    opaque string or JWT authorization
 MINIO_NOTIFY_WEBHOOK_QUEUE_DIR    (path)      staging dir for undelivered messages e.g. '/home/events'
 MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT  (number)    maximum limit for undelivered messages, defaults to '100000'
 MINIO_NOTIFY_WEBHOOK_COMMENT      (sentence)  optionally add a comment to this setting
+MINIO_NOTIFY_WEBHOOK_CLIENT_CERT  (string)    client cert for Webhook mTLS auth
+MINIO_NOTIFY_WEBHOOK_CLIENT_KEY   (string)    client cert key for Webhook mTLS auth   
 ```
 
 ```sh
 $ mc admin config get myminio/ notify_webhook
-notify_webhook:1 queue_limit="0"  endpoint="" queue_dir=""
+notify_webhook:1 endpoint="" auth_token="" queue_limit="0" queue_dir="" client_cert="" client_key=""
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Here the endpoint is the server listening for webhook notifications. Save the settings and restart the MinIO server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your MinIO server.
