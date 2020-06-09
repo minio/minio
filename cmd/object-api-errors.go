@@ -348,6 +348,27 @@ func (e BucketQuotaExceeded) Error() string {
 	return "Bucket quota exceeded for bucket: " + e.Bucket
 }
 
+// BucketReplicationConfigNotFound - no bucket replication config found
+type BucketReplicationConfigNotFound GenericError
+
+func (e BucketReplicationConfigNotFound) Error() string {
+	return "The replication configuration was not found: " + e.Bucket
+}
+
+// BucketReplicationDestinationNotFound bucket does not exist.
+type BucketReplicationDestinationNotFound GenericError
+
+func (e BucketReplicationDestinationNotFound) Error() string {
+	return "Destination bucket does not exist: " + e.Bucket
+}
+
+// BucketReplicationTargetNotFound replication target does not exist.
+type BucketReplicationTargetNotFound GenericError
+
+func (e BucketReplicationTargetNotFound) Error() string {
+	return "Replication target not found: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

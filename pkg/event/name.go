@@ -43,9 +43,9 @@ const (
 	ObjectRemovedAll
 	ObjectRemovedDelete
 	ObjectRemovedDeleteMarkerCreated
-
 	BucketCreated
 	BucketRemoved
+	OperationReplicationFailed
 )
 
 // Expand - returns expanded values of abbreviated event type.
@@ -104,6 +104,8 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:Delete"
 	case ObjectRemovedDeleteMarkerCreated:
 		return "s3:ObjectRemoved:DeleteMarkerCreated"
+	case OperationReplicationFailed:
+		return "s3:Replication:OperationFailedReplication"
 	}
 
 	return ""
@@ -188,6 +190,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedDelete, nil
 	case "s3:ObjectRemoved:DeleteMarkerCreated":
 		return ObjectRemovedDeleteMarkerCreated, nil
+	case "s3:Replication:OperationFailedReplication":
+		return OperationReplicationFailed, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

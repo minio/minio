@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
@@ -314,7 +315,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				filter = nil
 			}
 		}
-
 		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
@@ -635,5 +635,16 @@ func sleepDuration(d time.Duration, x float64) {
 			d = time.Second
 		}
 		time.Sleep(d)
+	}
+}
+
+// healReplication will heal a scanned item that has failed replication.
+func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
+	if meta.oi.ReplicationStatus == replication.Pending ||
+		meta.oi.ReplicationStatus == replication.Failed {
+		// if heal encounters a pending replication status, either replication
+		// has failed due to server shutdown or crawler and PutObject replication are in contention.
+		healPending := meta.oi.ReplicationStatus == replication.Pending
+		replicateObject(ctx, meta.oi.Bucket, meta.oi.Name, meta.oi.VersionID, o, nil, healPending)
 	}
 }

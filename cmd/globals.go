@@ -154,9 +154,9 @@ var (
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
 
-	globalLifecycleSys       *LifecycleSys
-	globalBucketSSEConfigSys *BucketSSEConfigSys
-
+	globalLifecycleSys         *LifecycleSys
+	globalBucketSSEConfigSys   *BucketSSEConfigSys
+	globalBucketReplicationSys *BucketReplicationSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
 	globalAPIConfig apiConfig

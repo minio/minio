@@ -171,8 +171,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
 		}
 
-		// Quota operations
 		if globalIsDistErasure || globalIsErasure {
+			// Quota operations
 			if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
 				// GetBucketQuotaConfig
 				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
@@ -181,6 +181,16 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 				adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
 					httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
 			}
+			// Bucket replication operations
+			// GetBucketReplicationTargetHandler
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-replication-target").HandlerFunc(
+				httpTraceHdrs(adminAPI.GetBucketReplicationTargetsHandler)).Queries("bucket", "{bucket:.*}")
+			// GetBucketReplicationARN	Handler
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-replication-arn").HandlerFunc(
+				httpTraceHdrs(adminAPI.GetBucketReplicationARNHandler)).Queries("url", "{url:.*}")
+			// SetBucketReplicationTargetHandler
+			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-replication-target").HandlerFunc(
+				httpTraceHdrs(adminAPI.SetBucketReplicationTargetHandler)).Queries("bucket", "{bucket:.*}")
 		}
 
 		// -- Top APIs --

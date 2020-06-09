@@ -157,7 +157,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if objInfo.VersionID != "" {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
-
+	if objInfo.ReplicationStatus.String() != "" {
+		w.Header()[xhttp.AmzBucketReplicationStatus] = []string{objInfo.ReplicationStatus.String()}
+	}
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
 		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
 			Name:         objInfo.Name,

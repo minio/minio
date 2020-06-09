@@ -26,6 +26,7 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/sync/errgroup"
 	"github.com/minio/sha256-simd"
 )
@@ -131,6 +132,9 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	// Add user tags to the object info
 	objInfo.UserTags = fi.Metadata[xhttp.AmzObjectTagging]
 
+	// Add replication status to the object info
+	objInfo.ReplicationStatus = replication.StatusType(fi.Metadata[xhttp.AmzBucketReplicationStatus])
+
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
@@ -146,7 +150,6 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
-
 	// Success.
 	return objInfo
 }

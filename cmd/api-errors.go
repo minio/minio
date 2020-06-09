@@ -34,6 +34,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/replication"
+
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/versioning"
@@ -104,6 +106,12 @@ const (
 	ErrNoSuchCORSConfiguration
 	ErrNoSuchWebsiteConfiguration
 	ErrReplicationConfigurationNotFoundError
+	ErrReplicationDestinationNotFoundError
+	ErrReplicationTargetNotFoundError
+
+	ErrReplicationNeedsVersioningError
+	ErrReplicationBucketNeedsVersioningError
+	ErrBucketReplicationDisabledError
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -811,6 +819,31 @@ var errorCodes = errorCodeMap{
 		Code:           "ReplicationConfigurationNotFoundError",
 		Description:    "The replication configuration was not found",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationDestinationNotFoundError: {
+		Code:           "ReplicationDestinationNotFoundError",
+		Description:    "The replication destination bucket does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationTargetNotFoundError: {
+		Code:           "ReplicationTargetNotFoundError",
+		Description:    "The replication target does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationNeedsVersioningError: {
+		Code:           "InvalidRequest",
+		Description:    "Versioning must be 'Enabled' on the bucket to apply a replication configuration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationBucketNeedsVersioningError: {
+		Code:           "InvalidRequest",
+		Description:    "Versioning must be 'Enabled' on the bucket to add a replication target",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketReplicationDisabledError: {
+		Code:           "XMinioAdminBucketReplicationDisabled",
+		Description:    "Replication specified but disk usage crawl is disabled on MinIO server",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNoSuchObjectLockConfiguration: {
 		Code:           "NoSuchObjectLockConfiguration",
@@ -1837,6 +1870,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectLockConfigurationNotFound
 	case BucketQuotaConfigNotFound:
 		apiErr = ErrAdminNoSuchQuotaConfiguration
+	case BucketReplicationConfigNotFound:
+		apiErr = ErrReplicationConfigurationNotFoundError
+	case BucketReplicationDestinationNotFound:
+		apiErr = ErrReplicationDestinationNotFoundError
+	case BucketReplicationTargetNotFound:
+		apiErr = ErrReplicationTargetNotFoundError
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:
@@ -1938,6 +1977,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		case lifecycle.Error:
 			apiErr = APIError{
 				Code:           "InvalidRequest",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case replication.Error:
+			apiErr = APIError{
+				Code:           "MalformedXML",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
