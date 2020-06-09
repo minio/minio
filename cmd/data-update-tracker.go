@@ -365,7 +365,8 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	}
 	switch tmp[0] {
 	case 1:
-		return errors.New("dataUpdateTracker: deprecated data version, updating.")
+		logger.Info(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
+		return nil
 	case dataUpdateTrackerVersion:
 	default:
 		return errors.New("dataUpdateTracker: Unknown data version")

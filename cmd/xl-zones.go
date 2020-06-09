@@ -261,6 +261,7 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, upd
 				// Start crawler. Blocks until done.
 				err := xl.crawlAndGetDataUsage(ctx, buckets, bf, updates)
 				if err != nil {
+					logger.LogIf(ctx, err)
 					mu.Lock()
 					if firstErr == nil {
 						firstErr = err
@@ -313,9 +314,11 @@ func (z *xlZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, upd
 
 	wg.Wait()
 	ch := make(chan struct{})
-	updateCloser <- ch
-	<-ch
-
+	select {
+	case updateCloser <- ch:
+		<-ch
+	case <-ctx.Done():
+	}
 	return firstErr
 }
 
