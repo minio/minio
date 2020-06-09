@@ -24,6 +24,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/pkg/retry"
 )
 
 // Indicator if logging is enabled.
@@ -128,49 +130,41 @@ func (dm *DRWMutex) GetRLock(id, source string, timeout time.Duration) (locked b
 // algorithm until either the lock is acquired successfully or more
 // time has elapsed than the timeout value.
 func (dm *DRWMutex) lockBlocking(timeout time.Duration, id, source string, isReadLock bool) (locked bool) {
-	start := time.Now().UTC()
-
 	restClnts := dm.clnt.GetLockersFn()
 
-	retryCtx, cancel := context.WithCancel(dm.ctx)
+	retryCtx, cancel := context.WithTimeout(dm.ctx, timeout)
 
 	defer cancel()
 
 	// Use incremental back-off algorithm for repeated attempts to acquire the lock
-	for range newRetryTimerSimple(retryCtx) {
-		select {
-		case <-dm.ctx.Done():
-			return
-		default:
-		}
-
+	for range retry.NewTimer(retryCtx) {
 		// Create temp array on stack.
 		locks := make([]string, len(restClnts))
 
 		// Try to acquire the lock.
 		success := lock(dm.clnt, &locks, id, source, isReadLock, dm.Names...)
-		if success {
-			dm.m.Lock()
-
-			// If success, copy array to object
-			if isReadLock {
-				// Append new array of strings at the end
-				dm.readersLocks = append(dm.readersLocks, make([]string, len(restClnts)))
-				// and copy stack array into last spot
-				copy(dm.readersLocks[len(dm.readersLocks)-1], locks[:])
-			} else {
-				copy(dm.writeLocks, locks[:])
-			}
-
-			dm.m.Unlock()
-			return true
+		if !success {
+			continue
 		}
-		if time.Now().UTC().Sub(start) >= timeout { // Are we past the timeout?
-			break
+
+		dm.m.Lock()
+
+		// If success, copy array to object
+		if isReadLock {
+			// Append new array of strings at the end
+			dm.readersLocks = append(dm.readersLocks, make([]string, len(restClnts)))
+			// and copy stack array into last spot
+			copy(dm.readersLocks[len(dm.readersLocks)-1], locks[:])
+		} else {
+			copy(dm.writeLocks, locks[:])
 		}
-		// Failed to acquire the lock on this attempt, incrementally wait
-		// for a longer back-off time and try again afterwards.
+
+		dm.m.Unlock()
+		return true
 	}
+
+	// Failed to acquire the lock on this attempt, incrementally wait
+	// for a longer back-off time and try again afterwards.
 	return false
 }
 
@@ -233,7 +227,7 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 		//
 		// a) received all lock responses
 		// b) received too many 'non-'locks for quorum to be still possible
-		// c) time out
+		// c) timedout
 		//
 		i, locksFailed := 0, 0
 		done := false

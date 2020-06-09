@@ -104,15 +104,12 @@ func (lc Lifecycle) FilterActionableRules(objName, objTags string) []Rule {
 		if rule.Status == Disabled {
 			continue
 		}
-		if strings.HasPrefix(objName, rule.Prefix()) {
-			tags := rule.Tags()
-			if tags != "" {
-				if strings.Contains(objTags, tags) {
-					rules = append(rules, rule)
-				}
-			} else {
-				rules = append(rules, rule)
-			}
+		if !strings.HasPrefix(objName, rule.Prefix()) {
+			continue
+		}
+		tags := strings.Split(objTags, "&")
+		if rule.Filter.TestTags(tags) {
+			rules = append(rules, rule)
 		}
 	}
 	return rules
@@ -125,20 +122,10 @@ func (lc Lifecycle) ComputeAction(objName, objTags string, modTime time.Time) (a
 	if modTime.IsZero() {
 		return
 	}
-	rules := lc.FilterActionableRules(objName, objTags)
-	for _, rule := range rules {
-		if !rule.Expiration.IsDateNull() {
-			if time.Now().After(rule.Expiration.Date.Time) {
-				action = DeleteAction
-				return
-			}
-		}
-		if !rule.Expiration.IsDaysNull() {
-			if time.Now().After(expectedExpiryTime(modTime, rule.Expiration.Days)) {
-				action = DeleteAction
-				return
-			}
-		}
+
+	_, expiryTime := lc.PredictExpiryTime(objName, modTime, objTags)
+	if !expiryTime.IsZero() && time.Now().After(expiryTime) {
+		return DeleteAction
 	}
 	return
 }
@@ -155,7 +142,7 @@ func expectedExpiryTime(modTime time.Time, days ExpirationDays) time.Time {
 
 // PredictExpiryTime returns the expiry date/time of a given object
 // after evaluting the current lifecycle document.
-func (lc Lifecycle) PredictExpiryTime(objName, objTags string) (string, time.Time) {
+func (lc Lifecycle) PredictExpiryTime(objName string, modTime time.Time, objTags string) (string, time.Time) {
 	var finalExpiryDate time.Time
 	var finalExpiryRuleID string
 
@@ -169,7 +156,7 @@ func (lc Lifecycle) PredictExpiryTime(objName, objTags string) (string, time.Tim
 			}
 		}
 		if !rule.Expiration.IsDaysNull() {
-			expectedExpiry := expectedExpiryTime(time.Now(), rule.Expiration.Days)
+			expectedExpiry := expectedExpiryTime(modTime, rule.Expiration.Days)
 			if finalExpiryDate.IsZero() || finalExpiryDate.After(expectedExpiry) {
 				finalExpiryRuleID = rule.ID
 				finalExpiryDate = expectedExpiry

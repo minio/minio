@@ -59,6 +59,18 @@ var (
 			Optional:    true,
 			Type:        "sentence",
 		},
+		config.HelpKV{
+			Key:         target.WebhookClientCert,
+			Description: "client cert for Webhook mTLS auth",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.WebhookClientKey,
+			Description: "client cert key for Webhook mTLS auth",
+			Optional:    true,
+			Type:        "string",
+		},
 	}
 
 	HelpAMQP = config.HelpKVS{
