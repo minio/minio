@@ -274,7 +274,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	if enableIAMOps {
 		// Initialize IAM sys.
-		logger.FatalIf(globalIAMSys.Init(GlobalContext, newObject), "Unable to initialize IAM system")
+		startBackgroundIAMLoad(GlobalContext)
 	}
 
 	if globalCacheConfig.Enabled {
