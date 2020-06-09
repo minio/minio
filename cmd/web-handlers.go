@@ -1309,6 +1309,11 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Set Parts Count Header
+	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 {
+		setPartsCountHeaders(w, objInfo)
+	}
+
 	if err = setObjectHeaders(w, objInfo, nil); err != nil {
 		writeWebErrorResponse(w, err)
 		return

@@ -68,6 +68,13 @@ func encodeResponseJSON(response interface{}) []byte {
 	return bytesBuffer.Bytes()
 }
 
+// Write parts count
+func setPartsCountHeaders(w http.ResponseWriter, objInfo ObjectInfo) {
+	if strings.Contains(objInfo.ETag, "-") && len(objInfo.Parts) > 0 {
+		w.Header()[xhttp.AmzMpPartsCount] = []string{strconv.Itoa(len(objInfo.Parts))}
+	}
+}
+
 // Write object header
 func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec) (err error) {
 	// set common headers
@@ -80,10 +87,6 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	// Set Etag if available.
 	if objInfo.ETag != "" {
 		w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
-	}
-
-	if strings.Contains(objInfo.ETag, "-") && len(objInfo.Parts) > 0 {
-		w.Header()[xhttp.AmzMpPartsCount] = []string{strconv.Itoa(len(objInfo.Parts))}
 	}
 
 	if objInfo.ContentType != "" {
