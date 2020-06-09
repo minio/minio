@@ -21,13 +21,22 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sync"
 	"syscall"
 	"unsafe"
 )
 
 // The buffer must be at least a block long.
 // refer https://github.com/golang/go/issues/24015
-const blockSize = 8 << 10
+const blockSize = 8 << 10 // 8192
+
+// By default atleast 1000 entries in single getdents call
+var direntPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, blockSize*1000)
+		return &buf
+	},
+}
 
 // unexpectedFileMode is a sentinel (and bogus) os.FileMode
 // value used to represent a syscall.DT_UNKNOWN Dirent.Type.
@@ -90,9 +99,9 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 	}
 	defer syscall.Close(fd)
 
-	buf := make([]byte, blockSize) // stack-allocated; doesn't escape
-	boff := 0                      // starting read position in buf
-	nbuf := 0                      // end valid data in buf
+	buf := make([]byte, blockSize)
+	boff := 0 // starting read position in buf
+	nbuf := 0 // end valid data in buf
 
 	for {
 		if boff >= nbuf {
@@ -105,7 +114,7 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 				return err
 			}
 			if nbuf <= 0 {
-				break
+				break // EOF
 			}
 		}
 		consumed, name, typ, err := parseDirEnt(buf[boff:nbuf])
@@ -143,14 +152,16 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	}
 	defer syscall.Close(fd)
 
-	buf := make([]byte, blockSize) // stack-allocated; doesn't escape
-	boff := 0                      // starting read position in buf
-	nbuf := 0                      // end valid data in buf
+	bufp := direntPool.Get().(*[]byte)
+	defer direntPool.Put(bufp)
+
+	boff := 0 // starting read position in buf
+	nbuf := 0 // end valid data in buf
 
 	for count != 0 {
 		if boff >= nbuf {
 			boff = 0
-			nbuf, err = syscall.ReadDirent(fd, buf)
+			nbuf, err = syscall.ReadDirent(fd, *bufp)
 			if err != nil {
 				if isSysErrNotDir(err) {
 					return nil, errFileNotFound
@@ -161,7 +172,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				break
 			}
 		}
-		consumed, name, typ, err := parseDirEnt(buf[boff:nbuf])
+		consumed, name, typ, err := parseDirEnt((*bufp)[boff:nbuf])
 		if err != nil {
 			return nil, err
 		}
