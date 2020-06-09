@@ -814,9 +814,9 @@ func (f *FileInfoCh) Push(fi FileInfo) {
 // we found this entry. Additionally also returns a boolean
 // to indicate if the caller needs to call this function
 // again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call leastEntry
+// if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
+func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
 	for i := range entryChs {
 		entries[i], entriesValid[i] = entryChs[i].Pop()
 	}
@@ -852,7 +852,7 @@ func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) 
 		return lentry, 0, isTruncated
 	}
 
-	leastEntryCount := 0
+	lexicallySortedEntryCount := 0
 	for i, valid := range entriesValid {
 		if !valid {
 			continue
@@ -861,7 +861,7 @@ func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) 
 		// Entries are duplicated across disks,
 		// we should simply skip such entries.
 		if lentry.Name == entries[i].Name && lentry.ModTime.Equal(entries[i].ModTime) {
-			leastEntryCount++
+			lexicallySortedEntryCount++
 			continue
 		}
 
@@ -870,7 +870,7 @@ func leastEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) 
 		entryChs[i].Push(entries[i])
 	}
 
-	return lentry, leastEntryCount, isTruncated
+	return lentry, lexicallySortedEntryCount, isTruncated
 }
 
 // mergeEntriesCh - merges FileInfo channel to entries upto maxKeys.
@@ -879,7 +879,7 @@ func mergeEntriesCh(entryChs []FileInfoCh, maxKeys int, ndisks int) (entries Fil
 	entriesInfos := make([]FileInfo, len(entryChs))
 	entriesValid := make([]bool, len(entryChs))
 	for {
-		fi, quorumCount, valid := leastEntry(entryChs, entriesInfos, entriesValid)
+		fi, quorumCount, valid := lexicallySortedEntry(entryChs, entriesInfos, entriesValid)
 		if !valid {
 			// We have reached EOF across all entryChs, break the loop.
 			break
@@ -1003,7 +1003,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 			break
 		}
 
-		result, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
+		result, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
 		if !ok {
 			eof = true
 			break
@@ -1690,7 +1690,7 @@ func (s *xlSets) Walk(ctx context.Context, bucket, prefix string, results chan<-
 		defer close(results)
 
 		for {
-			entry, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
+			entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
 			if !ok {
 				return
 			}
@@ -1716,7 +1716,7 @@ func (s *xlSets) HealObjects(ctx context.Context, bucket, prefix string, opts ma
 	entriesValid := make([]bool, len(entryChs))
 	entries := make([]FileInfo, len(entryChs))
 	for {
-		entry, quorumCount, ok := leastEntry(entryChs, entries, entriesValid)
+		entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
 		if !ok {
 			break
 		}

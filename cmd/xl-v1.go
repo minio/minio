@@ -65,9 +65,6 @@ type xlObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	// TODO: ListObjects pool management, should be removed in future.
-	listPool *TreeWalkPool
-
 	mrfUploadCh chan partialUpload
 }
 

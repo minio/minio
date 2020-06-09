@@ -79,7 +79,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
+func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects, drivesPerSet int) error {
 	buckets, err := xlObj.ListBuckets(ctx)
 	if err != nil {
 		return err
@@ -108,12 +108,38 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects) error {
 			path: bucket.Name,
 		}
 
-		// List all objects in the current bucket and heal them
-		listDir := listDirFactory(ctx, xlObj.getLoadBalancedDisks()...)
-		walkResultCh := startTreeWalk(ctx, bucket.Name, "", "", true, listDir, nil)
-		for walkEntry := range walkResultCh {
+		var entryChs []FileInfoCh
+		for _, disk := range xlObj.getLoadBalancedDisks() {
+			if disk == nil {
+				// Disk can be offline
+				continue
+			}
+			entryCh, err := disk.Walk(bucket.Name, "", "", true, xlMetaJSONFile, readMetadata, ctx.Done())
+			if err != nil {
+				// Disk walk returned error, ignore it.
+				continue
+			}
+			entryChs = append(entryChs, FileInfoCh{
+				Ch: entryCh,
+			})
+		}
+
+		entriesValid := make([]bool, len(entryChs))
+		entries := make([]FileInfo, len(entryChs))
+
+		for {
+			entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
+			if !ok {
+				return nil
+			}
+
+			if quorumCount == drivesPerSet {
+				// Skip good entries.
+				continue
+			}
+
 			bgSeq.sourceCh <- healSource{
-				path: pathJoin(bucket.Name, walkEntry.entry),
+				path: pathJoin(bucket.Name, entry.Name),
 			}
 		}
 	}
@@ -173,7 +199,7 @@ func execLeaderTasks(ctx context.Context, z *xlZones) {
 			for _, zone := range z.zones {
 				// Heal set by set
 				for i, set := range zone.sets {
-					if err := healErasureSet(ctx, i, set); err != nil {
+					if err := healErasureSet(ctx, i, set, zone.drivesPerSet); err != nil {
 						logger.LogIf(ctx, err)
 						continue
 					}
