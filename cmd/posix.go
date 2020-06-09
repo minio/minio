@@ -367,7 +367,7 @@ func (s *posix) waitForLowActiveIO() {
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	// Check if the current bucket has a configured lifecycle policy
 	lc, err := globalLifecycleSys.Get(cache.Info.Name)
-	if err == nil && lc.HasActiveRules("") {
+	if err == nil && lc.HasActiveRules("", true) {
 		cache.Info.lifeCycle = lc
 	}
 

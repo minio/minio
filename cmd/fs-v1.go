@@ -312,13 +312,16 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 	// Get bucket policy
 	// Check if the current bucket has a configured lifecycle policy
 	lc, err := globalLifecycleSys.Get(bucket)
-	if err == nil && lc.HasActiveRules("") {
+	if err == nil && lc.HasActiveRules("", true) {
+		logger.Info(color.Green("crawlBucket:") + " lifecycle: Active rules found")
 		cache.Info.lifeCycle = lc
+	} else {
+		logger.Info(color.Green("crawlBucket:")+" lifecycle: %v, err: %v", lc != nil, err)
 	}
 
 	// Load bucket info.
 	cache, err = updateUsage(ctx, fs.fsPath, cache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
-		bucket, object := path2BucketObject(strings.TrimPrefix(item.Path, fs.fsPath))
+		bucket, object := item.bucket, item.objectPath()
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !os.IsNotExist(err) {
 			return 0, errSkipFile
@@ -339,6 +342,7 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		// Stat the file.
 		fi, fiErr := os.Stat(item.Path)
 		if fiErr != nil {
+			logger.Info(color.Green("crawlBucket:")+" Unable to stat file: %q", err)
 			return 0, errSkipFile
 		}
 

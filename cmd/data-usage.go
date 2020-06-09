@@ -182,19 +182,20 @@ type Item struct {
 	Path string
 	Typ  os.FileMode
 
-	bucket    string // Bucket.
-	prefix    string // Only the prefix if any.
-	object    string // Only the object name without prefixes.
-	lifeCycle *lifecycle.Lifecycle
-	debug     bool
+	bucket     string // Bucket.
+	prefix     string // Only the prefix if any, does not have final object name.
+	objectName string // Only the object name without prefixes.
+	lifeCycle  *lifecycle.Lifecycle
+	debug      bool
 }
 
 type getSizeFn func(item Item) (int64, error)
 
 // actionMeta contains information used to apply actions.
 type actionMeta struct {
-	oi   ObjectInfo
-	meta map[string]string
+	oi      ObjectInfo
+	trustOI bool // Set true if oi can be trusted and has been read with quorum.
+	meta    map[string]string
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -207,10 +208,12 @@ func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta)
 		logger.LogIf(ctx, err)
 	}
 	if i.lifeCycle == nil {
+		// logger.Info(color.Green("applyActions:")+" %q: no lifecycle", i.objectPath())
 		return size
 	}
 
 	action := i.lifeCycle.ComputeAction(i.objectPath(), meta.meta[xhttp.AmzObjectTagging], meta.oi.ModTime)
+	logger.Info(color.Green("applyActions:")+" lifecycle: %q, initial scan: %v", i.objectPath(), action)
 	switch action {
 	case lifecycle.DeleteAction:
 	default:
@@ -220,21 +223,24 @@ func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta)
 
 	// These (expensive) operations should only run on items we are likely to delete.
 	// Load to ensure that we have the correct version and not an unsynced version.
-	obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{})
-	if err != nil {
-		// Do nothing - heal in the future.
-		logger.LogIf(ctx, err)
-		return size
-	}
-	size = obj.Size
+	if !meta.trustOI {
+		obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{})
+		if err != nil {
+			// Do nothing - heal in the future.
+			logger.LogIf(ctx, err)
+			return size
+		}
+		size = obj.Size
 
-	// Recalculate action.
-	action = i.lifeCycle.ComputeAction(i.objectPath(), obj.UserTags, obj.ModTime)
-	switch action {
-	case lifecycle.DeleteAction:
-	default:
-		// No action.
-		return size
+		// Recalculate action.
+		action = i.lifeCycle.ComputeAction(i.objectPath(), obj.UserTags, obj.ModTime)
+		logger.Info(color.Green("applyActions:")+" lifecycle: secondary scan: %v", action)
+		switch action {
+		case lifecycle.DeleteAction:
+		default:
+			// No action.
+			return size
+		}
 	}
 
 	err = o.DeleteObject(ctx, i.bucket, i.objectPath())
@@ -249,7 +255,7 @@ func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta)
 		EventName:  event.ObjectRemovedDelete,
 		BucketName: i.bucket,
 		Object: ObjectInfo{
-			Name: i.object,
+			Name: i.objectPath(),
 		},
 		Host: "Internal: [ILM-EXPIRY]",
 	})
@@ -258,7 +264,7 @@ func (i *Item) applyActions(ctx context.Context, o ObjectLayer, meta actionMeta)
 
 // objectPath returns the prefix and object name.
 func (i *Item) objectPath() string {
-	return path.Join(i.prefix, i.object)
+	return path.Join(i.prefix, i.objectName)
 }
 
 type cachedFolder struct {
@@ -310,8 +316,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
+		var activeLifeCycle *lifecycle.Lifecycle
 		if f.oldCache.Info.lifeCycle != nil && filter != nil {
-			if f.oldCache.Info.lifeCycle.HasActiveRules(folder.name) {
+			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
+			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+				logger.Info(color.Green("data-usage:")+" Prefix %q has active rules", prefix)
+				activeLifeCycle = f.oldCache.Info.lifeCycle
 				filter = nil
 			}
 		}
@@ -379,12 +389,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 			// Get file size, ignore errors.
 			item := Item{
-				Path:   path.Join(f.root, entName),
-				Typ:    typ,
-				bucket: bucket,
-				prefix: path.Dir(prefix),
-				object: path.Base(entName),
-				debug:  f.dataUsageCrawlDebug,
+				Path:       path.Join(f.root, entName),
+				Typ:        typ,
+				bucket:     bucket,
+				prefix:     path.Dir(prefix),
+				objectName: path.Base(entName),
+				debug:      f.dataUsageCrawlDebug,
+				lifeCycle:  activeLifeCycle,
 			}
 			size, err := f.getSize(item)
 
@@ -440,7 +451,25 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 		fileName := path.Join(dirStack...)
 		dirStack = dirStack[:len(dirStack)-1]
 
-		size, err := f.getSize(Item{Path: fileName, Typ: typ})
+		bucket, prefix := path2BucketObjectWithBasePath(f.root, fileName)
+		var activeLifeCycle *lifecycle.Lifecycle
+		if f.oldCache.Info.lifeCycle != nil {
+			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
+				logger.Info(color.Green("data-usage:")+" Prefix %q has active rules", prefix)
+				activeLifeCycle = f.oldCache.Info.lifeCycle
+			}
+		}
+
+		size, err := f.getSize(
+			Item{
+				Path:       fileName,
+				Typ:        typ,
+				bucket:     bucket,
+				prefix:     path.Dir(prefix),
+				objectName: path.Base(entName),
+				debug:      f.dataUsageCrawlDebug,
+				lifeCycle:  activeLifeCycle,
+			})
 
 		// Don't sleep for really small amount of time
 		sleepDuration(time.Since(t), f.dataUsageCrawlMult)

@@ -33,6 +33,8 @@ var (
 // actions that will be implemented later.
 type Action int
 
+//go:generate stringer -type Action $GOFILE
+
 const (
 	// NoneAction means no action required after evaluting lifecycle rules
 	NoneAction Action = iota
@@ -46,9 +48,11 @@ type Lifecycle struct {
 	Rules   []Rule   `xml:"Rule"`
 }
 
-// HasActiveRules - returns whether policy has active rules.
+// HasActiveRules - returns whether policy has active rules for.
 // Optionally a prefix can be supplied.
-func (lc Lifecycle) HasActiveRules(prefix string) bool {
+// If recursive is specified the function will also return true if any level below the
+// prefix has active rules. If no prefix is specified recursive is effectively true.
+func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 	if len(lc.Rules) == 0 {
 		return false
 	}
@@ -56,9 +60,17 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 		if rule.Status == Disabled {
 			continue
 		}
-		if len(prefix) > 0 && rule.Filter.Prefix != "" && !strings.HasPrefix(prefix, rule.Filter.Prefix) {
-			continue
+		if len(prefix) > 0 && len(rule.Filter.Prefix) > 0 {
+			// incoming prefix must be in rule prefix
+			if !recursive && !strings.HasPrefix(prefix, rule.Filter.Prefix) {
+				continue
+			}
+			// If recursive, we can skip this rule if it doesn't match the tested prefix.
+			if recursive && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
+				continue
+			}
 		}
+
 		if rule.NoncurrentVersionExpiration.NoncurrentDays > 0 {
 			return true
 		}
