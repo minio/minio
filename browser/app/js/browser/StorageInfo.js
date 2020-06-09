@@ -26,12 +26,9 @@ export class StorageInfo extends React.Component {
   }
   render() {
     const { used } = this.props.storageInfo
-
-    if (!used) {
+    if (!used || used == 0) {
       return <noscript />
     }
-
-    const totalUsed = used.reduce((v1, v2) => v1 + v2, 0)
 
     return (
       <div className="feh-used">
@@ -41,7 +38,7 @@ export class StorageInfo extends React.Component {
         <ul>
           <li>
             <span>Used: </span>
-            {humanize.filesize(totalUsed)}
+            {humanize.filesize(used)}
           </li>
         </ul>
       </div>

@@ -114,8 +114,8 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 
 // StorageInfoRep - contains storage usage statistics.
 type StorageInfoRep struct {
-	StorageInfo StorageInfo `json:"storageInfo"`
-	UIVersion   string      `json:"uiVersion"`
+	Used      uint64 `json:"used"`
+	UIVersion string `json:"uiVersion"`
 }
 
 // StorageInfo - web call to gather storage usage statistics.
@@ -129,7 +129,8 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *WebGenericArgs, re
 	if authErr != nil {
 		return toJSONError(ctx, authErr)
 	}
-	reply.StorageInfo, _ = objectAPI.StorageInfo(ctx, false)
+	dataUsageInfo, _ := loadDataUsageFromBackend(ctx, objectAPI)
+	reply.Used = dataUsageInfo.ObjectsTotalSize
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
