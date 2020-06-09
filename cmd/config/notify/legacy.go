@@ -281,6 +281,14 @@ func SetNotifyWebhook(s config.Config, whName string, cfg target.WebhookArgs) er
 			Key:   target.WebhookQueueLimit,
 			Value: strconv.Itoa(int(cfg.QueueLimit)),
 		},
+		config.KV{
+			Key:   target.WebhookClientCert,
+			Value: cfg.ClientCert,
+		},
+		config.KV{
+			Key:   target.WebhookClientKey,
+			Value: cfg.ClientKey,
+		},
 	}
 
 	return nil

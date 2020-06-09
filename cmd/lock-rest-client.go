@@ -76,7 +76,7 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 	}
 
 	if isNetworkError(err) {
-		time.AfterFunc(defaultRetryUnit, func() {
+		time.AfterFunc(time.Second, func() {
 			// After 1 seconds, take this lock client online for a retry.
 			atomic.StoreInt32(&client.connected, 1)
 		})

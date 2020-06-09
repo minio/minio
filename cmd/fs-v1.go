@@ -676,13 +676,11 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		switch lockType {
 		case writeLock:
 			if err = lock.GetLock(globalObjectTimeout); err != nil {
-				logger.LogIf(ctx, err)
 				return nil, err
 			}
 			nsUnlocker = lock.Unlock
 		case readLock:
 			if err = lock.GetRLock(globalObjectTimeout); err != nil {
-				logger.LogIf(ctx, err)
 				return nil, err
 			}
 			nsUnlocker = lock.RUnlock
