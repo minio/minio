@@ -426,6 +426,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Set Parts Count Header
+	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 {
+		setPartsCountHeaders(w, objInfo)
+	}
+
 	setHeadGetRespHeaders(w, r.URL.Query())
 	setAmzExpirationHeader(w, bucket, objInfo)
 
@@ -602,6 +607,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	if err = setObjectHeaders(w, objInfo, rs); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
+	}
+
+	// Set Parts Count Header
+	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 {
+		setPartsCountHeaders(w, objInfo)
 	}
 
 	// Set any additional requested response headers.

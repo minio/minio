@@ -903,7 +903,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		if err != nil {
 			return opts, err
 		}
-		if partNumber < 0 {
+		if partNumber <= 0 {
 			return opts, errInvalidArgument
 		}
 	}
