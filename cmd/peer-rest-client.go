@@ -47,11 +47,6 @@ type peerRESTClient struct {
 	connected  int32
 }
 
-// Reconnect to a peer rest server.
-func (client *peerRESTClient) reConnect() {
-	atomic.StoreInt32(&client.connected, 1)
-}
-
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
@@ -64,7 +59,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if !client.IsOnline() {
-		client.reConnect()
+		return nil, errServerOffline
 	}
 
 	if values == nil {
@@ -77,7 +72,7 @@ func (client *peerRESTClient) callWithContext(ctx context.Context, method string
 	}
 
 	if isNetworkError(err) {
-		atomic.StoreInt32(&client.connected, 0)
+		client.MarkOffline()
 	}
 
 	return nil, err
@@ -93,9 +88,36 @@ func (client *peerRESTClient) IsOnline() bool {
 	return atomic.LoadInt32(&client.connected) == 1
 }
 
+// MarkOffline - will mark a client as being offline
+// and spawn a goroutine that will attempt to reconnect.
+func (client *peerRESTClient) MarkOffline() {
+	// Start goroutine that will attempt to reconnect.
+	// If server is already trying to reconnect this will have no effect.
+	if atomic.CompareAndSwapInt32(&client.connected, 1, 0) {
+		go func() {
+			const retryEvery = 200 * time.Millisecond
+			const retryTimeout = time.Second
+			ticker := time.NewTicker(retryEvery)
+			defer ticker.Stop()
+			for range ticker.C {
+				ctx, cancel := context.WithTimeout(GlobalContext, retryTimeout)
+				respBody, err := client.callWithContext(ctx, peerRESTMethodServerInfo, nil, nil, -1)
+				http.DrainBody(respBody)
+				cancel()
+				if !isNetworkError(err) {
+					atomic.CompareAndSwapInt32(&client.connected, 0, 1)
+					return
+				}
+			}
+		}()
+	}
+}
+
 // Close - marks the client as closed.
 func (client *peerRESTClient) Close() error {
-	atomic.StoreInt32(&client.connected, 0)
+	// We may be attempting to reconnect, so we set the value to 2
+	// to avoid reconnecting.
+	atomic.StoreInt32(&client.connected, 2)
 	client.restClient.Close()
 	return nil
 }

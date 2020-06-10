@@ -44,6 +44,9 @@ var errDataTooSmall = errors.New("Object size smaller than expected")
 // errServerNotInitialized - server not initialized.
 var errServerNotInitialized = errors.New("Server not initialized, please try again")
 
+// errServerOffline - server marked as offline.
+var errServerOffline = errors.New("Server offline, please try again")
+
 // errRPCAPIVersionUnsupported - unsupported rpc API version.
 var errRPCAPIVersionUnsupported = errors.New("Unsupported rpc API version")
 
