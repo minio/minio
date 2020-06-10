@@ -392,6 +392,10 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 		if err != nil {
 			return 0, errSkipFile
 		}
+
+		// Remove filename which is the meta file.
+		item.transformMetaDir()
+
 		return item.applyActions(ctx, objAPI,
 			actionMeta{oi: meta.ToObjectInfo(item.bucket, item.objectPath()),
 				meta: meta.Meta,

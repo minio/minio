@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -196,6 +197,18 @@ type actionMeta struct {
 	oi      ObjectInfo
 	trustOI bool // Set true if oi can be trusted and has been read with quorum.
 	meta    map[string]string
+}
+
+// transformMetaDir will transform a directory to prefix/file.ext
+func (i *Item) transformMetaDir() {
+	split := strings.Split(i.prefix, SlashSeparator)
+	if len(split) > 1 {
+		i.prefix = path.Join(split[:len(split)-1]...)
+	} else {
+		i.prefix = ""
+	}
+	// Object name is last element
+	i.objectName = split[len(split)-1]
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -619,13 +632,18 @@ func updateUsage(ctx context.Context, basePath string, cache dataUsageCache, wai
 		}
 
 		if s.withFilter != nil {
-			// If folder isn't in filter, skip it completely.
-			if !s.withFilter.containsDir(folder.name) {
-				if s.dataUsageCrawlDebug {
-					logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
+			_, prefix := path2BucketObjectWithBasePath(basePath, folder.name)
+			if s.oldCache.Info.lifeCycle != nil && s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+
+				logger.Info(color.Green("data-usage:")+" Prefix %q has active rules", prefix)
+				// If folder isn't in filter, skip it completely.
+				if !s.withFilter.containsDir(folder.name) {
+					if s.dataUsageCrawlDebug {
+						logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
+					}
+					s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
+					continue
 				}
-				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-				continue
 			}
 		}
 
