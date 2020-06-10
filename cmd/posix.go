@@ -1289,6 +1289,9 @@ func (s *posix) CreateFile(volume, path string, fileSize int64, r io.Reader) (er
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		if errors.Is(err, &os.PathError{}) {
+			return errFileAccessDenied
+		}
 		return err
 	}
 
