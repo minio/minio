@@ -129,7 +129,7 @@ func (d *dataUsageCache) subCache(path string) dataUsageCache {
 }
 
 func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
-	if existing, ok := d.Cache[h.String()]; !ok {
+	if existing, ok := d.Cache[h.String()]; ok {
 		// Delete first if there should be a loop.
 		delete(d.Cache, h.Key())
 		for child := range existing.Children {
