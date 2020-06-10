@@ -189,8 +189,8 @@ func findDiskIndex(refFormat, format *formatXLV3) (int, int, error) {
 func (s *xlSets) connectDisks() {
 	var wg sync.WaitGroup
 	diskMap := s.getDiskMap()
-	for i, endpoint := range s.endpoints {
-		if isEndpointConnected(diskMap, s.endpointStrings[i]) {
+	for _, endpoint := range s.endpoints {
+		if isEndpointConnected(diskMap, endpoint.String()) {
 			continue
 		}
 		wg.Add(1)
@@ -214,6 +214,7 @@ func (s *xlSets) connectDisks() {
 				s.xlDisks[setIndex][diskIndex].Close()
 			}
 			s.xlDisks[setIndex][diskIndex] = disk
+			s.endpointStrings[setIndex*s.drivesPerSet+diskIndex] = disk.String()
 			s.xlDisksMu.Unlock()
 			go func(setIndex int) {
 				// Send a new disk connect event with a timeout
@@ -251,6 +252,19 @@ func (s *xlSets) GetLockers(setIndex int) func() []dsync.NetLocker {
 	}
 }
 
+func (s *xlSets) GetEndpoints(setIndex int) func() []string {
+	return func() []string {
+		s.xlDisksMu.RLock()
+		defer s.xlDisksMu.RUnlock()
+
+		eps := make([]string, s.drivesPerSet)
+		for i := 0; i < s.drivesPerSet; i++ {
+			eps[i] = s.endpointStrings[setIndex*s.drivesPerSet+i]
+		}
+		return eps
+	}
+}
+
 // GetDisks returns a closure for a given set, which provides list of disks per set.
 func (s *xlSets) GetDisks(setIndex int) func() []StorageAPI {
 	return func() []StorageAPI {
@@ -266,28 +280,20 @@ const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs
 
 // Initialize new set of erasure coded sets.
 func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatXLV3) (*xlSets, error) {
-	endpointStrings := make([]string, len(endpoints))
-	for i, endpoint := range endpoints {
-		if endpoint.IsLocal {
-			endpointStrings[i] = endpoint.Path
-		} else {
-			endpointStrings[i] = endpoint.String()
-		}
-	}
-
 	setCount := len(format.XL.Sets)
 	drivesPerSet := len(format.XL.Sets[0])
 
+	endpointStrings := make([]string, len(endpoints))
 	// Initialize the XL sets instance.
 	s := &xlSets{
 		sets:               make([]*xlObjects, setCount),
 		xlDisks:            make([][]StorageAPI, setCount),
 		xlLockers:          make([][]dsync.NetLocker, setCount),
-		endpoints:          endpoints,
-		endpointStrings:    endpointStrings,
 		setCount:           setCount,
 		drivesPerSet:       drivesPerSet,
 		format:             format,
+		endpoints:          endpoints,
+		endpointStrings:    endpointStrings,
 		disksConnectEvent:  make(chan diskConnectInfo),
 		disksConnectDoneCh: make(chan struct{}),
 		distributionAlgo:   format.XL.DistributionAlgo,
@@ -309,8 +315,9 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 
 	for i := 0; i < setCount; i++ {
 		for j := 0; j < drivesPerSet; j++ {
+			endpoint := endpoints[i*drivesPerSet+j]
 			// Rely on endpoints list to initialize, init lockers and available disks.
-			s.xlLockers[i][j] = newLockAPI(s.endpoints[i*drivesPerSet+j])
+			s.xlLockers[i][j] = newLockAPI(endpoint)
 
 			disk := storageDisks[i*drivesPerSet+j]
 			if disk == nil {
@@ -326,16 +333,18 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 				disk.Close()
 				continue
 			}
+			s.endpointStrings[m*drivesPerSet+n] = disk.String()
 			s.xlDisks[m][n] = disk
 		}
 
 		// Initialize xl objects for a given set.
 		s.sets[i] = &xlObjects{
-			getDisks:    s.GetDisks(i),
-			getLockers:  s.GetLockers(i),
-			nsMutex:     mutex,
-			bp:          bp,
-			mrfUploadCh: make(chan partialUpload, 10000),
+			getDisks:     s.GetDisks(i),
+			getLockers:   s.GetLockers(i),
+			getEndpoints: s.GetEndpoints(i),
+			nsMutex:      mutex,
+			bp:           bp,
+			mrfUploadCh:  make(chan partialUpload, 10000),
 		}
 
 		go s.sets[i].cleanupStaleMultipartUploads(ctx,
@@ -457,11 +466,12 @@ func (s *xlSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []er
 
 	for i, set := range s.sets {
 		storageDisks := set.getDisks()
+		endpointStrings := set.getEndpoints()
 		for j, storageErr := range storageInfoErrs[i] {
 			if storageDisks[j] == OfflineDisk {
 				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
 					State:    madmin.DriveStateOffline,
-					Endpoint: s.endpointStrings[i*s.drivesPerSet+j],
+					Endpoint: endpointStrings[j],
 				}
 				continue
 			}
@@ -1366,6 +1376,7 @@ func (s *xlSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
 			s.xlDisks[m][n].Close()
 		}
 
+		s.endpointStrings[m*s.drivesPerSet+n] = disk.String()
 		s.xlDisks[m][n] = disk
 	}
 	s.xlDisksMu.Unlock()
@@ -1578,6 +1589,7 @@ func (s *xlSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealRe
 				s.xlDisks[m][n].Close()
 			}
 
+			s.endpointStrings[m*s.drivesPerSet+n] = disk.String()
 			s.xlDisks[m][n] = disk
 		}
 		s.xlDisksMu.Unlock()
@@ -1607,35 +1619,6 @@ func (s *xlSets) HealBucket(ctx context.Context, bucket string, dryRun, remove b
 		}
 		result.Before.Drives = append(result.Before.Drives, healResult.Before.Drives...)
 		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)
-	}
-
-	for i := range s.endpoints {
-		var foundBefore bool
-		for _, v := range result.Before.Drives {
-			if s.endpointStrings[i] == v.Endpoint {
-				foundBefore = true
-			}
-		}
-		if !foundBefore {
-			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
-				UUID:     "",
-				Endpoint: s.endpointStrings[i],
-				State:    madmin.DriveStateOffline,
-			})
-		}
-		var foundAfter bool
-		for _, v := range result.After.Drives {
-			if s.endpointStrings[i] == v.Endpoint {
-				foundAfter = true
-			}
-		}
-		if !foundAfter {
-			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
-				UUID:     "",
-				Endpoint: s.endpointStrings[i],
-				State:    madmin.DriveStateOffline,
-			})
-		}
 	}
 
 	// Check if we had quorum to write, if not return an appropriate error.
