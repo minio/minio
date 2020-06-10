@@ -24,8 +24,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/kv"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
@@ -76,10 +76,14 @@ var (
 	backendEncryptedMigrationComplete   = []byte("encrypted")
 )
 
-func checkBackendEtcdEncrypted(ctx context.Context, client *etcd.Client) (bool, error) {
-	data, err := readKeyEtcd(ctx, client, backendEncryptedFile)
-	if err != nil && err != errConfigNotFound {
+func checkBackendEtcdEncrypted(ctx context.Context, client kv.Backend) (bool, error) {
+	data, err := client.Get(ctx, backendEncryptedFile)
+	if err != nil {
 		return false, err
+	}
+	if data == nil {
+		// Store has no data to migrate
+		return false, nil
 	}
 	return err == nil && bytes.Equal(data, backendEncryptedMigrationComplete), nil
 }
@@ -109,7 +113,7 @@ func decryptData(edata []byte, creds ...auth.Credentials) ([]byte, error) {
 	return data, err
 }
 
-func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) error {
+func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client kv.Backend) error {
 	encrypted, err := checkBackendEtcdEncrypted(ctx, client)
 	if err != nil {
 		return err
@@ -153,30 +157,28 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 	listCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 
-	r, err := client.Get(listCtx, minioConfigPrefix, etcd.WithPrefix(), etcd.WithKeysOnly())
+	r, err := client.Keys(listCtx, minioConfigPrefix)
 	if err != nil {
 		return err
 	}
 
-	if err = saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationIncomplete); err != nil {
+	if err = client.Save(ctx, backendEncryptedFile, backendEncryptedMigrationIncomplete); err != nil {
 		return err
 	}
 
-	for _, kv := range r.Kvs {
+	for key := range r {
 		var (
 			cdata    []byte
 			cencdata []byte
 		)
-		cdata, err = readKeyEtcd(ctx, client, string(kv.Key))
+		cdata, err = client.Get(ctx, key)
 		if err != nil {
-			switch err {
-			case errConfigNotFound:
-				// Perhaps not present or someone deleted it.
-				continue
-			}
 			return err
 		}
-
+		if cdata == nil {
+			// Perhaps not present or someone deleted it.
+			continue
+		}
 		var data []byte
 		// Is rotating of creds requested?
 		if globalOldCred.IsValid() {
@@ -205,16 +207,14 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 			return err
 		}
 
-		if err = saveKeyEtcd(ctx, client, string(kv.Key), cencdata); err != nil {
+		if err = client.Save(ctx, key, cencdata); err != nil {
 			return err
 		}
 	}
-
 	if encrypted && globalActiveCred.IsValid() && globalOldCred.IsValid() {
 		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
 	}
-
-	return saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationComplete)
+	return client.Save(ctx, backendEncryptedFile, backendEncryptedMigrationComplete)
 }
 
 func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Credentials, encrypted bool) error {

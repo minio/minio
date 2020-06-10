@@ -23,7 +23,6 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/set"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
@@ -34,6 +33,7 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/kv"
 	"github.com/minio/minio/pkg/auth"
 
 	"github.com/minio/minio/pkg/certs"
@@ -223,8 +223,8 @@ var (
 	// Initialized KMS configuration for disk cache
 	globalCacheKMS crypto.KMS
 
-	// Allocated etcd endpoint for config and bucket DNS.
-	globalEtcdClient *etcd.Client
+	// Global key value store instance for IAM and configuration
+	globalKeyValueStore kv.Backend
 
 	// Is set to true when Bucket federation is requested
 	// and is 'true' when etcdConfig.PathPrefix is empty

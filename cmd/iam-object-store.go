@@ -608,6 +608,10 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 	return ch
 }
 
+func (iamOS *IAMObjectStore) supportsWatch() bool {
+	return false
+}
+
 func (iamOS *IAMObjectStore) watch(ctx context.Context, sys *IAMSys) {
 	// Refresh IAMSys.
 	for {

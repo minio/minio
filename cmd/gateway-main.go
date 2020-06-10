@@ -174,12 +174,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// avoid URL path encoding minio/minio#8950
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
-	if globalEtcdClient != nil {
+	if globalKeyValueStore != nil {
 		// Enable STS router if etcd is enabled.
 		registerSTSRouter(router)
 	}
 
-	enableIAMOps := globalEtcdClient != nil
+	enableIAMOps := globalKeyValueStore != nil
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
@@ -267,11 +267,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		globalConfigSys.WatchConfigNASDisk(GlobalContext, newObject)
 	}
 
-	if globalEtcdClient != nil {
+	if globalKeyValueStore != nil {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient),
+		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalKeyValueStore),
 			"Unable to handle encrypted backend for iam and policies")
 	}
 

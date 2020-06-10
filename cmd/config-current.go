@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/kv"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
 	"github.com/minio/minio/pkg/env"
@@ -311,7 +312,8 @@ func validateConfig(s config.Config) error {
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
-var syncEtcdOnce sync.Once
+var syncBackend sync.Once
+var syncDNS sync.Once
 
 func lookupConfigs(s config.Config) {
 	ctx := GlobalContext
@@ -334,9 +336,10 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
-	if etcdCfg.Enabled {
-		syncEtcdOnce.Do(func() {
-			globalEtcdClient, err = etcd.New(etcdCfg)
+	syncBackend.Do(func() {
+		if etcdCfg.Enabled {
+			// Backwards compatible: Create a Etcd backend if we find a Etcd configuration
+			etcdClient, err := etcd.New(etcdCfg)
 			if err != nil {
 				if globalIsGateway {
 					logger.FatalIf(err, "Unable to initialize etcd config")
@@ -344,8 +347,20 @@ func lookupConfigs(s config.Config) {
 					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 				}
 			}
-		})
-	}
+			globalKeyValueStore = kv.NewEtcdBackend(etcdClient)
+		} else if kv.IsBackendConfigured() {
+			// Create an alternative backend for given environment.
+			backend, err := kv.NewBackend()
+			if err != nil {
+				if globalIsGateway {
+					logger.FatalIf(err, "Unable to initialize iam backend")
+				} else {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize iam backend: %w", err))
+				}
+			}
+			globalKeyValueStore = backend
+		}
+	})
 
 	// Bucket federation is 'true' only when IAM assets are not namespaced
 	// per tenant and all tenants interested in globally available users
@@ -354,18 +369,20 @@ func lookupConfigs(s config.Config) {
 	// but not federation.
 	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
 
-	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-		globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
-			dns.DomainNames(globalDomainNames),
-			dns.DomainIPs(globalDomainIPs),
-			dns.DomainPort(globalMinioPort),
-			dns.CoreDNSPath(etcdCfg.CoreDNSPath),
-		)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
-				globalDomainNames, err))
+	syncDNS.Do(func() {
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && etcdCfg.Enabled {
+			globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+				dns.DomainNames(globalDomainNames),
+				dns.DomainIPs(globalDomainIPs),
+				dns.DomainPort(globalMinioPort),
+				dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+			)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+					globalDomainNames, err))
+			}
 		}
-	}
+	})
 
 	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
 	if err != nil {

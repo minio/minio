@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -125,7 +124,7 @@ func saveFileConfig(filename string, v interface{}) error {
 
 }
 
-func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error {
+func saveFileConfigEtcd(filename string, storage Storage, v interface{}) error {
 	// Fetch filename's extension
 	ext := filepath.Ext(filename)
 	// Marshal data
@@ -139,40 +138,33 @@ func saveFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err = clnt.Put(ctx, filename, string(dataBytes))
+	err = storage.Save(ctx, filename, dataBytes)
 	if err == context.DeadlineExceeded {
-		return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
+		return fmt.Errorf("storage is unreachable, please check your endpoints. Storage: %s", storage.Info())
 	} else if err != nil {
-		return fmt.Errorf("unexpected error %w returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
+		return fmt.Errorf("unexpected error %w returned by storage, please check your endpoints. Storage: %s", err, storage.Info())
 	}
 	return nil
 }
 
-func loadFileConfigEtcd(filename string, clnt *etcd.Client, v interface{}) error {
+func loadFileConfigStorage(filename string, storage Storage, v interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	resp, err := clnt.Get(ctx, filename)
+	fileData, err := storage.Get(ctx, filename)
 	if err != nil {
 		if err == context.DeadlineExceeded {
-			return fmt.Errorf("etcd setup is unreachable, please check your endpoints %s", clnt.Endpoints())
+			return fmt.Errorf("storage is unreachable, please check your endpoints. Storage: %s", storage.Info())
 		}
-		return fmt.Errorf("unexpected error %w returned by etcd setup, please check your endpoints %s", err, clnt.Endpoints())
+		return fmt.Errorf("unexpected error %w returned by storage, please check your endpoints. Storage: %s", err, storage.Info())
 	}
-	if resp.Count == 0 {
+	if fileData == nil {
 		return os.ErrNotExist
 	}
-
-	for _, ev := range resp.Kvs {
-		if string(ev.Key) == filename {
-			fileData := ev.Value
-			if runtime.GOOS == "windows" {
-				fileData = bytes.Replace(fileData, []byte("\r\n"), []byte("\n"), -1)
-			}
-			// Unmarshal file's content
-			return toUnmarshaller(filepath.Ext(filename))(fileData, v)
-		}
+	if runtime.GOOS == "windows" {
+		fileData = bytes.Replace(fileData, []byte("\r\n"), []byte("\n"), -1)
 	}
-	return os.ErrNotExist
+	// Unmarshal file's content
+	return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 }
 
 // loadFileConfig unmarshals the file's content with the right

@@ -268,6 +268,9 @@ type IAMStorageAPI interface {
 	deleteGroupInfo(name string) error
 
 	watch(context.Context, *IAMSys)
+
+	// supportsWatch returns true if used backend supports to watch key changes
+	supportsWatch() bool
 }
 
 // LoadGroup - loads a specific group from storage, and updates the
@@ -280,7 +283,7 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 		return errServerNotInitialized
 	}
 
-	if globalEtcdClient != nil {
+	if sys.store.supportsWatch() {
 		// Watch APIs cover this case, so nothing to do.
 		return nil
 	}
@@ -324,7 +327,7 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if !sys.store.supportsWatch() {
 		return sys.store.loadPolicyDoc(policyName, sys.iamPolicyDocsMap)
 	}
 
@@ -342,7 +345,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if !sys.store.supportsWatch() {
 		var err error
 		if isGroup {
 			err = sys.store.loadMappedPolicy(userOrGroup, regularUser, isGroup, sys.iamGroupPolicyMap)
@@ -368,7 +371,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if !sys.store.supportsWatch() {
 		err := sys.store.loadUser(accessKey, userType, sys.iamUsersMap)
 		if err != nil {
 			return err
@@ -392,7 +395,7 @@ func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if !sys.store.supportsWatch() {
 		err := sys.store.loadUser(accessKey, srvAccUser, sys.iamUsersMap)
 		if err != nil {
 			return err
@@ -420,11 +423,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		logger.LogIf(ctx, errServerNotInitialized)
 		return
 	}
-
-	if globalEtcdClient == nil {
+	if globalKeyValueStore == nil {
+		// Fallback to the default IAMObject store
 		sys.store = newIAMObjectStore(ctx, objAPI)
 	} else {
-		sys.store = newIAMEtcdStore(ctx)
+		sys.store = newIAMKvStore(ctx, globalKeyValueStore)
 	}
 
 	if globalLDAPConfig.Enabled {
@@ -456,11 +459,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			continue
 		}
 
-		if globalEtcdClient != nil {
+		if globalKeyValueStore != nil {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
+			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalKeyValueStore); err != nil {
 				txnLk.Unlock()
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
