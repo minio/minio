@@ -313,14 +313,14 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 	// Check if the current bucket has a configured lifecycle policy
 	lc, err := globalLifecycleSys.Get(bucket)
 	if err == nil && lc.HasActiveRules("", true) {
-		logger.Info(color.Green("crawlBucket:") + " lifecycle: Active rules found")
+		if intDataUpdateTracker.debug {
+			logger.Info(color.Green("crawlBucket:") + " lifecycle: Active rules found")
+		}
 		cache.Info.lifeCycle = lc
-	} else {
-		logger.Info(color.Green("crawlBucket:")+" lifecycle: %v, err: %v", lc != nil, err)
 	}
 
 	// Load bucket info.
-	cache, err = updateUsage(ctx, fs.fsPath, cache, fs.waitForLowActiveIO, func(item Item) (int64, error) {
+	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, fs.waitForLowActiveIO, func(item crawlItem) (int64, error) {
 		bucket, object := item.bucket, item.objectPath()
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !os.IsNotExist(err) {
@@ -342,17 +342,11 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		// Stat the file.
 		fi, fiErr := os.Stat(item.Path)
 		if fiErr != nil {
-			logger.Info(color.Green("crawlBucket:")+" Unable to stat file: %q", err)
 			return 0, errSkipFile
 		}
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
-		sz, err := oi.GetActualSize()
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return fi.Size(), nil
-		}
-		sz = item.applyActions(ctx, fs, actionMeta{oi: oi, meta: fsMeta.Meta})
+		sz := item.applyActions(ctx, fs, actionMeta{oi: oi, meta: fsMeta.Meta})
 		if sz >= 0 {
 			return sz, nil
 		}

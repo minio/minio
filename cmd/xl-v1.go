@@ -233,7 +233,7 @@ func (xl xlObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (xl xlObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
-	// This should only be called from runDataUsageInfo and this setup should not happen (zones).
+	// This should only be called from runDataCrawler and this setup should not happen (zones).
 	return errors.New("xlObjects CrawlAndGetDataUsage not implemented")
 }
 

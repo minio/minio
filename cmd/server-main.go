@@ -363,7 +363,7 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 		initGlobalHeal(ctx, objAPI)
 	}
 
-	initDataUsageStats(ctx, objAPI)
+	initDataCrawler(ctx, objAPI)
 	initQuotaEnforcement(ctx, objAPI)
 }
 
