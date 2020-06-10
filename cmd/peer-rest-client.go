@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/gob"
+	"errors"
 	"io"
 	"io/ioutil"
 	"math"
@@ -104,7 +105,7 @@ func (client *peerRESTClient) MarkOffline() {
 				respBody, err := client.callWithContext(ctx, peerRESTMethodServerInfo, nil, nil, -1)
 				http.DrainBody(respBody)
 				cancel()
-				if !isNetworkError(err) {
+				if !errors.Is(err, context.DeadlineExceeded) && !isNetworkError(err) {
 					atomic.CompareAndSwapInt32(&client.connected, 0, 1)
 					return
 				}
