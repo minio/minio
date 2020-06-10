@@ -160,7 +160,10 @@ func (xl xlObjects) newMultipartUpload(ctx context.Context, bucket string, objec
 
 	// we now know the number of blocks this object needs for data and parity.
 	// establish the writeQuorum using this data
-	writeQuorum := dataBlocks + 1
+	writeQuorum := dataBlocks
+	if dataBlocks == parityBlocks {
+		writeQuorum = dataBlocks + 1
+	}
 
 	if meta["content-type"] == "" {
 		contentType := mimedb.TypeByExtension(path.Ext(object))

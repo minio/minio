@@ -331,7 +331,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	newAllSubsystems()
 
-	initAllSubsystems(objLayer)
+	initAllSubsystems(ctx, objLayer)
 
 	return testServer
 }
@@ -1556,7 +1556,7 @@ func newTestObjectLayer(ctx context.Context, endpointZones EndpointZones) (newOb
 
 	newAllSubsystems()
 
-	initAllSubsystems(z)
+	initAllSubsystems(ctx, z)
 
 	return z, nil
 }
@@ -1602,7 +1602,7 @@ func removeDiskN(disks []string, n int) {
 func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
 	newAllSubsystems()
 
-	initAllSubsystems(obj)
+	initAllSubsystems(context.Background(), obj)
 
 	// get random bucket name.
 	bucketName := getRandomBucketName()
@@ -1878,7 +1878,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		t.Fatal("Unexpected error", err)
 	}
 
-	initAllSubsystems(objLayer)
+	initAllSubsystems(ctx, objLayer)
 
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
@@ -1890,7 +1890,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 
-	initAllSubsystems(objLayer)
+	initAllSubsystems(ctx, objLayer)
 
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for XL.

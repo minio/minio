@@ -70,7 +70,7 @@ func prepareAdminXLTestBed(ctx context.Context) (*adminXLTestBed, error) {
 
 	newAllSubsystems()
 
-	initAllSubsystems(objLayer)
+	initAllSubsystems(ctx, objLayer)
 
 	// Setup admin mgmt REST API handlers.
 	adminRouter := mux.NewRouter()
