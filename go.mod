@@ -57,7 +57,7 @@ require (
 	github.com/klauspost/cpuid v1.2.4
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
-	github.com/klauspost/reedsolomon v1.9.7
+	github.com/klauspost/reedsolomon v1.9.9
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lib/pq v1.1.1
 	github.com/mattn/go-colorable v0.1.4
