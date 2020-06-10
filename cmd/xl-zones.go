@@ -624,7 +624,7 @@ func (z *xlZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marke
 			break
 		}
 
-		result, quorumCount, _, ok := leastEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		result, quorumCount, _, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
 			eof = true
 			break
@@ -852,9 +852,9 @@ func (z *xlZones) listObjects(ctx context.Context, bucket, prefix, marker, delim
 // we found this entry. Additionally also returns a boolean
 // to indicate if the caller needs to call this function
 // again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call leastEntry
+// if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func leastEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, int, int, bool) {
+func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
@@ -902,7 +902,7 @@ func leastEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneE
 		return lentry, 0, zoneIndex, isTruncated
 	}
 
-	leastEntryCount := 0
+	lexicallySortedEntryCount := 0
 	for i, entriesValid := range zoneEntriesValid {
 		for j, valid := range entriesValid {
 			if !valid {
@@ -912,7 +912,7 @@ func leastEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneE
 			// Entries are duplicated across disks,
 			// we should simply skip such entries.
 			if lentry.Name == zoneEntries[i][j].Name && lentry.ModTime.Equal(zoneEntries[i][j].ModTime) {
-				leastEntryCount++
+				lexicallySortedEntryCount++
 				continue
 			}
 
@@ -922,7 +922,7 @@ func leastEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneE
 		}
 	}
 
-	return lentry, leastEntryCount, zoneIndex, isTruncated
+	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
 // mergeZonesEntriesCh - merges FileInfo channel to entries upto maxKeys.
@@ -935,7 +935,7 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, ndisks int) 
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 	for {
-		fi, quorumCount, _, ok := leastEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		fi, quorumCount, _, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
@@ -1476,7 +1476,7 @@ func (z *xlZones) Walk(ctx context.Context, bucket, prefix string, results chan<
 		defer close(results)
 
 		for {
-			entry, quorumCount, zoneIndex, ok := leastEntryZone(zonesEntryChs,
+			entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs,
 				zonesEntriesInfos, zonesEntriesValid)
 			if !ok {
 				return
@@ -1519,7 +1519,7 @@ func (z *xlZones) HealObjects(ctx context.Context, bucket, prefix string, opts m
 	}
 
 	for {
-		entry, quorumCount, zoneIndex, ok := leastEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
 			break
 		}

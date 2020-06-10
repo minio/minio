@@ -115,7 +115,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 			// Heal all erasure sets that need
 			for i, erasureSetToHeal := range erasureSetInZoneToHeal {
 				for _, setIndex := range erasureSetToHeal {
-					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex])
+					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].drivesPerSet)
 					if err != nil {
 						logger.LogIf(ctx, err)
 					}
