@@ -2710,7 +2710,6 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 	}
 	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = strings.ToUpper(string(legalHold.Status))
 	if objInfo.UserTags != "" {
-		objInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
 	objInfo.metadataOnly = true
@@ -2871,7 +2870,6 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
 	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
 	if objInfo.UserTags != "" {
-		objInfo.UserDefined[xhttp.AmzTagDirective] = replaceDirective
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
 	objInfo.metadataOnly = true // Perform only metadata updates.
