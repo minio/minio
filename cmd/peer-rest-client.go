@@ -102,7 +102,7 @@ func (client *peerRESTClient) MarkOffline() {
 			defer ticker.Stop()
 			for range ticker.C {
 				ctx, cancel := context.WithTimeout(GlobalContext, retryTimeout)
-				respBody, err := client.callWithContext(ctx, peerRESTMethodServerInfo, nil, nil, -1)
+				respBody, err := client.callWithContext(ctx, peerRESTMethodGetLocalDiskIDs, nil, nil, -1)
 				http.DrainBody(respBody)
 				cancel()
 				if !errors.Is(err, context.DeadlineExceeded) && !isNetworkError(err) {
