@@ -27,6 +27,24 @@ import (
 	"time"
 )
 
+// Returns function "listDir" of the type listDirFunc.
+// disks - used for doing disk.ListDir()
+func listDirFactory(ctx context.Context, disk StorageAPI) ListDirFunc {
+	// Returns sorted merged entries from all the disks.
+	listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
+		entries, err := disk.ListDir(volume, dirPath, -1, xlMetaJSONFile)
+		if err != nil {
+			return false, nil
+		}
+		if len(entries) == 0 {
+			return true, nil
+		}
+		sort.Strings(entries)
+		return false, filterMatchingPrefix(entries, dirEntry)
+	}
+	return listDir
+}
+
 // Fixed volume name that could be used across tests
 const volume = "testvolume"
 
@@ -219,8 +237,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	}
 }
 
-// Test ListDir - listDir should list entries from the first disk, if the first disk is down,
-// it should list from the next disk.
+// Test ListDir - listDir is expected to only list one disk.
 func TestListDir(t *testing.T) {
 	file1 := "file1"
 	file2 := "file2"
@@ -248,7 +265,8 @@ func TestListDir(t *testing.T) {
 	}
 
 	// create listDir function.
-	listDir := listDirFactory(context.Background(), disk1, disk2)
+	listDir1 := listDirFactory(context.Background(), disk1)
+	listDir2 := listDirFactory(context.Background(), disk2)
 
 	// Create file1 in fsDir1 and file2 in fsDir2.
 	disks := []StorageAPI{disk1, disk2}
@@ -260,34 +278,22 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file1" from fsDir1.
-	_, entries := listDir(volume, "", "")
-	if len(entries) != 2 {
-		t.Fatal("Expected the number of entries to be 2")
-	}
-	if entries[0] != file1 {
-		t.Fatal("Expected the entry to be file1")
-	}
-	if entries[1] != file2 {
-		t.Fatal("Expected the entry to be file2")
-	}
-
-	// Remove fsDir1, list should return entries from fsDir2
-	err = os.RemoveAll(fsDir1)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Should list "file2" from fsDir2.
-	_, entries = listDir(volume, "", "")
+	_, entries := listDir1(volume, "", "")
 	if len(entries) != 1 {
 		t.Fatal("Expected the number of entries to be 1")
 	}
+
+	if entries[0] != file1 {
+		t.Fatal("Expected the entry to be file1")
+	}
+
+	_, entries = listDir2(volume, "", "")
+	if len(entries) != 1 {
+		t.Fatal("Expected the number of entries to be 1")
+	}
+
 	if entries[0] != file2 {
 		t.Fatal("Expected the entry to be file2")
-	}
-	err = os.RemoveAll(fsDir2)
-	if err != nil {
-		t.Error(err)
 	}
 }
 

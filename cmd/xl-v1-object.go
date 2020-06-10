@@ -500,7 +500,10 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 
 	// we now know the number of blocks this object needs for data and parity.
 	// writeQuorum is dataBlocks + 1
-	writeQuorum := dataDrives + 1
+	writeQuorum := dataDrives
+	if dataDrives == parityDrives {
+		writeQuorum = dataDrives + 1
+	}
 
 	// Delete temporary object in the event of failure.
 	// If PutObject succeeded there would be no temporary

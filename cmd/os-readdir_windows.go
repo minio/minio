@@ -57,7 +57,6 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 	}
 
 	data := &syscall.Win32finddata{}
-
 	for {
 		e := syscall.FindNextFile(syscall.Handle(d.Fd()), data)
 		if e != nil {
@@ -115,7 +114,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	}
 	// Not a directory return error.
 	if !st.IsDir() {
-		return nil, errFileAccessDenied
+		return nil, errFileNotFound
 	}
 
 	data := &syscall.Win32finddata{}
@@ -133,6 +132,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				}
 			}
 		}
+
 		name := syscall.UTF16ToString(data.FileName[0:])
 		if name == "" || name == "." || name == ".." { // Useless names
 			continue

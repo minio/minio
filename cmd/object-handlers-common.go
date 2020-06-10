@@ -257,7 +257,7 @@ func isETagEqual(left, right string) bool {
 // after analyzing the current bucket lifecycle rules if any.
 func setAmzExpirationHeader(w http.ResponseWriter, bucket string, objInfo ObjectInfo) {
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		ruleID, expiryTime := lc.PredictExpiryTime(objInfo.Name, objInfo.UserTags)
+		ruleID, expiryTime := lc.PredictExpiryTime(objInfo.Name, objInfo.ModTime, objInfo.UserTags)
 		if !expiryTime.IsZero() {
 			w.Header()[xhttp.AmzExpiration] = []string{
 				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),

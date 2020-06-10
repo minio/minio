@@ -21,8 +21,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
@@ -30,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/retry"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -403,10 +406,18 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
 }
 
+// Loads IAM users and policies in background, any un-handled
+// error means this code can potentially crash the server
+// in such a situation manual intervention is necessary.
+func startBackgroundIAMLoad(ctx context.Context) {
+	go globalIAMSys.Init(ctx, newObjectLayerWithoutSafeModeFn())
+}
+
 // Init - initializes config system from iam.json
-func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
+func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	if objAPI == nil {
-		return errServerNotInitialized
+		logger.LogIf(ctx, errServerNotInitialized)
+		return
 	}
 
 	if globalEtcdClient == nil {
@@ -419,18 +430,75 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 		sys.EnableLDAPSys()
 	}
 
-	// Migrate IAM configuration
-	if err := sys.doIAMConfigMigration(ctx); err != nil {
-		return err
+	retryCtx, cancel := context.WithCancel(ctx)
+
+	// Indicate to our routine to exit cleanly upon return.
+	defer cancel()
+
+	// Hold the lock for migration only.
+	txnLk := objAPI.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/iam.lock")
+
+	// Initializing IAM sub-system needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed, migration is needed etc.
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+
+	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
+		// let one of the server acquire the lock, if not let them timeout.
+		// which shall be retried again by this loop.
+		if err := txnLk.GetLock(newDynamicTimeout(1*time.Second, 5*time.Second)); err != nil {
+			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
+			continue
+		}
+
+		if globalEtcdClient != nil {
+			// ****  WARNING ****
+			// Migrating to encrypted backend on etcd should happen before initialization of
+			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
+			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
+				txnLk.Unlock()
+				logger.LogIf(ctx, fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err))
+				return
+			}
+		}
+
+		// These messages only meant primarily for distributed setup, so only log during distributed setup.
+		if globalIsDistXL {
+			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. lock acquired")
+		}
+
+		// Migrate IAM configuration
+		if err := sys.doIAMConfigMigration(ctx); err != nil {
+			txnLk.Unlock()
+			if errors.Is(err, errDiskNotFound) ||
+				errors.Is(err, errConfigNotFound) ||
+				errors.Is(err, context.Canceled) ||
+				errors.Is(err, context.DeadlineExceeded) ||
+				errors.As(err, &rquorum) ||
+				errors.As(err, &wquorum) ||
+				isErrBucketNotFound(err) {
+				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
+				continue
+			}
+			logger.LogIf(ctx, fmt.Errorf("Unable to migration IAM users and policies: %w", err))
+			return
+		}
+
+		// Successfully migrated
+		txnLk.Unlock()
+		break
 	}
 
-	err := sys.store.loadAll(ctx, sys)
+	logger.LogIf(ctx, sys.store.loadAll(ctx, sys))
 
 	// Invalidate the old cred after finishing IAM initialization
 	globalOldCred = auth.Credentials{}
 
 	go sys.store.watch(ctx, sys)
-	return err
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.

@@ -677,14 +677,15 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 }
 
 // GetLocalDiskIDs - get a peer's local disks' IDs.
-func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) []string {
+func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []string) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetLocalDiskIDs, nil, nil, -1)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return nil
 	}
 	defer http.DrainBody(respBody)
-	var diskIDs []string
 	if err = gob.NewDecoder(respBody).Decode(&diskIDs); err != nil {
+		logger.LogIf(ctx, err)
 		return nil
 	}
 	return diskIDs
