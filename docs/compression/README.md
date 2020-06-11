@@ -29,7 +29,7 @@ $ mc admin config set myminio compression extensions=".pdf" mime_types="applicat
 
 To enable compression for all content, with default extensions and mime-types.
 ```
-~ mc admin config set myminio compression
+~ mc admin config set myminio compression enable="on"
 ```
 
 The compression settings may also be set through environment variables. When set, environment variables override the defined `compress` config settings in the server config.
