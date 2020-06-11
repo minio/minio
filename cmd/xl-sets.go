@@ -190,7 +190,11 @@ func (s *xlSets) connectDisks() {
 	var wg sync.WaitGroup
 	diskMap := s.getDiskMap()
 	for _, endpoint := range s.endpoints {
-		if isEndpointConnected(diskMap, endpoint.String()) {
+		diskPath := endpoint.String()
+		if endpoint.IsLocal {
+			diskPath = endpoint.Path
+		}
+		if isEndpointConnected(diskMap, diskPath) {
 			continue
 		}
 		wg.Add(1)
