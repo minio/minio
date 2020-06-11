@@ -59,6 +59,10 @@ type xlObjects struct {
 	// getLockers returns list of remote and local lockers.
 	getLockers func() []dsync.NetLocker
 
+	// getEndpoints returns list of endpoint strings belonging this set.
+	// some may be local and some remote.
+	getEndpoints func() []string
+
 	// Locker mutex map.
 	nsMutex *nsLockMap
 
@@ -90,21 +94,17 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
-	for _, disk := range disks {
-		if disk == OfflineDisk {
-			continue
+	for _, ep := range endpoints {
+		if _, ok := offlineDisks[ep]; !ok {
+			offlineDisks[ep] = 0
 		}
-		peerAddr := disk.Hostname()
-		if _, ok := offlineDisks[peerAddr]; !ok {
-			offlineDisks[peerAddr] = 0
-		}
-		if _, ok := onlineDisks[peerAddr]; !ok {
-			onlineDisks[peerAddr] = 0
+		if _, ok := onlineDisks[ep]; !ok {
+			onlineDisks[ep] = 0
 		}
 	}
 
@@ -136,32 +136,12 @@ func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []
 		if disks[i] == OfflineDisk {
 			continue
 		}
+		ep := endpoints[i]
 		if diskInfoErr != nil {
-			offlineDisks[disks[i].Hostname()]++
+			offlineDisks[ep]++
 			continue
 		}
-		onlineDisks[disks[i].Hostname()]++
-	}
-
-	// Iterate over the passed endpoints arguments and check
-	// if there are still disks missing from the offline/online lists
-	// and update them accordingly.
-	missingOfflineDisks := make(map[string]int)
-	for _, zone := range globalEndpoints {
-		for _, endpoint := range zone.Endpoints {
-			// if local is set and endpoint is not local
-			// we are not interested in remote disks.
-			if local && !endpoint.IsLocal {
-				continue
-			}
-			if _, ok := offlineDisks[endpoint.Host]; !ok {
-				missingOfflineDisks[endpoint.Host]++
-			}
-		}
-	}
-	for missingDisk, n := range missingOfflineDisks {
-		onlineDisks[missingDisk] = 0
-		offlineDisks[missingDisk] = n
+		onlineDisks[ep]++
 	}
 
 	// Success.
@@ -169,8 +149,8 @@ func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, local bool) (StorageInfo, []error) {
-	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks, local)
+func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []error) {
+	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -206,19 +186,23 @@ func getStorageInfo(disks []StorageAPI, local bool) (StorageInfo, []error) {
 func (xl xlObjects) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 
 	disks := xl.getDisks()
+	endpoints := xl.getEndpoints()
 	if local {
 		var localDisks []StorageAPI
-		for _, disk := range disks {
+		var localEndpoints []string
+		for i, disk := range disks {
 			if disk != nil {
 				if disk.IsLocal() {
 					// Append this local disk since local flag is true
 					localDisks = append(localDisks, disk)
+					localEndpoints = append(localEndpoints, endpoints[i])
 				}
 			}
 		}
 		disks = localDisks
+		endpoints = localEndpoints
 	}
-	return getStorageInfo(disks, local)
+	return getStorageInfo(disks, endpoints)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.

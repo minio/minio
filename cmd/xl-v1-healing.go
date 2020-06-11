@@ -47,16 +47,17 @@ func (xl xlObjects) HealBucket(ctx context.Context, bucket string, dryRun, remov
 	}
 
 	storageDisks := xl.getDisks()
+	storageEndpoints := xl.getEndpoints()
 
 	// get write quorum for an object
 	writeQuorum := getWriteQuorum(len(storageDisks))
 
 	// Heal bucket.
-	return healBucket(ctx, storageDisks, bucket, writeQuorum, dryRun)
+	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, dryRun)
 }
 
 // Heal bucket - create buckets on disks where it does not exist.
-func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, writeQuorum int,
+func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints []string, bucket string, writeQuorum int,
 	dryRun bool) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
@@ -118,14 +119,11 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	}
 
 	for i := range beforeState {
-		if storageDisks[i] != nil {
-			drive := storageDisks[i].String()
-			res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    beforeState[i],
-			})
-		}
+		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: storageEndpoints[i],
+			State:    beforeState[i],
+		})
 	}
 
 	// Initialize sync waitgroup.
@@ -154,14 +152,11 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, bucket string, w
 	}
 
 	for i := range afterState {
-		if storageDisks[i] != nil {
-			drive := storageDisks[i].String()
-			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
-				UUID:     "",
-				Endpoint: drive,
-				State:    afterState[i],
-			})
-		}
+		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: storageEndpoints[i],
+			State:    afterState[i],
+		})
 	}
 
 	return res, nil
@@ -231,6 +226,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 	dataBlocks := latestXLMeta.Erasure.DataBlocks
 
 	storageDisks := xl.getDisks()
+	storageEndpoints := xl.getEndpoints()
 
 	// List of disks having latest version of the object xl.json
 	// (by modtime).
@@ -281,33 +277,29 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 			driveState = madmin.DriveStateCorrupt
 		}
 
-		var drive string
-		if storageDisks[i] != nil {
-			drive = storageDisks[i].String()
-		}
 		if shouldHealObjectOnDisk(errs[i], dataErrs[i], partsMetadata[i], modTime) {
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: drive,
+				Endpoint: storageEndpoints[i],
 				State:    driveState,
 			})
 			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 				UUID:     "",
-				Endpoint: drive,
+				Endpoint: storageEndpoints[i],
 				State:    driveState,
 			})
 			continue
 		}
 		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: drive,
+			Endpoint: storageEndpoints[i],
 			State:    driveState,
 		})
 		result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: drive,
+			Endpoint: storageEndpoints[i],
 			State:    driveState,
 		})
 	}
@@ -324,7 +316,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 			if !dryRun && remove {
 				err = xl.deleteObject(ctx, bucket, object, writeQuorum, false)
 			}
-			return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), err
+			return defaultHealResult(latestXLMeta, storageDisks, storageEndpoints, errs, bucket, object), err
 		}
 		return result, toObjectErr(errXLReadQuorum, bucket, object)
 	}
@@ -490,6 +482,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 // is needed since we do not have a special backend format for directories.
 func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dryRun bool, remove bool) (hr madmin.HealResultItem, err error) {
 	storageDisks := xl.getDisks()
+	storageEndpoints := xl.getEndpoints()
 
 	// Initialize heal result object
 	hr = madmin.HealResultItem{
@@ -515,10 +508,7 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 
 	// Prepare object creation in all disks
 	for i, err := range errs {
-		var drive string
-		if storageDisks[i] != nil {
-			drive = storageDisks[i].String()
-		}
+		drive := storageEndpoints[i]
 		switch err {
 		case nil:
 			hr.Before.Drives[i] = madmin.HealDriveInfo{Endpoint: drive, State: madmin.DriveStateOk}
@@ -558,7 +548,7 @@ func (xl xlObjects) healObjectDir(ctx context.Context, bucket, object string, dr
 
 // Populates default heal result item entries with possible values when we are returning prematurely.
 // This is to ensure that in any circumstance we are not returning empty arrays with wrong values.
-func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []error, bucket, object string) madmin.HealResultItem {
+func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, storageEndpoints []string, errs []error, bucket, object string) madmin.HealResultItem {
 	// Initialize heal result object
 	result := madmin.HealResultItem{
 		Type:      madmin.HealItemObject,
@@ -577,16 +567,17 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 	for index, disk := range storageDisks {
 		if disk == nil {
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
-				UUID:  "",
-				State: madmin.DriveStateOffline,
+				UUID:     "",
+				Endpoint: storageEndpoints[index],
+				State:    madmin.DriveStateOffline,
 			})
 			result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
-				UUID:  "",
-				State: madmin.DriveStateOffline,
+				UUID:     "",
+				Endpoint: storageEndpoints[index],
+				State:    madmin.DriveStateOffline,
 			})
 			continue
 		}
-		drive := disk.String()
 		driveState := madmin.DriveStateCorrupt
 		switch errs[index] {
 		case errFileNotFound, errVolumeNotFound:
@@ -594,12 +585,12 @@ func defaultHealResult(latestXLMeta xlMetaV1, storageDisks []StorageAPI, errs []
 		}
 		result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: drive,
+			Endpoint: storageEndpoints[index],
 			State:    driveState,
 		})
 		result.After.Drives = append(result.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: drive,
+			Endpoint: storageEndpoints[index],
 			State:    driveState,
 		})
 	}
@@ -725,6 +716,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 	}
 
 	storageDisks := xl.getDisks()
+	storageEndpoints := xl.getEndpoints()
 
 	// Read metadata files from all the disks
 	partsMetadata, errs := readAllXLMetadata(healCtx, storageDisks, bucket, object)
@@ -740,12 +732,12 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 			xl.deleteObject(healCtx, bucket, object, writeQuorum, false)
 		}
 		err = reduceReadQuorumErrs(ctx, errs, nil, writeQuorum-1)
-		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
+		return defaultHealResult(xlMetaV1{}, storageDisks, storageEndpoints, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
 
 	latestXLMeta, err := getLatestXLMeta(healCtx, partsMetadata, errs)
 	if err != nil {
-		return defaultHealResult(xlMetaV1{}, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
+		return defaultHealResult(xlMetaV1{}, storageDisks, storageEndpoints, errs, bucket, object), toObjectErr(err, bucket, object)
 	}
 
 	errCount := 0
@@ -769,7 +761,7 @@ func (xl xlObjects) HealObject(ctx context.Context, bucket, object string, opts 
 					xl.deleteObject(ctx, bucket, object, writeQuorum, false)
 				}
 			}
-			return defaultHealResult(latestXLMeta, storageDisks, errs, bucket, object), toObjectErr(err, bucket, object)
+			return defaultHealResult(latestXLMeta, storageDisks, storageEndpoints, errs, bucket, object), toObjectErr(err, bucket, object)
 		}
 	}
 
