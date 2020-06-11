@@ -128,6 +128,7 @@ func (d *naughtyDisk) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	return d.disk.StatVol(volume)
 }
+
 func (d *naughtyDisk) DeleteVol(volume string, forceDelete bool) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
@@ -135,25 +136,25 @@ func (d *naughtyDisk) DeleteVol(volume string, forceDelete bool) (err error) {
 	return d.disk.DeleteVol(volume, forceDelete)
 }
 
-func (d *naughtyDisk) WalkSplunk(volume, path, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (d *naughtyDisk) WalkSplunk(ctx context.Context, volume, path, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err
 	}
-	return d.disk.WalkSplunk(volume, path, marker, endWalkCh)
+	return d.disk.WalkSplunk(ctx, volume, path, marker, endWalkCh)
 }
 
-func (d *naughtyDisk) Walk(volume, path, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (d *naughtyDisk) Walk(ctx context.Context, volume, path, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err
 	}
-	return d.disk.Walk(volume, path, marker, recursive, leafFile, readMetadataFn, endWalkCh)
+	return d.disk.Walk(ctx, volume, path, marker, recursive, leafFile, readMetadataFn, endWalkCh)
 }
 
-func (d *naughtyDisk) ListDir(volume, path string, count int, leafFile string) (entries []string, err error) {
+func (d *naughtyDisk) ListDir(ctx context.Context, volume, path string, count int, leafFile string) (entries []string, err error) {
 	if err := d.calcError(); err != nil {
 		return []string{}, err
 	}
-	return d.disk.ListDir(volume, path, count, leafFile)
+	return d.disk.ListDir(ctx, volume, path, count, leafFile)
 }
 
 func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
@@ -205,19 +206,11 @@ func (d *naughtyDisk) DeleteFile(volume string, path string) (err error) {
 	return d.disk.DeleteFile(volume, path)
 }
 
-func (d *naughtyDisk) DeleteFileBulk(volume string, paths []string) ([]error, error) {
-	errs := make([]error, len(paths))
-	for idx, path := range paths {
-		errs[idx] = d.disk.DeleteFile(volume, path)
-	}
-	return errs, nil
-}
-
-func (d *naughtyDisk) DeletePrefixes(volume string, paths []string) ([]error, error) {
+func (d *naughtyDisk) DeletePrefixes(ctx context.Context, volume string, paths []string) ([]error, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err
 	}
-	return d.disk.DeletePrefixes(volume, paths)
+	return d.disk.DeletePrefixes(ctx, volume, paths)
 }
 
 func (d *naughtyDisk) WriteAll(volume string, path string, reader io.Reader) (err error) {
@@ -234,9 +227,9 @@ func (d *naughtyDisk) ReadAll(volume string, path string) (buf []byte, err error
 	return d.disk.ReadAll(volume, path)
 }
 
-func (d *naughtyDisk) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.VerifyFile(volume, path, size, algo, sum, shardSize)
+	return d.disk.VerifyFile(ctx, volume, path, size, algo, sum, shardSize)
 }

@@ -116,6 +116,27 @@ type storageRESTClient struct {
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
+func (client *storageRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
+	if !client.IsOnline() {
+		return nil, errDiskNotFound
+	}
+	if values == nil {
+		values = make(url.Values)
+	}
+	values.Set(storageRESTDiskID, client.diskID)
+	respBody, err := client.restClient.CallWithContext(ctx, method, values, body, length)
+	if err == nil {
+		return respBody, nil
+	}
+
+	err = toStorageErr(err)
+	if err == errDiskNotFound {
+		atomic.StoreInt32(&client.connected, 0)
+	}
+
+	return nil, err
+}
+
 func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
 	if !client.IsOnline() {
 		return nil, errDiskNotFound
@@ -157,7 +178,7 @@ func (client *storageRESTClient) Hostname() string {
 
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	b := cache.serialize()
-	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage,
+	respBody, err := client.callWithContext(ctx, storageRESTMethodCrawlAndGetDataUsage,
 		url.Values{},
 		bytes.NewBuffer(b), int64(len(b)))
 	defer http.DrainBody(respBody)
@@ -348,12 +369,12 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 	return int64(n), err
 }
 
-func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (client *storageRESTClient) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
-	respBody, err := client.call(storageRESTMethodWalkSplunk, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, storageRESTMethodWalkSplunk, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +393,8 @@ func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endW
 			}
 			select {
 			case ch <- fi:
+			case <-ctx.Done():
+				return
 			case <-endWalkCh:
 				return
 			}
@@ -382,7 +405,7 @@ func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endW
 	return ch, nil
 }
 
-func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
+func (client *storageRESTClient) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, leafFile string,
 	readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
@@ -390,7 +413,7 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
 	values.Set(storageRESTLeafFile, leafFile)
-	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, storageRESTMethodWalk, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -409,6 +432,8 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 			}
 			select {
 			case ch <- fi:
+			case <-ctx.Done():
+				return
 			case <-endWalkCh:
 				return
 			}
@@ -420,13 +445,13 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
 	values.Set(storageRESTLeafFile, leafFile)
-	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -445,45 +470,8 @@ func (client *storageRESTClient) DeleteFile(volume, path string) error {
 	return err
 }
 
-// DeleteFileBulk - deletes files in bulk.
-func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
-	if len(paths) == 0 {
-		return errs, err
-	}
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-
-	var buffer bytes.Buffer
-	for _, path := range paths {
-		buffer.WriteString(path)
-		buffer.WriteString("\n")
-	}
-
-	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, &buffer, -1)
-	defer http.DrainBody(respBody)
-	if err != nil {
-		return nil, err
-	}
-
-	reader, err := waitForHTTPResponse(respBody)
-	if err != nil {
-		return nil, err
-	}
-
-	dErrResp := &DeleteFileBulkErrsResp{}
-	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
-		return nil, err
-	}
-
-	for _, dErr := range dErrResp.Errs {
-		errs = append(errs, toStorageErr(dErr))
-	}
-
-	return errs, nil
-}
-
 // DeletePrefixes - deletes prefixes in bulk.
-func (client *storageRESTClient) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
+func (client *storageRESTClient) DeletePrefixes(ctx context.Context, volume string, paths []string) (errs []error, err error) {
 	if len(paths) == 0 {
 		return errs, err
 	}
@@ -496,7 +484,7 @@ func (client *storageRESTClient) DeletePrefixes(volume string, paths []string) (
 		buffer.WriteString("\n")
 	}
 
-	respBody, err := client.call(storageRESTMethodDeletePrefixes, values, &buffer, -1)
+	respBody, err := client.callWithContext(ctx, storageRESTMethodDeletePrefixes, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return nil, err
@@ -531,7 +519,7 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
-func (client *storageRESTClient) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -540,7 +528,7 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 	values.Set(storageRESTShardSize, strconv.Itoa(int(shardSize)))
 	values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))
 
-	respBody, err := client.call(storageRESTMethodVerifyFile, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, storageRESTMethodVerifyFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return err

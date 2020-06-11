@@ -42,7 +42,6 @@ const (
 	storageRESTMethodWalk           = "/walk"
 	storageRESTMethodWalkSplunk     = "/walksplunk"
 	storageRESTMethodDeleteFile     = "/deletefile"
-	storageRESTMethodDeleteFileBulk = "/deletefilebulk"
 	storageRESTMethodDeletePrefixes = "/deleteprefixes"
 	storageRESTMethodRenameFile     = "/renamefile"
 	storageRESTMethodVerifyFile     = "/verifyfile"

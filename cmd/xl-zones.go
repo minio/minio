@@ -1308,7 +1308,7 @@ func (z *xlZones) DeleteBucket(ctx context.Context, bucket string, forceDelete b
 	for _, err := range errs {
 		if err != nil {
 			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoDeleteBucketZones(bucket, z.zones, errs)
+				undoDeleteBucketZones(ctx, bucket, z.zones, errs)
 			}
 
 			return err
@@ -1320,7 +1320,7 @@ func (z *xlZones) DeleteBucket(ctx context.Context, bucket string, forceDelete b
 }
 
 // This function is used to undo a successful DeleteBucket operation.
-func undoDeleteBucketZones(bucket string, zones []*xlSets, errs []error) {
+func undoDeleteBucketZones(ctx context.Context, bucket string, zones []*xlSets, errs []error) {
 	g := errgroup.WithNErrs(len(zones))
 
 	// Undo previous delete bucket on all underlying zones.
@@ -1328,7 +1328,7 @@ func undoDeleteBucketZones(bucket string, zones []*xlSets, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].MakeBucketWithLocation(GlobalContext, bucket, "", false)
+				return zones[index].MakeBucketWithLocation(ctx, bucket, "", false)
 			}
 			return nil
 		}, index)

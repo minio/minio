@@ -75,7 +75,7 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90 
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
@@ -332,23 +332,23 @@ func (n *hdfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketIn
 
 func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
+	listDir := func(ctx context.Context, bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, aborted bool) {
 		f, err := n.clnt.Open(minio.PathJoin(hdfsSeparator, bucket, prefixDir))
 		if err != nil {
 			if os.IsNotExist(err) {
 				err = nil
 			}
 			logger.LogIf(minio.GlobalContext, err)
-			return
+			return false, nil, true
 		}
 		defer f.Close()
 		fis, err := f.Readdir(0)
 		if err != nil {
 			logger.LogIf(minio.GlobalContext, err)
-			return
+			return false, nil, true
 		}
 		if len(fis) == 0 {
-			return true, nil
+			return true, nil, false
 		}
 		for _, fi := range fis {
 			if fi.IsDir() {
@@ -357,7 +357,7 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 				entries = append(entries, fi.Name())
 			}
 		}
-		return false, minio.FilterMatchingPrefix(entries, prefixEntry)
+		return false, minio.FilterMatchingPrefix(entries, prefixEntry), false
 	}
 
 	// Return list factory instance.

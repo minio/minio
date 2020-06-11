@@ -325,7 +325,7 @@ func (xl xlObjects) getObjectInfoDir(ctx context.Context, bucket, object string)
 		index := index
 		g.Go(func() error {
 			// Check if 'prefix' is an object on this 'disk'.
-			entries, err := storageDisks[index].ListDir(bucket, object, 1, "")
+			entries, err := storageDisks[index].ListDir(ctx, bucket, object, 1, "")
 			if err != nil {
 				return err
 			}
@@ -798,7 +798,7 @@ func (xl xlObjects) doDeleteObjects(ctx context.Context, bucket string, objects 
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			delObjErrs[index], opErrs[index] = disk.DeletePrefixes(minioMetaTmpBucket, tmpObjs)
+			delObjErrs[index], opErrs[index] = disk.DeletePrefixes(ctx, minioMetaTmpBucket, tmpObjs)
 			if opErrs[index] == errVolumeNotFound || opErrs[index] == errFileNotFound {
 				opErrs[index] = nil
 			}

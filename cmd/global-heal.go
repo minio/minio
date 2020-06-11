@@ -114,7 +114,7 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects, drivesP
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(bucket.Name, "", "", true, xlMetaJSONFile, readMetadata, ctx.Done())
+			entryCh, err := disk.Walk(ctx, bucket.Name, "", "", true, xlMetaJSONFile, readMetadata, ctx.Done())
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue

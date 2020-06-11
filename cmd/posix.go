@@ -695,7 +695,7 @@ const guidSplunk = "guidSplunk"
 
 // ListDirSplunk - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
-func (s *posix) ListDirSplunk(volume, dirPath string, count int) (entries []string, err error) {
+func (s *posix) ListDirSplunk(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
 	guidIndex := strings.Index(dirPath, guidSplunk)
 	if guidIndex != -1 {
 		return nil, nil
@@ -749,7 +749,7 @@ func (s *posix) ListDirSplunk(volume, dirPath string, count int) (entries []stri
 // sorted order, additionally along with metadata about each of those entries.
 // Implemented specifically for Splunk backend structure and List call with
 // delimiter as "guidSplunk"
-func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
+func (s *posix) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -770,19 +770,19 @@ func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan stru
 	ch = make(chan FileInfo)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
-			entries, err := s.ListDirSplunk(volume, dirPath, -1)
+		listDir := func(ctx context.Context, volume, dirPath, dirEntry string) (bool, []string, bool) {
+			entries, err := s.ListDirSplunk(ctx, volume, dirPath, -1)
 			if err != nil {
-				return false, nil
+				return false, nil, true
 			}
 			if len(entries) == 0 {
-				return true, nil
+				return true, nil, false
 			}
 			sort.Strings(entries)
-			return false, filterMatchingPrefix(entries, dirEntry)
+			return false, filterMatchingPrefix(entries, dirEntry), false
 		}
 
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, true, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(ctx, volume, dirPath, marker, true, listDir, endWalkCh)
 		for {
 			walkResult, ok := <-walkResultCh
 			if !ok {
@@ -815,7 +815,7 @@ func (s *posix) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan stru
 
 // Walk - is a sorted walker which returns file entries in lexically
 // sorted order, additionally along with metadata about each of those entries.
-func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
+func (s *posix) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, leafFile string,
 	readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
 
 	atomic.AddInt32(&s.activeIOCount, 1)
@@ -844,19 +844,19 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 	ch = make(chan FileInfo, maxObjectList)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
-			entries, err := s.ListDir(volume, dirPath, -1, leafFile)
+		listDir := func(ctx context.Context, volume, dirPath, dirEntry string) (bool, []string, bool) {
+			entries, err := s.ListDir(ctx, volume, dirPath, -1, leafFile)
 			if err != nil {
-				return false, nil
+				return false, nil, true
 			}
 			if len(entries) == 0 {
-				return true, nil
+				return true, nil, false
 			}
 			sort.Strings(entries)
-			return false, filterMatchingPrefix(entries, dirEntry)
+			return false, filterMatchingPrefix(entries, dirEntry), false
 		}
 
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(ctx, volume, dirPath, marker, recursive, listDir, endWalkCh)
 		for {
 			walkResult, ok := <-walkResultCh
 			if !ok {
@@ -889,7 +889,7 @@ func (s *posix) Walk(volume, dirPath, marker string, recursive bool, leafFile st
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
-func (s *posix) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (s *posix) ListDir(ctx context.Context, volume, dirPath string, count int, leafFile string) (entries []string, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1501,7 +1501,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 // Parent directories are automatically removed if they become empty. err can
 // bil nil while errs can contain some errors for corresponding objects. No error
 // is set if a specified prefix path does not exist.
-func (s *posix) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
+func (s *posix) DeletePrefixes(ctx context.Context, volume string, paths []string) (errs []error, err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1576,45 +1576,6 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 
 	// Delete file and delete parent directory as well if its empty.
 	return deleteFile(volumeDir, filePath, false)
-}
-
-func (s *posix) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if os.IsPermission(err) {
-			return nil, errVolumeAccessDenied
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
-	errs = make([]error, len(paths))
-	// Following code is needed so that we retain SlashSeparator
-	// suffix if any in path argument.
-	for idx, path := range paths {
-		filePath := pathJoin(volumeDir, path)
-		errs[idx] = checkPathLength(filePath)
-		if errs[idx] != nil {
-			continue
-		}
-		// Delete file and delete parent directory as well if its empty.
-		errs[idx] = deleteFile(volumeDir, filePath, false)
-	}
-	return
 }
 
 // RenameFile - rename source path to destination path atomically.
@@ -1706,7 +1667,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	return nil
 }
 
-func (s *posix) VerifyFile(volume, path string, fileSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
+func (s *posix) VerifyFile(ctx context.Context, volume, path string, fileSize int64, algo BitrotAlgorithm, sum []byte, shardSize int64) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)

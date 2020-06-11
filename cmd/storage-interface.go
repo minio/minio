@@ -45,13 +45,13 @@ type StorageAPI interface {
 	DeleteVol(volume string, forceDelete bool) (err error)
 
 	// Walk in sorted order directly on disk.
-	Walk(volume, dirPath string, marker string, recursive bool, leafFile string,
+	Walk(ctx context.Context, volume, dirPath string, marker string, recursive bool, leafFile string,
 		readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error)
 	// Walk in sorted order directly on disk.
-	WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error)
+	WalkSplunk(ctx context.Context, volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error)
 
 	// File operations.
-	ListDir(volume, dirPath string, count int, leafFile string) ([]string, error)
+	ListDir(ctx context.Context, volume, dirPath string, count int, leafFile string) ([]string, error)
 	ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	CreateFile(volume, path string, size int64, reader io.Reader) error
@@ -59,9 +59,8 @@ type StorageAPI interface {
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
 	StatFile(volume string, path string) (file FileInfo, err error)
 	DeleteFile(volume string, path string) (err error)
-	DeleteFileBulk(volume string, paths []string) (errs []error, err error)
-	DeletePrefixes(volume string, paths []string) (errs []error, err error)
-	VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error
+	DeletePrefixes(ctx context.Context, volume string, paths []string) (errs []error, err error)
+	VerifyFile(ctx context.Context, volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error
 
 	// Write all data, syncs the data to disk.
 	WriteAll(volume string, path string, reader io.Reader) (err error)

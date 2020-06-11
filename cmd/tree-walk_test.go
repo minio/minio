@@ -31,16 +31,16 @@ import (
 // disks - used for doing disk.ListDir()
 func listDirFactory(ctx context.Context, disk StorageAPI) ListDirFunc {
 	// Returns sorted merged entries from all the disks.
-	listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
-		entries, err := disk.ListDir(volume, dirPath, -1, xlMetaJSONFile)
+	listDir := func(ctx context.Context, volume, dirPath, dirEntry string) (bool, []string, bool) {
+		entries, err := disk.ListDir(ctx, volume, dirPath, -1, xlMetaJSONFile)
 		if err != nil {
-			return false, nil
+			return false, nil, true
 		}
 		if len(entries) == 0 {
-			return true, nil
+			return true, nil, false
 		}
 		sort.Strings(entries)
-		return false, filterMatchingPrefix(entries, dirEntry)
+		return false, filterMatchingPrefix(entries, dirEntry), false
 	}
 	return listDir
 }
@@ -278,7 +278,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Should list "file1" from fsDir1.
-	_, entries := listDir1(volume, "", "")
+	_, entries, _ := listDir1(context.Background(), volume, "", "")
 	if len(entries) != 1 {
 		t.Fatal("Expected the number of entries to be 1")
 	}
@@ -287,7 +287,7 @@ func TestListDir(t *testing.T) {
 		t.Fatal("Expected the entry to be file1")
 	}
 
-	_, entries = listDir2(volume, "", "")
+	_, entries, _ = listDir2(context.Background(), volume, "", "")
 	if len(entries) != 1 {
 		t.Fatal("Expected the number of entries to be 1")
 	}

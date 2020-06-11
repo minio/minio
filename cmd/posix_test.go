@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -792,7 +793,7 @@ func TestPosixPosixListDir(t *testing.T) {
 		if _, ok := posixStorage.(*posixDiskIDCheck); !ok {
 			t.Errorf("Expected the StorageAPI to be of type *posix")
 		}
-		dirList, err = posixStorage.ListDir(testCase.srcVol, testCase.srcPath, -1, "")
+		dirList, err = posixStorage.ListDir(context.Background(), testCase.srcVol, testCase.srcPath, -1, "")
 		if err != testCase.expectedErr {
 			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
@@ -1670,7 +1671,7 @@ func TestPosixVerifyFile(t *testing.T) {
 	if err := posixStorage.WriteAll(volName, fileName, bytes.NewBuffer(data)); err != nil {
 		t.Fatal(err)
 	}
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, hashBytes, 0); err != nil {
+	if err := posixStorage.VerifyFile(context.Background(), volName, fileName, size, algo, hashBytes, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1680,12 +1681,12 @@ func TestPosixVerifyFile(t *testing.T) {
 	}
 
 	// Check if VerifyFile reports the incorrect file length (the correct length is `size+1`)
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, hashBytes, 0); err == nil {
+	if err := posixStorage.VerifyFile(context.Background(), volName, fileName, size, algo, hashBytes, 0); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 
 	// Check if bitrot fails
-	if err := posixStorage.VerifyFile(volName, fileName, size+1, algo, hashBytes, 0); err == nil {
+	if err := posixStorage.VerifyFile(context.Background(), volName, fileName, size+1, algo, hashBytes, 0); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 
@@ -1713,7 +1714,7 @@ func TestPosixVerifyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.Close()
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, nil, shardSize); err != nil {
+	if err := posixStorage.VerifyFile(context.Background(), volName, fileName, size, algo, nil, shardSize); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1727,10 +1728,10 @@ func TestPosixVerifyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.Close()
-	if err := posixStorage.VerifyFile(volName, fileName, size, algo, nil, shardSize); err == nil {
+	if err := posixStorage.VerifyFile(context.Background(), volName, fileName, size, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
-	if err := posixStorage.VerifyFile(volName, fileName, size+1, algo, nil, shardSize); err == nil {
+	if err := posixStorage.VerifyFile(context.Background(), volName, fileName, size+1, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
 	}
 }

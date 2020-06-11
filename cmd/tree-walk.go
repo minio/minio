@@ -56,7 +56,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 }
 
 // ListDirFunc - "listDir" function of type listDirFunc returned by listDirFactory() - explained below.
-type ListDirFunc func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string)
+type ListDirFunc func(ctx context.Context, bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, aborted bool)
 
 // treeWalk walks directory tree recursively pushing TreeWalkResult into the channel as and when it encounters files.
 func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker string, recursive bool, listDir ListDirFunc, resultCh chan TreeWalkResult, endWalkCh <-chan struct{}, isEnd bool) (emptyDir bool, treeErr error) {
@@ -75,7 +75,11 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		}
 	}
 
-	emptyDir, entries := listDir(bucket, prefixDir, entryPrefixMatch)
+	emptyDir, entries, aborted := listDir(ctx, bucket, prefixDir, entryPrefixMatch)
+	if aborted {
+		return false, errWalkAbort
+	}
+
 	// For an empty list return right here.
 	if emptyDir {
 		return true, nil
@@ -140,6 +144,8 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		// EOF is set if we are at last entry and the caller indicated we at the end.
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
+		case <-ctx.Done():
+			return false, errWalkAbort
 		case <-endWalkCh:
 			return false, errWalkAbort
 		case resultCh <- TreeWalkResult{entry: pentry, end: isEOF}:

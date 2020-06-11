@@ -115,7 +115,7 @@ func (xl xlObjects) ListMultipartUploads(ctx context.Context, bucket, object, ke
 		if disk == nil {
 			continue
 		}
-		uploadIDs, err := disk.ListDir(minioMetaMultipartBucket, xl.getMultipartSHADir(bucket, object), -1, "")
+		uploadIDs, err := disk.ListDir(ctx, minioMetaMultipartBucket, xl.getMultipartSHADir(bucket, object), -1, "")
 		if err != nil {
 			if err == errFileNotFound {
 				return result, nil
@@ -807,12 +807,12 @@ func (xl xlObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInt
 // Remove the old multipart uploads on the given disk.
 func (xl xlObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
 	now := time.Now()
-	shaDirs, err := disk.ListDir(minioMetaMultipartBucket, "", -1, "")
+	shaDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, "", -1, "")
 	if err != nil {
 		return
 	}
 	for _, shaDir := range shaDirs {
-		uploadIDDirs, err := disk.ListDir(minioMetaMultipartBucket, shaDir, -1, "")
+		uploadIDDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, shaDir, -1, "")
 		if err != nil {
 			continue
 		}

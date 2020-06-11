@@ -351,7 +351,7 @@ func (xl xlObjects) healObject(ctx context.Context, bucket string, object string
 		}
 
 		// List and delete the object directory,
-		files, derr := disk.ListDir(bucket, object, -1, "")
+		files, derr := disk.ListDir(ctx, bucket, object, -1, "")
 		if derr == nil {
 			for _, entry := range files {
 				_ = disk.DeleteFile(bucket,
@@ -616,7 +616,7 @@ func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix 
 		}
 		index := index
 		g.Go(func() error {
-			entries, err := storageDisks[index].ListDir(bucket, prefix, 1, "")
+			entries, err := storageDisks[index].ListDir(ctx, bucket, prefix, 1, "")
 			if err != nil {
 				return err
 			}

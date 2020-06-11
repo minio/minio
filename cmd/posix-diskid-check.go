@@ -118,25 +118,25 @@ func (p *posixDiskIDCheck) DeleteVol(volume string, forceDelete bool) (err error
 	return p.storage.DeleteVol(volume, forceDelete)
 }
 
-func (p *posixDiskIDCheck) Walk(volume, dirPath string, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (p *posixDiskIDCheck) Walk(ctx context.Context, volume, dirPath string, marker string, recursive bool, leafFile string, readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if p.isDiskStale() {
 		return nil, errDiskNotFound
 	}
-	return p.storage.Walk(volume, dirPath, marker, recursive, leafFile, readMetadataFn, endWalkCh)
+	return p.storage.Walk(ctx, volume, dirPath, marker, recursive, leafFile, readMetadataFn, endWalkCh)
 }
 
-func (p *posixDiskIDCheck) WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (p *posixDiskIDCheck) WalkSplunk(ctx context.Context, volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if p.isDiskStale() {
 		return nil, errDiskNotFound
 	}
-	return p.storage.WalkSplunk(volume, dirPath, marker, endWalkCh)
+	return p.storage.WalkSplunk(ctx, volume, dirPath, marker, endWalkCh)
 }
 
-func (p *posixDiskIDCheck) ListDir(volume, dirPath string, count int, leafFile string) ([]string, error) {
+func (p *posixDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int, leafFile string) ([]string, error) {
 	if p.isDiskStale() {
 		return nil, errDiskNotFound
 	}
-	return p.storage.ListDir(volume, dirPath, count, leafFile)
+	return p.storage.ListDir(ctx, volume, dirPath, count, leafFile)
 }
 
 func (p *posixDiskIDCheck) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
@@ -188,25 +188,18 @@ func (p *posixDiskIDCheck) DeleteFile(volume string, path string) (err error) {
 	return p.storage.DeleteFile(volume, path)
 }
 
-func (p *posixDiskIDCheck) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
+func (p *posixDiskIDCheck) DeletePrefixes(ctx context.Context, volume string, paths []string) (errs []error, err error) {
 	if p.isDiskStale() {
 		return nil, errDiskNotFound
 	}
-	return p.storage.DeleteFileBulk(volume, paths)
+	return p.storage.DeletePrefixes(ctx, volume, paths)
 }
 
-func (p *posixDiskIDCheck) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
-	if p.isDiskStale() {
-		return nil, errDiskNotFound
-	}
-	return p.storage.DeletePrefixes(volume, paths)
-}
-
-func (p *posixDiskIDCheck) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+func (p *posixDiskIDCheck) VerifyFile(ctx context.Context, volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
 	if p.isDiskStale() {
 		return errDiskNotFound
 	}
-	return p.storage.VerifyFile(volume, path, size, algo, sum, shardSize)
+	return p.storage.VerifyFile(ctx, volume, path, size, algo, sum, shardSize)
 }
 
 func (p *posixDiskIDCheck) WriteAll(volume string, path string, reader io.Reader) (err error) {

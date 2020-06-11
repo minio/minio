@@ -670,7 +670,7 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bo
 	// by creating buckets again on all sets which were successfully deleted.
 	for _, err := range errs {
 		if err != nil {
-			undoDeleteBucketSets(bucket, s.sets, errs)
+			undoDeleteBucketSets(ctx, bucket, s.sets, errs)
 			return err
 		}
 	}
@@ -683,7 +683,7 @@ func (s *xlSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bo
 }
 
 // This function is used to undo a successful DeleteBucket operation.
-func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
+func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*xlObjects, errs []error) {
 	g := errgroup.WithNErrs(len(sets))
 
 	// Undo previous delete bucket on all underlying sets.
@@ -691,7 +691,7 @@ func undoDeleteBucketSets(bucket string, sets []*xlObjects, errs []error) {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return sets[index].MakeBucketWithLocation(GlobalContext, bucket, "", false)
+				return sets[index].MakeBucketWithLocation(ctx, bucket, "", false)
 			}
 			return nil
 		}, index)
@@ -952,7 +952,7 @@ func (s *xlSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker st
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, xlMetaJSONFile, readMetadata, endWalkCh)
+			entryCh, err := disk.Walk(ctx, bucket, prefix, marker, recursive, xlMetaJSONFile, readMetadata, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -982,7 +982,7 @@ func (s *xlSets) startSplunkMergeWalksN(ctx context.Context, bucket, prefix, mar
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.WalkSplunk(bucket, prefix, marker, endWalkCh)
+			entryCh, err := disk.WalkSplunk(ctx, bucket, prefix, marker, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -1004,7 +1004,7 @@ func (s *xlSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker
 	defer close(endWalkCh)
 
 	const ndisks = 3
-	entryChs := s.startMergeWalksN(GlobalContext, bucket, prefix, "", true, endWalkCh, ndisks)
+	entryChs := s.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, ndisks)
 
 	var objInfos []ObjectInfo
 	var eof bool
@@ -1153,7 +1153,7 @@ func (s *xlSets) listObjects(ctx context.Context, bucket, prefix, marker, delimi
 	if entryChs == nil {
 		endWalkCh = make(chan struct{})
 		// start file tree walk across at most randomly 3 disks in a set.
-		entryChs = s.startMergeWalksN(GlobalContext, bucket, prefix, marker, recursive, endWalkCh, ndisks)
+		entryChs = s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, ndisks)
 	}
 
 	entries := mergeEntriesCh(entryChs, maxKeys, ndisks)
