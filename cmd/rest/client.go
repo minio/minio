@@ -160,7 +160,7 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 
 // IsOnline returns whether the client is likely to be online.
 func (c *Client) IsOnline() bool {
-	return atomic.LoadInt32(&c.connected) != online
+	return atomic.LoadInt32(&c.connected) == online
 }
 
 // MarkOffline - will mark a client as being offline and spawns
