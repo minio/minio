@@ -449,18 +449,43 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	iamUsersMap := make(map[string]auth.Credentials)
 	iamGroupsMap := make(map[string]GroupInfo)
-	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
 	iamUserPolicyMap := make(map[string]MappedPolicy)
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
-	isMinIOUsersSys := false
 	ies.rlock()
-	if sys.usersSysType == MinIOUsersSysType {
-		isMinIOUsersSys = true
-	}
+	isMinIOUsersSys := sys.usersSysType == MinIOUsersSysType
 	ies.runlock()
 
-	if err := ies.loadPolicyDocs(ctx, iamPolicyDocsMap); err != nil {
+	ies.lock()
+	if err := ies.loadPolicyDocs(ctx, sys.iamPolicyDocsMap); err != nil {
+		ies.unlock()
+		return err
+	}
+	// Sets default canned policies, if none are set.
+	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
+
+	ies.unlock()
+
+	if isMinIOUsersSys {
+		if err := ies.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
+			return err
+		}
+		if err := ies.loadGroups(ctx, iamGroupsMap); err != nil {
+			return err
+		}
+	}
+
+	// load polices mapped to users
+	if err := ies.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
+		return err
+	}
+
+	// load policies mapped to groups
+	if err := ies.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
+		return err
+	}
+
+	if err := ies.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
 		return err
 	}
 
@@ -469,28 +494,8 @@ func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 		return err
 	}
 
-	if isMinIOUsersSys {
-		// load long term users
-		if err := ies.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := ies.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := ies.loadGroups(ctx, iamGroupsMap); err != nil {
-			return err
-		}
-		if err := ies.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
-			return err
-		}
-	}
-
-	// load STS policy mappings into the same map
+	// load STS policy mappings
 	if err := ies.loadMappedPolicies(ctx, stsUser, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-	// load policies mapped to groups
-	if err := ies.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
 		return err
 	}
 
@@ -505,13 +510,6 @@ func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	for k, v := range iamUsersMap {
 		sys.iamUsersMap[k] = v
 	}
-
-	for k, v := range iamPolicyDocsMap {
-		sys.iamPolicyDocsMap[k] = v
-	}
-
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
 
 	for k, v := range iamUserPolicyMap {
 		sys.iamUserPolicyMap[k] = v
@@ -535,6 +533,7 @@ func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	}
 
 	sys.buildUserGroupMemberships()
+	sys.storeFallback = false
 
 	return nil
 }
