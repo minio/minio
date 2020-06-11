@@ -203,13 +203,16 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Add API router.
 	registerAPIRouter(router, encryptionEnabled, allowSSEKMS)
 
+	// Use all the middlewares
+	router.Use(registerMiddlewares)
+
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
 	httpServer := xhttp.NewServer([]string{globalCLIContext.Addr},
-		criticalErrorHandler{registerHandlers(router, globalHandlers...)}, getCert)
+		criticalErrorHandler{router}, getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
