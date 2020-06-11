@@ -27,6 +27,11 @@ Default config includes most common highly compressible content extensions and m
 $ mc admin config set myminio compression extensions=".pdf" mime_types="application/pdf"
 ```
 
+To show help on setting compression config values.
+```
+~ mc admin config set myminio compression
+```
+
 To enable compression for all content, with default extensions and mime-types.
 ```
 ~ mc admin config set myminio compression enable="on"
