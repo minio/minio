@@ -34,14 +34,14 @@ import (
 	"github.com/rs/cors"
 )
 
-// HandlerFunc - useful to chain different middleware http.Handler
-type HandlerFunc func(http.Handler) http.Handler
+// MiddlewareFunc - useful to chain different http.Handler middlewares
+type MiddlewareFunc func(http.Handler) http.Handler
 
-func registerHandlers(h http.Handler, handlerFns ...HandlerFunc) http.Handler {
-	for _, hFn := range handlerFns {
-		h = hFn(h)
+func registerMiddlewares(next http.Handler) http.Handler {
+	for _, handlerFn := range globalHandlers {
+		next = handlerFn(next)
 	}
-	return h
+	return next
 }
 
 // Adds limiting body size middleware
@@ -795,6 +795,7 @@ func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	defer func() {
 		if err := recover(); err == logger.ErrCritical { // handle
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+			return
 		} else if err != nil {
 			panic(err) // forward other panic calls
 		}
