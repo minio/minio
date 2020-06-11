@@ -96,7 +96,7 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		// A cancelled context doesn't always mean a network problem.
+		// A canceled context doesn't always mean a network problem.
 		if !errors.Is(err, context.Canceled) {
 			// We are safe from recursion
 			c.MarkOffline()
