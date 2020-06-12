@@ -325,13 +325,21 @@ func lookupConfigs(s config.Config) {
 
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		if etcdCfg.Required {
+			logger.FatalIf(err, "Unable to initialize etcd config")
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		}
 	}
 
 	if etcdCfg.Enabled {
 		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+			if etcdCfg.Required {
+				logger.FatalIf(err, "Unable to initialize etcd config")
+			} else {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+			}
 		}
 	}
 

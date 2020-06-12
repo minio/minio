@@ -42,12 +42,14 @@ const (
 	CoreDNSPath   = "coredns_path"
 	ClientCert    = "client_cert"
 	ClientCertKey = "client_cert_key"
+	Required      = "required"
 
 	EnvEtcdEndpoints     = "MINIO_ETCD_ENDPOINTS"
 	EnvEtcdPathPrefix    = "MINIO_ETCD_PATH_PREFIX"
 	EnvEtcdCoreDNSPath   = "MINIO_ETCD_COREDNS_PATH"
 	EnvEtcdClientCert    = "MINIO_ETCD_CLIENT_CERT"
 	EnvEtcdClientCertKey = "MINIO_ETCD_CLIENT_CERT_KEY"
+	EnvEtcdRequired      = "MINIO_ETCD_REQUIRED"
 )
 
 // DefaultKVS - default KV settings for etcd.
@@ -73,6 +75,10 @@ var (
 			Key:   ClientCertKey,
 			Value: "",
 		},
+		config.KV{
+			Key:   Required,
+			Value: "",
+		},
 	}
 )
 
@@ -82,6 +88,7 @@ type Config struct {
 	PathPrefix  string `json:"pathPrefix"`
 	CoreDNSPath string `json:"coreDNSPath"`
 	clientv3.Config
+	Required bool `json:"required"`
 }
 
 // New - initialize new etcd client.
@@ -141,6 +148,8 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, err
 	}
 
+	required, _ := config.ParseBool(env.Get(EnvEtcdRequired, kvs.Get(Required)))
+
 	cfg.Enabled = true
 	cfg.DialTimeout = defaultDialTimeout
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
@@ -148,6 +157,7 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kvs.Get(CoreDNSPath))
 	// Default path prefix for all keys on etcd, other than CoreDNSPath.
 	cfg.PathPrefix = env.Get(EnvEtcdPathPrefix, kvs.Get(PathPrefix))
+	cfg.Required = required
 	if etcdSecure {
 		cfg.TLS = &tls.Config{
 			RootCAs: rootCAs,
