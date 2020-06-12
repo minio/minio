@@ -622,7 +622,7 @@ func (l *s3Objects) GetMultipartInfo(ctx context.Context, bucket, object, upload
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *s3Objects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
-	result, err := l.Client.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
+	result, err := l.Client.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		return lpi, err
 	}
@@ -630,7 +630,7 @@ func (l *s3Objects) ListObjectParts(ctx context.Context, bucket string, object s
 	if lpi.IsTruncated && maxParts > len(lpi.Parts) {
 		partNumberMarker = lpi.NextPartNumberMarker
 		for {
-			result, err = l.Client.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
+			result, err = l.Client.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts)
 			if err != nil {
 				return lpi, err
 			}
