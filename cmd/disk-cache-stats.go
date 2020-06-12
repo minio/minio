@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019, 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,14 +16,27 @@
 
 package cmd
 
-import "sync/atomic"
+import (
+	"sync/atomic"
+)
+
+// CacheDiskStats represents cache disk statistics
+// such as current disk usage and available.
+type CacheDiskStats struct {
+	// indicates if usage is high or low, if high value is '1', if low its '0'
+	UsageState int32
+	// indicates the current usage percentage of this cache disk
+	UsagePercent uint64
+	Dir          string
+}
 
 // CacheStats - represents bytes served from cache,
 // cache hits and cache misses.
 type CacheStats struct {
-	BytesServed uint64
-	Hits        uint64
-	Misses      uint64
+	BytesServed  uint64
+	Hits         uint64
+	Misses       uint64
+	GetDiskStats func() []CacheDiskStats
 }
 
 // Increase total bytes served from cache
