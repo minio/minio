@@ -21,8 +21,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
@@ -30,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/retry"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -213,7 +216,8 @@ type IAMSys struct {
 	iamGroupPolicyMap map[string]MappedPolicy
 
 	// Persistence layer for IAM subsystem
-	store IAMStorageAPI
+	store         IAMStorageAPI
+	storeFallback bool
 }
 
 // IAMUserType represents a user type inside MinIO server
@@ -403,10 +407,18 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
 }
 
-// Init - initializes config system from iam.json
-func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
+// Loads IAM users and policies in background, any un-handled
+// error means this code can potentially crash the server
+// in such a situation manual intervention is necessary.
+func startBackgroundIAMLoad(ctx context.Context) {
+	go globalIAMSys.Init(ctx, newObjectLayerWithoutSafeModeFn())
+}
+
+// Init - initializes config system by reading entries from config/iam
+func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	if objAPI == nil {
-		return errServerNotInitialized
+		logger.LogIf(ctx, errServerNotInitialized)
+		return
 	}
 
 	if globalEtcdClient == nil {
@@ -423,18 +435,81 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 		sys.EnableLDAPSys()
 	}
 
-	// Migrate IAM configuration
-	if err := sys.doIAMConfigMigration(ctx); err != nil {
-		return err
+	retryCtx, cancel := context.WithCancel(ctx)
+
+	// Indicate to our routine to exit cleanly upon return.
+	defer cancel()
+
+	// Hold the lock for migration only.
+	txnLk := objAPI.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/iam.lock")
+
+	// Initializing IAM sub-system needs a retry mechanism for
+	// the following reasons:
+	//  - Read quorum is lost just after the initialization
+	//    of the object layer.
+	//  - Write quorum not met when upgrading configuration
+	//    version is needed, migration is needed etc.
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+
+	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
+		// let one of the server acquire the lock, if not let them timeout.
+		// which shall be retried again by this loop.
+		if err := txnLk.GetLock(newDynamicTimeout(1*time.Second, 5*time.Second)); err != nil {
+			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
+			continue
+		}
+
+		if globalEtcdClient != nil {
+			// ****  WARNING ****
+			// Migrating to encrypted backend on etcd should happen before initialization of
+			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
+			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
+				txnLk.Unlock()
+				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
+				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
+				return
+			}
+		}
+
+		// These messages only meant primarily for distributed setup, so only log during distributed setup.
+		if globalIsDistXL {
+			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. lock acquired")
+		}
+
+		// Migrate IAM configuration, if necessary.
+		if err := sys.doIAMConfigMigration(ctx); err != nil {
+			txnLk.Unlock()
+			if errors.Is(err, errDiskNotFound) ||
+				errors.Is(err, errConfigNotFound) ||
+				errors.Is(err, context.Canceled) ||
+				errors.Is(err, context.DeadlineExceeded) ||
+				errors.As(err, &rquorum) ||
+				errors.As(err, &wquorum) ||
+				isErrBucketNotFound(err) {
+				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
+				continue
+			}
+			logger.LogIf(ctx, fmt.Errorf("Unable to migrate IAM users and policies to new format: %w", err))
+			logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
+			return
+		}
+
+		// Successfully migrated, proceed to load the users.
+		txnLk.Unlock()
+		break
 	}
 
 	err := sys.store.loadAll(ctx, sys)
 
-	// Invalidate the old cred after finishing IAM initialization
+	// Invalidate the old cred always, even upon error to avoid any leakage.
 	globalOldCred = auth.Credentials{}
 
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available %w", err))
+	}
+
 	go sys.store.watch(ctx, sys)
-	return err
 }
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
@@ -517,6 +592,10 @@ func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
 
 	sys.store.rlock()
 	defer sys.store.runlock()
+
+	if sys.storeFallback {
+		return nil, errIAMNotInitialized
+	}
 
 	policyDocsMap := make(map[string]iampolicy.Policy, len(sys.iamPolicyDocsMap))
 	for k, v := range sys.iamPolicyDocsMap {
@@ -665,6 +744,10 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return nil, errIAMActionNotAllowed
+	}
+
+	if sys.storeFallback {
+		return nil, errIAMNotInitialized
 	}
 
 	for k, v := range sys.iamUsersMap {
@@ -901,6 +984,10 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	sys.store.rlock()
 	defer sys.store.runlock()
 
+	if sys.storeFallback {
+		return nil, errIAMNotInitialized
+	}
+
 	var serviceAccounts []string
 
 	for k, v := range sys.iamUsersMap {
@@ -1030,6 +1117,44 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
 		return cred, false
+	}
+
+	sys.store.rlock()
+	fallback := sys.storeFallback
+	sys.store.runlock()
+	if fallback {
+		sys.store.lock()
+		// If user is already found proceed.
+		if _, found := sys.iamUsersMap[accessKey]; !found {
+			sys.store.loadUser(accessKey, regularUser, sys.iamUsersMap)
+			if _, found = sys.iamUsersMap[accessKey]; found {
+				// found user, load its mapped policies
+				sys.store.loadMappedPolicy(accessKey, regularUser, false, sys.iamUserPolicyMap)
+			} else {
+				sys.store.loadUser(accessKey, srvAccUser, sys.iamUsersMap)
+				if svc, found := sys.iamUsersMap[accessKey]; found {
+					// Found service account, load its parent user and its mapped policies.
+					if sys.usersSysType == MinIOUsersSysType {
+						sys.store.loadUser(svc.ParentUser, regularUser, sys.iamUsersMap)
+					}
+					sys.store.loadMappedPolicy(svc.ParentUser, regularUser, false, sys.iamUserPolicyMap)
+				} else {
+					// None found fall back to STS users.
+					sys.store.loadUser(accessKey, stsUser, sys.iamUsersMap)
+					if _, found = sys.iamUsersMap[accessKey]; found {
+						// STS user found, load its mapped policy.
+						sys.store.loadMappedPolicy(accessKey, stsUser, false, sys.iamUserPolicyMap)
+					}
+				}
+			}
+		}
+		// Load associated policies if any.
+		for _, policy := range sys.iamUserPolicyMap[accessKey].toSlice() {
+			if _, found := sys.iamPolicyDocsMap[policy]; !found {
+				sys.store.loadPolicyDoc(policy, sys.iamPolicyDocsMap)
+			}
+		}
+		sys.store.unlock()
 	}
 
 	sys.store.rlock()
@@ -1279,6 +1404,10 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 
 	sys.store.rlock()
 	defer sys.store.runlock()
+
+	if sys.storeFallback {
+		return nil, errIAMNotInitialized
+	}
 
 	if sys.usersSysType != MinIOUsersSysType {
 		return nil, errIAMActionNotAllowed
@@ -1805,5 +1934,6 @@ func NewIAMSys() *IAMSys {
 		iamGroupPolicyMap:       make(map[string]MappedPolicy),
 		iamGroupsMap:            make(map[string]GroupInfo),
 		iamUserGroupMemberships: make(map[string]set.StringSet),
+		storeFallback:           true,
 	}
 }

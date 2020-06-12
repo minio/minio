@@ -185,6 +185,14 @@ func (c *Certs) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, er
 	return c.cert, nil
 }
 
+// GetClientCertificate returns the loaded certificate for use by
+// the TLSConfig fields GetClientCertificate field in a http.Server.
+func (c *Certs) GetClientCertificate(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+	c.RLock()
+	defer c.RUnlock()
+	return c.cert, nil
+}
+
 // Stop tells loader to stop watching for changes to the
 // certificate and key files.
 func (c *Certs) Stop() {

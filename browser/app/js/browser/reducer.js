@@ -19,7 +19,7 @@ import * as actionsCommon from "./actions"
 export default (
   state = {
     sidebarOpen: false,
-    storageInfo: { total: [0], free: [0], used: [0] },
+    storageInfo: {used: 0},
     serverInfo: {}
   },
   action

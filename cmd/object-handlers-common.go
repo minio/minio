@@ -173,9 +173,9 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// Check if the part number is correct.
-	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 && opts.PartNumber != len(objInfo.Parts) {
+	if opts.PartNumber > 1 && opts.PartNumber > len(objInfo.Parts) {
 		writeHeaders()
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL, guessIsBrowserReq(r))
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
 		return true
 	}
 
@@ -257,7 +257,7 @@ func isETagEqual(left, right string) bool {
 // after analyzing the current bucket lifecycle rules if any.
 func setAmzExpirationHeader(w http.ResponseWriter, bucket string, objInfo ObjectInfo) {
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		ruleID, expiryTime := lc.PredictExpiryTime(objInfo.Name, objInfo.UserTags)
+		ruleID, expiryTime := lc.PredictExpiryTime(objInfo.Name, objInfo.ModTime, objInfo.UserTags)
 		if !expiryTime.IsZero() {
 			w.Header()[xhttp.AmzExpiration] = []string{
 				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),

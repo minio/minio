@@ -38,7 +38,7 @@ func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
 }
 
 // List of some generic handlers which are applied for all incoming requests.
-var globalHandlers = []HandlerFunc{
+var globalHandlers = []MiddlewareFunc{
 	// set x-amz-request-id header.
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.
@@ -118,6 +118,6 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 
-	// Register rest of the handlers.
-	return registerHandlers(router, globalHandlers...), nil
+	router.Use(registerMiddlewares)
+	return router, nil
 }

@@ -85,7 +85,7 @@ func (entry FileInfo) ToObjectInfo() ObjectInfo {
 			ContentEncoding: entry.Metadata["content-encoding"],
 		}
 
-		// Extrat object tagging information
+		// Extract object tagging information
 		objInfo.UserTags = entry.Metadata[xhttp.AmzObjectTagging]
 
 		// Extract etag from metadata.

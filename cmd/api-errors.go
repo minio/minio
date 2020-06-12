@@ -1138,14 +1138,14 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrOperationTimedOut: {
-		Code:           "XMinioServerTimedOut",
-		Description:    "A timeout occurred while trying to lock a resource",
-		HTTPStatusCode: http.StatusRequestTimeout,
+		Code:           "RequestTimeout",
+		Description:    "A timeout occurred while trying to lock a resource, please reduce your request rate",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrOperationMaxedOut: {
-		Code:           "XMinioServerTimedOut",
-		Description:    "A timeout exceeded while waiting to proceed with the request",
-		HTTPStatusCode: http.StatusRequestTimeout,
+		Code:           "SlowDown",
+		Description:    "A timeout exceeded while waiting to proceed with the request, please reduce your request rate",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrUnsupportedMetadata: {
 		Code:           "InvalidArgument",

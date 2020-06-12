@@ -57,7 +57,7 @@ require (
 	github.com/klauspost/cpuid v1.2.4
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
-	github.com/klauspost/reedsolomon v1.9.7
+	github.com/klauspost/reedsolomon v1.9.9
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lib/pq v1.1.1
 	github.com/mattn/go-colorable v0.1.4
@@ -67,8 +67,7 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/lsync v1.0.1
-	github.com/minio/minio-go/v6 v6.0.56
+	github.com/minio/minio-go/v6 v6.0.57
 	github.com/minio/parquet-go v0.0.0-20200414234858-838cfa8aae61
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
