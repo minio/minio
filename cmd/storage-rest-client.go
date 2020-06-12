@@ -28,7 +28,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -109,7 +108,6 @@ func toStorageErr(err error) error {
 type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
-	connected  int32
 	diskID     string
 }
 
@@ -130,9 +128,6 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 	}
 
 	err = toStorageErr(err)
-	if err == errDiskNotFound {
-		atomic.StoreInt32(&client.connected, 0)
-	}
 
 	return nil, err
 }
@@ -144,7 +139,7 @@ func (client *storageRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
-	return atomic.LoadInt32(&client.connected) == 1
+	return client.restClient.IsOnline()
 }
 
 func (client *storageRESTClient) IsLocal() bool {
@@ -558,7 +553,6 @@ func (client *storageRESTClient) VerifyFile(volume, path string, size int64, alg
 
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
-	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -583,8 +577,7 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}
+		logger.Fatal(err, "Unable to initialize remote REST disks")
 	}
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
+	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
 }

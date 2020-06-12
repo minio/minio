@@ -49,6 +49,11 @@ func (n *NetworkError) Error() string {
 	return n.Err.Error()
 }
 
+// Unwrap returns the error wrapped in NetworkError.
+func (n *NetworkError) Unwrap() error {
+	return n.Err
+}
+
 // Client - http based RPC client.
 type Client struct {
 	// HealthCheckPath is the path to test for health.
