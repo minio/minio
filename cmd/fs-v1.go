@@ -331,7 +331,7 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		metaOk := false
 		if len(fsMetaBytes) > 0 {
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err != nil {
+			if err = json.Unmarshal(fsMetaBytes, &fsMeta); err == nil {
 				metaOk = true
 			}
 		}
