@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 )
@@ -36,6 +37,7 @@ func TestDataUsageUpdate(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
+	const bucket = "bucket"
 	defer os.RemoveAll(base)
 	var files = []usageTestFile{
 		{name: "rootfile", size: 10000},
@@ -47,7 +49,7 @@ func TestDataUsageUpdate(t *testing.T) {
 		{name: "dir1/dira/dirasub/dcfile", size: 1000000},
 		{name: "dir1/dira/dirasub/sublevel3/dccccfile", size: 10},
 	}
-	createUsageTestFiles(t, base, files)
+	createUsageTestFiles(t, base, bucket, files)
 
 	getSize := func(item crawlItem) (i int64, err error) {
 		if item.Typ&os.ModeDir == 0 {
@@ -60,7 +62,7 @@ func TestDataUsageUpdate(t *testing.T) {
 		return 0, nil
 	}
 
-	got, err := crawlDataFolder(context.Background(), base, dataUsageCache{}, func() {}, getSize)
+	got, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, func() {}, getSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,16 +109,17 @@ func TestDataUsageUpdate(t *testing.T) {
 			oSizes:  sizeHistogram{0: 1, 1: 3},
 		},
 		{
-			path:   "/dir1/dira",
-			size:   300000,
-			objs:   2,
-			oSizes: sizeHistogram{0: 0, 1: 2},
+			path:   "/dir1",
+			size:   2000,
+			objs:   1,
+			oSizes: sizeHistogram{0: 0, 1: 1},
 		},
 		{
+			// Children are flattened
 			path:   "/dir1/dira/",
-			size:   300000,
-			objs:   2,
-			oSizes: sizeHistogram{0: 0, 1: 2},
+			size:   1300010,
+			objs:   4,
+			oSizes: sizeHistogram{0: 1, 1: 3},
 		},
 		{
 			path:  "/nonexistying",
@@ -125,8 +128,9 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 
 	for _, w := range want {
-		t.Run(w.path, func(t *testing.T) {
-			e := got.find(w.path)
+		p := path.Join(bucket, w.path)
+		t.Run(p, func(t *testing.T) {
+			e := got.find(p)
 			if w.isNil {
 				if e != nil {
 					t.Error("want nil, got", e)
@@ -136,6 +140,7 @@ func TestDataUsageUpdate(t *testing.T) {
 			if e == nil {
 				t.Fatal("got nil result")
 			}
+			t.Log(e.Children)
 			if w.flatten {
 				*e = got.flatten(*e)
 			}
@@ -177,7 +182,7 @@ func TestDataUsageUpdate(t *testing.T) {
 			size: 1000,
 		},
 	}
-	createUsageTestFiles(t, base, files)
+	createUsageTestFiles(t, base, bucket, files)
 	got, err = crawlDataFolder(context.Background(), base, got, func() {}, getSize)
 	if err != nil {
 		t.Fatal(err)
@@ -224,7 +229,7 @@ func TestDataUsageUpdate(t *testing.T) {
 
 	for _, w := range want {
 		t.Run(w.path, func(t *testing.T) {
-			e := got.find(w.path)
+			e := got.find(path.Join(bucket, w.path))
 			if w.isNil {
 				if e != nil {
 					t.Error("want nil, got", e)
@@ -235,6 +240,7 @@ func TestDataUsageUpdate(t *testing.T) {
 				t.Fatal("got nil result")
 			}
 			if w.flatten {
+				t.Log(e.Children)
 				*e = got.flatten(*e)
 			}
 			if e.Size != int64(w.size) {
@@ -256,8 +262,8 @@ func TestDataUsageUpdate(t *testing.T) {
 		},
 	}
 
-	createUsageTestFiles(t, base, files)
-	err = os.RemoveAll(filepath.Join(base, "dir1/dira/dirasub/dcfile"))
+	createUsageTestFiles(t, base, bucket, files)
+	err = os.RemoveAll(filepath.Join(base, bucket, "dir1/dira/dirasub/dcfile"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,8 +299,9 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 
 	for _, w := range want {
-		t.Run(w.path, func(t *testing.T) {
-			e := got.find(w.path)
+		p := path.Join(bucket, w.path)
+		t.Run(p, func(t *testing.T) {
+			e := got.find(p)
 			if w.isNil {
 				if e != nil {
 					t.Error("want nil, got", e)
@@ -337,7 +344,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 		{name: "bucket/dir1/dira/dirasub/dcfile", size: 1000000},
 		{name: "bucket/dir1/dira/dirasub/sublevel3/dccccfile", size: 10},
 	}
-	createUsageTestFiles(t, base, files)
+	createUsageTestFiles(t, base, "", files)
 
 	getSize := func(item crawlItem) (i int64, err error) {
 		if item.Typ&os.ModeDir == 0 {
@@ -451,7 +458,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 			size: 1000,
 		},
 	}
-	createUsageTestFiles(t, base, files)
+	createUsageTestFiles(t, base, "", files)
 	got, err = crawlDataFolder(context.Background(), base, got, func() {}, getSize)
 	if err != nil {
 		t.Fatal(err)
@@ -528,7 +535,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 		},
 	}
 
-	createUsageTestFiles(t, base, files)
+	createUsageTestFiles(t, base, "", files)
 	err = os.RemoveAll(filepath.Join(base, "bucket/dir1/dira/dirasub/dcfile"))
 	if err != nil {
 		t.Fatal(err)
@@ -590,13 +597,13 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	}
 }
 
-func createUsageTestFiles(t *testing.T, base string, files []usageTestFile) {
+func createUsageTestFiles(t *testing.T, base, bucket string, files []usageTestFile) {
 	for _, f := range files {
-		err := os.MkdirAll(filepath.Dir(filepath.Join(base, f.name)), os.ModePerm)
+		err := os.MkdirAll(filepath.Dir(filepath.Join(base, bucket, f.name)), os.ModePerm)
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = ioutil.WriteFile(filepath.Join(base, f.name), make([]byte, f.size), os.ModePerm)
+		err = ioutil.WriteFile(filepath.Join(base, bucket, f.name), make([]byte, f.size), os.ModePerm)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -608,6 +615,7 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
+	const bucket = "abucket"
 	defer os.RemoveAll(base)
 	var files = []usageTestFile{
 		{name: "rootfile", size: 10000},
@@ -626,7 +634,7 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 		{name: "dir1/dira/dirasub/sublevel3/dccccfile30", size: 30},
 		{name: "dir1/dira/dirasub/sublevel3/dccccfile40", size: 40},
 	}
-	createUsageTestFiles(t, base, files)
+	createUsageTestFiles(t, base, bucket, files)
 
 	getSize := func(item crawlItem) (i int64, err error) {
 		if item.Typ&os.ModeDir == 0 {
@@ -638,7 +646,7 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 		}
 		return 0, nil
 	}
-	want, err := crawlDataFolder(context.Background(), base, dataUsageCache{}, func() {}, getSize)
+	want, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, func() {}, getSize)
 	if err != nil {
 		t.Fatal(err)
 	}
