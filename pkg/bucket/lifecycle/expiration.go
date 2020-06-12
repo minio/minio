@@ -124,7 +124,7 @@ func (e Expiration) IsDaysNull() bool {
 
 // IsDateNull returns true if date field is null
 func (e Expiration) IsDateNull() bool {
-	return e.Date == ExpirationDate{time.Time{}}
+	return e.Date.Time.IsZero()
 }
 
 // IsNull returns true if both date and days fields are null

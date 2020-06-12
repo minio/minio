@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -34,8 +35,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"bytes"
 
 	humanize "github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
@@ -366,7 +365,18 @@ func (s *posix) waitForLowActiveIO() {
 }
 
 func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
-	dataUsageInfo, err := updateUsage(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item Item) (int64, error) {
+	// Check if the current bucket has a configured lifecycle policy
+	lc, err := globalLifecycleSys.Get(cache.Info.Name)
+	if err == nil && lc.HasActiveRules("", true) {
+		cache.Info.lifeCycle = lc
+	}
+
+	// Get object api
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		return cache, errors.New("object layer not initialized")
+	}
+	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item crawlItem) (int64, error) {
 		// Look for `xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlMetaJSONFile) {
 			// if no xl.json found, skip the file.
@@ -380,22 +390,21 @@ func (s *posix) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) 
 
 		meta, err := xlMetaV1UnmarshalJSON(ctx, xlMetaBuf)
 		if err != nil {
-			return 0, nil
-		}
-
-		// we don't necessarily care about the names
-		// of bucket and object, only interested in size.
-		// so use some dummy names.
-		size, err := meta.ToObjectInfo("dummy", "dummy").GetActualSize()
-		if err != nil {
 			return 0, errSkipFile
 		}
-		return size, nil
 
+		// Remove filename which is the meta file.
+		item.transformMetaDir()
+
+		return item.applyActions(ctx, objAPI,
+			actionMeta{oi: meta.ToObjectInfo(item.bucket, item.objectPath()),
+				meta: meta.Meta,
+			}), nil
 	})
 	if err != nil {
 		return dataUsageInfo, err
 	}
+
 	dataUsageInfo.Info.LastUpdate = time.Now()
 	total := dataUsageInfo.sizeRecursive(dataUsageInfo.Info.Name)
 	if total == nil {

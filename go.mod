@@ -52,9 +52,9 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jonboulle/clockwork v0.1.0 // indirect
-	github.com/json-iterator/go v1.1.9
+	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.10.3
-	github.com/klauspost/cpuid v1.2.4
+	github.com/klauspost/cpuid v1.3.0
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.9
@@ -67,7 +67,7 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/minio-go/v6 v6.0.57
+	github.com/minio/minio-go/v6 v6.0.58-0.20200612001654-a57fec8037ec
 	github.com/minio/parquet-go v0.0.0-20200414234858-838cfa8aae61
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
@@ -113,10 +113,10 @@ require (
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
 	go.uber.org/zap v1.15.0 // indirect
-	golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f
-	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
+	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
+	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 	golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a // indirect
-	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd
+	golang.org/x/sys v0.0.0-20200610111108-226ff32320da
 	golang.org/x/text v0.3.2 // indirect
 	golang.org/x/tools v0.0.0-20200502202811-ed308ab3e770 // indirect
 	google.golang.org/api v0.5.0
@@ -124,7 +124,7 @@ require (
 	google.golang.org/genproto v0.0.0-20190513181449-d00d292a067c // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/cheggaaa/pb.v1 v1.0.28 // indirect
-	gopkg.in/ini.v1 v1.51.0 // indirect
+	gopkg.in/ini.v1 v1.57.0 // indirect
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3
 	gopkg.in/olivere/elastic.v5 v5.0.80

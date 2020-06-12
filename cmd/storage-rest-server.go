@@ -138,13 +138,8 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 	}
 
 	w.Header().Set(xhttp.ContentType, "text/event-stream")
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
 	var cache dataUsageCache
-	err = cache.deserialize(b)
+	err := cache.deserialize(r.Body)
 	if err != nil {
 		logger.LogIf(r.Context(), err)
 		s.writeErrorResponse(w, err)
