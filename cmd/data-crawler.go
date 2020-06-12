@@ -146,8 +146,9 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 
 	}
 
-	if cache.Info.Name == "" {
-		cache.Info.Name = dataUsageRoot
+	switch cache.Info.Name {
+	case "", dataUsageRoot:
+		return cache, errors.New("internal error: root scan attempted")
 	}
 
 	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
@@ -181,12 +182,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 
 	done := ctx.Done()
-	var flattenLevels = 3
-
-	// If we are scanning inside a bucket reduce depth by 1.
-	if cache.Info.Name != dataUsageRoot {
-		flattenLevels--
-	}
+	var flattenLevels = 2
 
 	if s.dataUsageCrawlDebug {
 		logger.Info(logPrefix+"Cycle: %v, Entries: %v"+logSuffix, cache.Info.NextCycle, len(cache.Cache))
