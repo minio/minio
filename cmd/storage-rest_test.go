@@ -191,7 +191,7 @@ func testStorageAPIDeleteVol(t *testing.T, storage StorageAPI) {
 	}
 }
 
-func testStorageAPIStatFile(t *testing.T, storage StorageAPI) {
+func testStorageAPICheckFile(t *testing.T, storage StorageAPI) {
 	tmpGlobalServerConfig := globalServerConfig
 	defer func() {
 		globalServerConfig = tmpGlobalServerConfig
@@ -202,7 +202,7 @@ func testStorageAPIStatFile(t *testing.T, storage StorageAPI) {
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
-	err = storage.AppendFile("foo", "myobject", []byte("foo"))
+	err = storage.AppendFile("foo", pathJoin("myobject", xlStorageFormatFile), []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -218,17 +218,11 @@ func testStorageAPIStatFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.StatFile(testCase.volumeName, testCase.objectName)
+		err := storage.CheckFile(testCase.volumeName, testCase.objectName)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
 			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if result.Name != testCase.objectName {
-				t.Fatalf("case %v: result: expected: %+v, got: %+v", i+1, testCase.objectName, result.Name)
-			}
 		}
 	}
 }
@@ -261,7 +255,7 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1, "")
+		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -586,7 +580,7 @@ func TestStorageRESTClientDeleteVol(t *testing.T) {
 	testStorageAPIDeleteVol(t, restClient)
 }
 
-func TestStorageRESTClientStatFile(t *testing.T) {
+func TestStorageRESTClientCheckFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
@@ -594,7 +588,7 @@ func TestStorageRESTClientStatFile(t *testing.T) {
 	}()
 	defer os.RemoveAll(endpointPath)
 
-	testStorageAPIStatFile(t, restClient)
+	testStorageAPICheckFile(t, restClient)
 }
 
 func TestStorageRESTClientListDir(t *testing.T) {

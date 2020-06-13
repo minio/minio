@@ -628,7 +628,7 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 	return nil
 }
 
-// Init - initializes notification system from notification.xml and listener.json of all buckets.
+// Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
 func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
@@ -1247,7 +1247,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 			},
 			Object: event.Object{
 				Key:       keyName,
-				VersionID: "1",
+				VersionID: args.Object.VersionID,
 				Sequencer: uniqueID,
 			},
 		},

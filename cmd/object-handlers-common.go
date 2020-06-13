@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 )
@@ -253,11 +255,35 @@ func isETagEqual(left, right string) bool {
 	return canonicalizeETag(left) == canonicalizeETag(right)
 }
 
-// setAmzExpirationHeader sets x-amz-expiration header with expiry time
-// after analyzing the current bucket lifecycle rules if any.
-func setAmzExpirationHeader(w http.ResponseWriter, bucket string, objInfo ObjectInfo) {
-	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
-		ruleID, expiryTime := lc.PredictExpiryTime(objInfo.Name, objInfo.ModTime, objInfo.UserTags)
+// setPutObjHeaders sets all the necessary headers returned back
+// upon a success Put/Copy/CompleteMultipart/Delete requests
+// to activate delete only headers set delete as true
+func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
+	// We must not use the http.Header().Set method here because some (broken)
+	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
+	// Therefore, we have to set the ETag directly as map entry.
+	if objInfo.ETag != "" && !delete {
+		w.Header()[xhttp.ETag] = []string{`"` + objInfo.ETag + `"`}
+	}
+
+	// Set the relevant version ID as part of the response header.
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+		// If version is a deleted marker, set this header as well
+		if objInfo.DeleteMarker && delete { // only returned during delete object
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+		}
+	}
+
+	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
+		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
+			Name:         objInfo.Name,
+			UserTags:     objInfo.UserTags,
+			VersionID:    objInfo.VersionID,
+			ModTime:      objInfo.ModTime,
+			IsLatest:     objInfo.IsLatest,
+			DeleteMarker: objInfo.DeleteMarker,
+		})
 		if !expiryTime.IsZero() {
 			w.Header()[xhttp.AmzExpiration] = []string{
 				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
@@ -269,27 +295,37 @@ func setAmzExpirationHeader(w http.ResponseWriter, bucket string, objInfo Object
 // deleteObject is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request) (err error) {
+func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	deleteObject := obj.DeleteObject
 	if cache != nil {
 		deleteObject = cache.DeleteObject
 	}
 	// Proceed to delete the object.
-	if err = deleteObject(ctx, bucket, object); err != nil {
-		return err
+	if objInfo, err = deleteObject(ctx, bucket, object, opts); err != nil {
+		return objInfo, err
 	}
 
-	// Notify object deleted event.
-	sendEvent(eventArgs{
-		EventName:  event.ObjectRemovedDelete,
-		BucketName: bucket,
-		Object: ObjectInfo{
-			Name: object,
-		},
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      handlers.GetSourceIP(r),
-	})
-
-	return nil
+	// Requesting only a delete marker which was successfully attempted.
+	if objInfo.DeleteMarker {
+		// Notify object deleted marker event.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectRemovedDeleteMarkerCreated,
+			BucketName: bucket,
+			Object:     objInfo,
+			ReqParams:  extractReqParams(r),
+			UserAgent:  r.UserAgent(),
+			Host:       handlers.GetSourceIP(r),
+		})
+	} else {
+		// Notify object deleted event.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectRemovedDelete,
+			BucketName: bucket,
+			Object:     objInfo,
+			ReqParams:  extractReqParams(r),
+			UserAgent:  r.UserAgent(),
+			Host:       handlers.GetSourceIP(r),
+		})
+	}
+	return objInfo, nil
 }

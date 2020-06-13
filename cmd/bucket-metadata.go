@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -47,6 +48,7 @@ const (
 
 var (
 	enabledBucketObjectLockConfig = []byte(`<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled></ObjectLockConfiguration>`)
+	enabledBucketVersioningConfig = []byte(`<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Status>Enabled</Status></VersioningConfiguration>`)
 )
 
 //go:generate msgp -file $GOFILE
@@ -64,6 +66,7 @@ type BucketMetadata struct {
 	NotificationConfigXML []byte
 	LifecycleConfigXML    []byte
 	ObjectLockConfigXML   []byte
+	VersioningConfigXML   []byte
 	EncryptionConfigXML   []byte
 	TaggingConfigXML      []byte
 	QuotaConfigJSON       []byte
@@ -73,6 +76,7 @@ type BucketMetadata struct {
 	notificationConfig *event.Config
 	lifecycleConfig    *lifecycle.Lifecycle
 	objectLockConfig   *objectlock.Config
+	versioningConfig   *versioning.Versioning
 	sseConfig          *bucketsse.BucketSSEConfig
 	taggingConfig      *tags.Tags
 	quotaConfig        *madmin.BucketQuota
@@ -87,6 +91,9 @@ func newBucketMetadata(name string) BucketMetadata {
 			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
 		},
 		quotaConfig: &madmin.BucketQuota{},
+		versioningConfig: &versioning.Versioning{
+			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
+		},
 	}
 }
 
@@ -188,6 +195,13 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.objectLockConfig = nil
 	}
 
+	if len(b.VersioningConfigXML) != 0 {
+		b.versioningConfig, err = versioning.ParseConfig(bytes.NewReader(b.VersioningConfigXML))
+		if err != nil {
+			return err
+		}
+	}
+
 	if len(b.QuotaConfigJSON) != 0 {
 		b.quotaConfig, err = parseBucketQuota(b.Name, b.QuotaConfigJSON)
 		if err != nil {
@@ -244,6 +258,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		case legacyBucketObjectLockEnabledConfigFile:
 			if string(configData) == legacyBucketObjectLockEnabledConfig {
 				b.ObjectLockConfigXML = enabledBucketObjectLockConfig
+				b.VersioningConfigXML = enabledBucketVersioningConfig
 				b.LockEnabled = false // legacy value unset it
 				// we are only interested in b.ObjectLockConfigXML
 			}
@@ -259,6 +274,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 			b.TaggingConfigXML = configData
 		case objectLockConfig:
 			b.ObjectLockConfigXML = configData
+			b.VersioningConfigXML = enabledBucketVersioningConfig
 		case bucketQuotaConfigFile:
 			b.QuotaConfigJSON = configData
 		}

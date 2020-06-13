@@ -21,7 +21,7 @@ package cmd
 import (
 	"io"
 	"os"
-	"strings"
+	"syscall"
 )
 
 // Return all the entries at the directory dirPath.
@@ -34,16 +34,7 @@ func readDir(dirPath string) (entries []string, err error) {
 func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
 	d, err := os.Open(dirPath)
 	if err != nil {
-		// File is really not found.
-		if os.IsNotExist(err) {
-			return errFileNotFound
-		}
-
-		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
-			return errFileNotFound
-		}
-		return err
+		return osErrToFileErr(err)
 	}
 	defer d.Close()
 
@@ -55,7 +46,7 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 			if err == io.EOF {
 				break
 			}
-			return err
+			return osErrToFileErr(err)
 		}
 		for _, fi := range fis {
 			if err = filter(fi.Name(), fi.Mode()); err == errDoneForNow {
@@ -71,16 +62,7 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 func readDirN(dirPath string, count int) (entries []string, err error) {
 	d, err := os.Open(dirPath)
 	if err != nil {
-		// File is really not found.
-		if os.IsNotExist(err) {
-			return nil, errFileNotFound
-		}
-
-		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
-			return nil, errFileNotFound
-		}
-		return nil, err
+		return nil, osErrToFileErr(err)
 	}
 	defer d.Close()
 
@@ -99,7 +81,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			if err == io.EOF {
 				break
 			}
-			return nil, err
+			return nil, osErrToFileErr(err)
 		}
 		if count > 0 {
 			if remaining <= len(fis) {
@@ -124,4 +106,9 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		}
 	}
 	return entries, nil
+}
+
+func globalSync() {
+	// no-op not sure about plan9/solaris support for syscall support
+	syscall.Sync()
 }

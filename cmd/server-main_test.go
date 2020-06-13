@@ -43,7 +43,7 @@ func TestNewObjectLayer(t *testing.T) {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}
 
-	// Tests for XL object layer initialization.
+	// Tests for Erasure object layer initialization.
 
 	// Create temporary backend for the test server.
 	nDisks = 16
@@ -58,7 +58,7 @@ func TestNewObjectLayer(t *testing.T) {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
 
-	_, ok = obj.(*xlZones)
+	_, ok = obj.(*erasureZones)
 	if !ok {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}

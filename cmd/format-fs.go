@@ -75,7 +75,7 @@ func newFormatFSV1() (format *formatFSV1) {
 }
 
 // Returns the field formatMetaV1.Format i.e the string "fs" which is never likely to change.
-// We do not use this function in XL to get the format as the file is not fcntl-locked on XL.
+// We do not use this function in Erasure to get the format as the file is not fcntl-locked on Erasure.
 func formatMetaGetFormatBackendFS(r io.ReadSeeker) (string, error) {
 	format := &formatMetaV1{}
 	if err := jsonLoad(r, format); err != nil {

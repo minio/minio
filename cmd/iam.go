@@ -469,7 +469,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		}
 
 		// These messages only meant primarily for distributed setup, so only log during distributed setup.
-		if globalIsDistXL {
+		if globalIsDistErasure {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. lock acquired")
 		}
 

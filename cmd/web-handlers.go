@@ -169,11 +169,16 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(ctx, errInvalidBucketName)
 	}
 
+	opts := BucketOptions{
+		Location:    globalServerRegion,
+		LockEnabled: false,
+	}
+
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
 			if err == dns.ErrNoEntriesFound {
 				// Proceed to creating a bucket.
-				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion, false); err != nil {
+				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
 				}
 				if err = globalDNSConfig.Put(args.BucketName); err != nil {
@@ -189,7 +194,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(ctx, errBucketAlreadyExists)
 	}
 
-	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, globalServerRegion, false); err != nil {
+	if err := objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
@@ -259,15 +264,14 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		return toJSONError(ctx, err, args.BucketName)
 	}
 
+	globalNotificationSys.DeleteBucketMetadata(ctx, args.BucketName)
+
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
-			// Deleting DNS entry failed, attempt to create the bucket again.
-			objectAPI.MakeBucketWithLocation(ctx, args.BucketName, "", false)
+			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually using etcdctl", err))
 			return toJSONError(ctx, err)
 		}
 	}
-
-	globalNotificationSys.DeleteBucketMetadata(ctx, args.BucketName)
 
 	return nil
 }
@@ -583,11 +587,6 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return toJSONError(ctx, errServerNotInitialized)
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if web.CacheAPI() != nil {
-		getObjectInfo = web.CacheAPI().GetObjectInfo
-	}
-
 	deleteObjects := objectAPI.DeleteObjects
 	if web.CacheAPI() != nil {
 		deleteObjects = web.CacheAPI().DeleteObjects
@@ -656,13 +655,14 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return nil
 	}
 
+	versioned := globalBucketVersioningSys.Enabled(args.BucketName)
+
 	var err error
 next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
 		if !HasSuffix(objectName, SlashSeparator) && objectName != "" {
 			// Check permissions for non-anonymous user.
-			govBypassPerms := false
 			if authErr != errNoAuthToken {
 				if !globalIAMSys.IsAllowed(iampolicy.Args{
 					AccountName:     claims.AccessKey,
@@ -674,17 +674,6 @@ next:
 					Claims:          claims.Map(),
 				}) {
 					return toJSONError(ctx, errAccessDenied)
-				}
-				if globalIAMSys.IsAllowed(iampolicy.Args{
-					AccountName:     claims.AccessKey,
-					Action:          iampolicy.BypassGovernanceRetentionAction,
-					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-					IsOwner:         owner,
-					ObjectName:      objectName,
-					Claims:          claims.Map(),
-				}) {
-					govBypassPerms = true
 				}
 			}
 
@@ -699,32 +688,10 @@ next:
 				}) {
 					return toJSONError(ctx, errAccessDenied)
 				}
-
-				// Check if object is allowed to be deleted anonymously
-				if globalPolicySys.IsAllowed(policy.Args{
-					Action:          policy.BypassGovernanceRetentionAction,
-					BucketName:      args.BucketName,
-					ConditionValues: getConditionValues(r, "", "", nil),
-					IsOwner:         false,
-					ObjectName:      objectName,
-				}) {
-					govBypassPerms = true
-				}
 			}
 
-			apiErr := enforceRetentionBypassForDeleteWeb(ctx, r, args.BucketName, objectName, getObjectInfo, govBypassPerms)
-			if apiErr == ErrObjectLocked {
-				return toJSONError(ctx, errLockedObject)
-			}
-			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
-				return toJSONError(ctx, errAccessDenied)
-			}
-			if apiErr == ErrNone {
-				if err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r); err != nil {
-					break next
-				}
-			}
-			continue
+			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, ObjectOptions{})
+			logger.LogIf(ctx, err)
 		}
 
 		if authErr == errNoAuthToken {
@@ -761,13 +728,16 @@ next:
 		}
 
 		for {
-			var objects []string
+			var objects []ObjectToDelete
 			for obj := range objInfoCh {
 				if len(objects) == maxDeleteList {
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
-				objects = append(objects, obj.Name)
+				objects = append(objects, ObjectToDelete{
+					ObjectName: obj.Name,
+					VersionID:  obj.VersionID,
+				})
 			}
 
 			// Nothing to do.
@@ -776,10 +746,12 @@ next:
 			}
 
 			// Deletes a list of objects.
-			_, err = deleteObjects(ctx, args.BucketName, objects)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				break next
+			_, errs := deleteObjects(ctx, args.BucketName, objects, ObjectOptions{Versioned: versioned})
+			for _, err := range errs {
+				if err != nil {
+					logger.LogIf(ctx, err)
+					break next
+				}
 			}
 		}
 	}
@@ -1084,6 +1056,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// get gateway encryption options
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
+
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return

@@ -22,8 +22,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Composed function registering routers for only distributed XL setup.
-func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
+// Composed function registering routers for only distributed Erasure setup.
+func registerDistErasureRouters(router *mux.Router, endpointZones EndpointZones) {
 	// Register storage REST router only if its a distributed setup.
 	registerStorageRESTHandlers(router, endpointZones)
 
@@ -87,8 +87,8 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// Initialize distributed NS lock.
-	if globalIsDistXL {
-		registerDistXLRouters(router, endpointZones)
+	if globalIsDistErasure {
+		registerDistErasureRouters(router, endpointZones)
 	}
 
 	// Add STS router always.

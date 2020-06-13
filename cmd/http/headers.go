@@ -56,6 +56,10 @@ const (
 	// S3 storage class
 	AmzStorageClass = "x-amz-storage-class"
 
+	// S3 object version ID
+	AmzVersionID    = "x-amz-version-id"
+	AmzDeleteMarker = "x-amz-delete-marker"
+
 	// S3 object tagging
 	AmzObjectTagging = "X-Amz-Tagging"
 	AmzTagCount      = "x-amz-tagging-count"

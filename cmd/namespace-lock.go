@@ -45,11 +45,11 @@ type RWLocker interface {
 }
 
 // newNSLock - return a new name space lock map.
-func newNSLock(isDistXL bool) *nsLockMap {
+func newNSLock(isDistErasure bool) *nsLockMap {
 	nsMutex := nsLockMap{
-		isDistXL: isDistXL,
+		isDistErasure: isDistErasure,
 	}
-	if isDistXL {
+	if isDistErasure {
 		return &nsMutex
 	}
 	nsMutex.lockMap = make(map[string]*nsLock)
@@ -66,9 +66,9 @@ type nsLock struct {
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
 	// Indicates if namespace is part of a distributed setup.
-	isDistXL     bool
-	lockMap      map[string]*nsLock
-	lockMapMutex sync.Mutex
+	isDistErasure bool
+	lockMap       map[string]*nsLock
+	lockMapMutex  sync.Mutex
 }
 
 // Lock the namespace resource.
@@ -190,7 +190,7 @@ type localLockInstance struct {
 // volume, path and operation ID.
 func (n *nsLockMap) NewNSLock(ctx context.Context, lockersFn func() []dsync.NetLocker, volume string, paths ...string) RWLocker {
 	opsID := mustGetUUID()
-	if n.isDistXL {
+	if n.isDistErasure {
 		drwmutex := dsync.NewDRWMutex(ctx, &dsync.Dsync{
 			GetLockersFn: lockersFn,
 		}, pathsJoinPrefix(volume, paths...)...)

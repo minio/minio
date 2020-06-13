@@ -263,21 +263,21 @@ func TestComputeActions(t *testing.T) {
 		},
 		// Too early to remove (test Date)
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().UTC().Truncate(24*time.Hour).Add(24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
 			objectName:     "foodir/fooobject",
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
 			expectedAction: NoneAction,
 		},
 		// Should remove (test Days)
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().UTC().Truncate(24*time.Hour).Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
 			objectName:     "foodir/fooobject",
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
 			expectedAction: DeleteAction,
 		},
 		// Should remove (Tags match)
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Prefix>foodir/</Prefix><Tag><Key>tag1</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Prefix>foodir/</Prefix><Tag><Key>tag1</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().UTC().Truncate(24*time.Hour).Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
 			objectName:     "foodir/fooobject",
 			objectTags:     "tag1=value1&tag2=value2",
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
@@ -310,7 +310,7 @@ func TestComputeActions(t *testing.T) {
 
 		// Should not remove (Tags don't match)
 		{
-			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Prefix>foodir/</Prefix><Tag><Key>tag</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Prefix>foodir/</Prefix><Tag><Key>tag</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().UTC().Truncate(24*time.Hour).Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
 			objectName:     "foodir/fooobject",
 			objectTags:     "tag1=value1",
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
@@ -333,14 +333,20 @@ func TestComputeActions(t *testing.T) {
 		},
 	}
 
-	for i, tc := range testCases {
-		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
+	for _, tc := range testCases {
+		tc := tc
+		t.Run("", func(t *testing.T) {
 			lc, err := ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig)))
 			if err != nil {
-				t.Fatalf("%d: Got unexpected error: %v", i+1, err)
+				t.Fatalf("Got unexpected error: %v", err)
 			}
-			if resultAction := lc.ComputeAction(tc.objectName, tc.objectTags, tc.objectModTime); resultAction != tc.expectedAction {
-				t.Fatalf("%d: Expected action: `%v`, got: `%v`", i+1, tc.expectedAction, resultAction)
+			if resultAction := lc.ComputeAction(ObjectOpts{
+				Name:     tc.objectName,
+				UserTags: tc.objectTags,
+				ModTime:  tc.objectModTime,
+				IsLatest: true,
+			}); resultAction != tc.expectedAction {
+				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
 			}
 		})
 

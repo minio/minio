@@ -103,7 +103,7 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 		length := len(key) + len(header.Get(key))
 		size += length
 		for _, prefix := range userMetadataKeyPrefixes {
-			if HasPrefix(key, prefix) {
+			if strings.HasPrefix(strings.ToLower(key), prefix) {
 				usersize += length
 				break
 			}
@@ -444,72 +444,73 @@ func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 
+var supportedDummyBucketAPIs = map[string][]string{
+	"acl":            {http.MethodPut, http.MethodGet},
+	"cors":           {http.MethodGet},
+	"website":        {http.MethodGet, http.MethodDelete},
+	"logging":        {http.MethodGet},
+	"accelerate":     {http.MethodGet},
+	"replication":    {http.MethodGet},
+	"requestPayment": {http.MethodGet},
+}
+
+// List of not implemented bucket queries
+var notImplementedBucketResourceNames = map[string]struct{}{
+	"cors":           {},
+	"metrics":        {},
+	"website":        {},
+	"logging":        {},
+	"inventory":      {},
+	"accelerate":     {},
+	"replication":    {},
+	"requestPayment": {},
+}
+
 // Checks requests for not implemented Bucket resources
 func ignoreNotImplementedBucketResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable PutBucketACL, GetBucketACL, GetBucketCors,
-		// GetBucketWebsite, GetBucketAcccelerate,
-		// GetBucketRequestPayment, GetBucketLogging,
-		// GetBucketLifecycle, GetBucketReplication,
-		// GetBucketTagging, GetBucketVersioning,
-		// DeleteBucketTagging, and DeleteBucketWebsite
-		// dummy calls specifically.
-		if name == "acl" && req.Method == http.MethodPut {
-			return false
-		}
-		if ((name == "acl" ||
-			name == "cors" ||
-			name == "website" ||
-			name == "accelerate" ||
-			name == "requestPayment" ||
-			name == "logging" ||
-			name == "lifecycle" ||
-			name == "replication" ||
-			name == "tagging" ||
-			name == "versioning") && req.Method == http.MethodGet) ||
-			((name == "tagging" ||
-				name == "website") && req.Method == http.MethodDelete) {
-			return false
+		methods, ok := supportedDummyBucketAPIs[name]
+		if ok {
+			for _, method := range methods {
+				if method == req.Method {
+					return false
+				}
+			}
 		}
 
-		if notImplementedBucketResourceNames[name] {
+		if _, ok := notImplementedBucketResourceNames[name]; ok {
 			return true
 		}
 	}
 	return false
+}
+
+var supportedDummyObjectAPIs = map[string][]string{
+	"acl": {http.MethodGet, http.MethodPut},
+}
+
+// List of not implemented object APIs
+var notImplementedObjectResourceNames = map[string]struct{}{
+	"restore": {},
+	"torrent": {},
 }
 
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable Get/PutObjectACL dummy call specifically.
-		if name == "acl" && (req.Method == http.MethodGet || req.Method == http.MethodPut) {
-			return false
+		methods, ok := supportedDummyObjectAPIs[name]
+		if ok {
+			for _, method := range methods {
+				if method == req.Method {
+					return false
+				}
+			}
 		}
-		if notImplementedObjectResourceNames[name] {
+		if _, ok := notImplementedObjectResourceNames[name]; ok {
 			return true
 		}
 	}
 	return false
-}
-
-// List of not implemented bucket queries
-var notImplementedBucketResourceNames = map[string]bool{
-	"accelerate":     true,
-	"cors":           true,
-	"inventory":      true,
-	"logging":        true,
-	"metrics":        true,
-	"replication":    true,
-	"requestPayment": true,
-	"versioning":     true,
-	"website":        true,
-}
-
-// List of not implemented object queries
-var notImplementedObjectResourceNames = map[string]bool{
-	"restore": true,
-	"torrent": true,
 }
 
 // Resource handler ServeHTTP() wrapper

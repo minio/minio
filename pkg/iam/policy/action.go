@@ -92,6 +92,21 @@ const (
 	// PutObjectAction - PutObject Rest API action.
 	PutObjectAction = "s3:PutObject"
 
+	// DeleteObjectVersionAction - DeleteObjectVersion Rest API action.
+	DeleteObjectVersionAction = "s3:DeleteObjectVersion"
+
+	// DeleteObjectVersionTaggingAction - DeleteObjectVersionTagging Rest API action.
+	DeleteObjectVersionTaggingAction = "s3:DeleteObjectVersionTagging"
+
+	// GetObjectVersionAction - GetObjectVersionAction Rest API action.
+	GetObjectVersionAction = "s3:GetObjectVersion"
+
+	// GetObjectVersionTaggingAction - GetObjectVersionTagging Rest API action.
+	GetObjectVersionTaggingAction = "s3:GetObjectVersionTagging"
+
+	// PutObjectVersionTaggingAction - PutObjectVersionTagging Rest API action.
+	PutObjectVersionTaggingAction = "s3:PutObjectVersionTagging"
+
 	// BypassGovernanceRetentionAction - bypass governance retention for PutObjectRetention, PutObject and DeleteObject Rest API action.
 	BypassGovernanceRetentionAction = "s3:BypassGovernanceRetention"
 
@@ -134,6 +149,12 @@ const (
 	// GetBucketEncryptionAction - GetBucketEncryption REST API action
 	GetBucketEncryptionAction = "s3:GetEncryptionConfiguration"
 
+	// PutBucketVersioningAction - PutBucketVersioning REST API action
+	PutBucketVersioningAction = "s3:PutBucketVersioning"
+
+	// GetBucketVersioningAction - GetBucketVersioning REST API action
+	GetBucketVersioningAction = "s3:GetBucketVersioning"
+
 	// AllActions - all API actions
 	AllActions = "s3:*"
 )
@@ -170,30 +191,42 @@ var supportedActions = map[Action]struct{}{
 	PutBucketObjectLockConfigurationAction: {},
 	GetBucketTaggingAction:                 {},
 	PutBucketTaggingAction:                 {},
+	GetObjectVersionAction:                 {},
+	GetObjectVersionTaggingAction:          {},
+	DeleteObjectVersionAction:              {},
+	DeleteObjectVersionTaggingAction:       {},
+	PutObjectVersionTaggingAction:          {},
 	GetObjectTaggingAction:                 {},
 	PutObjectTaggingAction:                 {},
 	DeleteObjectTaggingAction:              {},
 	PutBucketEncryptionAction:              {},
 	GetBucketEncryptionAction:              {},
+	PutBucketVersioningAction:              {},
+	GetBucketVersioningAction:              {},
 	AllActions:                             {},
 }
 
 // List of all supported object actions.
 var supportedObjectActions = map[Action]struct{}{
-	AllActions:                      {},
-	AbortMultipartUploadAction:      {},
-	DeleteObjectAction:              {},
-	GetObjectAction:                 {},
-	ListMultipartUploadPartsAction:  {},
-	PutObjectAction:                 {},
-	BypassGovernanceRetentionAction: {},
-	PutObjectRetentionAction:        {},
-	GetObjectRetentionAction:        {},
-	PutObjectLegalHoldAction:        {},
-	GetObjectLegalHoldAction:        {},
-	GetObjectTaggingAction:          {},
-	PutObjectTaggingAction:          {},
-	DeleteObjectTaggingAction:       {},
+	AllActions:                       {},
+	AbortMultipartUploadAction:       {},
+	DeleteObjectAction:               {},
+	GetObjectAction:                  {},
+	ListMultipartUploadPartsAction:   {},
+	PutObjectAction:                  {},
+	BypassGovernanceRetentionAction:  {},
+	PutObjectRetentionAction:         {},
+	GetObjectRetentionAction:         {},
+	PutObjectLegalHoldAction:         {},
+	GetObjectLegalHoldAction:         {},
+	GetObjectTaggingAction:           {},
+	PutObjectTaggingAction:           {},
+	DeleteObjectTaggingAction:        {},
+	GetObjectVersionAction:           {},
+	GetObjectVersionTaggingAction:    {},
+	DeleteObjectVersionAction:        {},
+	DeleteObjectVersionTaggingAction: {},
+	PutObjectVersionTaggingAction:    {},
 }
 
 // isObjectAction - returns whether action is object type or not.
@@ -235,7 +268,6 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		append([]condition.Key{
 			condition.S3XAmzServerSideEncryption,
 			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
-			condition.S3XAmzStorageClass,
 		}, condition.CommonKeys...)...),
 
 	HeadBucketAction: condition.NewKeySet(condition.CommonKeys...),
@@ -303,4 +335,22 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	PutObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	GetObjectTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 	DeleteObjectTaggingAction:              condition.NewKeySet(condition.CommonKeys...),
+
+	PutObjectVersionTaggingAction: condition.NewKeySet(condition.CommonKeys...),
+	GetObjectVersionAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3VersionID,
+		}, condition.CommonKeys...)...),
+	GetObjectVersionTaggingAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3VersionID,
+		}, condition.CommonKeys...)...),
+	DeleteObjectVersionAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3VersionID,
+		}, condition.CommonKeys...)...),
+	DeleteObjectVersionTaggingAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3VersionID,
+		}, condition.CommonKeys...)...),
 }

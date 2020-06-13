@@ -136,7 +136,7 @@ func TestWebHandlerLogin(t *testing.T) {
 
 // testLoginWebHandler - Test login web handler
 func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -176,7 +176,7 @@ func TestWebHandlerStorageInfo(t *testing.T) {
 // testStorageInfoWebHandler - Test StorageInfo web handler
 func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// get random bucket name.
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -209,7 +209,7 @@ func TestWebHandlerServerInfo(t *testing.T) {
 
 // testServerInfoWebHandler - Test ServerInfo web handler
 func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -251,7 +251,7 @@ func TestWebHandlerMakeBucket(t *testing.T) {
 
 // testMakeBucketWebHandler - Test MakeBucket web handler
 func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -315,7 +315,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	bucketName := getRandomBucketName()
 	var opts ObjectOptions
 
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatalf("failed to create bucket: %s (%s)", err.Error(), instanceType)
 	}
@@ -381,7 +381,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 		// If we created the bucket with an object, now delete the object to cleanup.
 		if test.initWithObject {
-			err = obj.DeleteObject(context.Background(), test.bucketName, "object")
+			_, err = obj.DeleteObject(context.Background(), test.bucketName, "object", ObjectOptions{})
 			if err != nil {
 				t.Fatalf("could not delete object, %s", err.Error())
 			}
@@ -393,7 +393,7 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 			continue
 		}
 
-		err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+		err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 		if err != nil {
 			// failed to create new bucket, abort.
 			t.Fatalf("failed to create new bucket (%s): %s", instanceType, err.Error())
@@ -408,7 +408,7 @@ func TestWebHandlerListBuckets(t *testing.T) {
 
 // testListBucketsHandler - Test ListBuckets web handler
 func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -421,7 +421,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	bucketName := getRandomBucketName()
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -456,7 +456,7 @@ func TestWebHandlerListObjects(t *testing.T) {
 
 // testListObjectsHandler - Test ListObjects web handler
 func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -472,7 +472,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -537,7 +537,7 @@ func TestWebHandlerRemoveObject(t *testing.T) {
 
 // testRemoveObjectWebHandler - Test RemoveObjectObject web handler
 func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -552,7 +552,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -628,7 +628,7 @@ func TestWebHandlerGenerateAuth(t *testing.T) {
 
 // testGenerateAuthWebHandler - Test GenerateAuth web handler
 func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -727,7 +727,7 @@ func TestWebHandlerUpload(t *testing.T) {
 
 // testUploadWebHandler - Test Upload web handler
 func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -766,7 +766,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		return rec.Code
 	}
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -809,7 +809,7 @@ func TestWebHandlerDownload(t *testing.T) {
 
 // testDownloadWebHandler - Test Download web handler
 func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -841,7 +841,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -919,7 +919,7 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 	fileThree := "cccccccccccccc"
 
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucket, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -990,7 +990,7 @@ func TestWebHandlerPresignedGetHandler(t *testing.T) {
 }
 
 func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
 
@@ -1006,7 +1006,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -1039,7 +1039,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("Failed, %v", err)
 	}
 
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter = initTestAPIEndPoints(obj, []string{"GetObject"})
 
 	// Initialize a new api recorder.
@@ -1062,7 +1062,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatal("Read data is not equal was what was expected")
 	}
 
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter = initTestWebRPCEndPoint(obj)
 
 	presignGetReq = PresignedGetArgs{
@@ -1093,15 +1093,15 @@ func TestWebCheckAuthorization(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Prepare XL backend
-	obj, fsDirs, err := prepareXL16(ctx)
+	// Prepare Erasure backend
+	obj, fsDirs, err := prepareErasure16(ctx)
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
+		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
-	// Executing the object layer tests for XL.
+	// Executing the object layer tests for Erasure.
 	defer removeRoots(fsDirs)
 
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 
 	// initialize the server and obtain the credentials and root.
@@ -1185,12 +1185,12 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Prepare XL backend
-	obj, fsDirs, err := prepareXL16(ctx)
+	// Prepare Erasure backend
+	obj, fsDirs, err := prepareErasure16(ctx)
 	if err != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
+		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
-	// Executing the object layer tests for XL.
+	// Executing the object layer tests for Erasure.
 	defer removeRoots(fsDirs)
 
 	// initialize the server and obtain the credentials and root.
@@ -1201,23 +1201,23 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	bucketName := "mybucket"
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "", false)
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatal("Cannot make bucket:", err)
 	}
 
-	// Set faulty disks to XL backend
-	z := obj.(*xlZones)
+	// Set faulty disks to Erasure backend
+	z := obj.(*erasureZones)
 	xl := z.zones[0].sets[0]
-	xlDisks := xl.getDisks()
-	z.zones[0].xlDisksMu.Lock()
+	erasureDisks := xl.getDisks()
+	z.zones[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
-		for i, d := range xlDisks {
-			xlDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
+		for i, d := range erasureDisks {
+			erasureDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
 		}
-		return xlDisks
+		return erasureDisks
 	}
-	z.zones[0].xlDisksMu.Unlock()
+	z.zones[0].erasureDisksMu.Unlock()
 
 	// Initialize web rpc endpoint.
 	apiRouter := initTestWebRPCEndPoint(obj)

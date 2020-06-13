@@ -9,7 +9,7 @@ ENV GO111MODULE on
 RUN  \
      apk add --no-cache git 'curl>7.61.0' && \
      git clone https://github.com/minio/minio && \
-     curl -L https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-arm.tar.gz | tar zxvf - -C . && mv qemu-3.0.0+resin-arm/qemu-arm-static . 
+     curl -L https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-arm.tar.gz | tar zxvf - -C . && mv qemu-3.0.0+resin-arm/qemu-arm-static .
 
 FROM arm64v8/alpine:3.10
 

@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -111,6 +112,8 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		meta.TaggingConfigXML = configData
 	case objectLockConfig:
 		meta.ObjectLockConfigXML = configData
+	case bucketVersioningConfig:
+		meta.VersioningConfigXML = configData
 	case bucketQuotaConfigFile:
 		meta.QuotaConfigJSON = configData
 	default:
@@ -145,6 +148,16 @@ func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
 	}
 
 	return meta, nil
+}
+
+// GetVersioningConfig returns configured versioning config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetVersioningConfig(bucket string) (*versioning.Versioning, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		return nil, err
+	}
+	return meta.versioningConfig, nil
 }
 
 // GetTaggingConfig returns configured tagging config

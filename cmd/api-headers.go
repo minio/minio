@@ -29,6 +29,7 @@ import (
 
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 )
 
 // Returns a hexadecimal representation of time at the
@@ -150,6 +151,27 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if rs != nil {
 		contentRange := fmt.Sprintf("bytes %d-%d/%d", start, start+rangeLen-1, totalObjectSize)
 		w.Header().Set(xhttp.ContentRange, contentRange)
+	}
+
+	// Set the relevant version ID as part of the response header.
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+	}
+
+	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
+		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
+			Name:         objInfo.Name,
+			UserTags:     objInfo.UserTags,
+			VersionID:    objInfo.VersionID,
+			ModTime:      objInfo.ModTime,
+			IsLatest:     objInfo.IsLatest,
+			DeleteMarker: objInfo.DeleteMarker,
+		})
+		if !expiryTime.IsZero() {
+			w.Header()[xhttp.AmzExpiration] = []string{
+				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
+			}
+		}
 	}
 
 	return nil

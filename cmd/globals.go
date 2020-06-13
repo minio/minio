@@ -61,8 +61,8 @@ const (
 	globalNetBSDOSName             = "netbsd"
 	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
-	globalMinioModeXL              = "mode-server-xl"
-	globalMinioModeDistXL          = "mode-server-distributed-xl"
+	globalMinioModeErasure         = "mode-server-xl"
+	globalMinioModeDistErasure     = "mode-server-distributed-xl"
 	globalMinioModeGatewayPrefix   = "mode-gateway-"
 
 	// Add new global values here.
@@ -107,13 +107,13 @@ var globalCLIContext = struct {
 
 var (
 	// Indicates set drive count.
-	globalXLSetDriveCount int
+	globalErasureSetDriveCount int
 
 	// Indicates if the running minio server is distributed setup.
-	globalIsDistXL = false
+	globalIsDistErasure = false
 
 	// Indicates if the running minio server is an erasure-code backend.
-	globalIsXL = false
+	globalIsErasure = false
 
 	// Indicates if the running minio is in gateway mode.
 	globalIsGateway = false
@@ -215,6 +215,7 @@ var (
 
 	globalBucketObjectLockSys *BucketObjectLockSys
 	globalBucketQuotaSys      *BucketQuotaSys
+	globalBucketVersioningSys *BucketVersioningSys
 
 	// Disk cache drives
 	globalCacheConfig cache.Config
