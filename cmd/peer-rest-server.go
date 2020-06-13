@@ -770,7 +770,7 @@ func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Requ
 	var latestReleaseTime time.Time
 	var err error
 	if latestRelease := vars[peerRESTLatestRelease]; latestRelease != "" {
-		latestReleaseTime, err = time.Parse(latestRelease, time.RFC3339)
+		latestReleaseTime, err = time.Parse(time.RFC3339, latestRelease)
 		if err != nil {
 			s.writeErrorResponse(w, err)
 			return
