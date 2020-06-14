@@ -1021,6 +1021,10 @@ func (xl xlObjects) PutObjectTags(ctx context.Context, bucket, object string, ta
 	}
 
 	for i, xlMeta := range metaArr {
+		if errs[i] != nil {
+			// Avoid disks where loading metadata fail
+			continue
+		}
 		// clean xlMeta.Meta of tag key, before updating the new tags
 		delete(xlMeta.Meta, xhttp.AmzObjectTagging)
 		// Don't update for empty tags
