@@ -82,11 +82,11 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
-		storage, err := newPosix(endpoint.Path, endpoint.Host)
+		storage, err := newXLStorage(endpoint.Path, endpoint.Host)
 		if err != nil {
 			return nil, err
 		}
-		return &posixDiskIDCheck{storage: storage}, nil
+		return &xlStorageDiskIDCheck{storage: storage}, nil
 	}
 
 	return newStorageRESTClient(endpoint), nil
@@ -105,7 +105,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1, "")
+		entries, err := storage.ListDir(volume, entryPath, -1)
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil
@@ -165,7 +165,7 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 				// ignore quorum error as it might be an entry from an outdated disk.
 				if IsErrIgnored(err, []error{
 					errFileNotFound,
-					errXLReadQuorum,
+					errErasureReadQuorum,
 				}...) {
 					continue
 				}
@@ -358,7 +358,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 			// ignore quorum error as it might be an entry from an outdated disk.
 			if IsErrIgnored(err, []error{
 				errFileNotFound,
-				errXLReadQuorum,
+				errErasureReadQuorum,
 			}...) {
 				continue
 			}

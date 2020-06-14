@@ -33,7 +33,7 @@ func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 //  1. Only the concerned erasure set will be listed and healed
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
-	z, ok := objAPI.(*xlZones)
+	z, ok := objAPI.(*erasureZones)
 	if !ok {
 		return
 	}
@@ -84,10 +84,10 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Reformat disks
-			bgSeq.sourceCh <- healSource{path: SlashSeparator}
+			bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
 
 			// Ensure that reformatting disks is finished
-			bgSeq.sourceCh <- healSource{path: nopHeal}
+			bgSeq.sourceCh <- healSource{bucket: nopHeal}
 
 			var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
 			// Compute the list of erasure set to heal

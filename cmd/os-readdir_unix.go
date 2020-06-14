@@ -87,17 +87,11 @@ func readDir(dirPath string) (entries []string, err error) {
 // readDir applies the filter function on each entries at dirPath, doesn't recurse into
 // the directory itself.
 func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
-	fd, err := syscall.Open(dirPath, 0, 0)
+	f, err := os.Open(dirPath)
 	if err != nil {
-		if os.IsNotExist(err) || isSysErrNotDir(err) {
-			return errFileNotFound
-		}
-		if os.IsPermission(err) {
-			return errFileAccessDenied
-		}
-		return err
+		return osErrToFileErr(err)
 	}
-	defer syscall.Close(fd)
+	defer f.Close()
 
 	buf := make([]byte, blockSize)
 	boff := 0 // starting read position in buf
@@ -106,7 +100,7 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 	for {
 		if boff >= nbuf {
 			boff = 0
-			nbuf, err = syscall.ReadDirent(fd, buf)
+			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
 			if err != nil {
 				if isSysErrNotDir(err) {
 					return errFileNotFound
@@ -140,17 +134,11 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 // Return count entries at the directory dirPath and all entries
 // if count is set to -1
 func readDirN(dirPath string, count int) (entries []string, err error) {
-	fd, err := syscall.Open(dirPath, 0, 0)
+	f, err := os.Open(dirPath)
 	if err != nil {
-		if os.IsNotExist(err) || isSysErrNotDir(err) {
-			return nil, errFileNotFound
-		}
-		if os.IsPermission(err) {
-			return nil, errFileAccessDenied
-		}
-		return nil, err
+		return nil, osErrToFileErr(err)
 	}
-	defer syscall.Close(fd)
+	defer f.Close()
 
 	bufp := direntPool.Get().(*[]byte)
 	defer direntPool.Put(bufp)
@@ -161,7 +149,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	for count != 0 {
 		if boff >= nbuf {
 			boff = 0
-			nbuf, err = syscall.ReadDirent(fd, *bufp)
+			nbuf, err = syscall.ReadDirent(int(f.Fd()), *bufp)
 			if err != nil {
 				if isSysErrNotDir(err) {
 					return nil, errFileNotFound
@@ -208,4 +196,8 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		count--
 	}
 	return
+}
+
+func globalSync() {
+	syscall.Sync()
 }

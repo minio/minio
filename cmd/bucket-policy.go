@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,6 +70,16 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 		principalType = "User"
 	}
 
+	vid := r.URL.Query().Get("versionId")
+	if vid == "" {
+		if u, err := url.Parse(r.Header.Get(xhttp.AmzCopySource)); err == nil {
+			vid = u.Query().Get("versionId")
+		}
+		if vid == "" {
+			vid = r.Header.Get(xhttp.AmzCopySourceVersionID)
+		}
+	}
+
 	args := map[string][]string{
 		"CurrentTime":     {currTime.Format(time.RFC3339)},
 		"EpochTime":       {strconv.FormatInt(currTime.Unix(), 10)},
@@ -80,6 +90,7 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 		"principaltype":   {principalType},
 		"userid":          {username},
 		"username":        {username},
+		"versionid":       {vid},
 	}
 
 	if lc != "" {
@@ -142,7 +153,7 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 	return args
 }
 
-// PolicyToBucketAccessPolicy - converts policy.Policy to minio-go/policy.BucketAccessPolicy.
+// PolicyToBucketAccessPolicy converts a MinIO policy into a minio-go policy data structure.
 func PolicyToBucketAccessPolicy(bucketPolicy *policy.Policy) (*miniogopolicy.BucketAccessPolicy, error) {
 	// Return empty BucketAccessPolicy for empty bucket policy.
 	if bucketPolicy == nil {

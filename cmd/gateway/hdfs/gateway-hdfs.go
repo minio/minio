@@ -75,7 +75,7 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90 
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_AFTER{{.AssignmentOperator}}3
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
@@ -283,8 +283,8 @@ func (n *hdfsObjects) DeleteBucket(ctx context.Context, bucket string, forceDele
 	return hdfsToObjectErr(ctx, n.clnt.Remove(minio.PathJoin(hdfsSeparator, bucket)), bucket)
 }
 
-func (n *hdfsObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
-	if lockEnabled {
+func (n *hdfsObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
+	if opts.LockEnabled || opts.VersioningEnabled {
 		return minio.NotImplemented{}
 	}
 
@@ -439,16 +439,26 @@ func (n *hdfsObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continu
 	}, nil
 }
 
-func (n *hdfsObjects) DeleteObject(ctx context.Context, bucket, object string) error {
-	return hdfsToObjectErr(ctx, n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), minio.PathJoin(hdfsSeparator, bucket, object)), bucket, object)
+func (n *hdfsObjects) DeleteObject(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
+	err := hdfsToObjectErr(ctx, n.deleteObject(minio.PathJoin(hdfsSeparator, bucket), minio.PathJoin(hdfsSeparator, bucket, object)), bucket, object)
+	return minio.ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+	}, err
 }
 
-func (n *hdfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+func (n *hdfsObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) ([]minio.DeletedObject, []error) {
 	errs := make([]error, len(objects))
+	dobjects := make([]minio.DeletedObject, len(objects))
 	for idx, object := range objects {
-		errs[idx] = n.DeleteObject(ctx, bucket, object)
+		_, errs[idx] = n.DeleteObject(ctx, bucket, object.ObjectName, opts)
+		if errs[idx] == nil {
+			dobjects[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
+		}
 	}
-	return errs, nil
+	return dobjects, errs
 }
 
 func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *minio.HTTPRangeSpec, h http.Header, lockType minio.LockType, opts minio.ObjectOptions) (gr *minio.GetObjectReader, err error) {

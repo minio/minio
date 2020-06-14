@@ -254,8 +254,8 @@ type FSBackend struct {
 	Type backendType `json:"backendType,omitempty"`
 }
 
-// XLBackend contains specific erasure storage information
-type XLBackend struct {
+// ErasureBackend contains specific erasure storage information
+type ErasureBackend struct {
 	Type         backendType `json:"backendType,omitempty"`
 	OnlineDisks  int         `json:"onlineDisks,omitempty"`
 	OfflineDisks int         `json:"offlineDisks,omitempty"`

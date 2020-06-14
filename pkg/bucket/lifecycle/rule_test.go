@@ -25,8 +25,7 @@ import (
 // TestUnsupportedRules checks if Rule xml with unsuported tags return
 // appropriate errors on parsing
 func TestUnsupportedRules(t *testing.T) {
-	// NoncurrentVersionTransition, NoncurrentVersionExpiration
-	// and Transition tags aren't supported
+	// NoncurrentVersionTransition, and Transition tags aren't supported
 	unsupportedTestCases := []struct {
 		inputXML    string
 		expectedErr error
@@ -36,13 +35,6 @@ func TestUnsupportedRules(t *testing.T) {
 	                     <NoncurrentVersionTransition></NoncurrentVersionTransition>
 	                    </Rule>`,
 			expectedErr: errNoncurrentVersionTransitionUnsupported,
-		},
-		{ // Rule with unsupported NoncurrentVersionExpiration
-
-			inputXML: ` <Rule>
-	                     <NoncurrentVersionExpiration></NoncurrentVersionExpiration>
-	                    </Rule>`,
-			expectedErr: errNoncurrentVersionExpirationUnsupported,
 		},
 		{ // Rule with unsupported Transition action
 			inputXML: ` <Rule>

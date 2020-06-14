@@ -421,14 +421,15 @@ func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageI
 }
 
 // MakeBucketWithLocation - Create a new container on GCS backend.
-func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
-	if lockEnabled {
+func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
+	if opts.LockEnabled || opts.VersioningEnabled {
 		return minio.NotImplemented{}
 	}
 
 	bkt := l.client.Bucket(bucket)
 
 	// we'll default to the us multi-region in case of us-east-1
+	location := opts.Location
 	if location == "us-east-1" {
 		location = "us"
 	}
@@ -958,22 +959,31 @@ func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject
 }
 
 // DeleteObject - Deletes a blob in bucket
-func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object string) error {
+func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	err := l.client.Bucket(bucket).Object(object).Delete(ctx)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return gcsToObjectError(err, bucket, object)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, object)
 	}
 
-	return nil
+	return minio.ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+	}, nil
 }
 
-func (l *gcsGateway) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+func (l *gcsGateway) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) ([]minio.DeletedObject, []error) {
 	errs := make([]error, len(objects))
+	dobjects := make([]minio.DeletedObject, len(objects))
 	for idx, object := range objects {
-		errs[idx] = l.DeleteObject(ctx, bucket, object)
+		_, errs[idx] = l.DeleteObject(ctx, bucket, object.ObjectName, opts)
+		if errs[idx] == nil {
+			dobjects[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
+		}
 	}
-	return errs, nil
+	return dobjects, errs
 }
 
 // NewMultipartUpload - upload object in multiple parts

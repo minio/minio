@@ -50,7 +50,7 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 }
 
 func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
-	err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile)
+	_, err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile, ObjectOptions{})
 	if err != nil && isErrObjectNotFound(err) {
 		return errConfigNotFound
 	}

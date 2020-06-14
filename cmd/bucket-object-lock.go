@@ -52,79 +52,6 @@ func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, 
 	return config.ToRetention(), nil
 }
 
-// Similar to enforceRetentionBypassForDelete but for WebUI
-func enforceRetentionBypassForDeleteWeb(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, govBypassPerms bool) APIErrorCode {
-	opts, err := getOpts(ctx, r, bucket, object)
-	if err != nil {
-		return toAPIErrorCode(ctx, err)
-	}
-
-	oi, err := getObjectInfoFn(ctx, bucket, object, opts)
-	if err != nil {
-		return toAPIErrorCode(ctx, err)
-	}
-
-	lhold := objectlock.GetObjectLegalHoldMeta(oi.UserDefined)
-	if lhold.Status.Valid() && lhold.Status == objectlock.LegalHoldOn {
-		return ErrObjectLocked
-	}
-
-	ret := objectlock.GetObjectRetentionMeta(oi.UserDefined)
-	if ret.Mode.Valid() {
-		switch ret.Mode {
-		case objectlock.RetCompliance:
-			// In compliance mode, a protected object version can't be overwritten
-			// or deleted by any user, including the root user in your AWS account.
-			// When an object is locked in compliance mode, its retention mode can't
-			// be changed, and its retention period can't be shortened. Compliance mode
-			// ensures that an object version can't be overwritten or deleted for the
-			// duration of the retention period.
-			t, err := objectlock.UTCNowNTP()
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return ErrObjectLocked
-			}
-
-			if !ret.RetainUntilDate.Before(t) {
-				return ErrObjectLocked
-			}
-			return ErrNone
-		case objectlock.RetGovernance:
-			// In governance mode, users can't overwrite or delete an object
-			// version or alter its lock settings unless they have special
-			// permissions. With governance mode, you protect objects against
-			// being deleted by most users, but you can still grant some users
-			// permission to alter the retention settings or delete the object
-			// if necessary. You can also use governance mode to test retention-period
-			// settings before creating a compliance-mode retention period.
-			// To override or remove governance-mode retention settings, a
-			// user must have the s3:BypassGovernanceRetention permission
-			// and must explicitly include x-amz-bypass-governance-retention:true
-			// as a request header with any request that requires overriding
-			// governance mode.
-			byPassSet := govBypassPerms && objectlock.IsObjectLockGovernanceBypassSet(r.Header)
-			if !byPassSet {
-				t, err := objectlock.UTCNowNTP()
-				if err != nil {
-					logger.LogIf(ctx, err)
-					return ErrObjectLocked
-				}
-
-				if !ret.RetainUntilDate.Before(t) {
-					return ErrObjectLocked
-				}
-
-				if !govBypassPerms {
-					return ErrObjectLocked
-				}
-
-				return ErrNone
-			}
-		}
-	}
-	return ErrNone
-}
-
 // enforceRetentionForDeletion checks if it is appropriate to remove an
 // object according to locking configuration when this is lifecycle/ bucket quota asking.
 func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locked bool) {
@@ -153,14 +80,23 @@ func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locke
 // For objects in "Governance" mode, overwrite is allowed if a) object retention date is past OR
 // governance bypass headers are set and user has governance bypass permissions.
 // Objects in "Compliance" mode can be overwritten only if retention date is past.
-func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn) APIErrorCode {
-	opts, err := getOpts(ctx, r, bucket, object)
+func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucket string, object ObjectToDelete, getObjectInfoFn GetObjectInfoFn) APIErrorCode {
+	opts, err := getOpts(ctx, r, bucket, object.ObjectName)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}
 
-	oi, err := getObjectInfoFn(ctx, bucket, object, opts)
+	opts.VersionID = object.VersionID
+
+	oi, err := getObjectInfoFn(ctx, bucket, object.ObjectName, opts)
 	if err != nil {
+		switch err.(type) {
+		case MethodNotAllowed: // This happens usually for a delete marker
+			if oi.DeleteMarker {
+				// Delete marker should be present and valid.
+				return ErrNone
+			}
+		}
 		return toAPIErrorCode(ctx, err)
 	}
 
@@ -219,8 +155,8 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 			// https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html#object-lock-retention-modes
 			// If you try to delete objects protected by governance mode and have s3:BypassGovernanceRetention
 			// or s3:GetBucketObjectLockConfiguration permissions, the operation will succeed.
-			govBypassPerms1 := checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object)
-			govBypassPerms2 := checkRequestAuthType(ctx, r, policy.GetBucketObjectLockConfigurationAction, bucket, object)
+			govBypassPerms1 := checkRequestAuthType(ctx, r, policy.BypassGovernanceRetentionAction, bucket, object.ObjectName)
+			govBypassPerms2 := checkRequestAuthType(ctx, r, policy.GetBucketObjectLockConfigurationAction, bucket, object.ObjectName)
 			if govBypassPerms1 != ErrNone && govBypassPerms2 != ErrNone {
 				return ErrAccessDenied
 			}
@@ -331,30 +267,32 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		return mode, retainDate, legalHold, ErrNone
 	}
 
-	var objExists bool
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
 		return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 	}
 
-	t, err := objectlock.UTCNowNTP()
-	if err != nil {
-		logger.LogIf(ctx, err)
-		return mode, retainDate, legalHold, ErrObjectLocked
-	}
+	if opts.VersionID != "" {
+		if objInfo, err := getObjectInfoFn(ctx, bucket, object, opts); err == nil {
+			r := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 
-	if objInfo, err := getObjectInfoFn(ctx, bucket, object, opts); err == nil {
-		objExists = true
-		r := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
-		if r.Mode == objectlock.RetCompliance && r.RetainUntilDate.After(t) {
-			return mode, retainDate, legalHold, ErrObjectLocked
-		}
-		mode = r.Mode
-		retainDate = r.RetainUntilDate
-		legalHold = objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
-		// Disallow overwriting an object on legal hold
-		if legalHold.Status == objectlock.LegalHoldOn {
-			return mode, retainDate, legalHold, ErrObjectLocked
+			t, err := objectlock.UTCNowNTP()
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return mode, retainDate, legalHold, ErrObjectLocked
+			}
+
+			if r.Mode == objectlock.RetCompliance && r.RetainUntilDate.After(t) {
+				return mode, retainDate, legalHold, ErrObjectLocked
+			}
+
+			mode = r.Mode
+			retainDate = r.RetainUntilDate
+			legalHold = objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
+			// Disallow overwriting an object on legal hold
+			if legalHold.Status == objectlock.LegalHoldOn {
+				return mode, retainDate, legalHold, ErrObjectLocked
+			}
 		}
 	}
 
@@ -374,9 +312,6 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		if err != nil {
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
-		if objExists && retainDate.After(t) {
-			return mode, retainDate, legalHold, ErrObjectLocked
-		}
 		if retentionPermErr != ErrNone {
 			return mode, retainDate, legalHold, retentionPermErr
 		}
@@ -387,16 +322,14 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		if retentionPermErr != ErrNone {
 			return mode, retainDate, legalHold, retentionPermErr
 		}
+
 		t, err := objectlock.UTCNowNTP()
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
-		// AWS S3 just creates a new version of object when an object is being overwritten.
-		if objExists && retainDate.After(t) {
-			return mode, retainDate, legalHold, ErrObjectLocked
-		}
-		if !legalHoldRequested {
+
+		if !legalHoldRequested && retentionCfg.LockEnabled {
 			// inherit retention from bucket configuration
 			return retentionCfg.Mode, objectlock.RetentionDate{Time: t.Add(retentionCfg.Validity)}, legalHold, ErrNone
 		}

@@ -64,7 +64,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(httpTraceAll(adminAPI.DataUsageInfoHandler))
 
-		if globalIsDistXL || globalIsXL {
+		if globalIsDistErasure || globalIsErasure {
 			/// Heal operations
 
 			// Heal processing endpoint.
@@ -172,7 +172,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		}
 
 		// Quota operations
-		if globalIsXL || globalIsDistXL {
+		if globalIsDistErasure || globalIsErasure {
 			if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
 				// GetBucketQuotaConfig
 				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
@@ -185,7 +185,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 		// -- Top APIs --
 		// Top locks
-		if globalIsDistXL {
+		if globalIsDistErasure {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
 		}
 

@@ -45,7 +45,7 @@ func mustGetNodeName(endpointZones EndpointZones) (nodeName string) {
 	if err != nil {
 		logger.FatalIf(err, "Unable to start console logging subsystem")
 	}
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		nodeName = host.Name
 	}
 	return nodeName

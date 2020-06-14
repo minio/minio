@@ -51,8 +51,8 @@ type CacheObjectLayer interface {
 	// Object operations.
 	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	DeleteObject(ctx context.Context, bucket, object string) error
-	DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
+	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
+	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 	// Storage operations.
@@ -78,8 +78,7 @@ type cacheObjects struct {
 
 	GetObjectNInfoFn func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error)
 	GetObjectInfoFn  func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
-	DeleteObjectFn   func(ctx context.Context, bucket, object string) error
-	DeleteObjectsFn  func(ctx context.Context, bucket string, objects []string) ([]error, error)
+	DeleteObjectFn   func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObjectFn      func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObjectFn     func(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 }
@@ -120,8 +119,8 @@ func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *disk
 }
 
 // DeleteObject clears cache entry if backend delete operation succeeds
-func (c *cacheObjects) DeleteObject(ctx context.Context, bucket, object string) (err error) {
-	if err = c.DeleteObjectFn(ctx, bucket, object); err != nil {
+func (c *cacheObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	if objInfo, err = c.DeleteObjectFn(ctx, bucket, object, opts); err != nil {
 		return
 	}
 	if c.isCacheExclude(bucket, object) || c.skipCache() {
@@ -130,19 +129,38 @@ func (c *cacheObjects) DeleteObject(ctx context.Context, bucket, object string) 
 
 	dcache, cerr := c.getCacheLoc(bucket, object)
 	if cerr != nil {
-		return
+		return objInfo, cerr
 	}
 	dcache.Delete(ctx, bucket, object)
 	return
 }
 
 // DeleteObjects batch deletes objects in slice, and clears any cached entries
-func (c *cacheObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+func (c *cacheObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	errs := make([]error, len(objects))
+	objInfos := make([]ObjectInfo, len(objects))
 	for idx, object := range objects {
-		errs[idx] = c.DeleteObject(ctx, bucket, object)
+		opts.VersionID = object.VersionID
+		objInfos[idx], errs[idx] = c.DeleteObject(ctx, bucket, object.ObjectName, opts)
 	}
-	return errs, nil
+	deletedObjects := make([]DeletedObject, len(objInfos))
+	for idx := range errs {
+		if errs[idx] != nil {
+			continue
+		}
+		if objInfos[idx].DeleteMarker {
+			deletedObjects[idx] = DeletedObject{
+				DeleteMarker:          objInfos[idx].DeleteMarker,
+				DeleteMarkerVersionID: objInfos[idx].VersionID,
+			}
+			continue
+		}
+		deletedObjects[idx] = DeletedObject{
+			ObjectName: objInfos[idx].Name,
+			VersionID:  objInfos[idx].VersionID,
+		}
+	}
+	return deletedObjects, errs
 }
 
 // construct a metadata k-v map
@@ -649,15 +667,8 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 		GetObjectNInfoFn: func(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 			return newObjectLayerFn().GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		},
-		DeleteObjectFn: func(ctx context.Context, bucket, object string) error {
-			return newObjectLayerFn().DeleteObject(ctx, bucket, object)
-		},
-		DeleteObjectsFn: func(ctx context.Context, bucket string, objects []string) ([]error, error) {
-			errs := make([]error, len(objects))
-			for idx, object := range objects {
-				errs[idx] = newObjectLayerFn().DeleteObject(ctx, bucket, object)
-			}
-			return errs, nil
+		DeleteObjectFn: func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+			return newObjectLayerFn().DeleteObject(ctx, bucket, object, opts)
 		},
 		PutObjectFn: func(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 			return newObjectLayerFn().PutObject(ctx, bucket, object, data, opts)

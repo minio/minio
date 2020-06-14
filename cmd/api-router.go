@@ -224,9 +224,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// ListObjectsV2
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("listobjectsv2", httpTraceAll(api.ListObjectsV2Handler)))).Queries("list-type", "2")
-		// ListBucketVersions
+		// ListObjectVersions
 		bucket.Methods(http.MethodGet).HandlerFunc(
-			maxClients(collectAPIStats("listbucketversions", httpTraceAll(api.ListBucketObjectVersionsHandler)))).Queries("versions", "")
+			maxClients(collectAPIStats("listobjectversions", httpTraceAll(api.ListObjectVersionsHandler)))).Queries("versions", "")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("listobjectsv1", httpTraceAll(api.ListObjectsV1Handler))))

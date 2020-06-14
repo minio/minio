@@ -547,9 +547,9 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("invalid number of endpoints")
 	}
 
-	// Return XL setup when all endpoints are path style.
+	// Return Erasure setup when all endpoints are path style.
 	if endpoints[0].Type() == PathEndpointType {
-		setupType = XLSetupType
+		setupType = ErasureSetupType
 		return endpoints, setupType, nil
 	}
 
@@ -614,18 +614,18 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, Just treat it as distXL setup
+		// If all endpoints have same port number, Just treat it as distErasure setup
 		// using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			return endpoints, DistXLSetupType, nil
+			return endpoints, DistErasureSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.
-		// This means it is DistXL setup.
+		// This means it is DistErasure setup.
 	}
 
 	// Add missing port in all endpoints.
@@ -645,7 +645,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 	}
 
 	// Error out if we have less than 2 unique servers.
-	if len(uniqueArgs.ToSlice()) < 2 && setupType == DistXLSetupType {
+	if len(uniqueArgs.ToSlice()) < 2 && setupType == DistErasureSetupType {
 		err := fmt.Errorf("Unsupported number of endpoints (%s), minimum number of servers cannot be less than 2 in distributed setup", endpoints)
 		return endpoints, setupType, err
 	}
@@ -655,7 +655,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		updateDomainIPs(uniqueArgs)
 	}
 
-	setupType = DistXLSetupType
+	setupType = DistErasureSetupType
 	return endpoints, setupType, nil
 }
 

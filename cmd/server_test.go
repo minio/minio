@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
-// API suite container common to both FS and XL.
+// API suite container common to both FS and Erasure.
 type TestSuiteCommon struct {
 	serverType string
 	testServer TestServer
@@ -124,10 +124,10 @@ func TestServerSuite(t *testing.T) {
 		{serverType: "FS", signer: signerV2},
 		// Init and run test on FS backend, with tls enabled.
 		{serverType: "FS", signer: signerV4, secure: true},
-		// Init and run test on XL backend.
-		{serverType: "XL", signer: signerV4},
-		// Init and run test on XLSet backend.
-		{serverType: "XLSet", signer: signerV4},
+		// Init and run test on Erasure backend.
+		{serverType: "Erasure", signer: signerV4},
+		// Init and run test on ErasureSet backend.
+		{serverType: "ErasureSet", signer: signerV4},
 	}
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
@@ -516,7 +516,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 		// assert the status of http response.
 		c.Assert(response.StatusCode, http.StatusOK)
 		// Append all objects.
-		delObjReq.Objects = append(delObjReq.Objects, ObjectIdentifier{
+		delObjReq.Objects = append(delObjReq.Objects, ObjectToDelete{
 			ObjectName: objName,
 		})
 	}
@@ -539,7 +539,10 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	for i := 0; i < 10; i++ {
 		// All the objects should be under deleted list (including non-existent object)
-		c.Assert(deleteResp.DeletedObjects[i], delObjReq.Objects[i])
+		c.Assert(deleteResp.DeletedObjects[i], DeletedObject{
+			ObjectName: delObjReq.Objects[i].ObjectName,
+			VersionID:  delObjReq.Objects[i].VersionID,
+		})
 	}
 	c.Assert(len(deleteResp.Errors), 0)
 
@@ -559,7 +562,10 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	c.Assert(len(deleteResp.DeletedObjects), len(delObjReq.Objects))
 	for i := 0; i < 10; i++ {
-		c.Assert(deleteResp.DeletedObjects[i], delObjReq.Objects[i])
+		c.Assert(deleteResp.DeletedObjects[i], DeletedObject{
+			ObjectName: delObjReq.Objects[i].ObjectName,
+			VersionID:  delObjReq.Objects[i].VersionID,
+		})
 	}
 	c.Assert(len(deleteResp.Errors), 0)
 }

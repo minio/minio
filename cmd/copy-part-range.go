@@ -32,7 +32,9 @@ func writeCopyPartErr(ctx context.Context, w http.ResponseWriter, err error, url
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource), url, browser)
 		return
 	default:
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), url, browser)
+		apiErr := errorCodes.ToAPIErr(ErrInvalidCopyPartRangeSource)
+		apiErr.Description = err.Error()
+		writeErrorResponse(ctx, w, apiErr, url, browser)
 		return
 	}
 }

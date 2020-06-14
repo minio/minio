@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -538,9 +539,9 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchVersion: {
-		Code:           "NoSuchVersion",
-		Description:    "Indicates that the version ID specified in the request does not match an existing version.",
-		HTTPStatusCode: http.StatusNotFound,
+		Code:           "InvalidArgument",
+		Description:    "Invalid version id specified",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNotImplemented: {
 		Code:           "NotImplemented",
@@ -1782,6 +1783,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case ObjectNotFound:
 		apiErr = ErrNoSuchKey
+	case MethodNotAllowed:
+		apiErr = ErrMethodNotAllowed
+	case VersionNotFound:
+		apiErr = ErrNoSuchVersion
 	case ObjectAlreadyExists:
 		apiErr = ErrMethodNotAllowed
 	case ObjectNameInvalid:
@@ -1916,6 +1921,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 				Code: "XMinioInvalidObjectName",
 				Description: fmt.Sprintf("%s (%s)", errorCodes[ErrInvalidObjectName].Description,
 					e.Error()),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case versioning.Error:
+			apiErr = APIError{
+				Code:           "IllegalVersioningConfigurationException",
+				Description:    fmt.Sprintf("Versioning configuration specified in the request is invalid. (%s)", e.Error()),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
 		case lifecycle.Error:

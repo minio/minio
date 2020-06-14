@@ -79,7 +79,7 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects, drivesPerSet int) error {
+func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, drivesPerSet int) error {
 	buckets, err := xlObj.ListBuckets(ctx)
 	if err != nil {
 		return err
@@ -105,32 +105,34 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects, drivesP
 	for _, bucket := range buckets {
 		// Heal current bucket
 		bgSeq.sourceCh <- healSource{
-			path: bucket.Name,
+			bucket: bucket.Name,
 		}
 
-		var entryChs []FileInfoCh
+		var entryChs []FileInfoVersionsCh
 		for _, disk := range xlObj.getLoadBalancedDisks() {
 			if disk == nil {
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(bucket.Name, "", "", true, xlMetaJSONFile, readMetadata, ctx.Done())
+
+			entryCh, err := disk.WalkVersions(bucket.Name, "", "", true, ctx.Done())
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
 			}
-			entryChs = append(entryChs, FileInfoCh{
+
+			entryChs = append(entryChs, FileInfoVersionsCh{
 				Ch: entryCh,
 			})
 		}
 
 		entriesValid := make([]bool, len(entryChs))
-		entries := make([]FileInfo, len(entryChs))
+		entries := make([]FileInfoVersions, len(entryChs))
 
 		for {
-			entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
+			entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
 			if !ok {
-				return nil
+				break
 			}
 
 			if quorumCount == drivesPerSet {
@@ -138,8 +140,12 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects, drivesP
 				continue
 			}
 
-			bgSeq.sourceCh <- healSource{
-				path: pathJoin(bucket.Name, entry.Name),
+			for _, version := range entry.Versions {
+				bgSeq.sourceCh <- healSource{
+					bucket:    bucket.Name,
+					object:    version.Name,
+					versionID: version.VersionID,
+				}
 			}
 		}
 	}
@@ -148,13 +154,15 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *xlObjects, drivesP
 }
 
 // deepHealObject heals given object path in deep to fix bitrot.
-func deepHealObject(objectPath string) {
+func deepHealObject(bucket, object, versionID string) {
 	// Get background heal sequence to send elements to heal
 	bgSeq, _ := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 
 	bgSeq.sourceCh <- healSource{
-		path: objectPath,
-		opts: &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+		bucket:    bucket,
+		object:    object,
+		versionID: versionID,
+		opts:      &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
 	}
 }
 
@@ -172,7 +180,7 @@ func durationToNextHealRound(lastHeal time.Time) time.Duration {
 }
 
 // Healing leader will take the charge of healing all erasure sets
-func execLeaderTasks(ctx context.Context, z *xlZones) {
+func execLeaderTasks(ctx context.Context, z *erasureZones) {
 	// So that we don't heal immediately, but after one month.
 	lastScanTime := UTCNow()
 	// Get background heal sequence to send elements to heal
@@ -211,7 +219,7 @@ func execLeaderTasks(ctx context.Context, z *xlZones) {
 }
 
 func startGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
-	zones, ok := objAPI.(*xlZones)
+	zones, ok := objAPI.(*erasureZones)
 	if !ok {
 		return
 	}

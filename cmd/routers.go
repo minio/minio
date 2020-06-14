@@ -22,8 +22,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Composed function registering routers for only distributed XL setup.
-func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
+// Composed function registering routers for only distributed Erasure setup.
+func registerDistErasureRouters(router *mux.Router, endpointZones EndpointZones) {
 	// Register storage REST router only if its a distributed setup.
 	registerStorageRESTHandlers(router, endpointZones)
 
@@ -38,7 +38,7 @@ func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
 }
 
 // List of some generic handlers which are applied for all incoming requests.
-var globalHandlers = []HandlerFunc{
+var globalHandlers = []MiddlewareFunc{
 	// set x-amz-request-id header.
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.
@@ -87,8 +87,8 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// Initialize distributed NS lock.
-	if globalIsDistXL {
-		registerDistXLRouters(router, endpointZones)
+	if globalIsDistErasure {
+		registerDistErasureRouters(router, endpointZones)
 	}
 
 	// Add STS router always.
@@ -118,6 +118,6 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
 
-	// Register rest of the handlers.
-	return registerHandlers(router, globalHandlers...), nil
+	router.Use(registerMiddlewares)
+	return router, nil
 }
