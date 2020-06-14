@@ -32,12 +32,11 @@ type LRWMutex struct {
 	isWriteLock bool
 	ref         int
 	m           sync.Mutex // Mutex to prevent multiple simultaneous locks
-	ctx         context.Context
 }
 
 // NewLRWMutex - initializes a new lsync RW mutex.
-func NewLRWMutex(ctx context.Context) *LRWMutex {
-	return &LRWMutex{ctx: ctx}
+func NewLRWMutex() *LRWMutex {
+	return &LRWMutex{}
 }
 
 // Lock holds a write lock on lm.
@@ -47,14 +46,14 @@ func NewLRWMutex(ctx context.Context) *LRWMutex {
 func (lm *LRWMutex) Lock() {
 
 	const isWriteLock = true
-	lm.lockLoop(lm.id, lm.source, time.Duration(math.MaxInt64), isWriteLock)
+	lm.lockLoop(context.Background(), lm.id, lm.source, time.Duration(math.MaxInt64), isWriteLock)
 }
 
 // GetLock tries to get a write lock on lm before the timeout occurs.
-func (lm *LRWMutex) GetLock(id string, source string, timeout time.Duration) (locked bool) {
+func (lm *LRWMutex) GetLock(ctx context.Context, id string, source string, timeout time.Duration) (locked bool) {
 
 	const isWriteLock = true
-	return lm.lockLoop(id, source, timeout, isWriteLock)
+	return lm.lockLoop(ctx, id, source, timeout, isWriteLock)
 }
 
 // RLock holds a read lock on lm.
@@ -64,60 +63,55 @@ func (lm *LRWMutex) GetLock(id string, source string, timeout time.Duration) (lo
 func (lm *LRWMutex) RLock() {
 
 	const isWriteLock = false
-	lm.lockLoop(lm.id, lm.source, time.Duration(1<<63-1), isWriteLock)
+	lm.lockLoop(context.Background(), lm.id, lm.source, time.Duration(1<<63-1), isWriteLock)
 }
 
 // GetRLock tries to get a read lock on lm before the timeout occurs.
-func (lm *LRWMutex) GetRLock(id string, source string, timeout time.Duration) (locked bool) {
+func (lm *LRWMutex) GetRLock(ctx context.Context, id string, source string, timeout time.Duration) (locked bool) {
 
 	const isWriteLock = false
-	return lm.lockLoop(id, source, timeout, isWriteLock)
+	return lm.lockLoop(ctx, id, source, timeout, isWriteLock)
+}
+
+func (lm *LRWMutex) lock(id, source string, isWriteLock bool) (locked bool) {
+	lm.m.Lock()
+	lm.id = id
+	lm.source = source
+	if isWriteLock {
+		if lm.ref == 0 && !lm.isWriteLock {
+			lm.ref = 1
+			lm.isWriteLock = true
+			locked = true
+		}
+	} else {
+		if !lm.isWriteLock {
+			lm.ref++
+			locked = true
+		}
+	}
+	lm.m.Unlock()
+
+	return locked
 }
 
 // lockLoop will acquire either a read or a write lock
 //
 // The call will block until the lock is granted using a built-in
 // timing randomized back-off algorithm to try again until successful
-func (lm *LRWMutex) lockLoop(id, source string, timeout time.Duration, isWriteLock bool) bool {
-	retryCtx, cancel := context.WithTimeout(lm.ctx, timeout)
-
+func (lm *LRWMutex) lockLoop(ctx context.Context, id, source string, timeout time.Duration, isWriteLock bool) (locked bool) {
+	retryCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	// We timed out on the previous lock, incrementally wait
 	// for a longer back-off time and try again afterwards.
 	for range retry.NewTimer(retryCtx) {
-		// Try to acquire the lock.
-		var success bool
-		{
-			lm.m.Lock()
-
-			lm.id = id
-			lm.source = source
-
-			if isWriteLock {
-				if lm.ref == 0 && !lm.isWriteLock {
-					lm.ref = 1
-					lm.isWriteLock = true
-					success = true
-				}
-			} else {
-				if !lm.isWriteLock {
-					lm.ref++
-					success = true
-				}
-			}
-
-			lm.m.Unlock()
-		}
-
-		if success {
+		if lm.lock(id, source, isWriteLock) {
 			return true
 		}
 	}
 
 	// We timed out on the previous lock, incrementally wait
 	// for a longer back-off time and try again afterwards.
-
 	return false
 }
 
