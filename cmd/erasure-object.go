@@ -973,6 +973,11 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	for i, fi := range metaArr {
+		if errs[i] != nil {
+			// Avoid disks where loading metadata fail
+			continue
+		}
+
 		// clean fi.Meta of tag key, before updating the new tags
 		delete(fi.Metadata, xhttp.AmzObjectTagging)
 		// Don't update for empty tags
