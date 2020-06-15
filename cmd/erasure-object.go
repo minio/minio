@@ -401,11 +401,12 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 	}
 
 	if fi.Deleted {
+		objInfo = fi.ToObjectInfo(bucket, object)
 		if opts.VersionID == "" {
 			return objInfo, toObjectErr(errFileNotFound, bucket, object)
 		}
 		// Make sure to return object info to provide extra information.
-		return fi.ToObjectInfo(bucket, object), toObjectErr(errMethodNotAllowed, bucket, object)
+		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
 	return fi.ToObjectInfo(bucket, object), nil
