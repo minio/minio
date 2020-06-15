@@ -1867,7 +1867,7 @@ func (z *erasureZones) getZoneAndSet(id string) (int, int, error) {
 			}
 		}
 	}
-	return 0, 0, errDiskNotFound
+	return 0, 0, fmt.Errorf("ID(%s) %w", errDiskNotFound)
 }
 
 // IsReady - Returns true, when all the erasure sets are writable.
@@ -1884,6 +1884,7 @@ func (z *erasureZones) IsReady(ctx context.Context) bool {
 	for _, id := range diskIDs {
 		zoneIdx, setIdx, err := z.getZoneAndSet(id)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			continue
 		}
 		erasureSetUpCount[zoneIdx][setIdx]++
@@ -1902,6 +1903,8 @@ func (z *erasureZones) IsReady(ctx context.Context) bool {
 		}
 		for setIdx := range erasureSetUpCount[zoneIdx] {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
+				logger.LogIf(ctx, fmt.Errorf("Write quorum lost on zone: %d, set: %d, expected write quorum: %d",
+					zoneIdx, setIdx, writeQuorum))
 				return false
 			}
 		}
