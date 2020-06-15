@@ -598,7 +598,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// -- FIXME. (needs a new kind of lock).
 	// -- FIXME (this also causes performance issue when disks are down).
 	if er.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-		fmt.Println("I am here")
 		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
