@@ -260,6 +260,27 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 		prometheus.CounterValue,
 		float64(cacheObjLayer.CacheStats().getBytesServed()),
 	)
+	for _, cdStats := range cacheObjLayer.CacheStats().GetDiskStats() {
+		// Cache disk usage percentage
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "usage", "percent"),
+				"Total percentage cache usage",
+				[]string{"disk"}, nil),
+			prometheus.GaugeValue,
+			float64(cdStats.UsagePercent),
+			cdStats.Dir,
+		)
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "usage", "high"),
+				"Indicates cache usage is high or low, relative to current cache 'quota' settings",
+				[]string{"disk"}, nil),
+			prometheus.GaugeValue,
+			float64(cdStats.UsageState),
+			cdStats.Dir,
+		)
+	}
 }
 
 // collects http metrics for MinIO server in Prometheus specific format
