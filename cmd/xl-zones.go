@@ -1608,7 +1608,7 @@ func (z *xlZones) getZoneAndSet(id string) (int, int, error) {
 			}
 		}
 	}
-	return 0, 0, fmt.Errorf("ID(%s) %w", errDiskNotFound)
+	return 0, 0, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
 }
 
 // IsReady - Returns true all the erasure sets are writable.

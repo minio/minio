@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/minio/cmd/config/cache"
@@ -264,10 +265,11 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	// Reaching here implies cache miss
 	c.cacheStats.incMiss()
+
 	// Since we got here, we are serving the request from backend,
 	// and also adding the object to the cache.
 	if dcache.diskUsageHigh() {
-		dcache.incGCCounter()
+		dcache.triggerGC <- struct{}{} // this is non-blocking
 	}
 
 	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
@@ -526,7 +528,7 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 		if quota == 0 {
 			quota = config.Quota
 		}
-		cache, err := newDiskCache(dir, quota, config.After, config.WatermarkLow, config.WatermarkHigh)
+		cache, err := newDiskCache(ctx, dir, quota, config.After, config.WatermarkLow, config.WatermarkHigh)
 		if err != nil {
 			return nil, false, err
 		}
@@ -666,7 +668,17 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 			return newObjectLayerFn().CopyObject(ctx, srcBucket, srcObject, destBucket, destObject, srcInfo, srcOpts, dstOpts)
 		},
 	}
-
+	c.cacheStats.GetDiskStats = func() []CacheDiskStats {
+		cacheDiskStats := make([]CacheDiskStats, len(c.cache))
+		for i := range c.cache {
+			cacheDiskStats[i] = CacheDiskStats{
+				Dir: c.cache[i].stats.Dir,
+			}
+			atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&c.cache[i].stats.UsageState))
+			atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&c.cache[i].stats.UsagePercent))
+		}
+		return cacheDiskStats
+	}
 	if migrateSw {
 		go c.migrateCacheFromV1toV2(ctx)
 	}
@@ -686,19 +698,9 @@ func (c *cacheObjects) gc(ctx context.Context) {
 			if c.migrating {
 				continue
 			}
-			var wg sync.WaitGroup
 			for _, dcache := range c.cache {
-				if dcache.gcCount() == 0 {
-					continue
-				}
-				wg.Add(1)
-				go func(d *diskCache) {
-					defer wg.Done()
-					d.resetGCCounter()
-					d.purge(ctx)
-				}(dcache)
+				dcache.triggerGC <- struct{}{}
 			}
-			wg.Wait()
 		}
 	}
 }

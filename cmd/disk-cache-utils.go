@@ -404,6 +404,14 @@ func (f *fileScorer) trimQueue() {
 	}
 }
 
+func (f *fileScorer) purgeFunc(p func(qfile queuedFile)) {
+	e := f.queue.Front()
+	for e != nil {
+		p(e.Value.(queuedFile))
+		e = e.Next()
+	}
+}
+
 // fileNames returns all queued file names.
 func (f *fileScorer) fileNames() []string {
 	res := make([]string, 0, f.queue.Len())
