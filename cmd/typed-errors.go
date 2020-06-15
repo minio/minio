@@ -52,7 +52,7 @@ var errServerTimeMismatch = errors.New("Server times are too far apart")
 
 // errInvalidBucketName - bucket name is reserved for MinIO, usually
 // returned for 'minio', '.minio.sys', buckets with capital letters.
-var errInvalidBucketName = errors.New("The specified bucket is not valid")
+var errInvalidBucketName = errors.New("Bucket Name is invalid. Lowercase letters, period, hyphen, numerals are the only allowed characters and should be minimum 3 characters in length")
 
 // errInvalidRange - returned when given range value is not valid.
 var errInvalidRange = errors.New("Invalid range")
