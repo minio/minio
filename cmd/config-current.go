@@ -313,7 +313,7 @@ func validateConfig(s config.Config) error {
 
 var syncEtcdOnce sync.Once
 
-func lookupConfigs(s config.Config) {
+func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	ctx := GlobalContext
 
 	var err error
@@ -345,6 +345,9 @@ func lookupConfigs(s config.Config) {
 				}
 			}
 		})
+	} else if !etcdCfg.Enabled && globalIAMSys != nil {
+		globalIAMSys.store = newIAMObjectStore(ctx, objAPI)
+		globalEtcdClient = nil
 	}
 
 	// Bucket federation is 'true' only when IAM assets are not namespaced
@@ -578,7 +581,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
+	lookupConfigs(srvCfg, objAPI)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -602,7 +605,7 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
+	lookupConfigs(srvCfg, objAPI)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

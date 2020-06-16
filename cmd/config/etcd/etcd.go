@@ -19,6 +19,8 @@ package etcd
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -141,11 +143,23 @@ func LookupConfig(kvs config.KVS, rootCAs *x509.CertPool) (Config, error) {
 		return cfg, err
 	}
 
-	cfg.Enabled = true
 	cfg.DialTimeout = defaultDialTimeout
 	cfg.DialKeepAliveTime = defaultDialKeepAlive
 	cfg.Endpoints = etcdEndpoints
 	cfg.CoreDNSPath = env.Get(EnvEtcdCoreDNSPath, kvs.Get(CoreDNSPath))
+	cfg.Enabled = false
+	for _, endpoint := range etcdEndpoints {
+		u, err := url.Parse(endpoint)
+		if err != nil {
+			continue
+		}
+		_, err = net.DialTimeout("tcp", u.Host, defaultDialTimeout)
+		if err == nil {
+			cfg.Enabled = true
+			break
+		}
+	}
+
 	// Default path prefix for all keys on etcd, other than CoreDNSPath.
 	cfg.PathPrefix = env.Get(EnvEtcdPathPrefix, kvs.Get(PathPrefix))
 	if etcdSecure {
