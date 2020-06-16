@@ -311,6 +311,8 @@ func validateConfig(s config.Config) error {
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
+var syncEtcdOnce sync.Once
+
 func lookupConfigs(s config.Config) {
 	ctx := GlobalContext
 
@@ -325,14 +327,24 @@ func lookupConfigs(s config.Config) {
 
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		if globalIsGateway {
+			logger.FatalIf(err, "Unable to initialize etcd config")
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		}
 	}
 
 	if etcdCfg.Enabled {
-		globalEtcdClient, err = etcd.New(etcdCfg)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
-		}
+		syncEtcdOnce.Do(func() {
+			globalEtcdClient, err = etcd.New(etcdCfg)
+			if err != nil {
+				if globalIsGateway {
+					logger.FatalIf(err, "Unable to initialize etcd config")
+				} else {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+				}
+			}
+		})
 	}
 
 	// Bucket federation is 'true' only when IAM assets are not namespaced
@@ -377,7 +389,11 @@ func lookupConfigs(s config.Config) {
 
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
+		if globalIsGateway {
+			logger.FatalIf(err, "Unable to setup cache")
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
+		}
 	}
 
 	if globalCacheConfig.Enabled {

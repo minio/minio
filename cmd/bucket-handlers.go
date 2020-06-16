@@ -45,8 +45,8 @@ import (
 )
 
 const (
-	objectLockConfig        = "object-lock.xml"
-	bucketTaggingConfigFile = "tagging.xml"
+	objectLockConfig    = "object-lock.xml"
+	bucketTaggingConfig = "tagging.xml"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -1106,7 +1106,7 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err = globalBucketMetadataSys.Update(bucket, bucketTaggingConfigFile, configData); err != nil {
+	if err = globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1174,7 +1174,7 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfigFile, nil); err != nil {
+	if err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
