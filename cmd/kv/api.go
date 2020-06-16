@@ -31,7 +31,7 @@ type Backend interface {
 	// Save saves given key/valye pair
 	Save(ctx context.Context, key string, data []byte) error
 
-	// Keys Returns all child keys of given basekey. The basekey is removed (KeyTransformTrimBase)
+	// Keys Returns all child keys of given basekey. The basekey is removed (KeyTransformDefault)
 	Keys(ctx context.Context, basekey string) (set.StringSet, error)
 
 	// KeysFilter Returns all child keys of given basekey and filters and transforms the key with given KeyTransform

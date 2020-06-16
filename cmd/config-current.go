@@ -348,17 +348,6 @@ func lookupConfigs(s config.Config) {
 				}
 			}
 			globalKeyValueStore = kv.NewEtcdBackend(etcdClient)
-		} else if kv.IsBackendConfigured() {
-			// Create an alternative backend for given environment.
-			backend, err := kv.NewBackend()
-			if err != nil {
-				if globalIsGateway {
-					logger.FatalIf(err, "Unable to initialize iam backend")
-				} else {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize iam backend: %w", err))
-				}
-			}
-			globalKeyValueStore = backend
 		}
 	})
 

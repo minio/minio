@@ -73,7 +73,7 @@ func (kv *EtcdBackend) Delete(ctx context.Context, key string) error {
 
 // Keys returns child keys for given key
 func (kv *EtcdBackend) Keys(ctx context.Context, key string) (set.StringSet, error) {
-	return kv.KeysFilter(ctx, key, KeyTransformTrimBase)
+	return kv.KeysFilter(ctx, key, KeyTransformDefault)
 }
 
 // KeysFilter returns child keys for given key filtered by given KeyTransform

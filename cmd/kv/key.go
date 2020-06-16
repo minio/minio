@@ -32,7 +32,7 @@ func KeyTransformTrimJSON(prefix string, key string) string {
 	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(key, prefix), ".json"))
 }
 
-// KeyTransformTrimBase trims prefix
-func KeyTransformTrimBase(prefix string, key string) string {
+// KeyTransformDefault trims prefix
+func KeyTransformDefault(prefix string, key string) string {
 	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(key, prefix), path.Base(key)))
 }
