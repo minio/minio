@@ -579,5 +579,6 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	if err != nil {
 		logger.Fatal(err, "Unable to initialize remote REST disks")
 	}
+	restClient.HealthCheckPath = "/"
 	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
 }

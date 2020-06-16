@@ -181,6 +181,9 @@ func (c *Client) MarkOffline() {
 			ticker := time.NewTicker(c.HealthCheckInterval)
 			defer ticker.Stop()
 			for range ticker.C {
+				if status := atomic.LoadInt32(&c.connected); status == closed {
+					return
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), c.HealthCheckTimeout)
 				respBody, err := c.CallWithContext(ctx, c.HealthCheckPath, nil, nil, -1)
 				xhttp.DrainBody(respBody)
