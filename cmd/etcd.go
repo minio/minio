@@ -32,6 +32,7 @@ func etcdErrToErr(err error, etcdEndpoints []string) error {
 	}
 	switch err {
 	case context.DeadlineExceeded:
+		globalEtcdClient = nil
 		return fmt.Errorf("%w %s", errEtcdUnreachable, etcdEndpoints)
 	default:
 		return fmt.Errorf("unexpected error %w from etcd, please check your endpoints %s", err, etcdEndpoints)

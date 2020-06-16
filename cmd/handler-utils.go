@@ -30,9 +30,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/cmd/config/etcd"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -424,7 +426,13 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 		if version == "v1" {
 			desc = fmt.Sprintf("Server expects client requests with 'admin' API version '%s', found '%s', please upgrade the client to latest releases", madmin.AdminAPIVersion, version)
 		} else if version == madmin.AdminAPIVersion {
-			desc = fmt.Sprintf("This 'admin' API is not supported by server in '%s'", getMinioMode())
+			var descstr string
+			if env.Get(etcd.EnvEtcdEndpoints, "") != "" && globalEtcdClient == nil {
+				descstr = "This 'admin' API is not supported by server while etcd is unreachable, please check your endpoints"
+			} else {
+				descstr = "This 'admin' API is not supported by server in '" + getMinioMode() + "'"
+			}
+			desc = fmt.Sprintf(descstr)
 		} else {
 			desc = fmt.Sprintf("Unexpected client 'admin' API version found '%s', expected '%s', please downgrade the client to older releases", version, madmin.AdminAPIVersion)
 		}
