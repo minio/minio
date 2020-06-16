@@ -950,6 +950,16 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	return opts, nil
 }
 
+func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
+	versioned := globalBucketVersioningSys.Enabled(bucket)
+	opts, err = getOpts(ctx, r, bucket, object)
+	if err != nil {
+		return opts, err
+	}
+	opts.Versioned = versioned
+	return opts, nil
+}
+
 // get ObjectOptions for PUT calls from encryption headers and metadata
 func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)

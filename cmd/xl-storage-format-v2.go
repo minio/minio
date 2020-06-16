@@ -231,7 +231,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 			Type: DeleteType,
 			DeleteMarker: &xlMetaV2DeleteMarker{
 				VersionID: uv,
-				ModTime:   fi.ModTime.Unix(),
+				ModTime:   fi.ModTime.UnixNano(),
 			},
 		})
 		return nil
@@ -262,7 +262,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 			VersionID:          uv,
 			DataDir:            dd,
 			StatSize:           fi.Size,
-			StatModTime:        fi.ModTime.Unix(),
+			StatModTime:        fi.ModTime.UnixNano(),
 			ErasureAlgorithm:   ReedSolomon,
 			ErasureM:           fi.Erasure.DataBlocks,
 			ErasureN:           fi.Erasure.ParityBlocks,
@@ -342,7 +342,7 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 	fi := FileInfo{
 		Volume:    volume,
 		Name:      path,
-		ModTime:   time.Unix(j.ModTime, 0).UTC(),
+		ModTime:   time.Unix(0, j.ModTime).UTC(),
 		VersionID: uuid.UUID(j.VersionID).String(),
 		Deleted:   true,
 	}
@@ -360,7 +360,7 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		Volume:    volume,
 		Name:      path,
 		Size:      j.StatSize,
-		ModTime:   time.Unix(j.StatModTime, 0).UTC(),
+		ModTime:   time.Unix(0, j.StatModTime).UTC(),
 		VersionID: versionID,
 	}
 	fi.Parts = make([]ObjectPartInfo, len(j.PartNumbers))
@@ -536,9 +536,9 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (FileInfo, error) {
 			var modTime time.Time
 			switch version.Type {
 			case ObjectType:
-				modTime = time.Unix(version.ObjectV2.StatModTime, 0)
+				modTime = time.Unix(0, version.ObjectV2.StatModTime)
 			case DeleteType:
-				modTime = time.Unix(version.DeleteMarker.ModTime, 0)
+				modTime = time.Unix(0, version.DeleteMarker.ModTime)
 			case LegacyType:
 				modTime = version.ObjectV1.Stat.ModTime
 			default:
