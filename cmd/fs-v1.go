@@ -140,7 +140,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		} else {
 			username = "<your-username>"
 		}
-		hint := fmt.Sprintf("Use 'sudo chown %s %s && sudo chmod u+rxw %s' to provide sufficient permissions.", username, fsPath, fsPath)
+		hint := fmt.Sprintf("Use 'sudo chown -R %s %s && sudo chmod u+rxw %s' to provide sufficient permissions.", username, fsPath, fsPath)
 		return nil, config.ErrUnableToWriteInBackend(err).Hint(hint)
 	}
 
