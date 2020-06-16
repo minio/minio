@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -82,7 +83,7 @@ func isEncryptedMultipart(objInfo ObjectInfo) bool {
 		}
 	}
 	// Further check if this object is uploaded using multipart mechanism
-	// by the user and it is not about XL internally splitting the
+	// by the user and it is not about Erasure internally splitting the
 	// object into parts in PutObject()
 	return !(objInfo.backendType == BackendErasure && len(objInfo.ETag) == 32)
 }
@@ -859,6 +860,7 @@ func getDefaultOpts(header http.Header, copySource bool, metadata map[string]str
 	var clientKey [32]byte
 	var sse encrypt.ServerSide
 
+	opts = ObjectOptions{UserDefined: metadata}
 	if copySource {
 		if crypto.SSECopy.IsRequested(header) {
 			clientKey, err = crypto.SSECopy.ParseHTTP(header)
@@ -868,7 +870,8 @@ func getDefaultOpts(header http.Header, copySource bool, metadata map[string]str
 			if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 				return
 			}
-			return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(sse), UserDefined: metadata}, nil
+			opts.ServerSideEncryption = encrypt.SSECopy(sse)
+			return
 		}
 		return
 	}
@@ -881,12 +884,13 @@ func getDefaultOpts(header http.Header, copySource bool, metadata map[string]str
 		if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
 			return
 		}
-		return ObjectOptions{ServerSideEncryption: sse, UserDefined: metadata}, nil
+		opts.ServerSideEncryption = sse
+		return
 	}
 	if crypto.S3.IsRequested(header) || (metadata != nil && crypto.S3.IsEncrypted(metadata)) {
-		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE(), UserDefined: metadata}, nil
+		opts.ServerSideEncryption = encrypt.NewSSE()
 	}
-	return ObjectOptions{UserDefined: metadata}, nil
+	return
 }
 
 // get ObjectOptions for GET calls from encryption headers
@@ -903,8 +907,21 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		if err != nil {
 			return opts, err
 		}
-		if partNumber < 0 {
+		if partNumber <= 0 {
 			return opts, errInvalidArgument
+		}
+	}
+
+	vid := strings.TrimSpace(r.URL.Query().Get("versionId"))
+	if vid != "" && vid != nullVersionID {
+		_, err := uuid.Parse(vid)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return opts, VersionNotFound{
+				Bucket:    bucket,
+				Object:    object,
+				VersionID: vid,
+			}
 		}
 	}
 
@@ -916,7 +933,11 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		derivedKey := deriveClientKey(key, bucket, object)
 		encryption, err = encrypt.NewSSEC(derivedKey[:])
 		logger.CriticalIf(ctx, err)
-		return ObjectOptions{ServerSideEncryption: encryption, PartNumber: partNumber}, nil
+		return ObjectOptions{
+			ServerSideEncryption: encryption,
+			VersionID:            vid,
+			PartNumber:           partNumber,
+		}, nil
 	}
 
 	// default case of passing encryption headers to backend
@@ -925,18 +946,21 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		return opts, err
 	}
 	opts.PartNumber = partNumber
+	opts.VersionID = vid
 	return opts, nil
 }
 
 // get ObjectOptions for PUT calls from encryption headers and metadata
 func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
+	versioned := globalBucketVersioningSys.Enabled(bucket)
 	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
 	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
 	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
-		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE(), UserDefined: metadata}, nil
+		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE(), UserDefined: metadata, Versioned: versioned}, nil
 	}
 	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
 		opts, err = getOpts(ctx, r, bucket, object)
+		opts.Versioned = versioned
 		opts.UserDefined = metadata
 		return
 	}
@@ -949,10 +973,15 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		if err != nil {
 			return ObjectOptions{}, err
 		}
-		return ObjectOptions{ServerSideEncryption: sseKms, UserDefined: metadata}, nil
+		return ObjectOptions{ServerSideEncryption: sseKms, UserDefined: metadata, Versioned: versioned}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
-	return getDefaultOpts(r.Header, false, metadata)
+	opts, err = getDefaultOpts(r.Header, false, metadata)
+	if err != nil {
+		return opts, err
+	}
+	opts.Versioned = versioned
+	return opts, nil
 }
 
 // get ObjectOptions for Copy calls with encryption headers provided on the target side and source side metadata
@@ -981,5 +1010,9 @@ func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (O
 	}
 
 	// default case of passing encryption headers to backend
-	return getDefaultOpts(r.Header, true, nil)
+	opts, err := getDefaultOpts(r.Header, false, nil)
+	if err != nil {
+		return opts, err
+	}
+	return opts, nil
 }

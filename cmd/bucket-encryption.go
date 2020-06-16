@@ -55,5 +55,6 @@ func validateBucketSSEConfig(r io.Reader) (*bucketsse.BucketSSEConfig, error) {
 	if len(encConfig.Rules) == 1 && encConfig.Rules[0].DefaultEncryptionAction.Algorithm == bucketsse.AES256 {
 		return encConfig, nil
 	}
+
 	return nil, errors.New("Unsupported bucket encryption configuration")
 }

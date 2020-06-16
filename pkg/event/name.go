@@ -41,6 +41,7 @@ const (
 	ObjectCreatedPutLegalHold
 	ObjectRemovedAll
 	ObjectRemovedDelete
+	ObjectRemovedDeleteMarkerCreated
 )
 
 // Expand - returns expanded values of abbreviated event type.
@@ -88,6 +89,8 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:*"
 	case ObjectRemovedDelete:
 		return "s3:ObjectRemoved:Delete"
+	case ObjectRemovedDeleteMarkerCreated:
+		return "s3:ObjectRemoved:DeleteMarkerCreated"
 	}
 
 	return ""
@@ -166,6 +169,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedAll, nil
 	case "s3:ObjectRemoved:Delete":
 		return ObjectRemovedDelete, nil
+	case "s3:ObjectRemoved:DeleteMarkerCreated":
+		return ObjectRemovedDeleteMarkerCreated, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

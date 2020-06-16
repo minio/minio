@@ -138,7 +138,7 @@ func startBucketQuotaEnforcement(ctx context.Context, objAPI ObjectLayer) {
 		case <-ctx.Done():
 			return
 		case <-time.NewTimer(bgQuotaInterval).C:
-			logger.LogIf(ctx, enforceFIFOQuota(ctx, objAPI))
+			enforceFIFOQuota(ctx, objAPI)
 		}
 
 	}
@@ -146,20 +146,22 @@ func startBucketQuotaEnforcement(ctx context.Context, objAPI ObjectLayer) {
 
 // enforceFIFOQuota deletes objects in FIFO order until sufficient objects
 // have been deleted so as to bring bucket usage within quota
-func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
+func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) {
 	// Turn off quota enforcement if data usage info is unavailable.
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
-		return nil
+		return
 	}
 
 	buckets, err := objectAPI.ListBuckets(ctx)
 	if err != nil {
-		return err
+		logger.LogIf(ctx, err)
+		return
 	}
 
 	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 	if err != nil {
-		return err
+		logger.LogIf(ctx, err)
+		return
 	}
 
 	for _, binfo := range buckets {
@@ -196,7 +198,8 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 
 		// Walk through all objects
 		if err := objectAPI.Walk(ctx, bucket, "", objInfoCh); err != nil {
-			return err
+			logger.LogIf(ctx, err)
+			continue
 		}
 
 		// reuse the fileScorer used by disk cache to score entries by
@@ -205,53 +208,61 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) error {
 		// irrelevant.
 		scorer, err := newFileScorer(toFree, time.Now().Unix(), 1)
 		if err != nil {
-			return err
+			logger.LogIf(ctx, err)
+			continue
 		}
 
 		rcfg, _ := globalBucketObjectLockSys.Get(bucket)
-
 		for obj := range objInfoCh {
+			if obj.DeleteMarker {
+				// Delete markers are automatically added for FIFO purge.
+				scorer.addFileWithObjInfo(obj, 1)
+				continue
+			}
 			// skip objects currently under retention
 			if rcfg.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
 				continue
 			}
-			scorer.addFile(obj.Name, obj.ModTime, obj.Size, 1)
+			scorer.addFileWithObjInfo(obj, 1)
 		}
-		var objects []string
-		numKeys := len(scorer.fileNames())
-		for i, key := range scorer.fileNames() {
-			objects = append(objects, key)
+
+		versioned := globalBucketVersioningSys.Enabled(bucket)
+
+		var objects []ObjectToDelete
+		numKeys := len(scorer.fileObjInfos())
+		for i, obj := range scorer.fileObjInfos() {
+			objects = append(objects, ObjectToDelete{
+				ObjectName: obj.Name,
+				VersionID:  obj.VersionID,
+			})
 			if len(objects) < maxDeleteList && (i < numKeys-1) {
-				// skip deletion until maxObjectList or end of slice
+				// skip deletion until maxDeleteList or end of slice
 				continue
 			}
 
 			if len(objects) == 0 {
 				break
 			}
+
 			// Deletes a list of objects.
-			deleteErrs, err := objectAPI.DeleteObjects(ctx, bucket, objects)
-			if err != nil {
-				logger.LogIf(ctx, err)
-			} else {
-				for i := range deleteErrs {
-					if deleteErrs[i] != nil {
-						logger.LogIf(ctx, deleteErrs[i])
-						continue
-					}
-					// Notify object deleted event.
-					sendEvent(eventArgs{
-						EventName:  event.ObjectRemovedDelete,
-						BucketName: bucket,
-						Object: ObjectInfo{
-							Name: objects[i],
-						},
-						Host: "Internal: [FIFO-QUOTA-EXPIRY]",
-					})
+			_, deleteErrs := objectAPI.DeleteObjects(ctx, bucket, objects, ObjectOptions{
+				Versioned: versioned,
+			})
+			for i := range deleteErrs {
+				if deleteErrs[i] != nil {
+					logger.LogIf(ctx, deleteErrs[i])
+					continue
 				}
-				objects = nil
+
+				// Notify object deleted event.
+				sendEvent(eventArgs{
+					EventName:  event.ObjectRemovedDelete,
+					BucketName: bucket,
+					Object:     obj,
+					Host:       "Internal: [FIFO-QUOTA-EXPIRY]",
+				})
 			}
+			objects = nil
 		}
 	}
-	return nil
 }

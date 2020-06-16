@@ -22,26 +22,31 @@ import (
 
 // NoncurrentVersionExpiration - an action for lifecycle configuration rule.
 type NoncurrentVersionExpiration struct {
-	XMLName        xml.Name `xml:"NoncurrentVersionExpiration"`
-	NoncurrentDays int      `xml:"NoncurrentDays,omitempty"`
+	XMLName        xml.Name       `xml:"NoncurrentVersionExpiration"`
+	NoncurrentDays ExpirationDays `xml:"NoncurrentDays,omitempty"`
 }
 
 // NoncurrentVersionTransition - an action for lifecycle configuration rule.
 type NoncurrentVersionTransition struct {
-	NoncurrentDays int    `xml:"NoncurrentDays"`
-	StorageClass   string `xml:"StorageClass"`
+	NoncurrentDays ExpirationDays `xml:"NoncurrentDays"`
+	StorageClass   string         `xml:"StorageClass"`
 }
 
 var (
-	errNoncurrentVersionExpirationUnsupported = Errorf("Specifying <NoncurrentVersionExpiration></NoncurrentVersionExpiration> is not supported")
 	errNoncurrentVersionTransitionUnsupported = Errorf("Specifying <NoncurrentVersionTransition></NoncurrentVersionTransition> is not supported")
 )
 
-// UnmarshalXML is extended to indicate lack of support for
-// NoncurrentVersionExpiration xml tag in object lifecycle
-// configuration
-func (n NoncurrentVersionExpiration) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	return errNoncurrentVersionExpirationUnsupported
+// MarshalXML if non-current days not set returns empty tags
+func (n *NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if n.NoncurrentDays == ExpirationDays(0) {
+		return nil
+	}
+	return e.EncodeElement(&n, start)
+}
+
+// IsDaysNull returns true if days field is null
+func (n NoncurrentVersionExpiration) IsDaysNull() bool {
+	return n.NoncurrentDays == ExpirationDays(0)
 }
 
 // UnmarshalXML is extended to indicate lack of support for
@@ -54,11 +59,8 @@ func (n NoncurrentVersionTransition) UnmarshalXML(d *xml.Decoder, startElement x
 // MarshalXML is extended to leave out
 // <NoncurrentVersionTransition></NoncurrentVersionTransition> tags
 func (n NoncurrentVersionTransition) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return nil
-}
-
-// MarshalXML is extended to leave out
-// <NoncurrentVersionExpiration></NoncurrentVersionExpiration> tags
-func (n NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	return nil
+	if n.NoncurrentDays == ExpirationDays(0) {
+		return nil
+	}
+	return e.EncodeElement(&n, start)
 }

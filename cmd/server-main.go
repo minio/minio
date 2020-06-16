@@ -116,9 +116,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
-		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
+		globalEndpoints, globalErasureSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
-		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
+		globalEndpoints, globalErasureSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
@@ -128,10 +128,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
 
-	globalIsXL = (setupType == XLSetupType)
-	globalIsDistXL = (setupType == DistXLSetupType)
-	if globalIsDistXL {
-		globalIsXL = true
+	globalIsErasure = (setupType == ErasureSetupType)
+	globalIsDistErasure = (setupType == DistErasureSetupType)
+	if globalIsDistErasure {
+		globalIsErasure = true
 	}
 }
 
@@ -167,6 +167,9 @@ func newAllSubsystems() {
 
 	// Create new bucket quota subsystem
 	globalBucketQuotaSys = NewBucketQuotaSys()
+
+	// Create new bucket versioning subsystem
+	globalBucketVersioningSys = NewBucketVersioningSys()
 }
 
 func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
@@ -225,7 +228,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		}
 
 		// These messages only meant primarily for distributed setup, so only log during distributed setup.
-		if globalIsDistXL {
+		if globalIsDistErasure {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
 		}
 
@@ -237,7 +240,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(retryCtx, newObject); err == nil {
 				// All successful return.
-				if globalIsDistXL {
+				if globalIsDistErasure {
 					// These messages only meant primarily for distributed setup, so only log during distributed setup.
 					logger.Info("All MinIO sub-systems initialized successfully")
 				}
@@ -278,7 +281,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// you want to add extra context to your error. This
 	// ensures top level retry works accordingly.
 	var buckets []BucketInfo
-	if globalIsDistXL || globalIsXL {
+	if globalIsDistErasure || globalIsErasure {
 		// List buckets to heal, and be re-used for loading configs.
 		buckets, err = newObject.ListBucketsHeal(ctx)
 		if err != nil {
@@ -289,7 +292,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		wquorum := &InsufficientWriteQuorum{}
 		rquorum := &InsufficientReadQuorum{}
 		for _, bucket := range buckets {
-			if err = newObject.MakeBucketWithLocation(ctx, bucket.Name, "", false); err != nil {
+			if err = newObject.MakeBucketWithLocation(ctx, bucket.Name, BucketOptions{}); err != nil {
 				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
 					// Return the error upwards for the caller to retry.
 					return fmt.Errorf("Unable to heal bucket: %w", err)
@@ -346,12 +349,11 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 		// No unlock for "leader" lock.
 	}
 
-	if globalIsXL {
+	if globalIsErasure {
 		initGlobalHeal(ctx, objAPI)
 	}
 
-	initDataUsageStats(ctx, objAPI)
-	initDailyLifecycle(ctx, objAPI)
+	initDataCrawler(ctx, objAPI)
 	initQuotaEnforcement(ctx, objAPI)
 }
 
@@ -397,7 +399,7 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		if globalEndpoints.HTTPS() && !globalIsSSL {
 			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
@@ -411,7 +413,7 @@ func serverMain(ctx *cli.Context) {
 		checkUpdate(getMinioMode())
 	}
 
-	if !globalActiveCred.IsValid() && globalIsDistXL {
+	if !globalActiveCred.IsValid() && globalIsDistErasure {
 		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
 			"Unable to initialize the server in distributed mode")
 	}
@@ -419,7 +421,7 @@ func serverMain(ctx *cli.Context) {
 	// Set system resources to maximum.
 	setMaxResources()
 
-	if globalIsXL {
+	if globalIsErasure {
 		// Init global heal state
 		globalAllHealState = initHealState()
 		globalBackgroundHealState = initHealState()
@@ -468,7 +470,7 @@ func serverMain(ctx *cli.Context) {
 	globalHTTPServer = httpServer
 	globalObjLayerMutex.Unlock()
 
-	if globalIsDistXL && globalEndpoints.FirstLocal() {
+	if globalIsDistErasure && globalEndpoints.FirstLocal() {
 		for {
 			// Additionally in distributed setup, validate the setup and configuration.
 			err := verifyServerSystemConfig(globalEndpoints)
@@ -503,7 +505,7 @@ func serverMain(ctx *cli.Context) {
 	newAllSubsystems()
 
 	// Enable healing to heal drives if possible
-	if globalIsXL {
+	if globalIsErasure {
 		initBackgroundHealing(GlobalContext, newObject)
 		initLocalDisksAutoHeal(GlobalContext, newObject)
 	}
@@ -550,5 +552,5 @@ func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	return newXLZones(ctx, endpointZones)
+	return newErasureZones(ctx, endpointZones)
 }

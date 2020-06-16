@@ -553,8 +553,8 @@ func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.Storag
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
-func (a *azureObjects) MakeBucketWithLocation(ctx context.Context, bucket, location string, lockEnabled bool) error {
-	if lockEnabled {
+func (a *azureObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
+	if opts.LockEnabled || opts.VersioningEnabled {
 		return minio.NotImplemented{}
 	}
 
@@ -966,21 +966,30 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 
 // DeleteObject - Deletes a blob on azure container, uses Azure
 // equivalent `BlobURL.Delete`.
-func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string) error {
+func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	blob := a.client.NewContainerURL(bucket).NewBlobURL(object)
 	_, err := blob.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 	if err != nil {
-		return azureToObjectError(err, bucket, object)
+		return minio.ObjectInfo{}, azureToObjectError(err, bucket, object)
 	}
-	return nil
+	return minio.ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+	}, nil
 }
 
-func (a *azureObjects) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+func (a *azureObjects) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) ([]minio.DeletedObject, []error) {
 	errs := make([]error, len(objects))
+	dobjects := make([]minio.DeletedObject, len(objects))
 	for idx, object := range objects {
-		errs[idx] = a.DeleteObject(ctx, bucket, object)
+		_, errs[idx] = a.DeleteObject(ctx, bucket, object.ObjectName, opts)
+		if errs[idx] == nil {
+			dobjects[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
+		}
 	}
-	return errs, nil
+	return dobjects, errs
 }
 
 // ListMultipartUploads - It's decided not to support List Multipart Uploads, hence returning empty result.

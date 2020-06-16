@@ -20,9 +20,18 @@ import (
 	"encoding/xml"
 )
 
-// ObjectIdentifier carries key name for the object to delete.
-type ObjectIdentifier struct {
+// DeletedObject objects deleted
+type DeletedObject struct {
+	DeleteMarker          bool   `xml:"DeleteMarker"`
+	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
+	ObjectName            string `xml:"Key,omitempty"`
+	VersionID             string `xml:"VersionId,omitempty"`
+}
+
+// ObjectToDelete carries key name for the object to delete.
+type ObjectToDelete struct {
 	ObjectName string `xml:"Key"`
+	VersionID  string `xml:"VersionId"`
 }
 
 // createBucketConfiguration container for bucket configuration request from client.
@@ -37,5 +46,5 @@ type DeleteObjectsRequest struct {
 	// Element to enable quiet mode for the request
 	Quiet bool
 	// List of objects to be deleted
-	Objects []ObjectIdentifier `xml:"Object"`
+	Objects []ObjectToDelete `xml:"Object"`
 }

@@ -66,6 +66,28 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
+	case errFileVersionNotFound:
+		switch len(params) {
+		case 2:
+			err = VersionNotFound{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		case 3:
+			err = VersionNotFound{
+				Bucket:    params[0],
+				Object:    params[1],
+				VersionID: params[2],
+			}
+		}
+	case errMethodNotAllowed:
+		switch len(params) {
+		case 2:
+			err = MethodNotAllowed{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case errFileNotFound:
 		switch len(params) {
 		case 2:
@@ -101,9 +123,9 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
-	case errXLReadQuorum:
+	case errErasureReadQuorum:
 		err = InsufficientReadQuorum{}
-	case errXLWriteQuorum:
+	case errErasureWriteQuorum:
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		err = IncompleteBody{}
@@ -150,8 +172,9 @@ func (e InsufficientWriteQuorum) Error() string {
 
 // GenericError - generic object layer error.
 type GenericError struct {
-	Bucket string
-	Object string
+	Bucket    string
+	Object    string
+	VersionID string
 }
 
 // BucketNotFound bucket does not exist.
@@ -182,18 +205,32 @@ func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
+// VersionNotFound object does not exist.
+type VersionNotFound GenericError
+
+func (e VersionNotFound) Error() string {
+	return "Version not found: " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
+}
+
 // ObjectNotFound object does not exist.
 type ObjectNotFound GenericError
 
 func (e ObjectNotFound) Error() string {
-	return "Object not found: " + e.Bucket + "#" + e.Object
+	return "Object not found: " + e.Bucket + "/" + e.Object
+}
+
+// MethodNotAllowed on the object
+type MethodNotAllowed GenericError
+
+func (e MethodNotAllowed) Error() string {
+	return "Method not allowed: " + e.Bucket + "/" + e.Object
 }
 
 // ObjectAlreadyExists object already exists.
 type ObjectAlreadyExists GenericError
 
 func (e ObjectAlreadyExists) Error() string {
-	return "Object: " + e.Bucket + "#" + e.Object + " already exists"
+	return "Object: " + e.Bucket + "/" + e.Object + " already exists"
 }
 
 // ObjectExistsAsDirectory object already exists as a directory.
@@ -323,17 +360,17 @@ type ObjectNamePrefixAsSlash GenericError
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
-	return "Object name invalid: " + e.Bucket + "#" + e.Object
+	return "Object name invalid: " + e.Bucket + "/" + e.Object
 }
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNameTooLong) Error() string {
-	return "Object name too long: " + e.Bucket + "#" + e.Object
+	return "Object name too long: " + e.Bucket + "/" + e.Object
 }
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNamePrefixAsSlash) Error() string {
-	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
+	return "Object name contains forward slash as pefix: " + e.Bucket + "/" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled
@@ -349,7 +386,7 @@ type IncompleteBody GenericError
 
 // Error returns string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
-	return e.Bucket + "#" + e.Object + "has incomplete body"
+	return e.Bucket + "/" + e.Object + "has incomplete body"
 }
 
 // InvalidRange - invalid range typed error.
@@ -445,9 +482,14 @@ func (e InvalidETag) Error() string {
 }
 
 // NotImplemented If a feature is not implemented
-type NotImplemented struct{}
+type NotImplemented struct {
+	API string
+}
 
 func (e NotImplemented) Error() string {
+	if e.API != "" {
+		return e.API + " is Not Implemented"
+	}
 	return "Not Implemented"
 }
 

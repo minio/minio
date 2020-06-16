@@ -23,7 +23,6 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio-go/v6/pkg/tags"
-
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -32,14 +31,23 @@ import (
 type CheckCopyPreconditionFn func(o ObjectInfo, encETag string) bool
 
 // GetObjectInfoFn is the signature of GetObjectInfo function.
-type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
+type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 
-// ObjectOptions represents object options for ObjectLayer operations
+// ObjectOptions represents object options for ObjectLayer object operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
+	Versioned            bool
+	VersionID            string
 	UserDefined          map[string]string
 	PartNumber           int
 	CheckCopyPrecondFn   CheckCopyPreconditionFn
+}
+
+// BucketOptions represents bucket options for ObjectLayer bucket operations
+type BucketOptions struct {
+	Location          string
+	LockEnabled       bool
+	VersioningEnabled bool
 }
 
 // LockType represents required locking for ObjectLayer operations
@@ -62,12 +70,14 @@ type ObjectLayer interface {
 	StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) // local queries only local disks
 
 	// Bucket operations.
-	MakeBucketWithLocation(ctx context.Context, bucket string, location string, lockEnabled bool) error
+	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
 	DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error
 	ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
+	ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (result ListObjectVersionsInfo, err error)
+	// Walk lists all objects including versions, delete markers.
 	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error
 
 	// Object operations.
@@ -83,8 +93,8 @@ type ObjectLayer interface {
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
-	DeleteObject(ctx context.Context, bucket, object string) error
-	DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error)
+	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
+	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
@@ -101,8 +111,8 @@ type ObjectLayer interface {
 	ReloadFormat(ctx context.Context, dryRun bool) error
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
-	HealObject(ctx context.Context, bucket, object string, opts madmin.HealOpts) (madmin.HealResultItem, error)
-	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn healObjectFn) error
+	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
+	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 
 	// Policy operations
@@ -124,7 +134,7 @@ type ObjectLayer interface {
 	IsReady(ctx context.Context) bool
 
 	// ObjectTagging operations
-	PutObjectTags(context.Context, string, string, string) error
-	GetObjectTags(context.Context, string, string) (*tags.Tags, error)
-	DeleteObjectTags(context.Context, string, string) error
+	PutObjectTags(context.Context, string, string, string, ObjectOptions) error
+	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)
+	DeleteObjectTags(context.Context, string, string, ObjectOptions) error
 }

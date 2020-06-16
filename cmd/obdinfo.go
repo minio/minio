@@ -34,7 +34,7 @@ import (
 
 func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOBDInfo {
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
@@ -103,8 +103,9 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 		}
 	}
 	wg.Wait()
+
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(endpointZones)
 	}
 	if parallel {
@@ -121,7 +122,7 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 
 func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInfo {
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
@@ -150,7 +151,7 @@ func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInf
 
 func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDInfo {
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
@@ -371,7 +372,7 @@ func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDI
 
 func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
 	addr := r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 

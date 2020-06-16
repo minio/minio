@@ -42,7 +42,7 @@ func fsRemoveFile(ctx context.Context, filePath string) (err error) {
 	}
 
 	if err = os.Remove((filePath)); err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		if err != errFileNotFound {
 			logger.LogIf(ctx, err)
 		}
@@ -186,37 +186,11 @@ func fsStatVolume(ctx context.Context, volume string) (os.FileInfo, error) {
 	return fi, nil
 }
 
-// Is a one place function which converts all os.PathError
-// into a more FS object layer friendly form, converts
-// known errors into their typed form for top level
-// interpretation.
-func osErrToFSFileErr(err error) error {
-	if err == nil {
-		return nil
-	}
-	if os.IsNotExist(err) {
-		return errFileNotFound
-	}
-	if os.IsPermission(err) {
-		return errFileAccessDenied
-	}
-	if isSysErrNotDir(err) {
-		return errFileNotFound
-	}
-	if isSysErrPathNotFound(err) {
-		return errFileNotFound
-	}
-	if isSysErrTooManyFiles(err) {
-		return errTooManyOpenFiles
-	}
-	return err
-}
-
 // Lookup if directory exists, returns directory attributes upon success.
 func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
 	fi, err := fsStat(ctx, statDir)
 	if err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		if err != errFileNotFound {
 			logger.LogIf(ctx, err)
 		}
@@ -232,7 +206,7 @@ func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
 func fsStatFile(ctx context.Context, statFile string) (os.FileInfo, error) {
 	fi, err := fsStat(ctx, statFile)
 	if err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		if err != errFileNotFound {
 			logger.LogIf(ctx, err)
 		}
@@ -267,13 +241,13 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 
 	fr, err := os.Open(readPath)
 	if err != nil {
-		return nil, 0, osErrToFSFileErr(err)
+		return nil, 0, osErrToFileErr(err)
 	}
 
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		if err != errFileNotFound {
 			logger.LogIf(ctx, err)
 		}
@@ -327,7 +301,7 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 	}
 	writer, err := lock.Open(filePath, flags, 0666)
 	if err != nil {
-		return 0, osErrToFSFileErr(err)
+		return 0, osErrToFileErr(err)
 	}
 	defer writer.Close()
 
@@ -399,7 +373,7 @@ func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error 
 
 	if err := os.Rename(sourcePath, destPath); err != nil {
 		logger.LogIf(ctx, err)
-		return osErrToFSFileErr(err)
+		return osErrToFileErr(err)
 	}
 
 	return nil

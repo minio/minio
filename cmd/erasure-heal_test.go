@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ func TestErasureHeal(t *testing.T) {
 		// create some test data
 		setup, err := newErasureTestSetup(test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
-			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
+			t.Fatalf("Test %d: failed to setup Erasure environment: %v", i, err)
 		}
 		disks := setup.disks
 		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)

@@ -243,43 +243,6 @@ func TestAzureCodesToObjectError(t *testing.T) {
 	}
 }
 
-func TestAnonErrToObjectErr(t *testing.T) {
-	testCases := []struct {
-		name       string
-		statusCode int
-		params     []string
-		wantErr    error
-	}{
-		{"ObjectNotFound",
-			http.StatusNotFound,
-			[]string{"testBucket", "testObject"},
-			minio.ObjectNotFound{Bucket: "testBucket", Object: "testObject"},
-		},
-		{"BucketNotFound",
-			http.StatusNotFound,
-			[]string{"testBucket", ""},
-			minio.BucketNotFound{Bucket: "testBucket"},
-		},
-		{"ObjectNameInvalid",
-			http.StatusBadRequest,
-			[]string{"testBucket", "testObject"},
-			minio.ObjectNameInvalid{Bucket: "testBucket", Object: "testObject"},
-		},
-		{"BucketNameInvalid",
-			http.StatusBadRequest,
-			[]string{"testBucket", ""},
-			minio.BucketNameInvalid{Bucket: "testBucket"},
-		},
-	}
-	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			if err := minio.AnonErrToObjectErr(test.statusCode, test.params...); !reflect.DeepEqual(err, test.wantErr) {
-				t.Errorf("anonErrToObjectErr() error = %v, wantErr %v", err, test.wantErr)
-			}
-		})
-	}
-}
-
 func TestCheckAzureUploadID(t *testing.T) {
 	invalidUploadIDs := []string{
 		"123456789abcdefg",

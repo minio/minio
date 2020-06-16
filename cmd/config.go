@@ -92,7 +92,8 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData b
 
 func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) error {
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV+kvPrefix)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, historyFile)
+	_, err := objAPI.DeleteObject(ctx, minioMetaBucket, historyFile, ObjectOptions{})
+	return err
 }
 
 func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
