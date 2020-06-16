@@ -74,7 +74,7 @@ func TestManyWalksSameParam(t *testing.T) {
 		break
 	default:
 		// Create many treeWalk go-routines for the same params.
-		for i := 0; i < 10; i++ {
+		for i := 0; i < treeWalkSameEntryLimit; i++ {
 			resultCh := make(chan TreeWalkResult)
 			endWalkCh := make(chan struct{})
 			tw.Set(params, resultCh, endWalkCh)
@@ -82,16 +82,16 @@ func TestManyWalksSameParam(t *testing.T) {
 
 		tw.Lock()
 		if walks, ok := tw.pool[params]; ok {
-			if len(walks) != 10 {
+			if len(walks) != treeWalkSameEntryLimit {
 				t.Error("There aren't as many walks as were Set")
 			}
 		}
 		tw.Unlock()
-		for i := 0; i < 10; i++ {
+		for i := 0; i < treeWalkSameEntryLimit; i++ {
 			tw.Lock()
 			if walks, ok := tw.pool[params]; ok {
-				// Before ith Release we should have 10-i treeWalk go-routines.
-				if 10-i != len(walks) {
+				// Before ith Release we should have n-i treeWalk go-routines.
+				if treeWalkSameEntryLimit-i != len(walks) {
 					t.Error("There aren't as many walks as were Set")
 				}
 			}
@@ -99,5 +99,49 @@ func TestManyWalksSameParam(t *testing.T) {
 			tw.Release(params)
 		}
 	}
+}
 
+// Test if multiple tree walkers for the same listParams are managed as expected by the pool
+// but that treeWalkSameEntryLimit is respected.
+func TestManyWalksSameParamPrune(t *testing.T) {
+	// Create a treeWalkPool.
+	tw := NewTreeWalkPool(5 * time.Second)
+
+	// Create sample params.
+	params := listParams{
+		bucket: "test-bucket",
+	}
+
+	select {
+	// This timeout is an upper-bound. This is started
+	// before the first treeWalk go-routine's timeout period starts.
+	case <-time.After(5 * time.Second):
+		break
+	default:
+		// Create many treeWalk go-routines for the same params.
+		for i := 0; i < treeWalkSameEntryLimit*4; i++ {
+			resultCh := make(chan TreeWalkResult)
+			endWalkCh := make(chan struct{})
+			tw.Set(params, resultCh, endWalkCh)
+		}
+
+		tw.Lock()
+		if walks, ok := tw.pool[params]; ok {
+			if len(walks) != treeWalkSameEntryLimit {
+				t.Error("There aren't as many walks as were Set")
+			}
+		}
+		tw.Unlock()
+		for i := 0; i < treeWalkSameEntryLimit; i++ {
+			tw.Lock()
+			if walks, ok := tw.pool[params]; ok {
+				// Before ith Release we should have n-i treeWalk go-routines.
+				if treeWalkSameEntryLimit-i != len(walks) {
+					t.Error("There aren't as many walks as were Set")
+				}
+			}
+			tw.Unlock()
+			tw.Release(params)
+		}
+	}
 }
