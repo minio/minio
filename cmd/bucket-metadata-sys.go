@@ -76,7 +76,44 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 
 	if globalIsGateway {
 		// This code is needed only for gateway implementations.
-		if configFile == bucketPolicyConfig {
+		switch configFile {
+		case bucketSSEConfig:
+			if globalGatewayName == "nas" {
+				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+				if err != nil {
+					return err
+				}
+				meta.EncryptionConfigXML = configData
+				return meta.Save(GlobalContext, objAPI)
+			}
+		case bucketLifecycleConfig:
+			if globalGatewayName == "nas" {
+				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+				if err != nil {
+					return err
+				}
+				meta.LifecycleConfigXML = configData
+				return meta.Save(GlobalContext, objAPI)
+			}
+		case bucketTaggingConfig:
+			if globalGatewayName == "nas" {
+				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+				if err != nil {
+					return err
+				}
+				meta.TaggingConfigXML = configData
+				return meta.Save(GlobalContext, objAPI)
+			}
+		case bucketNotificationConfig:
+			if globalGatewayName == "nas" {
+				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
+				if err != nil {
+					return err
+				}
+				meta.NotificationConfigXML = configData
+				return meta.Save(GlobalContext, objAPI)
+			}
+		case bucketPolicyConfig:
 			if configData == nil {
 				return objAPI.DeleteBucketPolicy(GlobalContext, bucket)
 			}
@@ -107,7 +144,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		meta.LifecycleConfigXML = configData
 	case bucketSSEConfig:
 		meta.EncryptionConfigXML = configData
-	case bucketTaggingConfigFile:
+	case bucketTaggingConfig:
 		meta.TaggingConfigXML = configData
 	case objectLockConfig:
 		meta.ObjectLockConfigXML = configData

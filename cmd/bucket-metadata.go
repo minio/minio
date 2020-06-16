@@ -206,7 +206,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		bucketLifecycleConfig,
 		bucketQuotaConfigFile,
 		bucketSSEConfig,
-		bucketTaggingConfigFile,
+		bucketTaggingConfig,
 		objectLockConfig,
 	}
 
@@ -255,7 +255,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 			b.LifecycleConfigXML = configData
 		case bucketSSEConfig:
 			b.EncryptionConfigXML = configData
-		case bucketTaggingConfigFile:
+		case bucketTaggingConfig:
 			b.TaggingConfigXML = configData
 		case objectLockConfig:
 			b.ObjectLockConfigXML = configData
