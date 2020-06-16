@@ -608,7 +608,10 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	fi := newFileInfo(object, dataDrives, parityDrives)
 
 	if opts.Versioned {
-		fi.VersionID = mustGetUUID()
+		fi.VersionID = opts.VersionID
+		if fi.VersionID == "" {
+			fi.VersionID = mustGetUUID()
+		}
 	}
 	fi.DataDir = mustGetUUID()
 

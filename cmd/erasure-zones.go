@@ -594,7 +594,13 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		return objInfo, err
 	}
 
-	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
+	putOpts := ObjectOptions{
+		ServerSideEncryption: dstOpts.ServerSideEncryption,
+		UserDefined:          srcInfo.UserDefined,
+		Versioned:            dstOpts.Versioned,
+		VersionID:            dstOpts.VersionID,
+	}
+
 	if cpSrcDstSame && srcInfo.metadataOnly {
 		return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}

@@ -142,7 +142,10 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	// Calculate the version to be saved.
 	if opts.Versioned {
-		fi.VersionID = mustGetUUID()
+		fi.VersionID = opts.VersionID
+		if fi.VersionID == "" {
+			fi.VersionID = mustGetUUID()
+		}
 	}
 
 	fi.DataDir = mustGetUUID()
