@@ -206,6 +206,7 @@ func (t *MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh
 				delete(t.pool, k)
 				continue
 			}
+			// The first element is the oldest, so we only check that.
 			if v[0].added.Before(age) {
 				oldest = k
 			}

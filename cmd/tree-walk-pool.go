@@ -120,6 +120,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 				delete(t.pool, k)
 				continue
 			}
+			// The first element is the oldest, so we only check that.
 			if v[0].added.Before(age) {
 				oldest = k
 			}
