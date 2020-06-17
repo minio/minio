@@ -261,9 +261,11 @@ func (xl xlObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketIn
 	for _, b := range buckets {
 		e := oldCache.find(b.Name)
 		if e != nil {
-			if bf == nil || bf.containsDir(b.Name) {
+			cache.replace(b.Name, dataUsageRoot, *e)
+			lc, err := globalLifecycleSys.Get(b.Name)
+			activeLC := err == nil && lc.HasActiveRules("", true)
+			if activeLC || bf == nil || bf.containsDir(b.Name) {
 				bucketCh <- b
-				cache.replace(b.Name, dataUsageRoot, *e)
 			} else {
 				if intDataUpdateTracker.debug {
 					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
