@@ -260,6 +260,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		},
 		Cache: make(map[string]dataUsageEntry, len(oldCache.Cache)),
 	}
+	bloom := bf.bytes()
 
 	// Put all buckets into channel.
 	bucketCh := make(chan BucketInfo, len(buckets))
@@ -342,6 +343,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				if cache.Info.Name == "" {
 					cache.Info.Name = bucket.Name
 				}
+				cache.Info.BloomFilter = bloom
 				if cache.Info.Name != bucket.Name {
 					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
 					cache.Info = dataUsageCacheInfo{
@@ -354,6 +356,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				// Calc usage
 				before := cache.Info.LastUpdate
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
+				cache.Info.BloomFilter = nil
 				if err != nil {
 					logger.LogIf(ctx, err)
 					if cache.Info.LastUpdate.After(before) {
