@@ -48,8 +48,6 @@ fi
 
 xargs --arg-file="${MINT_ROOT_DIR}/install-packages.list" apt --quiet --yes install
 
-nuget update -self
-
 # set python 3.6 as default
 update-alternatives --install /usr/bin/python python /usr/bin/python3.6 1
 
