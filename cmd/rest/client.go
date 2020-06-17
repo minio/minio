@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -30,6 +31,12 @@ import (
 
 // DefaultRESTTimeout - default RPC timeout is one minute.
 const DefaultRESTTimeout = 1 * time.Minute
+
+const (
+	offline = iota
+	online
+	closed
+)
 
 // NetworkError - error type in case of errors related to http/transport
 // for ex. connection refused, connection reset, dns resolution failure etc.
@@ -42,12 +49,34 @@ func (n *NetworkError) Error() string {
 	return n.Err.Error()
 }
 
+// Unwrap returns the error wrapped in NetworkError.
+func (n *NetworkError) Unwrap() error {
+	return n.Err
+}
+
 // Client - http based RPC client.
 type Client struct {
+	// HealthCheckPath is the path to test for health.
+	// If left empty the client will not keep track of health.
+	// Calling this can return any http status code/contents.
+	HealthCheckPath string
+
+	// HealthCheckInterval will be the duration between re-connection attempts
+	// when a call has failed with a network error.
+	HealthCheckInterval time.Duration
+
+	// HealthCheckTimeout determines timeout for each call.
+	HealthCheckTimeout time.Duration
+
+	// MaxErrResponseSize is the maximum expected response size.
+	// Should only be modified before any calls are made.
+	MaxErrResponseSize int64
+
 	httpClient          *http.Client
 	httpIdleConnsCloser func()
 	url                 *url.URL
 	newAuthToken        func(audience string) string
+	connected           int32
 }
 
 // URL query separator constants
@@ -57,6 +86,9 @@ const (
 
 // CallWithContext - make a REST call with context.
 func (c *Client) CallWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+	if !c.IsOnline() {
+		return nil, &NetworkError{Err: errors.New("remote server offline")}
+	}
 	req, err := http.NewRequest(http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
 	if err != nil {
 		return nil, &NetworkError{err}
@@ -69,7 +101,11 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		c.httpClient.CloseIdleConnections()
+		// A canceled context doesn't always mean a network problem.
+		if !errors.Is(err, context.Canceled) {
+			// We are safe from recursion
+			c.MarkOffline()
+		}
 		return nil, &NetworkError{err}
 	}
 
@@ -82,7 +118,7 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 	if resp.StatusCode != http.StatusOK {
 		defer xhttp.DrainBody(resp.Body)
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
-		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, 4096))
+		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			return nil, err
 		}
@@ -102,6 +138,7 @@ func (c *Client) Call(method string, values url.Values, body io.Reader, length i
 
 // Close closes all idle connections of the underlying http client
 func (c *Client) Close() {
+	atomic.StoreInt32(&c.connected, closed)
 	if c.httpIdleConnsCloser != nil {
 		c.httpIdleConnsCloser()
 	}
@@ -117,5 +154,46 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 		httpIdleConnsCloser: tr.CloseIdleConnections,
 		url:                 url,
 		newAuthToken:        newAuthToken,
+		connected:           online,
+
+		MaxErrResponseSize:  4096,
+		HealthCheckPath:     "",
+		HealthCheckInterval: 200 * time.Millisecond,
+		HealthCheckTimeout:  time.Second,
 	}, nil
+}
+
+// IsOnline returns whether the client is likely to be online.
+func (c *Client) IsOnline() bool {
+	return atomic.LoadInt32(&c.connected) == online
+}
+
+// MarkOffline - will mark a client as being offline and spawns
+// a goroutine that will attempt to reconnect if a HealthCheckPath is set.
+func (c *Client) MarkOffline() {
+	// Start goroutine that will attempt to reconnect.
+	// If server is already trying to reconnect this will have no effect.
+	if len(c.HealthCheckPath) > 0 && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
+		if c.httpIdleConnsCloser != nil {
+			c.httpIdleConnsCloser()
+		}
+		go func() {
+			ticker := time.NewTicker(c.HealthCheckInterval)
+			defer ticker.Stop()
+			for range ticker.C {
+				if status := atomic.LoadInt32(&c.connected); status == closed {
+					return
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), c.HealthCheckTimeout)
+				respBody, err := c.CallWithContext(ctx, c.HealthCheckPath, nil, nil, -1)
+				xhttp.DrainBody(respBody)
+				cancel()
+				var ne *NetworkError
+				if !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne) {
+					atomic.CompareAndSwapInt32(&c.connected, offline, online)
+					return
+				}
+			}
+		}()
+	}
 }

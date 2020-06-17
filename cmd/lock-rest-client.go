@@ -19,11 +19,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/tls"
-	"errors"
 	"io"
-	"sync/atomic"
-	"time"
-
 	"net/url"
 
 	"github.com/minio/minio/cmd/http"
@@ -36,7 +32,6 @@ import (
 type lockRESTClient struct {
 	restClient *rest.Client
 	endpoint   Endpoint
-	connected  int32
 }
 
 func toLockError(err error) error {
@@ -62,10 +57,6 @@ func (client *lockRESTClient) String() string {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.IsOnline() {
-		return nil, errors.New("Lock rest server node is down")
-	}
-
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -75,26 +66,16 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 		return respBody, nil
 	}
 
-	if isNetworkError(err) {
-		time.AfterFunc(time.Second, func() {
-			// After 1 seconds, take this lock client online for a retry.
-			atomic.StoreInt32(&client.connected, 1)
-		})
-
-		atomic.StoreInt32(&client.connected, 0)
-	}
-
 	return nil, toLockError(err)
 }
 
 // IsOnline - returns whether REST client failed to connect or not.
 func (client *lockRESTClient) IsOnline() bool {
-	return atomic.LoadInt32(&client.connected) == 1
+	return client.restClient.IsOnline()
 }
 
 // Close - marks the client as closed.
 func (client *lockRESTClient) Close() error {
-	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -173,9 +154,9 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}
+		logger.Fatal(err, "Unable to create lock rest client")
 	}
+	restClient.HealthCheckPath = "/"
 
-	return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
+	return &lockRESTClient{endpoint: endpoint, restClient: restClient}
 }
