@@ -25,6 +25,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -270,12 +271,21 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 			bucketCh <- b
 		}
 	}
-	// Add existing buckets.
+
+	// Add existing buckets if changes or lifecycles.
 	for _, b := range buckets {
 		e := oldCache.find(b.Name)
 		if e != nil {
-			bucketCh <- b
 			cache.replace(b.Name, dataUsageRoot, *e)
+			lc, err := globalLifecycleSys.Get(b.Name)
+			activeLC := err == nil && lc.HasActiveRules("", true)
+			if activeLC || bf == nil || bf.containsDir(b.Name) {
+				bucketCh <- b
+			} else {
+				if intDataUpdateTracker.debug {
+					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
+				}
+			}
 		}
 	}
 
