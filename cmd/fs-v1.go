@@ -248,10 +248,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 	if err != nil {
 		return err
 	}
-	totalCache.Info.BloomFilter = nil
-	if bf != nil {
-		totalCache.Info.BloomFilter = bf.bytes()
-	}
+	totalCache.Info.BloomFilter = bf.bytes()
 
 	// Clear totals.
 	var root dataUsageEntry
