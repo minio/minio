@@ -742,11 +742,11 @@ func (s *xlStorage) ListDirSplunk(volume, dirPath string, count int) (entries []
 		return nil, err
 	}
 
-	dirPath = pathJoin(volumeDir, dirPath)
+	dirPathAbs := pathJoin(volumeDir, dirPath)
 	if count > 0 {
-		entries, err = readDirN(dirPath, count)
+		entries, err = readDirN(dirPathAbs, count)
 	} else {
-		entries, err = readDir(dirPath)
+		entries, err = readDir(dirPathAbs)
 	}
 	if err != nil {
 		return nil, err
@@ -756,13 +756,13 @@ func (s *xlStorage) ListDirSplunk(volume, dirPath string, count int) (entries []
 		if entry != receiptJSON {
 			continue
 		}
-		_, err = os.Stat(pathJoin(dirPath, entry, xlStorageFormatFile))
+		_, err = os.Stat(pathJoin(dirPathAbs, entry, xlStorageFormatFile))
 		if err == nil {
 			entries[i] = strings.TrimSuffix(entry, SlashSeparator)
 			continue
 		}
 		if os.IsNotExist(err) {
-			if err = s.renameLegacyMetadata(volume, entry); err == nil {
+			if err = s.renameLegacyMetadata(volume, pathJoin(dirPath, entry)); err == nil {
 				// Rename was successful means we found old `xl.json`
 				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
 			}
@@ -1033,27 +1033,26 @@ func (s *xlStorage) ListDir(volume, dirPath string, count int) (entries []string
 		return nil, err
 	}
 
-	dirPath = pathJoin(volumeDir, dirPath)
+	dirPathAbs := pathJoin(volumeDir, dirPath)
 	if count > 0 {
-		entries, err = readDirN(dirPath, count)
+		entries, err = readDirN(dirPathAbs, count)
 	} else {
-		entries, err = readDir(dirPath)
+		entries, err = readDir(dirPathAbs)
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	for i, entry := range entries {
-		_, err = os.Stat(pathJoin(dirPath, entry, xlStorageFormatFile))
+		_, err = os.Stat(pathJoin(dirPathAbs, entry, xlStorageFormatFile))
 		if err == nil {
 			entries[i] = strings.TrimSuffix(entry, SlashSeparator)
 			continue
 		}
 		if os.IsNotExist(err) {
-			if err = s.renameLegacyMetadata(volume, entry); err == nil {
+			if err = s.renameLegacyMetadata(volume, pathJoin(dirPath, entry)); err == nil {
 				// if rename was successful, means we did find old `xl.json`
 				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
-				continue
 			}
 		}
 	}
