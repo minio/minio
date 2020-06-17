@@ -120,8 +120,8 @@ func (b bloomFilter) containsDir(in string) bool {
 }
 
 // bytes returns the bloom filter serialized as a byte slice.
-func (b bloomFilter) bytes() []byte {
-	if b.BloomFilter == nil {
+func (b *bloomFilter) bytes() []byte {
+	if b == nil || b.BloomFilter == nil {
 		return nil
 	}
 	var buf bytes.Buffer
