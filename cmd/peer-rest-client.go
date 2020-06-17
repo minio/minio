@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/gob"
+	"errors"
 	"io"
 	"io/ioutil"
 	"math"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/event"
@@ -881,7 +883,16 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	restClient.HealthCheckPath = peerRESTMethodGetLocalDiskIDs
+
+	// Construct a new health function.
+	restClient.HealthCheckFn = func() bool {
+		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		respBody, err := restClient.CallWithContext(ctx, peerRESTMethodHealth, nil, nil, -1)
+		xhttp.DrainBody(respBody)
+		cancel()
+		var ne *rest.NetworkError
+		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
+	}
 
 	return &peerRESTClient{host: peer, restClient: restClient}, nil
 }
