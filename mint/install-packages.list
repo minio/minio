@@ -7,7 +7,6 @@ dirmngr
 apt-transport-https
 dotnet-sdk-2.1
 ca-certificates-mono
-nuget
 libunwind8
 ruby
 ruby-dev
