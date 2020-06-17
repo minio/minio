@@ -28,6 +28,7 @@ const (
 
 // mergeWalk - represents the go routine that does the merge walk.
 type mergeWalk struct {
+	added      time.Time
 	entryChs   []FileInfoCh
 	endWalkCh  chan struct{}   // To signal when mergeWalk go-routine should end.
 	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
@@ -56,7 +57,7 @@ func NewMergeWalkPool(timeout time.Duration) *MergeWalkPool {
 // Release - selects a mergeWalk from the pool based on the input
 // listParams, removes it from the pool, and returns the MergeWalkResult
 // channel.
-// Returns nil if listParams does not have an asccociated mergeWalk.
+// Returns nil if listParams does not have an associated mergeWalk.
 func (t *MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{}) {
 	t.Lock()
 	defer t.Unlock()
@@ -65,6 +66,7 @@ func (t *MergeWalkPool) Release(params listParams) ([]FileInfoCh, chan struct{})
 		if len(walks) > 0 {
 			// Pop out the first valid walk entry.
 			walk := walks[0]
+			walks[0] = mergeWalk{} // clear references.
 			walks = walks[1:]
 			if len(walks) > 0 {
 				t.pool[params] = walks
@@ -91,17 +93,54 @@ func (t *MergeWalkPool) Set(params listParams, resultChs []FileInfoCh, endWalkCh
 	t.Lock()
 	defer t.Unlock()
 
+	// If we are above the limit delete at least one entry from the pool.
+	if len(t.pool) > treeWalkEntryLimit {
+		age := time.Now()
+		var oldest listParams
+		for k, v := range t.pool {
+			if len(v) == 0 {
+				delete(t.pool, k)
+				continue
+			}
+			// The first element is the oldest, so we only check that.
+			if v[0].added.Before(age) {
+				oldest = k
+			}
+		}
+		// Invalidate and delete oldest.
+		if walks, ok := t.pool[oldest]; ok {
+			walk := walks[0]
+			walks[0] = mergeWalk{} // clear references.
+			walks = walks[1:]
+			if len(walks) > 0 {
+				t.pool[params] = walks
+			} else {
+				delete(t.pool, params)
+			}
+			walk.endTimerCh <- struct{}{}
+		}
+	}
+
 	// Should be a buffered channel so that Release() never blocks.
 	endTimerCh := make(chan struct{}, 1)
 
 	walkInfo := mergeWalk{
+		added:      UTCNow(),
 		entryChs:   resultChs,
 		endWalkCh:  endWalkCh,
 		endTimerCh: endTimerCh,
 	}
 
 	// Append new walk info.
-	t.pool[params] = append(t.pool[params], walkInfo)
+	walks := t.pool[params]
+	if len(walks) < treeWalkSameEntryLimit {
+		t.pool[params] = append(walks, walkInfo)
+	} else {
+		// We are at limit, invalidate oldest, move list down and add new as last.
+		walks[0].endTimerCh <- struct{}{}
+		copy(walks, walks[1:])
+		walks[len(walks)-1] = walkInfo
+	}
 
 	// Timer go-routine which times out after t.timeOut seconds.
 	go func(endTimerCh <-chan struct{}, walkInfo mergeWalk) {
