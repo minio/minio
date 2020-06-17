@@ -18,11 +18,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"net/url"
 
 	"github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
@@ -156,7 +159,14 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	if err != nil {
 		logger.Fatal(err, "Unable to create lock rest client")
 	}
-	restClient.HealthCheckPath = "/"
+	restClient.HealthCheckFn = func() bool {
+		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		respBody, err := restClient.CallWithContext(ctx, lockRESTMethodHealth, nil, nil, -1)
+		xhttp.DrainBody(respBody)
+		cancel()
+		var ne *rest.NetworkError
+		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
+	}
 
 	return &lockRESTClient{endpoint: endpoint, restClient: restClient}
 }

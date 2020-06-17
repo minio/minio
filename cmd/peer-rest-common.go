@@ -24,6 +24,7 @@ const (
 )
 
 const (
+	peerRESTMethodHealth                = "/health"
 	peerRESTMethodServerInfo            = "/serverinfo"
 	peerRESTMethodDriveOBDInfo          = "/driveobdinfo"
 	peerRESTMethodNetOBDInfo            = "/netobdinfo"

@@ -47,7 +47,11 @@ type storageRESTServer struct {
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusForbidden)
+	if errors.Is(err, errDiskStale) {
+		w.WriteHeader(http.StatusPreconditionFailed)
+	} else {
+		w.WriteHeader(http.StatusForbidden)
+	}
 	w.Write([]byte(err.Error()))
 	w.(http.Flusher).Flush()
 }
@@ -116,6 +120,11 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 	}
 	s.writeErrorResponse(w, errDiskStale)
 	return false
+}
+
+// HealthHandler handler checks if disk is stale
+func (s *storageRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	s.IsValid(w, r)
 }
 
 // DiskInfoHandler - returns disk info.
@@ -778,6 +787,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(httpTraceHdrs(server.HealthHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCrawlAndGetDataUsage).HandlerFunc(httpTraceHdrs(server.CrawlAndGetDataUsageHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)

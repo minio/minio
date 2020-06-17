@@ -729,6 +729,11 @@ func getLocalDiskIDs(z *xlZones) []string {
 	return ids
 }
 
+// HealthHandler - returns true of health
+func (s *peerRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	s.IsValid(w, r)
+}
+
 // GetLocalDiskIDs - Return disk IDs of all the local disks.
 func (s *peerRESTServer) GetLocalDiskIDs(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1020,6 +1025,7 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
 	subrouter := router.PathPrefix(peerRESTPrefix).Subrouter()
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHealth).HandlerFunc(httpTraceHdrs(server.HealthHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcOBDInfo).HandlerFunc(httpTraceHdrs(server.ProcOBDInfoHandler))

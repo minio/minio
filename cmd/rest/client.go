@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,10 +56,11 @@ func (n *NetworkError) Unwrap() error {
 
 // Client - http based RPC client.
 type Client struct {
-	// HealthCheckPath is the path to test for health.
-	// If left empty the client will not keep track of health.
-	// Calling this can return any http status code/contents.
-	HealthCheckPath string
+	// HealthCheckFn is the function set to test for health.
+	// If not set the client will not keep track of health.
+	// Calling this returns true or false if the target
+	// is online or offline.
+	HealthCheckFn func() bool
 
 	// HealthCheckInterval will be the duration between re-connection attempts
 	// when a call has failed with a network error.
@@ -116,6 +117,18 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		// If server returns 412 pre-condition failed, it would
+		// mean that authentication succeeded, but another
+		// side-channel check has failed, we shall take
+		// the client offline in such situations.
+		// generally all implementations should simply return
+		// 403, but in situations where there is a dependency
+		// with the caller to take the client offline purpose
+		// fully it should make sure to respond with '412'
+		// instead, see cmd/storage-rest-server.go for ideas.
+		if resp.StatusCode == http.StatusPreconditionFailed {
+			c.MarkOffline()
+		}
 		defer xhttp.DrainBody(resp.Body)
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
@@ -157,7 +170,6 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 		connected:           online,
 
 		MaxErrResponseSize:  4096,
-		HealthCheckPath:     "",
 		HealthCheckInterval: 200 * time.Millisecond,
 		HealthCheckTimeout:  time.Second,
 	}, nil
@@ -169,11 +181,11 @@ func (c *Client) IsOnline() bool {
 }
 
 // MarkOffline - will mark a client as being offline and spawns
-// a goroutine that will attempt to reconnect if a HealthCheckPath is set.
+// a goroutine that will attempt to reconnect if HealthCheckFn is set.
 func (c *Client) MarkOffline() {
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
-	if len(c.HealthCheckPath) > 0 && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
+	if c.HealthCheckFn != nil && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
 		if c.httpIdleConnsCloser != nil {
 			c.httpIdleConnsCloser()
 		}
@@ -184,12 +196,7 @@ func (c *Client) MarkOffline() {
 				if status := atomic.LoadInt32(&c.connected); status == closed {
 					return
 				}
-				ctx, cancel := context.WithTimeout(context.Background(), c.HealthCheckTimeout)
-				respBody, err := c.CallWithContext(ctx, c.HealthCheckPath, nil, nil, -1)
-				xhttp.DrainBody(respBody)
-				cancel()
-				var ne *NetworkError
-				if !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne) {
+				if c.HealthCheckFn() {
 					atomic.CompareAndSwapInt32(&c.connected, offline, online)
 					return
 				}

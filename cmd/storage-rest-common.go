@@ -23,6 +23,7 @@ const (
 )
 
 const (
+	storageRESTMethodHealth               = "/health"
 	storageRESTMethodDiskInfo             = "/diskinfo"
 	storageRESTMethodCrawlAndGetDataUsage = "/crawlandgetdatausage"
 	storageRESTMethodMakeVol              = "/makevol"
