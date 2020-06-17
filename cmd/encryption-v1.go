@@ -963,13 +963,32 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 // get ObjectOptions for PUT calls from encryption headers and metadata
 func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
 	versioned := globalBucketVersioningSys.Enabled(bucket)
+	vid := strings.TrimSpace(r.URL.Query().Get("versionId"))
+	if vid != "" && vid != nullVersionID {
+		_, err := uuid.Parse(vid)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return opts, VersionNotFound{
+				Bucket:    bucket,
+				Object:    object,
+				VersionID: vid,
+			}
+		}
+	}
+
 	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
 	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
 	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
-		return ObjectOptions{ServerSideEncryption: encrypt.NewSSE(), UserDefined: metadata, Versioned: versioned}, nil
+		return ObjectOptions{
+			ServerSideEncryption: encrypt.NewSSE(),
+			UserDefined:          metadata,
+			VersionID:            vid,
+			Versioned:            versioned,
+		}, nil
 	}
 	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
 		opts, err = getOpts(ctx, r, bucket, object)
+		opts.VersionID = vid
 		opts.Versioned = versioned
 		opts.UserDefined = metadata
 		return
@@ -983,13 +1002,19 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		if err != nil {
 			return ObjectOptions{}, err
 		}
-		return ObjectOptions{ServerSideEncryption: sseKms, UserDefined: metadata, Versioned: versioned}, nil
+		return ObjectOptions{
+			ServerSideEncryption: sseKms,
+			UserDefined:          metadata,
+			VersionID:            vid,
+			Versioned:            versioned,
+		}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
 	opts, err = getDefaultOpts(r.Header, false, metadata)
 	if err != nil {
 		return opts, err
 	}
+	opts.VersionID = vid
 	opts.Versioned = versioned
 	return opts, nil
 }

@@ -794,7 +794,12 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 		return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
 
-	putOpts := ObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption, UserDefined: srcInfo.UserDefined}
+	putOpts := ObjectOptions{
+		ServerSideEncryption: dstOpts.ServerSideEncryption,
+		UserDefined:          srcInfo.UserDefined,
+		Versioned:            dstOpts.Versioned,
+		VersionID:            dstOpts.VersionID,
+	}
 	return dstSet.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
