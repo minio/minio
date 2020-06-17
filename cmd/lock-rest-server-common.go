@@ -27,6 +27,7 @@ const (
 )
 
 const (
+	lockRESTMethodHealth  = "/health"
 	lockRESTMethodLock    = "/lock"
 	lockRESTMethodRLock   = "/rlock"
 	lockRESTMethodUnlock  = "/unlock"

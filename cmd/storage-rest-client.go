@@ -22,14 +22,17 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
@@ -656,6 +659,15 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	if err != nil {
 		logger.Fatal(err, "Unable to initialize remote REST disks")
 	}
-	restClient.HealthCheckPath = "/"
+
+	restClient.HealthCheckInterval = 500 * time.Millisecond
+	restClient.HealthCheckFn = func() bool {
+		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		respBody, err := restClient.CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
+		xhttp.DrainBody(respBody)
+		cancel()
+		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
+	}
+
 	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
 }
