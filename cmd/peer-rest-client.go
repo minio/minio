@@ -44,12 +44,6 @@ import (
 type peerRESTClient struct {
 	host       *xnet.Host
 	restClient *rest.Client
-	connected  int32
-}
-
-// Reconnect to a peer rest server.
-func (client *peerRESTClient) reConnect() {
-	atomic.StoreInt32(&client.connected, 1)
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
@@ -63,10 +57,6 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.IsOnline() {
-		client.reConnect()
-	}
-
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -74,10 +64,6 @@ func (client *peerRESTClient) callWithContext(ctx context.Context, method string
 	respBody, err = client.restClient.CallWithContext(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
-	}
-
-	if isNetworkError(err) {
-		atomic.StoreInt32(&client.connected, 0)
 	}
 
 	return nil, err
@@ -88,14 +74,8 @@ func (client *peerRESTClient) String() string {
 	return client.host.String()
 }
 
-// IsOnline - returns whether RPC client failed to connect or not.
-func (client *peerRESTClient) IsOnline() bool {
-	return atomic.LoadInt32(&client.connected) == 1
-}
-
 // Close - marks the client as closed.
 func (client *peerRESTClient) Close() error {
-	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -901,6 +881,7 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	restClient.HealthCheckPath = peerRESTMethodGetLocalDiskIDs
 
-	return &peerRESTClient{host: peer, restClient: restClient, connected: 1}, nil
+	return &peerRESTClient{host: peer, restClient: restClient}, nil
 }
