@@ -147,7 +147,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	gatewayHandleEnvVars()
 
 	// Set system resources to maximum.
-	logger.LogIf(GlobalContext, setMaxResources())
+	setMaxResources()
 
 	// Set when gateway is enabled
 	globalIsGateway = true
