@@ -237,14 +237,16 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		return nil
 	}
 
-	var uv uuid.UUID
-	var err error
-	// null version Id means empty version Id.
-	if fi.VersionID == nullVersionID {
-		fi.VersionID = ""
+	if fi.VersionID == "" {
+		// this means versioning is not yet
+		// enabled i.e all versions are basically
+		// default value i.e "null"
+		fi.VersionID = nullVersionID
 	}
 
-	if fi.VersionID != "" {
+	var uv uuid.UUID
+	var err error
+	if fi.VersionID != "" && fi.VersionID != nullVersionID {
 		uv, err = uuid.Parse(fi.VersionID)
 		if err != nil {
 			return err

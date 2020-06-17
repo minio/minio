@@ -1735,6 +1735,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	if srcOpts.ServerSideEncryption != nil {
 		getOpts.ServerSideEncryption = encrypt.SSE(srcOpts.ServerSideEncryption)
 	}
+
 	dstOpts, err = copyDstOpts(ctx, r, dstBucket, dstObject, nil)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
