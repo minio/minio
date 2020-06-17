@@ -311,8 +311,6 @@ func validateConfig(s config.Config) error {
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
-var syncEtcdOnce sync.Once
-
 func lookupConfigs(s config.Config) {
 	ctx := GlobalContext
 
@@ -335,16 +333,30 @@ func lookupConfigs(s config.Config) {
 	}
 
 	if etcdCfg.Enabled {
-		syncEtcdOnce.Do(func() {
-			globalEtcdClient, err = etcd.New(etcdCfg)
+		globalEtcdClient, err = etcd.New(etcdCfg)
+		if err != nil {
+			if globalIsGateway {
+				logger.FatalIf(err, "Unable to initialize etcd config")
+			} else {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+			}
+		}
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
+			globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+				dns.DomainNames(globalDomainNames),
+				dns.DomainIPs(globalDomainIPs),
+				dns.DomainPort(globalMinioPort),
+				dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+			)
 			if err != nil {
 				if globalIsGateway {
-					logger.FatalIf(err, "Unable to initialize etcd config")
+					logger.FatalIf(err, "Unable to initialize DNS config")
 				} else {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+						globalDomainNames, err))
 				}
 			}
-		})
+		}
 	}
 
 	// Bucket federation is 'true' only when IAM assets are not namespaced
@@ -353,19 +365,6 @@ func lookupConfigs(s config.Config) {
 	// we assume that users are interested in global bucket support
 	// but not federation.
 	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
-
-	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-		globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
-			dns.DomainNames(globalDomainNames),
-			dns.DomainIPs(globalDomainIPs),
-			dns.DomainPort(globalMinioPort),
-			dns.CoreDNSPath(etcdCfg.CoreDNSPath),
-		)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
-				globalDomainNames, err))
-		}
-	}
 
 	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
 	if err != nil {
@@ -571,6 +570,8 @@ func newServerConfig() config.Config {
 	return config.New()
 }
 
+var lookupConfigOnce sync.Once
+
 // newSrvConfig - initialize a new server config, saves env parameters if
 // found, otherwise use default parameters
 func newSrvConfig(objAPI ObjectLayer) error {
@@ -578,7 +579,9 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
+	lookupConfigOnce.Do(func() {
+		lookupConfigs(srvCfg)
+	})
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -602,7 +605,9 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
+	lookupConfigOnce.Do(func() {
+		lookupConfigs(srvCfg)
+	})
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
