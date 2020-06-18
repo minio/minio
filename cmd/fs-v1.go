@@ -1181,7 +1181,11 @@ func (fs *FSObjects) DeleteObjects(ctx context.Context, bucket string, objects [
 	dobjects := make([]DeletedObject, len(objects))
 	for idx, object := range objects {
 		if object.VersionID != "" {
-			errs[idx] = NotImplemented{}
+			errs[idx] = VersionNotFound{
+				Bucket:    bucket,
+				Object:    object.ObjectName,
+				VersionID: object.VersionID,
+			}
 			continue
 		}
 		_, errs[idx] = fs.DeleteObject(ctx, bucket, object.ObjectName, opts)

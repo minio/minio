@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio-go/v6/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -542,14 +543,14 @@ func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object s
 func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	derrs := make([]error, len(objects))
 	dobjects := make([]DeletedObject, len(objects))
-	objNames := make([]string, len(objects))
+	objSets := set.NewStringSet()
 	for i := range derrs {
 		derrs[i] = checkDelObjArgs(ctx, bucket, objects[i].ObjectName)
-		objNames[i] = objects[i].ObjectName
+		objSets.Add(objects[i].ObjectName)
 	}
 
 	// Acquire a bulk write lock across 'objects'
-	multiDeleteLock := z.NewNSLock(ctx, bucket, objNames...)
+	multiDeleteLock := z.NewNSLock(ctx, bucket, objSets.ToSlice()...)
 	if err := multiDeleteLock.GetLock(globalOperationTimeout); err != nil {
 		for i := range derrs {
 			derrs[i] = err
