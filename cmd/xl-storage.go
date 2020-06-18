@@ -1231,6 +1231,10 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 
 	srcFilePath := pathJoin(filePath, xlStorageFormatFileV1)
 	dstFilePath := pathJoin(filePath, xlStorageFormatFile)
+
+	// Renaming xl.json to xl.meta should be fully synced to disk.
+	defer globalSync()
+
 	if err = os.Rename(srcFilePath, dstFilePath); err != nil {
 		switch {
 		case isSysErrNotDir(err):
@@ -2028,8 +2032,20 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 	}
 
 	dstBuf, err := ioutil.ReadFile(dstFilePath)
-	if err != nil && !os.IsNotExist(err) {
-		return osErrToFileErr(err)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return osErrToFileErr(err)
+		}
+		err = s.renameLegacyMetadata(dstVolume, dstPath)
+		if err != nil && err != errFileNotFound {
+			return err
+		}
+		if err == nil {
+			dstBuf, err = ioutil.ReadFile(dstFilePath)
+			if err != nil && !os.IsNotExist(err) {
+				return osErrToFileErr(err)
+			}
+		}
 	}
 
 	var xlMeta xlMetaV2
@@ -2092,6 +2108,9 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 			}
 			return osErrToFileErr(err)
 		}
+
+		// Sync all the directory operations.
+		globalSync()
 
 		for _, entry := range entries {
 			if entry == xlStorageFormatFile {
