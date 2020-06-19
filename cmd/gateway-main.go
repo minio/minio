@@ -144,7 +144,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}()
 
 	// Handle gateway specific env
-	gatewayHandleEnvVars()
+	gatewayHandleEnvVars(gw)
 
 	// Set system resources to maximum.
 	setMaxResources()

@@ -362,11 +362,14 @@ func parseGatewaySSE(s string) (gatewaySSE, error) {
 }
 
 // handle gateway env vars
-func gatewayHandleEnvVars() {
+func gatewayHandleEnvVars(gw Gateway) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
-	if !globalActiveCred.IsValid() {
+	// S3 gateway implements chaining all credentials.
+	// If IAM creds are being used from EC2,
+	// globalActiveCred will not be set.
+	if gw.Name() != "s3" && !globalActiveCred.IsValid() {
 		logger.Fatal(config.ErrInvalidCredentials(nil),
 			"Unable to validate credentials inherited from the shell environment")
 	}
