@@ -267,11 +267,17 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 				return nil, err
 			}
 
-			if args.Password == "" {
-				return conn, nil
+			if args.Password != "" {
+				if _, err = conn.Do("AUTH", args.Password); err != nil {
+					cErr := conn.Close()
+					targetID := event.TargetID{ID: id, Name: "redis"}
+					loggerOnce(context.Background(), cErr, targetID)
+					return nil, err
+				}
 			}
 
-			if _, err = conn.Do("AUTH", args.Password); err != nil {
+			// Must be done after AUTH
+			if _, err = conn.Do("CLIENT", "SETNAME", "MinIO"); err != nil {
 				cErr := conn.Close()
 				targetID := event.TargetID{ID: id, Name: "redis"}
 				loggerOnce(context.Background(), cErr, targetID)
