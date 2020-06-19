@@ -1578,15 +1578,14 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 
 	// test cases with inputs and expected result for Copy Object.
 	testCases := []struct {
-		bucketName          string
-		copySourceHeader    string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
-		copySourceVersionID string // data for "X-Amz-Copy-Source-Version-Id" header.
-		copySourceRange     string // data for "X-Amz-Copy-Source-Range" header, contains the byte range offsets of data to be copied.
-		uploadID            string // uploadID of the transaction.
-		invalidPartNumber   bool   // Sets an invalid multipart.
-		maximumPartNumber   bool   // Sets a maximum parts.
-		accessKey           string
-		secretKey           string
+		bucketName        string
+		copySourceHeader  string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
+		copySourceRange   string // data for "X-Amz-Copy-Source-Range" header, contains the byte range offsets of data to be copied.
+		uploadID          string // uploadID of the transaction.
+		invalidPartNumber bool   // Sets an invalid multipart.
+		maximumPartNumber bool   // Sets a maximum parts.
+		accessKey         string
+		secretKey         string
 		// expected output.
 		expectedRespStatus int
 	}{
@@ -1768,26 +1767,6 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
-		// Test case - 16, copy part 1 from from newObject1 with null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			uploadID:            uploadID,
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "null",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusOK,
-		},
-		// Test case - 16, copy part 1 from from newObject1 with non null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			uploadID:            uploadID,
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "17", // invalid id
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusBadRequest,
-		},
 	}
 
 	for i, testCase := range testCases {
@@ -1809,9 +1788,6 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
-		}
-		if testCase.copySourceVersionID != "" {
-			req.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
 		}
 		if testCase.copySourceRange != "" {
 			req.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
@@ -1933,7 +1909,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		bucketName           string
 		newObjectName        string // name of the newly copied object.
 		copySourceHeader     string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
-		copySourceVersionID  string // data for "X-Amz-Copy-Source-Version-Id" header.
 		copyModifiedHeader   string // data for "X-Amz-Copy-Source-If-Modified-Since" header
 		copyUnmodifiedHeader string // data for "X-Amz-Copy-Source-If-Unmodified-Since" header
 		metadataGarbage      bool
@@ -2162,26 +2137,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
-		// Test case - 19, copy metadata from newObject1 with null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			newObjectName:       "newObject1",
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "null",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusOK,
-		},
-		// Test case - 20, copy metadata from newObject1 with non null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			newObjectName:       "newObject1",
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "17",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusBadRequest,
-		},
 	}
 
 	for i, testCase := range testCases {
@@ -2199,9 +2154,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
-		}
-		if testCase.copySourceVersionID != "" {
-			req.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
 		}
 		if testCase.copyModifiedHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)
@@ -2258,9 +2210,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			reqV2.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
-		}
-		if testCase.copySourceVersionID != "" {
-			reqV2.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
 		}
 		if testCase.copyModifiedHeader != "" {
 			reqV2.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)

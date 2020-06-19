@@ -768,9 +768,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
-	if vid == "" {
-		vid = strings.TrimSpace(r.Header.Get(xhttp.AmzCopySourceVersionID))
-	}
 
 	srcBucket, srcObject := path2BucketObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
@@ -884,11 +881,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var chStorageClass bool
 	if dstSc != "" {
-		sc, ok := srcInfo.UserDefined[xhttp.AmzStorageClass]
-		if (ok && dstSc != sc) || (srcInfo.StorageClass != dstSc) {
-			chStorageClass = true
-			srcInfo.metadataOnly = false
-		}
+		chStorageClass = true
+		srcInfo.metadataOnly = false
 	}
 
 	var reader io.Reader
@@ -1121,7 +1115,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// if encryption is enabled we do not need explicit "REPLACE" metadata to
 	// be enabled as well - this is to allow for key-rotation.
 	if !isDirectiveReplace(r.Header.Get(xhttp.AmzMetadataDirective)) && !isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) &&
-		srcInfo.metadataOnly && !crypto.IsEncrypted(srcInfo.UserDefined) {
+		srcInfo.metadataOnly && !crypto.IsEncrypted(srcInfo.UserDefined) && srcOpts.VersionID == "" {
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyDest), r.URL, guessIsBrowserReq(r))
@@ -1181,6 +1175,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	encodedSuccessResponse := encodeResponse(response)
 
 	setPutObjHeaders(w, objInfo, false)
+	// We must not use the http.Header().Set method here because some (broken)
+	// clients expect the x-amz-copy-source-version-id header key to be literally
+	// "x-amz-copy-source-version-id"- not in canonicalized form, preserve it.
+	if srcOpts.VersionID != "" {
+		w.Header()[strings.ToLower(xhttp.AmzCopySourceVersionID)] = []string{srcOpts.VersionID}
+	}
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
