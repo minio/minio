@@ -152,7 +152,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Set when gateway is enabled
 	globalIsGateway = true
 
-	enableConfigOps := gatewayName == "nas"
+	enableConfigOps := false
 
 	// TODO: We need to move this code with globalConfigSys.Init()
 	// for now keep it here such that "s3" gateway layer initializes
@@ -242,29 +242,15 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Migrate all backend configs to encrypted backend, also handles rotation as well.
-	// For "nas" gateway we need to specially handle the backend migration as well.
-	// Internally code handles migrating etcd if enabled automatically.
-	logger.FatalIf(handleEncryptedConfigBackend(newObject, enableConfigOps),
-		"Unable to handle encrypted backend for config, iam and policies")
-
 	// Calls all New() for all sub-systems.
 	newAllSubsystems()
 
-	// ****  WARNING ****
-	// Migrating to encrypted backend should happen before initialization of any
-	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-	if enableConfigOps {
-		logger.FatalIf(globalConfigSys.Init(newObject), "Unable to initialize config system")
+	if gatewayName == "nas" {
 		buckets, err := newObject.ListBuckets(GlobalContext)
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}
-
 		logger.FatalIf(globalNotificationSys.Init(buckets, newObject), "Unable to initialize notification system")
-		// Start watching disk for reloading config, this
-		// is only enabled for "NAS" gateway.
-		globalConfigSys.WatchConfigNASDisk(GlobalContext, newObject)
 	}
 
 	if globalEtcdClient != nil {

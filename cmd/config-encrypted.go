@@ -31,10 +31,7 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func handleEncryptedConfigBackend(objAPI ObjectLayer, server bool) error {
-	if !server {
-		return nil
-	}
+func handleEncryptedConfigBackend(objAPI ObjectLayer) error {
 
 	encrypted, err := checkBackendEncrypted(objAPI)
 	if err != nil {

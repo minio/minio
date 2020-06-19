@@ -23,7 +23,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
@@ -182,23 +181,6 @@ type ConfigSys struct{}
 // Load - load config.json.
 func (sys *ConfigSys) Load(objAPI ObjectLayer) error {
 	return sys.Init(objAPI)
-}
-
-// WatchConfigNASDisk - watches nas disk on periodic basis.
-func (sys *ConfigSys) WatchConfigNASDisk(ctx context.Context, objAPI ObjectLayer) {
-	configInterval := globalRefreshIAMInterval
-	watchDisk := func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(configInterval):
-				loadConfig(objAPI)
-			}
-		}
-	}
-	// Refresh configSys in background for NAS gateway.
-	go watchDisk()
 }
 
 // Init - initializes config system from config.json.

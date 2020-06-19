@@ -60,8 +60,7 @@ func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transpor
 
 // GetNotificationTargets registers and initializes all notification
 // targets, returns error if any.
-func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
-	test := false
+func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool) (*event.TargetList, error) {
 	returnOnTargetError := false
 	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test, returnOnTargetError)
 }
@@ -72,7 +71,6 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
 func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
-
 	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, returnOnTargetError)
 	if err != nil {
 		return targetList, err
