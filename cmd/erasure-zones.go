@@ -595,15 +595,20 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		return objInfo, err
 	}
 
+	if cpSrcDstSame && srcInfo.metadataOnly && srcOpts.VersionID == dstOpts.VersionID {
+		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
+			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+	}
+
 	putOpts := ObjectOptions{
 		ServerSideEncryption: dstOpts.ServerSideEncryption,
 		UserDefined:          srcInfo.UserDefined,
 		Versioned:            dstOpts.Versioned,
 		VersionID:            dstOpts.VersionID,
-	}
-
-	if cpSrcDstSame && srcInfo.metadataOnly {
-		return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
 
 	return z.zones[zoneIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
