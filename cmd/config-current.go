@@ -333,15 +333,18 @@ func lookupConfigs(s config.Config) {
 	}
 
 	if etcdCfg.Enabled {
-		globalEtcdClient, err = etcd.New(etcdCfg)
-		if err != nil {
-			if globalIsGateway {
-				logger.FatalIf(err, "Unable to initialize etcd config")
-			} else {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		if globalEtcdClient == nil {
+			globalEtcdClient, err = etcd.New(etcdCfg)
+			if err != nil {
+				if globalIsGateway {
+					logger.FatalIf(err, "Unable to initialize etcd config")
+				} else {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+				}
 			}
 		}
-		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
+
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil && globalDNSConfig == nil {
 			globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 				dns.DomainNames(globalDomainNames),
 				dns.DomainIPs(globalDomainIPs),
@@ -570,8 +573,6 @@ func newServerConfig() config.Config {
 	return config.New()
 }
 
-var lookupConfigOnce sync.Once
-
 // newSrvConfig - initialize a new server config, saves env parameters if
 // found, otherwise use default parameters
 func newSrvConfig(objAPI ObjectLayer) error {
@@ -579,9 +580,7 @@ func newSrvConfig(objAPI ObjectLayer) error {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	lookupConfigOnce.Do(func() {
-		lookupConfigs(srvCfg)
-	})
+	lookupConfigs(srvCfg)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
@@ -605,9 +604,7 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	lookupConfigOnce.Do(func() {
-		lookupConfigs(srvCfg)
-	})
+	lookupConfigs(srvCfg)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()
