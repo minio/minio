@@ -45,6 +45,12 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         Scopes,
+			Description: `Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"`,
+			Optional:    true,
+			Type:        "csv",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,

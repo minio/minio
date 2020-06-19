@@ -21,6 +21,38 @@ $ export MINIO_SECRET_KEY=minio123
 $ minio server /mnt/export
 ```
 
+Here are all the available options to configure OpenID connect
+```
+mc admin config set myminio/ identity_openid
+
+KEY:
+identity_openid  enable OpenID SSO support
+
+ARGS:
+config_url*   (url)       openid discovery document e.g. "https://accounts.google.com/.well-known/openid-configuration"
+client_id     (string)    unique public identifier for apps e.g. "292085223830.apps.googleusercontent.com"
+claim_name    (string)    JWT canned policy claim name, defaults to "policy"
+claim_prefix  (string)    JWT claim namespace prefix e.g. "customer1/"
+scopes        (csv)       Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"
+comment       (sentence)  optionally add a comment to this setting
+```
+
+and for ENV based options
+```
+mc admin config set myminio/ identity_openid --env
+
+KEY:
+identity_openid  enable OpenID SSO support
+
+ARGS:
+MINIO_IDENTITY_OPENID_CONFIG_URL*   (url)       openid discovery document e.g. "https://accounts.google.com/.well-known/openid-configuration"
+MINIO_IDENTITY_OPENID_CLIENT_ID     (string)    unique public identifier for apps e.g. "292085223830.apps.googleusercontent.com"
+MINIO_IDENTITY_OPENID_CLAIM_NAME    (string)    JWT canned policy claim name, defaults to "policy"
+MINIO_IDENTITY_OPENID_CLAIM_PREFIX  (string)    JWT claim namespace prefix e.g. "customer1/"
+MINIO_IDENTITY_OPENID_SCOPES        (csv)       Comma separated list of OpenID scopes for server, defaults to advertised scopes from discovery document e.g. "email,admin"
+MINIO_IDENTITY_OPENID_COMMENT       (sentence)  optionally add a comment to this setting
+```
+
 Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
 ```
 ~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" client_id="account"

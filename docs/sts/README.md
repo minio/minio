@@ -13,8 +13,8 @@ Following are advantages for using temporary credentials:
 ## Identity Federation
 |AuthN | Description |
 | :---------------------- | ------------------------------------------ |
-| [**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) | Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, WSO2. This is known as the client grants approach to temporary access. Using this approach helps clients keep MinIO credentials to be secured. MinIO STS supports client grants, tested against identity providers such as WSO2, KeyCloak. |
-| [**WebIdentity**](https://github.com/minio/minio/blob/master/docs/sts/web-identity.md) | Let users request temporary credentials using any OpenID(OIDC) compatible web identity providers such as Facebook, Google etc. |
+| [**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) | Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, Okta. This is known as the client grants approach to temporary access. Using this approach helps clients keep MinIO credentials to be secured. MinIO STS supports client grants, tested against identity providers such as KeyCloak, Okta. |
+| [**WebIdentity**](https://github.com/minio/minio/blob/master/docs/sts/web-identity.md) | Let users request temporary credentials using any OpenID(OIDC) compatible web identity providers such as KeyCloak, Facebook, Google etc. |
 | [**AssumeRole**](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md) | Let MinIO users request temporary credentials using user access and secret keys. |
 | [**AD/LDAP**](https://github.com/minio/minio/blob/master/docs/sts/ldap.md) | Let AD/LDAP users request temporary credentials using AD/LDAP username and password. |
 
@@ -24,22 +24,21 @@ In this document we will explain in detail on how to configure all the prerequis
 > NOTE: If you are interested in AssumeRole API only, skip to [here](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md)
 
 ### 1. Prerequisites
-- [Configuring wso2](https://github.com/minio/minio/blob/master/docs/sts/wso2.md)
-- [Configuring opa (optional)](https://github.com/minio/minio/blob/master/docs/sts/opa.md)
+- [Configuring keycloak](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md)
 - [Configuring etcd (optional needed only in gateway or federation mode)](https://github.com/minio/minio/blob/master/docs/sts/etcd.md)
 
-### 2. Setup MinIO with WSO2
+### 2. Setup MinIO with Keycloak
 Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use MinIO STS API and MinIO server to use these credentials to perform object API operations.
 
 ```
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio123
-export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
+export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 minio server /mnt/data
 ```
 
-### 3. Setup MinIO Gateway with WSO2, ETCD
+### 3. Setup MinIO Gateway with Keycloak and Etcd
 Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use MinIO STS API and MinIO gateway to use these credentials to perform object API operations.
 
 > NOTE: MinIO gateway requires etcd to be configured to use STS API.
@@ -47,14 +46,14 @@ Make sure we have followed the previous step and configured each software indepe
 ```
 export MINIO_ACCESS_KEY=aws_access_key
 export MINIO_SECRET_KEY=aws_secret_key
-export MINIO_IDENTITY_OPENID_CONFIG_URL=https://localhost:9443/oauth2/oidcdiscovery/.well-known/openid-configuration
+export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 export MINIO_ETCD_ENDPOINTS=http://localhost:2379
 minio gateway s3
 ```
 
 ### 4. Test using client-grants.go
-On another terminal run `client-grants.go` a sample client application which obtains JWT access tokens from an identity provider, in our case its WSO2. Uses the returned access token response to get new temporary credentials from the MinIO server using the STS API call `AssumeRoleWithClientGrants`.
+On another terminal run `client-grants.go` a sample client application which obtains JWT access tokens from an identity provider, in our case its Keycloak. Uses the returned access token response to get new temporary credentials from the MinIO server using the STS API call `AssumeRoleWithClientGrants`.
 
 ```
 go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
