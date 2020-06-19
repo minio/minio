@@ -103,12 +103,13 @@ func (p zonesAvailableSpace) TotalAvailable() uint64 {
 	return total
 }
 
-func (z *erasureZones) getAvailableZoneIdx(ctx context.Context) int {
-	zones := z.getZonesAvailableSpace(ctx)
+// getAvailableZoneIdx will return an index that can hold size bytes.
+// -1 is returned if no zones have available space for the size given.
+func (z *erasureZones) getAvailableZoneIdx(ctx context.Context, size int64) int {
+	zones := z.getZonesAvailableSpace(ctx, size)
 	total := zones.TotalAvailable()
 	if total == 0 {
-		// Houston, we have a problem, maybe panic??
-		return zones[0].Index
+		return -1
 	}
 	// choose when we reach this many
 	choose := rand.Uint64() % total
@@ -120,10 +121,17 @@ func (z *erasureZones) getAvailableZoneIdx(ctx context.Context) int {
 		}
 	}
 	// Should not happen, but print values just in case.
-	panic(fmt.Errorf("reached end of zones (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
+	logger.LogIf(ctx, fmt.Errorf("reached end of zones (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
+	return -1
 }
 
-func (z *erasureZones) getZonesAvailableSpace(ctx context.Context) zonesAvailableSpace {
+// getZonesAvailableSpace will return the available space of each zone after storing the content.
+// If there is not enough space the zone will return 0 bytes available.
+// Negative sizes are seen as 0 bytes.
+func (z *erasureZones) getZonesAvailableSpace(ctx context.Context, size int64) zonesAvailableSpace {
+	if size < 0 {
+		size = 0
+	}
 	var zones = make(zonesAvailableSpace, len(z.zones))
 
 	storageInfos := make([]StorageInfo, len(z.zones))
@@ -144,6 +152,24 @@ func (z *erasureZones) getZonesAvailableSpace(ctx context.Context) zonesAvailabl
 		for _, davailable := range zinfo.Available {
 			available += davailable
 		}
+		var total uint64
+		for _, dtotal := range zinfo.Total {
+			total += dtotal
+		}
+		// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
+		if available < uint64(size) {
+			available = 0
+		}
+		if available > 0 {
+			// How much will be left after adding the file.
+			available -= -uint64(size)
+
+			// wantLeft is how much space there at least must be left.
+			wantLeft := uint64(float64(total) * (1.0 - diskFillFraction))
+			if available <= wantLeft {
+				available = 0
+			}
+		}
 		zones[i] = zoneAvailableSpace{
 			Index:     i,
 			Available: available,
@@ -154,7 +180,7 @@ func (z *erasureZones) getZonesAvailableSpace(ctx context.Context) zonesAvailabl
 
 // getZoneIdx returns the found previous object and its corresponding zone idx,
 // if none are found falls back to most available space zone.
-func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions) (idx int, err error) {
+func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
 	if z.SingleZone() {
 		return 0, nil
 	}
@@ -179,7 +205,13 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 		// Success case and when DeleteMarker is true return.
 		return i, nil
 	}
-	return z.getAvailableZoneIdx(ctx), nil
+
+	// We multiply the size by 2 to account for erasure coding.
+	idx = z.getAvailableZoneIdx(ctx, size*2)
+	if idx < 0 {
+		return -1, errDiskFull
+	}
+	return idx, nil
 }
 
 func (z *erasureZones) Shutdown(ctx context.Context) error {
@@ -508,7 +540,7 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts)
+	idx, err := z.getZoneIdx(ctx, bucket, object, opts, data.Size())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -590,7 +622,7 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		return z.zones[0].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
 
-	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts)
+	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
 	}
@@ -1305,7 +1337,8 @@ func (z *erasureZones) NewMultipartUpload(ctx context.Context, bucket, object st
 		return z.zones[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts)
+	// We don't know the exact size, so we ask for at least 100MB.
+	idx, err := z.getZoneIdx(ctx, bucket, object, opts, 100<<20)
 	if err != nil {
 		return "", err
 	}

@@ -96,6 +96,9 @@ const (
 
 	// Maximum size of default bucket encryption configuration allowed
 	maxBucketSSEConfigSize = 1 * humanize.MiByte
+
+	// diskFillFraction is the fraction of a disk we allow to be filled.
+	diskFillFraction = 0.95
 )
 
 var globalCLIContext = struct {
