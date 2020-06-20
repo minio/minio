@@ -209,7 +209,7 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 	// We multiply the size by 2 to account for erasure coding.
 	idx = z.getAvailableZoneIdx(ctx, size*2)
 	if idx < 0 {
-		return -1, errDiskFull
+		return -1, toObjectErr(errDiskFull)
 	}
 	return idx, nil
 }
@@ -1337,8 +1337,8 @@ func (z *erasureZones) NewMultipartUpload(ctx context.Context, bucket, object st
 		return z.zones[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
-	// We don't know the exact size, so we ask for at least 100MB.
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts, 100<<20)
+	// We don't know the exact size, so we ask for at least 1GiB file.
+	idx, err := z.getZoneIdx(ctx, bucket, object, opts, 1<<30)
 	if err != nil {
 		return "", err
 	}
