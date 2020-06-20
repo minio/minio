@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -29,12 +31,11 @@ import (
 // servers holding the lock, source on the client machine,
 // ID, type(read or write) and time stamp.
 type LockEntry struct {
-	Timestamp  time.Time `json:"time"`       // Timestamp set at the time of initialization.
-	Resource   string    `json:"resource"`   // Resource contains info like bucket, object etc
-	Type       string    `json:"type"`       // Bool whether write or read lock.
-	Source     string    `json:"source"`     // Source which created the lock
-	ServerList []string  `json:"serverlist"` // RPC path of servers issuing the lock.
-	Owner      string    `json:"owner"`      // RPC path of client claiming lock.
+	Timestamp  time.Time `json:"time"`       // When the lock was first granted
+	Resource   string    `json:"resource"`   // Resource contains info like bucket+object
+	Type       string    `json:"type"`       // Type indicates if 'Write' or 'Read' lock
+	Source     string    `json:"source"`     // Source at which lock was granted
+	ServerList []string  `json:"serverlist"` // List of servers participating in the lock.
 	ID         string    `json:"id"`         // UID to uniquely identify request of client.
 }
 
@@ -53,13 +54,19 @@ func (l LockEntries) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
-// TopLocks - returns the oldest locks in a minio setup.
-func (adm *AdminClient) TopLocks(ctx context.Context) (LockEntries, error) {
-	// Execute GET on /minio/admin/v3/top/locks
-	// to get the oldest locks in a minio setup.
+// TopNLocks - returns the count number of oldest locks currently active on the server.
+func (adm *AdminClient) TopNLocks(ctx context.Context, count int) (LockEntries, error) {
+	// Execute GET on /minio/admin/v3/top/locks?count=10
+	// to get the 'count' number of oldest locks currently
+	// active on the server.
+	queryVals := make(url.Values)
+	queryVals.Set("count", strconv.Itoa(count))
 	resp, err := adm.executeMethod(ctx,
 		http.MethodGet,
-		requestData{relPath: adminAPIPrefix + "/top/locks"},
+		requestData{
+			relPath:     adminAPIPrefix + "/top/locks",
+			queryValues: queryVals,
+		},
 	)
 	defer closeResponse(resp)
 	if err != nil {
@@ -78,4 +85,9 @@ func (adm *AdminClient) TopLocks(ctx context.Context) (LockEntries, error) {
 	var lockEntries LockEntries
 	err = json.Unmarshal(response, &lockEntries)
 	return lockEntries, err
+}
+
+// TopLocks - returns top '10' oldest locks currently active on the server.
+func (adm *AdminClient) TopLocks(ctx context.Context) (LockEntries, error) {
+	return adm.TopNLocks(ctx, 10)
 }

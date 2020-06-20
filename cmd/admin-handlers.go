@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -328,7 +328,7 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
 		Resource:   resource,
@@ -337,14 +337,14 @@ func newLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntr
 		ID:         l.UID,
 	}
 	if l.Writer {
-		entry.Type = "Write"
+		entry.Type = "WRITE"
 	} else {
-		entry.Type = "Read"
+		entry.Type = "READ"
 	}
 	return entry
 }
 
-func topLockEntries(peerLocks []*PeerLocks) madmin.LockEntries {
+func topLockEntries(peerLocks []*PeerLocks, count int) madmin.LockEntries {
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -356,20 +356,19 @@ func topLockEntries(peerLocks []*PeerLocks) madmin.LockEntries {
 					if val, ok := entryMap[lockReqInfo.UID]; ok {
 						val.ServerList = append(val.ServerList, peerLock.Addr)
 					} else {
-						entryMap[lockReqInfo.UID] = newLockEntry(lockReqInfo, k, peerLock.Addr)
+						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
 					}
 				}
 			}
 		}
 	}
-	var lockEntries = make(madmin.LockEntries, 0)
+	var lockEntries = make(madmin.LockEntries, 0, len(entryMap))
 	for _, v := range entryMap {
 		lockEntries = append(lockEntries, *v)
 	}
 	sort.Sort(lockEntries)
-	const listCount int = 10
-	if len(lockEntries) > listCount {
-		lockEntries = lockEntries[:listCount]
+	if len(lockEntries) > count {
+		lockEntries = lockEntries[:count]
 	}
 	return lockEntries
 }
@@ -391,6 +390,16 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	count := 10 // by default list only top 10 entries
+	if countStr := r.URL.Query().Get("count"); countStr != "" {
+		var err error
+		count, err = strconv.Atoi(countStr)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
 	peerLocks := globalNotificationSys.GetLocks(ctx)
 	// Once we have received all the locks currently used from peers
 	// add the local peer locks list as well.
@@ -398,12 +407,13 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	for _, llocker := range globalLockServers {
 		getRespLocks = append(getRespLocks, llocker.DupLockMap())
 	}
+
 	peerLocks = append(peerLocks, &PeerLocks{
 		Addr:  getHostName(r),
 		Locks: getRespLocks,
 	})
 
-	topLocks := topLockEntries(peerLocks)
+	topLocks := topLockEntries(peerLocks, count)
 
 	// Marshal API response
 	jsonBytes, err := json.Marshal(topLocks)
