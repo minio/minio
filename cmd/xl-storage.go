@@ -288,7 +288,7 @@ var ignoreDiskFreeOS = []string{
 func checkDiskMinTotal(di disk.Info) (err error) {
 	// Remove 5% from total space for cumulative disk space
 	// used for journalling, inodes etc.
-	totalDiskSpace := float64(di.Total) * 0.95
+	totalDiskSpace := float64(di.Total) * diskFillFraction
 	if int64(totalDiskSpace) <= diskMinTotalSpace {
 		return errMinDiskSize
 	}
@@ -298,7 +298,7 @@ func checkDiskMinTotal(di disk.Info) (err error) {
 // check if disk free has minimum required size.
 func checkDiskMinFree(di disk.Info) error {
 	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := float64(di.Free) * 0.95
+	availableDiskSpace := float64(di.Free) * diskFillFraction
 	if int64(availableDiskSpace) <= diskMinFreeSpace {
 		return errDiskFull
 	}
@@ -328,7 +328,7 @@ func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 	}
 
 	// Check if we have enough space to store data
-	if neededSpace > int64(float64(di.Free)*0.95) {
+	if neededSpace > int64(float64(di.Free)*diskFillFraction) {
 		return errDiskFull
 	}
 
