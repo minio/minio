@@ -40,11 +40,11 @@ func checkXL2V1(buf []byte) error {
 	}
 
 	if !bytes.Equal(buf[:4], xlHeader[:]) {
-		return fmt.Errorf("xlMeta: unknown XLv2 header %s", xlHeader)
+		return fmt.Errorf("xlMeta: unknown XLv2 header, expected %v, got %v", xlHeader[:4], buf[:4])
 	}
 
 	if !bytes.Equal(buf[4:8], xlVersionV1[:]) {
-		return fmt.Errorf("xlMeta: unknown XLv2 version %s", xlVersionV1)
+		return fmt.Errorf("xlMeta: unknown XLv2 version, expected %v, got %v", xlVersionV1[:4], buf[4:8])
 	}
 
 	return nil
