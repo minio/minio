@@ -1,7 +1,9 @@
-FROM alpine:3.10
+FROM multiarch/qemu-user-static:x86_64-s390x as qemu
+FROM s390x/alpine:3.10
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
+COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin
 COPY minio /usr/bin/minio
 
 ENV MINIO_UPDATE off
