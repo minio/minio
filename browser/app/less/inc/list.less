@@ -105,7 +105,7 @@ div.fesl-row {
 
     .fesl-item-name {
         a {
-            cursor: default;
+            cursor: pointer;
         }
     }
 
@@ -114,12 +114,6 @@ div.fesl-row {
     ----------------------------*/
     &[data-type=folder] {
         .list-type(#a1d6dd, '\f07b');
-
-        .fesl-item-name {
-            a {
-                cursor: pointer;
-            }
-        }
     }
     &[data-type=pdf] {.list-type(#fa7775, '\f1c1'); }
     &[data-type=zip] { .list-type(#427089, '\f1c6'); }

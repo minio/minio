@@ -54,8 +54,11 @@ export const ObjectItem = ({
           href={getDataType(name, contentType) === "folder" ? name : "#"}
           onClick={e => {
             e.preventDefault()
+            // onclick function is passed only when we have a prefix
             if (onClick) {
               onClick()
+            } else {
+              checked ? uncheckObject(name) : checkObject(name)
             }
           }}
         >
