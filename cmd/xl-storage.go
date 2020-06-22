@@ -60,8 +60,10 @@ const (
 	readAheadBufSize = 1 << 20
 
 	// Wait interval to check if active IO count is low
-	// to proceed crawling to compute data usage
+	// to proceed crawling to compute data usage.
+	// Wait up to lowActiveIOWaitMaxN times.
 	lowActiveIOWaitTick = 100 * time.Millisecond
+	lowActiveIOWaitMaxN = 10
 
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
@@ -357,8 +359,16 @@ func (s *xlStorage) IsLocal() bool {
 }
 
 func (s *xlStorage) waitForLowActiveIO() {
+	max := lowActiveIOWaitMaxN
 	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
 		time.Sleep(lowActiveIOWaitTick)
+		max--
+		if max == 0 {
+			if intDataUpdateTracker.debug {
+				logger.Info("waitForLowActiveIO: waited %d times, resuming", lowActiveIOWaitMaxN)
+			}
+			break
+		}
 	}
 }
 
