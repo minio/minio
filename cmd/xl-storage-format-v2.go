@@ -40,14 +40,25 @@ func checkXL2V1(buf []byte) error {
 	}
 
 	if !bytes.Equal(buf[:4], xlHeader[:]) {
-		return fmt.Errorf("xlMeta: unknown XLv2 header %s", xlHeader)
+		return fmt.Errorf("xlMeta: unknown XLv2 header, expected %v, got %v", xlHeader[:4], buf[:4])
 	}
 
 	if !bytes.Equal(buf[4:8], xlVersionV1[:]) {
-		return fmt.Errorf("xlMeta: unknown XLv2 version %s", xlVersionV1)
+		return fmt.Errorf("xlMeta: unknown XLv2 version %v", buf[4:8])
 	}
 
 	return nil
+}
+
+// ExternLoadMetaV2 will load xlMetaV2 metadata and return it as an untyped interface.
+// Mainly for use by other packages.
+func ExternLoadMetaV2(b []byte) (interface{}, error) {
+	var meta xlMetaV2
+	err := meta.Load(b)
+	if err != nil {
+		return nil, err
+	}
+	return &meta, nil
 }
 
 func isXL2V1Format(buf []byte) bool {
