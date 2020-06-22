@@ -1,4 +1,4 @@
-FROM golang:1.13-alpine
+FROM golang:1.13-alpine as builder
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
@@ -21,9 +21,9 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 
 EXPOSE 9000
 
-COPY --from=0 /go/bin/minio /usr/bin/minio
-COPY --from=0 /go/minio/CREDITS /third_party/
-COPY --from=0 /go/minio/dockerscripts/docker-entrypoint.sh /usr/bin/
+COPY --from=builder /go/bin/minio /usr/bin/minio
+COPY --from=builder /go/minio/CREDITS /third_party/
+COPY --from=builder /go/minio/dockerscripts/docker-entrypoint.sh /usr/bin/
 
 RUN  \
      apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \

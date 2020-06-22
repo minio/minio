@@ -1,7 +1,9 @@
-FROM alpine:3.10
+FROM multiarch/qemu-user-static:x86_64-ppc64le as qemu
+FROM ppc64le/alpine:3.10
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
+COPY --from=qemu /usr/bin/qemu-ppc64le-static /usr/bin
 COPY minio /usr/bin/minio
 
 ENV MINIO_UPDATE off
