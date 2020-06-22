@@ -176,14 +176,17 @@ type xlMetaV2Version struct {
 func (j xlMetaV2Version) Valid() bool {
 	switch j.Type {
 	case LegacyType:
-		return j.ObjectV1 != nil && j.ObjectV1.valid()
+		return j.ObjectV1 != nil &&
+			j.ObjectV1.valid()
 	case ObjectType:
 		return j.ObjectV2 != nil &&
 			j.ObjectV2.ErasureAlgorithm.valid() &&
 			j.ObjectV2.BitrotChecksumAlgo.valid() &&
-			isXLMetaErasureInfoValid(j.ObjectV2.ErasureM, j.ObjectV2.ErasureN)
+			isXLMetaErasureInfoValid(j.ObjectV2.ErasureM, j.ObjectV2.ErasureN) &&
+			j.ObjectV2.StatModTime > 0
 	case DeleteType:
-		return j.DeleteMarker != nil && j.DeleteMarker.ModTime > 0
+		return j.DeleteMarker != nil &&
+			j.DeleteMarker.ModTime > 0
 	}
 	return false
 }
