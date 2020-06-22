@@ -1,0 +1,167 @@
+project_name: minio
+
+release:
+   name_template: "Version {{.MinIO.Version}}"
+   disable: true
+   github:
+    owner: minio
+    name: minio
+
+env:
+  - CGO_ENABLED=0
+  - GO111MODULE=on
+
+before:
+  hooks:
+    - make clean
+    - go generate ./...
+    - go mod tidy
+    - go mod download
+
+builds:
+  -
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+
+    goarch:
+      - amd64
+      - arm64
+      - arm
+      - ppc64le
+      - s390x
+
+    goarm:
+      - 7
+
+    ignore:
+      - goos: darwin
+        goarch: arm64
+      - goos: darwin
+        goarch: arm
+      - goos: darwin
+        goarch: ppc64le
+      - goos: darwin
+        goarch: s390x
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: ppc64le
+      - goos: windows
+        goarch: s390x
+      - goos: freebsd
+        goarch: arm
+      - goos: freebsd
+        goarch: arm64
+      - goos: freebsd
+        goarch: ppc64le
+      - goos: freebsd
+        goarch: s390x
+
+    flags:
+      - -tags=kqueue
+      - -trimpath
+
+    ldflags:
+      - "-s -w -X github.com/minio/minio/cmd.Version={{.Version}} -X github.com/minio/minio/cmd.ReleaseTag={{.Tag}} -X github.com/minio/minio/cmd.CommitID={{.FullCommit}} -X github.com/minio/minio/cmd.ShortCommitID={{.ShortCommit}}"
+
+archives:
+  -
+    format: binary
+    name_template: "{{ .Binary }}-release/{{ .Os }}-{{ .Arch }}/{{ .Binary }}.{{ .Version }}"
+
+nfpms:
+  -
+    id: minio
+    package_name: minio
+    vendor: MinIO, Inc.
+    homepage: https://min.io/
+    maintainer: dev@min.io
+    description: MinIO is a High Performance Object Storage released under Apache License v2.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
+    license: Apache 2.0
+    bindir: /usr/bin
+    formats:
+      - deb
+      - rpm
+    overrides:
+      deb:
+        file_name_template: "{{ .Binary }}-release/debs/{{ .ProjectName }}-{{ .Version }}_{{ .Arch }}"
+        replacements:
+          arm: armv7
+        files:
+          "NOTICE": "/usr/share/minio/NOTICE"
+          "CREDITS": "/usr/share/minio/CREDITS"
+          "LICENSE": "/usr/share/minio/LICENSE"
+          "README.md": "/usr/share/minio/README.md"
+      rpm:
+        file_name_template: "{{ .Binary }}-release/rpms/{{ .ProjectName }}-{{ .Version }}.{{ .Arch }}"
+        replacements:
+          amd64: x86_64
+          arm64: aarch64
+          arm: armv7
+        files:
+          "NOTICE": "/usr/share/minio/NOTICE"
+          "CREDITS": "/usr/share/minio/CREDITS"
+          "LICENSE": "/usr/share/minio/LICENSE"
+          "README.md": "/usr/share/minio/README.md"
+
+checksum:
+  algorithm: sha256
+
+signs:
+  -
+    signature: "${artifact}.asc"
+    cmd: "sh"
+    args:
+      - '-c'
+      - 'gpg --quiet --detach-sign -a ${artifact}'
+    artifacts: all
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^Update yaml files'
+
+dockers:
+  -
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.release
+    image_templates:
+      - minio/minio:{{ .Tag }}
+      - minio/minio:latest
+
+  -
+    goos: linux
+    goarch: ppc64le
+    dockerfile: Dockerfile.ppc64le.release
+    image_templates:
+      - minio/minio:{{ .Tag }}-ppc64le
+
+  -
+    goos: linux
+    goarch: s390x
+    dockerfile: Dockerfile.s390x.release
+    image_templates:
+      - minio/minio:{{ .Tag }}-s390x
+
+  -
+    goos: linux
+    goarch: arm64
+    goarm: ''
+    dockerfile: Dockerfile.arm64.release
+    image_templates:
+      - minio/minio:{{ .Tag }}-arm64
+
+  -
+    goos: linux
+    goarch: arm
+    goarm: '7'
+    dockerfile: Dockerfile.arm.release
+    image_templates:
+      - minio/minio:{{ .Tag }}-arm
