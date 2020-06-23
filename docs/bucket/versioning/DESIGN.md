@@ -1,53 +1,32 @@
 # Bucket Versioning Design Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-Example of a version enabled bucket `engineering`
-```
-/mnt/data02/engineering/backup.tar.gz
-├─ 0379f361-695c-4509-b0b8-a4842d414579
-│  └─ part.1
-├─ 804fea2c-c21e-490b-98ff-cdb647047cb6
-│  └─ part.1
-├─ e063d138-4d6e-4e68-8576-12d1b4509cc3
-│  └─ part.1
-├─ e675c1f6-476d-4b46-be31-281c887aea7b
-│  └─ part.1
-└─ xl.meta
+## Description of `xl.meta`
 
-/mnt/data03/engineering/backup.tar.gz
-├─ 0379f361-695c-4509-b0b8-a4842d414579
-│  └─ part.1
-├─ 804fea2c-c21e-490b-98ff-cdb647047cb6
-│  └─ part.1
-├─ e063d138-4d6e-4e68-8576-12d1b4509cc3
-│  └─ part.1
-├─ e675c1f6-476d-4b46-be31-281c887aea7b
-│  └─ part.1
-└─ xl.meta
+`xl.meta` is a new self describing backend format used by MinIO to support AWS S3 compatible versioning. This file is the source of truth for each `version` at rest. `xl.meta` is a msgpack file serialized from a well defined data structure. To understand `xl.meta` here are the few things to start with
 
-/mnt/data04/engineering/backup.tar.gz
-├─ 0379f361-695c-4509-b0b8-a4842d414579
-│  └─ part.1
-├─ 804fea2c-c21e-490b-98ff-cdb647047cb6
-│  └─ part.1
-├─ e063d138-4d6e-4e68-8576-12d1b4509cc3
-│  └─ part.1
-├─ e675c1f6-476d-4b46-be31-281c887aea7b
-│  └─ part.1
-└─ xl.meta
+`xl.meta` carries first 8 bytes an XL header which describes the current format and the format version, allowing the unmarshaller's to automatically use the right data structures to parse the subsequent content in the stream.
 
-/mnt/data05/engineering/backup.tar.gz
-├─ 0379f361-695c-4509-b0b8-a4842d414579
-│  └─ part.1
-├─ 804fea2c-c21e-490b-98ff-cdb647047cb6
-│  └─ part.1
-├─ e063d138-4d6e-4e68-8576-12d1b4509cc3
-│  └─ part.1
-├─ e675c1f6-476d-4b46-be31-281c887aea7b
-│  └─ part.1
-└─ xl.meta
+These are the current entries
+```go
+var (
+        // XL header specifies the format
+        // one extra byte left for future use
+        xlHeader = [4]byte{'X', 'L', '2', ' '}
+
+        // XLv2 version 1 specifies the current
+        // version of the XLv2 format, 3 extra bytes
+        // left for future use.
+        xlVersionV1 = [4]byte{'1', ' ', ' ', ' '}
+)
 ```
 
-`xl.meta` is a msgpack file with following data structure, this is converted from binary format to JSON for convenience.
+Once the header is validated, we proceed to the actual data structure of the `xl.meta` format. `xl.meta` carries three types of object entries which designate the type of version object stored.
+
+- ObjectType (default)
+- LegacyObjectType (preserves existing deployments and older xl.json format)
+- DeleteMarker (a versionId to capture the DELETE sequences implemented primarily for AWS spec compatibility)
+
+A sample msgpack-JSON `xl.meta`, you can debug the content inside `xl.meta` using [xl-meta-to-json.go][./xl-meta-to-json.go] program.
 ```json
 {
   "Versions": [
