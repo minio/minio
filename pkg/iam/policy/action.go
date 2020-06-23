@@ -78,10 +78,10 @@ const (
 	ListMultipartUploadPartsAction = "s3:ListMultipartUploadParts"
 
 	// PutBucketLifecycleAction - PutBucketLifecycle Rest API action.
-	PutBucketLifecycleAction = "s3:PutBucketLifecycle"
+	PutBucketLifecycleAction = "s3:PutLifecycleConfiguration"
 
 	// GetBucketLifecycleAction - GetBucketLifecycle Rest API action.
-	GetBucketLifecycleAction = "s3:GetBucketLifecycle"
+	GetBucketLifecycleAction = "s3:GetLifecycleConfiguration"
 
 	// PutBucketNotificationAction - PutObjectNotification Rest API action.
 	PutBucketNotificationAction = "s3:PutBucketNotification"
