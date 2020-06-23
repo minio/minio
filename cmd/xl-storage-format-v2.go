@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -230,13 +231,17 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		if err != nil {
 			return err
 		}
-		z.Versions = append(z.Versions, xlMetaV2Version{
+		v := xlMetaV2Version{
 			Type: DeleteType,
 			DeleteMarker: &xlMetaV2DeleteMarker{
 				VersionID: uv,
 				ModTime:   fi.ModTime.UnixNano(),
 			},
-		})
+		}
+		if !v.Valid() {
+			return errors.New("internal error: invalid version entry generated")
+		}
+		z.Versions = append(z.Versions, v)
 		return nil
 	}
 
@@ -303,6 +308,10 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		} else {
 			ventry.ObjectV2.MetaUser[k] = v
 		}
+	}
+
+	if !ventry.Valid() {
+		return errors.New("internal error: invalid version entry generated")
 	}
 
 	for i, version := range z.Versions {
@@ -418,6 +427,9 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 	// means the version which matches will be purged.
 	if fi.VersionID == nullVersionID {
 		fi.VersionID = ""
+	}
+	if fi.ModTime.IsZero() {
+		fi.ModTime = UTCNow()
 	}
 	var uv uuid.UUID
 	if fi.VersionID != "" {

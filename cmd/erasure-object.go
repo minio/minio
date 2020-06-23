@@ -931,6 +931,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
 		Name:      object,
 		VersionID: opts.VersionID,
+		ModTime:   UTCNow(),
 	}); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}

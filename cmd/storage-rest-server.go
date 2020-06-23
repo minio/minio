@@ -289,7 +289,7 @@ func (s *storageRESTServer) DeleteVersionHandler(w http.ResponseWriter, r *http.
 	versionID := vars[storageRESTVersionID]
 	deleteMarker := vars[storageRESTDeleteMarker] == "true"
 
-	err := s.storage.DeleteVersion(volume, filePath, FileInfo{VersionID: versionID, Deleted: deleteMarker})
+	err := s.storage.DeleteVersion(volume, filePath, FileInfo{VersionID: versionID, Deleted: deleteMarker, ModTime: UTCNow()})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
