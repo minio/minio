@@ -68,5 +68,11 @@ var (
 			Optional:    true,
 			Type:        "number",
 		},
+		config.HelpKV{
+			Key:         Range,
+			Description: `set to "on" or "off" caching of independent range requests per object, defaults to "on"`,
+			Optional:    true,
+			Type:        "string",
+		},
 	}
 )

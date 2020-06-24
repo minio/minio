@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/djherbis/atime"
+	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -137,6 +138,7 @@ type diskCache struct {
 	after         int // minimum accesses before an object is cached.
 	lowWatermark  int
 	highWatermark int
+	enableRange   bool
 	// nsMutex namespace lock
 	nsMutex *nsLockMap
 	// Object functions pointing to the corresponding functions of backend implementation.
@@ -144,7 +146,12 @@ type diskCache struct {
 }
 
 // Inits the disk cache dir if it is not initialized already.
-func newDiskCache(ctx context.Context, dir string, quotaPct, after, lowWatermark, highWatermark int) (*diskCache, error) {
+func newDiskCache(ctx context.Context, dir string, config cache.Config) (*diskCache, error) {
+	quotaPct := config.MaxUse
+	if quotaPct == 0 {
+		quotaPct = config.Quota
+	}
+
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '%s' dir, %w", dir, err)
 	}
@@ -153,9 +160,10 @@ func newDiskCache(ctx context.Context, dir string, quotaPct, after, lowWatermark
 		triggerGC:     make(chan struct{}),
 		stats:         CacheDiskStats{Dir: dir},
 		quotaPct:      quotaPct,
-		after:         after,
-		lowWatermark:  lowWatermark,
-		highWatermark: highWatermark,
+		after:         config.After,
+		lowWatermark:  config.WatermarkLow,
+		highWatermark: config.WatermarkHigh,
+		enableRange:   config.Range,
 		online:        1,
 		pool: sync.Pool{
 			New: func() interface{} {
