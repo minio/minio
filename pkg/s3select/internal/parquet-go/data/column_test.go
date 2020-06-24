@@ -150,19 +150,19 @@ func TestAddressBookExample(t *testing.T) {
     "owner": "foo"
 }`
 	result2 := map[string]*Column{
-		"owner": &Column{
+		"owner": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{foo},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"ownerPhoneNumbers.list.element": &Column{
+		"ownerPhoneNumbers.list.element": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.name": &Column{
+		"contacts.list.element.name": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -178,19 +178,19 @@ func TestAddressBookExample(t *testing.T) {
 }
 `
 	result3 := map[string]*Column{
-		"owner": &Column{
+		"owner": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{foo},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"ownerPhoneNumbers.list.element": &Column{
+		"ownerPhoneNumbers.list.element": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{phone1},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.name": &Column{
+		"contacts.list.element.name": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -207,19 +207,19 @@ func TestAddressBookExample(t *testing.T) {
 }
 `
 	result4 := map[string]*Column{
-		"owner": &Column{
+		"owner": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{foo},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"ownerPhoneNumbers.list.element": &Column{
+		"ownerPhoneNumbers.list.element": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{phone1, phone2},
 			definitionLevels: []int64{2, 2},
 			repetitionLevels: []int64{0, 1},
 		},
-		"contacts.list.element.name": &Column{
+		"contacts.list.element.name": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -236,25 +236,25 @@ func TestAddressBookExample(t *testing.T) {
     "owner": "foo"
 }`
 	result5 := map[string]*Column{
-		"owner": &Column{
+		"owner": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{foo},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"ownerPhoneNumbers.list.element": &Column{
+		"ownerPhoneNumbers.list.element": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.name": &Column{
+		"contacts.list.element.name": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{bar},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.phoneNumber": &Column{
+		"contacts.list.element.phoneNumber": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{2},
@@ -272,25 +272,25 @@ func TestAddressBookExample(t *testing.T) {
     "owner": "foo"
 }`
 	result6 := map[string]*Column{
-		"owner": &Column{
+		"owner": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{foo},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"ownerPhoneNumbers.list.element": &Column{
+		"ownerPhoneNumbers.list.element": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.name": &Column{
+		"contacts.list.element.name": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{bar},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.phoneNumber": &Column{
+		"contacts.list.element.phoneNumber": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{phone3},
 			definitionLevels: []int64{3},
@@ -312,25 +312,25 @@ func TestAddressBookExample(t *testing.T) {
     ]
 }`
 	result7 := map[string]*Column{
-		"owner": &Column{
+		"owner": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{foo},
 			definitionLevels: []int64{0},
 			repetitionLevels: []int64{0},
 		},
-		"ownerPhoneNumbers.list.element": &Column{
+		"ownerPhoneNumbers.list.element": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{phone1, phone2},
 			definitionLevels: []int64{2, 2},
 			repetitionLevels: []int64{0, 1},
 		},
-		"contacts.list.element.name": &Column{
+		"contacts.list.element.name": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{bar},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"contacts.list.element.phoneNumber": &Column{
+		"contacts.list.element.phoneNumber": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{phone3},
 			definitionLevels: []int64{3},

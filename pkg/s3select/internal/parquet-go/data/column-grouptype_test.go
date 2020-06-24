@@ -138,7 +138,7 @@ func TestPopulateGroupType(t *testing.T) {
 	}
 
 	result1 := map[string]*Column{
-		"group.col": &Column{
+		"group.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{0},
@@ -151,7 +151,7 @@ func TestPopulateGroupType(t *testing.T) {
 	}
 
 	result2 := map[string]*Column{
-		"group.col": &Column{
+		"group.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -161,7 +161,7 @@ func TestPopulateGroupType(t *testing.T) {
 	}
 
 	result3 := map[string]*Column{
-		"group.col": &Column{
+		"group.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{1},
@@ -174,7 +174,7 @@ func TestPopulateGroupType(t *testing.T) {
 	}
 
 	result4 := map[string]*Column{
-		"group.col": &Column{
+		"group.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{1},
@@ -184,7 +184,7 @@ func TestPopulateGroupType(t *testing.T) {
 	}
 
 	result5 := map[string]*Column{
-		"group.col": &Column{
+		"group.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{2},

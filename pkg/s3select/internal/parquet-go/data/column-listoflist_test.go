@@ -490,7 +490,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result1 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{2},
@@ -503,7 +503,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result2 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20, v30, v10, v20, v10, v30},
 			definitionLevels: []int64{2, 2, 2, 2, 2, 2, 2},
@@ -516,7 +516,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result3 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{2},
@@ -526,7 +526,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result4 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{3},
@@ -539,7 +539,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result5 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20, v30, v10, v20, v10, v30},
 			definitionLevels: []int64{3, 3, 3, 3, 3, 3, 3},
@@ -552,7 +552,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result6 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{3},
@@ -562,7 +562,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result7 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{4},
@@ -575,7 +575,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result8 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20, v30, v10, v20, v10, v30},
 			definitionLevels: []int64{4, 4, 4, 4, 4, 4, 4},
@@ -588,7 +588,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result9 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -598,7 +598,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result10 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{4},
@@ -608,7 +608,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result11 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{5},
@@ -621,7 +621,7 @@ func TestPopulateListOfList(t *testing.T) {
 	}
 
 	result12 := map[string]*Column{
-		"col.list.element.list.element": &Column{
+		"col.list.element.list.element": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20, v30, v10, v20, v10, v30},
 			definitionLevels: []int64{5, 5, 5, 5, 5, 5, 5},

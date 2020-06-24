@@ -410,7 +410,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result1 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{1},
@@ -423,7 +423,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result2 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20},
 			definitionLevels: []int64{1, 1},
@@ -436,7 +436,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result3 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{1},
@@ -446,7 +446,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result4 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{2},
@@ -459,7 +459,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result5 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20},
 			definitionLevels: []int64{2, 2},
@@ -472,7 +472,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result6 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{2},
@@ -482,7 +482,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result7 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{3},
@@ -495,7 +495,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result8 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20},
 			definitionLevels: []int64{3, 3},
@@ -508,7 +508,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result9 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -518,7 +518,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result10 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{3},
@@ -528,7 +528,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result11 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{4},
@@ -541,7 +541,7 @@ func TestPopulateGroupList(t *testing.T) {
 	}
 
 	result12 := map[string]*Column{
-		"group.list.element.col": &Column{
+		"group.list.element.col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10, v20},
 			definitionLevels: []int64{4, 4},

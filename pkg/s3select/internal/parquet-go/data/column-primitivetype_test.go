@@ -62,7 +62,7 @@ func TestPopulatePrimitiveType(t *testing.T) {
 	}
 
 	result1 := map[string]*Column{
-		"col": &Column{
+		"col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{0},
@@ -75,7 +75,7 @@ func TestPopulatePrimitiveType(t *testing.T) {
 	}
 
 	result2 := map[string]*Column{
-		"col": &Column{
+		"col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -85,7 +85,7 @@ func TestPopulatePrimitiveType(t *testing.T) {
 	}
 
 	result3 := map[string]*Column{
-		"col": &Column{
+		"col": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{1},

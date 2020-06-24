@@ -231,13 +231,13 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result1 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{ten},
 			definitionLevels: []int64{1},
 			repetitionLevels: []int64{0},
 		},
-		"map.key_value.value": &Column{
+		"map.key_value.value": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{1},
@@ -246,13 +246,13 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result2 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{ten},
 			definitionLevels: []int64{1},
 			repetitionLevels: []int64{0},
 		},
-		"map.key_value.value": &Column{
+		"map.key_value.value": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{1},
@@ -261,13 +261,13 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result3 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{ten},
 			definitionLevels: []int64{1},
 			repetitionLevels: []int64{0},
 		},
-		"map.key_value.value": &Column{
+		"map.key_value.value": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{2},
@@ -276,7 +276,7 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result4 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{0},
@@ -285,13 +285,13 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result5 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{ten},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"map.key_value.value": &Column{
+		"map.key_value.value": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{2},
@@ -300,13 +300,13 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result6 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{ten},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"map.key_value.value": &Column{
+		"map.key_value.value": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{nil},
 			definitionLevels: []int64{2},
@@ -315,13 +315,13 @@ func TestPopulateMap(t *testing.T) {
 	}
 
 	result7 := map[string]*Column{
-		"map.key_value.key": &Column{
+		"map.key_value.key": {
 			parquetType:      parquet.Type_BYTE_ARRAY,
 			values:           []interface{}{ten},
 			definitionLevels: []int64{2},
 			repetitionLevels: []int64{0},
 		},
-		"map.key_value.value": &Column{
+		"map.key_value.value": {
 			parquetType:      parquet.Type_INT32,
 			values:           []interface{}{v10},
 			definitionLevels: []int64{3},
