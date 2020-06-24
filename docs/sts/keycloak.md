@@ -57,6 +57,7 @@ Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
 ```
 ~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" client_id="account"
 ```
+> Note: You can configure the `scopes` parameter to restrict the OpenID scopes requested by minio to the IdP, for example, `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak
 
 Once successfully set restart the MinIO instance.
 ```
@@ -86,6 +87,8 @@ This will open the login page of keycloak, upon successful login, STS credential
   }
 }
 ```
+
+> Note: You can use the `-cscopes` parameter to restrict the requested scopes, for example to `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak.
 
 These credentials can now be used to perform MinIO API operations.
 
