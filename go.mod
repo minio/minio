@@ -5,6 +5,7 @@ go 1.13
 require (
 	cloud.google.com/go v0.39.0
 	contrib.go.opencensus.io/exporter/ocagent v0.5.0 // indirect
+	git.apache.org/thrift.git v0.13.0
 	github.com/Azure/azure-pipeline-go v0.2.1
 	github.com/Azure/azure-storage-blob-go v0.8.0
 	github.com/Azure/go-autorest v11.7.1+incompatible // indirect
@@ -69,7 +70,6 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/minio-go/v6 v6.0.58-0.20200612001654-a57fec8037ec
-	github.com/minio/parquet-go v0.0.0-20200414234858-838cfa8aae61
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
 	github.com/minio/sio v0.2.0
@@ -90,6 +90,7 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/pierrec/lz4 v2.4.0+incompatible
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.9.3
 	github.com/rcrowley/go-metrics v0.0.0-20190704165056-9c2d0518ed81 // indirect
@@ -103,6 +104,8 @@ require (
 	github.com/soheilhy/cmux v0.1.4 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
+	github.com/tidwall/gjson v1.3.5
+	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.1
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
 	github.com/ugorji/go v1.1.5-pre // indirect
