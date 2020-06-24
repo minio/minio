@@ -30,6 +30,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
@@ -79,6 +80,7 @@ var (
 	configEndpoint string
 	clientID       string
 	clientSec      string
+	clientScopes   string
 	port           int
 )
 
@@ -131,6 +133,7 @@ func init() {
 		"OpenID discovery document endpoint")
 	flag.StringVar(&clientID, "cid", "", "Client ID")
 	flag.StringVar(&clientSec, "csec", "", "Client Secret")
+	flag.StringVar(&clientScopes, "cscopes", "openid", "Client Scopes")
 	flag.IntVar(&port, "port", 8080, "Port")
 }
 
@@ -148,6 +151,11 @@ func main() {
 		return
 	}
 
+	scopes :=  ddoc.ScopesSupported
+	if clientScopes != "" {
+		scopes = strings.Split(clientScopes, ",");
+	}
+
 	ctx := context.Background()
 
 	config := oauth2.Config{
@@ -158,7 +166,7 @@ func main() {
 			TokenURL: ddoc.TokenEndpoint,
 		},
 		RedirectURL: fmt.Sprintf("http://localhost:%d/oauth2/callback", port),
-		Scopes:      ddoc.ScopesSupported,
+		Scopes:      scopes,
 	}
 
 	state := randomState()
