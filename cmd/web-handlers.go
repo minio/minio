@@ -340,7 +340,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		for _, bucket := range buckets {
 			if globalIAMSys.IsAllowed(iampolicy.Args{
 				AccountName:     claims.AccessKey,
-				Action:          iampolicy.ListAllMyBucketsAction,
+				Action:          iampolicy.ListBucketAction,
 				BucketName:      bucket.Name,
 				ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 				IsOwner:         owner,
