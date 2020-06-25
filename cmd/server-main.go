@@ -235,7 +235,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		// Migrate all backend configs to encrypted backend configs, optionally
 		// handles rotating keys for encryption, if there is any retriable failure
 		// that shall be retried if there is an error.
-		if err = handleEncryptedConfigBackend(newObject, true); err == nil {
+		if err = handleEncryptedConfigBackend(newObject); err == nil {
 			// Upon success migrating the config, initialize all sub-systems
 			// if all sub-systems initialized successfully return right away
 			if err = initAllSubsystems(retryCtx, newObject); err == nil {
