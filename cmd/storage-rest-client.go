@@ -287,10 +287,12 @@ func (client *storageRESTClient) DeleteVersion(volume, path string, fi FileInfo)
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTVersionID, fi.VersionID)
-	values.Set(storageRESTDeleteMarker, strconv.FormatBool(fi.Deleted))
 
-	respBody, err := client.call(storageRESTMethodDeleteVersion, values, nil, -1)
+	var buffer bytes.Buffer
+	encoder := gob.NewEncoder(&buffer)
+	encoder.Encode(&fi)
+
+	respBody, err := client.call(storageRESTMethodDeleteVersion, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	return err
 }

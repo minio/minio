@@ -286,10 +286,15 @@ func (s *storageRESTServer) DeleteVersionHandler(w http.ResponseWriter, r *http.
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	filePath := vars[storageRESTFilePath]
-	versionID := vars[storageRESTVersionID]
-	deleteMarker := vars[storageRESTDeleteMarker] == "true"
 
-	err := s.storage.DeleteVersion(volume, filePath, FileInfo{VersionID: versionID, Deleted: deleteMarker})
+	var fi FileInfo
+	decoder := gob.NewDecoder(r.Body)
+	if err := decoder.Decode(&fi); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	err := s.storage.DeleteVersion(volume, filePath, fi)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
