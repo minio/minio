@@ -18,27 +18,12 @@ package parquet
 
 import (
 	"encoding/binary"
-	"math"
 )
 
 func uint32ToBytes(v uint32) []byte {
 	buf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(buf, v)
 	return buf
-}
-
-func uint64ToBytes(v uint64) []byte {
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, v)
-	return buf
-}
-
-func float32ToBytes(v float32) []byte {
-	return uint32ToBytes(math.Float32bits(v))
-}
-
-func float64ToBytes(v float64) []byte {
-	return uint64ToBytes(math.Float64bits(v))
 }
 
 func bytesToUint32(buf []byte) uint32 {

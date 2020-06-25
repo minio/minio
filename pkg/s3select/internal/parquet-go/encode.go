@@ -264,64 +264,6 @@ func valuesToBitPackedBytes(values interface{}, bitWidth int64, withHeader bool,
 	return valueBytes
 }
 
-func valuesToBitPackedDeprecatedBytes(values interface{}, bitWidth int64, dataType parquet.Type) []byte {
-	var ui64s []uint64
-	switch dataType {
-	case parquet.Type_INT32:
-		i32s := values.([]int32)
-		ui64s = make([]uint64, len(i32s))
-		for i := range i32s {
-			ui64s[i] = uint64(i32s[i])
-		}
-	case parquet.Type_INT64:
-		i64s := values.([]int64)
-		ui64s = make([]uint64, len(i64s))
-		for i := range i64s {
-			ui64s[i] = uint64(i64s[i])
-		}
-	default:
-		panic(fmt.Errorf("data type %v is not supported for bit packing deprecated", dataType))
-	}
-
-	if len(ui64s) == 0 {
-		return nil
-	}
-
-	result := []byte{}
-	var curByte byte
-	curNeed := uint64(8)
-	valBitLeft := uint64(bitWidth)
-	val := ui64s[0] << uint64(64-bitWidth)
-
-	for i := 0; i < len(ui64s); {
-		if valBitLeft > curNeed {
-			mask := uint64(((1 << curNeed) - 1) << (64 - curNeed))
-			curByte |= byte((val & mask) >> (64 - curNeed))
-			val <<= curNeed
-
-			valBitLeft -= curNeed
-			result = append(result, curByte)
-			curByte = 0
-			curNeed = 8
-		} else {
-			curByte |= byte(val >> (64 - curNeed))
-			curNeed -= valBitLeft
-			if curNeed == 0 {
-				result = append(result, curByte)
-				curByte = 0
-				curNeed = 8
-			}
-
-			valBitLeft = uint64(bitWidth)
-			i++
-			if i < len(ui64s) {
-				val = ui64s[i] << uint64(64-bitWidth)
-			}
-		}
-	}
-	return result
-}
-
 const (
 	blockSize     = 128
 	subBlockSize  = 32

@@ -105,10 +105,3 @@ func bytesToJSONValue(data []byte) (*jsonValue, error) {
 	result := gjson.ParseBytes(data)
 	return resultToJSONValue(&result), nil
 }
-
-func newJSONValue(path string, result gjson.Result) *jsonValue {
-	return &jsonValue{
-		result: &result,
-		path:   &path,
-	}
-}

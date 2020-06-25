@@ -11,6 +11,7 @@ import (
 	"github.com/pierrec/lz4"
 )
 
+// ToSliceValue converts values to a slice value.
 func ToSliceValue(values []interface{}, parquetType parquet.Type) interface{} {
 	switch parquetType {
 	case parquet.Type_BOOLEAN:
@@ -54,7 +55,7 @@ func ToSliceValue(values []interface{}, parquetType parquet.Type) interface{} {
 	return nil
 }
 
-// BitWidth returns bits count required to accomodate given value.
+// BitWidth returns bits count required to accommodate given value.
 func BitWidth(ui64 uint64) (width int32) {
 	for ; ui64 != 0; ui64 >>= 1 {
 		width++

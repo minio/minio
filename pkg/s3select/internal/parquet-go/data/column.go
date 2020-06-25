@@ -636,6 +636,7 @@ func (column *Column) toRLEDictPage(element *schema.Element) *ColumnChunk {
 	return chunk
 }
 
+// Encode an element.
 func (column *Column) Encode(element *schema.Element) *ColumnChunk {
 	parquetEncoding := getDefaultEncoding(column.parquetType)
 	if element.Encoding != nil {

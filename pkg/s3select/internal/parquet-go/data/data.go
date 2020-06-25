@@ -20,6 +20,7 @@ import (
 	"github.com/minio/minio/pkg/s3select/internal/parquet-go/gen-go/parquet"
 )
 
+// ColumnChunk ...
 type ColumnChunk struct {
 	parquet.ColumnChunk
 	isDictPage  bool
@@ -29,14 +30,17 @@ type ColumnChunk struct {
 	data        []byte
 }
 
+// Data returns the data.
 func (chunk *ColumnChunk) Data() []byte {
 	return chunk.data
 }
 
+// DataLen returns the length of the data.
 func (chunk *ColumnChunk) DataLen() int64 {
 	return chunk.dataLen
 }
 
+// NewRowGroup creates a new row group.
 func NewRowGroup(chunks []*ColumnChunk, numRows, offset int64) *parquet.RowGroup {
 	rows := parquet.NewRowGroup()
 	rows.NumRows = numRows
