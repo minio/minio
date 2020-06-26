@@ -441,7 +441,7 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
-		if len(i64s) <= int(count) {
+		if len(i64s) <= int(count) || count > math.MaxInt64 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 		return i64s[:count], parquet.Type_INT64, nil
@@ -452,7 +452,7 @@ func readDataPageValues(
 			return nil, -1, err
 		}
 
-		if len(i64s) <= int(count) {
+		if len(i64s) <= int(count) || count > math.MaxInt64 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 		i64s = i64s[:count]
@@ -472,7 +472,7 @@ func readDataPageValues(
 			return nil, -1, err
 		}
 
-		if len(i64s) <= int(count) {
+		if len(i64s) <= int(count) || count > math.MaxInt64 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 		i64s = i64s[:count]
@@ -488,6 +488,9 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
+		if len(byteSlices) <= int(count) || count > math.MaxInt64 {
+			return nil, -1, errors.New("parquet: value out of range")
+		}
 
 		return byteSlices[:count], parquet.Type_FIXED_LEN_BYTE_ARRAY, nil
 
@@ -496,7 +499,7 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
-		if len(byteSlices) <= int(count) {
+		if len(byteSlices) <= int(count) || count > math.MaxInt64 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 

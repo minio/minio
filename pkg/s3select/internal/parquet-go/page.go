@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"git.apache.org/thrift.git/lib/go/thrift"
@@ -220,6 +221,9 @@ func readPage(
 				repetitionLevels = repetitionLevels[:numValues]
 			}
 		} else {
+			if numValues > math.MaxInt64 {
+				return nil, 0, 0, errors.New("parquet: numvalues too large")
+			}
 			repetitionLevels = make([]int64, numValues)
 		}
 
