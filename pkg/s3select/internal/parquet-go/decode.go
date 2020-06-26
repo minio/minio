@@ -342,7 +342,9 @@ func readDeltaBinaryPackedInt(reader *bytes.Reader) (result []int64, err error) 
 
 	v := int64(firstValueZigZag>>1) ^ (-int64(firstValueZigZag & 1))
 	result = append(result, v)
-
+	if numMiniblocksInBlock == 0 {
+		return nil, errors.New("parquet: zero mini blocks in block")
+	}
 	numValuesInMiniBlock := blockSize / numMiniblocksInBlock
 
 	bitWidths := make([]uint64, numMiniblocksInBlock)
