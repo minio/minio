@@ -35,9 +35,7 @@ func getColumns(
 	nameIndexMap := make(map[string]int)
 	for colIndex, columnChunk := range rowGroup.GetColumns() {
 		meta := columnChunk.GetMetaData()
-		if meta == nil {
-			return nil, errors.New("parquet: metadata not set")
-		}
+
 		columnName := strings.Join(meta.GetPathInSchema(), ".")
 		if columnNames != nil && !columnNames.Contains(columnName) {
 			continue
@@ -48,6 +46,9 @@ func getColumns(
 			continue
 		}
 
+		if meta == nil {
+			return nil, errors.New("parquet: metadata not set")
+		}
 		offset := meta.GetDataPageOffset()
 		if meta.DictionaryPageOffset != nil {
 			offset = meta.GetDictionaryPageOffset()
