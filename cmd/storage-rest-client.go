@@ -289,8 +289,9 @@ func (client *storageRESTClient) DeleteVersion(volume, path string, fi FileInfo)
 	values.Set(storageRESTFilePath, path)
 
 	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	encoder.Encode(&fi)
+	if err := gob.NewEncoder(&buffer).Encode(fi); err != nil {
+		return err
+	}
 
 	respBody, err := client.call(storageRESTMethodDeleteVersion, values, &buffer, -1)
 	defer http.DrainBody(respBody)
