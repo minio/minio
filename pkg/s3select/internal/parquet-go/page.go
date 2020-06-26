@@ -19,6 +19,7 @@ package parquet
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -101,6 +102,9 @@ func readPage(
 		var repLevelsBuf, defLevelsBuf []byte
 
 		if pageHeader.GetType() == parquet.PageType_DATA_PAGE_V2 {
+			if pageHeader.DataPageHeaderV2 == nil {
+				return nil, errors.New("parquet: Header not set")
+			}
 			repLevelsLen = pageHeader.DataPageHeaderV2.GetRepetitionLevelsByteLength()
 			repLevelsBuf = make([]byte, repLevelsLen)
 			if _, err = thriftReader.Read(repLevelsBuf); err != nil {
@@ -113,8 +117,11 @@ func readPage(
 				return nil, err
 			}
 		}
-
-		dataBuf := make([]byte, pageHeader.GetCompressedPageSize()-repLevelsLen-defLevelsLen)
+		dbLen := pageHeader.GetCompressedPageSize() - repLevelsLen - defLevelsLen
+		if dbLen < 0 {
+			return nil, errors.New("parquet: negative data length")
+		}
+		dataBuf := make([]byte, dbLen)
 		if _, err = thriftReader.Read(dataBuf); err != nil {
 			return nil, err
 		}
@@ -146,7 +153,9 @@ func readPage(
 	if err != nil {
 		return nil, 0, 0, err
 	}
-
+	if metadata == nil {
+		return nil, 0, 0, errors.New("parquet: metadata not set")
+	}
 	path := append([]string{}, metadata.GetPathInSchema()...)
 
 	bytesReader := bytes.NewReader(buf)
@@ -160,6 +169,9 @@ func readPage(
 		page.Header = pageHeader
 		table := new(table)
 		table.Path = path
+		if pageHeader.DictionaryPageHeader == nil {
+			return nil, 0, 0, errors.New("parquet: dictionary not set")
+		}
 		values, err := readValues(bytesReader, metadata.GetType(),
 			uint64(pageHeader.DictionaryPageHeader.GetNumValues()), 0)
 		if err != nil {
@@ -183,9 +195,15 @@ func readPage(
 		var encodingType parquet.Encoding
 
 		if pageHeader.GetType() == parquet.PageType_DATA_PAGE {
+			if pageHeader.DataPageHeader == nil {
+				return nil, 0, 0, errors.New("parquet: Header not set")
+			}
 			numValues = uint64(pageHeader.DataPageHeader.GetNumValues())
 			encodingType = pageHeader.DataPageHeader.GetEncoding()
 		} else {
+			if pageHeader.DataPageHeaderV2 == nil {
+				return nil, 0, 0, errors.New("parquet: Header not set")
+			}
 			numValues = uint64(pageHeader.DataPageHeaderV2.GetNumValues())
 			encodingType = pageHeader.DataPageHeaderV2.GetEncoding()
 		}
@@ -308,7 +326,10 @@ func (page *page) decode(dictPage *page) {
 
 	for i := 0; i < len(page.DataTable.Values); i++ {
 		if page.DataTable.Values[i] != nil {
-			index := page.DataTable.Values[i].(int64)
+			index, ok := page.DataTable.Values[i].(int64)
+			if !ok || int(index) >= len(dictPage.DataTable.Values) {
+				return
+			}
 			page.DataTable.Values[i] = dictPage.DataTable.Values[index]
 		}
 	}
@@ -324,7 +345,9 @@ func (page *page) getRLDLFromRawData(columnNameIndexMap map[string]int, schemaEl
 	if pageType == parquet.PageType_DATA_PAGE_V2 {
 		var repLevelsLen, defLevelsLen int32
 		var repLevelsBuf, defLevelsBuf []byte
-
+		if page.Header.DataPageHeaderV2 == nil {
+			return 0, 0, errors.New("parquet: Header not set")
+		}
 		repLevelsLen = page.Header.DataPageHeaderV2.GetRepetitionLevelsByteLength()
 		repLevelsBuf = make([]byte, repLevelsLen)
 		if _, err = bytesReader.Read(repLevelsBuf); err != nil {
@@ -375,8 +398,14 @@ func (page *page) getRLDLFromRawData(columnNameIndexMap map[string]int, schemaEl
 	case parquet.PageType_DATA_PAGE, parquet.PageType_DATA_PAGE_V2:
 		var numValues uint64
 		if pageType == parquet.PageType_DATA_PAGE {
+			if page.Header.DataPageHeader == nil {
+				return 0, 0, errors.New("parquet: Header not set")
+			}
 			numValues = uint64(page.Header.DataPageHeader.GetNumValues())
 		} else {
+			if page.Header.DataPageHeaderV2 == nil {
+				return 0, 0, errors.New("parquet: Header not set")
+			}
 			numValues = uint64(page.Header.DataPageHeaderV2.GetNumValues())
 		}
 
@@ -445,6 +474,9 @@ func (page *page) getValueFromRawData(columnNameIndexMap map[string]int, schemaE
 	case parquet.PageType_DICTIONARY_PAGE:
 		bytesReader := bytes.NewReader(page.RawData)
 		var values interface{}
+		if page.Header.DictionaryPageHeader == nil {
+			return errors.New("parquet: dictionary not set")
+		}
 		values, err = readValues(bytesReader, page.DataType,
 			uint64(page.Header.DictionaryPageHeader.GetNumValues()), 0)
 		if err != nil {
