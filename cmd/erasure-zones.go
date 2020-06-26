@@ -928,9 +928,18 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 // N times until this boolean is 'false'.
 func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
+		i := i
+		var wg sync.WaitGroup
 		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			j := j
+			wg.Add(1)
+			// Pop() entries in parallel for large drive setups.
+			go func() {
+				defer wg.Done()
+				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			}()
 		}
+		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1008,9 +1017,18 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 // N times until this boolean is 'false'.
 func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
+		i := i
+		var wg sync.WaitGroup
 		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			j := j
+			wg.Add(1)
+			// Pop() entries in parallel for large drive setups.
+			go func() {
+				defer wg.Done()
+				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			}()
 		}
+		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1141,9 +1159,18 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, ndisks int) 
 
 func isTruncatedZones(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) bool {
 	for i, entryChs := range zoneEntryChs {
+		i := i
+		var wg sync.WaitGroup
 		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			j := j
+			wg.Add(1)
+			// Pop() entries in parallel for large drive setups.
+			go func() {
+				defer wg.Done()
+				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			}()
 		}
+		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1170,9 +1197,18 @@ func isTruncatedZones(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zon
 
 func isTruncatedZonesVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) bool {
 	for i, entryChs := range zoneEntryChs {
+		i := i
+		var wg sync.WaitGroup
 		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			j := j
+			wg.Add(1)
+			// Pop() entries in parallel for large drive setups.
+			go func() {
+				defer wg.Done()
+				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
+			}()
 		}
+		wg.Wait()
 	}
 
 	var isTruncated = false
