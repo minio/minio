@@ -145,9 +145,9 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			disk := p.readers[i]
-			if disk == nil {
-				// Since disk is nil, trigger another read.
+			rr := p.readers[i]
+			if rr == nil {
+				// Since reader is nil, trigger another read.
 				readTriggerCh <- true
 				return
 			}
@@ -160,7 +160,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			// For the last shard, the shardsize might be less than previous shard sizes.
 			// Hence the following statement ensures that the buffer size is reset to the right size.
 			p.buf[bufIdx] = p.buf[bufIdx][:p.shardSize]
-			_, err := disk.ReadAt(p.buf[bufIdx], p.offset)
+			_, err := rr.ReadAt(p.buf[bufIdx], p.offset)
 			if err != nil {
 				if _, ok := err.(*errHashMismatch); ok {
 					atomic.StoreInt32(&healRequired, 1)
