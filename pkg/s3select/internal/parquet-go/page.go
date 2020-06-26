@@ -217,11 +217,11 @@ func readPage(
 				return nil, 0, 0, err
 			}
 
-			if repetitionLevels = values.([]int64); uint64(len(repetitionLevels)) > numValues {
+			if repetitionLevels = values.([]int64); len(repetitionLevels) > int(numValues) && int(numValues) >= 0 {
 				repetitionLevels = repetitionLevels[:numValues]
 			}
 		} else {
-			if numValues > math.MaxInt64 {
+			if numValues > math.MaxInt64/8 {
 				return nil, 0, 0, errors.New("parquet: numvalues too large")
 			}
 			repetitionLevels = make([]int64, numValues)
@@ -234,10 +234,16 @@ func readPage(
 			if err != nil {
 				return nil, 0, 0, err
 			}
-			if definitionLevels = values.([]int64); uint64(len(definitionLevels)) > numValues {
+			if numValues > math.MaxInt64/8 {
+				return nil, 0, 0, errors.New("parquet: numvalues too large")
+			}
+			if definitionLevels = values.([]int64); len(definitionLevels) > int(numValues) {
 				definitionLevels = definitionLevels[:numValues]
 			}
 		} else {
+			if numValues > math.MaxInt64/8 {
+				return nil, 0, 0, errors.New("parquet: numvalues too large")
+			}
 			definitionLevels = make([]int64, numValues)
 		}
 

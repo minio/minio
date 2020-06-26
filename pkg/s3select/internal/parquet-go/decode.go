@@ -267,8 +267,11 @@ func readRLE(reader *bytes.Reader, header, bitWidth uint64) (result []int64, err
 	}
 
 	val := int64(bytesToUint32(data))
-
 	count := header >> 1
+	if count > math.MaxInt64/8 {
+		// 8 bytes/element.
+		return nil, errors.New("parquet: size too large")
+	}
 	result = make([]int64, count)
 	for i := range result {
 		result[i] = val
@@ -441,7 +444,7 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
-		if len(i64s) < int(count) || count > math.MaxInt64 {
+		if len(i64s) < int(count) || count > math.MaxInt64/8 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 		return i64s[:count], parquet.Type_INT64, nil
@@ -452,7 +455,7 @@ func readDataPageValues(
 			return nil, -1, err
 		}
 
-		if len(i64s) < int(count) || count > math.MaxInt64 {
+		if len(i64s) < int(count) || count > math.MaxInt64/8 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 		i64s = i64s[:count]
@@ -472,7 +475,7 @@ func readDataPageValues(
 			return nil, -1, err
 		}
 
-		if len(i64s) < int(count) || count > math.MaxInt64 {
+		if len(i64s) < int(count) || count > math.MaxInt64/8 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 		i64s = i64s[:count]
@@ -488,7 +491,7 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
-		if len(byteSlices) < int(count) || count > math.MaxInt64 {
+		if len(byteSlices) < int(count) || count > math.MaxInt64/24 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 
@@ -499,7 +502,7 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
-		if len(byteSlices) < int(count) || count > math.MaxInt64 {
+		if len(byteSlices) < int(count) || count > math.MaxInt64/24 {
 			return nil, -1, errors.New("parquet: value out of range")
 		}
 
