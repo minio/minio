@@ -42,8 +42,8 @@ require (
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/uuid v1.1.1
 	github.com/gopherjs/gopherjs v0.0.0-20190328170749-bb2674552d8f // indirect
-	github.com/gorilla/handlers v1.4.0
-	github.com/gorilla/mux v1.7.0
+	github.com/gorilla/handlers v1.4.2
+	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4 // indirect
