@@ -30,6 +30,7 @@ type apiConfig struct {
 	requestsDeadline time.Duration
 	requestsPool     chan struct{}
 	readyDeadline    time.Duration
+	readyCacheTTL    time.Duration
 	corsAllowOrigins []string
 }
 
@@ -38,6 +39,7 @@ func (t *apiConfig) init(cfg api.Config) {
 	defer t.mu.Unlock()
 
 	t.readyDeadline = cfg.APIReadyDeadline
+	t.readyCacheTTL = cfg.APIReadyCacheTTL
 	t.corsAllowOrigins = cfg.APICorsAllowOrigin
 	if cfg.APIRequestsMax <= 0 {
 		return
@@ -57,6 +59,17 @@ func (t *apiConfig) getCorsAllowOrigins() []string {
 	defer t.mu.RUnlock()
 
 	return t.corsAllowOrigins
+}
+
+func (t *apiConfig) getReadyCacheTTL() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.readyCacheTTL == 0 {
+		return 5 * time.Second
+	}
+
+	return t.readyCacheTTL
 }
 
 func (t *apiConfig) getReadyDeadline() time.Duration {

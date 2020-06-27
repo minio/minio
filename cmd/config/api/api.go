@@ -32,11 +32,13 @@ const (
 	apiRequestsMax      = "requests_max"
 	apiRequestsDeadline = "requests_deadline"
 	apiReadyDeadline    = "ready_deadline"
+	apiReadyCacheTTL    = "ready_cache_ttl"
 	apiCorsAllowOrigin  = "cors_allow_origin"
 
 	EnvAPIRequestsMax      = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIReadyDeadline    = "MINIO_API_READY_DEADLINE"
+	EnvAPIReadyCacheTTL    = "MINIO_API_READY_CACHE_TTL"
 	EnvAPICorsAllowOrigin  = "MINIO_API_CORS_ALLOW_ORIGIN"
 )
 
@@ -56,6 +58,10 @@ var (
 			Value: "10s",
 		},
 		config.KV{
+			Key:   apiReadyCacheTTL,
+			Value: "3s",
+		},
+		config.KV{
 			Key:   apiCorsAllowOrigin,
 			Value: "*",
 		},
@@ -67,6 +73,7 @@ type Config struct {
 	APIRequestsMax      int           `json:"requests_max"`
 	APIRequestsDeadline time.Duration `json:"requests_deadline"`
 	APIReadyDeadline    time.Duration `json:"ready_deadline"`
+	APIReadyCacheTTL    time.Duration `json:"ready_cache_ttl"`
 	APICorsAllowOrigin  []string      `json:"cors_allow_origin"`
 }
 
@@ -107,11 +114,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	readyCacheTTL, err := time.ParseDuration(env.Get(EnvAPIReadyCacheTTL, kvs.Get(apiReadyCacheTTL)))
+	if err != nil {
+		return cfg, err
+	}
+
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
 	return Config{
 		APIRequestsMax:      requestsMax,
 		APIRequestsDeadline: requestsDeadline,
 		APIReadyDeadline:    readyDeadline,
+		APIReadyCacheTTL:    readyCacheTTL,
 		APICorsAllowOrigin:  corsAllowOrigin,
 	}, nil
 }
