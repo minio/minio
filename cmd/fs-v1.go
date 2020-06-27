@@ -1552,9 +1552,5 @@ func (fs *FSObjects) IsReady(_ context.Context) bool {
 		return false
 	}
 
-	globalObjLayerMutex.RLock()
-	res := globalObjectAPI != nil && !globalSafeMode
-	globalObjLayerMutex.RUnlock()
-
-	return res
+	return newObjectLayerFn() != nil
 }

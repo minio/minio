@@ -422,9 +422,9 @@ func serverMain(ctx *cli.Context) {
 	setMaxResources()
 
 	if globalIsErasure {
-		// Init global heal state
-		globalAllHealState = initHealState()
-		globalBackgroundHealState = initHealState()
+		// New global heal state
+		globalAllHealState = newHealState()
+		globalBackgroundHealState = newHealState()
 	}
 
 	// Configure server.
