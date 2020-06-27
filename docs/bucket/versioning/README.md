@@ -26,7 +26,7 @@ GET requests by specifying a verison ID as shown below, you can retrieve the spe
 
 ![get_version_id](versioning_GET_versionEnabled_id.png)
 
-To permanently delete an object you need to specify the version you want to delete, only the user with appropriate permissions can permanently delete a version.  As shown below DELETE request called with a specific version id permenantly deletes an object from a bucket. Delete marker is not added for DELETE requets with version id.
+To permanently delete an object you need to specify the version you want to delete, only the user with appropriate permissions can permanently delete a version.  As shown below DELETE request called with a specific version id permenantly deletes an object from a bucket. Delete marker is not added for DELETE requests with version id.
 
 ![delete_version_id](versioning_DELETE_versionEnabled_id.png)
 
