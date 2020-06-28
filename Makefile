@@ -60,7 +60,9 @@ build: checks
 	@echo "Building minio binary to './minio'"
 	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
-docker: build
+docker: checks
+	@echo "Building minio docker image '$(TAG)'"
+	@GOOS=linux GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@docker build -t $(TAG) . -f Dockerfile.dev
 
 # Builds minio and installs it to $GOPATH/bin.
