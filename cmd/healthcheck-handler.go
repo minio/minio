@@ -51,7 +51,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Get cached value
 	v, _ := globalReadyCache.Get()
-	if v.(bool) == true {
+	if v.(bool) {
 		writeResponse(w, http.StatusOK, nil, mimeNone)
 		return
 	}
