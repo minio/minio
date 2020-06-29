@@ -27,22 +27,44 @@ import (
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ReadinessCheckHandler")
 
-	objLayer := newObjectLayerWithoutSafeModeFn()
-	// Service not initialized yet
-	if objLayer == nil {
-		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+	ready := func() bool {
+		objLayer := newObjectLayerWithoutSafeModeFn()
+		// Service not initialized yet
+		if objLayer == nil {
+			return false
+		}
+
+		ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getReadyDeadline())
+		defer cancel()
+		if !objLayer.IsReady(ctx) && newObjectLayerFn() == nil {
+			return false
+		}
+		return true
+	}
+
+	globalReadyCache.Once.Do(func() {
+		globalReadyCache.TTL = globalAPIConfig.getReadyCacheTTL()
+		globalReadyCache.Update = func () (interface{}, error) {
+			return ready(), nil
+		}
+	})
+
+	// Get cached value
+	v, _ := globalReadyCache.Get()
+	if v.(bool) == true {
+		writeResponse(w, http.StatusOK, nil, mimeNone)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getReadyDeadline())
-	defer cancel()
-
-	if !objLayer.IsReady(ctx) && newObjectLayerFn() == nil {
-		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+	// If not ready force to re evaluate health bypassing cached value.
+	v, _ = globalReadyCache.ForceUpdate()
+	if v.(bool) == true {
+		writeResponse(w, http.StatusOK, nil, mimeNone)
 		return
 	}
 
-	writeResponse(w, http.StatusOK, nil, mimeNone)
+	writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+	return
 }
 
 // LivenessCheckHandler - Checks if the process is up. Always returns success.

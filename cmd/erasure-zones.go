@@ -38,8 +38,6 @@ import (
 type erasureZones struct {
 	GatewayUnsupported
 
-	readinessCache timedValue
-
 	zones []*erasureSets
 }
 
@@ -1975,57 +1973,44 @@ func (z *erasureZones) getZoneAndSet(id string) (int, int, error) {
 
 // IsReady - Returns true, when all the erasure sets are writable.
 func (z *erasureZones) IsReady(ctx context.Context) bool {
-	ready := func() bool {
-		erasureSetUpCount := make([][]int, len(z.zones))
-		for i := range z.zones {
-			erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
-		}
-
-		diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
-
-		diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
-
-		for _, id := range diskIDs {
-			zoneIdx, setIdx, err := z.getZoneAndSet(id)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			erasureSetUpCount[zoneIdx][setIdx]++
-		}
-
-		for zoneIdx := range erasureSetUpCount {
-			parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-			diskCount := len(z.zones[zoneIdx].format.Erasure.Sets[0])
-			if parityDrives == 0 {
-				parityDrives = getDefaultParityBlocks(diskCount)
-			}
-			dataDrives := diskCount - parityDrives
-			writeQuorum := dataDrives
-			if dataDrives == parityDrives {
-				writeQuorum++
-			}
-			for setIdx := range erasureSetUpCount[zoneIdx] {
-				if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
-					logger.LogIf(ctx, fmt.Errorf("Write quorum lost on zone: %d, set: %d, expected write quorum: %d",
-						zoneIdx, setIdx, writeQuorum))
-					return false
-				}
-			}
-		}
-		return true
+	erasureSetUpCount := make([][]int, len(z.zones))
+	for i := range z.zones {
+		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
 	}
 
-	z.readinessCache.Once.Do(func() {
-		z.readinessCache.TTL = globalAPIConfig.getReadyCacheTTL()
-		z.readinessCache.Update = func() (interface{}, error) {
-			return ready(), nil
+	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
+
+	diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
+
+	for _, id := range diskIDs {
+		zoneIdx, setIdx, err := z.getZoneAndSet(id)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
 		}
-	})
+		erasureSetUpCount[zoneIdx][setIdx]++
+	}
 
-	v, _ := z.readinessCache.Get()
-	return v.(bool)
-
+	for zoneIdx := range erasureSetUpCount {
+		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+		diskCount := len(z.zones[zoneIdx].format.Erasure.Sets[0])
+		if parityDrives == 0 {
+			parityDrives = getDefaultParityBlocks(diskCount)
+		}
+		dataDrives := diskCount - parityDrives
+		writeQuorum := dataDrives
+		if dataDrives == parityDrives {
+			writeQuorum++
+		}
+		for setIdx := range erasureSetUpCount[zoneIdx] {
+			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
+				logger.LogIf(ctx, fmt.Errorf("Write quorum lost on zone: %d, set: %d, expected write quorum: %d",
+					zoneIdx, setIdx, writeQuorum))
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // PutObjectTags - replace or add tags to an existing object
