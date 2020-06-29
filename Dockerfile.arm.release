@@ -1,5 +1,5 @@
 FROM multiarch/qemu-user-static:x86_64-arm as qemu
-FROM arm32v7/alpine:3.10
+FROM arm32v7/alpine:3.12
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 

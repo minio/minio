@@ -1,5 +1,5 @@
 FROM multiarch/qemu-user-static:x86_64-s390x as qemu
-FROM s390x/alpine:3.10
+FROM s390x/alpine:3.12
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
