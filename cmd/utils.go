@@ -658,7 +658,7 @@ type timedValue struct {
 	mu         sync.Mutex
 }
 
-// ForceUpdates the value and caches it.
+// ForceUpdate the value and caches it.
 // If the Update function returns an error the value is forwarded as is and not cached.
 func (t *timedValue) ForceUpdate() (interface{}, error) {
 	t.mu.Lock()
