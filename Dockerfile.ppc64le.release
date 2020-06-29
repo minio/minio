@@ -1,5 +1,5 @@
 FROM multiarch/qemu-user-static:x86_64-ppc64le as qemu
-FROM ppc64le/alpine:3.10
+FROM ppc64le/alpine:3.12
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
