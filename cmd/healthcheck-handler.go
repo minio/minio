@@ -36,7 +36,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 		ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getReadyDeadline())
 		defer cancel()
-		if !objLayer.IsReady(ctx) && newObjectLayerFn() == nil {
+		return objLayer.IsReady(ctx)
 			return false
 		}
 		return true
