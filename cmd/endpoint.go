@@ -668,6 +668,51 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 	return endpoints, setupType, nil
 }
 
+// Return the index of the local peer among other nodes of the cluster.
+// The index will be zero in case of a standalone erasure.
+func getLocalPeerIndex(endpointZones EndpointZones) int {
+	var (
+		index            = -1
+		lastEndpointHost = ""
+	)
+
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.Host != lastEndpointHost {
+				lastEndpointHost = endpoint.Host
+				index++
+			}
+			if endpoint.IsLocal {
+				return index
+			}
+		}
+	}
+
+	return -1
+}
+
+// Return host[:port] address of the peer with the given index
+func getPeerHostByIndex(endpointZones EndpointZones, index int) (string, bool) {
+	var (
+		i                = -1
+		lastEndpointHost = ""
+	)
+
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.Host != lastEndpointHost {
+				lastEndpointHost = endpoint.Host
+				i++
+			}
+			if i == index {
+				return endpoint.Host, endpoint.IsLocal
+			}
+		}
+	}
+
+	return "", false
+}
+
 // GetLocalPeer - returns local peer value, returns globalMinioAddr
 // for FS and Erasure mode. In case of distributed server return
 // the first element from the set of peers which indicate that

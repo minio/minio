@@ -370,13 +370,18 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 	reqInfo.AppendTags("prefix", objPrefix)
 	ctx, cancel := context.WithCancel(logger.SetReqInfo(ctx, reqInfo))
 
+	clientToken := mustGetUUID()
+	if globalIsDistErasure {
+		clientToken = fmt.Sprintf("%s@%d", clientToken, getLocalPeerIndex(globalEndpoints))
+	}
+
 	return &healSequence{
 		respCh:         make(chan healResult),
 		bucket:         bucket,
 		object:         objPrefix,
 		reportProgress: true,
 		startTime:      UTCNow(),
-		clientToken:    mustGetUUID(),
+		clientToken:    clientToken,
 		clientAddress:  clientAddr,
 		forceStarted:   forceStart,
 		settings:       hs,
