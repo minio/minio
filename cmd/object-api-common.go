@@ -49,7 +49,7 @@ var globalObjectAPI ObjectLayer
 //Global cacheObjects, only accessed by newCacheObjectsFn().
 var globalCacheObjectAPI CacheObjectLayer
 
-//Global cached readiness flag
+// Global cached readiness flag
 var globalReadyCache timedValue
 
 // Checks if the object is a directory, this logic uses
