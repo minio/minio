@@ -58,7 +58,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If not ready force to re evaluate health bypassing cached value.
 	v, _ = globalReadyCache.ForceUpdate()
-	if v.(bool) == true {
+	if v.(bool) {
 		writeResponse(w, http.StatusOK, nil, mimeNone)
 		return
 	}
