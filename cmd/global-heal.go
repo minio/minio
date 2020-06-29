@@ -34,7 +34,7 @@ var leaderLockTimeout = newDynamicTimeout(time.Minute, time.Minute)
 
 // NewBgHealSequence creates a background healing sequence
 // operation which crawls all objects and heal them.
-func newBgHealSequence(numDisks int) *healSequence {
+func newBgHealSequence() *healSequence {
 
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
 	ctx, cancelCtx := context.WithCancel(logger.SetReqInfo(GlobalContext, reqInfo))
@@ -54,7 +54,6 @@ func newBgHealSequence(numDisks int) *healSequence {
 		currentStatus: healSequenceStatus{
 			Summary:      healNotStartedStatus,
 			HealSettings: hs,
-			NumDisks:     numDisks,
 		},
 		cancelCtx:          cancelCtx,
 		ctx:                ctx,

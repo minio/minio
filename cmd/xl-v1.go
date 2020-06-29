@@ -41,9 +41,9 @@ const (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
-// partialUpload is a successful upload of an object
-// but not written in all disks (having quorum)
-type partialUpload struct {
+// partialOperation is a successful upload/delete
+// of an object but not written in all disks (having quorum)
+type partialOperation struct {
 	bucket    string
 	object    string
 	failedSet int
@@ -69,7 +69,7 @@ type xlObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	mrfUploadCh chan partialUpload
+	mrfOpCh chan partialOperation
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.

@@ -77,7 +77,6 @@ type HealTaskStatus struct {
 	FailureDetail string    `json:"detail"`
 	StartTime     time.Time `json:"startTime"`
 	HealSettings  HealOpts  `json:"settings"`
-	NumDisks      int       `json:"numDisks"`
 
 	Items []HealResultItem `json:"items,omitempty"`
 }

@@ -204,6 +204,12 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		}
 	}(txnLk)
 
+	// Enable healing to heal drives if possible
+	if globalIsXL {
+		initBackgroundHealing(ctx, newObject)
+		initLocalDisksAutoHeal(ctx, newObject)
+	}
+
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
@@ -419,9 +425,9 @@ func serverMain(ctx *cli.Context) {
 	setMaxResources()
 
 	if globalIsXL {
-		// Init global heal state
-		globalAllHealState = initHealState()
-		globalBackgroundHealState = initHealState()
+		// New global heal state
+		globalAllHealState = newHealState()
+		globalBackgroundHealState = newHealState()
 	}
 
 	// Configure server.
@@ -500,12 +506,6 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	newAllSubsystems()
-
-	// Enable healing to heal drives if possible
-	if globalIsXL {
-		initBackgroundHealing(GlobalContext, newObject)
-		initLocalDisksAutoHeal(GlobalContext, newObject)
-	}
 
 	go startBackgroundOps(GlobalContext, newObject)
 

@@ -1676,18 +1676,20 @@ func (z *xlZones) PutObjectTags(ctx context.Context, bucket, object string, tags
 	if z.SingleZone() {
 		return z.zones[0].PutObjectTags(ctx, bucket, object, tags)
 	}
+
 	for _, zone := range z.zones {
 		err := zone.PutObjectTags(ctx, bucket, object, tags)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) {
 				continue
 			}
 			return err
 		}
 		return nil
 	}
-	return BucketNotFound{
+	return ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }
 
@@ -1699,15 +1701,16 @@ func (z *xlZones) DeleteObjectTags(ctx context.Context, bucket, object string) e
 	for _, zone := range z.zones {
 		err := zone.DeleteObjectTags(ctx, bucket, object)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) {
 				continue
 			}
 			return err
 		}
 		return nil
 	}
-	return BucketNotFound{
+	return ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }
 
@@ -1719,14 +1722,15 @@ func (z *xlZones) GetObjectTags(ctx context.Context, bucket, object string) (*ta
 	for _, zone := range z.zones {
 		tags, err := zone.GetObjectTags(ctx, bucket, object)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) {
 				continue
 			}
 			return tags, err
 		}
 		return tags, nil
 	}
-	return nil, BucketNotFound{
+	return nil, ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }

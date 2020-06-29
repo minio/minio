@@ -667,7 +667,7 @@ func (xl xlObjects) putObject(ctx context.Context, bucket string, object string,
 	// during this upload, send it to the MRF list.
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] == nil || storageDisks[i] == nil {
-			xl.addPartialUpload(bucket, object)
+			xl.addPartial(bucket, object)
 			break
 		}
 	}
@@ -927,6 +927,21 @@ func (xl xlObjects) DeleteObjects(ctx context.Context, bucket string, objects []
 		}
 	}
 
+	// Check failed deletes across multiple objects
+	for i, object := range objects {
+		if deleteErrs[i] == nil {
+			// Check if there is any offline disk and add it to the MRF list
+			for _, disk := range xl.getDisks() {
+				if disk == nil {
+					// all other direct versionId references we should
+					// ensure no dangling file is left over.
+					xl.addPartial(bucket, object)
+					break
+				}
+			}
+		}
+	}
+
 	return deleteErrs, nil
 }
 
@@ -973,6 +988,13 @@ func (xl xlObjects) DeleteObject(ctx context.Context, bucket, object string) (er
 		return toObjectErr(err, bucket, object)
 	}
 
+	for _, disk := range storageDisks {
+		if disk == nil {
+			xl.addPartial(bucket, object)
+			break
+		}
+	}
+
 	// Success.
 	return nil
 }
@@ -999,11 +1021,11 @@ func (xl xlObjects) ListObjectsV2(ctx context.Context, bucket, prefix, continuat
 	return listObjectsV2Info, err
 }
 
-// Send the successful but partial upload, however ignore
+// Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (xl xlObjects) addPartialUpload(bucket, key string) {
+func (xl xlObjects) addPartial(bucket, object string) {
 	select {
-	case xl.mrfUploadCh <- partialUpload{bucket: bucket, object: key}:
+	case xl.mrfOpCh <- partialOperation{bucket: bucket, object: object}:
 	default:
 	}
 }

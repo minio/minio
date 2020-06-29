@@ -90,8 +90,8 @@ type xlSets struct {
 	pool       *MergeWalkPool
 	poolSplunk *MergeWalkPool
 
-	mrfMU      sync.Mutex
-	mrfUploads map[string]int
+	mrfMU         sync.Mutex
+	mrfOperations map[string]int
 }
 
 func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
@@ -303,7 +303,7 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 		distributionAlgo:   format.XL.DistributionAlgo,
 		pool:               NewMergeWalkPool(globalMergeLookupTimeout),
 		poolSplunk:         NewMergeWalkPool(globalMergeLookupTimeout),
-		mrfUploads:         make(map[string]int),
+		mrfOperations:      make(map[string]int),
 	}
 
 	mutex := newNSLock(globalIsDistXL)
@@ -348,7 +348,7 @@ func newXLSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageA
 			getEndpoints: s.GetEndpoints(i),
 			nsMutex:      mutex,
 			bp:           bp,
-			mrfUploadCh:  make(chan partialUpload, 10000),
+			mrfOpCh:      make(chan partialOperation, 10000),
 		}
 
 		go s.sets[i].cleanupStaleMultipartUploads(ctx,
@@ -1765,9 +1765,9 @@ func (s *xlSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 // from all underlying xl sets and puts them in a global map which
 // should not have more than 10000 entries.
 func (s *xlSets) maintainMRFList() {
-	var agg = make(chan partialUpload, 10000)
+	var agg = make(chan partialOperation, 10000)
 	for i, xl := range s.sets {
-		go func(c <-chan partialUpload, setIndex int) {
+		go func(c <-chan partialOperation, setIndex int) {
 			for msg := range c {
 				msg.failedSet = setIndex
 				select {
@@ -1775,16 +1775,16 @@ func (s *xlSets) maintainMRFList() {
 				default:
 				}
 			}
-		}(xl.mrfUploadCh, i)
+		}(xl.mrfOpCh, i)
 	}
 
-	for fUpload := range agg {
+	for fOp := range agg {
 		s.mrfMU.Lock()
-		if len(s.mrfUploads) > 10000 {
+		if len(s.mrfOperations) > 10000 {
 			s.mrfMU.Unlock()
 			continue
 		}
-		s.mrfUploads[pathJoin(fUpload.bucket, fUpload.object)] = fUpload.failedSet
+		s.mrfOperations[pathJoin(fOp.bucket, fOp.object)] = fOp.failedSet
 		s.mrfMU.Unlock()
 	}
 }
@@ -1810,17 +1810,17 @@ func (s *xlSets) healMRFRoutine() {
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the xl set
 		// to which the connected disk belongs.
-		var mrfUploads []string
+		var mrfOperations []string
 		s.mrfMU.Lock()
-		for k, v := range s.mrfUploads {
+		for k, v := range s.mrfOperations {
 			if v == e.setIndex {
-				mrfUploads = append(mrfUploads, k)
+				mrfOperations = append(mrfOperations, k)
 			}
 		}
 		s.mrfMU.Unlock()
 
 		// Heal objects
-		for _, u := range mrfUploads {
+		for _, u := range mrfOperations {
 			// Send an object to be healed with a timeout
 			select {
 			case bgSeq.sourceCh <- healSource{path: u}:
@@ -1828,7 +1828,7 @@ func (s *xlSets) healMRFRoutine() {
 			}
 
 			s.mrfMU.Lock()
-			delete(s.mrfUploads, u)
+			delete(s.mrfOperations, u)
 			s.mrfMU.Unlock()
 		}
 	}

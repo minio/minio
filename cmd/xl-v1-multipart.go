@@ -731,9 +731,9 @@ func (xl xlObjects) CompleteMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	// Check if there is any offline disk and add it to the MRF list
-	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] == nil || storageDisks[i] == nil {
-			xl.addPartialUpload(bucket, object)
+	for i, disk := range onlineDisks {
+		if disk == nil || storageDisks[i] == nil {
+			xl.addPartial(bucket, object)
 			break
 		}
 	}

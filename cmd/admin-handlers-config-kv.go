@@ -173,7 +173,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	cfg := globalServerConfig
-	if globalSafeMode {
+	if newObjectLayerFn() == nil {
 		var err error
 		cfg, err = getValidConfig(objectAPI)
 		if err != nil {

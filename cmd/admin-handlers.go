@@ -708,10 +708,6 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// find number of disks in the setup, ignore any errors here.
-	info, _ := objectAPI.StorageInfo(ctx, false)
-	numDisks := info.Backend.OfflineDisks.Sum() + info.Backend.OnlineDisks.Sum()
-
 	healPath := pathJoin(hip.bucket, hip.objPrefix)
 	if hip.clientToken == "" && !hip.forceStart && !hip.forceStop {
 		nh, exists := globalAllHealState.getHealSequence(healPath)
@@ -754,7 +750,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 			respCh <- hr
 		}()
 	case hip.clientToken == "":
-		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), numDisks, hip.hs, hip.forceStart)
+		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), hip.hs, hip.forceStart)
 		go func() {
 			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
 			hr := healResp{respBytes, apiErr, errMsg}
@@ -1399,10 +1395,8 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	mode := ""
-	if globalSafeMode {
-		mode = "safe"
-	} else {
+	mode := "safe"
+	if newObjectLayerFn() != nil {
 		mode = "online"
 	}
 

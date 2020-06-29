@@ -100,7 +100,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 	}
 }
 
-func initHealRoutine() *healRoutine {
+func newHealRoutine() *healRoutine {
 	return &healRoutine{
 		tasks:  make(chan healTask),
 		doneCh: make(chan struct{}),
@@ -108,22 +108,22 @@ func initHealRoutine() *healRoutine {
 
 }
 
-func startBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
+func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 	// Run the background healer
-	globalBackgroundHealRoutine = initHealRoutine()
+	globalBackgroundHealRoutine = newHealRoutine()
 	go globalBackgroundHealRoutine.run(ctx, objAPI)
 
-	// Launch the background healer sequence to track
-	// background healing operations, ignore errors
-	// errors are handled into offline disks already.
-	info, _ := objAPI.StorageInfo(ctx, false)
-	numDisks := info.Backend.OnlineDisks.Sum() + info.Backend.OfflineDisks.Sum()
-	nh := newBgHealSequence(numDisks)
-	globalBackgroundHealState.LaunchNewHealSequence(nh)
-}
+	nh := newBgHealSequence()
+	// Heal any disk format and metadata early, if possible.
+	if err := nh.healDiskMeta(); err != nil {
+		if newObjectLayerFn() != nil {
+			// log only in situations, when object layer
+			// has fully initialized.
+			logger.LogIf(nh.ctx, err)
+		}
+	}
 
-func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
-	go startBackgroundHealing(ctx, objAPI)
+	globalBackgroundHealState.LaunchNewHealSequence(nh)
 }
 
 // healDiskFormat - heals format.json, return value indicates if a
@@ -140,12 +140,20 @@ func healDiskFormat(ctx context.Context, objAPI ObjectLayer, opts madmin.HealOpt
 	// Healing succeeded notify the peers to reload format and re-initialize disks.
 	// We will not notify peers if healing is not required.
 	if err == nil {
-		for _, nerr := range globalNotificationSys.ReloadFormat(opts.DryRun) {
-			if nerr.Err != nil {
-				logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-				logger.LogIf(ctx, nerr.Err)
+		// Notify servers in background and retry if needed.
+		go func() {
+		retry:
+			for _, nerr := range globalNotificationSys.ReloadFormat(opts.DryRun) {
+				if nerr.Err != nil {
+					if nerr.Err.Error() == errServerNotInitialized.Error() {
+						time.Sleep(time.Second)
+						goto retry
+					}
+					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+					logger.LogIf(ctx, nerr.Err)
+				}
 			}
-		}
+		}()
 	}
 
 	return res, nil
