@@ -407,7 +407,7 @@ func resetGlobalIsErasure() {
 func resetGlobalHealState() {
 	// Init global heal state
 	if globalAllHealState == nil {
-		globalAllHealState = initHealState()
+		globalAllHealState = newHealState()
 	} else {
 		globalAllHealState.Lock()
 		for _, v := range globalAllHealState.healSeqMap {
@@ -420,7 +420,7 @@ func resetGlobalHealState() {
 
 	// Init background heal state
 	if globalBackgroundHealState == nil {
-		globalBackgroundHealState = initHealState()
+		globalBackgroundHealState = newHealState()
 	} else {
 		globalBackgroundHealState.Lock()
 		for _, v := range globalBackgroundHealState.healSeqMap {

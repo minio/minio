@@ -714,7 +714,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// during this upload, send it to the MRF list.
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] == nil || storageDisks[i] == nil {
-			er.addPartialUpload(bucket, object)
+			er.addPartial(bucket, object, fi.VersionID)
 			break
 		}
 	}
@@ -897,6 +897,23 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		}
 	}
 
+	// Check failed deletes across multiple objects
+	for _, version := range versions {
+		// Check if there is any offline disk and add it to the MRF list
+		for _, disk := range storageDisks {
+			if disk == nil {
+				// ignore delete markers for quorum
+				if version.Deleted {
+					continue
+				}
+				// all other direct versionId references we should
+				// ensure no dangling file is left over.
+				er.addPartial(bucket, version.Name, version.VersionID)
+				break
+			}
+		}
+	}
+
 	return dobjects, errs
 }
 
@@ -935,14 +952,21 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
+	for _, disk := range storageDisks {
+		if disk == nil {
+			er.addPartial(bucket, object, opts.VersionID)
+			break
+		}
+	}
+
 	return ObjectInfo{Bucket: bucket, Name: object, VersionID: opts.VersionID}, nil
 }
 
-// Send the successful but partial upload, however ignore
+// Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartialUpload(bucket, key string) {
+func (er erasureObjects) addPartial(bucket, object, versionID string) {
 	select {
-	case er.mrfUploadCh <- partialUpload{bucket: bucket, object: key}:
+	case er.mrfOpCh <- partialOperation{bucket: bucket, object: object, versionID: versionID}:
 	default:
 	}
 }

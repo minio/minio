@@ -34,11 +34,12 @@ import (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
-// partialUpload is a successful upload of an object
+// partialOperation is a successful upload/delete of an object
 // but not written in all disks (having quorum)
-type partialUpload struct {
+type partialOperation struct {
 	bucket    string
 	object    string
+	versionID string
 	failedSet int
 }
 
@@ -62,7 +63,7 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	mrfUploadCh chan partialUpload
+	mrfOpCh chan partialOperation
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -87,21 +88,17 @@ func (d byDiskTotal) Less(i, j int) bool {
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
+func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
 	disksInfo = make([]DiskInfo, len(disks))
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
-	for _, disk := range disks {
-		if disk == OfflineDisk {
-			continue
+	for _, ep := range endpoints {
+		if _, ok := offlineDisks[ep]; !ok {
+			offlineDisks[ep] = 0
 		}
-		peerAddr := disk.Hostname()
-		if _, ok := offlineDisks[peerAddr]; !ok {
-			offlineDisks[peerAddr] = 0
-		}
-		if _, ok := onlineDisks[peerAddr]; !ok {
-			onlineDisks[peerAddr] = 0
+		if _, ok := onlineDisks[ep]; !ok {
+			onlineDisks[ep] = 0
 		}
 	}
 
@@ -130,36 +127,12 @@ func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []
 	errs = g.Wait()
 	// Wait for the routines.
 	for i, diskInfoErr := range errs {
-		if disks[i] == OfflineDisk {
-			continue
-		}
+		ep := endpoints[i]
 		if diskInfoErr != nil {
-			offlineDisks[disks[i].Hostname()]++
+			offlineDisks[ep]++
 			continue
 		}
-		onlineDisks[disks[i].Hostname()]++
-	}
-
-	// Iterate over the passed endpoints arguments and check
-	// if there are still disks missing from the offline/online lists
-	// and update them accordingly.
-	missingOfflineDisks := make(map[string]int)
-	for _, zone := range globalEndpoints {
-		for _, endpoint := range zone.Endpoints {
-			// if local is set and endpoint is not local
-			// we are not interested in remote disks.
-			if local && !endpoint.IsLocal {
-				continue
-			}
-
-			if _, ok := offlineDisks[endpoint.Host]; !ok {
-				missingOfflineDisks[endpoint.Host]++
-			}
-		}
-	}
-	for missingDisk, n := range missingOfflineDisks {
-		onlineDisks[missingDisk] = 0
-		offlineDisks[missingDisk] = n
+		onlineDisks[ep]++
 	}
 
 	// Success.
@@ -167,8 +140,8 @@ func getDisksInfo(disks []StorageAPI, local bool) (disksInfo []DiskInfo, errs []
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, local bool) (StorageInfo, []error) {
-	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks, local)
+func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []error) {
+	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -203,19 +176,23 @@ func getStorageInfo(disks []StorageAPI, local bool) (StorageInfo, []error) {
 // StorageInfo - returns underlying storage statistics.
 func (er erasureObjects) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 	disks := er.getDisks()
+	endpoints := er.getEndpoints()
 	if local {
 		var localDisks []StorageAPI
-		for _, disk := range disks {
+		var localEndpoints []string
+		for i, disk := range disks {
 			if disk != nil {
 				if disk.IsLocal() {
 					// Append this local disk since local flag is true
 					localDisks = append(localDisks, disk)
+					localEndpoints = append(localEndpoints, endpoints[i])
 				}
 			}
 		}
 		disks = localDisks
+		endpoints = localEndpoints
 	}
-	return getStorageInfo(disks, local)
+	return getStorageInfo(disks, endpoints)
 }
 
 // GetMetrics - is not implemented and shouldn't be called.
