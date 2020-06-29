@@ -67,10 +67,20 @@ func getEndpointURL(endpoint string, secure bool) (*url.URL, error) {
 			return nil, ErrInvalidArgument(msg)
 		}
 	}
+
 	// If secure is false, use 'http' scheme.
 	scheme := "https"
 	if !secure {
 		scheme = "http"
+	}
+
+	// Strip the obvious :443 and :80 from the endpoint
+	// to avoid the signature mismatch error.
+	if secure && strings.HasSuffix(endpoint, ":443") {
+		endpoint = strings.TrimSuffix(endpoint, ":443")
+	}
+	if !secure && strings.HasSuffix(endpoint, ":80") {
+		endpoint = strings.TrimSuffix(endpoint, ":80")
 	}
 
 	// Construct a secured endpoint URL.
