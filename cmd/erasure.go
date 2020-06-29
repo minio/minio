@@ -34,11 +34,12 @@ import (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
-// partialUpload is a successful upload of an object
+// partialOperation is a successful upload/delete of an object
 // but not written in all disks (having quorum)
-type partialUpload struct {
+type partialOperation struct {
 	bucket    string
 	object    string
+	versionID string
 	failedSet int
 }
 
@@ -62,7 +63,7 @@ type erasureObjects struct {
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
 
-	mrfUploadCh chan partialUpload
+	mrfOpCh chan partialOperation
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -126,9 +127,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []DiskInfo,
 	errs = g.Wait()
 	// Wait for the routines.
 	for i, diskInfoErr := range errs {
-		if disks[i] == OfflineDisk {
-			continue
-		}
 		ep := endpoints[i]
 		if diskInfoErr != nil {
 			offlineDisks[ep]++

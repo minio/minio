@@ -2018,18 +2018,27 @@ func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string,
 	if z.SingleZone() {
 		return z.zones[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
+
 	for _, zone := range z.zones {
 		err := zone.PutObjectTags(ctx, bucket, object, tags, opts)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) {
 				continue
 			}
 			return err
 		}
 		return nil
 	}
-	return BucketNotFound{
+	if opts.VersionID != "" {
+		return VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	return ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }
 
@@ -2041,15 +2050,23 @@ func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object stri
 	for _, zone := range z.zones {
 		err := zone.DeleteObjectTags(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) {
 				continue
 			}
 			return err
 		}
 		return nil
 	}
-	return BucketNotFound{
+	if opts.VersionID != "" {
+		return VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	return ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }
 
@@ -2061,14 +2078,22 @@ func (z *erasureZones) GetObjectTags(ctx context.Context, bucket, object string,
 	for _, zone := range z.zones {
 		tags, err := zone.GetObjectTags(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) {
 				continue
 			}
 			return tags, err
 		}
 		return tags, nil
 	}
-	return nil, BucketNotFound{
+	if opts.VersionID != "" {
+		return nil, VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	return nil, ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }

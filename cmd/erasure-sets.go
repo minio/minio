@@ -92,8 +92,8 @@ type erasureSets struct {
 	poolSplunk   *MergeWalkPool
 	poolVersions *MergeWalkVersionsPool
 
-	mrfMU      sync.Mutex
-	mrfUploads map[healSource]int
+	mrfMU         sync.Mutex
+	mrfOperations map[healSource]int
 }
 
 func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
@@ -307,7 +307,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		pool:               NewMergeWalkPool(globalMergeLookupTimeout),
 		poolSplunk:         NewMergeWalkPool(globalMergeLookupTimeout),
 		poolVersions:       NewMergeWalkVersionsPool(globalMergeLookupTimeout),
-		mrfUploads:         make(map[healSource]int),
+		mrfOperations:      make(map[healSource]int),
 	}
 
 	mutex := newNSLock(globalIsDistErasure)
@@ -351,7 +351,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			getEndpoints: s.GetEndpoints(i),
 			nsMutex:      mutex,
 			bp:           bp,
-			mrfUploadCh:  make(chan partialUpload, 10000),
+			mrfOpCh:      make(chan partialOperation, 10000),
 		}
 	}
 
@@ -1608,9 +1608,9 @@ func (s *erasureSets) IsReady(_ context.Context) bool {
 // from all underlying er.sets and puts them in a global map which
 // should not have more than 10000 entries.
 func (s *erasureSets) maintainMRFList() {
-	var agg = make(chan partialUpload, 10000)
+	var agg = make(chan partialOperation, 10000)
 	for i, er := range s.sets {
-		go func(c <-chan partialUpload, setIndex int) {
+		go func(c <-chan partialOperation, setIndex int) {
 			for msg := range c {
 				msg.failedSet = setIndex
 				select {
@@ -1618,19 +1618,20 @@ func (s *erasureSets) maintainMRFList() {
 				default:
 				}
 			}
-		}(er.mrfUploadCh, i)
+		}(er.mrfOpCh, i)
 	}
 
-	for fUpload := range agg {
+	for fOp := range agg {
 		s.mrfMU.Lock()
-		if len(s.mrfUploads) > 10000 {
+		if len(s.mrfOperations) > 10000 {
 			s.mrfMU.Unlock()
 			continue
 		}
-		s.mrfUploads[healSource{
-			bucket: fUpload.bucket,
-			object: fUpload.object,
-		}] = fUpload.failedSet
+		s.mrfOperations[healSource{
+			bucket:    fOp.bucket,
+			object:    fOp.object,
+			versionID: fOp.versionID,
+		}] = fOp.failedSet
 		s.mrfMU.Unlock()
 	}
 }
@@ -1656,17 +1657,17 @@ func (s *erasureSets) healMRFRoutine() {
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the er.set
 		// to which the connected disk belongs.
-		var mrfUploads []healSource
+		var mrfOperations []healSource
 		s.mrfMU.Lock()
-		for k, v := range s.mrfUploads {
+		for k, v := range s.mrfOperations {
 			if v == e.setIndex {
-				mrfUploads = append(mrfUploads, k)
+				mrfOperations = append(mrfOperations, k)
 			}
 		}
 		s.mrfMU.Unlock()
 
 		// Heal objects
-		for _, u := range mrfUploads {
+		for _, u := range mrfOperations {
 			// Send an object to be healed with a timeout
 			select {
 			case bgSeq.sourceCh <- u:
@@ -1674,7 +1675,7 @@ func (s *erasureSets) healMRFRoutine() {
 			}
 
 			s.mrfMU.Lock()
-			delete(s.mrfUploads, u)
+			delete(s.mrfOperations, u)
 			s.mrfMU.Unlock()
 		}
 	}
