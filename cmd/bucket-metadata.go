@@ -319,9 +319,15 @@ func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
 // deleteBucketMetadata deletes bucket metadata
 // If config does not exist no error is returned.
 func deleteBucketMetadata(ctx context.Context, obj ObjectLayer, bucket string) error {
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketMetadataFile)
-	if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
-		return err
+	metadataFiles := []string{
+		dataUsageCacheName,
+		bucketMetadataFile,
+	}
+	for _, metaFile := range metadataFiles {
+		configFile := path.Join(bucketConfigPrefix, bucket, metaFile)
+		if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
+			return err
+		}
 	}
 	return nil
 }
