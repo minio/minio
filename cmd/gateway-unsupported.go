@@ -31,22 +31,6 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-// GatewayLocker implements custom NeNSLock implementation
-type GatewayLocker struct {
-	ObjectLayer
-	nsMutex *nsLockMap
-}
-
-// NewNSLock - implements gateway level locker
-func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return l.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
-}
-
-// NewGatewayLayerWithLocker - initialize gateway with locker.
-func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
-	return &GatewayLocker{ObjectLayer: gwLayer, nsMutex: newNSLock(false)}
-}
-
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
 
