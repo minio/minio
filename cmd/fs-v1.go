@@ -280,6 +280,13 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		}
 		logger.LogIf(ctx, err)
 		cache.Info.BloomFilter = nil
+
+		if cache.root() == nil {
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("CrawlAndGetDataUsage:") + " No root added. Adding empty")
+			}
+			cache.replace(cache.Info.Name, dataUsageRoot, dataUsageEntry{})
+		}
 		if cache.Info.LastUpdate.After(bCache.Info.LastUpdate) {
 			if intDataUpdateTracker.debug {
 				logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving bucket %q cache with %d entries", b.Name, len(cache.Cache))
