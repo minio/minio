@@ -44,8 +44,6 @@ const (
 
 	// URLEndpointType - URL style endpoint type enum.
 	URLEndpointType
-
-	retryInterval = 5 // In Seconds.
 )
 
 // Endpoint - any type of endpoint.
@@ -302,7 +300,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 	resolvedList := make([]bool, len(endpoints))
 	// Mark the starting time
 	startTime := time.Now()
-	keepAliveTicker := time.NewTicker(retryInterval * time.Second)
+	keepAliveTicker := time.NewTicker(10 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 	for {
 		// Break if the local endpoint is found already Or all the endpoints are resolved.
