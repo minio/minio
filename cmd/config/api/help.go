@@ -34,12 +34,6 @@ var (
 			Type:        "duration",
 		},
 		config.HelpKV{
-			Key:         apiReadyDeadline,
-			Description: `set the deadline for health check API /minio/health/ready e.g. "1m"`,
-			Optional:    true,
-			Type:        "duration",
-		},
-		config.HelpKV{
 			Key:         apiCorsAllowOrigin,
 			Description: `set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"`,
 			Optional:    true,
