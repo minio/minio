@@ -1694,10 +1694,13 @@ func (s *xlStorage) CreateFile(volume, path string, fileSize int64, r io.Reader)
 		return err
 	}
 
-	defer w.Close()
-
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
+
+	defer func() {
+		w.Sync()
+		w.Close()
+	}()
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
