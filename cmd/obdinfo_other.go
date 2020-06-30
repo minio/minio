@@ -1,4 +1,4 @@
-// +build !freebsd
+// +build !freebsd,!netbsd,!openbsd,!solaris
 
 /*
  * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
@@ -26,7 +26,41 @@ import (
 
 	"github.com/minio/minio/pkg/madmin"
 	diskhw "github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/host"
 )
+
+func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
+	addr := r.Host
+	if globalIsDistErasure {
+		addr = GetLocalPeer(globalEndpoints)
+	}
+
+	info, err := host.InfoWithContext(ctx)
+	if err != nil {
+		return madmin.ServerOsOBDInfo{
+			Addr:  addr,
+			Error: err.Error(),
+		}
+	}
+
+	sensors, err := host.SensorsTemperaturesWithContext(ctx)
+	if err != nil {
+		return madmin.ServerOsOBDInfo{
+			Addr:  addr,
+			Error: err.Error(),
+		}
+	}
+
+	// ignore user err, as it cannot be obtained reliably inside containers
+	users, _ := host.UsersWithContext(ctx)
+
+	return madmin.ServerOsOBDInfo{
+		Addr:    addr,
+		Info:    info,
+		Sensors: sensors,
+		Users:   users,
+	}
+}
 
 func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHwOBDInfo {
 	addr := r.Host
