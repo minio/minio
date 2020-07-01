@@ -18,6 +18,7 @@ package parquet
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 
@@ -266,8 +267,11 @@ func readRLE(reader *bytes.Reader, header, bitWidth uint64) (result []int64, err
 	}
 
 	val := int64(bytesToUint32(data))
-
 	count := header >> 1
+	if count > math.MaxInt64/8 {
+		// 8 bytes/element.
+		return nil, errors.New("parquet: size too large")
+	}
 	result = make([]int64, count)
 	for i := range result {
 		result[i] = val
@@ -282,6 +286,9 @@ func readRLEBitPackedHybrid(reader *bytes.Reader, length, bitWidth uint64) (resu
 		i32s, err = readInt32s(reader, 1)
 		if err != nil {
 			return nil, err
+		}
+		if i32s[0] < 0 {
+			return nil, errors.New("parquet: negative RLEBitPackedHybrid length")
 		}
 		length = uint64(i32s[0])
 	}
@@ -338,7 +345,9 @@ func readDeltaBinaryPackedInt(reader *bytes.Reader) (result []int64, err error) 
 
 	v := int64(firstValueZigZag>>1) ^ (-int64(firstValueZigZag & 1))
 	result = append(result, v)
-
+	if numMiniblocksInBlock == 0 {
+		return nil, errors.New("parquet: zero mini blocks in block")
+	}
 	numValuesInMiniBlock := blockSize / numMiniblocksInBlock
 
 	bitWidths := make([]uint64, numMiniblocksInBlock)
@@ -435,7 +444,9 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
-
+		if len(i64s) < int(count) || count > math.MaxInt64/8 {
+			return nil, -1, errors.New("parquet: value out of range")
+		}
 		return i64s[:count], parquet.Type_INT64, nil
 
 	case parquet.Encoding_RLE:
@@ -444,6 +455,9 @@ func readDataPageValues(
 			return nil, -1, err
 		}
 
+		if len(i64s) < int(count) || count > math.MaxInt64/8 {
+			return nil, -1, errors.New("parquet: value out of range")
+		}
 		i64s = i64s[:count]
 
 		if dataType == parquet.Type_INT32 {
@@ -461,6 +475,9 @@ func readDataPageValues(
 			return nil, -1, err
 		}
 
+		if len(i64s) < int(count) || count > math.MaxInt64/8 {
+			return nil, -1, errors.New("parquet: value out of range")
+		}
 		i64s = i64s[:count]
 
 		if dataType == parquet.Type_INT32 {
@@ -474,6 +491,9 @@ func readDataPageValues(
 		if err != nil {
 			return nil, -1, err
 		}
+		if len(byteSlices) < int(count) || count > math.MaxInt64/24 {
+			return nil, -1, errors.New("parquet: value out of range")
+		}
 
 		return byteSlices[:count], parquet.Type_FIXED_LEN_BYTE_ARRAY, nil
 
@@ -481,6 +501,9 @@ func readDataPageValues(
 		byteSlices, err := readDeltaByteArrays(bytesReader)
 		if err != nil {
 			return nil, -1, err
+		}
+		if len(byteSlices) < int(count) || count > math.MaxInt64/24 {
+			return nil, -1, errors.New("parquet: value out of range")
 		}
 
 		return byteSlices[:count], parquet.Type_FIXED_LEN_BYTE_ARRAY, nil
