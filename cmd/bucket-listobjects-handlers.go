@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strings"
 
@@ -157,6 +159,10 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if proxyListRequest(ctx, w, r, bucket) {
+		return
+	}
+
 	listObjectsV2 := objectAPI.ListObjectsV2
 
 	// Inititate a list objects operation based on the input params.
@@ -231,6 +237,10 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
+	if proxyListRequest(ctx, w, r, bucket) {
+		return
+	}
+
 	listObjectsV2 := objectAPI.ListObjectsV2
 
 	// Inititate a list objects operation based on the input params.
@@ -260,6 +270,43 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))
+}
+
+func getListEndpoint(bucket string) ListEndpoint {
+	return globalListEndpoints[crcHashMod(bucket, len(globalListEndpoints))]
+}
+
+// Proxy the list request to the right server.
+func proxyListRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
+	if len(globalListEndpoints) == 0 {
+		return false
+	}
+	ep := getListEndpoint(bucket)
+	if ep.isLocal {
+		return false
+	}
+	ctx = r.Context()
+	outreq := r.Clone(ctx)
+	outreq.URL.Scheme = "http"
+	outreq.URL.Host = ep.host
+	outreq.URL.Path = r.URL.Path
+	outreq.Header.Add("Host", r.Host)
+	if globalIsSSL {
+		outreq.URL.Scheme = "https"
+	}
+	outreq.Host = r.Host
+	res, err := ep.t.RoundTrip(outreq)
+	if err != nil {
+		return false
+	}
+	for k, vv := range res.Header {
+		for _, v := range vv {
+			w.Header().Set(k, v)
+		}
+	}
+	w.WriteHeader(res.StatusCode)
+	io.Copy(w, res.Body)
+	return true
 }
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
@@ -297,6 +344,10 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	// Validate all the query params before beginning to serve the request.
 	if s3Error := validateListObjectsArgs(marker, delimiter, encodingType, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if proxyListRequest(ctx, w, r, bucket) {
 		return
 	}
 

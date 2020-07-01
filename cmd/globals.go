@@ -276,6 +276,7 @@ var (
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
+	globalListEndpoints []ListEndpoint
 	// Add new variable global values here.
 )
 
