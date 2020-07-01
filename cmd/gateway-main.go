@@ -60,6 +60,10 @@ func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ..
 func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 	walk := func(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 		var marker string
+
+		// Make sure the results channel is ready to be read when we're done.
+		defer close(results)
+
 		for {
 			// set maxKeys to '0' to list maximum possible objects in single call.
 			loi, err := l.ObjectLayer.ListObjects(ctx, bucket, prefix, marker, "", 0)
