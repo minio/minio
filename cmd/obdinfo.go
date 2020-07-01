@@ -27,7 +27,6 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/madmin"
 	cpuhw "github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/host"
 	memhw "github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 )
@@ -366,38 +365,5 @@ func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDI
 	return madmin.ServerProcOBDInfo{
 		Addr:      addr,
 		Processes: sysProcs,
-	}
-}
-
-func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
-	addr := r.Host
-	if globalIsDistXL {
-		addr = GetLocalPeer(globalEndpoints)
-	}
-
-	info, err := host.InfoWithContext(ctx)
-	if err != nil {
-		return madmin.ServerOsOBDInfo{
-			Addr:  addr,
-			Error: err.Error(),
-		}
-	}
-
-	sensors, err := host.SensorsTemperaturesWithContext(ctx)
-	if err != nil {
-		return madmin.ServerOsOBDInfo{
-			Addr:  addr,
-			Error: err.Error(),
-		}
-	}
-
-	// ignore user err, as it cannot be obtained reliably inside containers
-	users, _ := host.UsersWithContext(ctx)
-
-	return madmin.ServerOsOBDInfo{
-		Addr:    addr,
-		Info:    info,
-		Sensors: sensors,
-		Users:   users,
 	}
 }

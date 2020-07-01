@@ -1,3 +1,5 @@
+// +build freebsd netbsd openbsd solaris
+
 /*
  * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
@@ -20,6 +22,7 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"runtime"
 
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -32,6 +35,18 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 
 	return madmin.ServerDiskHwOBDInfo{
 		Addr:  addr,
-		Error: "unsupported platform",
+		Error: "unsupported platform: " + runtime.GOOS,
+	}
+}
+
+func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
+	addr := r.Host
+	if globalIsDistXL {
+		addr = GetLocalPeer(globalEndpoints)
+	}
+
+	return madmin.ServerOsOBDInfo{
+		Addr:  addr,
+		Error: "unsupported platform: " + runtime.GOOS,
 	}
 }
