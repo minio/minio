@@ -1694,7 +1694,10 @@ func (s *xlStorage) CreateFile(volume, path string, fileSize int64, r io.Reader)
 		return err
 	}
 
-	defer w.Close()
+	defer func() {
+		disk.Fdatasync(w) // Only interested in flushing the size_t not mtime/atime
+		w.Close()
+	}()
 
 	bufp := s.pool.Get().(*[]byte)
 	defer s.pool.Put(bufp)
