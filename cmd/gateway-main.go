@@ -61,7 +61,7 @@ func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results
 	walk := func(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 		var marker string
 
-		//Make sure the results channel is ready to be read when we're done.
+		// Make sure the results channel is ready to be read when we're done.
 		defer close(results)
 
 		for {
