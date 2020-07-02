@@ -49,12 +49,11 @@ const (
 	URLEndpointType
 )
 
-// ListEndpoint - endpoint used for list redirects
-// See proxyListRequest() for details.
-type ListEndpoint struct {
-	host    string
-	t       *http.Transport
-	isLocal bool
+// ProxyEndpoint - endpoint used for proxy redirects
+// See proxyRequest() for details.
+type ProxyEndpoint struct {
+	Endpoint
+	Transport *http.Transport
 }
 
 // Endpoint - any type of endpoint.
@@ -668,51 +667,6 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 	return endpoints, setupType, nil
 }
 
-// Return the index of the local peer among other nodes of the cluster.
-// The index will be zero in case of a standalone erasure.
-func getLocalPeerIndex(endpointZones EndpointZones) int {
-	var (
-		index            = -1
-		lastEndpointHost = ""
-	)
-
-	for _, ep := range endpointZones {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.Host != lastEndpointHost {
-				lastEndpointHost = endpoint.Host
-				index++
-			}
-			if endpoint.IsLocal {
-				return index
-			}
-		}
-	}
-
-	return -1
-}
-
-// Return host[:port] address of the peer with the given index
-func getPeerHostByIndex(endpointZones EndpointZones, index int) (string, bool) {
-	var (
-		i                = -1
-		lastEndpointHost = ""
-	)
-
-	for _, ep := range endpointZones {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.Host != lastEndpointHost {
-				lastEndpointHost = endpoint.Host
-				i++
-			}
-			if i == index {
-				return endpoint.Host, endpoint.IsLocal
-			}
-		}
-	}
-
-	return "", false
-}
-
 // GetLocalPeer - returns local peer value, returns globalMinioAddr
 // for FS and Erasure mode. In case of distributed server return
 // the first element from the set of peers which indicate that
@@ -764,18 +718,21 @@ func GetRemotePeers(endpointZones EndpointZones) []string {
 	return peerSet.ToSlice()
 }
 
-// GetListEndpoints - get all endpoints that can be used to proxy list request.
-func GetListEndpoints(endpointZones EndpointZones) ([]ListEndpoint, error) {
-	var listeps []ListEndpoint
-
-	listepExists := func(host string) bool {
-		for _, listep := range listeps {
-			if listep.host == host {
-				return true
-			}
+// GetProxyEndpointLocalIndex returns index of the local proxy endpoint
+func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
+	for i, pep := range proxyEps {
+		if pep.IsLocal {
+			return i
 		}
-		return false
 	}
+	return -1
+}
+
+// GetProxyEndpoints - get all endpoints that can be used to proxy list request.
+func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
+	var proxyEps []ProxyEndpoint
+
+	proxyEpSet := set.NewStringSet()
 
 	for _, ep := range endpointZones {
 		for _, endpoint := range ep.Endpoints {
@@ -784,28 +741,25 @@ func GetListEndpoints(endpointZones EndpointZones) ([]ListEndpoint, error) {
 			}
 
 			host := endpoint.Host
-			if listepExists(host) {
+			if proxyEpSet.Contains(host) {
 				continue
 			}
-			hostName, _, err := net.SplitHostPort(host)
-			if err != nil {
-				return nil, err
-			}
+			proxyEpSet.Add(host)
+
 			var tlsConfig *tls.Config
 			if globalIsSSL {
 				tlsConfig = &tls.Config{
-					ServerName: hostName,
+					ServerName: endpoint.Hostname(),
 					RootCAs:    globalRootCAs,
 				}
 			}
-			listeps = append(listeps, ListEndpoint{
-				host,
-				newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
-				endpoint.IsLocal,
+			proxyEps = append(proxyEps, ProxyEndpoint{
+				Endpoint:  endpoint,
+				Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
 			})
 		}
 	}
-	return listeps, nil
+	return proxyEps, nil
 }
 
 func updateDomainIPs(endPoints set.StringSet) {
