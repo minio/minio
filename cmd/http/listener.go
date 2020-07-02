@@ -23,7 +23,6 @@ import (
 	"os"
 	"sync"
 	"syscall"
-	"time"
 )
 
 type acceptResult struct {
@@ -33,11 +32,10 @@ type acceptResult struct {
 
 // httpListener - HTTP listener capable of handling multiple server addresses.
 type httpListener struct {
-	mutex               sync.Mutex         // to guard Close() method.
-	tcpListeners        []*net.TCPListener // underlaying TCP listeners.
-	acceptCh            chan acceptResult  // channel where all TCP listeners write accepted connection.
-	doneCh              chan struct{}      // done channel for TCP listener goroutines.
-	tcpKeepAliveTimeout time.Duration
+	mutex        sync.Mutex         // to guard Close() method.
+	tcpListeners []*net.TCPListener // underlaying TCP listeners.
+	acceptCh     chan acceptResult  // channel where all TCP listeners write accepted connection.
+	doneCh       chan struct{}      // done channel for TCP listener goroutines.
 }
 
 // isRoutineNetErr returns true if error is due to a network timeout,
@@ -83,10 +81,10 @@ func (listener *httpListener) start() {
 
 	// Closure to handle single connection.
 	handleConn := func(tcpConn *net.TCPConn, doneCh <-chan struct{}) {
-		// Tune accepted TCP connection.
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(listener.tcpKeepAliveTimeout)
-
+		rawConn, err := tcpConn.SyscallConn()
+		if err == nil {
+			setTCPParameters(rawConn)
+		}
 		send(acceptResult{tcpConn, nil}, doneCh)
 	}
 
@@ -167,8 +165,7 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 // httpListener is capable to
 // * listen to multiple addresses
 // * controls incoming connections only doing HTTP protocol
-func newHTTPListener(serverAddrs []string,
-	tcpKeepAliveTimeout time.Duration) (listener *httpListener, err error) {
+func newHTTPListener(serverAddrs []string) (listener *httpListener, err error) {
 
 	var tcpListeners []*net.TCPListener
 
@@ -201,8 +198,7 @@ func newHTTPListener(serverAddrs []string,
 	}
 
 	listener = &httpListener{
-		tcpListeners:        tcpListeners,
-		tcpKeepAliveTimeout: tcpKeepAliveTimeout,
+		tcpListeners: tcpListeners,
 	}
 	listener.start()
 
