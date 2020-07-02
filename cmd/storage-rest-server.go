@@ -576,7 +576,6 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 
 	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, r.Context().Done())
 	if err != nil {
-		logger.LogIf(r.Context(), err)
 		s.writeErrorResponse(w, err)
 		return
 	}
