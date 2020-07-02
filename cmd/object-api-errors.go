@@ -519,6 +519,12 @@ func isErrObjectNotFound(err error) bool {
 	return errors.As(err, &objNotFound)
 }
 
+// isErrVersionNotFound - Check if error type is VersionNotFound.
+func isErrVersionNotFound(err error) bool {
+	var versionNotFound VersionNotFound
+	return errors.As(err, &versionNotFound)
+}
+
 // PreConditionFailed - Check if copy precondition failed
 type PreConditionFailed struct{}
 
