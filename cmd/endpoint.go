@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -31,6 +33,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -45,6 +48,14 @@ const (
 	// URLEndpointType - URL style endpoint type enum.
 	URLEndpointType
 )
+
+// ListEndpoint - endpoint used for list redirects
+// See proxyListRequest() for details.
+type ListEndpoint struct {
+	host    string
+	t       *http.Transport
+	isLocal bool
+}
 
 // Endpoint - any type of endpoint.
 type Endpoint struct {
@@ -706,6 +717,50 @@ func GetRemotePeers(endpointZones EndpointZones) []string {
 		}
 	}
 	return peerSet.ToSlice()
+}
+
+// GetListEndpoints - get all endpoints that can be used to proxy list request.
+func GetListEndpoints(endpointZones EndpointZones) ([]ListEndpoint, error) {
+	var listeps []ListEndpoint
+
+	listepExists := func(host string) bool {
+		for _, listep := range listeps {
+			if listep.host == host {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.Type() != URLEndpointType {
+				continue
+			}
+
+			host := endpoint.Host
+			if listepExists(host) {
+				continue
+			}
+			hostName, _, err := net.SplitHostPort(host)
+			if err != nil {
+				return nil, err
+			}
+			var tlsConfig *tls.Config
+			if globalIsSSL {
+				tlsConfig = &tls.Config{
+					ServerName: hostName,
+					RootCAs:    globalRootCAs,
+				}
+			}
+			listeps = append(listeps, ListEndpoint{
+				host,
+				newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
+				endpoint.IsLocal,
+			})
+		}
+	}
+	return listeps, nil
 }
 
 func updateDomainIPs(endPoints set.StringSet) {
