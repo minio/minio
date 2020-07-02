@@ -57,7 +57,6 @@ type FileInfoVersions struct {
 	LatestModTime time.Time
 
 	Versions []FileInfo
-	Deleted  []FileInfo
 }
 
 // FileInfo - represents file stat information.

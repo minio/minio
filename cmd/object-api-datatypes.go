@@ -368,9 +368,6 @@ type ListObjectVersionsInfo struct {
 	// List of objects info for this request.
 	Objects []ObjectInfo
 
-	// List of deleted objects for this request.
-	DeleteObjects []DeletedObjectInfo
-
 	// List of prefixes for this request.
 	Prefixes []string
 }

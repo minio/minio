@@ -1534,9 +1534,6 @@ func (s *erasureSets) Walk(ctx context.Context, bucket, prefix string, results c
 				for _, version := range entry.Versions {
 					results <- version.ToObjectInfo(bucket, version.Name)
 				}
-				for _, deleted := range entry.Deleted {
-					results <- deleted.ToObjectInfo(bucket, deleted.Name)
-				}
 			}
 			// skip entries which do not have quorum
 		}

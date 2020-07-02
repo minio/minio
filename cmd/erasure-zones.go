@@ -1322,16 +1322,6 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 			}
 			loi.Objects = append(loi.Objects, objInfo)
 		}
-		for _, deleted := range entry.Deleted {
-			loi.DeleteObjects = append(loi.DeleteObjects, DeletedObjectInfo{
-				Bucket:    bucket,
-				Name:      entry.Name,
-				VersionID: deleted.VersionID,
-				ModTime:   deleted.ModTime,
-				IsLatest:  deleted.IsLatest,
-			})
-		}
-
 	}
 	if loi.IsTruncated {
 		for i, zone := range z.zones {
@@ -1847,9 +1837,6 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 				// Read quorum exists proceed
 				for _, version := range entry.Versions {
 					results <- version.ToObjectInfo(bucket, version.Name)
-				}
-				for _, deleted := range entry.Deleted {
-					results <- deleted.ToObjectInfo(bucket, deleted.Name)
 				}
 			}
 

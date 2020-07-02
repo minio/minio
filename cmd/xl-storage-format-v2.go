@@ -473,12 +473,12 @@ func (z xlMetaV2) TotalSize() int64 {
 
 // ListVersions lists current versions, and current deleted
 // versions returns error for unexpected entries.
-func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, deleted []FileInfo, modTime time.Time, err error) {
+func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
 	var latestModTime time.Time
 	var latestVersionID string
 	for _, version := range z.Versions {
 		if !version.Valid() {
-			return nil, nil, latestModTime, errFileCorrupt
+			return nil, latestModTime, errFileCorrupt
 		}
 		var fi FileInfo
 		switch version.Type {
@@ -492,7 +492,7 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, delete
 			continue
 		}
 		if err != nil {
-			return nil, nil, latestModTime, err
+			return nil, latestModTime, err
 		}
 		if fi.ModTime.After(latestModTime) {
 			latestModTime = fi.ModTime
@@ -501,24 +501,11 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, delete
 		switch version.Type {
 		case LegacyType:
 			fallthrough
-		case ObjectType:
+		case ObjectType, DeleteType:
 			versions = append(versions, fi)
-		case DeleteType:
-			deleted = append(deleted, fi)
-
 		}
 	}
 
-	// Since we can never have duplicate versions the versionID
-	// if it matches first with deleted markers then we are sure
-	// that actual versions wouldn't be latest, so we can return
-	// early if we find the version in delete markers.
-	for i := range deleted {
-		if deleted[i].VersionID == latestVersionID {
-			deleted[i].IsLatest = true
-			return versions, deleted, latestModTime, nil
-		}
-	}
 	// We didn't find the version in delete markers so latest version
 	// is indeed one of the actual version of the object with data.
 	for i := range versions {
@@ -528,7 +515,8 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, delete
 		versions[i].IsLatest = true
 		break
 	}
-	return versions, deleted, latestModTime, nil
+
+	return versions, latestModTime, nil
 }
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
