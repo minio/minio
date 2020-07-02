@@ -629,7 +629,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 			// Object might have been deleted, by the time heal
 			// was attempted, we should ignore this object and
 			// return success.
-			if isErrObjectNotFound(res.err) {
+			if isErrObjectNotFound(res.err) || isErrVersionNotFound(res.err) {
 				return nil
 			}
 
@@ -657,7 +657,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		if res.err != nil {
 			// Object might have been deleted, by the time heal
 			// was attempted, we should ignore this object and return success.
-			if isErrObjectNotFound(res.err) {
+			if isErrObjectNotFound(res.err) || isErrVersionNotFound(res.err) {
 				return nil
 			}
 			// Only report object error
@@ -769,7 +769,7 @@ func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 			}, madmin.HealItemBucketMetadata)
 			// Object might have been deleted, by the time heal
 			// was attempted we ignore this object an move on.
-			if isErrObjectNotFound(herr) {
+			if isErrObjectNotFound(herr) || isErrVersionNotFound(herr) {
 				return nil
 			}
 			return herr

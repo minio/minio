@@ -465,19 +465,22 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	for _, zone := range z.zones {
-		gr, err := zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+		gr, err = zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			nsUnlocker()
-			return nil, err
+			return gr, err
 		}
 		gr.cleanUpFns = append(gr.cleanUpFns, nsUnlocker)
 		return gr, nil
 	}
 	nsUnlocker()
-	return nil, ObjectNotFound{Bucket: bucket, Object: object}
+	if opts.VersionID != "" {
+		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
+	return gr, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
@@ -491,9 +494,10 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 	if z.SingleZone() {
 		return z.zones[0].GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
+
 	for _, zone := range z.zones {
 		if err := zone.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return err
@@ -503,7 +507,7 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 	return ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := z.NewNSLock(ctx, bucket, object)
 	if err := lk.GetRLock(globalObjectTimeout); err != nil {
@@ -515,16 +519,19 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 		return z.zones[0].GetObjectInfo(ctx, bucket, object, opts)
 	}
 	for _, zone := range z.zones {
-		objInfo, err := zone.GetObjectInfo(ctx, bucket, object, opts)
+		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return objInfo, err
 		}
 		return objInfo, nil
 	}
-	return ObjectInfo{}, ObjectNotFound{Bucket: bucket, Object: object}
+	if opts.VersionID != "" {
+		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
+	return objInfo, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 // PutObject - writes an object to least used erasure zone.
@@ -565,7 +572,7 @@ func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object s
 		if err == nil {
 			return objInfo, nil
 		}
-		if err != nil && !isErrObjectNotFound(err) {
+		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			break
 		}
 	}
@@ -595,7 +602,7 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 		deletedObjects, errs := zone.DeleteObjects(ctx, bucket, objects, opts)
 		for i, derr := range errs {
 			if derrs[i] == nil {
-				if derr != nil && !isErrObjectNotFound(derr) {
+				if derr != nil && !isErrObjectNotFound(derr) && !isErrVersionNotFound(derr) {
 					derrs[i] = derr
 				}
 			}
@@ -1918,7 +1925,7 @@ func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID
 	for _, zone := range z.zones {
 		result, err := zone.HealObject(ctx, bucket, object, versionID, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return result, err
@@ -2022,7 +2029,7 @@ func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string,
 	for _, zone := range z.zones {
 		err := zone.PutObjectTags(ctx, bucket, object, tags, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return err
@@ -2050,7 +2057,7 @@ func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object stri
 	for _, zone := range z.zones {
 		err := zone.DeleteObjectTags(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return err
@@ -2078,7 +2085,7 @@ func (z *erasureZones) GetObjectTags(ctx context.Context, bucket, object string,
 	for _, zone := range z.zones {
 		tags, err := zone.GetObjectTags(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return tags, err
