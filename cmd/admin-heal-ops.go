@@ -372,7 +372,7 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 
 	clientToken := mustGetUUID()
 	if globalIsDistErasure {
-		clientToken = fmt.Sprintf("%s@%d", clientToken, getLocalPeerIndex(globalEndpoints))
+		clientToken = fmt.Sprintf("%s@%d", clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	}
 
 	return &healSequence{

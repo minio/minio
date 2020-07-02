@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"strings"
 
@@ -272,41 +271,15 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	writeSuccessResponseXML(w, encodeResponse(response))
 }
 
-func getListEndpoint(bucket string) ListEndpoint {
-	return globalListEndpoints[crcHashMod(bucket, len(globalListEndpoints))]
-}
-
-// Proxy the list request to the right server.
 func proxyListRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
-	if len(globalListEndpoints) == 0 {
+	if len(globalProxyEndpoints) == 0 {
 		return false
 	}
-	ep := getListEndpoint(bucket)
-	if ep.isLocal {
+	ep := globalProxyEndpoints[crcHashMod(bucket, len(globalProxyEndpoints))]
+	if ep.IsLocal {
 		return false
 	}
-	ctx = r.Context()
-	outreq := r.Clone(ctx)
-	outreq.URL.Scheme = "http"
-	outreq.URL.Host = ep.host
-	outreq.URL.Path = r.URL.Path
-	outreq.Header.Add("Host", r.Host)
-	if globalIsSSL {
-		outreq.URL.Scheme = "https"
-	}
-	outreq.Host = r.Host
-	res, err := ep.t.RoundTrip(outreq)
-	if err != nil {
-		return false
-	}
-	for k, vv := range res.Header {
-		for _, v := range vv {
-			w.Header().Set(k, v)
-		}
-	}
-	w.WriteHeader(res.StatusCode)
-	io.Copy(w, res.Body)
-	return true
+	return proxyRequest(ctx, w, r, ep)
 }
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.

@@ -617,25 +617,6 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	return
 }
 
-// Forward the current request to the peer host
-func forwardReq(w http.ResponseWriter, r *http.Request, host string) {
-	f := handlers.NewForwarder(&handlers.Forwarder{
-		PassHost:     true,
-		RoundTripper: NewGatewayHTTPTransport(),
-		Logger: func(err error) {
-			logger.LogIf(GlobalContext, err)
-		},
-	})
-
-	r.URL.Scheme = "http"
-	if globalIsSSL {
-		r.URL.Scheme = "https"
-	}
-
-	r.URL.Host = host
-	f.ServeHTTP(w, r)
-}
-
 // HealHandler - POST /minio/admin/v3/heal/
 // -----------
 // Start heal processing and return heal status items.
@@ -671,15 +652,26 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if i := strings.Index(hip.clientToken, "@"); i >= 0 {
-		// The client token is not empty and contains '@' character
-		// re-route the request if the server index does not correspond
-		// to the local server.
-		serverIndex, err := strconv.Atoi(hip.clientToken[i+1:])
-		if err == nil {
-			host, local := getPeerHostByIndex(globalEndpoints, serverIndex)
-			if host != "" && !local {
-				forwardReq(w, r, host)
+	if globalIsDistErasure {
+		// For distributed setup, extract server Index.
+		if i := strings.Index(hip.clientToken, "@"); i >= 0 {
+			// The client token is not empty and contains '@' character
+			// re-route the request if the server index does not correspond
+			// to the local server.
+			serverIndex, err := strconv.Atoi(hip.clientToken[i+1:])
+			if err != nil {
+				apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
+				apiErr.Description = fmt.Sprintf("%s: '%s'", apiErr.Description, err)
+				writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+				return
+			}
+			if serverIndex < 0 {
+				apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
+				apiErr.Description = fmt.Sprintf("%s: '%s'", apiErr.Description, errors.New("server index cannot be negative"))
+				writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+				return
+			}
+			if proxyRequest(ctx, w, r, globalProxyEndpoints[serverIndex]) {
 				return
 			}
 		}
