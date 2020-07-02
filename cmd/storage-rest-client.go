@@ -454,7 +454,7 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
+	respBody, err := client.call(storageRESTMethodWalkVersions, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -469,6 +469,9 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			var fi FileInfoVersions
 			if gerr := decoder.Decode(&fi); gerr != nil {
 				// Upon error return
+				if gerr != io.EOF {
+					logger.LogIf(context.Background(), gerr)
+				}
 				return
 			}
 			select {
@@ -476,7 +479,6 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			case <-endWalkCh:
 				return
 			}
-
 		}
 	}()
 

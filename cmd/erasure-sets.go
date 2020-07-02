@@ -942,6 +942,7 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 			}
 			entryCh, err := disk.WalkVersions(bucket, prefix, marker, recursive, endWalkCh)
 			if err != nil {
+				logger.LogIf(ctx, err)
 				// Disk walk returned error, ignore it.
 				continue
 			}

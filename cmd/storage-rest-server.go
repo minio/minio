@@ -526,7 +526,6 @@ func (s *storageRESTServer) WalkSplunkHandler(w http.ResponseWriter, r *http.Req
 	for fi := range fch {
 		encoder.Encode(&fi)
 	}
-	w.(http.Flusher).Flush()
 }
 
 // WalkVersionsHandler - remote caller to start walking at a requested directory path.
@@ -553,9 +552,8 @@ func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 	for fi := range fch {
-		encoder.Encode(&fi)
+		logger.LogIf(r.Context(), encoder.Encode(&fi))
 	}
-	w.(http.Flusher).Flush()
 }
 
 // WalkHandler - remote caller to start walking at a requested directory path.
@@ -578,13 +576,13 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 
 	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, r.Context().Done())
 	if err != nil {
+		logger.LogIf(r.Context(), err)
 		s.writeErrorResponse(w, err)
 		return
 	}
 	for fi := range fch {
-		encoder.Encode(&fi)
+		logger.LogIf(r.Context(), encoder.Encode(&fi))
 	}
-	w.(http.Flusher).Flush()
 }
 
 // ListDirHandler - list a directory.
@@ -889,7 +887,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkSplunk).HandlerFunc(httpTraceHdrs(server.WalkSplunkHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkVersions).HandlerFunc(httpTraceHdrs(server.WalkVersionsHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath)...)
+				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive)...)
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(httpTraceHdrs(server.DeleteVersionsHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTTotalVersions)...)

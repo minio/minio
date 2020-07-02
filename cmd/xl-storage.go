@@ -901,11 +901,7 @@ func (s *xlStorage) WalkVersions(volume, dirPath, marker string, recursive bool,
 		}
 
 		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
-		for {
-			walkResult, ok := <-walkResultCh
-			if !ok {
-				return
-			}
+		for walkResult := range walkResultCh {
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) {
 				fiv = FileInfoVersions{
@@ -981,11 +977,7 @@ func (s *xlStorage) Walk(volume, dirPath, marker string, recursive bool, endWalk
 		}
 
 		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
-		for {
-			walkResult, ok := <-walkResultCh
-			if !ok {
-				return
-			}
+		for walkResult := range walkResultCh {
 			var fi FileInfo
 			if HasSuffix(walkResult.entry, SlashSeparator) {
 				fi = FileInfo{
