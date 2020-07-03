@@ -242,7 +242,7 @@ type ObjectVersion struct {
 	isDeleteMarker bool
 }
 
-// MarshalXML - marhsal ObjectVersion
+// MarshalXML - marshal ObjectVersion
 func (o ObjectVersion) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if o.isDeleteMarker {
 		start.Name.Local = "DeleteMarker"
