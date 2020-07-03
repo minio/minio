@@ -145,7 +145,20 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, fi.ToObjectInfo(bucket, object), opts)
+	objInfo := fi.ToObjectInfo(bucket, object)
+	if objInfo.DeleteMarker {
+		if opts.VersionID == "" {
+			return &GetObjectReader{
+				ObjInfo: objInfo,
+			}, toObjectErr(errFileNotFound, bucket, object)
+		}
+		// Make sure to return object info to provide extra information.
+		return &GetObjectReader{
+			ObjInfo: objInfo,
+		}, toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -310,6 +323,14 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+	if fi.Deleted {
+		if opts.VersionID == "" {
+			return toObjectErr(errFileNotFound, bucket, object)
+		}
+		// Make sure to return object info to provide extra information.
+		return toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
 	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, etag, opts, fi, metaArr, onlineDisks)
 }
 
@@ -358,12 +379,7 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 		return info, nil
 	}
 
-	info, err = er.getObjectInfo(ctx, bucket, object, opts)
-	if err != nil {
-		return info, toObjectErr(err, bucket, object)
-	}
-
-	return info, nil
+	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
 func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI, err error) {
@@ -397,7 +413,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts)
 	if err != nil {
-		return objInfo, err
+		return objInfo, toObjectErr(err, bucket, object)
 	}
 
 	if fi.Deleted {

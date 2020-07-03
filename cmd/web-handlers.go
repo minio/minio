@@ -756,7 +756,7 @@ next:
 		}
 	}
 
-	if err != nil && !isErrObjectNotFound(err) {
+	if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 		// Ignore object not found error.
 		return toJSONError(ctx, err, args.BucketName, "")
 	}
