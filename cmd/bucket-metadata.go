@@ -186,6 +186,10 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.taggingConfig = nil
 	}
 
+	if bytes.Equal(b.ObjectLockConfigXML, enabledBucketObjectLockConfig) {
+		b.VersioningConfigXML = enabledBucketVersioningConfig
+	}
+
 	if len(b.ObjectLockConfigXML) != 0 {
 		b.objectLockConfig, err = objectlock.ParseObjectLockConfig(bytes.NewReader(b.ObjectLockConfigXML))
 		if err != nil {
