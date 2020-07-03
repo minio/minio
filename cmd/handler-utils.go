@@ -458,20 +458,22 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 	if ep.IsLocal {
 		return false
 	}
-	f := handlers.NewForwarder(&handlers.Forwarder{
-		PassHost:     true,
-		RoundTripper: ep.Transport,
-		Logger: func(err error) {
-			logger.LogIf(GlobalContext, err)
-		},
-	})
-
-	r.URL.Scheme = "http"
+	ctx = r.Context()
+	outreq := r.Clone(ctx)
+	outreq.URL.Scheme = "http"
+	outreq.URL.Host = ep.Host
+	outreq.URL.Path = r.URL.Path
+	outreq.Header.Add("Host", r.Host)
 	if globalIsSSL {
-		r.URL.Scheme = "https"
+		outreq.URL.Scheme = "https"
 	}
-
-	r.URL.Host = ep.Host
-	f.ServeHTTP(w, r)
+	outreq.Host = r.Host
+	res, err := ep.Transport.RoundTrip(outreq)
+	if err != nil {
+		return false
+	}
+	res.Header.Write(w)
+	w.WriteHeader(res.StatusCode)
+	io.Copy(w, res.Body)
 	return true
 }
