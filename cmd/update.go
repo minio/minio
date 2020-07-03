@@ -409,7 +409,7 @@ const updateTimeout = 10 * time.Second
 func getUpdateTransport(timeout time.Duration) http.RoundTripper {
 	var updateTransport http.RoundTripper = &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewCustomDialContext(timeout, timeout),
+		DialContext:           xhttp.NewCustomDialContext(timeout),
 		IdleConnTimeout:       timeout,
 		TLSHandshakeTimeout:   timeout,
 		ExpectContinueTimeout: timeout,
