@@ -459,7 +459,7 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 
 	f := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
-		RoundTripper: NewGatewayHTTPTransport(),
+		RoundTripper: ep.Transport,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			success = false
 			w.WriteHeader(http.StatusBadGateway)
