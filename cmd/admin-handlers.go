@@ -652,19 +652,15 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if globalIsDistErasure {
-		// Analyze the heal token and route the request accordingly
-		_, nodeIndex, parsed := parseRequestToken(hip.clientToken)
-		if parsed {
-			if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
-				return
-			}
-		} else {
-			apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
-			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
-			return
-		}
+	// Analyze the heal token and route the request accordingly
+	token, success := proxyRequestByToken(ctx, w, r, hip.clientToken)
+	if success {
+		return
 	}
+	hip.clientToken = token
+	// if request was not successful, try this server locally if token
+	// is not found the call will fail anyways. if token is empty
+	// try this server to generate a new token.
 
 	type healResp struct {
 		respBytes []byte
@@ -736,8 +732,12 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	if hip.clientToken == "" && !hip.forceStart && !hip.forceStop {
 		nh, exists := globalAllHealState.getHealSequence(healPath)
 		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
+			clientToken := nh.clientToken
+			if globalIsDistErasure {
+				clientToken = fmt.Sprintf("%s@%d", nh.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+			}
 			b, err := json.Marshal(madmin.HealStartSuccess{
-				ClientToken:   nh.clientToken,
+				ClientToken:   clientToken,
 				ClientAddress: nh.clientAddress,
 				StartTime:     nh.startTime,
 			})

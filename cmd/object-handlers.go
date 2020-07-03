@@ -2326,13 +2326,20 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 				return
 			}
 		}
-		parts := make([]PartInfo, len(listPartsInfo.Parts))
-		for i, p := range listPartsInfo.Parts {
-			part := p
-			part.ETag = tryDecryptETag(objectEncryptionKey, p.ETag, ssec)
-			parts[i] = part
+		for i := range listPartsInfo.Parts {
+			curp := listPartsInfo.Parts[i]
+			curp.ETag = tryDecryptETag(objectEncryptionKey, curp.ETag, ssec)
+			if !ssec {
+				var partSize uint64
+				partSize, err = sio.DecryptedSize(uint64(curp.Size))
+				if err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
+				}
+				curp.Size = int64(partSize)
+			}
+			listPartsInfo.Parts[i] = curp
 		}
-		listPartsInfo.Parts = parts
 	}
 
 	response := generateListPartsResponse(listPartsInfo, encodingType)

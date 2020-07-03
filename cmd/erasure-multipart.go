@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/minio/minio-go/v6/pkg/set"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
@@ -75,35 +76,99 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 // not support prefix based listing, this is a deliberate attempt
 // towards simplification of multipart APIs.
 // The resulting ListMultipartsInfo structure is unmarshalled directly as XML.
-func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, e error) {
+func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
 	result.MaxUploads = maxUploads
 	result.KeyMarker = keyMarker
 	result.Prefix = object
 	result.Delimiter = delimiter
 
+	var uploadIDs []string
 	for _, disk := range er.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
-		uploadIDs, err := disk.ListDir(minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
+		uploadIDs, err = disk.ListDir(minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
+			if err == errDiskNotFound {
+				continue
+			}
 			if err == errFileNotFound {
 				return result, nil
 			}
 			logger.LogIf(ctx, err)
-			return result, err
-		}
-		for i := range uploadIDs {
-			uploadIDs[i] = strings.TrimSuffix(uploadIDs[i], SlashSeparator)
-		}
-		sort.Strings(uploadIDs)
-		for _, uploadID := range uploadIDs {
-			if len(result.Uploads) == maxUploads {
-				break
-			}
-			result.Uploads = append(result.Uploads, MultipartInfo{Object: object, UploadID: uploadID})
+			return result, toObjectErr(err, bucket, object)
 		}
 		break
+	}
+
+	for i := range uploadIDs {
+		uploadIDs[i] = strings.TrimSuffix(uploadIDs[i], SlashSeparator)
+	}
+
+	// S3 spec says uploadIDs should be sorted based on initiated time, we need
+	// to read the metadata entry.
+	var uploads []MultipartInfo
+
+	populatedUploadIds := set.NewStringSet()
+
+retry:
+	for _, disk := range er.getLoadBalancedDisks() {
+		if disk == nil {
+			continue
+		}
+		for _, uploadID := range uploadIDs {
+			if populatedUploadIds.Contains(uploadID) {
+				continue
+			}
+			fi, err := disk.ReadVersion(minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
+			if err != nil {
+				if err == errDiskNotFound || err == errFileNotFound {
+					goto retry
+				}
+				return result, toObjectErr(err, bucket, object)
+			}
+			populatedUploadIds.Add(uploadID)
+			uploads = append(uploads, MultipartInfo{
+				Object:    object,
+				UploadID:  uploadID,
+				Initiated: fi.ModTime,
+			})
+		}
+		break
+	}
+
+	sort.Slice(uploads, func(i int, j int) bool {
+		return uploads[i].Initiated.Before(uploads[j].Initiated)
+	})
+
+	uploadIndex := 0
+	if uploadIDMarker != "" {
+		for uploadIndex < len(uploads) {
+			if uploads[uploadIndex].UploadID != uploadIDMarker {
+				uploadIndex++
+				continue
+			}
+			if uploads[uploadIndex].UploadID == uploadIDMarker {
+				uploadIndex++
+				break
+			}
+			uploadIndex++
+		}
+	}
+	for uploadIndex < len(uploads) {
+		result.Uploads = append(result.Uploads, uploads[uploadIndex])
+		result.NextUploadIDMarker = uploads[uploadIndex].UploadID
+		uploadIndex++
+		if len(result.Uploads) == maxUploads {
+			break
+		}
+	}
+
+	result.IsTruncated = uploadIndex < len(uploads)
+
+	if !result.IsTruncated {
+		result.NextKeyMarker = ""
+		result.NextUploadIDMarker = ""
 	}
 
 	return result, nil
