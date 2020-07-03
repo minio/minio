@@ -81,7 +81,6 @@ type ListVersionsResponse struct {
 
 	CommonPrefixes []CommonPrefix
 	Versions       []ObjectVersion
-	DeleteMarkers  []DeletedVersion
 
 	// Encoding type used to encode object keys in the response.
 	EncodingType string `xml:"EncodingType,omitempty"`
@@ -236,24 +235,23 @@ type Bucket struct {
 
 // ObjectVersion container for object version metadata
 type ObjectVersion struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Version" json:"-"`
 	Object
 	IsLatest  bool
 	VersionID string `xml:"VersionId"`
+
+	isDeleteMarker bool
 }
 
-// DeletedVersion container for the delete object version metadata.
-type DeletedVersion struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteMarker" json:"-"`
+// MarshalXML - marshal ObjectVersion
+func (o ObjectVersion) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if o.isDeleteMarker {
+		start.Name.Local = "DeleteMarker"
+	} else {
+		start.Name.Local = "Version"
+	}
 
-	IsLatest     bool
-	Key          string
-	LastModified string // time string of format "2006-01-02T15:04:05.000Z"
-
-	// Owner of the object.
-	Owner Owner
-
-	VersionID string `xml:"VersionId"`
+	type objectVersionWrapper ObjectVersion
+	return e.EncodeElement(objectVersionWrapper(o), start)
 }
 
 // StringMap is a map[string]string.
@@ -431,7 +429,6 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	var versions []ObjectVersion
-	var deletedVersions []DeletedVersion
 	var prefixes []CommonPrefix
 	var owner = Owner{}
 	var data = ListVersionsResponse{}
@@ -459,23 +456,12 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 			content.VersionID = nullVersionID
 		}
 		content.IsLatest = object.IsLatest
+		content.isDeleteMarker = object.DeleteMarker
 		versions = append(versions, content)
-	}
-
-	for _, deleted := range resp.DeleteObjects {
-		var dv = DeletedVersion{
-			Key:          s3EncodeName(deleted.Name, encodingType),
-			Owner:        owner,
-			LastModified: deleted.ModTime.UTC().Format(iso8601TimeFormat),
-			VersionID:    deleted.VersionID,
-			IsLatest:     deleted.IsLatest,
-		}
-		deletedVersions = append(deletedVersions, dv)
 	}
 
 	data.Name = bucket
 	data.Versions = versions
-	data.DeleteMarkers = deletedVersions
 	data.EncodingType = encodingType
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.KeyMarker = s3EncodeName(marker, encodingType)

@@ -409,12 +409,9 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		var totalSize int64
 		for _, version := range fivs.Versions {
 			size := item.applyActions(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
-			totalSize += size
-		}
-
-		// Delete markers have no size, nothing to do here.
-		for _, deleted := range fivs.Deleted {
-			item.applyActions(ctx, objAPI, actionMeta{oi: deleted.ToObjectInfo(item.bucket, item.objectPath())})
+			if !version.Deleted {
+				totalSize += size
+			}
 		}
 
 		return totalSize, nil

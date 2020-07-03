@@ -26,7 +26,7 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 		if err := xlMeta.Load(xlMetaBuf); err != nil {
 			return FileInfoVersions{}, err
 		}
-		versions, deletedVersions, latestModTime, err := xlMeta.ListVersions(volume, path)
+		versions, latestModTime, err := xlMeta.ListVersions(volume, path)
 		if err != nil {
 			return FileInfoVersions{}, err
 		}
@@ -34,7 +34,6 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 			Volume:        volume,
 			Name:          path,
 			Versions:      versions,
-			Deleted:       deletedVersions,
 			LatestModTime: latestModTime,
 		}, nil
 	}
