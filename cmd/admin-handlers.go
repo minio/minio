@@ -653,27 +653,16 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if globalIsDistErasure {
-		// For distributed setup, extract server Index.
-		if i := strings.Index(hip.clientToken, "@"); i >= 0 {
-			// The client token is not empty and contains '@' character
-			// re-route the request if the server index does not correspond
-			// to the local server.
-			serverIndex, err := strconv.Atoi(hip.clientToken[i+1:])
-			if err != nil {
-				apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
-				apiErr.Description = fmt.Sprintf("%s: '%s'", apiErr.Description, err)
-				writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+		// Analyze the heal token and route the request accordingly
+		_, nodeIndex, parsed := parseRequestToken(hip.clientToken)
+		if parsed {
+			if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
 				return
 			}
-			if serverIndex < 0 {
-				apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
-				apiErr.Description = fmt.Sprintf("%s: '%s'", apiErr.Description, errors.New("server index cannot be negative"))
-				writeErrorResponseJSON(ctx, w, apiErr, r.URL)
-				return
-			}
-			if proxyRequest(ctx, w, r, globalProxyEndpoints[serverIndex]) {
-				return
-			}
+		} else {
+			apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
+			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+			return
 		}
 	}
 

@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -158,8 +160,13 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if proxyListRequest(ctx, w, r, bucket) {
-		return
+	// Analyze continuation token and route the request accordingly
+	subToken, nodeIndex, parsed := parseRequestToken(token)
+	if parsed {
+		if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
+			return
+		}
+		token = subToken
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
@@ -184,8 +191,10 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token,
-		listObjectsV2Info.NextContinuationToken, startAfter,
+	// The next continuation token has id@node_index format to optimize paginated listing
+	nextContinuationToken := fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+
+	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, true)
 
@@ -236,8 +245,13 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if proxyListRequest(ctx, w, r, bucket) {
-		return
+	// Analyze continuation token and route the request accordingly
+	subToken, nodeIndex, parsed := parseRequestToken(token)
+	if parsed {
+		if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
+			return
+		}
+		token = subToken
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
@@ -262,8 +276,10 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		}
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token,
-		listObjectsV2Info.NextContinuationToken, startAfter,
+	// The next continuation token has id@node_index format to optimize paginated listing
+	nextContinuationToken := fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+
+	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, false)
 
@@ -271,15 +287,47 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	writeSuccessResponseXML(w, encodeResponse(response))
 }
 
-func proxyListRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
+func getLocalNodeIndex() int {
+	if len(globalProxyEndpoints) == 0 {
+		return -1
+	}
+	for i, ep := range globalProxyEndpoints {
+		if ep.IsLocal {
+			return i
+		}
+	}
+	return -1
+}
+
+func parseRequestToken(token string) (subToken string, nodeIndex int, success bool) {
+	i := strings.Index(token, "@")
+	if i < 0 {
+		return "", -1, false
+	}
+	nodeIndex, err := strconv.Atoi(token[i+1:])
+	if err != nil {
+		return "", -1, false
+	}
+	subToken = token[:i]
+	return subToken, nodeIndex, true
+}
+
+func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int) (success bool) {
 	if len(globalProxyEndpoints) == 0 {
 		return false
 	}
-	ep := globalProxyEndpoints[crcHashMod(bucket, len(globalProxyEndpoints))]
+	if index < 0 || index >= len(globalProxyEndpoints) {
+		return false
+	}
+	ep := globalProxyEndpoints[index]
 	if ep.IsLocal {
 		return false
 	}
 	return proxyRequest(ctx, w, r, ep)
+}
+
+func proxyRequestByBucket(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
+	return proxyRequestByNodeIndex(ctx, w, r, crcHashMod(bucket, len(globalProxyEndpoints)))
 }
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
@@ -320,7 +368,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if proxyListRequest(ctx, w, r, bucket) {
+	if proxyRequestByBucket(ctx, w, r, bucket) {
 		return
 	}
 
