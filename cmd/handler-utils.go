@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -450,5 +450,31 @@ func getHostName(r *http.Request) (hostName string) {
 	} else {
 		hostName = r.Host
 	}
+	return
+}
+
+// Proxy any request to an endpoint.
+func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
+	success = true
+
+	f := handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: ep.Transport,
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			success = false
+			w.WriteHeader(http.StatusBadGateway)
+		},
+		Logger: func(err error) {
+			logger.LogIf(GlobalContext, err)
+		},
+	})
+
+	r.URL.Scheme = "http"
+	if globalIsSSL {
+		r.URL.Scheme = "https"
+	}
+
+	r.URL.Host = ep.Host
+	f.ServeHTTP(w, r)
 	return
 }

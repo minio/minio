@@ -652,6 +652,20 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if globalIsDistErasure {
+		// Analyze the heal token and route the request accordingly
+		_, nodeIndex, parsed := parseRequestToken(hip.clientToken)
+		if parsed {
+			if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
+				return
+			}
+		} else {
+			apiErr := errorCodes.ToAPIErr(ErrHealInvalidClientToken)
+			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+			return
+		}
+	}
+
 	type healResp struct {
 		respBytes []byte
 		apiErr    APIError

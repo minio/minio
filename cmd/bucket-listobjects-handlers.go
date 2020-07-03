@@ -18,8 +18,9 @@ package cmd
 
 import (
 	"context"
-	"io"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -159,8 +160,13 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if proxyListRequest(ctx, w, r, bucket) {
-		return
+	// Analyze continuation token and route the request accordingly
+	subToken, nodeIndex, parsed := parseRequestToken(token)
+	if parsed {
+		if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
+			return
+		}
+		token = subToken
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
@@ -185,8 +191,10 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token,
-		listObjectsV2Info.NextContinuationToken, startAfter,
+	// The next continuation token has id@node_index format to optimize paginated listing
+	nextContinuationToken := fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+
+	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, true)
 
@@ -237,8 +245,13 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if proxyListRequest(ctx, w, r, bucket) {
-		return
+	// Analyze continuation token and route the request accordingly
+	subToken, nodeIndex, parsed := parseRequestToken(token)
+	if parsed {
+		if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
+			return
+		}
+		token = subToken
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
@@ -263,8 +276,10 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		}
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token,
-		listObjectsV2Info.NextContinuationToken, startAfter,
+	// The next continuation token has id@node_index format to optimize paginated listing
+	nextContinuationToken := fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+
+	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, false)
 
@@ -272,41 +287,47 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	writeSuccessResponseXML(w, encodeResponse(response))
 }
 
-func getListEndpoint(bucket string) ListEndpoint {
-	return globalListEndpoints[crcHashMod(bucket, len(globalListEndpoints))]
-}
-
-// Proxy the list request to the right server.
-func proxyListRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
-	if len(globalListEndpoints) == 0 {
-		return false
+func getLocalNodeIndex() int {
+	if len(globalProxyEndpoints) == 0 {
+		return -1
 	}
-	ep := getListEndpoint(bucket)
-	if ep.isLocal {
-		return false
-	}
-	ctx = r.Context()
-	outreq := r.Clone(ctx)
-	outreq.URL.Scheme = "http"
-	outreq.URL.Host = ep.host
-	outreq.URL.Path = r.URL.Path
-	outreq.Header.Add("Host", r.Host)
-	if globalIsSSL {
-		outreq.URL.Scheme = "https"
-	}
-	outreq.Host = r.Host
-	res, err := ep.t.RoundTrip(outreq)
-	if err != nil {
-		return false
-	}
-	for k, vv := range res.Header {
-		for _, v := range vv {
-			w.Header().Set(k, v)
+	for i, ep := range globalProxyEndpoints {
+		if ep.IsLocal {
+			return i
 		}
 	}
-	w.WriteHeader(res.StatusCode)
-	io.Copy(w, res.Body)
-	return true
+	return -1
+}
+
+func parseRequestToken(token string) (subToken string, nodeIndex int, success bool) {
+	i := strings.Index(token, "@")
+	if i < 0 {
+		return "", -1, false
+	}
+	nodeIndex, err := strconv.Atoi(token[i+1:])
+	if err != nil {
+		return "", -1, false
+	}
+	subToken = token[:i]
+	return subToken, nodeIndex, true
+}
+
+func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int) (success bool) {
+	if len(globalProxyEndpoints) == 0 {
+		return false
+	}
+	if index < 0 || index >= len(globalProxyEndpoints) {
+		return false
+	}
+	ep := globalProxyEndpoints[index]
+	if ep.IsLocal {
+		return false
+	}
+	return proxyRequest(ctx, w, r, ep)
+}
+
+func proxyRequestByBucket(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
+	return proxyRequestByNodeIndex(ctx, w, r, crcHashMod(bucket, len(globalProxyEndpoints)))
 }
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
@@ -347,7 +368,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if proxyListRequest(ctx, w, r, bucket) {
+	if proxyRequestByBucket(ctx, w, r, bucket) {
 		return
 	}
 
