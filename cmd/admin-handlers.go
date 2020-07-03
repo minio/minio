@@ -652,7 +652,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if globalIsDistErasure {
+	if globalIsDistErasure && hip.clientToken != "" {
 		// Analyze the heal token and route the request accordingly
 		_, nodeIndex, parsed := parseRequestToken(hip.clientToken)
 		if parsed {
