@@ -455,25 +455,26 @@ func getHostName(r *http.Request) (hostName string) {
 
 // Proxy any request to an endpoint.
 func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
-	if ep.IsLocal {
-		return false
-	}
-	ctx = r.Context()
-	outreq := r.Clone(ctx)
-	outreq.URL.Scheme = "http"
-	outreq.URL.Host = ep.Host
-	outreq.URL.Path = r.URL.Path
-	outreq.Header.Add("Host", r.Host)
+	success = true
+
+	f := handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: NewGatewayHTTPTransport(),
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			success = false
+			w.WriteHeader(http.StatusBadGateway)
+		},
+		Logger: func(err error) {
+			logger.LogIf(GlobalContext, err)
+		},
+	})
+
+	r.URL.Scheme = "http"
 	if globalIsSSL {
-		outreq.URL.Scheme = "https"
+		r.URL.Scheme = "https"
 	}
-	outreq.Host = r.Host
-	res, err := ep.Transport.RoundTrip(outreq)
-	if err != nil {
-		return false
-	}
-	res.Header.Write(w)
-	w.WriteHeader(res.StatusCode)
-	io.Copy(w, res.Body)
-	return true
+
+	r.URL.Host = ep.Host
+	f.ServeHTTP(w, r)
+	return
 }
