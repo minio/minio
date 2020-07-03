@@ -151,7 +151,6 @@ func TestNewHTTPListener(t *testing.T) {
 	for _, testCase := range testCases {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
-			testCase.tcpKeepAliveTimeout,
 		)
 
 		if !testCase.expectedErr {
@@ -185,7 +184,6 @@ func TestHTTPListenerStartClose(t *testing.T) {
 	for i, testCase := range testCases {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
-			time.Duration(0),
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -225,7 +223,6 @@ func TestHTTPListenerAddr(t *testing.T) {
 	for i, testCase := range testCases {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
-			time.Duration(0),
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)
@@ -262,7 +259,6 @@ func TestHTTPListenerAddrs(t *testing.T) {
 	for i, testCase := range testCases {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
-			time.Duration(0),
 		)
 		if err != nil {
 			t.Fatalf("Test %d: error: expected = <nil>, got = %v", i+1, err)

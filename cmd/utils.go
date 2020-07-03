@@ -454,7 +454,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewCustomDialContext(dialTimeout, 15*time.Second),
+		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       1 * time.Minute,

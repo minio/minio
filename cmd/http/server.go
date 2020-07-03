@@ -38,9 +38,6 @@ const (
 	// DefaultShutdownTimeout - default shutdown timeout used for graceful http server shutdown.
 	DefaultShutdownTimeout = 5 * time.Second
 
-	// DefaultTCPKeepAliveTimeout - default TCP keep alive timeout for accepted connection.
-	DefaultTCPKeepAliveTimeout = 30 * time.Second
-
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
 )
@@ -48,13 +45,12 @@ const (
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs               []string      // addresses on which the server listens for new connection.
-	ShutdownTimeout     time.Duration // timeout used for graceful server shutdown.
-	TCPKeepAliveTimeout time.Duration // timeout used for underneath TCP connection.
-	listenerMutex       sync.Mutex    // to guard 'listener' field.
-	listener            *httpListener // HTTP listener for all 'Addrs' field.
-	inShutdown          uint32        // indicates whether the server is in shutdown or not
-	requestCount        int32         // counter holds no. of request in progress.
+	Addrs           []string      // addresses on which the server listens for new connection.
+	ShutdownTimeout time.Duration // timeout used for graceful server shutdown.
+	listenerMutex   sync.Mutex    // to guard 'listener' field.
+	listener        *httpListener // HTTP listener for all 'Addrs' field.
+	inShutdown      uint32        // indicates whether the server is in shutdown or not
+	requestCount    int32         // counter holds no. of request in progress.
 }
 
 // GetRequestCount - returns number of request in progress.
@@ -72,13 +68,11 @@ func (srv *Server) Start() (err error) {
 	handler := srv.Handler // if srv.Handler holds non-synced state -> possible data race
 
 	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
-	tcpKeepAliveTimeout := srv.TCPKeepAliveTimeout
 
 	// Create new HTTP listener.
 	var listener *httpListener
 	listener, err = newHTTPListener(
 		addrs,
-		tcpKeepAliveTimeout,
 	)
 	if err != nil {
 		return err
@@ -204,9 +198,8 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 	}
 
 	httpServer := &Server{
-		Addrs:               addrs,
-		ShutdownTimeout:     DefaultShutdownTimeout,
-		TCPKeepAliveTimeout: DefaultTCPKeepAliveTimeout,
+		Addrs:           addrs,
+		ShutdownTimeout: DefaultShutdownTimeout,
 	}
 	httpServer.Handler = handler
 	httpServer.TLSConfig = tlsConfig
