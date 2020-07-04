@@ -52,10 +52,6 @@ type FileInfoVersions struct {
 	// Name of the file.
 	Name string
 
-	// Represents the latest mod time of the
-	// latest version.
-	LatestModTime time.Time
-
 	Versions []FileInfo
 }
 

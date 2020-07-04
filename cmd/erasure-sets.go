@@ -906,7 +906,7 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 
 		// Entries are duplicated across disks,
 		// we should simply skip such entries.
-		if lentry.Name == entries[i].Name && lentry.LatestModTime.Equal(entries[i].LatestModTime) {
+		if lentry.Name == entries[i].Name {
 			lexicallySortedEntryCount++
 			continue
 		}

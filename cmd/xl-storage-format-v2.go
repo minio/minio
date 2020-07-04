@@ -352,18 +352,19 @@ func newXLMetaV2(fi FileInfo) (xlMetaV2, error) {
 	return xlMeta, xlMeta.AddVersion(fi)
 }
 
-func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
+func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string, isLatest bool) (FileInfo, error) {
 	fi := FileInfo{
 		Volume:    volume,
 		Name:      path,
 		ModTime:   time.Unix(0, j.ModTime).UTC(),
 		VersionID: uuid.UUID(j.VersionID).String(),
 		Deleted:   true,
+		IsLatest:  isLatest,
 	}
 	return fi, nil
 }
 
-func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
+func (j xlMetaV2Object) ToFileInfo(volume, path string, isLatest bool) (FileInfo, error) {
 	versionID := ""
 	var uv uuid.UUID
 	// check if the version is not "null"
@@ -376,6 +377,7 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		Size:      j.StatSize,
 		ModTime:   time.Unix(0, j.StatModTime).UTC(),
 		VersionID: versionID,
+		IsLatest:  isLatest,
 	}
 	fi.Parts = make([]ObjectPartInfo, len(j.PartNumbers))
 	for i := range fi.Parts {
@@ -473,30 +475,25 @@ func (z xlMetaV2) TotalSize() int64 {
 
 // ListVersions lists current versions, and current deleted
 // versions returns error for unexpected entries.
-func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
-	var latestModTime time.Time
-	var latestVersionID string
-	for _, version := range z.Versions {
+func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, err error) {
+	for i, version := range z.Versions {
 		if !version.Valid() {
-			return nil, latestModTime, errFileCorrupt
+			return nil, errFileCorrupt
 		}
+		isLatest := i == len(z.Versions)-1
 		var fi FileInfo
 		switch version.Type {
 		case ObjectType:
-			fi, err = version.ObjectV2.ToFileInfo(volume, path)
+			fi, err = version.ObjectV2.ToFileInfo(volume, path, isLatest)
 		case DeleteType:
-			fi, err = version.DeleteMarker.ToFileInfo(volume, path)
+			fi, err = version.DeleteMarker.ToFileInfo(volume, path, isLatest)
 		case LegacyType:
-			fi, err = version.ObjectV1.ToFileInfo(volume, path)
+			fi, err = version.ObjectV1.ToFileInfo(volume, path, true)
 		default:
 			continue
 		}
 		if err != nil {
-			return nil, latestModTime, err
-		}
-		if fi.ModTime.After(latestModTime) {
-			latestModTime = fi.ModTime
-			latestVersionID = fi.VersionID
+			return nil, err
 		}
 		switch version.Type {
 		case LegacyType:
@@ -506,17 +503,7 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 		}
 	}
 
-	// We didn't find the version in delete markers so latest version
-	// is indeed one of the actual version of the object with data.
-	for i := range versions {
-		if versions[i].VersionID != latestVersionID {
-			continue
-		}
-		versions[i].IsLatest = true
-		break
-	}
-
-	return versions, latestModTime, nil
+	return versions, nil
 }
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
@@ -528,43 +515,29 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (FileInfo, error) {
 	}
 
 	if versionID == "" {
-		var latestModTime time.Time
-		var latestIndex int
-		for i, version := range z.Versions {
-			if !version.Valid() {
-				logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", version))
-				return FileInfo{}, errFileNotFound
-			}
-			var modTime time.Time
-			switch version.Type {
-			case ObjectType:
-				modTime = time.Unix(0, version.ObjectV2.StatModTime)
-			case DeleteType:
-				modTime = time.Unix(0, version.DeleteMarker.ModTime)
-			case LegacyType:
-				modTime = version.ObjectV1.Stat.ModTime
-			default:
-				continue
-			}
-			if modTime.After(latestModTime) {
-				latestModTime = modTime
-				latestIndex = i
-			}
+		if len(z.Versions) == 0 {
+			return FileInfo{}, errFileNotFound
 		}
-		if len(z.Versions) >= 1 {
-			switch z.Versions[latestIndex].Type {
-			case ObjectType:
-				return z.Versions[latestIndex].ObjectV2.ToFileInfo(volume, path)
-			case DeleteType:
-				return z.Versions[latestIndex].DeleteMarker.ToFileInfo(volume, path)
-			case LegacyType:
-				return z.Versions[latestIndex].ObjectV1.ToFileInfo(volume, path)
-			}
+		latestVersion := z.Versions[len(z.Versions)-1]
+		if !latestVersion.Valid() {
+			logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", latestVersion))
+			return FileInfo{}, errFileNotFound
 		}
-		return FileInfo{}, errFileNotFound
+
+		switch latestVersion.Type {
+		case ObjectType:
+			return latestVersion.ObjectV2.ToFileInfo(volume, path, true)
+		case DeleteType:
+			return latestVersion.DeleteMarker.ToFileInfo(volume, path, true)
+		case LegacyType:
+			return latestVersion.ObjectV1.ToFileInfo(volume, path, true)
+		default:
+			logger.LogIf(GlobalContext, fmt.Errorf("unknown version type: %v", latestVersion.Type))
+			return FileInfo{}, errFileNotFound
+		}
 	}
 
-	for _, version := range z.Versions {
+	for i, version := range z.Versions {
 		if !version.Valid() {
 			logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", version))
 			if versionID == "" {
@@ -572,31 +545,24 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (FileInfo, error) {
 			}
 			return FileInfo{}, errFileVersionNotFound
 		}
+		isLatest := i == (len(z.Versions) - 1)
 		switch version.Type {
 		case ObjectType:
 			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
-				return version.ObjectV2.ToFileInfo(volume, path)
+				return version.ObjectV2.ToFileInfo(volume, path, isLatest)
 			}
 		case LegacyType:
 			if version.ObjectV1.VersionID == versionID {
-				return version.ObjectV1.ToFileInfo(volume, path)
+				return version.ObjectV1.ToFileInfo(volume, path, true)
 			}
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
-				return version.DeleteMarker.ToFileInfo(volume, path)
+				return version.DeleteMarker.ToFileInfo(volume, path, isLatest)
 			}
 		default:
 			logger.LogIf(GlobalContext, fmt.Errorf("unknown version type: %v", version.Type))
-			if versionID == "" {
-				return FileInfo{}, errFileNotFound
-			}
-
 			return FileInfo{}, errFileVersionNotFound
 		}
-	}
-
-	if versionID == "" {
-		return FileInfo{}, errFileNotFound
 	}
 
 	return FileInfo{}, errFileVersionNotFound

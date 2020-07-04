@@ -178,13 +178,14 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 // constant and shouldn't be changed.
 const legacyDataDir = "legacy"
 
-func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
+func (m *xlMetaV1Object) ToFileInfo(volume, path string, isLatest bool) (FileInfo, error) {
 	if !m.valid() {
 		return FileInfo{}, errFileCorrupt
 	}
 	return FileInfo{
 		Volume:    volume,
 		Name:      path,
+		IsLatest:  isLatest,
 		ModTime:   m.Stat.ModTime,
 		Size:      m.Stat.Size,
 		Metadata:  m.Meta,
