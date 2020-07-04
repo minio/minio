@@ -596,8 +596,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	}
 
 	opts := ObjectOptions{}
-	if action == lifecycle.DeleteVersionAction {
+	switch action {
+	case lifecycle.DeleteVersionAction:
 		opts.VersionID = versionID
+	case lifecycle.DeleteAction:
+		opts.Versioned = globalBucketVersioningSys.Enabled(i.bucket)
 	}
 
 	obj, err := o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)

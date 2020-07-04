@@ -209,8 +209,9 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			return NoneAction
 		}
 
-		// All other expiration only applies to latest versions.
-		if obj.IsLatest {
+		// All other expiration only applies to latest versions
+		// (except if this is a delete marker)
+		if obj.IsLatest && !obj.DeleteMarker {
 			switch {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {
