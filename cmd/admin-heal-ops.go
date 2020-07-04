@@ -155,8 +155,13 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 			StartTime:   UTCNow(),
 		}
 	} else {
+		clientToken := he.clientToken
+		if globalIsDistErasure {
+			clientToken = fmt.Sprintf("%s@%d", he.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+		}
+
 		hsp = madmin.HealStopSuccess{
-			ClientToken:   he.clientToken,
+			ClientToken:   clientToken,
 			ClientAddress: he.clientAddress,
 			StartTime:     he.startTime,
 		}
@@ -232,8 +237,13 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 	// Launch top-level background heal go-routine
 	go h.healSequenceStart()
 
+	clientToken := h.clientToken
+	if globalIsDistErasure {
+		clientToken = fmt.Sprintf("%s@%d", h.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+	}
+
 	b, err := json.Marshal(madmin.HealStartSuccess{
-		ClientToken:   h.clientToken,
+		ClientToken:   clientToken,
 		ClientAddress: h.clientAddress,
 		StartTime:     h.startTime,
 	})
@@ -371,9 +381,6 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 	ctx, cancel := context.WithCancel(logger.SetReqInfo(ctx, reqInfo))
 
 	clientToken := mustGetUUID()
-	if globalIsDistErasure {
-		clientToken = fmt.Sprintf("%s@%d", clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
-	}
 
 	return &healSequence{
 		respCh:         make(chan healResult),

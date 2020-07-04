@@ -161,12 +161,10 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Analyze continuation token and route the request accordingly
-	subToken, nodeIndex, parsed := parseRequestToken(token)
-	if parsed {
-		if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
-			return
-		}
-		token = subToken
+	var success bool
+	token, success = proxyRequestByToken(ctx, w, r, token)
+	if success {
+		return
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
@@ -192,7 +190,10 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 	}
 
 	// The next continuation token has id@node_index format to optimize paginated listing
-	nextContinuationToken := fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+	nextContinuationToken := listObjectsV2Info.NextContinuationToken
+	if nextContinuationToken != "" && listObjectsV2Info.IsTruncated {
+		nextContinuationToken = fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+	}
 
 	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
@@ -246,12 +247,10 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	// Analyze continuation token and route the request accordingly
-	subToken, nodeIndex, parsed := parseRequestToken(token)
-	if parsed {
-		if proxyRequestByNodeIndex(ctx, w, r, nodeIndex) {
-			return
-		}
-		token = subToken
+	var success bool
+	token, success = proxyRequestByToken(ctx, w, r, token)
+	if success {
+		return
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
@@ -277,7 +276,10 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 
 	// The next continuation token has id@node_index format to optimize paginated listing
-	nextContinuationToken := fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+	nextContinuationToken := listObjectsV2Info.NextContinuationToken
+	if nextContinuationToken != "" && listObjectsV2Info.IsTruncated {
+		nextContinuationToken = fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+	}
 
 	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
@@ -299,17 +301,28 @@ func getLocalNodeIndex() int {
 	return -1
 }
 
-func parseRequestToken(token string) (subToken string, nodeIndex int, success bool) {
+func parseRequestToken(token string) (subToken string, nodeIndex int) {
+	if token == "" {
+		return token, -1
+	}
 	i := strings.Index(token, "@")
 	if i < 0 {
-		return "", -1, false
+		return token, -1
 	}
 	nodeIndex, err := strconv.Atoi(token[i+1:])
 	if err != nil {
-		return "", -1, false
+		return token, -1
 	}
 	subToken = token[:i]
-	return subToken, nodeIndex, true
+	return subToken, nodeIndex
+}
+
+func proxyRequestByToken(ctx context.Context, w http.ResponseWriter, r *http.Request, token string) (string, bool) {
+	subToken, nodeIndex := parseRequestToken(token)
+	if nodeIndex > 0 {
+		return subToken, proxyRequestByNodeIndex(ctx, w, r, nodeIndex)
+	}
+	return subToken, false
 }
 
 func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int) (success bool) {
