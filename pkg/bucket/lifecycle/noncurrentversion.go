@@ -36,12 +36,13 @@ var (
 	errNoncurrentVersionTransitionUnsupported = Errorf("Specifying <NoncurrentVersionTransition></NoncurrentVersionTransition> is not supported")
 )
 
-// MarshalXML if non-current days not set returns empty tags
-func (n *NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
-	if n.NoncurrentDays == ExpirationDays(0) {
+// MarshalXML if non-current days not set to non zero value
+func (n NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if n.IsDaysNull() {
 		return nil
 	}
-	return e.EncodeElement(&n, start)
+	type noncurrentVersionExpirationWrapper NoncurrentVersionExpiration
+	return e.EncodeElement(noncurrentVersionExpirationWrapper(n), start)
 }
 
 // IsDaysNull returns true if days field is null
