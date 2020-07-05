@@ -8,14 +8,18 @@ MinIO is a High Performance Object Storage released under Apache License v2.0. I
 ## Docker Container
 ### Stable
 ```
-docker pull minio/minio
-docker run -p 9000:9000 minio/minio server /data
+docker run -p 9000:9000 \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  minio/minio server /data
 ```
 
 ### Edge
 ```
-docker pull minio/minio:edge
-docker run -p 9000:9000 minio/minio:edge server /data
+docker run -p 9000:9000 \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  minio/minio:edge server /data
 ```
 
 > NOTE: Docker will not display the default keys unless you start the container with the `-it`(interactive TTY) argument. Generally, it is not recommended to use default keys with containers. Please visit MinIO Docker quickstart guide for more information [here](https://docs.min.io/docs/minio-docker-quickstart-guide)
@@ -94,23 +98,6 @@ GO111MODULE=on go get github.com/minio/minio
 
 By default MinIO uses the port 9000 to listen for incoming connections. If your platform blocks the port by default, you may need to enable access to the port.
 
-### iptables
-
-For hosts with iptables enabled (RHEL, CentOS, etc), you can use `iptables` command to enable all traffic coming to specific ports. Use below command to allow
-access to port 9000
-
-```sh
-iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
-service iptables restart
-```
-
-Below command enables all incoming traffic to ports ranging from 9000 to 9010.
-
-```sh
-iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
-service iptables restart
-```
-
 ### ufw
 
 For hosts with ufw enabled (Debian based distros), you can use `ufw` command to allow traffic to specific ports. Use below command to allow access to port 9000
@@ -145,6 +132,23 @@ Note that `permanent` makes sure the rules are persistent across firewall start,
 firewall-cmd --reload
 ```
 
+### iptables
+
+For hosts with iptables enabled (RHEL, CentOS, etc), you can use `iptables` command to enable all traffic coming to specific ports. Use below command to allow
+access to port 9000
+
+```sh
+iptables -A INPUT -p tcp --dport 9000 -j ACCEPT
+service iptables restart
+```
+
+Below command enables all incoming traffic to ports ranging from 9000 to 9010.
+
+```sh
+iptables -A INPUT -p tcp --dport 9000:9010 -j ACCEPT
+service iptables restart
+```
+
 ## Test using MinIO Browser
 MinIO Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 ensure your server has started successfully.
 
@@ -159,20 +163,23 @@ When deployed on a single drive, MinIO server lets clients access any pre-existi
 The above statement is also valid for all gateway backends.
 
 ## Upgrading MinIO
-MinIO server supports rolling upgrades, i.e. you can update one MinIO instance at a time in a distributed cluster. This allows upgrades with no downtime. Upgrades can be done manually by replacing the binary with the latest release and restarting all servers in a rolling fashion. However, we recommend all our users to use [`mc admin update`](https://docs.min.io/docs/minio-admin-complete-guide.html#update) from the client. This will update all the nodes in the cluster and restart them, as shown in the following command from the MinIO client (mc):
+MinIO server supports rolling upgrades, i.e. you can update one MinIO instance at a time in a distributed cluster. This allows upgrades with no downtime. Upgrades can be done manually by replacing the binary with the latest release and restarting all servers in a rolling fashion. However, we recommend all our users to use [`mc admin update`](https://docs.min.io/docs/minio-admin-complete-guide.html#update) from the client. This will update all the nodes in the cluster simultaneously and restart them, as shown in the following command from the MinIO client (mc):
 
 ```
 mc admin update <minio alias, e.g., myminio>
 ```
 
-**Important things to remember during upgrades**:
+> NOTE: some releases might not allow rolling upgrades, this is always called out in the release notes and it is generally advised to read release notes before upgrading. In such a situation `mc admin update` is the recommended upgrading mechanism to upgrade all servers at once.
+
+### Important things to remember during MinIO upgrades
 
 - `mc admin update` will only work if the user running MinIO has write access to the parent directory where the binary is located, for example if the current binary is at `/usr/local/bin/minio`, you would need write access to `/usr/local/bin`.
-- In the case of federated setups `mc admin update` should be run against each cluster individually. Avoid updating `mc` until all clusters have been updated.
-- If you are updating the server it is always recommended (unless explicitly mentioned in MinIO server release notes), to update `mc` once all the servers have been upgraded using `mc update`.
-- `mc admin update` is disabled in docker/container environments, container environments provide their own mechanisms for updating running containers.
-- If you are using Vault as KMS with MinIO, ensure you have followed the Vault upgrade procedure outlined here: https://www.vaultproject.io/docs/upgrading/index.html
-- If you are using etcd with MinIO for the federation, ensure you have followed the etcd upgrade procedure outlined here: https://github.com/etcd-io/etcd/blob/master/Documentation/upgrades/upgrading-etcd.md
+- `mc admin update` updates and restarts all servers simultaneously, applications would retry and continue their respective operations upon upgrade.
+- `mc admin update` is disabled in kubernetes/container environments, container environments provide their own mechanisms to rollout of updates.
+- In the case of federated setups `mc admin update` should be run against each cluster individually. Avoid updating `mc` to any new releases until all clusters have been successfully updated.
+- If using `kes` as KMS with MinIO, just replace the binary and restart `kes` more information about `kes` can be found [here](https://github.com/minio/kes/wiki)x
+- If using Vault as KMS with MinIO, ensure you have followed the Vault upgrade procedure outlined here: https://www.vaultproject.io/docs/upgrading/index.html
+- If using etcd with MinIO for the federation, ensure you have followed the etcd upgrade procedure outlined here: https://github.com/etcd-io/etcd/blob/master/Documentation/upgrades/upgrading-etcd.md
 
 ## Explore Further
 - [MinIO Erasure Code QuickStart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide)

@@ -79,9 +79,13 @@ Expected expansion
 - Choosing an erasure set for the object is decided during `PutObject()`, object names are used to find the right erasure set using the following pseudo code.
 ```go
 // hashes the key returning an integer.
-func crcHashMod(key string, cardinality int) int {
-        keyCrc := crc32.Checksum([]byte(key), crc32.IEEETable)
-        return int(keyCrc % uint32(cardinality))
+func sipHashMod(key string, cardinality int, id [16]byte) int {
+        if cardinality <= 0 {
+                return -1
+        }
+        sip := siphash.New(id[:])
+        sip.Write([]byte(key))
+        return int(sip.Sum64() % uint64(cardinality))
 }
 ```
 Input for the key is the object name specified in `PutObject()`, returns a unique index. This index is one of the erasure sets where the object will reside. This function is a consistent hash for a given object name i.e for a given object name the index returned is always the same.
