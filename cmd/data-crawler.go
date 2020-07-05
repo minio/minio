@@ -582,6 +582,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 				VersionID:    obj.VersionID,
 				DeleteMarker: obj.DeleteMarker,
 				IsLatest:     obj.IsLatest,
+				NumVersions:  meta.numVersions,
 			})
 		if i.debug {
 			logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)

@@ -108,26 +108,13 @@ type Expiration struct {
 	DeleteMarker ExpireDeleteMarker `xml:"ExpiredObjectDeleteMarker,omitempty"`
 }
 
-// UnmarshalXML parses delete marker and validates if it is set.
-func (b *ExpireDeleteMarker) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	if !*b {
-		return nil
-	}
-	var deleteMarker bool
-	err := d.DecodeElement(&deleteMarker, &startElement)
-	if err != nil {
-		return err
-	}
-	*b = ExpireDeleteMarker(deleteMarker)
-	return nil
-}
-
 // MarshalXML encodes delete marker boolean into an XML form.
-func (b *ExpireDeleteMarker) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
-	if !*b {
+func (b ExpireDeleteMarker) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
+	if !b {
 		return nil
 	}
-	return e.EncodeElement(*b, startElement)
+	type expireDeleteMarkerWrapper ExpireDeleteMarker
+	return e.EncodeElement(expireDeleteMarkerWrapper(b), startElement)
 }
 
 // Validate - validates the "Expiration" element
