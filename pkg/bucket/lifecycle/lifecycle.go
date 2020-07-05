@@ -204,9 +204,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 				if time.Now().After(expectedExpiryTime(obj.ModTime, rule.NoncurrentVersionExpiration.NoncurrentDays)) {
 					return DeleteVersionAction
 				}
-				return NoneAction
 			}
-			return NoneAction
 		}
 
 		// All other expiration only applies to latest versions
