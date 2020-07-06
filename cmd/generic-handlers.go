@@ -30,8 +30,6 @@ import (
 	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/wildcard"
-	"github.com/rs/cors"
 )
 
 // MiddlewareFunc - useful to chain different http.Handler middlewares
@@ -392,49 +390,6 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type resourceHandler struct {
 	handler http.Handler
-}
-
-// setCorsHandler handler for CORS (Cross Origin Resource Sharing)
-func setCorsHandler(h http.Handler) http.Handler {
-	commonS3Headers := []string{
-		xhttp.Date,
-		xhttp.ETag,
-		xhttp.ServerInfo,
-		xhttp.Connection,
-		xhttp.AcceptRanges,
-		xhttp.ContentRange,
-		xhttp.ContentEncoding,
-		xhttp.ContentLength,
-		xhttp.ContentType,
-		"X-Amz*",
-		"x-amz*",
-		"*",
-	}
-
-	c := cors.New(cors.Options{
-		AllowOriginFunc: func(origin string) bool {
-			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
-				if wildcard.MatchSimple(allowedOrigin, origin) {
-					return true
-				}
-			}
-			return false
-		},
-		AllowedMethods: []string{
-			http.MethodGet,
-			http.MethodPut,
-			http.MethodHead,
-			http.MethodPost,
-			http.MethodDelete,
-			http.MethodOptions,
-			http.MethodPatch,
-		},
-		AllowedHeaders:   commonS3Headers,
-		ExposedHeaders:   commonS3Headers,
-		AllowCredentials: true,
-	})
-
-	return c.Handler(h)
 }
 
 // setIgnoreResourcesHandler -
