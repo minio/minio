@@ -198,7 +198,7 @@ func listAllBuckets(storageDisks []StorageAPI, healBuckets map[string]VolInfo) (
 // this list as and when we figure out more errors can be added to this list safely.
 func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime time.Time) bool {
 	switch erErr {
-	case errFileNotFound:
+	case errFileNotFound, errFileVersionNotFound:
 		return true
 	case errCorruptedFormat:
 		return true
@@ -207,6 +207,7 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 		// If er.meta was read fine but there may be problem with the part.N files.
 		if IsErr(dataErr, []error{
 			errFileNotFound,
+			errFileVersionNotFound,
 			errFileCorrupt,
 		}...) {
 			return true
@@ -270,7 +271,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			driveState = madmin.DriveStateOffline
 		case errs[i] == errFileNotFound, errs[i] == errVolumeNotFound:
 			fallthrough
-		case dataErrs[i] == errFileNotFound, dataErrs[i] == errVolumeNotFound:
+		case dataErrs[i] == errFileNotFound, dataErrs[i] == errFileVersionNotFound, dataErrs[i] == errVolumeNotFound:
 			driveState = madmin.DriveStateMissing
 		default:
 			// all remaining cases imply corrupt data/metadata
