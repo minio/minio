@@ -7,22 +7,31 @@ Docker installed on your machine. Download the relevant installer from [here](ht
 MinIO needs a persistent volume to store configuration and application data. However, for testing purposes, you can launch MinIO by simply passing a directory (`/data` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
 
 ```sh
-docker run -p 9000:9000 minio/minio server /data
+docker run -p 9000:9000 \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  minio/minio server /data
 ```
 
 To create a MinIO container with persistent storage, you need to map local persistent directories from the host OS to virtual config `~/.minio` and export `/data` directories. To do this, run the below commands
 
 #### GNU/Linux and macOS
 ```sh
-docker run -p 9000:9000 --name minio1 \
+docker run -p 9000:9000 \
+  --name minio1 \
   -v /mnt/data:/data \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   minio/minio server /data
 ```
 
 #### Windows
 ```sh
-docker run -p 9000:9000 --name minio1 \
+docker run -p 9000:9000 \
+  --name minio1 \
   -v D:\data:/data \
+  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   minio/minio server /data
 ```
 
