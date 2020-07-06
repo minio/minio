@@ -22,7 +22,7 @@ import (
 
 // DeletedObject objects deleted
 type DeletedObject struct {
-	DeleteMarker          bool   `xml:"DeleteMarker"`
+	DeleteMarker          bool   `xml:"DeleteMarker,omitempty"`
 	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
 	ObjectName            string `xml:"Key,omitempty"`
 	VersionID             string `xml:"VersionId,omitempty"`

@@ -462,6 +462,8 @@ func azureToObjectError(err error, params ...string) error {
 
 func azureCodesToObjectError(err error, serviceCode string, statusCode int, bucket string, object string) error {
 	switch serviceCode {
+	case "ContainerNotFound":
+		err = minio.BucketNotFound{Bucket: bucket}
 	case "ContainerAlreadyExists":
 		err = minio.BucketExists{Bucket: bucket}
 	case "InvalidResourceName":
@@ -970,7 +972,10 @@ func (a *azureObjects) DeleteObject(ctx context.Context, bucket, object string, 
 	blob := a.client.NewContainerURL(bucket).NewBlobURL(object)
 	_, err := blob.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 	if err != nil {
-		return minio.ObjectInfo{}, azureToObjectError(err, bucket, object)
+		err = azureToObjectError(err, bucket, object)
+		if !errors.Is(err, minio.ObjectNotFound{Bucket: bucket, Object: object}) {
+			return minio.ObjectInfo{}, err
+		}
 	}
 	return minio.ObjectInfo{
 		Bucket: bucket,
@@ -983,10 +988,8 @@ func (a *azureObjects) DeleteObjects(ctx context.Context, bucket string, objects
 	dobjects := make([]minio.DeletedObject, len(objects))
 	for idx, object := range objects {
 		_, errs[idx] = a.DeleteObject(ctx, bucket, object.ObjectName, opts)
-		if errs[idx] == nil {
-			dobjects[idx] = minio.DeletedObject{
-				ObjectName: object.ObjectName,
-			}
+		dobjects[idx] = minio.DeletedObject{
+			ObjectName: object.ObjectName,
 		}
 	}
 	return dobjects, errs
