@@ -1181,14 +1181,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			ServerSideEncryption: dstOpts.ServerSideEncryption,
 			UserTags:             tag.ToMap(),
 		}
-		remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
-			srcInfo.Size, "", "", opts)
+		_, rerr = client.Client.PutObject(dstBucket, dstObject, srcInfo.Reader,
+			srcInfo.Size, opts)
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		objInfo.ETag = remoteObjInfo.ETag
-		objInfo.ModTime = remoteObjInfo.LastModified
+		objInfo.ModTime = UTCNow()
 	} else {
 		copyObjectFn := objectAPI.CopyObject
 		if api.CacheAPI() != nil {
