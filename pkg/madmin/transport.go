@@ -21,6 +21,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/mattn/go-ieproxy"
 )
 
 // DefaultTransport - this default transport is similar to
@@ -28,7 +30,7 @@ import (
 // is set to true to avoid decompressing content with 'gzip' encoding.
 var DefaultTransport = func(secure bool) http.RoundTripper {
 	tr := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		Proxy: ieproxy.GetProxyFunc(),
 		DialContext: (&net.Dialer{
 			Timeout:   5 * time.Second,
 			KeepAlive: 15 * time.Second,

@@ -24,11 +24,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
+	etcd "go.etcd.io/etcd/v3/clientv3"
 )
 
 func handleEncryptedConfigBackend(objAPI ObjectLayer) error {
