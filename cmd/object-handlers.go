@@ -1187,7 +1187,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
+
+		//TODO: When minio-go is upgraded to v7 read this info from the response.
+		statOpts := miniogo.StatObjectOptions{GetObjectOptions: miniogo.GetObjectOptions{ServerSideEncryption: dstOpts.ServerSideEncryption}}
+		info, rerr := client.Client.StatObject(dstObject, dstObject, statOpts)
+		logger.LogIf(ctx, rerr)
 		objInfo.ModTime = UTCNow()
+		if rerr == nil {
+			objInfo.ModTime = info.LastModified
+			objInfo.ETag = info.ETag
+		}
 	} else {
 		copyObjectFn := objectAPI.CopyObject
 		if api.CacheAPI() != nil {
