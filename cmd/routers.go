@@ -63,8 +63,6 @@ var globalHandlers = []MiddlewareFunc{
 	setBrowserCacheControlHandler,
 	// Validates all incoming requests to have a valid date header.
 	setTimeValidityHandler,
-	// CORS setting for all browser API requests.
-	setCorsHandler,
 	// Validates all incoming URL resources, for invalid/unsupported
 	// resources client receives a HTTP error.
 	setIgnoreResourcesHandler,
@@ -114,10 +112,7 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	// but don't allow SSE-KMS.
 	registerAPIRouter(router, true, false)
 
-	// If none of the routes match add default error handler routes
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
-	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
-
 	router.Use(registerMiddlewares)
+
 	return router, nil
 }
