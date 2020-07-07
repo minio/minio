@@ -35,3 +35,4 @@ To permanently delete an object you need to specify the version you want to dele
 - Versioning state applies to all of the objects in the versioning enabled bucket. The first time you enable a bucket for versioning, objects in the bucket are thereafter always versioned and given a unique version ID.
 - Existing or newer buckets can be created with versioning enabled and eventually can be suspended as well. Existing versions of objects stay as is and can still be accessed using the version ID.
 - All versions, including delete-markers should be deleted before deleting a bucket.
+- **Versioning feature is only available in erasure coded and distributed erasrue coded setups**.
