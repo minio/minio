@@ -41,6 +41,8 @@ const (
 	TraceAdminAction = "admin:ServerTrace"
 	// ConsoleLogAdminAction - allow listing console logs on terminal
 	ConsoleLogAdminAction = "admin:ConsoleLog"
+	// KMSCreateKeyAdminAction - allow creating a new KMS master key
+	KMSCreateKeyAdminAction = "admin:KMSCreateKey"
 	// KMSKeyStatusAdminAction - allow getting KMS key status
 	KMSKeyStatusAdminAction = "admin:KMSKeyStatus"
 	// ServerInfoAdminAction - allow listing server info
