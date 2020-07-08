@@ -30,7 +30,7 @@ import (
 	"strings"
 	"time"
 
-	etcd "github.com/coreos/etcd/clientv3"
+	etcd "go.etcd.io/etcd/v3/clientv3"
 	yaml "gopkg.in/yaml.v2"
 )
 

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio-go/v6/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	"github.com/coreos/etcd/clientv3"
+	"go.etcd.io/etcd/v3/clientv3"
 )
 
 // ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
