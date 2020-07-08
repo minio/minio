@@ -42,5 +42,5 @@ assignees: ''
 ## Your Environment
 <!--- Include as many relevant details about the environment you experienced the bug in -->
 * Version used (`minio --version`):
-* Server type and version:
+* Server setup and configuration:
 * Operating System and version (`uname -a`):
