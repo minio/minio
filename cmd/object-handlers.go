@@ -1187,7 +1187,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		client, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -1202,7 +1202,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			ServerSideEncryption: dstOpts.ServerSideEncryption,
 			UserTags:             tag.ToMap(),
 		}
-		remoteObjInfo, rerr := client.PutObjectWithContext(ctx, dstBucket, dstObject, srcInfo.Reader,
+		remoteObjInfo, rerr := core.PutObjectWithContext(ctx, dstBucket, dstObject, srcInfo.Reader,
 			srcInfo.Size, "", "", opts)
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
@@ -1879,13 +1879,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		client, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		partInfo, err := client.PutObjectPartWithContext(ctx, dstBucket, dstObject, uploadID, partID,
+		partInfo, err := core.PutObjectPartWithContext(ctx, dstBucket, dstObject, uploadID, partID,
 			srcInfo.Reader, srcInfo.Size, "", "", dstOpts.ServerSideEncryption)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
