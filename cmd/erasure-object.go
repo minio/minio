@@ -698,14 +698,16 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		})
 	}
 
-	// Save additional erasureMetadata.
-	modTime := UTCNow()
-
 	opts.UserDefined["etag"] = r.MD5CurrentHexString()
 
 	// Guess content-type from the extension if possible.
 	if opts.UserDefined["content-type"] == "" {
 		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	}
+
+	modTime := opts.MTime
+	if opts.MTime.IsZero() {
+		modTime = UTCNow()
 	}
 
 	// Fill all the necessary metadata.

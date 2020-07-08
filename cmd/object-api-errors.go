@@ -175,6 +175,17 @@ type GenericError struct {
 	Bucket    string
 	Object    string
 	VersionID string
+	Err       error
+}
+
+// InvalidArgument incorrect input argument
+type InvalidArgument GenericError
+
+func (e InvalidArgument) Error() string {
+	if e.Err != nil {
+		return "Invalid arguments provided for " + e.Bucket + "/" + e.Object + ": (" + e.Err.Error() + ")"
+	}
+	return "Invalid arguments provided for " + e.Bucket + "/" + e.Object
 }
 
 // BucketNotFound bucket does not exist.

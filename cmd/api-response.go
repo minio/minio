@@ -698,6 +698,10 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, err
 }
 
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
+	if newObjectLayerFn() == nil {
+		// Server still in safe mode.
+		w.Header().Set(xhttp.MinIOServerStatus, "safemode")
+	}
 	setCommonHeaders(w)
 	if mType != mimeNone {
 		w.Header().Set(xhttp.ContentType, string(mType))
@@ -760,6 +764,10 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
 		if browser && globalBrowserEnabled {
+			if newObjectLayerFn() == nil {
+				// server still in safe mode.
+				w.Header().Set(xhttp.MinIOServerStatus, "safemode")
+			}
 			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return
