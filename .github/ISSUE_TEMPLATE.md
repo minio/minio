@@ -1,3 +1,12 @@
+---
+name: Bug report
+about: Create a report to help us improve
+title: ''
+labels: community, triage
+assignees: ''
+
+---
+
 <!--- Provide a general summary of the issue in the Title above -->
 
 ## Expected Behavior
@@ -15,6 +24,8 @@
 ## Steps to Reproduce (for bugs)
 <!--- Provide a link to a live example, or an unambiguous set of steps to -->
 <!--- reproduce this bug. Include code to reproduce, if relevant -->
+<!--- and make sure you have followed https://github.com/minio/minio/tree/release/docs/debugging to capture relevant logs -->
+
 1.
 2.
 3.
@@ -30,8 +41,6 @@
 
 ## Your Environment
 <!--- Include as many relevant details about the environment you experienced the bug in -->
-* Version used (`minio version`):
-* Environment name and version (e.g. nginx 1.9.1):
-* Server type and version:
+* Version used (`minio --version`):
+* Server setup and configuration:
 * Operating System and version (`uname -a`):
-* Link to your project:
