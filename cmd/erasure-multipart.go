@@ -215,7 +215,11 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	fi.DataDir = mustGetUUID()
 	fi.ModTime = UTCNow()
-	fi.Metadata = opts.UserDefined
+	if opts.UserDefined != nil {
+		fi.Metadata = opts.UserDefined
+	} else {
+		fi.Metadata = make(map[string]string)
+	}
 
 	uploadID := mustGetUUID()
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
@@ -691,7 +695,10 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Save the final object size and modtime.
 	fi.Size = objectSize
-	fi.ModTime = UTCNow()
+	fi.ModTime = opts.MTime
+	if opts.MTime.IsZero() {
+		fi.ModTime = UTCNow()
+	}
 
 	// Save successfully calculated md5sum.
 	fi.Metadata["etag"] = s3MD5
