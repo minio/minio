@@ -126,9 +126,28 @@ func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]
 	}
 
 	// Set content-type to default value if it is not set.
-	if _, ok := metadata["content-type"]; !ok {
-		metadata["content-type"] = "application/octet-stream"
+	if _, ok := metadata[strings.ToLower(xhttp.ContentType)]; !ok {
+		metadata[strings.ToLower(xhttp.ContentType)] = "application/octet-stream"
 	}
+
+	if contentEncoding, ok := metadata[strings.ToLower(xhttp.ContentEncoding)]; ok {
+		contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
+		if contentEncoding != "" {
+			// Make sure to trim and save the content-encoding
+			// parameter for a streaming signature which is set
+			// to a custom value for example: "aws-chunked,gzip".
+			metadata[strings.ToLower(xhttp.ContentEncoding)] = contentEncoding
+		} else {
+			// Trimmed content encoding is empty when the header
+			// value is set to "aws-chunked" only.
+
+			// Make sure to delete the content-encoding parameter
+			// for a streaming signature which is set to value
+			// for example: "aws-chunked"
+			delete(metadata, strings.ToLower(xhttp.ContentEncoding))
+		}
+	}
+
 	// Success.
 	return metadata, nil
 }

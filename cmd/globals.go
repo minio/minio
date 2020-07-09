@@ -23,7 +23,6 @@ import (
 
 	"github.com/minio/minio-go/v6/pkg/set"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
@@ -35,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	etcd "go.etcd.io/etcd/v3/clientv3"
 
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"

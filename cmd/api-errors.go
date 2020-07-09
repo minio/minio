@@ -1909,6 +1909,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// their internal error types. This code is only
 		// useful with gateway implementations.
 		switch e := err.(type) {
+		case InvalidArgument:
+			apiErr = APIError{
+				Code:           "InvalidArgument",
+				Description:    e.Error(),
+				HTTPStatusCode: errorCodes[ErrInvalidRequest].HTTPStatusCode,
+			}
 		case *xml.SyntaxError:
 			apiErr = APIError{
 				Code: "MalformedXML",

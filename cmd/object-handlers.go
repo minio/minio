@@ -159,7 +159,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	// Get request range.
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrUnsupportedRangeHeader), r.URL, guessIsBrowserReq(r))
 		return
@@ -370,7 +370,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
@@ -552,7 +552,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
@@ -701,6 +701,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 
 // getRemoteInstanceTransport contains a singleton roundtripper.
 var getRemoteInstanceTransport http.RoundTripper
+var getRemoteInstanceTransportLongTO http.RoundTripper
 var getRemoteInstanceTransportOnce sync.Once
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
@@ -715,8 +716,28 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	}
 	getRemoteInstanceTransportOnce.Do(func() {
 		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
 	})
 	core.SetCustomTransport(getRemoteInstanceTransport)
+	return core, nil
+}
+
+// Returns a minio-go Client configured to access remote host described by destDNSRecord
+// Applicable only in a federated deployment.
+// The transport does not contain any timeout except for dialing.
+func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.Core, error) {
+	cred := getReqAccessCred(r, globalServerRegion)
+	// In a federated deployment, all the instances share config files
+	// and hence expected to have same credentials.
+	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
+	if err != nil {
+		return nil, err
+	}
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
+	})
+	core.SetCustomTransport(getRemoteInstanceTransportLongTO)
 	return core, nil
 }
 
@@ -789,7 +810,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
 	var vid string
 	if u, err := url.Parse(cpSrcPath); err == nil {
-		vid = strings.TrimSpace(u.Query().Get("versionId"))
+		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
@@ -1166,7 +1187,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		client, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -1181,7 +1202,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			ServerSideEncryption: dstOpts.ServerSideEncryption,
 			UserTags:             tag.ToMap(),
 		}
-		remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
+		remoteObjInfo, rerr := core.PutObjectWithContext(ctx, dstBucket, dstObject, srcInfo.Reader,
 			srcInfo.Size, "", "", opts)
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
@@ -1332,26 +1353,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 		metadata[xhttp.AmzObjectTagging] = objTags
-	}
-
-	if rAuthType == authTypeStreamingSigned {
-		if contentEncoding, ok := metadata["content-encoding"]; ok {
-			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
-			if contentEncoding != "" {
-				// Make sure to trim and save the content-encoding
-				// parameter for a streaming signature which is set
-				// to a custom value for example: "aws-chunked,gzip".
-				metadata["content-encoding"] = contentEncoding
-			} else {
-				// Trimmed content encoding is empty when the header
-				// value is set to "aws-chunked" only.
-
-				// Make sure to delete the content-encoding parameter
-				// for a streaming signature which is set to value
-				// for example: "aws-chunked"
-				delete(metadata, "content-encoding")
-			}
-		}
 	}
 
 	var (
@@ -1708,7 +1709,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
 	var vid string
 	if u, err := url.Parse(cpSrcPath); err == nil {
-		vid = strings.TrimSpace(u.Query().Get("versionId"))
+		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
@@ -1740,8 +1741,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	uploadID := r.URL.Query().Get("uploadId")
-	partIDString := r.URL.Query().Get("partNumber")
+	uploadID := r.URL.Query().Get(xhttp.UploadID)
+	partIDString := r.URL.Query().Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -1858,13 +1859,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		client, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		partInfo, err := client.PutObjectPart(dstBucket, dstObject, uploadID, partID,
+		partInfo, err := core.PutObjectPartWithContext(ctx, dstBucket, dstObject, uploadID, partID,
 			srcInfo.Reader, srcInfo.Size, "", "", dstOpts.ServerSideEncryption)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2050,8 +2051,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	uploadID := r.URL.Query().Get("uploadId")
-	partIDString := r.URL.Query().Get("partNumber")
+	uploadID := r.URL.Query().Get(xhttp.UploadID)
+	partIDString := r.URL.Query().Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {

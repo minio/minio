@@ -1419,7 +1419,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	mode := "safe"
+	mode := "safemode"
 	if newObjectLayerFn() != nil {
 		mode = "online"
 	}
