@@ -133,9 +133,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 				// Move walks forward
 				copy(walks, walks[1:])
 				walks = walks[:len(walks)-1]
-				if len(walks) > 0 {
-					t.pool[oldest] = walks
-				}
+				t.pool[oldest] = walks
 			} else {
 				// Only entry, just delete.
 				delete(t.pool, oldest)
