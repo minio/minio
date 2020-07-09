@@ -70,6 +70,7 @@ func isValidLocation(location string) bool {
 // Supported headers that needs to be extracted.
 var supportedHeaders = []string{
 	"content-type",
+	"content-md5",
 	"cache-control",
 	"content-language",
 	"content-encoding",
