@@ -39,10 +39,11 @@ type Args struct {
 	Claims          map[string]interface{} `json:"claims"`
 }
 
-// GetPolicies get policies
-func (a Args) GetPolicies(policyClaimName string) (set.StringSet, bool) {
+// GetPoliciesFromClaims returns the list of policies to be applied for this
+// incoming request, extracting the information from input JWT claims.
+func GetPoliciesFromClaims(claims map[string]interface{}, policyClaimName string) (set.StringSet, bool) {
 	s := set.NewStringSet()
-	pname, ok := a.Claims[policyClaimName]
+	pname, ok := claims[policyClaimName]
 	if !ok {
 		return s, false
 	}
@@ -65,6 +66,12 @@ func (a Args) GetPolicies(policyClaimName string) (set.StringSet, bool) {
 		s.Add(pname)
 	}
 	return s, true
+}
+
+// GetPolicies returns the list of policies to be applied for this
+// incoming request, extracting the information from JWT claims.
+func (a Args) GetPolicies(policyClaimName string) (set.StringSet, bool) {
+	return GetPoliciesFromClaims(a.Claims, policyClaimName)
 }
 
 // Policy - iam bucket iamp.

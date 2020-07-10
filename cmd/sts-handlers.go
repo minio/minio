@@ -357,8 +357,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	// be set and configured on your identity provider as part of
 	// JWT custom claims.
 	var policyName string
-	if v, ok := m[iamPolicyClaimNameOpenID()]; ok {
-		policyName, _ = v.(string)
+	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
+	if ok {
+		policyName = strings.Join(policySet.ToSlice(), ",")
 	}
 
 	var subFromToken string

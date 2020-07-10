@@ -1,6 +1,8 @@
 # MinIO HDFS Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 MinIO HDFS gateway adds Amazon S3 API support to Hadoop HDFS filesystem. Applications can use both the S3 and file APIs concurrently without requiring any data migration. Since the gateway is stateless and shared-nothing, you may elastically provision as many MinIO instances as needed to distribute the load.
 
+> NOTE: Intention of this gateway implementation it to make it easy to migrate your existing data on HDFS clusters to MinIO clusters using standard tools like `mc` or `aws-cli`, if the goal is to use HDFS perpetually we recommend that HDFS should be used directly for all write operations.
+
 ## Run MinIO Gateway for HDFS Storage
 
 ### Using Binary
@@ -58,13 +60,7 @@ Gateway inherits the following limitations of HDFS storage layer:
 - No bucket notification APIs are not supported (HDFS has no support for fsnotify)
 - No server side encryption support (Intentionally not implemented)
 - No server side compression support (Intentionally not implemented)
-
-## Roadmap
-- Additional metadata support for PutObject operations
-- Additional metadata support for Multipart operations
-- Background append to provide concurrency support for multipart operations
-
-Please open a GitHub issue if you wish these to be fixed https://github.com/minio/minio/issues
+- Concurrent multipart operations are not supported (HDFS lacks safe locking support, or poorly implemented)
 
 ## Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
