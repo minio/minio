@@ -1,4 +1,4 @@
-# MinIO AD/LDAP Integration [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 **Table of Contents**
 
@@ -15,9 +15,8 @@
     - [Response Elements](#response-elements)
     - [Errors](#errors)
 - [Sample `POST` Request](#sample-post-request)
-- [Sample Response](#sample-response)
-- [Testing](#testing)
-
+- [Using LDAP STS API](#using-ldap-sts-api)
+- [Explore Further](#explore-further)
 
 ## Introduction
 
@@ -212,7 +211,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 </AssumeRoleWithLDAPIdentityResponse>
 ```
 
-## Testing
+## Using LDAP STS API
 
 With multiple OU hierarchies for users, and multiple group search base DN's.
 ```
@@ -237,3 +236,10 @@ $ go run ldap.go -u foouser -p foopassword
         "sessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJOVUlCT1JaWVRWMkhHMkJNUlNYUiIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTM0ODk2NjI5LCJpYXQiOjE1MzQ4OTMwMjksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiNjY2OTZjZTctN2U1Ny00ZjU5LWI0MWQtM2E1YTMzZGZiNjA4In0.eJONnVaSVHypiXKEARSMnSKgr-2mlC2Sr4fEGJitLcJF_at3LeNdTHv0_oHsv6ZZA3zueVGgFlVXMlREgr9LXA"
 }
 ```
+
+## Caveats
+**LDAP STS credentials are not yet supported on MinIO Browser UI, we may add this feature in future releases.**
+
+## Explore Further
+- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
+- [The MinIO documentation website](https://docs.min.io)

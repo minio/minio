@@ -228,7 +228,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 10*time.Second)); err != nil {
+		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 3*time.Second)); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -348,7 +348,7 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	for {
 		err := locker.GetLock(leaderLockTimeout)
 		if err != nil {
-			time.Sleep(leaderTick)
+			time.Sleep(leaderLockTimeoutSleepInterval)
 			continue
 		}
 		break
@@ -482,11 +482,11 @@ func serverMain(ctx *cli.Context) {
 	if globalIsDistErasure && globalEndpoints.FirstLocal() {
 		for {
 			// Additionally in distributed setup, validate the setup and configuration.
-			err := verifyServerSystemConfig(globalEndpoints)
+			err := verifyServerSystemConfig(GlobalContext, globalEndpoints)
 			if err == nil {
 				break
 			}
-			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup")
+			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup, retrying.. after 5 seconds")
 			select {
 			case <-GlobalContext.Done():
 				return
