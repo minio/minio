@@ -166,7 +166,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, true) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	opts := BucketOptions{
@@ -233,7 +233,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -523,7 +523,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	nextMarker := ""
@@ -618,7 +618,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -1599,7 +1599,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
@@ -1696,7 +1696,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
@@ -1787,7 +1787,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
@@ -1939,7 +1939,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	// Check if the user indeed has GetObject access,

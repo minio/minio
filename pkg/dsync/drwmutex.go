@@ -185,6 +185,7 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 
 			g := Granted{index: index}
 			if c == nil {
+				log("lock: nil locker")
 				ch <- g
 				return
 			}
@@ -258,7 +259,10 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 				// timeout happened, maybe one of the nodes is slow, count
 				// number of locks to check whether we have quorum or not
 				if !quorumMet(locks, isReadLock, dquorum, dquorumReads) {
+					log("Quorum not met after timeout")
 					releaseAll(ds, locks, isReadLock, restClnts, lockNames...)
+				} else {
+					log("Quorum met after timeout")
 				}
 			}
 
