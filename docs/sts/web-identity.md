@@ -12,9 +12,10 @@
     - [Errors](#errors)
 - [Sample `POST` Request](#sample-post-request)
 - [Sample Response](#sample-response)
-- [Testing](#testing)
+- [Using WebIdentity API](#using-webidentity-api)
 - [Authorization Flow](#authorization-flow)
-- [MinIO Browser](#minio-browser)
+- [Using MinIO Browser](#using-minio-browser)
+- [Explore Further](#explore-further)
 
 ## Introduction
 
@@ -89,7 +90,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithWebIdentity&DurationSeconds=3600&
 </AssumeRoleWithWebIdentityResponse>
 ```
 
-## Testing
+## Using WebIdentity API
 ```
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio123
@@ -114,7 +115,7 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 2018/12/26 17:49:36 listening on http://localhost:8080/
 ```
 
-Note: For a reasonable test outcome, make sure the assumed user has at least permission/policy to list all buckets. That policy would look like below:
+> NOTE: for a reasonable test outcome, make sure the assumed user has at least permission/policy to list all buckets. That policy would look like below:
 ```
 {
   "version": "2012-10-17",
@@ -140,11 +141,8 @@ Note: For a reasonable test outcome, make sure the assumed user has at least per
 - Once obtained the JWT id_token is further sent to STS endpoint i.e MinIO to retrive temporary credentials.
 - Temporary credentials are displayed on the browser upon successful retrieval.
 
-
-## MinIO Browser
-To support WebIdentity login on MinIO Browser
-
-- Set openid configuration and restart MinIO
+## Using MinIO Browser
+To support WebIdentity login on MinIO Browser, set openid configuration and restart MinIO
 
 ```
 mc admin config set myminio identity_openid config_url="<CONFIG_URL>" client_id="<client_identifier>"
@@ -164,3 +162,7 @@ JWT token returned by the Identity Provider should include a custom claim for th
 - Enter the `Client ID` obtained from Identity Provider and press ENTER, if not you can set a `client_id` on server to avoid this step.
 - The user will be redirected to the Identity Provider login page
 - Upon successful login on Identity Provider page the user will be automatically logged into MinIO Browser
+
+## Explore Further
+- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
+- [The MinIO documentation website](https://docs.min.io)
