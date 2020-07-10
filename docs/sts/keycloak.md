@@ -1,20 +1,42 @@
 # Keycloak Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Keycloak is an open source Identity and Access Management solution aimed at modern applications and services, this document covers configuring Keycloak to be used as an identity provider for MinIO server STS API.
+Keycloak is an open source Identity and Access Management solution aimed at modern applications and services, this document covers configuring Keycloak identity provider support with MinIO.
 
-## 1. Prerequisites
+## Prerequisites
 
-- JAVA 1.8 and above installed
-- Download and start Keycloak server by following the [installation guide](https://www.keycloak.org/docs/latest/getting_started/index.html) (finish upto section 3.4)
+Configure and install keycloak server by following [Keycloak Installation Guide](https://www.keycloak.org/docs/latest/getting_started/index.html) (finish upto section 3.4)
 
-## 2. Configure Keycloak
-- Go to Clients -> Click on account -> Settings -> Enable `Implicit Flow`, then Save.
-- Go to Users -> Click on the user -> Attribute, add a new attribute `Key` is `policy`, `Value` is name of the policy in minio (ex: `readwrite`). Click Add and then Save.
-- Go to Clients -> Click on `account` -> Settings, set `Valid Redirect URIs` to `*`, expand `Advanced Settings` and set `Access Token Lifespan` to `1 Hours`, then Save.
-- Go to Clients -> Client on `account` -> Mappers -> Create, `Name` can be any text, `Mapper Type` is `User Attribute`, `User Attribute` is `policy`, `Token Claim Name` is `policy`, `Claim JSON Type` is `string`, then Save.
-- Open http://localhost:8080/auth/realms/demo/.well-known/openid-configuration and see if it has `authorization_endpoint` and `jwks_uri`
+### Configure Keycloak UI
+- Go to Clients
+  -> Click on account
+  -> Settings
+  -> Enable `Implicit Flow`
+  -> Save
 
-## 3. Configure MinIO
+- Go to Users
+  -> Click on the user
+  -> Attribute, add a new attribute `Key` is `policy`, `Value` is name of the `policy` on MinIO (ex: `readwrite`)
+  -> Add and Save
+
+- Go to Clients
+  -> Click on `account`
+  -> Settings, set `Valid Redirect URIs` to `*`, expand `Advanced Settings` and set `Access Token Lifespan` to `1 Hours`
+  -> Save
+
+- Go to Clients
+  -> Client on `account`
+  -> Mappers
+  -> Create
+    - `Name` with any text
+    - `Mapper Type` is `User Attribute`
+    - `User Attribute` is `policy`
+    - `Token Claim Name` is `policy`
+    - `Claim JSON Type` is `string`
+  -> Save
+
+- Open http://localhost:8080/auth/realms/demo/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
+
+### Configure MinIO
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
@@ -37,7 +59,7 @@ scopes        (csv)       Comma separated list of OpenID scopes for server, defa
 comment       (sentence)  optionally add a comment to this setting
 ```
 
-and for ENV based options
+and ENV based options
 ```
 mc admin config set myminio/ identity_openid --env
 
@@ -57,14 +79,14 @@ Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
 ```
 ~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" client_id="account"
 ```
-> Note: You can configure the `scopes` parameter to restrict the OpenID scopes requested by minio to the IdP, for example, `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak
+> NOTE: You can configure the `scopes` parameter to restrict the OpenID scopes requested by minio to the IdP, for example, `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak
 
 Once successfully set restart the MinIO instance.
 ```
 mc admin service restart myminio
 ```
 
-## 4. Using WebIdentiy API
+### Using WebIdentiy API
 Client ID can be found by clicking any of the clients listed [here](http://localhost:8080/auth/admin/master/console/#/realms/demo/clients). If you have followed the above steps docs, the default Client ID will be `account`.
 
 ```
@@ -88,16 +110,17 @@ This will open the login page of keycloak, upon successful login, STS credential
 }
 ```
 
-> Note: You can use the `-cscopes` parameter to restrict the requested scopes, for example to `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak.
+> NOTE: You can use the `-cscopes` parameter to restrict the requested scopes, for example to `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak.
 
 These credentials can now be used to perform MinIO API operations.
 
-## 5. Using MinIO Browser
+### Using MinIO Browser
 
-- Open MinIO url on the browser, for example `http://localhost:9000`
+- Open MinIO URL on the browser, lets say http://localhost:9000
 - Click on `Log in with OpenID`
-- Provide `Client ID` and press ENTER
-- Now the user will be redirected to the Keycloak login page, upon successful login the user will be redirected to MinIO page and logged in automatically
+- Provide `Client ID` and press ENTER, if `client_id` is already configured for MinIO this page will automatically redirect to Keycloak user login page.
+- User will be redirected to the Keycloak user login page, upon successful login the user will be redirected to MinIO page and logged in automatically,
+  the user should see now the buckets and objects they have access to.
 
 ## Explore Further
 
