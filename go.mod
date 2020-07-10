@@ -43,7 +43,6 @@ require (
 	github.com/klauspost/reedsolomon v1.9.9
 	github.com/lib/pq v1.7.0
 	github.com/mattn/go-colorable v0.1.4
-	github.com/mattn/go-ieproxy v0.0.1
 	github.com/mattn/go-isatty v0.0.8
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0

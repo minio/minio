@@ -39,7 +39,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mattn/go-ieproxy"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
@@ -454,7 +453,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
-		Proxy:                 ieproxy.GetProxyFunc(),
+		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
 		MaxIdleConns:          16,
