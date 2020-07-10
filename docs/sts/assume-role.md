@@ -12,8 +12,10 @@
     - [Errors](#errors)
 - [Sample `POST` Request](#sample-post-request)
 - [Sample Response](#sample-response)
-- [Testing](#testing)
+- [Using AssumeRole API](#using-assumerole-api)
+- [Explore Further](#explore-further)
 
+<!-- markdown-toc end -->
 
 ## Introduction
 
@@ -87,7 +89,7 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 </AssumeRoleResponse>
 ```
 
-## Testing
+## Using AssumeRole API
 ```
 $ export MINIO_ACCESS_KEY=minio
 $ export MINIO_SECRET_KEY=minio123
@@ -122,3 +124,7 @@ $ aws --profile foobar --endpoint-url http://localhost:9000 sts assume-role --po
     }
 }
 ```
+
+## Explore Further
+- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
+- [The MinIO documentation website](https://docs.min.io)
