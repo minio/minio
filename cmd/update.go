@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/inconshreveable/go-update"
-	"github.com/mattn/go-ieproxy"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/env"
@@ -409,7 +408,7 @@ const updateTimeout = 10 * time.Second
 
 func getUpdateTransport(timeout time.Duration) http.RoundTripper {
 	var updateTransport http.RoundTripper = &http.Transport{
-		Proxy:                 ieproxy.GetProxyFunc(),
+		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(timeout),
 		IdleConnTimeout:       timeout,
 		TLSHandshakeTimeout:   timeout,
