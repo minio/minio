@@ -377,6 +377,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	// Before proceeding validate if bucket exists.
+	_, err := objectAPI.GetBucketInfo(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	deleteObjectsFn := objectAPI.DeleteObjects
 	if api.CacheAPI() != nil {
 		deleteObjectsFn = api.CacheAPI().DeleteObjects
