@@ -31,7 +31,7 @@ require (
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/handlers v1.4.2
-	github.com/gorilla/mux v1.7.4
+	github.com/gorilla/mux v1.7.5-0.20200711200521-98cb6bf42e08
 	github.com/gorilla/rpc v1.2.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
@@ -43,7 +43,7 @@ require (
 	github.com/klauspost/reedsolomon v1.9.9
 	github.com/lib/pq v1.7.0
 	github.com/mattn/go-colorable v0.1.4
-	github.com/mattn/go-ieproxy v0.0.1
+	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.8
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
