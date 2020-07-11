@@ -1419,23 +1419,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Fetching the Storage information, ignore any errors.
 	storageInfo, _ := objectAPI.StorageInfo(ctx, false)
 
-	var OnDisks int
-	var OffDisks int
 	var backend interface{}
-
 	if storageInfo.Backend.Type == BackendType(madmin.Erasure) {
-
-		for _, v := range storageInfo.Backend.OnlineDisks {
-			OnDisks += v
-		}
-		for _, v := range storageInfo.Backend.OfflineDisks {
-			OffDisks += v
-		}
-
 		backend = madmin.ErasureBackend{
 			Type:             madmin.ErasureType,
-			OnlineDisks:      OnDisks,
-			OfflineDisks:     OffDisks,
+			OnlineDisks:      storageInfo.Backend.OnlineDisks.Sum(),
+			OfflineDisks:     storageInfo.Backend.OfflineDisks.Sum(),
 			StandardSCData:   storageInfo.Backend.StandardSCData,
 			StandardSCParity: storageInfo.Backend.StandardSCParity,
 			RRSCData:         storageInfo.Backend.RRSCData,
@@ -1456,38 +1445,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)
 
-	for _, sp := range servers {
-		for i, di := range sp.Disks {
-			path := ""
-			if globalIsErasure {
-				path = di.DrivePath
-			}
-			if globalIsDistErasure {
-				path = sp.Endpoint + di.DrivePath
-			}
-			// For distributed
-			for a := range storageInfo.Backend.Sets {
-				for b := range storageInfo.Backend.Sets[a] {
-					ep := storageInfo.Backend.Sets[a][b].Endpoint
-
-					if globalIsDistErasure {
-						if strings.Replace(ep, "http://", "", -1) == path || strings.Replace(ep, "https://", "", -1) == path {
-							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
-							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
-						}
-					}
-					if globalIsErasure {
-						if ep == path {
-							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
-							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
-						}
-					}
-				}
-			}
-
-		}
-	}
-
 	domain := globalDomainNames
 	services := madmin.Services{
 		Vault:         vault,
@@ -1495,6 +1452,21 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Logger:        log,
 		Audit:         audit,
 		Notifications: notifyTarget,
+	}
+
+	// find all disks which belong to each respective endpoints
+	for i := range servers {
+		for _, disk := range storageInfo.Disks {
+			if strings.Contains(disk.Endpoint, servers[i].Endpoint) {
+				servers[i].Disks = append(servers[i].Disks, disk)
+			}
+		}
+	}
+	// add all the disks local to this server.
+	for _, disk := range storageInfo.Disks {
+		if disk.Endpoint == disk.DrivePath {
+			servers[len(servers)-1].Disks = append(servers[len(servers)-1].Disks, disk)
+		}
 	}
 
 	infoMsg := madmin.InfoMessage{

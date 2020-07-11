@@ -134,8 +134,7 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 	info, err := s.storage.DiskInfo()
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		info.Error = err.Error()
 	}
 	defer w.(http.Flusher).Flush()
 	gob.NewEncoder(w).Encode(info)

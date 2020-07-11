@@ -79,17 +79,36 @@ func (er erasureObjects) Shutdown(ctx context.Context) error {
 }
 
 // byDiskTotal is a collection satisfying sort.Interface.
-type byDiskTotal []DiskInfo
+type byDiskTotal []madmin.Disk
 
 func (d byDiskTotal) Len() int      { return len(d) }
 func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
 func (d byDiskTotal) Less(i, j int) bool {
-	return d[i].Total < d[j].Total
+	return d[i].TotalSpace < d[j].TotalSpace
+}
+
+func diskErrToDriveState(err error) (state string) {
+	state = madmin.DriveStateUnknown
+	switch err {
+	case errDiskNotFound:
+		state = madmin.DriveStateOffline
+	case errCorruptedFormat:
+		state = madmin.DriveStateCorrupt
+	case errUnformattedDisk:
+		state = madmin.DriveStateUnformatted
+	case errDiskAccessDenied:
+		state = madmin.DriveStatePermission
+	case errFaultyDisk:
+		state = madmin.DriveStateFaulty
+	case nil:
+		state = madmin.DriveStateOk
+	}
+	return
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []DiskInfo, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
-	disksInfo = make([]DiskInfo, len(disks))
+func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
+	disksInfo = make([]madmin.Disk, len(disks))
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
@@ -107,6 +126,10 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []DiskInfo,
 		index := index
 		g.Go(func() error {
 			if disks[index] == OfflineDisk {
+				disksInfo[index] = madmin.Disk{
+					State:    diskErrToDriveState(errDiskNotFound),
+					Endpoint: endpoints[index],
+				}
 				// Storage disk is empty, perhaps ignored disk or not available.
 				return errDiskNotFound
 			}
@@ -117,10 +140,20 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []DiskInfo,
 					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 					logger.LogIf(ctx, err)
 				}
-				return err
 			}
-			disksInfo[index] = info
-			return nil
+			di := madmin.Disk{
+				Endpoint:   endpoints[index],
+				DrivePath:  info.MountPath,
+				TotalSpace: info.Total,
+				UsedSpace:  info.Used,
+				UUID:       info.ID,
+				State:      diskErrToDriveState(err),
+			}
+			if info.Total > 0 {
+				di.Utilization = float64(info.Used / info.Total * 100)
+			}
+			disksInfo[index] = di
+			return err
 		}, index)
 	}
 
@@ -146,24 +179,8 @@ func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []erro
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
 
-	// Combine all disks to get total usage
-	usedList := make([]uint64, len(disksInfo))
-	totalList := make([]uint64, len(disksInfo))
-	availableList := make([]uint64, len(disksInfo))
-	mountPaths := make([]string, len(disksInfo))
-
-	for i, di := range disksInfo {
-		usedList[i] = di.Used
-		totalList[i] = di.Total
-		availableList[i] = di.Free
-		mountPaths[i] = di.MountPath
-	}
-
 	storageInfo := StorageInfo{
-		Used:       usedList,
-		Total:      totalList,
-		Available:  availableList,
-		MountPaths: mountPaths,
+		Disks: disksInfo,
 	}
 
 	storageInfo.Backend.Type = BackendErasure

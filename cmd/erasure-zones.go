@@ -149,12 +149,10 @@ func (z *erasureZones) getZonesAvailableSpace(ctx context.Context, size int64) z
 
 	for i, zinfo := range storageInfos {
 		var available uint64
-		for _, davailable := range zinfo.Available {
-			available += davailable
-		}
 		var total uint64
-		for _, dtotal := range zinfo.Total {
-			total += dtotal
+		for _, disk := range zinfo.Disks {
+			total += disk.TotalSpace
+			available += disk.TotalSpace - disk.UsedSpace
 		}
 		// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
 		if available < uint64(size) {
@@ -260,13 +258,9 @@ func (z *erasureZones) StorageInfo(ctx context.Context, local bool) (StorageInfo
 	g.Wait()
 
 	for _, lstorageInfo := range storageInfos {
-		storageInfo.Used = append(storageInfo.Used, lstorageInfo.Used...)
-		storageInfo.Total = append(storageInfo.Total, lstorageInfo.Total...)
-		storageInfo.Available = append(storageInfo.Available, lstorageInfo.Available...)
-		storageInfo.MountPaths = append(storageInfo.MountPaths, lstorageInfo.MountPaths...)
+		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
-		storageInfo.Backend.Sets = append(storageInfo.Backend.Sets, lstorageInfo.Backend.Sets...)
 	}
 
 	storageInfo.Backend.Type = storageInfos[0].Backend.Type
