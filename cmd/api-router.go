@@ -301,10 +301,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
 
 	// Supports cors only for S3 handlers
-	apiRouter.Methods(http.MethodOptions).Path(SlashSeparator).HandlerFunc(
-		maxClients(collectAPIStats("cors", httpTraceAll(corsHandlerFunc()))))
-
-	apiRouter.Methods(http.MethodOptions).Path(SlashSeparator + SlashSeparator).HandlerFunc(
+	apiRouter.Methods(http.MethodOptions).HandlerFunc(
 		maxClients(collectAPIStats("cors", httpTraceAll(corsHandlerFunc()))))
 
 	// If none of the routes match add default error handler routes
