@@ -48,6 +48,19 @@ type FilterRule struct {
 	Value string `xml:"Value"`
 }
 
+func (filter FilterRule) isEmpty() bool {
+	return filter.Name == "" && filter.Value == ""
+}
+
+// MarshalXML implements a custom marshaller to support `omitempty` feature.
+func (filter FilterRule) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if filter.isEmpty() {
+		return nil
+	}
+	type filterRuleWrapper FilterRule
+	return e.EncodeElement(filterRuleWrapper(filter), start)
+}
+
 // UnmarshalXML - decodes XML data.
 func (filter *FilterRule) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	// Make subtype to avoid recursive UnmarshalXML().
@@ -102,6 +115,10 @@ func (ruleList *FilterRuleList) UnmarshalXML(d *xml.Decoder, start xml.StartElem
 	return nil
 }
 
+func (ruleList FilterRuleList) isEmpty() bool {
+	return len(ruleList.Rules) == 0
+}
+
 // Pattern - returns pattern using prefix and suffix values.
 func (ruleList FilterRuleList) Pattern() string {
 	var prefix string
@@ -122,6 +139,15 @@ func (ruleList FilterRuleList) Pattern() string {
 // S3Key - represents elements inside <S3Key>...</S3Key>
 type S3Key struct {
 	RuleList FilterRuleList `xml:"S3Key,omitempty" json:"S3Key,omitempty"`
+}
+
+// MarshalXML implements a custom marshaller to support `omitempty` feature.
+func (s3Key S3Key) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if s3Key.RuleList.isEmpty() {
+		return nil
+	}
+	type s3KeyWrapper S3Key
+	return e.EncodeElement(s3KeyWrapper(s3Key), start)
 }
 
 // common - represents common elements inside <QueueConfiguration>, <CloudFunctionConfiguration>

@@ -613,7 +613,7 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 	// As per AWS S3 Spec, ETag for SSE-C encrypted objects need not be MD5Sum of the data.
 	// Since server side copy with same source and dest just replaces the ETag, we save
 	// encrypted content MD5Sum as ETag for both SSE-C and SSE-S3, we standardize the ETag
-	//encryption across SSE-C and SSE-S3, and only return last 32 bytes for SSE-C
+	// encryption across SSE-C and SSE-S3, and only return last 32 bytes for SSE-C
 	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) && !copySource {
 		return objInfo.ETag[len(objInfo.ETag)-32:]
 	}
@@ -777,34 +777,6 @@ func (o *ObjectInfo) EncryptedSize() int64 {
 	return int64(size)
 }
 
-// DecryptCopyObjectInfo tries to decrypt the provided object if it is encrypted.
-// It fails if the object is encrypted and the HTTP headers don't contain
-// SSE-C headers or the object is not encrypted but SSE-C headers are provided. (AWS behavior)
-// DecryptObjectInfo returns 'ErrNone' if the object is not encrypted or the
-// decryption succeeded.
-//
-// DecryptCopyObjectInfo also returns whether the object is encrypted or not.
-func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (errCode APIErrorCode, encrypted bool) {
-	// Directories are never encrypted.
-	if info.IsDir {
-		return ErrNone, false
-	}
-	if errCode, encrypted = ErrNone, crypto.IsEncrypted(info.UserDefined); !encrypted && crypto.SSECopy.IsRequested(headers) {
-		errCode = ErrInvalidEncryptionParameters
-	} else if encrypted {
-		if (!crypto.SSECopy.IsRequested(headers) && crypto.SSEC.IsEncrypted(info.UserDefined)) ||
-			(crypto.SSECopy.IsRequested(headers) && crypto.S3.IsEncrypted(info.UserDefined)) {
-			errCode = ErrSSEEncryptedObject
-			return
-		}
-		var err error
-		if info.Size, err = info.DecryptedSize(); err != nil {
-			errCode = toAPIErrorCode(GlobalContext, err)
-		}
-	}
-	return
-}
-
 // DecryptObjectInfo tries to decrypt the provided object if it is encrypted.
 // It fails if the object is encrypted and the HTTP headers don't contain
 // SSE-C headers or the object is not encrypted but SSE-C headers are provided. (AWS behavior)
@@ -812,32 +784,46 @@ func DecryptCopyObjectInfo(info *ObjectInfo, headers http.Header) (errCode APIEr
 // decryption succeeded.
 //
 // DecryptObjectInfo also returns whether the object is encrypted or not.
-func DecryptObjectInfo(info *ObjectInfo, headers http.Header) (encrypted bool, err error) {
+func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err error) {
 	// Directories are never encrypted.
 	if info.IsDir {
 		return false, nil
 	}
-	// disallow X-Amz-Server-Side-Encryption header on HEAD and GET
-	if crypto.S3.IsRequested(headers) {
-		err = errInvalidEncryptionParameters
-		return
+	if r == nil {
+		return false, errInvalidArgument
 	}
-	if err, encrypted = nil, crypto.IsEncrypted(info.UserDefined); !encrypted && crypto.SSEC.IsRequested(headers) {
-		err = errInvalidEncryptionParameters
-	} else if encrypted {
+
+	headers := r.Header
+
+	// disallow X-Amz-Server-Side-Encryption header on HEAD and GET
+	switch r.Method {
+	case http.MethodGet, http.MethodHead:
+		if crypto.S3.IsRequested(headers) {
+			return false, errInvalidEncryptionParameters
+		}
+	}
+
+	encrypted = crypto.IsEncrypted(info.UserDefined)
+	if !encrypted && crypto.SSEC.IsRequested(headers) {
+		return false, errInvalidEncryptionParameters
+	}
+
+	if encrypted {
 		if (crypto.SSEC.IsEncrypted(info.UserDefined) && !crypto.SSEC.IsRequested(headers)) ||
 			(crypto.S3.IsEncrypted(info.UserDefined) && crypto.SSEC.IsRequested(headers)) {
-			err = errEncryptedObject
-			return
+			return encrypted, errEncryptedObject
 		}
-		_, err = info.DecryptedSize()
+
+		if _, err = info.DecryptedSize(); err != nil {
+			return encrypted, err
+		}
 
 		if crypto.IsEncrypted(info.UserDefined) && !crypto.IsMultiPart(info.UserDefined) {
-			info.ETag = getDecryptedETag(headers, *info, false)
+			info.ETag = getDecryptedETag(headers, *info, headers.Get(crypto.SSECopyAlgorithm) != "")
 		}
-
 	}
-	return
+
+	return encrypted, nil
 }
 
 // The customer key in the header is used by the gateway for encryption in the case of

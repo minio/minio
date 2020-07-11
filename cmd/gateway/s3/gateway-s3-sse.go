@@ -330,7 +330,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return fn(pr, h, o.CheckCopyPrecondFn, pipeCloser)
+	return fn(pr, h, o.CheckPrecondFn, pipeCloser)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo

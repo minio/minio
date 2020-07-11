@@ -940,7 +940,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
 	}
 	src := l.client.Bucket(srcBucket).Object(srcObject)
