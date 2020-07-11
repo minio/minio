@@ -1232,7 +1232,12 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 	dstFilePath := pathJoin(filePath, xlStorageFormatFile)
 
 	// Renaming xl.json to xl.meta should be fully synced to disk.
-	defer globalSync()
+	defer func() {
+		if err == nil {
+			// Sync to disk only upon success.
+			globalSync()
+		}
+	}()
 
 	if err = os.Rename(srcFilePath, dstFilePath); err != nil {
 		switch {
@@ -2111,7 +2116,7 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 			return osErrToFileErr(err)
 		}
 
-		// Sync all the directory operations.
+		// Sync all the previous directory operations.
 		globalSync()
 
 		for _, entry := range entries {
