@@ -57,7 +57,7 @@ func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ..
 }
 
 // Walk - implements common gateway level Walker, to walk on all objects recursively at a prefix
-func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	walk := func(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
 		var marker string
 
@@ -85,7 +85,7 @@ func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results
 		return nil
 	}
 
-	if err := l.ObjectLayer.Walk(ctx, bucket, prefix, results); err != nil {
+	if err := l.ObjectLayer.Walk(ctx, bucket, prefix, results, opts); err != nil {
 		if _, ok := err.(NotImplemented); ok {
 			return walk(ctx, bucket, prefix, results)
 		}

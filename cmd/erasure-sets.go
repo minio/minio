@@ -855,8 +855,72 @@ func (f *FileInfoCh) Push(fi FileInfo) {
 	f.Valid = true
 }
 
-// Calculate least entry across multiple FileInfo channels,
-// returns the least common entry and the total number of times
+// Calculate lexically least entry across multiple FileInfo channels,
+// returns the lexically common entry and the total number of times
+// we found this entry. Additionally also returns a boolean
+// to indicate if the caller needs to call this function
+// again to list the next entry. It is callers responsibility
+// if the caller wishes to list N entries to call lexicallySortedEntry
+// N times until this boolean is 'false'.
+func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
+	for i := range entryChs {
+		entries[i], entriesValid[i] = entryChs[i].Pop()
+	}
+
+	var isTruncated = false
+	for _, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+		isTruncated = true
+		break
+	}
+
+	var lentry FileInfo
+	var found bool
+	for i, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+		if !found {
+			lentry = entries[i]
+			found = true
+			continue
+		}
+		if entries[i].Name < lentry.Name {
+			lentry = entries[i]
+		}
+	}
+
+	// We haven't been able to find any lexically least entry,
+	// this would mean that we don't have valid entry.
+	if !found {
+		return lentry, 0, isTruncated
+	}
+
+	lexicallySortedEntryCount := 0
+	for i, valid := range entriesValid {
+		if !valid {
+			continue
+		}
+
+		// Entries are duplicated across disks,
+		// we should simply skip such entries.
+		if lentry.Name == entries[i].Name && lentry.ModTime.Equal(entries[i].ModTime) {
+			lexicallySortedEntryCount++
+			continue
+		}
+
+		// Push all entries which are lexically higher
+		// and will be returned later in Pop()
+		entryChs[i].Push(entries[i])
+	}
+
+	return lentry, lexicallySortedEntryCount, isTruncated
+}
+
+// Calculate lexically least entry across multiple FileInfo channels,
+// returns the lexically common entry and the total number of times
 // we found this entry. Additionally also returns a boolean
 // to indicate if the caller needs to call this function
 // again to list the next entry. It is callers responsibility
@@ -892,7 +956,7 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 		}
 	}
 
-	// We haven't been able to find any least entry,
+	// We haven't been able to find any lexically least entry,
 	// this would mean that we don't have valid entry.
 	if !found {
 		return lentry, 0, isTruncated
@@ -1508,32 +1572,58 @@ func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error)
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (s *erasureSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (s *erasureSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", s); err != nil {
 		// Upon error close the channel.
 		close(results)
 		return err
 	}
 
-	entryChs := s.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done())
+	if opts.WalkVersions {
+		entryChs := s.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done())
+
+		entriesValid := make([]bool, len(entryChs))
+		entries := make([]FileInfoVersions, len(entryChs))
+
+		go func() {
+			defer close(results)
+
+			for {
+				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
+				if !ok {
+					return
+				}
+
+				if quorumCount >= s.drivesPerSet/2 {
+					// Read quorum exists proceed
+					for _, version := range entry.Versions {
+						results <- version.ToObjectInfo(bucket, version.Name)
+					}
+				}
+				// skip entries which do not have quorum
+			}
+		}()
+
+		return nil
+	}
+
+	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done())
 
 	entriesValid := make([]bool, len(entryChs))
-	entries := make([]FileInfoVersions, len(entryChs))
+	entries := make([]FileInfo, len(entryChs))
 
 	go func() {
 		defer close(results)
 
 		for {
-			entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
+			entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
 			if !ok {
 				return
 			}
 
 			if quorumCount >= s.drivesPerSet/2 {
 				// Read quorum exists proceed
-				for _, version := range entry.Versions {
-					results <- version.ToObjectInfo(bucket, version.Name)
-				}
+				results <- entry.ToObjectInfo(bucket, entry.Name)
 			}
 			// skip entries which do not have quorum
 		}

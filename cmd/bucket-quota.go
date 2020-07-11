@@ -196,8 +196,10 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) {
 		// Allocate new results channel to receive ObjectInfo.
 		objInfoCh := make(chan ObjectInfo)
 
+		versioned := globalBucketVersioningSys.Enabled(bucket)
+
 		// Walk through all objects
-		if err := objectAPI.Walk(ctx, bucket, "", objInfoCh); err != nil {
+		if err := objectAPI.Walk(ctx, bucket, "", objInfoCh, ObjectOptions{WalkVersions: versioned}); err != nil {
 			logger.LogIf(ctx, err)
 			continue
 		}
@@ -225,8 +227,6 @@ func enforceFIFOQuota(ctx context.Context, objectAPI ObjectLayer) {
 			}
 			scorer.addFileWithObjInfo(obj, 1)
 		}
-
-		versioned := globalBucketVersioningSys.Enabled(bucket)
 
 		var objects []ObjectToDelete
 		numKeys := len(scorer.fileObjInfos())

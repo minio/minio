@@ -38,6 +38,7 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
 	Versioned            bool                    // indicates if the bucket is versioned
+	WalkVersions         bool                    // indicates if the we are interested in walking versions
 	VersionID            string                  // Specifies the versionID which needs to be overwritten or read
 	MTime                time.Time               // Is only set in POST/PUT operations
 	UserDefined          map[string]string       // only set in case of POST/PUT operations
@@ -80,7 +81,7 @@ type ObjectLayer interface {
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (result ListObjectVersionsInfo, err error)
 	// Walk lists all objects including versions, delete markers.
-	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error
+	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error
 
 	// Object operations.
 
