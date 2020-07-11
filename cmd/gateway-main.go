@@ -267,7 +267,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	httpServer := xhttp.NewServer([]string{globalCLIContext.Addr},
-		criticalErrorHandler{router}, getCert)
+		criticalErrorHandler{corsHandler(router)}, getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}

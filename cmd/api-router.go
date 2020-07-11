@@ -291,18 +291,14 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator + SlashSeparator).HandlerFunc(
 		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
 
-	// Supports cors only for S3 handlers
-	apiRouter.Methods(http.MethodOptions).HandlerFunc(
-		maxClients(collectAPIStats("cors", httpTraceAll(corsHandlerFunc()))))
-
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = http.HandlerFunc(collectAPIStats("notfound", httpTraceAll(errorResponseHandler)))
 	apiRouter.MethodNotAllowedHandler = http.HandlerFunc(collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler)))
 
 }
 
-// setCorsHandler handler for CORS (Cross Origin Resource Sharing)
-func corsHandlerFunc() http.HandlerFunc {
+// corsHandler handler for CORS (Cross Origin Resource Sharing)
+func corsHandler(handler http.Handler) http.Handler {
 	commonS3Headers := []string{
 		xhttp.Date,
 		xhttp.ETag,
@@ -318,7 +314,7 @@ func corsHandlerFunc() http.HandlerFunc {
 		"*",
 	}
 
-	c := cors.New(cors.Options{
+	return cors.New(cors.Options{
 		AllowOriginFunc: func(origin string) bool {
 			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
 				if wildcard.MatchSimple(allowedOrigin, origin) {
@@ -339,7 +335,5 @@ func corsHandlerFunc() http.HandlerFunc {
 		AllowedHeaders:   commonS3Headers,
 		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
-	})
-
-	return c.HandlerFunc
+	}).Handler(handler)
 }
