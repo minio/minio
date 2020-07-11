@@ -36,3 +36,131 @@ To permanently delete an object you need to specify the version you want to dele
 - Existing or newer buckets can be created with versioning enabled and eventually can be suspended as well. Existing versions of objects stay as is and can still be accessed using the version ID.
 - All versions, including delete-markers should be deleted before deleting a bucket.
 - **Versioning feature is only available in erasure coded and distributed erasure coded setups**.
+
+## How to configure versioning on a bucket
+Each bucket created has a versioning configuration associated with it. By default bucket is unversioned as shown below
+```
+<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+</VersioningConfiguration>
+```
+
+To enable versioning, you send a request to MinIO with a versioning configuration with Status set to `Enabled`.
+```
+<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Status>Enabled</Status>
+</VersioningConfiguration>
+```
+
+Similarly to suspend versioning set the configuration with Status set to `Suspended`.
+```
+<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Status>Suspended</Status>
+</VersioningConfiguration>
+```
+
+Only users with explicit permissions or the root credential can configure the versioning state of any bucket.
+
+## Examples of enabling bucket versioning using MinIO Java SDK
+
+### EnableVersioning() API
+
+```
+import io.minio.EnableVersioningArgs;
+import io.minio.MinioClient;
+import io.minio.errors.MinioException;
+import java.io.IOException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+
+public class EnableVersioning {
+  /** MinioClient.enableVersioning() example. */
+  public static void main(String[] args)
+      throws IOException, NoSuchAlgorithmException, InvalidKeyException {
+    try {
+      /* play.min.io for test and development. */
+      MinioClient minioClient =
+          MinioClient.builder()
+              .endpoint("https://play.min.io")
+              .credentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG")
+              .build();
+
+      /* Amazon S3: */
+      // MinioClient minioClient =
+      //     MinioClient.builder()
+      //         .endpoint("https://s3.amazonaws.com")
+      //         .credentials("YOUR-ACCESSKEY", "YOUR-SECRETACCESSKEY")
+      //         .build();
+
+      // Enable versioning on 'my-bucketname'.
+      minioClient.enableVersioning(EnableVersioningArgs.builder().bucket("my-bucketname").build());
+
+      System.out.println("Bucket versioning is enabled successfully");
+
+    } catch (MinioException e) {
+      System.out.println("Error occurred: " + e);
+    }
+  }
+}
+```
+
+### isVersioningEnabled() API
+
+```
+public class IsVersioningEnabled {
+  /** MinioClient.isVersioningEnabled() example. */
+  public static void main(String[] args)
+      throws IOException, NoSuchAlgorithmException, InvalidKeyException {
+    try {
+      /* play.min.io for test and development. */
+      MinioClient minioClient =
+          MinioClient.builder()
+              .endpoint("https://play.min.io")
+              .credentials("Q3AM3UQ867SPQQA43P2F", "zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG")
+              .build();
+
+      /* Amazon S3: */
+      // MinioClient minioClient =
+      //     MinioClient.builder()
+      //         .endpoint("https://s3.amazonaws.com")
+      //         .credentials("YOUR-ACCESSKEY", "YOUR-SECRETACCESSKEY")
+      //         .build();
+
+      // Create bucket 'my-bucketname' if it doesn`t exist.
+      if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket("my-bucketname").build())) {
+        minioClient.makeBucket(MakeBucketArgs.builder().bucket("my-bucketname").build());
+        System.out.println("my-bucketname is created successfully");
+      }
+
+      boolean isVersioningEnabled =
+          minioClient.isVersioningEnabled(
+              IsVersioningEnabledArgs.builder().bucket("my-bucketname").build());
+      if (isVersioningEnabled) {
+        System.out.println("Bucket versioning is enabled");
+      } else {
+        System.out.println("Bucket versioning is disabled");
+      }
+      // Enable versioning on 'my-bucketname'.
+      minioClient.enableVersioning(EnableVersioningArgs.builder().bucket("my-bucketname").build());
+      System.out.println("Bucket versioning is enabled successfully");
+
+      isVersioningEnabled =
+          minioClient.isVersioningEnabled(
+              IsVersioningEnabledArgs.builder().bucket("my-bucketname").build());
+      if (isVersioningEnabled) {
+        System.out.println("Bucket versioning is enabled");
+      } else {
+        System.out.println("Bucket versioning is disabled");
+      }
+
+    } catch (MinioException e) {
+      System.out.println("Error occurred: " + e);
+    }
+  }
+}
+```
+
+## Explore Further
+- [Use `minio-java` SDK with MinIO Server](https://docs.minio.io/docs/java-client-quickstart-guide.html)
+- [Object Lock and Immutablity Guide](https://docs.minio.io/docs/minio-bucket-object-lock-guide.html)
+- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
+- [The MinIO documentation website](https://docs.min.io)

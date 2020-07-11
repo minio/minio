@@ -103,7 +103,7 @@ Here `prometheus.yml` is the name of configuration file. You can now see MinIO m
 
 ### 6. Configure Grafana
 
-After Prometheus is configured, you can use Grafana to visualize MinIO metrics. Refer the [document here to setup Grafana with MinIO metrics](./grafana/README.md).
+After Prometheus is configured, you can use Grafana to visualize MinIO metrics. Refer the [document here to setup Grafana with MinIO prometheus metrics](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/grafana/README.md).
 
 ## List of metrics exposed by MinIO
 
