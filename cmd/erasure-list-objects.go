@@ -53,6 +53,6 @@ func (er erasureObjects) HealObjects(ctx context.Context, bucket, prefix string,
 }
 
 // Walk - This is not implemented/needed anymore, look for erasure-zones.Walk()
-func (er erasureObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (er erasureObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, _ ObjectOptions) error {
 	return NotImplemented{}
 }

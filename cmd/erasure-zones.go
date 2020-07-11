@@ -1799,16 +1799,58 @@ func (z *erasureZones) HealBucket(ctx context.Context, bucket string, dryRun, re
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
 		// Upon error close the channel.
 		close(results)
 		return err
 	}
 
-	var zonesEntryChs [][]FileInfoVersionsCh
+	if opts.WalkVersions {
+		var zonesEntryChs [][]FileInfoVersionsCh
+		for _, zone := range z.zones {
+			zonesEntryChs = append(zonesEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
+		}
+
+		var zoneDrivesPerSet []int
+		for _, zone := range z.zones {
+			zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+		}
+
+		var zonesEntriesInfos [][]FileInfoVersions
+		var zonesEntriesValid [][]bool
+		for _, entryChs := range zonesEntryChs {
+			zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+			zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+		}
+
+		go func() {
+			defer close(results)
+
+			for {
+				entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+				if !ok {
+					// We have reached EOF across all entryChs, break the loop.
+					return
+				}
+
+				if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
+					// Read quorum exists proceed
+					for _, version := range entry.Versions {
+						results <- version.ToObjectInfo(bucket, version.Name)
+					}
+				}
+
+				// skip entries which do not have quorum
+			}
+		}()
+
+		return nil
+	}
+
+	var zonesEntryChs [][]FileInfoCh
 	for _, zone := range z.zones {
-		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
+		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
 	}
 
 	var zoneDrivesPerSet []int
@@ -1816,10 +1858,10 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
 	}
 
-	var zonesEntriesInfos [][]FileInfoVersions
+	var zonesEntriesInfos [][]FileInfo
 	var zonesEntriesValid [][]bool
 	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 
@@ -1827,7 +1869,7 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		defer close(results)
 
 		for {
-			entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+			entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 			if !ok {
 				// We have reached EOF across all entryChs, break the loop.
 				return
@@ -1835,11 +1877,8 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 
 			if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
 				// Read quorum exists proceed
-				for _, version := range entry.Versions {
-					results <- version.ToObjectInfo(bucket, version.Name)
-				}
+				results <- entry.ToObjectInfo(bucket, entry.Name)
 			}
-
 			// skip entries which do not have quorum
 		}
 	}()

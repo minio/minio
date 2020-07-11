@@ -186,7 +186,7 @@ func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, c
 }
 
 // Walk - Not implemented stub
-func (a GatewayUnsupported) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (a GatewayUnsupported) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	return NotImplemented{}
 }
 

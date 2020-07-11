@@ -655,8 +655,9 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return nil
 	}
 
-	versioned := globalBucketVersioningSys.Enabled(args.BucketName)
-
+	opts := ObjectOptions{
+		Versioned: globalBucketVersioningSys.Enabled(args.BucketName),
+	}
 	var err error
 next:
 	for _, objectName := range args.Objects {
@@ -690,7 +691,7 @@ next:
 				}
 			}
 
-			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, ObjectOptions{})
+			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, opts)
 			logger.LogIf(ctx, err)
 		}
 
@@ -723,7 +724,7 @@ next:
 		objInfoCh := make(chan ObjectInfo)
 
 		// Walk through all objects
-		if err = objectAPI.Walk(ctx, args.BucketName, objectName, objInfoCh); err != nil {
+		if err = objectAPI.Walk(ctx, args.BucketName, objectName, objInfoCh, ObjectOptions{}); err != nil {
 			break next
 		}
 
@@ -736,7 +737,6 @@ next:
 				}
 				objects = append(objects, ObjectToDelete{
 					ObjectName: obj.Name,
-					VersionID:  obj.VersionID,
 				})
 			}
 
@@ -746,7 +746,7 @@ next:
 			}
 
 			// Deletes a list of objects.
-			_, errs := deleteObjects(ctx, args.BucketName, objects, ObjectOptions{Versioned: versioned})
+			_, errs := deleteObjects(ctx, args.BucketName, objects, opts)
 			for _, err := range errs {
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -1030,6 +1030,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, err)
 		return
 	}
+
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -1052,15 +1053,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	pReader = NewPutObjReader(hashReader, nil, nil)
 	// get gateway encryption options
-	var opts ObjectOptions
-	opts, err = putOpts(ctx, r, bucket, object, metadata)
-
+	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
+
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
@@ -1545,7 +1546,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		objInfoCh := make(chan ObjectInfo)
 
 		// Walk through all objects
-		if err := objectAPI.Walk(ctx, args.BucketName, pathJoin(args.Prefix, object), objInfoCh); err != nil {
+		if err := objectAPI.Walk(ctx, args.BucketName, pathJoin(args.Prefix, object), objInfoCh, ObjectOptions{}); err != nil {
 			logger.LogIf(ctx, err)
 			continue
 		}

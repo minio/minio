@@ -1484,7 +1484,7 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), results, fs.getObjectInfo, fs.getObjectInfo)
 }
 
