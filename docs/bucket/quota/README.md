@@ -1,6 +1,6 @@
 # Bucket Quota Configuration Quickstart Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-![quota](bucketquota.png)
+![quota](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/quota/bucketquota.png)
 
 Buckets can be configured to have one of two types of quota configuration - FIFO and Hard quota.
 
