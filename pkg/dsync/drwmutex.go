@@ -19,12 +19,12 @@ package dsync
 import (
 	"context"
 	"errors"
-	golog "log"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/retry"
 )
 
@@ -37,9 +37,9 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func log(msg ...interface{}) {
+func log(format string, data ...interface{}) {
 	if dsyncLog {
-		golog.Println(msg...)
+		console.Printf(format, data...)
 	}
 }
 
@@ -185,7 +185,7 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 
 			g := Granted{index: index}
 			if c == nil {
-				log("lock: nil locker")
+				log("dsync: nil locker")
 				ch <- g
 				return
 			}
@@ -200,11 +200,11 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 			var err error
 			if isReadLock {
 				if locked, err = c.RLock(args); err != nil {
-					log("Unable to call RLock", err)
+					log("dsync: Unable to call RLock failed with %s for %#v at %s\n", err, args, c)
 				}
 			} else {
 				if locked, err = c.Lock(args); err != nil {
-					log("Unable to call Lock", err)
+					log("dsync: Unable to call Lock failed with %s for %#v at %s\n", err, args, c)
 				}
 			}
 
@@ -259,10 +259,10 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 				// timeout happened, maybe one of the nodes is slow, count
 				// number of locks to check whether we have quorum or not
 				if !quorumMet(locks, isReadLock, dquorum, dquorumReads) {
-					log("Quorum not met after timeout")
+					log("Quorum not met after timeout\n")
 					releaseAll(ds, locks, isReadLock, restClnts, lockNames...)
 				} else {
-					log("Quorum met after timeout")
+					log("Quorum met after timeout\n")
 				}
 			}
 
@@ -402,7 +402,7 @@ func unlock(ds *Dsync, locks []string, isReadLock bool, restClnts []NetLocker, n
 // sendRelease sends a release message to a node that previously granted a lock
 func sendRelease(ds *Dsync, c NetLocker, uid string, isReadLock bool, names ...string) {
 	if c == nil {
-		log("Unable to call RUnlock", errors.New("netLocker is offline"))
+		log("Unable to call RUnlock failed with %s\n", errors.New("netLocker is offline"))
 		return
 	}
 
@@ -412,11 +412,11 @@ func sendRelease(ds *Dsync, c NetLocker, uid string, isReadLock bool, names ...s
 	}
 	if isReadLock {
 		if _, err := c.RUnlock(args); err != nil {
-			log("Unable to call RUnlock", err)
+			log("dsync: Unable to call RUnlock failed with %s for %#v at %s\n", err, args, c)
 		}
 	} else {
 		if _, err := c.Unlock(args); err != nil {
-			log("Unable to call Unlock", err)
+			log("dsync: Unable to call Unlock failed with %s for %#v at %s\n", err, args, c)
 		}
 	}
 }

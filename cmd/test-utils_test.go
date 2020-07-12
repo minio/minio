@@ -66,6 +66,13 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	globalActiveCred = auth.Credentials{
+		AccessKey: auth.DefaultAccessKey,
+		SecretKey: auth.DefaultSecretKey,
+	}
+
+	globalConfigEncrypted = true
+
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
 		crypto.EnvAutoEncryptionLegacy,
@@ -462,13 +469,6 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	if err = newSrvConfig(obj); err != nil {
 		return err
 	}
-
-	globalActiveCred = auth.Credentials{
-		AccessKey: auth.DefaultAccessKey,
-		SecretKey: auth.DefaultSecretKey,
-	}
-
-	globalConfigEncrypted = true
 
 	// Set a default region.
 	config.SetRegion(globalServerConfig, bucketLocation)

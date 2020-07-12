@@ -660,15 +660,13 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	}
 
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		logger.Fatal(err, "Unable to initialize remote REST disks")
-	}
-
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckInterval = 500 * time.Millisecond
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		respBody, err := restClient.CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
