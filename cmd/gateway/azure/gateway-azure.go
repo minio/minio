@@ -462,7 +462,7 @@ func azureToObjectError(err error, params ...string) error {
 
 func azureCodesToObjectError(err error, serviceCode string, statusCode int, bucket string, object string) error {
 	switch serviceCode {
-	case "ContainerNotFound":
+	case "ContainerNotFound", "ContainerBeingDeleted":
 		err = minio.BucketNotFound{Bucket: bucket}
 	case "ContainerAlreadyExists":
 		err = minio.BucketExists{Bucket: bucket}

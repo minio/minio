@@ -158,7 +158,7 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func(aud string) string) (*Client, error) {
+func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func(aud string) string) *Client {
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
 	tr := newCustomTransport()
@@ -172,7 +172,7 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 		MaxErrResponseSize:  4096,
 		HealthCheckInterval: 200 * time.Millisecond,
 		HealthCheckTimeout:  time.Second,
-	}, nil
+	}
 }
 
 // IsOnline returns whether the client is likely to be online.

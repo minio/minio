@@ -205,11 +205,7 @@ func newBootstrapRESTClients(endpointZones EndpointZones) []*bootstrapRESTClient
 
 			// Only proceed for remote endpoints.
 			if !endpoint.IsLocal {
-				clnt, err := newBootstrapRESTClient(endpoint)
-				if err != nil {
-					continue
-				}
-				clnts = append(clnts, clnt)
+				clnts = append(clnts, newBootstrapRESTClient(endpoint))
 			}
 		}
 	}
@@ -217,7 +213,7 @@ func newBootstrapRESTClients(endpointZones EndpointZones) []*bootstrapRESTClient
 }
 
 // Returns a new bootstrap client.
-func newBootstrapRESTClient(endpoint Endpoint) (*bootstrapRESTClient, error) {
+func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -233,19 +229,17 @@ func newBootstrapRESTClient(endpoint Endpoint) (*bootstrapRESTClient, error) {
 	}
 
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		return nil, err
-	}
-
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		respBody, err := restClient.CallWithContext(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError
 		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
 	}
 
-	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}, nil
+	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}
 }
