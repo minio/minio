@@ -84,16 +84,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	apiRouter := router.PathPrefix(SlashSeparator).Subrouter()
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
-		if globalMinioPort == "80" || globalMinioPort == "443" {
-			// For standard ports its possible, incoming requests
-			// might not have a port assigned, in such scenarios use
-			// have wildcard routing.
-			// FIXME: remove this code once https://github.com/gorilla/mux/pull/579
-			// is merged and released upstream, as this entire change can become
-			// a single line.
-			routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
-		}
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName+":{port:.*}").Subrouter())
+		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
@@ -301,10 +292,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
 
 	// Supports cors only for S3 handlers
-	apiRouter.Methods(http.MethodOptions).Path(SlashSeparator).HandlerFunc(
-		maxClients(collectAPIStats("cors", httpTraceAll(corsHandlerFunc()))))
-
-	apiRouter.Methods(http.MethodOptions).Path(SlashSeparator + SlashSeparator).HandlerFunc(
+	apiRouter.Methods(http.MethodOptions).HandlerFunc(
 		maxClients(collectAPIStats("cors", httpTraceAll(corsHandlerFunc()))))
 
 	// If none of the routes match add default error handler routes

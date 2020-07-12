@@ -324,7 +324,7 @@ func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType
 		}
 
 		userName := item.Item
-		if err := iamOS.loadUser(userName, userType, m); err != errNoSuchUser {
+		if err := iamOS.loadUser(userName, userType, m); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}
