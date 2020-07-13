@@ -464,10 +464,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(totalDisks.Sum()),
 	)
 
-	for i := 0; i < len(storageInfo.Total); i++ {
-		mountPath, total, free := storageInfo.MountPaths[i], storageInfo.Total[i],
-			storageInfo.Available[i]
-
+	for _, disk := range storageInfo.Disks {
 		// Total disk usage by the disk
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
@@ -475,8 +472,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total disk storage used on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(total-free),
-			mountPath,
+			float64(disk.UsedSpace),
+			disk.DrivePath,
 		)
 
 		// Total available space in the disk
@@ -486,8 +483,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total available space left on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(free),
-			mountPath,
+			float64(disk.AvailableSpace),
+			disk.DrivePath,
 		)
 
 		// Total storage space of the disk
@@ -497,8 +494,8 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total space on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(total),
-			mountPath,
+			float64(disk.TotalSpace),
+			disk.DrivePath,
 		)
 	}
 }

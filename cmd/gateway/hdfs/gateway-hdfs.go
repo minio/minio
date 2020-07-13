@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 	krb "gopkg.in/jcmturner/gokrb5.v7/client"
 	"gopkg.in/jcmturner/gokrb5.v7/config"
@@ -210,7 +211,9 @@ func (n *hdfsObjects) StorageInfo(ctx context.Context, _ bool) (si minio.Storage
 	if err != nil {
 		return minio.StorageInfo{}, []error{err}
 	}
-	si.Used = []uint64{fsInfo.Used}
+	si.Disks = []madmin.Disk{{
+		UsedSpace: fsInfo.Used,
+	}}
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = true
 	return si, nil

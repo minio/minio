@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -183,7 +182,21 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 
 	httpClient := &http.Client{
-		Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
+		Transport:
+		// For more details about various values used here refer
+		// https://golang.org/pkg/net/http/#Transport documentation
+		&http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           xhttp.NewCustomDialContext(3 * time.Second),
+			ResponseHeaderTimeout: 5 * time.Second,
+			TLSHandshakeTimeout:   5 * time.Second,
+			ExpectContinueTimeout: 5 * time.Second,
+			TLSClientConfig:       tlsConfig,
+			// Go net/http automatically unzip if content-type is
+			// gzip disable this feature, as we are always interested
+			// in raw stream.
+			DisableCompression: true,
+		},
 	}
 	defer httpClient.CloseIdleConnections()
 
