@@ -79,7 +79,7 @@ require (
 	github.com/willf/bitset v1.1.10 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
-	go.etcd.io/etcd/v3 v3.0.0-00010101000000-000000000000
+	go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
 	golang.org/x/sys v0.0.0-20200610111108-226ff32320da
@@ -89,5 +89,3 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.80
 	gopkg.in/yaml.v2 v2.2.8
 )
-
-replace go.etcd.io/etcd/v3 => go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e
