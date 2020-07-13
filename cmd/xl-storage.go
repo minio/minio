@@ -1100,12 +1100,7 @@ func (s *xlStorage) DeleteVersion(volume, path string, fi FileInfo) error {
 	if !isXL2V1Format(buf) {
 		// Delete the meta file, if there are no more versions the
 		// top level parent is automatically removed.
-		filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
-		if err = checkPathLength(filePath); err != nil {
-			return err
-		}
-
-		return deleteFile(volumeDir, filePath, false)
+		return deleteFile(volumeDir, pathJoin(volumeDir, path), true)
 	}
 
 	var xlMeta xlMetaV2
