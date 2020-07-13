@@ -185,13 +185,7 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	var claims jwtgo.MapClaims
 	jwtToken, err := jp.ParseWithClaims(token, &claims, keyFuncCallback)
 	if err != nil {
-		if err = p.PopulatePublicKey(); err != nil {
-			return nil, err
-		}
-		jwtToken, err = jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	if !jwtToken.Valid {
@@ -203,7 +197,6 @@ func (p *JWT) Validate(token, dsecs string) (map[string]interface{}, error) {
 	}
 
 	return claims, nil
-
 }
 
 // ID returns the provider name and authentication type.
