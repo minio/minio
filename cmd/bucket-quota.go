@@ -175,6 +175,21 @@ func enforceFIFOQuotaBucket(ctx context.Context, objectAPI ObjectLayer, bucket s
 		scorer.addFileWithObjInfo(obj, 1)
 	}
 
+	// If we saw less than quota we are good.
+	if scorer.seenBytes <= cfg.Quota {
+		return
+	}
+	// Calculate how much we want to delete now.
+	toFreeNow := scorer.seenBytes - cfg.Quota
+	// We were less over quota than we thought. Adjust so we delete less.
+	// If we are more over, leave it for the next run to pick up.
+	if toFreeNow < toFree {
+		if !scorer.adjustSaveBytes(int64(toFreeNow) - int64(toFree)) {
+			// We got below or at quota.
+			return
+		}
+	}
+
 	var objects []ObjectToDelete
 	numKeys := len(scorer.fileObjInfos())
 	for i, obj := range scorer.fileObjInfos() {
