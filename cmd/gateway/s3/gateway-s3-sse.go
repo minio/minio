@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
 	minio "github.com/minio/minio/cmd"
 
 	"github.com/minio/minio/cmd/logger"
@@ -785,7 +785,7 @@ func (l *s3EncObjects) DeleteBucket(ctx context.Context, bucket string, forceDel
 	for k := range expParts {
 		l.s3Objects.DeleteObject(ctx, bucket, k, minio.ObjectOptions{})
 	}
-	err := l.Client.RemoveBucket(bucket)
+	err := l.Client.RemoveBucket(ctx, bucket)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket)
 	}

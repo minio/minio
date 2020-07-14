@@ -23,8 +23,8 @@ import (
 	"log"
 	"net/url"
 
-	miniogo "github.com/minio/minio-go/v6"
-	cr "github.com/minio/minio-go/v6/pkg/credentials"
+	miniogo "github.com/minio/minio-go/v7"
+	cr "github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 var (
