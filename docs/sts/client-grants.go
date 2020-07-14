@@ -29,8 +29,8 @@ import (
 	"net/url"
 	"strings"
 
-	minio "github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/credentials"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 // JWTToken - parses the output from IDP access token.

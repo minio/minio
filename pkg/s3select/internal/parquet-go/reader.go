@@ -22,7 +22,7 @@ import (
 	"io"
 
 	"git.apache.org/thrift.git/lib/go/thrift"
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/s3select/internal/parquet-go/gen-go/parquet"
 )
 

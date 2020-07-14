@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 )
 
 func TestNewEndpoint(t *testing.T) {
