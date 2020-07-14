@@ -473,7 +473,9 @@ func intCast(v *Value) (int64, error) {
 	case []byte:
 		// Parse as number, truncate floating point if
 		// needed.
-		res, ok := strToInt(string(x))
+		// String might contain trimming spaces, which
+		// needs to be trimmed.
+		res, ok := strToInt(strings.Trim(string(x), " "))
 		if !ok {
 			return 0, errCastFailure("could not parse as int")
 		}
