@@ -8,31 +8,31 @@ Configure and install keycloak server by following [Keycloak Installation Guide]
 
 ### Configure Keycloak UI
 - Go to Clients
-  -> Click on account
-  -> Settings
-  -> Enable `Implicit Flow`
-  -> Save
+  - Click on account
+  - Settings
+  - Enable `Implicit Flow`
+  - Save
 
 - Go to Users
-  -> Click on the user
-  -> Attribute, add a new attribute `Key` is `policy`, `Value` is name of the `policy` on MinIO (ex: `readwrite`)
-  -> Add and Save
+  - Click on the user
+  - Attribute, add a new attribute `Key` is `policy`, `Value` is name of the `policy` on MinIO (ex: `readwrite`)
+  - Add and Save
 
 - Go to Clients
-  -> Click on `account`
-  -> Settings, set `Valid Redirect URIs` to `*`, expand `Advanced Settings` and set `Access Token Lifespan` to `1 Hours`
-  -> Save
+  - Click on `account`
+  - Settings, set `Valid Redirect URIs` to `*`, expand `Advanced Settings` and set `Access Token Lifespan` to `1 Hours`
+  - Save
 
 - Go to Clients
-  -> Client on `account`
-  -> Mappers
-  -> Create
+  - Client on `account`
+  - Mappers
+  - Create
     - `Name` with any text
     - `Mapper Type` is `User Attribute`
     - `User Attribute` is `policy`
     - `Token Claim Name` is `policy`
     - `Claim JSON Type` is `string`
-  -> Save
+  - Save
 
 - Open http://localhost:8080/auth/realms/demo/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
 
