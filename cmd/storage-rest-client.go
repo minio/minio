@@ -190,7 +190,13 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 	}
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
+	if err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.

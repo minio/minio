@@ -35,8 +35,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/klauspost/compress/zip"
-	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v7"
+	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
@@ -252,7 +253,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		if err = core.RemoveBucket(args.BucketName); err != nil {
+		if err = core.RemoveBucket(ctx, args.BucketName); err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
 		return nil
@@ -647,7 +648,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 			}
 		}()
 
-		for resp := range core.RemoveObjects(args.BucketName, objectsCh) {
+		for resp := range core.RemoveObjects(ctx, args.BucketName, objectsCh, minio.RemoveObjectsOptions{}) {
 			if resp.Err != nil {
 				return toJSONError(ctx, resp.Err, args.BucketName, resp.ObjectName)
 			}
@@ -1618,7 +1619,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		if rerr != nil {
 			return toJSONError(ctx, rerr, args.BucketName)
 		}
-		policyStr, err := client.GetBucketPolicy(args.BucketName)
+		policyStr, err := client.GetBucketPolicy(ctx, args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, rerr, args.BucketName)
 		}
@@ -1716,7 +1717,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 			return toJSONError(ctx, rerr, args.BucketName)
 		}
 		var policyStr string
-		policyStr, err = core.Client.GetBucketPolicy(args.BucketName)
+		policyStr, err = core.Client.GetBucketPolicy(ctx, args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -1815,7 +1816,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		var policyStr string
 		// Use the abstracted API instead of core, such that
 		// NoSuchBucketPolicy errors are automatically handled.
-		policyStr, err = core.Client.GetBucketPolicy(args.BucketName)
+		policyStr, err = core.Client.GetBucketPolicy(ctx, args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -1828,7 +1829,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 		policyInfo.Statements = miniogopolicy.SetPolicy(policyInfo.Statements, policyType, args.BucketName, args.Prefix)
 		if len(policyInfo.Statements) == 0 {
-			if err = core.SetBucketPolicy(args.BucketName, ""); err != nil {
+			if err = core.SetBucketPolicy(ctx, args.BucketName, ""); err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
 			return nil
@@ -1845,7 +1846,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		if err = core.SetBucketPolicy(args.BucketName, string(policyData)); err != nil {
+		if err = core.SetBucketPolicy(ctx, args.BucketName, string(policyData)); err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
 

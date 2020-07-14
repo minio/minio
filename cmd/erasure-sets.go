@@ -28,7 +28,7 @@ import (
 
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
@@ -395,10 +395,7 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 		g.Wait()
 
 		for _, lstorageInfo := range storageInfos {
-			storageInfo.Used = append(storageInfo.Used, lstorageInfo.Used...)
-			storageInfo.Total = append(storageInfo.Total, lstorageInfo.Total...)
-			storageInfo.Available = append(storageInfo.Available, lstorageInfo.Available...)
-			storageInfo.MountPaths = append(storageInfo.MountPaths, lstorageInfo.MountPaths...)
+			storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 			storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
 			storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 		}
@@ -438,10 +435,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 	g.Wait()
 
 	for _, lstorageInfo := range storageInfos {
-		storageInfo.Used = append(storageInfo.Used, lstorageInfo.Used...)
-		storageInfo.Total = append(storageInfo.Total, lstorageInfo.Total...)
-		storageInfo.Available = append(storageInfo.Available, lstorageInfo.Available...)
-		storageInfo.MountPaths = append(storageInfo.MountPaths, lstorageInfo.MountPaths...)
+		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
@@ -457,55 +451,10 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 	storageInfo.Backend.RRSCData = s.drivesPerSet - rrSCParity
 	storageInfo.Backend.RRSCParity = rrSCParity
 
-	storageInfo.Backend.Sets = make([][]madmin.DriveInfo, s.setCount)
-	for i := range storageInfo.Backend.Sets {
-		storageInfo.Backend.Sets[i] = make([]madmin.DriveInfo, s.drivesPerSet)
-	}
-
 	if local {
 		// if local is true, we are not interested in the drive UUID info.
 		// this is called primarily by prometheus
 		return storageInfo, nil
-	}
-
-	for i, set := range s.sets {
-		storageDisks := set.getDisks()
-		endpointStrings := set.getEndpoints()
-		for j, storageErr := range storageInfoErrs[i] {
-			if storageDisks[j] == OfflineDisk {
-				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-					State:    madmin.DriveStateOffline,
-					Endpoint: endpointStrings[j],
-				}
-				continue
-			}
-			var diskID string
-			if storageErr == nil {
-				// No errors returned by storage, look for its DiskID()
-				diskID, storageErr = storageDisks[j].GetDiskID()
-			}
-			if storageErr == nil {
-				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-					State:    madmin.DriveStateOk,
-					Endpoint: storageDisks[j].String(),
-					UUID:     diskID,
-				}
-				continue
-			}
-			if storageErr == errUnformattedDisk {
-				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-					State:    madmin.DriveStateUnformatted,
-					Endpoint: storageDisks[j].String(),
-					UUID:     "",
-				}
-			} else {
-				storageInfo.Backend.Sets[i][j] = madmin.DriveInfo{
-					State:    madmin.DriveStateCorrupt,
-					Endpoint: storageDisks[j].String(),
-					UUID:     "",
-				}
-			}
-		}
 	}
 
 	var errs []error
@@ -1195,8 +1144,8 @@ else
 fi
 */
 
-func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs []error) (beforeDrives []madmin.DriveInfo) {
-	beforeDrives = make([]madmin.DriveInfo, len(endpoints))
+func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs []error) (beforeDrives []madmin.HealDriveInfo) {
+	beforeDrives = make([]madmin.HealDriveInfo, len(endpoints))
 	// Existing formats are available (i.e. ok), so save it in
 	// result, also populate disks to be healed.
 	for i, format := range formats {
@@ -1210,7 +1159,7 @@ func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs 
 		case sErrs[i] == errDiskNotFound:
 			state = madmin.DriveStateOffline
 		}
-		beforeDrives[i] = madmin.DriveInfo{
+		beforeDrives[i] = madmin.HealDriveInfo{
 			UUID: func() string {
 				if format != nil {
 					return format.Erasure.This

@@ -22,9 +22,54 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
+
+func TestGetPoliciesFromClaims(t *testing.T) {
+	attributesArray := `{
+  "exp": 1594690452,
+  "iat": 1594689552,
+  "auth_time": 1594689552,
+  "jti": "18ed05c9-2c69-45d5-a33f-8c94aca99ad5",
+  "iss": "http://localhost:8080/auth/realms/minio",
+  "aud": "account",
+  "sub": "7e5e2f30-1c97-4616-8623-2eae14dee9b1",
+  "typ": "ID",
+  "azp": "account",
+  "nonce": "66ZoLzwJbjdkiedI",
+  "session_state": "3df7b526-5310-4038-9f35-50ecd295a31d",
+  "acr": "1",
+  "upn": "harsha",
+  "address": {},
+  "email_verified": false,
+  "groups": [
+    "offline_access"
+  ],
+  "preferred_username": "harsha",
+  "policy": [
+    "readwrite",
+    "readwrite,readonly",
+    "  readonly",
+    ""
+  ]}`
+	var m = make(map[string]interface{})
+	if err := json.Unmarshal([]byte(attributesArray), &m); err != nil {
+		t.Fatal(err)
+	}
+	var expectedSet = set.CreateStringSet("readwrite", "readonly")
+	gotSet, ok := GetPoliciesFromClaims(m, "policy")
+	if !ok {
+		t.Fatal("no policy claim was found")
+	}
+	if gotSet.IsEmpty() {
+		t.Fatal("no policies were found in policy claim")
+	}
+	if !gotSet.Equals(expectedSet) {
+		t.Fatalf("Expected %v got %v", expectedSet, gotSet)
+	}
+}
 
 func TestPolicyIsAllowed(t *testing.T) {
 	case1Policy := Policy{

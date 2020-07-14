@@ -33,8 +33,8 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -52,9 +52,6 @@ var defaultEtag = "00000000000000000000000000000000-1"
 // FSObjects - Implements fs object layer.
 type FSObjects struct {
 	GatewayUnsupported
-
-	// Disk usage metrics
-	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
 	// The count of concurrent calls on FSObjects API
 	activeIOCount int64
@@ -215,15 +212,15 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []er
 		return StorageInfo{}, []error{err}
 	}
 	used := di.Total - di.Free
-	if !fs.diskMount {
-		used = atomic.LoadUint64(&fs.totalUsed)
-	}
-
 	storageInfo := StorageInfo{
-		Used:       []uint64{used},
-		Total:      []uint64{di.Total},
-		Available:  []uint64{di.Free},
-		MountPaths: []string{fs.fsPath},
+		Disks: []madmin.Disk{
+			{
+				TotalSpace:     di.Total,
+				UsedSpace:      used,
+				AvailableSpace: di.Free,
+				DrivePath:      fs.fsPath,
+			},
+		},
 	}
 	storageInfo.Backend.Type = BackendFS
 	return storageInfo, nil

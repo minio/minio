@@ -28,7 +28,7 @@ import (
 
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"

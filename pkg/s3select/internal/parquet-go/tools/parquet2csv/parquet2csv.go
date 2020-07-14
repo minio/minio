@@ -24,7 +24,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	parquet "github.com/minio/minio/pkg/s3select/internal/parquet-go"
 )
 
