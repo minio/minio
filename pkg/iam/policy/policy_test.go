@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
