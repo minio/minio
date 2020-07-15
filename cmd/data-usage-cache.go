@@ -335,6 +335,21 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 	return dst
 }
 
+// bucketUsageInfo returns the buckets usage info.
+// If not found all values returned are zero values.
+func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
+	e := d.find(bucket)
+	if e == nil {
+		return BucketUsageInfo{}
+	}
+	flat := d.flatten(*e)
+	return BucketUsageInfo{
+		Size:                 uint64(flat.Size),
+		ObjectsCount:         uint64(flat.Objects),
+		ObjectSizesHistogram: flat.ObjSizes.toMap(),
+	}
+}
+
 // sizeRecursive returns the path as a flattened entry.
 func (d *dataUsageCache) sizeRecursive(path string) *dataUsageEntry {
 	root := d.find(path)

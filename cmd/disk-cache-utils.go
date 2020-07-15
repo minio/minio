@@ -295,6 +295,7 @@ type fileScorer struct {
 	// The list is kept sorted according to score, highest at top, lowest at bottom.
 	queue       list.List
 	queuedBytes uint64
+	seenBytes   uint64
 }
 
 type queuedFile struct {
@@ -337,6 +338,7 @@ func (f *fileScorer) addFileWithObjInfo(objInfo ObjectInfo, hits int) {
 		versionID: objInfo.VersionID,
 		size:      uint64(objInfo.Size),
 	}
+	f.seenBytes += uint64(objInfo.Size)
 
 	var score float64
 	if objInfo.ModTime.IsZero() {
@@ -369,9 +371,14 @@ func (f *fileScorer) addFileWithObjInfo(objInfo ObjectInfo, hits int) {
 
 // adjustSaveBytes allows to adjust the number of bytes to save.
 // This can be used to adjust the count on the fly.
-// Returns true if there still is a need to delete files (saveBytes >0),
+// Returns true if there still is a need to delete files (n+saveBytes >0),
 // false if no more bytes needs to be saved.
 func (f *fileScorer) adjustSaveBytes(n int64) bool {
+	if int64(f.saveBytes)+n <= 0 {
+		f.saveBytes = 0
+		f.trimQueue()
+		return false
+	}
 	if n < 0 {
 		f.saveBytes -= ^uint64(n - 1)
 	} else {

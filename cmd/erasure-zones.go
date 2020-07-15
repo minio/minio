@@ -337,13 +337,15 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 		updateTicker := time.NewTicker(30 * time.Second)
 		defer updateTicker.Stop()
 		var lastUpdate time.Time
+
+		// We need to merge since we will get the same buckets from each zone.
+		// Therefore to get the exact bucket sizes we must merge before we can convert.
+		allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
+
 		update := func() {
 			mu.Lock()
 			defer mu.Unlock()
 
-			// We need to merge since we will get the same buckets from each zone.
-			// Therefore to get the exact bucket sizes we must merge before we can convert.
-			allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
 			for _, info := range results {
 				if info.Info.LastUpdate.IsZero() {
 					// Not filled yet.
@@ -362,6 +364,10 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 				return
 			case v := <-updateCloser:
 				update()
+				// Enforce quotas when all is done.
+				for _, b := range allBuckets {
+					enforceFIFOQuotaBucket(ctx, z, b.Name, allMerged.bucketUsageInfo(b.Name))
+				}
 				close(v)
 				return
 			case <-updateTicker.C:
