@@ -43,7 +43,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 
 	// Test for lifecycle config with rules containing overlapping prefixes
 	rule1 := Rule{
-		ID: "rule1",
+		ID:         "rule1",
 		Status:     "Enabled",
 		Expiration: Expiration{Days: ExpirationDays(3)},
 		Filter: Filter{
@@ -51,7 +51,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 	}
 	rule2 := Rule{
-		ID: "rule2",
+		ID:         "rule2",
 		Status:     "Enabled",
 		Expiration: Expiration{Days: ExpirationDays(3)},
 		Filter: Filter{
@@ -68,7 +68,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 
 	// Test for lifecycle rules with duplicate IDs
 	rule3 := Rule{
-		ID: "duplicateID",
+		ID:         "duplicateID",
 		Status:     "Enabled",
 		Expiration: Expiration{Days: ExpirationDays(3)},
 		Filter: Filter{
@@ -76,7 +76,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 	}
 	rule4 := Rule{
-		ID: "duplicateID",
+		ID:         "duplicateID",
 		Status:     "Enabled",
 		Expiration: Expiration{Days: ExpirationDays(4)},
 		Filter: Filter{

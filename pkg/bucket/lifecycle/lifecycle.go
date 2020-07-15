@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	errLifecycleTooManyRules      = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
-	errLifecycleNoRule            = Errorf("Lifecycle configuration should have at least one rule")
-	errLifecycleDuplicateID       = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
+	errLifecycleTooManyRules = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
+	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
+	errLifecycleDuplicateID  = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
 )
 
 // Action represents a delete action or other transition
