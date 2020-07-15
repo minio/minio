@@ -34,7 +34,7 @@ Configure and install keycloak server by following [Keycloak Installation Guide]
     - `Claim JSON Type` is `string`
   - Save
 
-- Open http://localhost:8080/auth/realms/demo/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
+- Open http://localhost:8080/auth/realms/minio/.well-known/openid-configuration to verify OpenID discovery document, verify it has `authorization_endpoint` and `jwks_uri`
 
 ### Configure MinIO
 ```
@@ -77,7 +77,7 @@ MINIO_IDENTITY_OPENID_COMMENT       (sentence)  optionally add a comment to this
 
 Set `identity_openid` config with `config_url`, `client_id` and restart MinIO
 ```
-~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" client_id="account"
+~ mc admin config set myminio identity_openid config_url="http://localhost:8080/auth/realms/minio/.well-known/openid-configuration" client_id="account"
 ```
 > NOTE: You can configure the `scopes` parameter to restrict the OpenID scopes requested by minio to the IdP, for example, `"openid,policy_role_attribute"`, being `policy_role_attribute` a client_scope / client_mapper that maps a role attribute called policy to a `policy` claim returned by Keycloak
 
@@ -87,10 +87,10 @@ mc admin service restart myminio
 ```
 
 ### Using WebIdentiy API
-Client ID can be found by clicking any of the clients listed [here](http://localhost:8080/auth/admin/master/console/#/realms/demo/clients). If you have followed the above steps docs, the default Client ID will be `account`.
+Client ID can be found by clicking any of the clients listed [here](http://localhost:8080/auth/admin/master/console/#/realms/minio/clients). If you have followed the above steps docs, the default Client ID will be `account`.
 
 ```
-$ go run docs/sts/web-identity.go -cid account -csec 072e7f00-4289-469c-9ab2-bbe843c7f5a8  -config-ep "http://localhost:8080/auth/realms/demo/.well-known/openid-configuration" -port 8888
+$ go run docs/sts/web-identity.go -cid account -csec 072e7f00-4289-469c-9ab2-bbe843c7f5a8  -config-ep "http://localhost:8080/auth/realms/minio/.well-known/openid-configuration" -port 8888
 2018/12/26 17:49:36 listening on http://localhost:8888/
 ```
 

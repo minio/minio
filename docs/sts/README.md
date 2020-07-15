@@ -14,7 +14,7 @@ Following are advantages for using temporary credentials:
 |AuthN | Description |
 | :---------------------- | ------------------------------------------ |
 | [**Client grants**](https://github.com/minio/minio/blob/master/docs/sts/client-grants.md) | Let applications request `client_grants` using any well-known third party identity provider such as KeyCloak, Okta. This is known as the client grants approach to temporary access. Using this approach helps clients keep MinIO credentials to be secured. MinIO STS supports client grants, tested against identity providers such as KeyCloak, Okta. |
-| [**WebIdentity**](https://github.com/minio/minio/blob/master/docs/sts/web-identity.md) | Let users request temporary credentials using any OpenID(OIDC) compatible web identity providers such as KeyCloak, Facebook, Google etc. |
+| [**WebIdentity**](https://github.com/minio/minio/blob/master/docs/sts/web-identity.md) | Let users request temporary credentials using any OpenID(OIDC) compatible web identity providers such as KeyCloak, Dex, Facebook, Google etc. |
 | [**AssumeRole**](https://github.com/minio/minio/blob/master/docs/sts/assume-role.md) | Let MinIO users request temporary credentials using user access and secret keys. |
 | [**AD/LDAP**](https://github.com/minio/minio/blob/master/docs/sts/ldap.md) | Let AD/LDAP users request temporary credentials using AD/LDAP username and password. |
 
