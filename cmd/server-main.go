@@ -360,7 +360,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	initDataCrawler(ctx, objAPI)
-	initQuotaEnforcement(ctx, objAPI)
 }
 
 // serverMain handler called for 'minio server' command.
