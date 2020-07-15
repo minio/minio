@@ -126,7 +126,7 @@ func TestDefaultExpiryDuration(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			reqURL:    "http://localhost:8443/?DurationSeconds=43201",
+			reqURL:    "http://localhost:8443/?DurationSeconds=604801",
 			expectErr: true,
 		},
 		{
