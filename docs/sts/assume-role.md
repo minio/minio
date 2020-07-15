@@ -24,7 +24,7 @@ Returns a set of temporary security credentials that you can use to access MinIO
 - To be able to reliably use S3 multipart APIs feature of the SDKs without re-inventing the wheel of pre-signing the each URL in multipart API. This is very tedious to implement with all the scenarios of fault tolerance that's already implemented by the client SDK. The general client SDKs don't support multipart with presigned URLs.
 - To be able to easily get the temporary credentials to upload to a prefix. Make it possible for a client to upload a whole folder using the session. The server side applications need not create a presigned URL and serve to the client for each file. Since, the client would have the session it can do it by itself.
 
-The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
+The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations. The policy applied to these temporary credentials is inherited from the MinIO user credentials. By default, the temporary security credentials created by AssumeRole last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration up to 7 days.
 
 ## API Request Parameters
 ### Version
@@ -39,13 +39,13 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 Indicates STS API Authorization information. If you are familiar with AWS Signature V4 Authorization header, this STS API supports signature V4 authorization as mentioned [here](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
 
 ### DurationSeconds
-The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
+The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 7 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
 
-| Params        | Value                                           |
-| :--           | :--                                             |
-| *Type*        | *Integer*                                       |
-| *Valid Range* | *Minimum value of 900. Maximum value of 43200.* |
-| *Required*    | *No*                                            |
+| Params        | Value                                            |
+| :--           | :--                                              |
+| *Type*        | *Integer*                                        |
+| *Valid Range* | *Minimum value of 900. Maximum value of 604800.* |
+| *Required*    | *No*                                             |
 
 ### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
