@@ -142,12 +142,13 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				}
 			}
 			di := madmin.Disk{
-				Endpoint:   endpoints[index],
-				DrivePath:  info.MountPath,
-				TotalSpace: info.Total,
-				UsedSpace:  info.Used,
-				UUID:       info.ID,
-				State:      diskErrToDriveState(err),
+				Endpoint:       endpoints[index],
+				DrivePath:      info.MountPath,
+				TotalSpace:     info.Total,
+				UsedSpace:      info.Used,
+				AvailableSpace: info.Free,
+				UUID:           info.ID,
+				State:          diskErrToDriveState(err),
 			}
 			if info.Total > 0 {
 				di.Utilization = float64(info.Used / info.Total * 100)
