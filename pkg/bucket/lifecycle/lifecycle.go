@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	errLifecycleTooManyRules      = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
-	errLifecycleNoRule            = Errorf("Lifecycle configuration should have at least one rule")
-	errLifecycleOverlappingPrefix = Errorf("Lifecycle configuration has rules with overlapping prefix")
+	errLifecycleTooManyRules = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
+	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
+	errLifecycleDuplicateID  = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
 )
 
 // Action represents a delete action or other transition
@@ -115,17 +115,15 @@ func (lc Lifecycle) Validate() error {
 			return err
 		}
 	}
-	// Compare every rule's prefix with every other rule's prefix
+	// Make sure Rule ID is unique
 	for i := range lc.Rules {
 		if i == len(lc.Rules)-1 {
 			break
 		}
-		// N B Empty prefixes overlap with all prefixes
 		otherRules := lc.Rules[i+1:]
 		for _, otherRule := range otherRules {
-			if strings.HasPrefix(lc.Rules[i].Prefix(), otherRule.Prefix()) ||
-				strings.HasPrefix(otherRule.Prefix(), lc.Rules[i].Prefix()) {
-				return errLifecycleOverlappingPrefix
+			if lc.Rules[i].ID == otherRule.ID {
+				return errLifecycleDuplicateID
 			}
 		}
 	}
