@@ -396,8 +396,7 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 	}
 	// If domain is set then we need to use bucket DNS style.
 	for _, domain := range domains {
-		if strings.Contains(r.Host, domain) {
-			u.Host = bucket + "." + r.Host
+		if strings.HasPrefix(r.Host, bucket+"."+domain) {
 			u.Path = path.Join(SlashSeparator, object)
 			break
 		}
