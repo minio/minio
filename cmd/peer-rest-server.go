@@ -897,8 +897,10 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return false
 		}
-		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
-			return false
+		if ev.S3.Bucket.Name != "" && values.Get(peerRESTListenBucket) != "" {
+			if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
+				return false
+			}
 		}
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})

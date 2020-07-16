@@ -576,8 +576,8 @@ func (s *erasureSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (s *erasureSets) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (s *erasureSets) IsListenSupported() bool {
 	return true
 }
 

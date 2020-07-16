@@ -1537,8 +1537,8 @@ func (fs *FSObjects) IsNotificationSupported() bool {
 	return true
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (fs *FSObjects) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (fs *FSObjects) IsListenSupported() bool {
 	return true
 }
 

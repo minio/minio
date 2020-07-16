@@ -254,8 +254,8 @@ func (er erasureObjects) IsNotificationSupported() bool {
 	return true
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (er erasureObjects) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (er erasureObjects) IsListenSupported() bool {
 	return true
 }
 

@@ -70,6 +70,10 @@ const (
 	// ListBucketMultipartUploadsAction - ListMultipartUploads Rest API action.
 	ListBucketMultipartUploadsAction = "s3:ListBucketMultipartUploads"
 
+	// ListenNotificationAction - ListenNotification Rest API action.
+	// This is MinIO extension.
+	ListenNotificationAction = "s3:ListenNotification"
+
 	// ListenBucketNotificationAction - ListenBucketNotification Rest API action.
 	// This is MinIO extension.
 	ListenBucketNotificationAction = "s3:ListenBucketNotification"
@@ -175,6 +179,7 @@ var supportedActions = map[Action]struct{}{
 	ListAllMyBucketsAction:                 {},
 	ListBucketAction:                       {},
 	ListBucketMultipartUploadsAction:       {},
+	ListenNotificationAction:               {},
 	ListenBucketNotificationAction:         {},
 	ListMultipartUploadPartsAction:         {},
 	PutBucketLifecycleAction:               {},
@@ -282,6 +287,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		}, condition.CommonKeys...)...),
 
 	ListBucketMultipartUploadsAction: condition.NewKeySet(condition.CommonKeys...),
+
+	ListenNotificationAction: condition.NewKeySet(condition.CommonKeys...),
 
 	ListenBucketNotificationAction: condition.NewKeySet(condition.CommonKeys...),
 
