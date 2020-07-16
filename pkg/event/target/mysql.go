@@ -161,9 +161,6 @@ func (m MySQLArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if m.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -184,6 +181,11 @@ type MySQLTarget struct {
 // ID - returns target ID.
 func (target *MySQLTarget) ID() event.TargetID {
 	return target.id
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *MySQLTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 // IsActive - Return true if target is up and active
@@ -362,6 +364,7 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 			Addr:                 args.Host.String() + ":" + args.Port,
 			DBName:               args.Database,
 			AllowNativePasswords: true,
+			CheckConnLiveness:    true,
 		}
 
 		args.DSN = config.FormatDSN()

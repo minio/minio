@@ -33,8 +33,10 @@ import (
 )
 
 const (
-	timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
-	maxObjectList     = 10000                      // Limit number of objects in a listObjectsResponse.
+	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
+	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+	maxObjectList     = 10000                      // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+	maxDeleteList     = 10000                      // Limit number of objects deleted in a delete call.
 	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
 	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
 )
@@ -233,10 +235,23 @@ type Bucket struct {
 
 // ObjectVersion container for object version metadata
 type ObjectVersion struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ Version" json:"-"`
 	Object
-	VersionID string `xml:"VersionId"`
 	IsLatest  bool
+	VersionID string `xml:"VersionId"`
+
+	isDeleteMarker bool
+}
+
+// MarshalXML - marshal ObjectVersion
+func (o ObjectVersion) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if o.isDeleteMarker {
+		start.Name.Local = "DeleteMarker"
+	} else {
+		start.Name.Local = "Version"
+	}
+
+	type objectVersionWrapper ObjectVersion
+	return e.EncodeElement(objectVersionWrapper(o), start)
 }
 
 // StringMap is a map[string]string.
@@ -331,9 +346,10 @@ type CompleteMultipartUploadResponse struct {
 
 // DeleteError structure.
 type DeleteError struct {
-	Code    string
-	Message string
-	Key     string
+	Code      string
+	Message   string
+	Key       string
+	VersionID string `xml:"VersionId"`
 }
 
 // DeleteObjectsResponse container for multiple object deletes.
@@ -341,7 +357,7 @@ type DeleteObjectsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteResult" json:"-"`
 
 	// Collection of all deleted objects
-	DeletedObjects []ObjectIdentifier `xml:"Deleted,omitempty"`
+	DeletedObjects []DeletedObject `xml:"Deleted,omitempty"`
 
 	// Collection of errors deleting certain objects.
 	Errors []DeleteError `xml:"Error,omitempty"`
@@ -380,8 +396,7 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 	}
 	// If domain is set then we need to use bucket DNS style.
 	for _, domain := range domains {
-		if strings.Contains(r.Host, domain) {
-			u.Host = bucket + "." + r.Host
+		if strings.HasPrefix(r.Host, bucket+"."+domain) {
 			u.Path = path.Join(SlashSeparator, object)
 			break
 		}
@@ -400,7 +415,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
-		listbucket.CreationDate = bucket.Created.UTC().Format(timeFormatAMZLong)
+		listbucket.CreationDate = bucket.Created.UTC().Format(iso8601TimeFormat)
 		listbuckets = append(listbuckets, listbucket)
 	}
 
@@ -411,7 +426,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 }
 
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
-func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListVersionsResponse {
+func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	var versions []ObjectVersion
 	var prefixes []CommonPrefix
 	var owner = Owner{}
@@ -424,7 +439,7 @@ func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingTyp
 			continue
 		}
 		content.Key = s3EncodeName(object.Name, encodingType)
-		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
+		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
 		}
@@ -434,15 +449,18 @@ func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingTyp
 		} else {
 			content.StorageClass = globalMinioDefaultStorageClass
 		}
-
 		content.Owner = owner
-		content.VersionID = "null"
-		content.IsLatest = true
+		content.VersionID = object.VersionID
+		if content.VersionID == "" {
+			content.VersionID = nullVersionID
+		}
+		content.IsLatest = object.IsLatest
+		content.isDeleteMarker = object.DeleteMarker
 		versions = append(versions, content)
 	}
+
 	data.Name = bucket
 	data.Versions = versions
-
 	data.EncodingType = encodingType
 	data.Prefix = s3EncodeName(prefix, encodingType)
 	data.KeyMarker = s3EncodeName(marker, encodingType)
@@ -450,6 +468,8 @@ func generateListVersionsResponse(bucket, prefix, marker, delimiter, encodingTyp
 	data.MaxKeys = maxKeys
 
 	data.NextKeyMarker = s3EncodeName(resp.NextMarker, encodingType)
+	data.NextVersionIDMarker = resp.NextVersionIDMarker
+	data.VersionIDMarker = versionIDMarker
 	data.IsTruncated = resp.IsTruncated
 
 	for _, prefix := range resp.Prefixes {
@@ -475,7 +495,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 			continue
 		}
 		content.Key = s3EncodeName(object.Name, encodingType)
-		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
+		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
 		}
@@ -525,7 +545,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 			continue
 		}
 		content.Key = s3EncodeName(object.Name, encodingType)
-		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
+		content.LastModified = object.ModTime.UTC().Format(iso8601TimeFormat)
 		if object.ETag != "" {
 			content.ETag = "\"" + object.ETag + "\""
 		}
@@ -539,7 +559,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		if metadata {
 			content.UserMetadata = make(StringMap)
 			for k, v := range CleanMinioInternalMetadataKeys(object.UserDefined) {
-				if HasPrefix(k, ReservedMetadataPrefix) {
+				if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 					// Do not need to send any internal metadata
 					// values to client.
 					continue
@@ -574,7 +594,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
 	return CopyObjectResponse{
 		ETag:         "\"" + etag + "\"",
-		LastModified: lastModified.UTC().Format(timeFormatAMZLong),
+		LastModified: lastModified.UTC().Format(iso8601TimeFormat),
 	}
 }
 
@@ -582,7 +602,7 @@ func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectR
 func generateCopyObjectPartResponse(etag string, lastModified time.Time) CopyObjectPartResponse {
 	return CopyObjectPartResponse{
 		ETag:         "\"" + etag + "\"",
-		LastModified: lastModified.UTC().Format(timeFormatAMZLong),
+		LastModified: lastModified.UTC().Format(iso8601TimeFormat),
 	}
 }
 
@@ -601,7 +621,8 @@ func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) 
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
-		ETag:     etag,
+		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
+		ETag: "\"" + etag + "\"",
 	}
 }
 
@@ -626,7 +647,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
-		newPart.LastModified = part.LastModified.UTC().Format(timeFormatAMZLong)
+		newPart.LastModified = part.LastModified.UTC().Format(iso8601TimeFormat)
 		listPartsResponse.Parts[index] = newPart
 	}
 	return listPartsResponse
@@ -656,23 +677,30 @@ func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMult
 		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = s3EncodeName(upload.Object, encodingType)
-		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZLong)
+		newUpload.Initiated = upload.Initiated.UTC().Format(iso8601TimeFormat)
 		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}
 	return listMultipartUploadsResponse
 }
 
 // generate multi objects delete response.
-func generateMultiDeleteResponse(quiet bool, deletedObjects []ObjectIdentifier, errs []DeleteError) DeleteObjectsResponse {
+func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, errs []DeleteError) DeleteObjectsResponse {
 	deleteResp := DeleteObjectsResponse{}
 	if !quiet {
 		deleteResp.DeletedObjects = deletedObjects
+	}
+	if len(errs) == len(deletedObjects) {
+		deleteResp.DeletedObjects = nil
 	}
 	deleteResp.Errors = errs
 	return deleteResp
 }
 
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
+	if newObjectLayerFn() == nil {
+		// Server still in safe mode.
+		w.Header().Set(xhttp.MinIOServerStatus, "safemode")
+	}
 	setCommonHeaders(w)
 	if mType != mimeNone {
 		w.Header().Set(xhttp.ContentType, string(mType))
@@ -735,6 +763,10 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
 		if browser && globalBrowserEnabled {
+			if newObjectLayerFn() == nil {
+				// server still in safe mode.
+				w.Header().Set(xhttp.MinIOServerStatus, "safemode")
+			}
 			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return
@@ -764,17 +796,6 @@ func writeErrorResponseJSON(ctx context.Context, w http.ResponseWriter, err APIE
 	errorResponse := getAPIErrorResponse(ctx, err, reqURL.Path, w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
-}
-
-// writeVersionMismatchResponse - writes custom error responses for version mismatches.
-func writeVersionMismatchResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL, isJSON bool) {
-	if isJSON {
-		// Generate error response.
-		errorResponse := getAPIErrorResponse(ctx, err, reqURL.String(), w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
-		writeResponse(w, err.HTTPStatusCode, encodeResponseJSON(errorResponse), mimeJSON)
-	} else {
-		writeResponse(w, err.HTTPStatusCode, []byte(err.Description), mimeNone)
-	}
 }
 
 // writeCustomErrorResponseJSON - similar to writeErrorResponseJSON,

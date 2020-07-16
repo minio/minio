@@ -21,25 +21,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/rs/cors"
 )
 
-// HandlerFunc - useful to chain different middleware http.Handler
-type HandlerFunc func(http.Handler) http.Handler
+// MiddlewareFunc - useful to chain different http.Handler middlewares
+type MiddlewareFunc func(http.Handler) http.Handler
 
-func registerHandlers(h http.Handler, handlerFns ...HandlerFunc) http.Handler {
-	for _, hFn := range handlerFns {
-		h = hFn(h)
+func registerMiddlewares(next http.Handler) http.Handler {
+	for _, handlerFn := range globalHandlers {
+		next = handlerFn(next)
 	}
-	return h
+	return next
 }
 
 // Adds limiting body size middleware
@@ -101,7 +101,7 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 		length := len(key) + len(header.Get(key))
 		size += length
 		for _, prefix := range userMetadataKeyPrefixes {
-			if HasPrefix(key, prefix) {
+			if strings.HasPrefix(strings.ToLower(key), prefix) {
 				usersize += length
 				break
 			}
@@ -115,7 +115,10 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 
 // ReservedMetadataPrefix is the prefix of a metadata key which
 // is reserved and for internal use only.
-const ReservedMetadataPrefix = "X-Minio-Internal-"
+const (
+	ReservedMetadataPrefix      = "X-Minio-Internal-"
+	ReservedMetadataPrefixLower = "x-minio-internal-"
+)
 
 type reservedMetadataHandler struct {
 	http.Handler
@@ -140,7 +143,7 @@ func (h reservedMetadataHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
-		if HasPrefix(key, ReservedMetadataPrefix) {
+		if strings.HasPrefix(strings.ToLower(key), ReservedMetadataPrefixLower) {
 			return true
 		}
 	}
@@ -209,7 +212,8 @@ func guessIsHealthCheckReq(req *http.Request) bool {
 	aType := getRequestAuthType(req)
 	return aType == authTypeAnonymous && (req.Method == http.MethodGet || req.Method == http.MethodHead) &&
 		(req.URL.Path == healthCheckPathPrefix+healthCheckLivenessPath ||
-			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath)
+			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath ||
+			req.URL.Path == healthCheckPathPrefix+healthCheckClusterPath)
 }
 
 // guessIsMetricsReq - returns true if incoming request looks
@@ -388,42 +392,6 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
-// setCorsHandler handler for CORS (Cross Origin Resource Sharing)
-func setCorsHandler(h http.Handler) http.Handler {
-	commonS3Headers := []string{
-		xhttp.Date,
-		xhttp.ETag,
-		xhttp.ServerInfo,
-		xhttp.Connection,
-		xhttp.AcceptRanges,
-		xhttp.ContentRange,
-		xhttp.ContentEncoding,
-		xhttp.ContentLength,
-		xhttp.ContentType,
-		"X-Amz*",
-		"x-amz*",
-		"*",
-	}
-
-	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{
-			http.MethodGet,
-			http.MethodPut,
-			http.MethodHead,
-			http.MethodPost,
-			http.MethodDelete,
-			http.MethodOptions,
-			http.MethodPatch,
-		},
-		AllowedHeaders:   commonS3Headers,
-		ExposedHeaders:   commonS3Headers,
-		AllowCredentials: true,
-	})
-
-	return c.Handler(h)
-}
-
 // setIgnoreResourcesHandler -
 // Ignore resources handler is wrapper handler used for API request resource validation
 // Since we do not support all the S3 queries, it is necessary for us to throw back a
@@ -432,73 +400,73 @@ func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 
+var supportedDummyBucketAPIs = map[string][]string{
+	"acl":            {http.MethodPut, http.MethodGet},
+	"cors":           {http.MethodGet},
+	"website":        {http.MethodGet, http.MethodDelete},
+	"logging":        {http.MethodGet},
+	"accelerate":     {http.MethodGet},
+	"replication":    {http.MethodGet},
+	"requestPayment": {http.MethodGet},
+}
+
+// List of not implemented bucket queries
+var notImplementedBucketResourceNames = map[string]struct{}{
+	"cors":           {},
+	"metrics":        {},
+	"website":        {},
+	"logging":        {},
+	"inventory":      {},
+	"accelerate":     {},
+	"replication":    {},
+	"requestPayment": {},
+}
+
 // Checks requests for not implemented Bucket resources
 func ignoreNotImplementedBucketResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable PutBucketACL, GetBucketACL, GetBucketCors,
-		// GetBucketWebsite, GetBucketAcccelerate,
-		// GetBucketRequestPayment, GetBucketLogging,
-		// GetBucketLifecycle, GetBucketReplication,
-		// GetBucketTagging, GetBucketVersioning,
-		// DeleteBucketTagging, and DeleteBucketWebsite
-		// dummy calls specifically.
-		if name == "acl" && req.Method == http.MethodPut {
-			return false
-		}
-		if ((name == "acl" ||
-			name == "cors" ||
-			name == "website" ||
-			name == "accelerate" ||
-			name == "requestPayment" ||
-			name == "logging" ||
-			name == "lifecycle" ||
-			name == "replication" ||
-			name == "tagging" ||
-			name == "versioning") && req.Method == http.MethodGet) ||
-			((name == "tagging" ||
-				name == "website") && req.Method == http.MethodDelete) {
-			return false
+		methods, ok := supportedDummyBucketAPIs[name]
+		if ok {
+			for _, method := range methods {
+				if method == req.Method {
+					return false
+				}
+			}
 		}
 
-		if notImplementedBucketResourceNames[name] {
+		if _, ok := notImplementedBucketResourceNames[name]; ok {
 			return true
 		}
 	}
 	return false
+}
+
+var supportedDummyObjectAPIs = map[string][]string{
+	"acl": {http.MethodGet, http.MethodPut},
+}
+
+// List of not implemented object APIs
+var notImplementedObjectResourceNames = map[string]struct{}{
+	"restore": {},
+	"torrent": {},
 }
 
 // Checks requests for not implemented Object resources
 func ignoreNotImplementedObjectResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
-		// Enable Get/PutObjectACL dummy call specifically.
-		if name == "acl" && (req.Method == http.MethodGet || req.Method == http.MethodPut) {
-			return false
+		methods, ok := supportedDummyObjectAPIs[name]
+		if ok {
+			for _, method := range methods {
+				if method == req.Method {
+					return false
+				}
+			}
 		}
-		if notImplementedObjectResourceNames[name] {
+		if _, ok := notImplementedObjectResourceNames[name]; ok {
 			return true
 		}
 	}
 	return false
-}
-
-// List of not implemented bucket queries
-var notImplementedBucketResourceNames = map[string]bool{
-	"accelerate":     true,
-	"cors":           true,
-	"inventory":      true,
-	"logging":        true,
-	"metrics":        true,
-	"replication":    true,
-	"requestPayment": true,
-	"tagging":        true,
-	"versioning":     true,
-	"website":        true,
-}
-
-// List of not implemented object queries
-var notImplementedObjectResourceNames = map[string]bool{
-	"restore": true,
-	"torrent": true,
 }
 
 // Resource handler ServeHTTP() wrapper
@@ -535,12 +503,21 @@ func setHTTPStatsHandler(h http.Handler) http.Handler {
 }
 
 func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	isS3Request := !strings.HasPrefix(r.URL.Path, minioReservedBucketPath)
-	// record s3 connection stats.
-	r.Body = &recordTrafficRequest{ReadCloser: r.Body, isS3Request: isS3Request}
-	recordResponse := &recordTrafficResponse{ResponseWriter: w, isS3Request: isS3Request}
+	// Meters s3 connection stats.
+	meteredRequest := &stats.IncomingTrafficMeter{ReadCloser: r.Body}
+	meteredResponse := &stats.OutgoingTrafficMeter{ResponseWriter: w}
+
 	// Execute the request
-	h.handler.ServeHTTP(recordResponse, r)
+	r.Body = meteredRequest
+	h.handler.ServeHTTP(meteredResponse, r)
+
+	if strings.HasPrefix(r.URL.Path, minioReservedBucketPath) {
+		globalConnStats.incInputBytes(meteredRequest.BytesCount())
+		globalConnStats.incOutputBytes(meteredResponse.BytesCount())
+	} else {
+		globalConnStats.incS3InputBytes(meteredRequest.BytesCount())
+		globalConnStats.incS3OutputBytes(meteredResponse.BytesCount())
+	}
 }
 
 // requestValidityHandler validates all the incoming paths for
@@ -670,9 +647,12 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	bucket, object := request2BucketObjectName(r)
 
-	// ListBucket requests should be handled at current endpoint as
-	// all buckets data can be fetched from here.
-	if r.Method == http.MethodGet && bucket == "" && object == "" {
+	// Requests in federated setups for STS type calls which are
+	// performed at '/' resource should be routed by the muxer,
+	// the assumption is simply such that requests without a bucket
+	// in a federated setup cannot be proxied, so serve them at
+	// current server.
+	if bucket == "" {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
@@ -720,7 +700,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 func setBucketForwardingHandler(h http.Handler) http.Handler {
 	fwd := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
-		RoundTripper: NewGatewayHTTPTransport(),
+		RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
 		Logger: func(err error) {
 			logger.LogIf(GlobalContext, err)
 		},
@@ -772,6 +752,7 @@ func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	defer func() {
 		if err := recover(); err == logger.ErrCritical { // handle
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInternalError), r.URL, guessIsBrowserReq(r))
+			return
 		} else if err != nil {
 			panic(err) // forward other panic calls
 		}

@@ -26,14 +26,14 @@ import (
 	"sync"
 	"time"
 
-	etcd "github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	jwtgo "github.com/dgrijalva/jwt-go"
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
+	etcd "go.etcd.io/etcd/v3/clientv3"
+	"go.etcd.io/etcd/v3/mvcc/mvccpb"
 )
 
 var defaultContextTimeout = 30 * time.Second
@@ -197,7 +197,7 @@ func (ies *IAMEtcdStore) migrateUsersConfigToV1(ctx context.Context, isSTS bool)
 		// then the parsed auth.Credentials will have
 		// the zero value for the struct.
 		var zeroCred auth.Credentials
-		if cred == zeroCred {
+		if cred.Equal(zeroCred) {
 			// nothing to do
 			continue
 		}
@@ -449,18 +449,43 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	iamUsersMap := make(map[string]auth.Credentials)
 	iamGroupsMap := make(map[string]GroupInfo)
-	iamPolicyDocsMap := make(map[string]iampolicy.Policy)
 	iamUserPolicyMap := make(map[string]MappedPolicy)
 	iamGroupPolicyMap := make(map[string]MappedPolicy)
 
-	isMinIOUsersSys := false
 	ies.rlock()
-	if sys.usersSysType == MinIOUsersSysType {
-		isMinIOUsersSys = true
-	}
+	isMinIOUsersSys := sys.usersSysType == MinIOUsersSysType
 	ies.runlock()
 
-	if err := ies.loadPolicyDocs(ctx, iamPolicyDocsMap); err != nil {
+	ies.lock()
+	if err := ies.loadPolicyDocs(ctx, sys.iamPolicyDocsMap); err != nil {
+		ies.unlock()
+		return err
+	}
+	// Sets default canned policies, if none are set.
+	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
+
+	ies.unlock()
+
+	if isMinIOUsersSys {
+		if err := ies.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
+			return err
+		}
+		if err := ies.loadGroups(ctx, iamGroupsMap); err != nil {
+			return err
+		}
+	}
+
+	// load polices mapped to users
+	if err := ies.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
+		return err
+	}
+
+	// load policies mapped to groups
+	if err := ies.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
+		return err
+	}
+
+	if err := ies.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
 		return err
 	}
 
@@ -469,43 +494,46 @@ func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 		return err
 	}
 
-	if isMinIOUsersSys {
-		// load long term users
-		if err := ies.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := ies.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := ies.loadGroups(ctx, iamGroupsMap); err != nil {
-			return err
-		}
-		if err := ies.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
-			return err
-		}
-	}
-
-	// load STS policy mappings into the same map
+	// load STS policy mappings
 	if err := ies.loadMappedPolicies(ctx, stsUser, false, iamUserPolicyMap); err != nil {
 		return err
 	}
-	// load policies mapped to groups
-	if err := ies.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
-		return err
-	}
-
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(iamPolicyDocsMap)
 
 	ies.lock()
 	defer ies.Unlock()
 
-	sys.iamUsersMap = iamUsersMap
-	sys.iamGroupsMap = iamGroupsMap
-	sys.iamUserPolicyMap = iamUserPolicyMap
-	sys.iamPolicyDocsMap = iamPolicyDocsMap
-	sys.iamGroupPolicyMap = iamGroupPolicyMap
+	// Merge the new reloaded entries into global map.
+	// See issue https://github.com/minio/minio/issues/9651
+	// where the present list of entries on disk are not yet
+	// latest, there is a small window where this can make
+	// valid users invalid.
+	for k, v := range iamUsersMap {
+		sys.iamUsersMap[k] = v
+	}
+
+	for k, v := range iamUserPolicyMap {
+		sys.iamUserPolicyMap[k] = v
+	}
+
+	// purge any expired entries which became expired now.
+	for k, v := range sys.iamUsersMap {
+		if v.IsExpired() {
+			delete(sys.iamUsersMap, k)
+			delete(sys.iamUserPolicyMap, k)
+			// Deleting on the etcd is taken care of in the next cycle
+		}
+	}
+
+	for k, v := range iamGroupPolicyMap {
+		sys.iamGroupPolicyMap[k] = v
+	}
+
+	for k, v := range iamGroupsMap {
+		sys.iamGroupsMap[k] = v
+	}
+
 	sys.buildUserGroupMemberships()
+	sys.storeFallback = false
 
 	return nil
 }

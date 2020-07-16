@@ -18,7 +18,7 @@
 # handle command line arguments
 if [ $# -ne 2 ]; then
     echo "usage: run.sh <OUTPUT-LOG-FILE> <ERROR-LOG-FILE>"
-    exit -1
+    exit 1
 fi
 
 output_log_file="$1"

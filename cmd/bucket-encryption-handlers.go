@@ -18,13 +18,12 @@ package cmd
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
@@ -46,14 +45,13 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 		return
 	}
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	// PutBucketEncyrption API requires Content-Md5
-	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL, guessIsBrowserReq(r))
+	if !objAPI.IsEncryptionSupported() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
 
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketEncryptionAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
@@ -69,7 +67,12 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	// Parse bucket encryption xml
 	encConfig, err := validateBucketSSEConfig(io.LimitReader(r.Body, maxBucketSSEConfigSize))
 	if err != nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		apiErr := APIError{
+			Code:           "MalformedXML",
+			Description:    fmt.Sprintf("%s (%s)", errorCodes[ErrMalformedXML].Description, err),
+			HTTPStatusCode: errorCodes[ErrMalformedXML].HTTPStatusCode,
+		}
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -79,17 +82,17 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Store the bucket encryption configuration in the object layer
-	if err = objAPI.SetBucketSSEConfig(ctx, bucket, encConfig); err != nil {
+	configData, err := xml.Marshal(encConfig)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	// Update the in-memory bucket encryption cache
-	globalBucketSSEConfigSys.Set(bucket, *encConfig)
-
-	// Update peer MinIO servers of the updated bucket encryption config
-	globalNotificationSys.SetBucketSSEConfig(ctx, bucket, encConfig)
+	// Store the bucket encryption configuration in the object layer
+	if err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -122,21 +125,20 @@ func (api objectAPIHandlers) GetBucketEncryptionHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Fetch bucket encryption configuration from object layer
-	var encConfig *bucketsse.BucketSSEConfig
-	if encConfig, err = objAPI.GetBucketSSEConfig(ctx, bucket); err != nil {
+	config, err := globalBucketMetadataSys.GetSSEConfig(bucket)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	var encConfigData []byte
-	if encConfigData, err = xml.Marshal(encConfig); err != nil {
+	configData, err := xml.Marshal(config)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Write bucket encryption configuration to client
-	writeSuccessResponseXML(w, encConfigData)
+	writeSuccessResponseXML(w, configData)
 }
 
 // DeleteBucketEncryptionHandler - Removes bucket encryption configuration
@@ -167,15 +169,10 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 	}
 
 	// Delete bucket encryption config from object layer
-	if err = objAPI.DeleteBucketSSEConfig(ctx, bucket); err != nil {
+	if err = globalBucketMetadataSys.Update(bucket, bucketSSEConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	// Remove entry from the in-memory bucket encryption cache
-	globalBucketSSEConfigSys.Remove(bucket)
-	// Update peer MinIO servers of the updated bucket encryption config
-	globalNotificationSys.RemoveBucketSSEConfig(ctx, bucket)
 
 	writeSuccessNoContent(w)
 }

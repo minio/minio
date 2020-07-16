@@ -23,7 +23,10 @@ class PreviewObjectModal extends React.Component {
     this.state = {
       url: "",
     }
-    props.getObjectURL(props.object.name, (url) => {
+  }
+
+  componentDidMount() {
+    this.props.getObjectURL(this.props.object.name, (url) => {
       this.setState({
         url: url,
       })
@@ -43,11 +46,11 @@ class PreviewObjectModal extends React.Component {
         <ModalBody>
           <div className="input-group">
             {this.state.url && (
-              <img
-                alt="Image broken"
-                src={this.state.url}
-                style={{ display: "block", width: "100%" }}
-              />
+              <object data={this.state.url} style={{ display: "block", width: "100%" }}>
+                <h3 style={{ textAlign: "center", display: "block", width: "100%" }}>
+                  Do not have read permissions to preview "{this.props.object.name}"
+                </h3>
+              </object>
             )}
           </div>
         </ModalBody>

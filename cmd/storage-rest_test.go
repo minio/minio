@@ -36,16 +36,10 @@ import (
 ///////////////////////////////////////////////////////////////////////////////
 
 func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	testCases := []struct {
 		expectErr bool
 	}{
-		{false},
+		{true},
 	}
 
 	for i, testCase := range testCases {
@@ -55,16 +49,13 @@ func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
 		if expectErr != testCase.expectErr {
 			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
 		}
+		if err != errUnformattedDisk {
+			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, errUnformattedDisk, err)
+		}
 	}
 }
 
 func testStorageAPIMakeVol(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	testCases := []struct {
 		volumeName string
 		expectErr  bool
@@ -85,12 +76,6 @@ func testStorageAPIMakeVol(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIListVols(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	testCases := []struct {
 		volumeNames    []string
 		expectedResult []VolInfo
@@ -124,12 +109,6 @@ func testStorageAPIListVols(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIStatVol(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -161,12 +140,6 @@ func testStorageAPIStatVol(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIDeleteVol(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -191,18 +164,12 @@ func testStorageAPIDeleteVol(t *testing.T, storage StorageAPI) {
 	}
 }
 
-func testStorageAPIStatFile(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
+func testStorageAPICheckFile(t *testing.T, storage StorageAPI) {
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
-	err = storage.AppendFile("foo", "myobject", []byte("foo"))
+	err = storage.AppendFile("foo", pathJoin("myobject", xlStorageFormatFile), []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -218,28 +185,16 @@ func testStorageAPIStatFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.StatFile(testCase.volumeName, testCase.objectName)
+		err := storage.CheckFile(testCase.volumeName, testCase.objectName)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
 			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
 		}
-
-		if !testCase.expectErr {
-			if result.Name != testCase.objectName {
-				t.Fatalf("case %v: result: expected: %+v, got: %+v", i+1, testCase.objectName, result.Name)
-			}
-		}
 	}
 }
 
 func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -261,7 +216,7 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1, "")
+		result, err := storage.ListDir(testCase.volumeName, testCase.prefix, -1)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -277,12 +232,6 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIReadAll(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -320,12 +269,6 @@ func testStorageAPIReadAll(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -367,12 +310,6 @@ func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -401,12 +338,6 @@ func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -440,12 +371,6 @@ func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
-	tmpGlobalServerConfig := globalServerConfig
-	defer func() {
-		globalServerConfig = tmpGlobalServerConfig
-	}()
-	globalServerConfig = newServerConfig()
-
 	err := storage.MakeVol("foo")
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
@@ -524,9 +449,11 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 		Endpoints: Endpoints{endpoint},
 	}})
 
-	restClient := newStorageRESTClient(endpoint)
 	prevGlobalServerConfig := globalServerConfig
 	globalServerConfig = newServerConfig()
+	lookupConfigs(globalServerConfig)
+
+	restClient := newStorageRESTClient(endpoint)
 
 	return httpServer, restClient, prevGlobalServerConfig, endpointPath
 }
@@ -586,7 +513,7 @@ func TestStorageRESTClientDeleteVol(t *testing.T) {
 	testStorageAPIDeleteVol(t, restClient)
 }
 
-func TestStorageRESTClientStatFile(t *testing.T) {
+func TestStorageRESTClientCheckFile(t *testing.T) {
 	httpServer, restClient, prevGlobalServerConfig, endpointPath := newStorageRESTHTTPServerClient(t)
 	defer httpServer.Close()
 	defer func() {
@@ -594,7 +521,7 @@ func TestStorageRESTClientStatFile(t *testing.T) {
 	}()
 	defer os.RemoveAll(endpointPath)
 
-	testStorageAPIStatFile(t, restClient)
+	testStorageAPICheckFile(t, restClient)
 }
 
 func TestStorageRESTClientListDir(t *testing.T) {

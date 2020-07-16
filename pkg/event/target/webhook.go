@@ -19,6 +19,7 @@ package target
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,7 +29,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
+	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -39,12 +42,16 @@ const (
 	WebhookAuthToken  = "auth_token"
 	WebhookQueueDir   = "queue_dir"
 	WebhookQueueLimit = "queue_limit"
+	WebhookClientCert = "client_cert"
+	WebhookClientKey  = "client_key"
 
 	EnvWebhookEnable     = "MINIO_NOTIFY_WEBHOOK_ENABLE"
 	EnvWebhookEndpoint   = "MINIO_NOTIFY_WEBHOOK_ENDPOINT"
 	EnvWebhookAuthToken  = "MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN"
 	EnvWebhookQueueDir   = "MINIO_NOTIFY_WEBHOOK_QUEUE_DIR"
 	EnvWebhookQueueLimit = "MINIO_NOTIFY_WEBHOOK_QUEUE_LIMIT"
+	EnvWebhookClientCert = "MINIO_NOTIFY_WEBHOOK_CLIENT_CERT"
+	EnvWebhookClientKey  = "MINIO_NOTIFY_WEBHOOK_CLIENT_KEY"
 )
 
 // WebhookArgs - Webhook target arguments.
@@ -55,6 +62,8 @@ type WebhookArgs struct {
 	Transport  *http.Transport `json:"-"`
 	QueueDir   string          `json:"queueDir"`
 	QueueLimit uint64          `json:"queueLimit"`
+	ClientCert string          `json:"clientCert"`
+	ClientKey  string          `json:"clientKey"`
 }
 
 // Validate WebhookArgs fields
@@ -70,8 +79,8 @@ func (w WebhookArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if w.QueueLimit > maxLimit {
-		return errors.New("queueLimit should not exceed 10000")
+	if w.ClientCert != "" && w.ClientKey == "" || w.ClientCert == "" && w.ClientKey != "" {
+		return errors.New("cert and key must be specified as a pair")
 	}
 	return nil
 }
@@ -90,18 +99,34 @@ func (target WebhookTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *WebhookTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *WebhookTarget) IsActive() (bool, error) {
-	u, pErr := xnet.ParseHTTPURL(target.args.Endpoint.String())
-	if pErr != nil {
-		return false, pErr
-	}
-	if dErr := u.DialHTTP(nil); dErr != nil {
-		if xnet.IsNetworkOrHostDown(dErr) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequest(http.MethodHead, target.args.Endpoint.String(), nil)
+	if err != nil {
+		if xnet.IsNetworkOrHostDown(err) {
 			return false, errNotConnected
 		}
-		return false, dErr
+		return false, err
 	}
+
+	resp, err := target.httpClient.Do(req.WithContext(ctx))
+	if err != nil {
+		if xnet.IsNetworkOrHostDown(err) || err == context.DeadlineExceeded {
+			return false, errNotConnected
+		}
+		return false, err
+	}
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+	// No network failure i.e response from the target means its up
 	return true, nil
 }
 
@@ -110,11 +135,13 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	_, err := target.IsActive()
+	err := target.send(eventData)
 	if err != nil {
-		return err
+		if xnet.IsNetworkOrHostDown(err) {
+			return errNotConnected
+		}
 	}
-	return target.send(eventData)
+	return err
 }
 
 // send - sends an event to the webhook.
@@ -159,10 +186,6 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to webhook.
 func (target *WebhookTarget) Send(eventKey string) error {
-	_, err := target.IsActive()
-	if err != nil {
-		return err
-	}
 	eventData, eErr := target.store.Get(eventKey)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
@@ -197,13 +220,19 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 	var store Store
 
 	target := &WebhookTarget{
-		id:   event.TargetID{ID: id, Name: "webhook"},
-		args: args,
-		httpClient: &http.Client{
-			Transport: transport,
-		},
+		id:         event.TargetID{ID: id, Name: "webhook"},
+		args:       args,
 		loggerOnce: loggerOnce,
 	}
+
+	if target.args.ClientCert != "" && target.args.ClientKey != "" {
+		c, err := certs.New(target.args.ClientCert, target.args.ClientKey, tls.LoadX509KeyPair)
+		if err != nil {
+			return target, err
+		}
+		transport.TLSClientConfig.GetClientCertificate = c.GetClientCertificate
+	}
+	target.httpClient = &http.Client{Transport: transport}
 
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-webhook-"+id)
@@ -215,7 +244,8 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 		target.store = store
 	}
 
-	if _, err := target.IsActive(); err != nil {
+	_, err := target.IsActive()
+	if err != nil {
 		if target.store == nil || err != errNotConnected {
 			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err

@@ -48,18 +48,29 @@ export class Dropzone extends React.Component {
     const rejectStyle = {
       backgroundColor: "#ffdddd"
     }
+    const getStyle = (isDragActive, isDragAccept, isDragReject) => ({
+      ...style,
+      ...(isDragActive ? activeStyle : {}),
+      ...(isDragReject ? rejectStyle : {})
+    })
 
     // disableClick means that it won't trigger a file upload box when
     // the user clicks on a file.
     return (
       <ReactDropzone
-        style={style}
-        activeStyle={activeStyle}
-        rejectStyle={rejectStyle}
-        disableClick={true}
         onDrop={this.onDrop.bind(this)}
       >
-        {this.props.children}
+        {({getRootProps, getInputProps, isDragActive, isDragAccept, isDragReject}) => (
+          <div
+            {...getRootProps({
+              onClick: event => event.stopPropagation()
+            })}
+            style={getStyle(isDragActive, isDragAccept, isDragReject)}
+          >
+            <input {...getInputProps()} />
+            {this.props.children}
+          </div>
+        )}
       </ReactDropzone>
     )
   }

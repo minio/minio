@@ -20,135 +20,14 @@ import (
 	"reflect"
 	"testing"
 
-	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
-	"github.com/minio/minio-go/v6/pkg/set"
+	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 )
 
-func TestPolicySysSet(t *testing.T) {
-	case1PolicySys := NewPolicySys()
-	case1Policy := policy.Policy{
-		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
-				policy.Allow,
-				policy.NewPrincipal("*"),
-				policy.NewActionSet(policy.PutObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case1Result := NewPolicySys()
-	case1Result.bucketPolicyMap["mybucket"] = case1Policy
-
-	case2PolicySys := NewPolicySys()
-	case2PolicySys.bucketPolicyMap["mybucket"] = case1Policy
-	case2Policy := policy.Policy{
-		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
-				policy.Allow,
-				policy.NewPrincipal("*"),
-				policy.NewActionSet(policy.GetObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case2Result := NewPolicySys()
-	case2Result.bucketPolicyMap["mybucket"] = case2Policy
-
-	case3PolicySys := NewPolicySys()
-	case3PolicySys.bucketPolicyMap["mybucket"] = case2Policy
-	case3Policy := policy.Policy{
-		ID:      "MyPolicyForMyBucket",
-		Version: policy.DefaultVersion,
-	}
-	case3Result := NewPolicySys()
-
-	testCases := []struct {
-		policySys      *PolicySys
-		bucketName     string
-		bucketPolicy   policy.Policy
-		expectedResult *PolicySys
-	}{
-		{case1PolicySys, "mybucket", case1Policy, case1Result},
-		{case2PolicySys, "mybucket", case2Policy, case2Result},
-		{case3PolicySys, "mybucket", case3Policy, case3Result},
-	}
-
-	for i, testCase := range testCases {
-		result := testCase.policySys
-		result.Set(testCase.bucketName, testCase.bucketPolicy)
-
-		if !reflect.DeepEqual(result, testCase.expectedResult) {
-			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
-func TestPolicySysRemove(t *testing.T) {
-	case1Policy := policy.Policy{
-		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
-				policy.Allow,
-				policy.NewPrincipal("*"),
-				policy.NewActionSet(policy.PutObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case1PolicySys := NewPolicySys()
-	case1PolicySys.bucketPolicyMap["mybucket"] = case1Policy
-	case1Result := NewPolicySys()
-
-	case2Policy := policy.Policy{
-		Version: policy.DefaultVersion,
-		Statements: []policy.Statement{
-			policy.NewStatement(
-				policy.Allow,
-				policy.NewPrincipal("*"),
-				policy.NewActionSet(policy.GetObjectAction),
-				policy.NewResourceSet(policy.NewResource("mybucket", "/myobject*")),
-				condition.NewFunctions(),
-			),
-		},
-	}
-	case2PolicySys := NewPolicySys()
-	case2PolicySys.bucketPolicyMap["mybucket"] = case2Policy
-	case2Result := NewPolicySys()
-	case2Result.bucketPolicyMap["mybucket"] = case2Policy
-
-	case3PolicySys := NewPolicySys()
-	case3Result := NewPolicySys()
-
-	testCases := []struct {
-		policySys      *PolicySys
-		bucketName     string
-		expectedResult *PolicySys
-	}{
-		{case1PolicySys, "mybucket", case1Result},
-		{case2PolicySys, "yourbucket", case2Result},
-		{case3PolicySys, "mybucket", case3Result},
-	}
-
-	for i, testCase := range testCases {
-		result := testCase.policySys
-		result.Remove(testCase.bucketName)
-
-		if !reflect.DeepEqual(result, testCase.expectedResult) {
-			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)
-		}
-	}
-}
-
 func TestPolicySysIsAllowed(t *testing.T) {
-	policySys := NewPolicySys()
-	policySys.Set("mybucket", policy.Policy{
+	p := &policy.Policy{
 		Version: policy.DefaultVersion,
 		Statements: []policy.Statement{
 			policy.NewStatement(
@@ -166,7 +45,7 @@ func TestPolicySysIsAllowed(t *testing.T) {
 				condition.NewFunctions(),
 			),
 		},
-	})
+	}
 
 	anonGetBucketLocationArgs := policy.Args{
 		AccountName:     "Q3AM3UQ867SPQQA43P2F",
@@ -241,22 +120,21 @@ func TestPolicySysIsAllowed(t *testing.T) {
 	}
 
 	testCases := []struct {
-		policySys      *PolicySys
 		args           policy.Args
 		expectedResult bool
 	}{
-		{policySys, anonGetBucketLocationArgs, true},
-		{policySys, anonPutObjectActionArgs, true},
-		{policySys, anonGetObjectActionArgs, false},
-		{policySys, getBucketLocationArgs, true},
-		{policySys, putObjectActionArgs, true},
-		{policySys, getObjectActionArgs, true},
-		{policySys, yourbucketAnonGetObjectActionArgs, false},
-		{policySys, yourbucketGetObjectActionArgs, true},
+		{anonGetBucketLocationArgs, true},
+		{anonPutObjectActionArgs, true},
+		{anonGetObjectActionArgs, false},
+		{getBucketLocationArgs, true},
+		{putObjectActionArgs, true},
+		{getObjectActionArgs, true},
+		{yourbucketAnonGetObjectActionArgs, false},
+		{yourbucketGetObjectActionArgs, true},
 	}
 
 	for i, testCase := range testCases {
-		result := testCase.policySys.IsAllowed(testCase.args)
+		result := p.IsAllowed(testCase.args)
 
 		if result != testCase.expectedResult {
 			t.Fatalf("case %v: expected: %v, got: %v\n", i+1, testCase.expectedResult, result)

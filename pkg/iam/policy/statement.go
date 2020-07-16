@@ -17,7 +17,6 @@
 package iampolicy
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -63,11 +62,11 @@ func (statement Statement) IsAllowed(args Args) bool {
 }
 func (statement Statement) isAdmin() bool {
 	for action := range statement.Actions {
-		if !AdminAction(action).IsValid() {
-			return false
+		if AdminAction(action).IsValid() {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // isValid - checks whether statement is valid or not.
@@ -81,6 +80,9 @@ func (statement Statement) isValid() error {
 	}
 
 	if statement.isAdmin() {
+		if err := statement.Actions.ValidateAdmin(); err != nil {
+			return err
+		}
 		for action := range statement.Actions {
 			keys := statement.Conditions.Keys()
 			keyDiff := keys.Difference(adminActionConditionKeyMap[action])
@@ -91,11 +93,19 @@ func (statement Statement) isValid() error {
 		return nil
 	}
 
+	if !statement.SID.IsValid() {
+		return Errorf("invalid SID %v", statement.SID)
+	}
+
 	if len(statement.Resources) == 0 {
 		return Errorf("Resource must not be empty")
 	}
 
 	if err := statement.Resources.Validate(); err != nil {
+		return err
+	}
+
+	if err := statement.Actions.Validate(); err != nil {
 		return err
 	}
 
@@ -110,38 +120,6 @@ func (statement Statement) isValid() error {
 			return Errorf("unsupported condition keys '%v' used for action '%v'", keyDiff, action)
 		}
 	}
-
-	return nil
-}
-
-// MarshalJSON - encodes JSON data to Statement.
-func (statement Statement) MarshalJSON() ([]byte, error) {
-	if err := statement.isValid(); err != nil {
-		return nil, err
-	}
-
-	// subtype to avoid recursive call to MarshalJSON()
-	type subStatement Statement
-	ss := subStatement(statement)
-	return json.Marshal(ss)
-}
-
-// UnmarshalJSON - decodes JSON data to Statement.
-func (statement *Statement) UnmarshalJSON(data []byte) error {
-	// subtype to avoid recursive call to UnmarshalJSON()
-	type subStatement Statement
-	var ss subStatement
-
-	if err := json.Unmarshal(data, &ss); err != nil {
-		return err
-	}
-
-	s := Statement(ss)
-	if err := s.isValid(); err != nil {
-		return err
-	}
-
-	*statement = s
 
 	return nil
 }

@@ -1,81 +1,98 @@
 # Kernel Tuning for MinIO Production Deployment on Linux Servers [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-## Tuning Network Parameters
+Following are the recommended settings, a copy of this [script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh) is available here to be applied on Linux servers.
 
-Following network parameter settings can help ensure optimal MinIO server performance on production workloads.
+> NOTE: Although these settings are generally good on Linux servers, users must be careful on any premature tuning. These tunings are generally considered good to have but not mandatory, these settings do not fix any hardware issues and should not be considered as an alternative to boost performance. Under most circumstances this tuning is to be done after performing baseline performance tests for the hardware with expected results.
 
-- *`tcp_fin_timeout`* : A socket left in memory takes approximately 1.5Kb of memory. It makes sense to close the unused sockets preemptively to ensure no memory leakage. This way, even if a peer doesn't close the socket due to some reason, the system itself closes it after a timeout. `tcp_fin_timeout` variable defines this timeout and tells kernel how long to keep sockets in the state FIN-WAIT-2. We recommend setting it to 30. You can set it as shown below
-
-```sh
-sysctl -w net.ipv4.tcp_fin_timeout=30
 ```
+#!/bin/bash
+cat > sysctl.conf <<EOF
+# maximum number of open files/file descriptors
+fs.file-max = 4194303
 
-- *`tcp_keepalive_probes`* : This variable defines the number of unacknowledged probes to be sent before considering a connection dead. You can set it as shown below
+# use as little swap space as possible
+vm.swappiness = 1
 
-```sh
-sysctl -w net.ipv4.tcp_keepalive_probes=5
-```
+# prioritize application RAM against disk/swap cache
+vm.vfs_cache_pressure = 10
 
-- *`wmem_max`*: This parameter sets the max OS send buffer size for all types of connections.
+# minimum free memory
+vm.min_free_kbytes = 1000000
 
-```sh
-sysctl -w net.core.wmem_max=540000
-```
+# maximum receive socket buffer (bytes)
+net.core.rmem_max = 268435456
 
-- *`rmem_max`*: This parameter sets the max OS receive buffer size for all types of connections.
+# maximum send buffer socket buffer (bytes)
+net.core.wmem_max = 268435456
 
-```sh
-sysctl -w net.core.rmem_max=540000
-```
+# default receive buffer socket size (bytes)
+net.core.rmem_default = 67108864
 
-## Tuning Virtual Memory
+# default send buffer socket size (bytes)
+net.core.wmem_default = 67108864
 
-Recommended virtual memory settings are as follows.
+# maximum number of packets in one poll cycle
+net.core.netdev_budget = 1200
 
-- *`swappiness`* : This parameter controls the relative weight given to swapping out runtime memory, as opposed to dropping pages from the system page cache. It takes values from 0 to 100, both inclusive. We recommend setting it to 10.
+# maximum ancillary buffer size per socket
+net.core.optmem_max = 134217728
 
-```sh
-sysctl -w vm.swappiness=1
-```
+# maximum number of incoming connections
+net.core.somaxconn = 65535
 
-- *`dirty_background_ratio`*: This is the percentage of system memory that can be filled with `dirty` pages, i.e. memory pages that still need to be written to disk. We recommend writing the data to the disk as soon as possible. To do this, set the `dirty_background_ratio` to 1.
+# maximum number of packets queued
+net.core.netdev_max_backlog = 250000
 
-```sh
-sysctl -w vm.dirty_background_ratio=1
-```
+# maximum read buffer space
+net.ipv4.tcp_rmem = 67108864 134217728 268435456
 
-- *`dirty_ratio`*: This defines is the absolute maximum amount of system memory that can be filled with dirty pages before everything must get committed to disk.
+# maximum write buffer space
+net.ipv4.tcp_wmem = 67108864 134217728 268435456
 
-```sh
-sysctl -w vm.dirty_ratio=5
-```
+# enable low latency mode
+net.ipv4.tcp_low_latency = 1
 
-- *`Transparent Hugepage Support`*: This is a Linux kernel feature intended to improve performance by making more efficient use of processor’s memory-mapping hardware. But this may cause [problems](https://blogs.oracle.com/linux/performance-issues-with-transparent-huge-pages-thp) for non-optimized applications. As most Linux distributions set it to `enabled=always` by default, we recommend changing this to `enabled=madvise`. This will allow applications optimized for transparent hugepages to obtain the performance benefits, while preventing the associated problems otherwise.
+# socket buffer portion used for TCP window
+net.ipv4.tcp_adv_win_scale = 1
 
-```sh
+# queue length of completely established sockets waiting for accept
+net.ipv4.tcp_max_syn_backlog = 30000
+
+# maximum number of sockets in TIME_WAIT state
+net.ipv4.tcp_max_tw_buckets = 2000000
+
+# reuse sockets in TIME_WAIT state when safe
+net.ipv4.tcp_tw_reuse = 1
+
+# time to wait (seconds) for FIN packet
+net.ipv4.tcp_fin_timeout = 5
+
+# disable icmp send redirects
+net.ipv4.conf.all.send_redirects = 0
+
+# disable icmp accept redirect
+net.ipv4.conf.all.accept_redirects = 0
+
+# drop packets with LSR or SSR
+net.ipv4.conf.all.accept_source_route = 0
+
+# MTU discovery, only enable when ICMP blackhole detected
+net.ipv4.tcp_mtu_probing = 1
+
+EOF
+
+echo "Enabling system level tuning params"
+sysctl --quiet --load sysctl.conf && rm -f sysctl.conf
+
+# `Transparent Hugepage Support`*: This is a Linux kernel feature intended to improve
+# performance by making more efficient use of processor’s memory-mapping hardware.
+# But this may cause https://blogs.oracle.com/linux/performance-issues-with-transparent-huge-pages-thp
+# for non-optimized applications. As most Linux distributions set it to `enabled=always` by default,
+# we recommend changing this to `enabled=madvise`. This will allow applications optimized
+# for transparent hugepages to obtain the performance benefits, while preventing the
+# associated problems otherwise. Also, set `transparent_hugepage=madvise` on your kernel
+# command line (e.g. in /etc/default/grub) to persistently set this value.
+
+echo "Enabling THP madvise"
 echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 ```
-
-Also, set `transparent_hugepage=madvise` on your kernel command line (e.g. in /etc/default/grub) to persistently set this value.
-
-All these system level tunings are conveniently packaged in [shell script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh). Please review the shell script for our recommendations.
-
-## Tuning Scheduler
-
-Proper scheduler configuration makes sure MinIO process gets adequate CPU time. Here are the recommended scheduler settings
-
-- *`sched_min_granularity_ns`*: This parameter decides the minimum time a task will be be allowed to run on CPU before being pre-empted out. We recommend setting it to 10ms.
-
-```sh
-sysctl -w kernel.sched_min_granularity_ns=10000000
-```
-
-- *`sched_wakeup_granularity_ns`*: Lowering this parameter improves wake-up latency and throughput for latency critical tasks, particularly when a short duty cycle load component must compete with CPU bound components.
-
-```sh
-sysctl -w kernel.sched_wakeup_granularity_ns=15000000
-```
-
-## Tuning Disks
-
-The recommendations for disk tuning are conveniently packaged in a well commented [shell script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/disk-tuning.sh). Please review the shell script for our recommendations.

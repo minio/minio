@@ -18,12 +18,15 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 )
@@ -146,7 +149,7 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 //  If-Unmodified-Since
 //  If-Match
 //  If-None-Match
-func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
+func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
 	// Return false for methods other than GET and HEAD.
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		return false
@@ -170,6 +173,14 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 		}
 	}
+
+	// Check if the part number is correct.
+	if opts.PartNumber > 1 && opts.PartNumber > len(objInfo.Parts) {
+		writeHeaders()
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		return true
+	}
+
 	// If-Modified-Since : Return the object only if it has been modified since the specified time,
 	// otherwise return a 304 (not modified).
 	ifModifiedSinceHeader := r.Header.Get(xhttp.IfModifiedSince)
@@ -244,30 +255,77 @@ func isETagEqual(left, right string) bool {
 	return canonicalizeETag(left) == canonicalizeETag(right)
 }
 
+// setPutObjHeaders sets all the necessary headers returned back
+// upon a success Put/Copy/CompleteMultipart/Delete requests
+// to activate delete only headers set delete as true
+func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
+	// We must not use the http.Header().Set method here because some (broken)
+	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
+	// Therefore, we have to set the ETag directly as map entry.
+	if objInfo.ETag != "" && !delete {
+		w.Header()[xhttp.ETag] = []string{`"` + objInfo.ETag + `"`}
+	}
+
+	// Set the relevant version ID as part of the response header.
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+		// If version is a deleted marker, set this header as well
+		if objInfo.DeleteMarker && delete { // only returned during delete object
+			w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+		}
+	}
+
+	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
+		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
+			Name:         objInfo.Name,
+			UserTags:     objInfo.UserTags,
+			VersionID:    objInfo.VersionID,
+			ModTime:      objInfo.ModTime,
+			IsLatest:     objInfo.IsLatest,
+			DeleteMarker: objInfo.DeleteMarker,
+		})
+		if !expiryTime.IsZero() {
+			w.Header()[xhttp.AmzExpiration] = []string{
+				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
+			}
+		}
+	}
+}
+
 // deleteObject is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request) (err error) {
+func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	deleteObject := obj.DeleteObject
 	if cache != nil {
 		deleteObject = cache.DeleteObject
 	}
 	// Proceed to delete the object.
-	if err = deleteObject(ctx, bucket, object); err != nil {
-		return err
+	if objInfo, err = deleteObject(ctx, bucket, object, opts); err != nil {
+		return objInfo, err
 	}
 
-	// Notify object deleted event.
-	sendEvent(eventArgs{
-		EventName:  event.ObjectRemovedDelete,
-		BucketName: bucket,
-		Object: ObjectInfo{
-			Name: object,
-		},
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      handlers.GetSourceIP(r),
-	})
-
-	return nil
+	// Requesting only a delete marker which was successfully attempted.
+	if objInfo.DeleteMarker {
+		// Notify object deleted marker event.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectRemovedDeleteMarkerCreated,
+			BucketName: bucket,
+			Object:     objInfo,
+			ReqParams:  extractReqParams(r),
+			UserAgent:  r.UserAgent(),
+			Host:       handlers.GetSourceIP(r),
+		})
+	} else {
+		// Notify object deleted event.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectRemovedDelete,
+			BucketName: bucket,
+			Object:     objInfo,
+			ReqParams:  extractReqParams(r),
+			UserAgent:  r.UserAgent(),
+			Host:       handlers.GetSourceIP(r),
+		})
+	}
+	return objInfo, nil
 }

@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	xnet "github.com/minio/minio/pkg/net"
 
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
 )
 
 var (
@@ -54,42 +54,6 @@ var (
 	// IsStringEqual is string equal.
 	IsStringEqual = isStringEqual
 )
-
-// StatInfo -  alias for statInfo
-type StatInfo struct {
-	statInfo
-}
-
-// AnonErrToObjectErr - converts standard http codes into meaningful object layer errors.
-func AnonErrToObjectErr(statusCode int, params ...string) error {
-	bucket := ""
-	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
-		object = params[1]
-	}
-
-	switch statusCode {
-	case http.StatusNotFound:
-		if object != "" {
-			return ObjectNotFound{bucket, object}
-		}
-		return BucketNotFound{Bucket: bucket}
-	case http.StatusBadRequest:
-		if object != "" {
-			return ObjectNameInvalid{bucket, object}
-		}
-		return BucketNameInvalid{Bucket: bucket}
-	case http.StatusForbidden:
-		fallthrough
-	case http.StatusUnauthorized:
-		return AllAccessDisabled{bucket, object}
-	}
-
-	return errUnexpected
-}
 
 // FromMinioClientMetadata converts minio metadata to map[string]string
 func FromMinioClientMetadata(metadata map[string][]string) map[string]string {
@@ -130,7 +94,6 @@ func FromMinioClientListPartsInfo(lopr minio.ListObjectPartsResult) ListPartsInf
 		NextPartNumberMarker: lopr.NextPartNumberMarker,
 		MaxParts:             lopr.MaxParts,
 		IsTruncated:          lopr.IsTruncated,
-		EncodingType:         lopr.EncodingType,
 		Parts:                fromMinioClientObjectParts(lopr.ObjectParts),
 	}
 }

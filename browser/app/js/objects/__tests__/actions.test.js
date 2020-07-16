@@ -34,6 +34,7 @@ jest.mock("../../web", () => ({
     .mockReturnValueOnce(false)
     .mockReturnValueOnce(true)
     .mockReturnValueOnce(true)
+    .mockReturnValueOnce(true)
     .mockReturnValueOnce(false),
   ListObjects: jest.fn(({ bucketName }) => {
     if (bucketName === "test-deny") {
@@ -70,6 +71,16 @@ jest.mock("../../web", () => ({
     .mockImplementationOnce(() => {
       return Promise.resolve({ token: "test" })
     })
+    .mockImplementationOnce(() => {
+      return Promise.resolve({ token: "test" })
+    }),
+  GetBucketPolicy: jest.fn(({ bucketName, prefix }) => {
+    if (!bucketName) {
+      return Promise.reject({ message: "Invalid bucket" })
+    }
+    if (bucketName === 'test-public') return Promise.resolve({ policy: 'readonly' })
+    return Promise.resolve({})
+  })
 }))
 
 const middlewares = [thunk]
@@ -295,7 +306,8 @@ describe("Objects actions", () => {
         type: "objects/SET_SHARE_OBJECT",
         show: true,
         object: "b.txt",
-        url: "test"
+        url: "test",
+        showExpiryDate: true
       }
     ]
     store.dispatch(actionsObjects.showShareObject("b.txt", "test"))
@@ -321,14 +333,16 @@ describe("Objects actions", () => {
   it("creates objects/SET_SHARE_OBJECT when object is shared", () => {
     const store = mockStore({
       buckets: { currentBucket: "bk1" },
-      objects: { currentPrefix: "pre1/" }
+      objects: { currentPrefix: "pre1/" },
+      browser: { serverInfo: {} },
     })
     const expectedActions = [
       {
         type: "objects/SET_SHARE_OBJECT",
         show: true,
         object: "a.txt",
-        url: "https://test.com/bk1/pre1/b.txt"
+        url: "https://test.com/bk1/pre1/b.txt",
+        showExpiryDate: true
       },
       {
         type: "alert/SET",
@@ -347,10 +361,42 @@ describe("Objects actions", () => {
       })
   })
 
+  it("creates objects/SET_SHARE_OBJECT when object is shared with public link", () => {
+    const store = mockStore({
+      buckets: { currentBucket: "test-public" },
+      objects: { currentPrefix: "pre1/" },
+      browser: { serverInfo: { info: { domains: ['public.com'] }} },
+    })
+    const expectedActions = [
+      {
+        type: "objects/SET_SHARE_OBJECT",
+        show: true,
+        object: "a.txt",
+        url: "public.com/test-public/pre1/a.txt",
+        showExpiryDate: false
+      },
+      {
+        type: "alert/SET",
+        alert: {
+          type: "success",
+          message: "Object shared.",
+          id: alertActions.alertId
+        }
+      }
+    ]
+    return store
+      .dispatch(actionsObjects.shareObject("a.txt", 1, 0, 0))
+      .then(() => {
+        const actions = store.getActions()
+        expect(actions).toEqual(expectedActions)
+      })
+  })
+
   it("creates alert/SET when shareObject is failed", () => {
     const store = mockStore({
       buckets: { currentBucket: "" },
-      objects: { currentPrefix: "pre1/" }
+      objects: { currentPrefix: "pre1/" },
+      browser: { serverInfo: {} },
     })
     const expectedActions = [
       {
@@ -439,6 +485,34 @@ describe("Objects actions", () => {
         const actions = store.getActions()
         expect(actions).toEqual(expectedActions)
       })
+    })
+  })
+
+  it("should download prefix", () => {
+    const open = jest.fn()
+    const send = jest.fn()
+    const xhrMockClass = () => ({
+      open: open,
+      send: send
+    })
+    window.XMLHttpRequest = jest.fn().mockImplementation(xhrMockClass)
+
+    const store = mockStore({
+      buckets: { currentBucket: "bk1" },
+      objects: { currentPrefix: "pre1/" }
+    })
+    return store.dispatch(actionsObjects.downloadPrefix("pre2/")).then(() => {
+      const requestUrl = `${
+        location.origin
+      }${minioBrowserPrefix}/zip?token=test`
+      expect(open).toHaveBeenCalledWith("POST", requestUrl, true)
+      expect(send).toHaveBeenCalledWith(
+        JSON.stringify({
+          bucketName: "bk1",
+          prefix: "pre1/",
+          objects: ["pre2/"]
+        })
+      )
     })
   })
 

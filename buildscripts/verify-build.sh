@@ -154,34 +154,6 @@ function run_test_erasure_sets() {
     return "$rv"
 }
 
-function run_test_dist_erasure_sets_ipv6()
-{
-    minio_pids=( $(start_minio_dist_erasure_sets_ipv6) )
-
-    export SERVER_ENDPOINT="[::1]:9000"
-
-    (cd "$WORK_DIR" && "$FUNCTIONAL_TESTS")
-    rv=$?
-
-    for pid in "${minio_pids[@]}"; do
-        kill "$pid"
-    done
-    sleep 3
-
-    if [ "$rv" -ne 0 ]; then
-        for i in $(seq 0 9); do
-            echo "server$i log:"
-            cat "$WORK_DIR/dist-minio-v6-900$i.log"
-        done
-    fi
-
-    for i in $(seq 0 9); do
-        rm -f "$WORK_DIR/dist-minio-v6-900$i.log"
-    done
-
-    return "$rv"
-}
-
 function run_test_zone_erasure_sets()
 {
     minio_pids=( $(start_minio_zone_erasure_sets) )

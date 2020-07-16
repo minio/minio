@@ -114,7 +114,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
 	t.NodeName = r.Host
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		t.NodeName = GetLocalPeer(globalEndpoints)
 	}
 	// strip port from the host address
@@ -123,7 +123,8 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	}
 
 	rw := logger.NewResponseWriter(w)
-	rw.LogBody = logBody
+	rw.LogErrBody = true
+	rw.LogAllBody = logBody
 	f(rw, r)
 
 	rq := trace.RequestInfo{

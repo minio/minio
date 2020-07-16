@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  Mint (C) 2017 Minio, Inc.
+#  Mint (C) 2017-2020 Minio, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -39,4 +39,4 @@ rm -fr "${temp_dir}"
 
 cd "$MINIO_DOTNET_SDK_PATH"
 dotnet restore /p:Configuration=Mint
-dotnet publish --runtime ubuntu.16.04-x64 --output out /p:Configuration=Mint
+dotnet publish --runtime ubuntu.18.04-x64 --output out /p:Configuration=Mint

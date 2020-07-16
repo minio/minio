@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/encrypt"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
 	minio "github.com/minio/minio/cmd"
 
 	"github.com/minio/minio/cmd/logger"
@@ -258,8 +258,8 @@ func getPartMetaPath(object, uploadID string, partID int) string {
 }
 
 // deletes the custom dare metadata file saved at the backend
-func (l *s3EncObjects) deleteGWMetadata(ctx context.Context, bucket, metaFileName string) error {
-	return l.s3Objects.DeleteObject(ctx, bucket, metaFileName)
+func (l *s3EncObjects) deleteGWMetadata(ctx context.Context, bucket, metaFileName string) (minio.ObjectInfo, error) {
+	return l.s3Objects.DeleteObject(ctx, bucket, metaFileName, minio.ObjectOptions{})
 }
 
 func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
@@ -314,8 +314,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if err != nil {
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
-	objInfo.UserDefined = minio.CleanMinioInternalMetadataKeys(objInfo.UserDefined)
-	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o.CheckCopyPrecondFn)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err)
 	}
@@ -382,14 +381,14 @@ func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObje
 // DeleteObject deletes a blob in bucket
 // For custom gateway encrypted large objects, cleans up encrypted content and metadata files
 // from the backend.
-func (l *s3EncObjects) DeleteObject(ctx context.Context, bucket string, object string) error {
-
+func (l *s3EncObjects) DeleteObject(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	// Get dare meta json
 	if _, err := l.getGWMetadata(ctx, bucket, getDareMetaPath(object)); err != nil {
-		return l.s3Objects.DeleteObject(ctx, bucket, object)
+		logger.LogIf(minio.GlobalContext, err)
+		return l.s3Objects.DeleteObject(ctx, bucket, object, opts)
 	}
 	// delete encrypted object
-	l.s3Objects.DeleteObject(ctx, bucket, getGWContentPath(object))
+	l.s3Objects.DeleteObject(ctx, bucket, getGWContentPath(object), opts)
 	return l.deleteGWMetadata(ctx, bucket, getDareMetaPath(object))
 }
 
@@ -447,7 +446,7 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 	}
 	if opts.ServerSideEncryption == nil {
 		defer l.deleteGWMetadata(ctx, bucket, getDareMetaPath(object))
-		defer l.DeleteObject(ctx, bucket, getGWContentPath(object))
+		defer l.DeleteObject(ctx, bucket, getGWContentPath(object), opts)
 		return l.s3Objects.PutObject(ctx, bucket, object, data, minio.ObjectOptions{UserDefined: opts.UserDefined})
 	}
 
@@ -471,7 +470,7 @@ func (l *s3EncObjects) PutObject(ctx context.Context, bucket string, object stri
 	}
 	objInfo = gwMeta.ToObjectInfo(bucket, object)
 	// delete any unencrypted content of the same name created previously
-	l.s3Objects.DeleteObject(ctx, bucket, object)
+	l.s3Objects.DeleteObject(ctx, bucket, object, opts)
 	return objInfo, nil
 }
 
@@ -529,6 +528,21 @@ func (l *s3EncObjects) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 	return l.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, srcInfo.PutObjReader, dstOpts)
 }
 
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (l *s3EncObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	// We do not store parts uploaded so far in the dare.meta. Only CompleteMultipartUpload finalizes the parts under upload prefix.Otherwise,
+	// there could be situations of dare.meta getting corrupted by competing upload parts.
+	dm, err := l.getGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID))
+	if err != nil {
+		return l.s3Objects.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+	}
+	result.UserDefined = dm.ToObjectInfo(bucket, object).UserDefined
+	return result, nil
+}
+
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, object string, uploadID string, partNumberMarker int, maxParts int, opts minio.ObjectOptions) (lpi minio.ListPartsInfo, e error) {
 	// We do not store parts uploaded so far in the dare.meta. Only CompleteMultipartUpload finalizes the parts under upload prefix.Otherwise,
@@ -549,7 +563,7 @@ func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, objec
 		}
 		lpi.Parts[i].ETag = partMeta.ETag
 	}
-	lpi.UserDefined = dm.Meta
+	lpi.UserDefined = dm.ToObjectInfo(bucket, object).UserDefined
 	lpi.Object = object
 	return lpi, nil
 }
@@ -572,7 +586,7 @@ func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, 
 			return minio.InvalidUploadID{UploadID: uploadID}
 		}
 		for _, obj := range loi.Objects {
-			if err := l.s3Objects.DeleteObject(ctx, bucket, obj.Name); err != nil {
+			if _, err := l.s3Objects.DeleteObject(ctx, bucket, obj.Name, minio.ObjectOptions{}); err != nil {
 				return minio.ErrorRespToObjectError(err)
 			}
 			startAfter = obj.Name
@@ -594,7 +608,7 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 		if e == nil {
 			// delete any encrypted version of object that might exist
 			defer l.deleteGWMetadata(ctx, bucket, getDareMetaPath(object))
-			defer l.DeleteObject(ctx, bucket, getGWContentPath(object))
+			defer l.DeleteObject(ctx, bucket, getGWContentPath(object), opts)
 		}
 		return oi, e
 	}
@@ -626,7 +640,7 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	}
 
 	//delete any unencrypted version of object that might be on the backend
-	defer l.s3Objects.DeleteObject(ctx, bucket, object)
+	defer l.s3Objects.DeleteObject(ctx, bucket, object, opts)
 
 	// Save the final object size and modtime.
 	gwMeta.Stat.Size = objectSize
@@ -643,7 +657,6 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	for {
 		loi, lerr := l.s3Objects.ListObjectsV2(ctx, bucket, uploadPrefix, continuationToken, delimiter, 1000, false, startAfter)
 		if lerr != nil {
-			done = true
 			break
 		}
 		for _, obj := range loi.Objects {
@@ -652,7 +665,7 @@ func (l *s3EncObjects) CompleteMultipartUpload(ctx context.Context, bucket, obje
 				break
 			}
 			startAfter = obj.Name
-			l.s3Objects.DeleteObject(ctx, bucket, obj.Name)
+			l.s3Objects.DeleteObject(ctx, bucket, obj.Name, opts)
 		}
 		continuationToken = loi.NextContinuationToken
 		if !loi.IsTruncated || done {
@@ -679,13 +692,13 @@ func getGWContentPath(object string) string {
 }
 
 // Clean-up the stale incomplete encrypted multipart uploads. Should be run in a Go routine.
-func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration, doneCh <-chan struct{}) {
+func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-doneCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			l.cleanupStaleEncMultipartUploadsOnGW(ctx, expiry)
@@ -703,7 +716,7 @@ func (l *s3EncObjects) cleanupStaleEncMultipartUploadsOnGW(ctx context.Context, 
 		for _, b := range buckets {
 			expParts := l.getStalePartsForBucket(ctx, b.Name, expiry)
 			for k := range expParts {
-				l.s3Objects.DeleteObject(ctx, b.Name, k)
+				l.s3Objects.DeleteObject(ctx, b.Name, k, minio.ObjectOptions{})
 			}
 		}
 	}
@@ -770,9 +783,9 @@ func (l *s3EncObjects) DeleteBucket(ctx context.Context, bucket string, forceDel
 		}
 	}
 	for k := range expParts {
-		l.s3Objects.DeleteObject(ctx, bucket, k)
+		l.s3Objects.DeleteObject(ctx, bucket, k, minio.ObjectOptions{})
 	}
-	err := l.Client.RemoveBucket(bucket)
+	err := l.Client.RemoveBucket(ctx, bucket)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket)
 	}

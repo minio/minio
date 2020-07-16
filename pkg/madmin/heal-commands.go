@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,20 @@ type HealOpts struct {
 	ScanMode  HealScanMode `json:"scanMode"`
 }
 
+// Equal returns true if no is same as o.
+func (o HealOpts) Equal(no HealOpts) bool {
+	if o.Recursive != no.Recursive {
+		return false
+	}
+	if o.DryRun != no.DryRun {
+		return false
+	}
+	if o.Remove != no.Remove {
+		return false
+	}
+	return o.ScanMode == no.ScanMode
+}
+
 // HealStartSuccess - holds information about a successfully started
 // heal operation
 type HealStartSuccess struct {
@@ -63,7 +77,6 @@ type HealTaskStatus struct {
 	FailureDetail string    `json:"detail"`
 	StartTime     time.Time `json:"startTime"`
 	HealSettings  HealOpts  `json:"settings"`
-	NumDisks      int       `json:"numDisks"`
 
 	Items []HealResultItem `json:"items,omitempty"`
 }
@@ -86,6 +99,9 @@ const (
 	DriveStateOffline            = "offline"
 	DriveStateCorrupt            = "corrupt"
 	DriveStateMissing            = "missing"
+	DriveStatePermission         = "permission-denied"
+	DriveStateFaulty             = "faulty"
+	DriveStateUnknown            = "unknown"
 	DriveStateUnformatted        = "unformatted" // only returned by disk
 )
 

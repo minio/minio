@@ -78,6 +78,11 @@ func getLockArgs(r *http.Request) (args dsync.LockArgs, err error) {
 	return args, nil
 }
 
+// HealthHandler returns success if request is authenticated.
+func (l *lockRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
+	l.IsValid(w, r)
+}
+
 // LockHandler - Acquires a lock.
 func (l *lockRESTServer) LockHandler(w http.ResponseWriter, r *http.Request) {
 	if !l.IsValid(w, r) {
@@ -270,10 +275,10 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			}
 
 			// Read locks we assume quorum for be N/2 success
-			quorum := globalXLSetDriveCount / 2
+			quorum := globalErasureSetDriveCount / 2
 			if nlrip.lri.Writer {
 				// For write locks we need N/2+1 success
-				quorum = globalXLSetDriveCount/2 + 1
+				quorum = globalErasureSetDriveCount/2 + 1
 			}
 
 			// less than the quorum, we have locks expired.
@@ -345,6 +350,7 @@ func registerLockRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
 			}
 
 			subrouter := router.PathPrefix(path.Join(lockRESTPrefix, endpoint.Path)).Subrouter()
+			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodHealth).HandlerFunc(httpTraceHdrs(lockServer.HealthHandler)).Queries(queries...)
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler)).Queries(queries...)
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler)).Queries(queries...)
 			subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler)).Queries(queries...)

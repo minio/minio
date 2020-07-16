@@ -1,23 +1,9 @@
-FROM golang:1.13-alpine as builder
-
-WORKDIR /home
-
-ENV GOPATH /go
-ENV CGO_ENABLED 0
-ENV GO111MODULE on
-
-RUN  \
-     apk add --no-cache git 'curl>7.61.0' && \
-     git clone https://github.com/minio/minio && \
-     curl -L https://github.com/balena-io/qemu/releases/download/v3.0.0%2Bresin/qemu-3.0.0+resin-arm.tar.gz | tar zxvf - -C . && mv qemu-3.0.0+resin-arm/qemu-arm-static . 
-
-FROM arm32v7/alpine:3.10
+FROM multiarch/qemu-user-static:x86_64-arm as qemu
+FROM arm32v7/alpine:3.12
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
-COPY dockerscripts/docker-entrypoint.sh /usr/bin/
-COPY CREDITS /third_party/
-COPY --from=builder /home/qemu-arm-static /usr/bin/qemu-arm-static
+COPY --from=qemu /usr/bin/qemu-arm-static /usr/bin
 
 ENV MINIO_UPDATE off
 ENV MINIO_ACCESS_KEY_FILE=access_key \
@@ -28,9 +14,11 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 RUN \
      apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-     curl https://dl.min.io/server/minio/release/linux-arm/minio > /usr/bin/minio && \
-     chmod +x /usr/bin/minio  && \
-     chmod +x /usr/bin/docker-entrypoint.sh
+     curl -s -q https://dl.min.io/server/minio/release/linux-arm/minio -o /usr/bin/minio && \
+     curl -s -q https://raw.githubusercontent.com/minio/minio/release/dockerscripts/docker-entrypoint.sh -o /usr/bin/docker-entrypoint.sh && \
+     chmod +x /usr/bin/minio && \
+     chmod +x /usr/bin/docker-entrypoint.sh && \
+     curl -s -q -O https://raw.githubusercontent.com/minio/minio/release/CREDITS
 
 EXPOSE 9000
 

@@ -1,0 +1,50 @@
+name: Go
+
+on:
+  pull_request:
+    branches:
+    - master
+    - release
+
+jobs:
+  build:
+    name: Test on Go ${{ matrix.go-version }} and ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        go-version: [1.13.x]
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '12'
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Build on ${{ matrix.os }}
+        if: matrix.os == 'windows-latest'
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+          MINIO_CI_CD: 1
+        run: |
+          go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
+          go test -v --timeout 50m ./...
+      - name: Build on ${{ matrix.os }}
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          CGO_ENABLED: 0
+          GO111MODULE: on
+          MINIO_CI_CD: 1
+        run: |
+          sudo apt-get install devscripts shellcheck
+          make
+          diff -au <(gofmt -s -d cmd) <(printf "")
+          diff -au <(gofmt -s -d pkg) <(printf "")
+          make test-race
+          make crosscompile
+          make verify
+          make verify-healing
+          cd browser && npm install && npm run test && cd ..
+          bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'

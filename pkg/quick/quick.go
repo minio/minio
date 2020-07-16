@@ -26,9 +26,9 @@ import (
 	"reflect"
 	"sync"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/fatih/structs"
 	"github.com/minio/minio/pkg/safe"
+	etcd "go.etcd.io/etcd/v3/clientv3"
 )
 
 // Config - generic config interface functions

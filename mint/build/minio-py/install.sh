@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-#  Mint (C) 2017 Minio, Inc.
+#  Mint (C) 2017-2020 Minio, Inc.
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ if [ -z "$MINIO_PY_VERSION" ]; then
 fi
 
 test_run_dir="$MINT_RUN_CORE_DIR/minio-py"
-# FIX https://github.com/pypa/pip/issues/5221
-python -m pip install --upgrade pip
-python -m pip install --user faker
-python -m pip install minio=="$MINIO_PY_VERSION"
+pip3 install --user faker
+pip3 install minio=="$MINIO_PY_VERSION"
 $WGET --output-document="$test_run_dir/tests.py" "https://raw.githubusercontent.com/minio/minio-py/${MINIO_PY_VERSION}/tests/functional/tests.py"

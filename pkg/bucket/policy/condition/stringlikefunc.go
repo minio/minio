@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/minio/minio-go/v6/pkg/s3utils"
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/wildcard"
 )
 

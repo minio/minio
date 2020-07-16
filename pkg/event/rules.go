@@ -53,6 +53,16 @@ func (rules Rules) Add(pattern string, targetID TargetID) {
 	rules[pattern] = NewTargetIDSet(targetID).Union(rules[pattern])
 }
 
+// MatchSimple - returns true one of the matching object name in rules.
+func (rules Rules) MatchSimple(objectName string) bool {
+	for pattern := range rules {
+		if wildcard.MatchSimple(pattern, objectName) {
+			return true
+		}
+	}
+	return false
+}
+
 // Match - returns TargetIDSet matching object name in rules.
 func (rules Rules) Match(objectName string) TargetIDSet {
 	targetIDs := NewTargetIDSet()

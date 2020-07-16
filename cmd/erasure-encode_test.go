@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,10 @@ func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
 }
 
 func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+	return nil, errFaultyDisk
+}
+
+func (a badDisk) UpdateBloomFilter(ctx context.Context, oldest, current uint64) (*bloomFilterResponse, error) {
 	return nil, errFaultyDisk
 }
 

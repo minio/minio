@@ -18,6 +18,7 @@ package madmin
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 )
 
@@ -70,7 +71,7 @@ func httpRespToErrorResponse(resp *http.Response) error {
 	if err != nil {
 		return ErrorResponse{
 			Code:    resp.Status,
-			Message: "Failed to parse server response.",
+			Message: fmt.Sprintf("Failed to parse server response: %s.", err),
 		}
 	}
 	closeResponse(resp)

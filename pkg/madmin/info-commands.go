@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"time"
 )
@@ -40,19 +39,9 @@ const (
 	// Add your own backend.
 )
 
-// DriveInfo - represents each drive info, describing
-// status, uuid and endpoint.
-type DriveInfo HealDriveInfo
-
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
-	Used []uint64 // Used total used per disk.
-
-	Total []uint64 // Total disk space per disk.
-
-	Available []uint64 // Total disk space available per disk.
-
-	MountPaths []string // Disk mountpoints
+	Disks []Disk
 
 	// Backend type.
 	Backend struct {
@@ -66,9 +55,6 @@ type StorageInfo struct {
 		StandardSCParity int          // Parity disks for currently configured Standard storage class.
 		RRSCData         int          // Data disks for currently configured Reduced Redundancy storage class.
 		RRSCParity       int          // Parity disks for currently configured Reduced Redundancy storage class.
-
-		// List of all disk status, this is only meaningful if BackendType is Erasure.
-		Sets [][]DriveInfo
 	}
 }
 
@@ -128,23 +114,6 @@ func (adm *AdminClient) StorageInfo(ctx context.Context) (StorageInfo, error) {
 	return storageInfo, nil
 }
 
-type objectHistogramInterval struct {
-	name       string
-	start, end int64
-}
-
-// ObjectsHistogramIntervals contains the list of intervals
-// of an histogram analysis of objects sizes.
-var ObjectsHistogramIntervals = []objectHistogramInterval{
-	{"LESS_THAN_1024_B", -1, 1024 - 1},
-	{"BETWEEN_1024_B_AND_1_MB", 1024, 1024*1024 - 1},
-	{"BETWEEN_1_MB_AND_10_MB", 1024 * 1024, 1024*1024*10 - 1},
-	{"BETWEEN_10_MB_AND_64_MB", 1024 * 1024 * 10, 1024*1024*64 - 1},
-	{"BETWEEN_64_MB_AND_128_MB", 1024 * 1024 * 64, 1024*1024*128 - 1},
-	{"BETWEEN_128_MB_AND_512_MB", 1024 * 1024 * 128, 1024*1024*512 - 1},
-	{"GREATER_THAN_512_MB", 1024 * 1024 * 512, math.MaxInt64},
-}
-
 // DataUsageInfo represents data usage of an Object API
 type DataUsageInfo struct {
 	// LastUpdate is the timestamp of when the data usage info was last updated.
@@ -190,50 +159,6 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 	}
 
 	return dataUsageInfo, nil
-}
-
-// AccountAccess contains information about
-type AccountAccess struct {
-	AccountName string `json:"accountName"`
-	Read        bool   `json:"read"`
-	Write       bool   `json:"write"`
-	Custom      bool   `json:"custom"`
-}
-
-// BucketAccountingUsage represents the accounting usage of a particular bucket
-type BucketAccountingUsage struct {
-	Size       uint64          `json:"size"`
-	AccessList []AccountAccess `json:"accessList"`
-}
-
-// AccountingUsageInfo returns the accounting usage info, currently it returns
-// the type of access of different accounts to the different buckets.
-func (adm *AdminClient) AccountingUsageInfo(ctx context.Context) (map[string]BucketAccountingUsage, error) {
-	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountingusageinfo"})
-	defer closeResponse(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check response http status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, httpRespToErrorResponse(resp)
-	}
-
-	// Unmarshal the server's json response
-	var accountingUsageInfo map[string]BucketAccountingUsage
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(respBytes, &accountingUsageInfo)
-	if err != nil {
-		return nil, err
-	}
-
-	return accountingUsageInfo, nil
 }
 
 // InfoMessage container to hold server admin related information.
@@ -316,8 +241,8 @@ type FSBackend struct {
 	Type backendType `json:"backendType,omitempty"`
 }
 
-// XLBackend contains specific erasure storage information
-type XLBackend struct {
+// ErasureBackend contains specific erasure storage information
+type ErasureBackend struct {
 	Type         backendType `json:"backendType,omitempty"`
 	OnlineDisks  int         `json:"onlineDisks,omitempty"`
 	OfflineDisks int         `json:"offlineDisks,omitempty"`
@@ -344,12 +269,14 @@ type ServerProperties struct {
 
 // Disk holds Disk information
 type Disk struct {
+	Endpoint        string  `json:"endpoint,omitempty"`
 	DrivePath       string  `json:"path,omitempty"`
 	State           string  `json:"state,omitempty"`
 	UUID            string  `json:"uuid,omitempty"`
 	Model           string  `json:"model,omitempty"`
 	TotalSpace      uint64  `json:"totalspace,omitempty"`
 	UsedSpace       uint64  `json:"usedspace,omitempty"`
+	AvailableSpace  uint64  `json:"availspace,omitempty"`
 	ReadThroughput  float64 `json:"readthroughput,omitempty"`
 	WriteThroughPut float64 `json:"writethroughput,omitempty"`
 	ReadLatency     float64 `json:"readlatency,omitempty"`

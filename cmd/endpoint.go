@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -28,9 +30,10 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -44,9 +47,14 @@ const (
 
 	// URLEndpointType - URL style endpoint type enum.
 	URLEndpointType
-
-	retryInterval = 5 // In Seconds.
 )
+
+// ProxyEndpoint - endpoint used for proxy redirects
+// See proxyRequest() for details.
+type ProxyEndpoint struct {
+	Endpoint
+	Transport *http.Transport
+}
 
 // Endpoint - any type of endpoint.
 type Endpoint struct {
@@ -302,7 +310,7 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 	resolvedList := make([]bool, len(endpoints))
 	// Mark the starting time
 	startTime := time.Now()
-	keepAliveTicker := time.NewTicker(retryInterval * time.Second)
+	keepAliveTicker := time.NewTicker(10 * time.Millisecond)
 	defer keepAliveTicker.Stop()
 	for {
 		// Break if the local endpoint is found already Or all the endpoints are resolved.
@@ -547,9 +555,9 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		return endpoints, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("invalid number of endpoints")
 	}
 
-	// Return XL setup when all endpoints are path style.
+	// Return Erasure setup when all endpoints are path style.
 	if endpoints[0].Type() == PathEndpointType {
-		setupType = XLSetupType
+		setupType = ErasureSetupType
 		return endpoints, setupType, nil
 	}
 
@@ -614,18 +622,18 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, Just treat it as distXL setup
+		// If all endpoints have same port number, Just treat it as distErasure setup
 		// using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			return endpoints, DistXLSetupType, nil
+			return endpoints, DistErasureSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.
-		// This means it is DistXL setup.
+		// This means it is DistErasure setup.
 	}
 
 	// Add missing port in all endpoints.
@@ -645,7 +653,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 	}
 
 	// Error out if we have less than 2 unique servers.
-	if len(uniqueArgs.ToSlice()) < 2 && setupType == DistXLSetupType {
+	if len(uniqueArgs.ToSlice()) < 2 && setupType == DistErasureSetupType {
 		err := fmt.Errorf("Unsupported number of endpoints (%s), minimum number of servers cannot be less than 2 in distributed setup", endpoints)
 		return endpoints, setupType, err
 	}
@@ -655,7 +663,7 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 		updateDomainIPs(uniqueArgs)
 	}
 
-	setupType = DistXLSetupType
+	setupType = DistErasureSetupType
 	return endpoints, setupType, nil
 }
 
@@ -708,6 +716,50 @@ func GetRemotePeers(endpointZones EndpointZones) []string {
 		}
 	}
 	return peerSet.ToSlice()
+}
+
+// GetProxyEndpointLocalIndex returns index of the local proxy endpoint
+func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
+	for i, pep := range proxyEps {
+		if pep.IsLocal {
+			return i
+		}
+	}
+	return -1
+}
+
+// GetProxyEndpoints - get all endpoints that can be used to proxy list request.
+func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
+	var proxyEps []ProxyEndpoint
+
+	proxyEpSet := set.NewStringSet()
+
+	for _, ep := range endpointZones {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.Type() != URLEndpointType {
+				continue
+			}
+
+			host := endpoint.Host
+			if proxyEpSet.Contains(host) {
+				continue
+			}
+			proxyEpSet.Add(host)
+
+			var tlsConfig *tls.Config
+			if globalIsSSL {
+				tlsConfig = &tls.Config{
+					ServerName: endpoint.Hostname(),
+					RootCAs:    globalRootCAs,
+				}
+			}
+			proxyEps = append(proxyEps, ProxyEndpoint{
+				Endpoint:  endpoint,
+				Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
+			})
+		}
+	}
+	return proxyEps, nil
 }
 
 func updateDomainIPs(endPoints set.StringSet) {

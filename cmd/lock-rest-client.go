@@ -18,16 +18,14 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"errors"
 	"io"
-	"sync/atomic"
-	"time"
-
 	"net/url"
 
 	"github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
 )
@@ -36,7 +34,6 @@ import (
 type lockRESTClient struct {
 	restClient *rest.Client
 	endpoint   Endpoint
-	connected  int32
 }
 
 func toLockError(err error) error {
@@ -62,10 +59,6 @@ func (client *lockRESTClient) String() string {
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if !client.IsOnline() {
-		return nil, errors.New("Lock rest server node is down")
-	}
-
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -75,26 +68,16 @@ func (client *lockRESTClient) call(method string, values url.Values, body io.Rea
 		return respBody, nil
 	}
 
-	if isNetworkError(err) {
-		time.AfterFunc(defaultRetryUnit, func() {
-			// After 1 seconds, take this lock client online for a retry.
-			atomic.StoreInt32(&client.connected, 1)
-		})
-
-		atomic.StoreInt32(&client.connected, 0)
-	}
-
 	return nil, toLockError(err)
 }
 
 // IsOnline - returns whether REST client failed to connect or not.
 func (client *lockRESTClient) IsOnline() bool {
-	return atomic.LoadInt32(&client.connected) == 1
+	return client.restClient.IsOnline()
 }
 
 // Close - marks the client as closed.
 func (client *lockRESTClient) Close() error {
-	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -170,12 +153,18 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient.HealthCheckFn = func() bool {
+		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, lockRESTMethodHealth, nil, nil, -1)
+		xhttp.DrainBody(respBody)
+		cancel()
+		var ne *rest.NetworkError
+		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
 	}
 
-	return &lockRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
+	return &lockRESTClient{endpoint: endpoint, restClient: restClient}
 }

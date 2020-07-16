@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,17 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
-	"sync/atomic"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
@@ -109,7 +111,6 @@ func toStorageErr(err error) error {
 type storageRESTClient struct {
 	endpoint   Endpoint
 	restClient *rest.Client
-	connected  int32
 	diskID     string
 }
 
@@ -130,9 +131,6 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 	}
 
 	err = toStorageErr(err)
-	if err == errDiskNotFound {
-		atomic.StoreInt32(&client.connected, 0)
-	}
 
 	return nil, err
 }
@@ -144,7 +142,11 @@ func (client *storageRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
-	return atomic.LoadInt32(&client.connected) == 1
+	return client.restClient.IsOnline()
+}
+
+func (client *storageRESTClient) IsLocal() bool {
+	return false
 }
 
 func (client *storageRESTClient) Hostname() string {
@@ -164,15 +166,15 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	if err != nil {
 		return cache, err
 	}
-	b, err = ioutil.ReadAll(reader)
-	if err != nil {
-		return cache, err
-	}
 	var newCache dataUsageCache
-	return newCache, newCache.deserialize(b)
+	return newCache, newCache.deserialize(reader)
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
+	// This call should never be over the network, this is always
+	// a cached value - caller should make sure to use this
+	// function on a fresh disk or make sure to look at the error
+	// from a different networked call to validate the GetDiskID()
 	return client.diskID, nil
 }
 
@@ -188,7 +190,13 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 	}
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
+	if err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -266,6 +274,36 @@ func (client *storageRESTClient) CreateFile(volume, path string, length int64, r
 	return err
 }
 
+func (client *storageRESTClient) WriteMetadata(volume, path string, fi FileInfo) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+
+	var reader bytes.Buffer
+	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(storageRESTMethodWriteMetadata, values, &reader, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
+func (client *storageRESTClient) DeleteVersion(volume, path string, fi FileInfo) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+
+	var buffer bytes.Buffer
+	if err := gob.NewEncoder(&buffer).Encode(fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(storageRESTMethodDeleteVersion, values, &buffer, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
 // WriteAll - write all data to a file.
 func (client *storageRESTClient) WriteAll(volume, path string, reader io.Reader) error {
 	values := make(url.Values)
@@ -276,18 +314,60 @@ func (client *storageRESTClient) WriteAll(volume, path string, reader io.Reader)
 	return err
 }
 
-// StatFile - stat a file.
-func (client *storageRESTClient) StatFile(volume, path string) (info FileInfo, err error) {
+// CheckFile - stat a file metadata.
+func (client *storageRESTClient) CheckFile(volume, path string) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(storageRESTMethodStatFile, values, nil, -1)
+	respBody, err := client.call(storageRESTMethodCheckFile, values, nil, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
+// CheckParts - stat all file parts.
+func (client *storageRESTClient) CheckParts(volume, path string, fi FileInfo) error {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+
+	var reader bytes.Buffer
+	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(storageRESTMethodWriteMetadata, values, &reader, -1)
+	defer http.DrainBody(respBody)
+	return err
+}
+
+// RenameData - rename source path to destination path atomically, metadata and data file.
+func (client *storageRESTClient) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
+	values := make(url.Values)
+	values.Set(storageRESTSrcVolume, srcVolume)
+	values.Set(storageRESTSrcPath, srcPath)
+	values.Set(storageRESTDataDir, dataDir)
+	values.Set(storageRESTDstVolume, dstVolume)
+	values.Set(storageRESTDstPath, dstPath)
+	respBody, err := client.call(storageRESTMethodRenameData, values, nil, -1)
+	defer http.DrainBody(respBody)
+
+	return err
+}
+
+func (client *storageRESTClient) ReadVersion(volume, path, versionID string) (fi FileInfo, err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTVersionID, versionID)
+
+	respBody, err := client.call(storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {
-		return info, err
+		return fi, err
 	}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
+
+	err = gob.NewDecoder(respBody).Decode(&fi)
+	return fi, err
 }
 
 // ReadAll - reads all contents of a file.
@@ -374,14 +454,49 @@ func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endW
 	return ch, nil
 }
 
-func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, leafFile string,
-	readMetadataFn readMetadataFunc, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	values.Set(storageRESTLeafFile, leafFile)
+	respBody, err := client.call(storageRESTMethodWalkVersions, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	ch := make(chan FileInfoVersions)
+	go func() {
+		defer close(ch)
+		defer http.DrainBody(respBody)
+
+		decoder := gob.NewDecoder(respBody)
+		for {
+			var fi FileInfoVersions
+			if gerr := decoder.Decode(&fi); gerr != nil {
+				// Upon error return
+				if gerr != io.EOF {
+					logger.LogIf(context.Background(), gerr)
+				}
+				return
+			}
+			select {
+			case ch <- fi:
+			case <-endWalkCh:
+				return
+			}
+		}
+	}()
+
+	return ch, nil
+}
+
+func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTDirPath, dirPath)
+	values.Set(storageRESTMarkerPath, marker)
+	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
 	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
 	if err != nil {
 		return nil, err
@@ -412,12 +527,11 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int, leafFile string) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
-	values.Set(storageRESTLeafFile, leafFile)
 	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err
@@ -437,78 +551,54 @@ func (client *storageRESTClient) DeleteFile(volume, path string) error {
 	return err
 }
 
-// DeleteFileBulk - deletes files in bulk.
-func (client *storageRESTClient) DeleteFileBulk(volume string, paths []string) (errs []error, err error) {
-	if len(paths) == 0 {
-		return errs, err
+// DeleteVersions - deletes list of specified versions if present
+func (client *storageRESTClient) DeleteVersions(volume string, versions []FileInfo) (errs []error) {
+	if len(versions) == 0 {
+		return errs
 	}
+
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
+	values.Set(storageRESTTotalVersions, strconv.Itoa(len(versions)))
 
 	var buffer bytes.Buffer
-	for _, path := range paths {
-		buffer.WriteString(path)
-		buffer.WriteString("\n")
+	encoder := gob.NewEncoder(&buffer)
+	for _, version := range versions {
+		encoder.Encode(&version)
 	}
 
-	respBody, err := client.call(storageRESTMethodDeleteFileBulk, values, &buffer, -1)
+	errs = make([]error, len(versions))
+
+	respBody, err := client.call(storageRESTMethodDeleteVersions, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
-		return nil, err
+		for i := range errs {
+			errs[i] = err
+		}
+		return errs
 	}
 
 	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return nil, err
+		for i := range errs {
+			errs[i] = err
+		}
+		return errs
 	}
 
-	dErrResp := &DeleteFileBulkErrsResp{}
+	dErrResp := &DeleteVersionsErrsResp{}
 	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
-		return nil, err
+		for i := range errs {
+			errs[i] = err
+		}
+		return errs
 	}
 
-	for _, dErr := range dErrResp.Errs {
-		errs = append(errs, toStorageErr(dErr))
+	for i, dErr := range dErrResp.Errs {
+		errs[i] = toStorageErr(dErr)
 	}
 
-	return errs, nil
-}
-
-// DeletePrefixes - deletes prefixes in bulk.
-func (client *storageRESTClient) DeletePrefixes(volume string, paths []string) (errs []error, err error) {
-	if len(paths) == 0 {
-		return errs, err
-	}
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-
-	var buffer bytes.Buffer
-	for _, path := range paths {
-		buffer.WriteString(path)
-		buffer.WriteString("\n")
-	}
-
-	respBody, err := client.call(storageRESTMethodDeletePrefixes, values, &buffer, -1)
-	defer http.DrainBody(respBody)
-	if err != nil {
-		return nil, err
-	}
-
-	reader, err := waitForHTTPResponse(respBody)
-	if err != nil {
-		return nil, err
-	}
-
-	dErrResp := &DeletePrefixesErrsResp{}
-	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
-		return nil, err
-	}
-
-	for _, dErr := range dErrResp.Errs {
-		errs = append(errs, toStorageErr(dErr))
-	}
-
-	return errs, nil
+	return errs
 }
 
 // RenameFile - renames a file.
@@ -523,34 +613,37 @@ func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPa
 	return err
 }
 
-func (client *storageRESTClient) VerifyFile(volume, path string, size int64, algo BitrotAlgorithm, sum []byte, shardSize int64) error {
+func (client *storageRESTClient) VerifyFile(volume, path string, fi FileInfo) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTBitrotAlgo, algo.String())
-	values.Set(storageRESTLength, strconv.FormatInt(size, 10))
-	values.Set(storageRESTShardSize, strconv.Itoa(int(shardSize)))
-	values.Set(storageRESTBitrotHash, hex.EncodeToString(sum))
 
-	respBody, err := client.call(storageRESTMethodVerifyFile, values, nil, -1)
+	var reader bytes.Buffer
+	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+		return err
+	}
+
+	respBody, err := client.call(storageRESTMethodVerifyFile, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return err
 	}
-	reader, err := waitForHTTPResponse(respBody)
+
+	respReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		return err
 	}
+
 	verifyResp := &VerifyFileResp{}
-	if err = gob.NewDecoder(reader).Decode(verifyResp); err != nil {
+	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
 		return err
 	}
+
 	return toStorageErr(verifyResp.Err)
 }
 
 // Close - marks the client as closed.
 func (client *storageRESTClient) Close() error {
-	atomic.StoreInt32(&client.connected, 0)
 	client.restClient.Close()
 	return nil
 }
@@ -572,11 +665,18 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 0}
+	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient.HealthCheckInterval = 500 * time.Millisecond
+	restClient.HealthCheckFn = func() bool {
+		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
+		xhttp.DrainBody(respBody)
+		cancel()
+		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
 	}
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient, connected: 1}
+
+	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
 }

@@ -26,11 +26,11 @@ const (
 	// FSSetupType - FS setup type enum.
 	FSSetupType
 
-	// XLSetupType - XL setup type enum.
-	XLSetupType
+	// ErasureSetupType - Erasure setup type enum.
+	ErasureSetupType
 
-	// DistXLSetupType - Distributed XL setup type enum.
-	DistXLSetupType
+	// DistErasureSetupType - Distributed Erasure setup type enum.
+	DistErasureSetupType
 
 	// GatewaySetupType - gateway setup type enum.
 	GatewaySetupType
@@ -40,10 +40,10 @@ func (setupType SetupType) String() string {
 	switch setupType {
 	case FSSetupType:
 		return globalMinioModeFS
-	case XLSetupType:
-		return globalMinioModeXL
-	case DistXLSetupType:
-		return globalMinioModeDistXL
+	case ErasureSetupType:
+		return globalMinioModeErasure
+	case DistErasureSetupType:
+		return globalMinioModeDistErasure
 	case GatewaySetupType:
 		return globalMinioModeGatewayPrefix
 	}

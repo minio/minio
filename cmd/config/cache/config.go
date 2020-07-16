@@ -37,6 +37,7 @@ type Config struct {
 	After         int      `json:"after"`
 	WatermarkLow  int      `json:"watermark_low"`
 	WatermarkHigh int      `json:"watermark_high"`
+	Range         bool     `json:"range"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling

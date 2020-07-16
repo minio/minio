@@ -110,9 +110,6 @@ func (k KafkaArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if k.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 	if k.Version != "" {
 		if _, err := sarama.ParseKafkaVersion(k.Version); err != nil {
 			return err
@@ -134,6 +131,11 @@ type KafkaTarget struct {
 // ID - returns target ID.
 func (target *KafkaTarget) ID() event.TargetID {
 	return target.id
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *KafkaTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 // IsActive - Return true if target is up and active

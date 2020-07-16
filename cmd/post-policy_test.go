@@ -33,14 +33,13 @@ import (
 )
 
 const (
-	expirationDateFormat = "2006-01-02T15:04:05.999Z"
-	iso8601DateFormat    = "20060102T150405Z"
+	iso8601DateFormat = "20060102T150405Z"
 )
 
 func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey string, expiration time.Time) []byte {
 	t := UTCNow()
 	// Add the expiration date.
-	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
+	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(iso8601TimeFormat))
 	// Add the bucket condition, only accept buckets equal to the one passed.
 	bucketConditionStr := fmt.Sprintf(`["eq", "$bucket", "%s"]`, bucketName)
 	// Add the key condition, only accept keys equal to the one passed.
@@ -71,7 +70,7 @@ func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey stri
 func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration time.Time) []byte {
 	t := UTCNow()
 	// Add the expiration date.
-	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
+	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(iso8601TimeFormat))
 	// Add the bucket condition, only accept buckets equal to the one passed.
 	bucketConditionStr := fmt.Sprintf(`["eq", "$bucket", "%s"]`, bucketName)
 	// Add the key condition, only accept keys equal to the one passed.
@@ -98,7 +97,7 @@ func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration t
 // newPostPolicyBytesV2 - creates a bare bones postpolicy string with key and bucket matches.
 func newPostPolicyBytesV2(bucketName, objectKey string, expiration time.Time) []byte {
 	// Add the expiration date.
-	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
+	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(iso8601TimeFormat))
 	// Add the bucket condition, only accept buckets equal to the one passed.
 	bucketConditionStr := fmt.Sprintf(`["eq", "$bucket", "%s"]`, bucketName)
 	// Add the key condition, only accept keys equal to the one passed.
@@ -114,7 +113,7 @@ func newPostPolicyBytesV2(bucketName, objectKey string, expiration time.Time) []
 	return []byte(retStr)
 }
 
-// Wrapper for calling TestPostPolicyBucketHandler tests for both XL multiple disks and single node setup.
+// Wrapper for calling TestPostPolicyBucketHandler tests for both Erasure multiple disks and single node setup.
 func TestPostPolicyBucketHandler(t *testing.T) {
 	ExecObjectLayerTest(t, testPostPolicyBucketHandler)
 }
@@ -129,7 +128,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	bucketName := getRandomBucketName()
 
 	var opts ObjectOptions
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
 	credentials := globalActiveCred
@@ -141,7 +140,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err := obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -264,7 +263,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			expectedRespStatus: http.StatusNoContent,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"],["eq", "$x-amz-meta-uuid", "1234"]]}`,
 		},
 		// Corrupted Base 64 result
@@ -274,7 +273,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 			corruptedBase64:    true,
 		},
@@ -285,7 +284,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 			corruptedMultipart: true,
 		},
@@ -307,7 +306,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			dates:              []interface{}{curTime.Add(-1 * time.Minute * 5).Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			dates:              []interface{}{curTime.Add(-1 * time.Minute * 5).Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 		},
 		// Corrupted policy document
@@ -317,7 +316,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			expectedRespStatus: http.StatusForbidden,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"3/aws4_request"]]}`,
 		},
 	}
@@ -415,7 +414,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 
 }
 
-// Wrapper for calling TestPostPolicyBucketHandlerRedirect tests for both XL multiple disks and single node setup.
+// Wrapper for calling TestPostPolicyBucketHandlerRedirect tests for both Erasure multiple disks and single node setup.
 func TestPostPolicyBucketHandlerRedirect(t *testing.T) {
 	ExecObjectLayerTest(t, testPostPolicyBucketHandlerRedirect)
 }
@@ -443,7 +442,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 		t.Fatal(err)
 	}
 
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
 
 	credentials := globalActiveCred
@@ -451,7 +450,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, "")
+	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -460,7 +459,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 	rec := httptest.NewRecorder()
 
-	dates := []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
+	dates := []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
 	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL.String() + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-meta-uuid", "1234"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
 
 	// Generate the final policy document
@@ -494,8 +493,8 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	expectedLocation := redirectURL.String()
 
 	// Check the new location url
-	if rec.HeaderMap.Get("Location") != expectedLocation {
-		t.Errorf("Unexpected location, expected = %s, found = `%s`", rec.HeaderMap.Get("Location"), expectedLocation)
+	if rec.Header().Get("Location") != expectedLocation {
+		t.Errorf("Unexpected location, expected = %s, found = `%s`", rec.Header().Get("Location"), expectedLocation)
 	}
 
 }

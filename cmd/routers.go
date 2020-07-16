@@ -22,8 +22,8 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Composed function registering routers for only distributed XL setup.
-func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
+// Composed function registering routers for only distributed Erasure setup.
+func registerDistErasureRouters(router *mux.Router, endpointZones EndpointZones) {
 	// Register storage REST router only if its a distributed setup.
 	registerStorageRESTHandlers(router, endpointZones)
 
@@ -38,7 +38,7 @@ func registerDistXLRouters(router *mux.Router, endpointZones EndpointZones) {
 }
 
 // List of some generic handlers which are applied for all incoming requests.
-var globalHandlers = []HandlerFunc{
+var globalHandlers = []MiddlewareFunc{
 	// set x-amz-request-id header.
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.
@@ -63,8 +63,6 @@ var globalHandlers = []HandlerFunc{
 	setBrowserCacheControlHandler,
 	// Validates all incoming requests to have a valid date header.
 	setTimeValidityHandler,
-	// CORS setting for all browser API requests.
-	setCorsHandler,
 	// Validates all incoming URL resources, for invalid/unsupported
 	// resources client receives a HTTP error.
 	setIgnoreResourcesHandler,
@@ -87,8 +85,8 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// Initialize distributed NS lock.
-	if globalIsDistXL {
-		registerDistXLRouters(router, endpointZones)
+	if globalIsDistErasure {
+		registerDistErasureRouters(router, endpointZones)
 	}
 
 	// Add STS router always.
@@ -114,10 +112,7 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 	// but don't allow SSE-KMS.
 	registerAPIRouter(router, true, false)
 
-	// If none of the routes match add default error handler routes
-	router.NotFoundHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
-	router.MethodNotAllowedHandler = http.HandlerFunc(httpTraceAll(errorResponseHandler))
+	router.Use(registerMiddlewares)
 
-	// Register rest of the handlers.
-	return registerHandlers(router, globalHandlers...), nil
+	return router, nil
 }

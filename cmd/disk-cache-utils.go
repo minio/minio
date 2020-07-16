@@ -187,12 +187,12 @@ func readCacheFileStream(filePath string, offset, length int64) (io.ReadCloser, 
 
 	fr, err := os.Open(filePath)
 	if err != nil {
-		return nil, osErrToFSFileErr(err)
+		return nil, osErrToFileErr(err)
 	}
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
-		err = osErrToFSFileErr(err)
+		err = osErrToFileErr(err)
 		return nil, err
 	}
 
@@ -285,7 +285,7 @@ func isMetadataSame(m1, m2 map[string]string) bool {
 }
 
 type fileScorer struct {
-	saveBytes int64
+	saveBytes uint64
 	now       int64
 	maxHits   int
 	// 1/size for consistent score.
@@ -294,21 +294,23 @@ type fileScorer struct {
 	// queue is a linked list of files we want to delete.
 	// The list is kept sorted according to score, highest at top, lowest at bottom.
 	queue       list.List
-	queuedBytes int64
+	queuedBytes uint64
+	seenBytes   uint64
 }
 
 type queuedFile struct {
-	name  string
-	size  int64
-	score float64
+	name      string
+	versionID string
+	size      uint64
+	score     float64
 }
 
 // newFileScorer allows to collect files to save a specific number of bytes.
 // Each file is assigned a score based on its age, size and number of hits.
 // A list of files is maintained
-func newFileScorer(saveBytes int64, now int64, maxHits int) (*fileScorer, error) {
-	if saveBytes <= 0 {
-		return nil, errors.New("newFileScorer: saveBytes <= 0")
+func newFileScorer(saveBytes uint64, now int64, maxHits int) (*fileScorer, error) {
+	if saveBytes == 0 {
+		return nil, errors.New("newFileScorer: saveBytes = 0")
 	}
 	if now < 0 {
 		return nil, errors.New("newFileScorer: now < 0")
@@ -321,15 +323,34 @@ func newFileScorer(saveBytes int64, now int64, maxHits int) (*fileScorer, error)
 	return &f, nil
 }
 
-func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits int) {
+func (f *fileScorer) addFile(name string, accTime time.Time, size int64, hits int) {
+	f.addFileWithObjInfo(ObjectInfo{
+		Name:    name,
+		AccTime: accTime,
+		Size:    size,
+	}, hits)
+}
+
+func (f *fileScorer) addFileWithObjInfo(objInfo ObjectInfo, hits int) {
 	// Calculate how much we want to delete this object.
 	file := queuedFile{
-		name: name,
-		size: size,
+		name:      objInfo.Name,
+		versionID: objInfo.VersionID,
+		size:      uint64(objInfo.Size),
 	}
-	score := float64(f.now - lastAccess.Unix())
+	f.seenBytes += uint64(objInfo.Size)
+
+	var score float64
+	if objInfo.ModTime.IsZero() {
+		// Mod time is not available with disk cache use atime.
+		score = float64(f.now - objInfo.AccTime.Unix())
+	} else {
+		// if not used mod time when mod time is available.
+		score = float64(f.now - objInfo.ModTime.Unix())
+	}
+
 	// Size as fraction of how much we want to save, 0->1.
-	szWeight := math.Max(0, (math.Min(1, float64(size)*f.sizeMult)))
+	szWeight := math.Max(0, (math.Min(1, float64(file.size)*f.sizeMult)))
 	// 0 at f.maxHits, 1 at 0.
 	hitsWeight := (1.0 - math.Max(0, math.Min(1.0, float64(hits)/float64(f.maxHits))))
 	file.score = score * (1 + 0.25*szWeight + 0.25*hitsWeight)
@@ -350,11 +371,20 @@ func (f *fileScorer) addFile(name string, lastAccess time.Time, size int64, hits
 
 // adjustSaveBytes allows to adjust the number of bytes to save.
 // This can be used to adjust the count on the fly.
-// Returns true if there still is a need to delete files (saveBytes >0),
+// Returns true if there still is a need to delete files (n+saveBytes >0),
 // false if no more bytes needs to be saved.
 func (f *fileScorer) adjustSaveBytes(n int64) bool {
-	f.saveBytes += n
-	if f.saveBytes <= 0 {
+	if int64(f.saveBytes)+n <= 0 {
+		f.saveBytes = 0
+		f.trimQueue()
+		return false
+	}
+	if n < 0 {
+		f.saveBytes -= ^uint64(n - 1)
+	} else {
+		f.saveBytes += uint64(n)
+	}
+	if f.saveBytes == 0 {
 		f.queue.Init()
 		f.saveBytes = 0
 		return false
@@ -397,6 +427,30 @@ func (f *fileScorer) trimQueue() {
 		}
 		f.queue.Remove(e)
 		f.queuedBytes -= v.size
+	}
+}
+
+// fileObjInfos returns all queued file object infos
+func (f *fileScorer) fileObjInfos() []ObjectInfo {
+	res := make([]ObjectInfo, 0, f.queue.Len())
+	e := f.queue.Front()
+	for e != nil {
+		qfile := e.Value.(queuedFile)
+		res = append(res, ObjectInfo{
+			Name:      qfile.name,
+			Size:      int64(qfile.size),
+			VersionID: qfile.versionID,
+		})
+		e = e.Next()
+	}
+	return res
+}
+
+func (f *fileScorer) purgeFunc(p func(qfile queuedFile)) {
+	e := f.queue.Front()
+	for e != nil {
+		p(e.Value.(queuedFile))
+		e = e.Next()
 	}
 }
 

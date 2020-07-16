@@ -22,10 +22,9 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"sort"
 	"strings"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
@@ -435,6 +434,26 @@ func LookupWorm() (bool, error) {
 	return ParseBool(env.Get(EnvWorm, EnableOff))
 }
 
+// Merge - merges a new config with all the
+// missing values for default configs,
+// returns a config.
+func (c Config) Merge() Config {
+	cp := New()
+	for subSys, tgtKV := range c {
+		for tgt := range tgtKV {
+			ckvs := c[subSys][tgt]
+			for _, kv := range cp[subSys][Default] {
+				_, ok := c[subSys][tgt].Lookup(kv.Key)
+				if !ok {
+					ckvs.Set(kv.Key, kv.Value)
+				}
+			}
+			cp[subSys][tgt] = ckvs
+		}
+	}
+	return cp
+}
+
 // New - initialize a new server config.
 func New() Config {
 	srvCfg := make(Config)
@@ -580,33 +599,6 @@ func (c Config) Clone() Config {
 	return cp
 }
 
-// Converts an input string of form "k1=v1 k2=v2" into fields
-// of ["k1=v1", "k2=v2"], the tokenization of each `k=v`
-// happens with the right number of input keys, if keys
-// input is empty returned value is empty slice as well.
-func kvFields(input string, keys []string) []string {
-	var valueIndexes []int
-	for _, key := range keys {
-		i := strings.Index(input, key+KvSeparator)
-		if i == -1 {
-			continue
-		}
-		valueIndexes = append(valueIndexes, i)
-	}
-
-	sort.Ints(valueIndexes)
-	var fields = make([]string, len(valueIndexes))
-	for i := range valueIndexes {
-		j := i + 1
-		if j < len(valueIndexes) {
-			fields[i] = strings.TrimSpace(input[valueIndexes[i]:valueIndexes[j]])
-		} else {
-			fields[i] = strings.TrimSpace(input[valueIndexes[i]:])
-		}
-	}
-	return fields
-}
-
 // SetKVS - set specific key values per sub-system.
 func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 	if len(s) == 0 {
@@ -635,7 +627,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 		tgt = subSystemValue[1]
 	}
 
-	fields := kvFields(inputs[1], defaultKVS[subSys].Keys())
+	fields := madmin.KvFields(inputs[1], defaultKVS[subSys].Keys())
 	if len(fields) == 0 {
 		return Errorf("sub-system '%s' cannot have empty keys", subSys)
 	}

@@ -18,7 +18,7 @@ Compression can be enabled by updating the `compress` config settings for MinIO 
 
 ```
 $ mc admin config get myminio compression
-compression extensions=".txt,.log,.csv,.json,.tar,.xml,.bin" mime_types="text/*,application/json,application/xml"```
+compression extensions=".txt,.log,.csv,.json,.tar,.xml,.bin" mime_types="text/*,application/json,application/xml"
 ```
 
 Default config includes most common highly compressible content extensions and mime-types.
@@ -27,9 +27,14 @@ Default config includes most common highly compressible content extensions and m
 $ mc admin config set myminio compression extensions=".pdf" mime_types="application/pdf"
 ```
 
-To enable compression for all content, with default extensions and mime-types.
+To show help on setting compression config values.
 ```
 ~ mc admin config set myminio compression
+```
+
+To enable compression for all content, with default extensions and mime-types.
+```
+~ mc admin config set myminio compression enable="on"
 ```
 
 The compression settings may also be set through environment variables. When set, environment variables override the defined `compress` config settings in the server config.

@@ -17,11 +17,13 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -36,13 +38,14 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/retry"
 )
 
 // ServerFlags - server command specific flags
 var ServerFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
-		Value: ":" + globalMinioDefaultPort,
+		Value: ":" + GlobalMinioDefaultPort,
 		Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
 	},
 }
@@ -75,12 +78,15 @@ EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
 
-  2. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
+  2. Start single node server with 64 local drives "/mnt/data1" to "/mnt/data64".
+     {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
+
+  3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
-  3. Start distributed minio server in an expanded setup, run the following command on all the nodes
+  4. Start distributed minio server in an expanded setup, run the following command on all the nodes
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
@@ -108,12 +114,11 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalMinioAddr = globalCLIContext.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-
 	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
 	if len(endpoints) > 0 {
-		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
+		globalEndpoints, globalErasureSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
 	} else {
-		globalEndpoints, globalXLSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
+		globalEndpoints, globalErasureSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
 	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
@@ -123,10 +128,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the server")
 
-	globalIsXL = (setupType == XLSetupType)
-	globalIsDistXL = (setupType == DistXLSetupType)
-	if globalIsDistXL {
-		globalIsXL = true
+	globalIsErasure = (setupType == ErasureSetupType)
+	globalIsDistErasure = (setupType == DistErasureSetupType)
+	if globalIsDistErasure {
+		globalIsErasure = true
 	}
 }
 
@@ -138,6 +143,9 @@ func serverHandleEnvVars() {
 func newAllSubsystems() {
 	// Create new notification system and initialize notification targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
+
+	// Create new bucket metadata system.
+	globalBucketMetadataSys = NewBucketMetadataSys()
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -153,55 +161,61 @@ func newAllSubsystems() {
 
 	// Create new bucket encryption subsystem
 	globalBucketSSEConfigSys = NewBucketSSEConfigSys()
+
+	// Create new bucket object lock subsystem
+	globalBucketObjectLockSys = NewBucketObjectLockSys()
+
+	// Create new bucket quota subsystem
+	globalBucketQuotaSys = NewBucketQuotaSys()
+
+	// Create new bucket versioning subsystem
+	globalBucketVersioningSys = NewBucketVersioningSys()
 }
 
-func initSafeMode(buckets []BucketInfo) (err error) {
-	newObject := newObjectLayerWithoutSafeModeFn()
+func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
+	// Create cancel context to control 'newRetryTimer' go routine.
+	retryCtx, cancel := context.WithCancel(ctx)
 
-	// Construct path to config/transaction.lock for locking
-	transactionConfigPrefix := minioConfigPrefix + "/transaction.lock"
+	// Indicate to our routine to exit cleanly upon return.
+	defer cancel()
 
 	// Make sure to hold lock for entire migration to avoid
 	// such that only one server should migrate the entire config
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	objLock := newObject.NewNSLock(GlobalContext, minioMetaBucket, transactionConfigPrefix)
-	if err = objLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-
-	defer func(objLock RWLocker) {
-		objLock.Unlock()
+	txnLk := newObject.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
+	defer func(txnLk RWLocker) {
+		txnLk.Unlock()
 
 		if err != nil {
 			var cerr config.Err
+			// For any config error, we don't need to drop into safe-mode
+			// instead its a user error and should be fixed by user.
 			if errors.As(err, &cerr) {
 				return
 			}
 
 			// Prints the formatted startup message in safe mode operation.
+			// Drops-into safe mode where users need to now manually recover
+			// the server.
 			printStartupSafeModeMessage(getAPIEndpoints(), err)
 
 			// Initialization returned error reaching safe mode and
 			// not proceeding waiting for admin action.
 			handleSignals()
 		}
-	}(objLock)
+	}(txnLk)
 
-	// Migrate all backend configs to encrypted backend configs, optionally
-	// handles rotating keys for encryption.
-	if err = handleEncryptedConfigBackend(newObject, true); err != nil {
-		return fmt.Errorf("Unable to handle encrypted backend for config, iam and policies: %w", err)
+	// Enable healing to heal drives if possible
+	if globalIsErasure {
+		initBackgroundHealing(ctx, newObject)
+		initLocalDisksAutoHeal(ctx, newObject)
 	}
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
-
-	// Validate and initialize all subsystems.
-	doneCh := make(chan struct{})
-	defer close(doneCh)
 
 	// Initializing sub-systems needs a retry mechanism for
 	// the following reasons:
@@ -209,79 +223,120 @@ func initSafeMode(buckets []BucketInfo) (err error) {
 	//    of the object layer.
 	//  - Write quorum not met when upgrading configuration
 	//    version is needed, migration is needed etc.
-	retryTimerCh := newRetryTimerSimple(doneCh)
-	for {
-		rquorum := InsufficientReadQuorum{}
-		wquorum := InsufficientWriteQuorum{}
-		bucketNotFound := BucketNotFound{}
-		var err error
-		select {
-		case n := <-retryTimerCh:
-			if err = initAllSubsystems(buckets, newObject); err != nil {
-				if errors.Is(err, errDiskNotFound) ||
-					errors.As(err, &rquorum) ||
-					errors.As(err, &wquorum) ||
-					errors.As(err, &bucketNotFound) {
-					if n < 5 {
-						logger.Info("Waiting for all sub-systems to be initialized..")
-					} else {
-						logger.Info("Waiting for all sub-systems to be initialized.. %v", err)
-					}
-					continue
-				}
-				return err
-			}
-			return nil
-		case <-globalOSSignalCh:
-			if err == nil {
-				return errors.New("Initializing sub-systems stopped gracefully")
-			}
-			return fmt.Errorf("Unable to initialize sub-systems: %w", err)
+	rquorum := InsufficientReadQuorum{}
+	wquorum := InsufficientWriteQuorum{}
+	for range retry.NewTimer(retryCtx) {
+		// let one of the server acquire the lock, if not let them timeout.
+		// which shall be retried again by this loop.
+		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 3*time.Second)); err != nil {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
+			continue
 		}
+
+		// These messages only meant primarily for distributed setup, so only log during distributed setup.
+		if globalIsDistErasure {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
+		}
+
+		// Migrate all backend configs to encrypted backend configs, optionally
+		// handles rotating keys for encryption, if there is any retriable failure
+		// that shall be retried if there is an error.
+		if err = handleEncryptedConfigBackend(newObject); err == nil {
+			// Upon success migrating the config, initialize all sub-systems
+			// if all sub-systems initialized successfully return right away
+			if err = initAllSubsystems(retryCtx, newObject); err == nil {
+				// All successful return.
+				if globalIsDistErasure {
+					// These messages only meant primarily for distributed setup, so only log during distributed setup.
+					logger.Info("All MinIO sub-systems initialized successfully")
+				}
+				return nil
+			}
+		}
+
+		// One of these retriable errors shall be retried.
+		if errors.Is(err, errDiskNotFound) ||
+			errors.Is(err, errConfigNotFound) ||
+			errors.Is(err, context.Canceled) ||
+			errors.Is(err, context.DeadlineExceeded) ||
+			errors.As(err, &rquorum) ||
+			errors.As(err, &wquorum) ||
+			isErrBucketNotFound(err) {
+			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
+			txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+			continue
+		}
+
+		// Any other unhandled return right here.
+		return fmt.Errorf("Unable to initialize sub-systems: %w", err)
 	}
+
+	// Return an error when retry is canceled or deadlined
+	if err = retryCtx.Err(); err != nil {
+		return fmt.Errorf("Unable to initialize sub-systems: %w", err)
+	}
+
+	// Retry was canceled successfully.
+	return errors.New("Initializing sub-systems stopped gracefully")
 }
 
-func initAllSubsystems(buckets []BucketInfo, newObject ObjectLayer) (err error) {
+func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
+	// %w is used by all error returns here to make sure
+	// we wrap the underlying error, make sure when you
+	// are modifying this code that you do so, if and when
+	// you want to add extra context to your error. This
+	// ensures top level retry works accordingly.
+	var buckets []BucketInfo
+	if globalIsDistErasure || globalIsErasure {
+		// List buckets to heal, and be re-used for loading configs.
+		buckets, err = newObject.ListBucketsHeal(ctx)
+		if err != nil {
+			return fmt.Errorf("Unable to list buckets to heal: %w", err)
+		}
+		// Attempt a heal if possible and re-use the bucket names
+		// to reload their config.
+		wquorum := &InsufficientWriteQuorum{}
+		rquorum := &InsufficientReadQuorum{}
+		for _, bucket := range buckets {
+			if err = newObject.MakeBucketWithLocation(ctx, bucket.Name, BucketOptions{}); err != nil {
+				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
+					// Return the error upwards for the caller to retry.
+					return fmt.Errorf("Unable to heal bucket: %w", err)
+				}
+				if _, ok := err.(BucketExists); !ok {
+					// ignore any other error and log for investigation.
+					logger.LogIf(ctx, err)
+					continue
+				}
+				// Bucket already exists, nothing that needs to be done.
+			}
+		}
+	} else {
+		buckets, err = newObject.ListBuckets(ctx)
+		if err != nil {
+			return fmt.Errorf("Unable to list buckets: %w", err)
+		}
+	}
+
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
 		return fmt.Errorf("Unable to initialize config system: %w", err)
 	}
-	if globalEtcdClient != nil {
-		// ****  WARNING ****
-		// Migrating to encrypted backend on etcd should happen before initialization of
-		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		if err = migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient); err != nil {
-			return fmt.Errorf("Unable to handle encrypted backend for iam and policies: %w", err)
-		}
+
+	// Populate existing buckets to the etcd backend
+	if globalDNSConfig != nil {
+		// Background this operation.
+		go initFederatorBackend(buckets, newObject)
 	}
 
-	if err = globalIAMSys.Init(GlobalContext, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize IAM system: %w", err)
+	// Initialize bucket metadata sub-system.
+	if err := globalBucketMetadataSys.Init(ctx, buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket metadata sub-system: %w", err)
 	}
 
 	// Initialize notification system.
 	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
-	}
-
-	// Initialize policy system.
-	if err = globalPolicySys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize policy system: %w", err)
-	}
-
-	// Initialize bucket object lock.
-	if err = initBucketObjectLockConfig(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize object lock system: %w", err)
-	}
-
-	// Initialize lifecycle system.
-	if err = globalLifecycleSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize lifecycle system: %w", err)
-	}
-
-	// Initialize bucket encryption subsystem.
-	if err = globalBucketSSEConfigSys.Init(buckets, newObject); err != nil {
-		return fmt.Errorf("Unable to initialize bucket encryption subsystem: %w", err)
 	}
 
 	return nil
@@ -293,19 +348,18 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	for {
 		err := locker.GetLock(leaderLockTimeout)
 		if err != nil {
-			time.Sleep(leaderTick)
+			time.Sleep(leaderLockTimeoutSleepInterval)
 			continue
 		}
 		break
 		// No unlock for "leader" lock.
 	}
 
-	if globalIsXL {
+	if globalIsErasure {
 		initGlobalHeal(ctx, objAPI)
 	}
 
-	initDataUsageStats(ctx, objAPI)
-	initDailyLifecycle(ctx, objAPI)
+	initDataCrawler(ctx, objAPI)
 }
 
 // serverMain handler called for 'minio server' command.
@@ -341,8 +395,19 @@ func serverMain(ctx *cli.Context) {
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	globalProxyEndpoints, err = GetProxyEndpoints(globalEndpoints)
+	logger.FatalIf(err, "Invalid command line arguments")
+
+	globalMinioEndpoint = func() string {
+		host := globalMinioHost
+		if host == "" {
+			host = sortIPs(localIP4.ToSlice())[0]
+		}
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+	}()
+
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		if globalEndpoints.HTTPS() && !globalIsSSL {
 			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
@@ -356,25 +421,22 @@ func serverMain(ctx *cli.Context) {
 		checkUpdate(getMinioMode())
 	}
 
-	if !globalActiveCred.IsValid() && globalIsDistXL {
+	if !globalActiveCred.IsValid() && globalIsDistErasure {
 		logger.Fatal(config.ErrEnvCredentialsMissingDistributed(nil),
 			"Unable to initialize the server in distributed mode")
 	}
 
 	// Set system resources to maximum.
-	if err = setMaxResources(); err != nil {
-		logger.Info("Unable to set system resources to maximum %s", err)
-	}
+	setMaxResources()
 
-	if globalIsXL {
-		// Init global heal state
-		globalAllHealState = initHealState()
-		globalBackgroundHealState = initHealState()
+	if globalIsErasure {
+		// New global heal state
+		globalAllHealState = newHealState()
+		globalBackgroundHealState = newHealState()
 	}
 
 	// Configure server.
-	var handler http.Handler
-	handler, err = configureServerHandler(globalEndpoints)
+	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {
 		logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 	}
@@ -384,7 +446,27 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	// Annonying hack to ensure that Go doesn't write its own logging,
+	// interleaved with our formatted logging, this allows us to
+	// honor --json and --quiet flag properly.
+	//
+	// Unfortunately we have to resort to this sort of hacky approach
+	// because, Go automatically initializes ErrorLog on its own
+	// and can log without application control.
+	//
+	// This is an implementation issue in Go and should be fixed, but
+	// until then this hack is okay and works for our needs.
+	pr, pw := io.Pipe()
+	go func() {
+		defer pr.Close()
+		scanner := bufio.NewScanner(&contextReader{pr, GlobalContext})
+		for scanner.Scan() {
+			logger.LogIf(GlobalContext, errors.New(scanner.Text()))
+		}
+	}()
+
+	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{corsHandler(handler)}, getCert)
+	httpServer.ErrorLog = log.New(pw, "", 0)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}
@@ -396,14 +478,14 @@ func serverMain(ctx *cli.Context) {
 	globalHTTPServer = httpServer
 	globalObjLayerMutex.Unlock()
 
-	if globalIsDistXL && globalEndpoints.FirstLocal() {
+	if globalIsDistErasure && globalEndpoints.FirstLocal() {
 		for {
 			// Additionally in distributed setup, validate the setup and configuration.
-			err := verifyServerSystemConfig(globalEndpoints)
+			err := verifyServerSystemConfig(GlobalContext, globalEndpoints)
 			if err == nil {
 				break
 			}
-			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup")
+			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup, retrying.. after 5 seconds")
 			select {
 			case <-GlobalContext.Done():
 				return
@@ -430,21 +512,12 @@ func serverMain(ctx *cli.Context) {
 
 	newAllSubsystems()
 
-	// Enable healing to heal drives if possible
-	if globalIsXL {
-		initBackgroundHealing(GlobalContext, newObject)
-		initLocalDisksAutoHeal(GlobalContext, newObject)
-	}
-
 	go startBackgroundOps(GlobalContext, newObject)
 
-	// Calls New() and initializes all sub-systems.
-	buckets, err := newObject.ListBuckets(GlobalContext)
-	if err != nil {
-		logger.Fatal(err, "Unable to list buckets")
-	}
+	logger.FatalIf(initSafeMode(GlobalContext, newObject), "Unable to initialize server switching into safe-mode")
 
-	logger.FatalIf(initSafeMode(buckets), "Unable to initialize server switching into safe-mode")
+	// Initialize users credentials and policies in background.
+	go startBackgroundIAMLoad(GlobalContext)
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
@@ -455,11 +528,6 @@ func serverMain(ctx *cli.Context) {
 		globalObjLayerMutex.Lock()
 		globalCacheObjectAPI = cacheAPI
 		globalObjLayerMutex.Unlock()
-	}
-
-	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
-		initFederatorBackend(buckets, newObject)
 	}
 
 	// Disable safe mode operation, after all initialization is over.
@@ -481,11 +549,10 @@ func serverMain(ctx *cli.Context) {
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
 func newObjectLayer(ctx context.Context, endpointZones EndpointZones) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
-
 	if endpointZones.NEndpoints() == 1 {
 		// Initialize new FS object layer.
 		return NewFSObjectLayer(endpointZones[0].Endpoints[0].Path)
 	}
 
-	return newXLZones(ctx, endpointZones)
+	return newErasureZones(ctx, endpointZones)
 }

@@ -99,9 +99,6 @@ func (m MQTTArgs) Validate() error {
 			return errors.New("qos should be set to 1 or 2 if queueDir is set")
 		}
 	}
-	if m.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -119,6 +116,11 @@ type MQTTTarget struct {
 // ID - returns target ID.
 func (target *MQTTTarget) ID() event.TargetID {
 	return target.id
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *MQTTTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 // IsActive - Return true if target is up and active

@@ -1,19 +1,6 @@
-FROM golang:1.13-alpine
-
-ENV GOPATH /go
-ENV CGO_ENABLED 0
-ENV GO111MODULE on
-
-RUN  \
-     apk add --no-cache git && \
-     git clone https://github.com/minio/minio
-
-FROM alpine:3.10
+FROM alpine:3.12
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
-
-COPY dockerscripts/docker-entrypoint.sh /usr/bin/
-COPY CREDITS /third_party/
 
 ENV MINIO_UPDATE off
 ENV MINIO_ACCESS_KEY_FILE=access_key \
@@ -24,9 +11,11 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 RUN \
      apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-     curl https://dl.min.io/server/minio/release/linux-amd64/minio > /usr/bin/minio && \
-     chmod +x /usr/bin/minio  && \
-     chmod +x /usr/bin/docker-entrypoint.sh
+     curl -s -q https://dl.min.io/server/minio/release/linux-amd64/minio -o /usr/bin/minio && \
+     curl -s -q https://raw.githubusercontent.com/minio/minio/release/dockerscripts/docker-entrypoint.sh -o /usr/bin/docker-entrypoint.sh && \
+     chmod +x /usr/bin/minio && \
+     chmod +x /usr/bin/docker-entrypoint.sh && \
+     curl -s -q -O https://raw.githubusercontent.com/minio/minio/release/CREDITS
 
 EXPOSE 9000
 

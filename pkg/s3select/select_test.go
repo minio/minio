@@ -29,7 +29,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/cpuid"
-	"github.com/minio/minio-go/v6"
+	"github.com/minio/minio-go/v7"
 	"github.com/minio/simdjson-go"
 )
 
@@ -574,6 +574,16 @@ func TestCSVQueries2(t *testing.T) {
 			wantResult: `{"num2":" 0.765111"}`,
 		},
 		{
+			name:       "select-in-array",
+			query:      `select id from S3Object s WHERE id in [1,3]`,
+			wantResult: `{"id":"1"}`,
+		},
+		{
+			name:       "select-in-array-matchnone",
+			query:      `select id from S3Object s WHERE s.id in [4,3]`,
+			wantResult: ``,
+		},
+		{
 			name:       "select-float-by-val",
 			query:      `SELECT num2 from s3object s WHERE num2 = 0.765111`,
 			wantResult: `{"num2":" 0.765111"}`,
@@ -986,7 +996,7 @@ func TestParquetInput(t *testing.T) {
 					offset = fi.Size() + offset
 				}
 
-				if _, err = file.Seek(offset, os.SEEK_SET); err != nil {
+				if _, err = file.Seek(offset, io.SeekStart); err != nil {
 					return nil, err
 				}
 

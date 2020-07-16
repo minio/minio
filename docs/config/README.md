@@ -172,7 +172,6 @@ MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 
 ### API
-
 By default, there is no limitation on the number of concurrents requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
 
 ```
@@ -180,16 +179,18 @@ KEY:
 api  manage global HTTP API call specific features, such as throttling, authentication types, etc.
 
 ARGS:
-requests_max       (number)     set the maximum number of concurrent requests
-requests_deadline  (duration)   set the deadline for API requests waiting to be processed
+requests_max       (number)    set the maximum number of concurrent requests, e.g. "1600"
+requests_deadline  (duration)  set the deadline for API requests waiting to be processed e.g. "1m"
+ready_deadline     (duration)  set the deadline for health check API /minio/health/ready e.g. "1m"
+cors_allow_origin  (csv)       set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"
 ```
 
 or environment variables
 
 ```
-MINIO_API_REQUESTS_MAX        (number)     set the maximum number of concurrent requests
-MINIO_API_REQUESTS_DEADLINE   (duration)   set the deadline for API requests waiting to be processed
-
+MINIO_API_REQUESTS_MAX       (number)    set the maximum number of concurrent requests, e.g. "1600"
+MINIO_API_REQUESTS_DEADLINE  (duration)  set the deadline for API requests waiting to be processed e.g. "1m"
+MINIO_API_CORS_ALLOW_ORIGIN  (csv)       set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"
 ```
 
 #### Notifications
@@ -257,7 +258,9 @@ This behavior is consistent across all keys, each key self documents itself with
 ## Environment only settings (not in config)
 
 #### Usage crawler
-Data usage crawler is enabled by default, following ENVs allow for more staggered delay in terms of usage calculation. 
+> NOTE: Data usage crawler is not supported under Gateway deployments.
+
+Data usage crawler is enabled by default, following ENVs allow for more staggered delay in terms of usage calculation.
 
 The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `MINIO_DISK_USAGE_CRAWL_DELAY` environment variable. By default the value is `10`. This means the crawler will sleep *10x* the time each operation takes.
 
@@ -267,16 +270,6 @@ Example: Following setting will decrease the crawler speed by a factor of 3, red
 
 ```sh
 export MINIO_DISK_USAGE_CRAWL_DELAY=30
-minio server /data
-```
-
-#### Worm (deprecated)
-Enable this to turn on Write-Once-Read-Many. By default it is set to `off`. Set ``MINIO_WORM=on`` environment variable to enable WORM mode. This ENV setting is not recommended anymore, please use Object Locking and Object Retention APIs documented [here](https://github.com/minio/minio/tree/master/docs/retention).
-
-Example:
-
-```sh
-export MINIO_WORM=on
 minio server /data
 ```
 

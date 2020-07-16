@@ -38,7 +38,7 @@ import (
 	"cloud.google.com/go/storage"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
-	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -414,17 +414,22 @@ func (l *gcsGateway) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to GCS backend.
-func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo) {
+func (l *gcsGateway) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
-	return si
+	return si, nil
 }
 
 // MakeBucketWithLocation - Create a new container on GCS backend.
-func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket, location string) error {
+func (l *gcsGateway) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
+	if opts.LockEnabled || opts.VersioningEnabled {
+		return minio.NotImplemented{}
+	}
+
 	bkt := l.client.Bucket(bucket)
 
 	// we'll default to the us multi-region in case of us-east-1
+	location := opts.Location
 	if location == "us-east-1" {
 		location = "us"
 	}
@@ -754,7 +759,7 @@ func (l *gcsGateway) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts.CheckCopyPrecondFn, pipeCloser)
+	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
 }
 
 // GetObject - reads an object from GCS. Supports additional
@@ -895,16 +900,20 @@ func (l *gcsGateway) GetObjectInfo(ctx context.Context, bucket string, object st
 func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r *minio.PutObjReader, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	data := r.Reader
 
+	nctx, cancel := context.WithCancel(ctx)
+
+	defer cancel()
+
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
-	if _, err := l.client.Bucket(bucket).Attrs(ctx); err != nil {
+	if _, err := l.client.Bucket(bucket).Attrs(nctx); err != nil {
 		logger.LogIf(ctx, err, logger.Application)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket)
 	}
 
 	object := l.client.Bucket(bucket).Object(key)
 
-	w := object.NewWriter(ctx)
+	w := object.NewWriter(nctx)
 
 	// Disable "chunked" uploading in GCS client if the size of the data to be uploaded is below
 	// the current chunk-size of the writer. This avoids an unnecessary memory allocation.
@@ -915,7 +924,6 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 
 	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
-		w.CloseWithError(err)
 		logger.LogIf(ctx, err)
 		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, key)
 	}
@@ -951,22 +959,31 @@ func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject
 }
 
 // DeleteObject - Deletes a blob in bucket
-func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object string) error {
+func (l *gcsGateway) DeleteObject(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	err := l.client.Bucket(bucket).Object(object).Delete(ctx)
 	if err != nil {
 		logger.LogIf(ctx, err)
-		return gcsToObjectError(err, bucket, object)
+		return minio.ObjectInfo{}, gcsToObjectError(err, bucket, object)
 	}
 
-	return nil
+	return minio.ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+	}, nil
 }
 
-func (l *gcsGateway) DeleteObjects(ctx context.Context, bucket string, objects []string) ([]error, error) {
+func (l *gcsGateway) DeleteObjects(ctx context.Context, bucket string, objects []minio.ObjectToDelete, opts minio.ObjectOptions) ([]minio.DeletedObject, []error) {
 	errs := make([]error, len(objects))
+	dobjects := make([]minio.DeletedObject, len(objects))
 	for idx, object := range objects {
-		errs[idx] = l.DeleteObject(ctx, bucket, object)
+		_, errs[idx] = l.DeleteObject(ctx, bucket, object.ObjectName, opts)
+		if errs[idx] == nil {
+			dobjects[idx] = minio.DeletedObject{
+				ObjectName: object.ObjectName,
+			}
+		}
 	}
-	return errs, nil
+	return dobjects, errs
 }
 
 // NewMultipartUpload - upload object in multiple parts
@@ -1143,6 +1160,14 @@ func gcsGetPartInfo(ctx context.Context, attrs *storage.ObjectAttrs) (minio.Part
 		Size:         attrs.Size,
 		ETag:         partComps[1],
 	}, nil
+}
+
+// GetMultipartInfo returns multipart info of the uploadId of the object
+func (l *gcsGateway) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (result minio.MultipartInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	return result, nil
 }
 
 //  ListObjectParts returns all object parts for specified object in specified bucket

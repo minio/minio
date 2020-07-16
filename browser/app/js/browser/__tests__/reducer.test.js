@@ -21,11 +21,7 @@ describe("common reducer", () => {
   it("should return the initial state", () => {
     expect(reducer(undefined, {})).toEqual({
       sidebarOpen: false,
-      storageInfo: {
-        total: [0],
-        free: [0],
-        used: [0]
-      },
+      storageInfo: {used: 0},
       serverInfo: {}
     })
   })
@@ -62,11 +58,11 @@ describe("common reducer", () => {
         {},
         {
           type: actionsCommon.SET_STORAGE_INFO,
-          storageInfo: { total: [100], free: [40] }
+          storageInfo: { }
         }
       )
     ).toEqual({
-      storageInfo: { total: [100], free: [40] }
+      storageInfo: { }
     })
   })
 

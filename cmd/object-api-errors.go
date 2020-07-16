@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -65,6 +66,28 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
+	case errFileVersionNotFound:
+		switch len(params) {
+		case 2:
+			err = VersionNotFound{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		case 3:
+			err = VersionNotFound{
+				Bucket:    params[0],
+				Object:    params[1],
+				VersionID: params[2],
+			}
+		}
+	case errMethodNotAllowed:
+		switch len(params) {
+		case 2:
+			err = MethodNotAllowed{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case errFileNotFound:
 		switch len(params) {
 		case 2:
@@ -100,11 +123,13 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
-	case errXLReadQuorum:
+	case errErasureReadQuorum:
 		err = InsufficientReadQuorum{}
-	case errXLWriteQuorum:
+	case errErasureWriteQuorum:
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
+		err = IncompleteBody{}
+	case context.Canceled, context.DeadlineExceeded:
 		err = IncompleteBody{}
 	}
 	return err
@@ -147,8 +172,20 @@ func (e InsufficientWriteQuorum) Error() string {
 
 // GenericError - generic object layer error.
 type GenericError struct {
-	Bucket string
-	Object string
+	Bucket    string
+	Object    string
+	VersionID string
+	Err       error
+}
+
+// InvalidArgument incorrect input argument
+type InvalidArgument GenericError
+
+func (e InvalidArgument) Error() string {
+	if e.Err != nil {
+		return "Invalid arguments provided for " + e.Bucket + "/" + e.Object + ": (" + e.Err.Error() + ")"
+	}
+	return "Invalid arguments provided for " + e.Bucket + "/" + e.Object
 }
 
 // BucketNotFound bucket does not exist.
@@ -179,18 +216,32 @@ func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
+// VersionNotFound object does not exist.
+type VersionNotFound GenericError
+
+func (e VersionNotFound) Error() string {
+	return "Version not found: " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
+}
+
 // ObjectNotFound object does not exist.
 type ObjectNotFound GenericError
 
 func (e ObjectNotFound) Error() string {
-	return "Object not found: " + e.Bucket + "#" + e.Object
+	return "Object not found: " + e.Bucket + "/" + e.Object
+}
+
+// MethodNotAllowed on the object
+type MethodNotAllowed GenericError
+
+func (e MethodNotAllowed) Error() string {
+	return "Method not allowed: " + e.Bucket + "/" + e.Object
 }
 
 // ObjectAlreadyExists object already exists.
 type ObjectAlreadyExists GenericError
 
 func (e ObjectAlreadyExists) Error() string {
-	return "Object: " + e.Bucket + "#" + e.Object + " already exists"
+	return "Object: " + e.Bucket + "/" + e.Object + " already exists"
 }
 
 // ObjectExistsAsDirectory object already exists as a directory.
@@ -252,21 +303,49 @@ func (e InvalidMarkerPrefixCombination) Error() string {
 type BucketPolicyNotFound GenericError
 
 func (e BucketPolicyNotFound) Error() string {
-	return "No bucket policy found for bucket: " + e.Bucket
+	return "No bucket policy configuration found for bucket: " + e.Bucket
 }
 
 // BucketLifecycleNotFound - no bucket lifecycle found.
 type BucketLifecycleNotFound GenericError
 
 func (e BucketLifecycleNotFound) Error() string {
-	return "No bucket life cycle found for bucket : " + e.Bucket
+	return "No bucket lifecycle configuration found for bucket : " + e.Bucket
 }
 
-// BucketSSEConfigNotFound - no bucket encryption config found
+// BucketSSEConfigNotFound - no bucket encryption found
 type BucketSSEConfigNotFound GenericError
 
 func (e BucketSSEConfigNotFound) Error() string {
-	return "No bucket encryption found for bucket: " + e.Bucket
+	return "No bucket encryption configuration found for bucket: " + e.Bucket
+}
+
+// BucketTaggingNotFound - no bucket tags found
+type BucketTaggingNotFound GenericError
+
+func (e BucketTaggingNotFound) Error() string {
+	return "No bucket tags found for bucket: " + e.Bucket
+}
+
+// BucketObjectLockConfigNotFound - no bucket object lock config found
+type BucketObjectLockConfigNotFound GenericError
+
+func (e BucketObjectLockConfigNotFound) Error() string {
+	return "No bucket object lock configuration found for bucket: " + e.Bucket
+}
+
+// BucketQuotaConfigNotFound - no bucket quota config found.
+type BucketQuotaConfigNotFound GenericError
+
+func (e BucketQuotaConfigNotFound) Error() string {
+	return "No quota config found for bucket : " + e.Bucket
+}
+
+// BucketQuotaExceeded - bucket quota exceeded.
+type BucketQuotaExceeded GenericError
+
+func (e BucketQuotaExceeded) Error() string {
+	return "Bucket quota exceeded for bucket: " + e.Bucket
 }
 
 /// Bucket related errors.
@@ -292,17 +371,17 @@ type ObjectNamePrefixAsSlash GenericError
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
-	return "Object name invalid: " + e.Bucket + "#" + e.Object
+	return "Object name invalid: " + e.Bucket + "/" + e.Object
 }
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNameTooLong) Error() string {
-	return "Object name too long: " + e.Bucket + "#" + e.Object
+	return "Object name too long: " + e.Bucket + "/" + e.Object
 }
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNamePrefixAsSlash) Error() string {
-	return "Object name contains forward slash as pefix: " + e.Bucket + "#" + e.Object
+	return "Object name contains forward slash as pefix: " + e.Bucket + "/" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled
@@ -318,7 +397,7 @@ type IncompleteBody GenericError
 
 // Error returns string an error formatted as the given text.
 func (e IncompleteBody) Error() string {
-	return e.Bucket + "#" + e.Object + "has incomplete body"
+	return e.Bucket + "/" + e.Object + "has incomplete body"
 }
 
 // InvalidRange - invalid range typed error.
@@ -414,9 +493,14 @@ func (e InvalidETag) Error() string {
 }
 
 // NotImplemented If a feature is not implemented
-type NotImplemented struct{}
+type NotImplemented struct {
+	API string
+}
 
 func (e NotImplemented) Error() string {
+	if e.API != "" {
+		return e.API + " is Not Implemented"
+	}
 	return "Not Implemented"
 }
 
@@ -444,6 +528,12 @@ func isErrBucketNotFound(err error) bool {
 func isErrObjectNotFound(err error) bool {
 	var objNotFound ObjectNotFound
 	return errors.As(err, &objNotFound)
+}
+
+// isErrVersionNotFound - Check if error type is VersionNotFound.
+func isErrVersionNotFound(err error) bool {
+	var versionNotFound VersionNotFound
+	return errors.As(err, &versionNotFound)
 }
 
 // PreConditionFailed - Check if copy precondition failed

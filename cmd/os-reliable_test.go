@@ -23,10 +23,10 @@ import (
 
 // Tests - mkdirAll()
 func TestOSMkdirAll(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 
@@ -45,10 +45,10 @@ func TestOSMkdirAll(t *testing.T) {
 
 // Tests - renameAll()
 func TestOSRenameAll(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 	defer os.RemoveAll(path)
 

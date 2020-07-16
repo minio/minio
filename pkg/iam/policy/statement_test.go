@@ -265,82 +265,7 @@ func TestStatementIsValid(t *testing.T) {
 	}
 }
 
-func TestStatementMarshalJSON(t *testing.T) {
-	case1Statement := NewStatement(
-		policy.Allow,
-		NewActionSet(PutObjectAction),
-		NewResourceSet(NewResource("mybucket", "/myobject*")),
-		condition.NewFunctions(),
-	)
-	case1Statement.SID = "SomeId1"
-	case1Data := []byte(`{"Sid":"SomeId1","Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"]}`)
-
-	func1, err := condition.NewNullFunc(
-		condition.S3XAmzCopySource,
-		true,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-	case2Statement := NewStatement(
-		policy.Allow,
-		NewActionSet(PutObjectAction),
-		NewResourceSet(NewResource("mybucket", "/myobject*")),
-		condition.NewFunctions(func1),
-	)
-	case2Data := []byte(`{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"],"Condition":{"Null":{"s3:x-amz-copy-source":[true]}}}`)
-
-	func2, err := condition.NewNullFunc(
-		condition.S3XAmzServerSideEncryption,
-		false,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error. %v\n", err)
-	}
-	case3Statement := NewStatement(
-		policy.Deny,
-		NewActionSet(GetObjectAction),
-		NewResourceSet(NewResource("mybucket", "/myobject*")),
-		condition.NewFunctions(func2),
-	)
-	case3Data := []byte(`{"Effect":"Deny","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::mybucket/myobject*"],"Condition":{"Null":{"s3:x-amz-server-side-encryption":[false]}}}`)
-
-	case4Statement := NewStatement(
-		policy.Allow,
-		NewActionSet(GetObjectAction, PutObjectAction),
-		NewResourceSet(NewResource("mybucket", "myobject*")),
-		condition.NewFunctions(func1, func2),
-	)
-
-	testCases := []struct {
-		statement      Statement
-		expectedResult []byte
-		expectErr      bool
-	}{
-		{case1Statement, case1Data, false},
-		{case2Statement, case2Data, false},
-		{case3Statement, case3Data, false},
-		// Invalid statement error.
-		{case4Statement, nil, true},
-	}
-
-	for i, testCase := range testCases {
-		result, err := json.Marshal(testCase.statement)
-		expectErr := (err != nil)
-
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
-		}
-
-		if !testCase.expectErr {
-			if !reflect.DeepEqual(result, testCase.expectedResult) {
-				t.Fatalf("case %v: result: expected: %v, got: %v", i+1, string(testCase.expectedResult), string(result))
-			}
-		}
-	}
-}
-
-func TestStatementUnmarshalJSON(t *testing.T) {
+func TestStatementUnmarshalJSONAndValidate(t *testing.T) {
 	case1Data := []byte(`{
     "Sid": "SomeId1",
     "Effect": "Allow",
@@ -408,7 +333,7 @@ func TestStatementUnmarshalJSON(t *testing.T) {
 
 	case4Data := []byte(`{
     "Effect": "Allow",
-    "Action": "s3:PutObjec",
+    "Action": "s3:PutObjec,
     "Resource": "arn:aws:s3:::mybucket/myobject*"
 }`)
 
@@ -450,36 +375,42 @@ func TestStatementUnmarshalJSON(t *testing.T) {
 }`)
 
 	testCases := []struct {
-		data           []byte
-		expectedResult Statement
-		expectErr      bool
+		data                []byte
+		expectedResult      Statement
+		expectUnmarshalErr  bool
+		expectValidationErr bool
 	}{
-		{case1Data, case1Statement, false},
-		{case2Data, case2Statement, false},
-		{case3Data, case3Statement, false},
+		{case1Data, case1Statement, false, false},
+		{case2Data, case2Statement, false, false},
+		{case3Data, case3Statement, false, false},
 		// JSON unmarshaling error.
-		{case4Data, Statement{}, true},
+		{case4Data, Statement{}, true, true},
 		// Invalid effect error.
-		{case5Data, Statement{}, true},
+		{case5Data, Statement{}, false, true},
 		// Empty action error.
-		{case7Data, Statement{}, true},
+		{case7Data, Statement{}, false, true},
 		// Empty resource error.
-		{case8Data, Statement{}, true},
+		{case8Data, Statement{}, false, true},
 		// Empty condition error.
-		{case9Data, Statement{}, true},
+		{case9Data, Statement{}, true, false},
 		// Unsupported condition key error.
-		{case10Data, Statement{}, true},
+		{case10Data, Statement{}, false, true},
 	}
 
 	for i, testCase := range testCases {
 		var result Statement
 		expectErr := (json.Unmarshal(testCase.data, &result) != nil)
 
-		if expectErr != testCase.expectErr {
-			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
+		if expectErr != testCase.expectUnmarshalErr {
+			t.Fatalf("case %v: error during unmarshal: expected: %v, got: %v", i+1, testCase.expectUnmarshalErr, expectErr)
 		}
 
-		if !testCase.expectErr {
+		expectErr = (result.Validate() != nil)
+		if expectErr != testCase.expectValidationErr {
+			t.Fatalf("case %v: error during validation: expected: %v, got: %v", i+1, testCase.expectValidationErr, expectErr)
+		}
+
+		if !testCase.expectUnmarshalErr && !testCase.expectValidationErr {
 			if !reflect.DeepEqual(result, testCase.expectedResult) {
 				t.Fatalf("case %v: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
 			}

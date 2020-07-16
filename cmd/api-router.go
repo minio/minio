@@ -21,6 +21,8 @@ import (
 
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/wildcard"
+	"github.com/rs/cors"
 )
 
 func newHTTPServerFn() *xhttp.Server {
@@ -83,7 +85,6 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
 		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName+":{port:.*}").Subrouter())
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
@@ -194,7 +195,7 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketReplicationHandler - this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbucketreplication", httpTraceAll(api.GetBucketReplicationHandler)))).Queries("replication", "")
-		// GetBucketTaggingHandler - this is a dummy call.
+		// GetBucketTaggingHandler
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbuckettagging", httpTraceAll(api.GetBucketTaggingHandler)))).Queries("tagging", "")
 		//DeleteBucketWebsiteHandler
@@ -224,9 +225,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// ListObjectsV2
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("listobjectsv2", httpTraceAll(api.ListObjectsV2Handler)))).Queries("list-type", "2")
-		// ListBucketVersions
+		// ListObjectVersions
 		bucket.Methods(http.MethodGet).HandlerFunc(
-			maxClients(collectAPIStats("listbucketversions", httpTraceAll(api.ListBucketObjectVersionsHandler)))).Queries("versions", "")
+			maxClients(collectAPIStats("listobjectversions", httpTraceAll(api.ListObjectVersionsHandler)))).Queries("versions", "")
 		// ListObjectsV1 (Legacy)
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("listobjectsv1", httpTraceAll(api.ListObjectsV1Handler))))
@@ -244,6 +245,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// PutBucketObjectLockConfig
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			maxClients(collectAPIStats("putbucketobjectlockconfig", httpTraceAll(api.PutBucketObjectLockConfigHandler)))).Queries("object-lock", "")
+		// PutBucketTaggingHandler
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			maxClients(collectAPIStats("putbuckettagging", httpTraceAll(api.PutBucketTaggingHandler)))).Queries("tagging", "")
 		// PutBucketVersioning
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			maxClients(collectAPIStats("putbucketversioning", httpTraceAll(api.PutBucketVersioningHandler)))).Queries("versioning", "")
@@ -282,8 +286,54 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(
 		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
 
+	// S3 browser with signature v4 adds '//' for ListBuckets request, so rather
+	// than failing with UnknownAPIRequest we simply handle it for now.
+	apiRouter.Methods(http.MethodGet).Path(SlashSeparator + SlashSeparator).HandlerFunc(
+		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
+
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = http.HandlerFunc(collectAPIStats("notfound", httpTraceAll(errorResponseHandler)))
 	apiRouter.MethodNotAllowedHandler = http.HandlerFunc(collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler)))
 
+}
+
+// corsHandler handler for CORS (Cross Origin Resource Sharing)
+func corsHandler(handler http.Handler) http.Handler {
+	commonS3Headers := []string{
+		xhttp.Date,
+		xhttp.ETag,
+		xhttp.ServerInfo,
+		xhttp.Connection,
+		xhttp.AcceptRanges,
+		xhttp.ContentRange,
+		xhttp.ContentEncoding,
+		xhttp.ContentLength,
+		xhttp.ContentType,
+		"X-Amz*",
+		"x-amz*",
+		"*",
+	}
+
+	return cors.New(cors.Options{
+		AllowOriginFunc: func(origin string) bool {
+			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
+				if wildcard.MatchSimple(allowedOrigin, origin) {
+					return true
+				}
+			}
+			return false
+		},
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPut,
+			http.MethodHead,
+			http.MethodPost,
+			http.MethodDelete,
+			http.MethodOptions,
+			http.MethodPatch,
+		},
+		AllowedHeaders:   commonS3Headers,
+		ExposedHeaders:   commonS3Headers,
+		AllowCredentials: true,
+	}).Handler(handler)
 }

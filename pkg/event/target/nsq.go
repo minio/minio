@@ -80,9 +80,6 @@ func (n NSQArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if n.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -102,9 +99,14 @@ func (target *NSQTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *NSQTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *NSQTarget) IsActive() (bool, error) {
-	if target.producer != nil {
+	if target.producer == nil {
 		producer, err := nsq.NewProducer(target.args.NSQDAddress.String(), target.config)
 		if err != nil {
 			return false, err

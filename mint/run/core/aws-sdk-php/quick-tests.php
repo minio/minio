@@ -33,7 +33,7 @@ const HTTP_NOCONTENT = "204";
 const HTTP_BADREQUEST = "400";
 const HTTP_NOTIMPLEMENTED = "501";
 const HTTP_INTERNAL_ERROR = "500";
-const TEST_METADATA = ['Param_1' => 'val-1'];
+const TEST_METADATA = ['param_1' => 'val-1'];
 
 /**
  * ClientConfig abstracts configuration details to connect to a
@@ -186,7 +186,7 @@ function testHeadObject($s3Client, $objects) {
         if (getStatusCode($result) != HTTP_OK)
             throw new Exception('headObject API failed for ' .
                                 $bucket . '/' . $object);
-        if ($result['Metadata'] != TEST_METADATA) {
+        if (strtolower($result['Metadata']) != strtolower(TEST_METADATA)) {
             throw new Exception("headObject API Metadata didn't match for " .
                                 $bucket . '/' . $object);
         }

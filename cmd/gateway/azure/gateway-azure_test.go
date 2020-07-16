@@ -20,8 +20,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
+	"strconv"
 	"testing"
+
+	"github.com/dustin/go-humanize"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	minio "github.com/minio/minio/cmd"
@@ -239,43 +243,6 @@ func TestAzureCodesToObjectError(t *testing.T) {
 	}
 }
 
-func TestAnonErrToObjectErr(t *testing.T) {
-	testCases := []struct {
-		name       string
-		statusCode int
-		params     []string
-		wantErr    error
-	}{
-		{"ObjectNotFound",
-			http.StatusNotFound,
-			[]string{"testBucket", "testObject"},
-			minio.ObjectNotFound{Bucket: "testBucket", Object: "testObject"},
-		},
-		{"BucketNotFound",
-			http.StatusNotFound,
-			[]string{"testBucket", ""},
-			minio.BucketNotFound{Bucket: "testBucket"},
-		},
-		{"ObjectNameInvalid",
-			http.StatusBadRequest,
-			[]string{"testBucket", "testObject"},
-			minio.ObjectNameInvalid{Bucket: "testBucket", Object: "testObject"},
-		},
-		{"BucketNameInvalid",
-			http.StatusBadRequest,
-			[]string{"testBucket", ""},
-			minio.BucketNameInvalid{Bucket: "testBucket"},
-		},
-	}
-	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			if err := minio.AnonErrToObjectErr(test.statusCode, test.params...); !reflect.DeepEqual(err, test.wantErr) {
-				t.Errorf("anonErrToObjectErr() error = %v, wantErr %v", err, test.wantErr)
-			}
-		})
-	}
-}
-
 func TestCheckAzureUploadID(t *testing.T) {
 	invalidUploadIDs := []string{
 		"123456789abcdefg",
@@ -300,4 +267,37 @@ func TestCheckAzureUploadID(t *testing.T) {
 			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
 		}
 	}
+}
+
+func TestParsingUploadChunkSize(t *testing.T) {
+	key := "MINIO_AZURE_CHUNK_SIZE_MB"
+	invalidValues := []string{
+		"",
+		"0,3",
+		"100.1",
+		"-1",
+	}
+
+	for i, chunkValue := range invalidValues {
+		os.Setenv(key, chunkValue)
+		result := getUploadChunkSizeFromEnv(key, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
+		if result != azureDefaultUploadChunkSize {
+			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
+		}
+	}
+
+	validValues := []string{
+		"1",
+		"1.25",
+		"50",
+		"99",
+	}
+	for i, chunkValue := range validValues {
+		os.Setenv(key, chunkValue)
+		result := getUploadChunkSizeFromEnv(key, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
+		if result == azureDefaultUploadChunkSize {
+			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
+		}
+	}
+
 }

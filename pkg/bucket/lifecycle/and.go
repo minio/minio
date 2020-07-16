@@ -18,15 +18,13 @@ package lifecycle
 
 import (
 	"encoding/xml"
-
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 )
 
 // And - a tag to combine a prefix and multiple tags for lifecycle configuration rule.
 type And struct {
-	XMLName xml.Name      `xml:"And"`
-	Prefix  string        `xml:"Prefix,omitempty"`
-	Tags    []tagging.Tag `xml:"Tag,omitempty"`
+	XMLName xml.Name `xml:"And"`
+	Prefix  string   `xml:"Prefix,omitempty"`
+	Tags    []Tag    `xml:"Tag,omitempty"`
 }
 
 var errDuplicateTagKey = Errorf("Duplicate Tag Keys are not allowed")

@@ -56,7 +56,7 @@ const (
 	MissingUploadID
 )
 
-// Wrapper for calling HeadObject API handler tests for both XL multiple disks and FS single drive setup.
+// Wrapper for calling HeadObject API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIHeadObjectHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPIHeadObjectHandler, []string{"HeadObject"})
 }
@@ -322,7 +322,7 @@ func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucke
 	}
 }
 
-// Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
+// Wrapper for calling GetObject API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIGetObjectHandler(t *testing.T) {
 	globalPolicySys = NewPolicySys()
 	defer func() { globalPolicySys = nil }()
@@ -646,7 +646,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
+// Wrapper for calling GetObject API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIGetObjectWithMPHandler(t *testing.T) {
 	globalPolicySys = NewPolicySys()
 	defer func() { globalPolicySys = nil }()
@@ -844,7 +844,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 
 }
 
-// Wrapper for calling PutObject API handler tests using streaming signature v4 for both XL multiple disks and FS single drive setup.
+// Wrapper for calling PutObject API handler tests using streaming signature v4 for both Erasure multiple disks and FS single drive setup.
 func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
 	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectStreamSigV4Handler, []string{"PutObject"})
@@ -1162,7 +1162,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 	}
 }
 
-// Wrapper for calling PutObject API handler tests for both XL multiple disks and FS single drive setup.
+// Wrapper for calling PutObject API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIPutObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectHandler, []string{"PutObject"})
@@ -1522,7 +1522,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	}
 }
 
-// Wrapper for calling Copy Object Part API handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling Copy Object Part API handler tests for both Erasure multiple disks and single node setup.
 func TestAPICopyObjectPartHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPICopyObjectPartHandler, []string{"CopyObjectPart"})
@@ -1578,15 +1578,14 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 
 	// test cases with inputs and expected result for Copy Object.
 	testCases := []struct {
-		bucketName          string
-		copySourceHeader    string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
-		copySourceVersionID string // data for "X-Amz-Copy-Source-Version-Id" header.
-		copySourceRange     string // data for "X-Amz-Copy-Source-Range" header, contains the byte range offsets of data to be copied.
-		uploadID            string // uploadID of the transaction.
-		invalidPartNumber   bool   // Sets an invalid multipart.
-		maximumPartNumber   bool   // Sets a maximum parts.
-		accessKey           string
-		secretKey           string
+		bucketName        string
+		copySourceHeader  string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
+		copySourceRange   string // data for "X-Amz-Copy-Source-Range" header, contains the byte range offsets of data to be copied.
+		uploadID          string // uploadID of the transaction.
+		invalidPartNumber bool   // Sets an invalid multipart.
+		maximumPartNumber bool   // Sets a maximum parts.
+		accessKey         string
+		secretKey         string
 		// expected output.
 		expectedRespStatus int
 	}{
@@ -1766,27 +1765,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=17",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
-		},
-		// Test case - 16, copy part 1 from from newObject1 with null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			uploadID:            uploadID,
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "null",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusOK,
-		},
-		// Test case - 16, copy part 1 from from newObject1 with non null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			uploadID:            uploadID,
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "17",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -1810,12 +1789,10 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		if testCase.copySourceHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
 		}
-		if testCase.copySourceVersionID != "" {
-			req.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
-		}
 		if testCase.copySourceRange != "" {
 			req.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
 		}
+
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler, `func (api objectAPIHandlers) CopyObjectHandler` handles the request.
 		apiRouter.ServeHTTP(rec, req)
@@ -1861,7 +1838,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 
 }
 
-// Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling Copy Object API handler tests for both Erasure multiple disks and single node setup.
 func TestAPICopyObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPICopyObjectHandler, []string{"CopyObject"})
@@ -1932,7 +1909,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		bucketName           string
 		newObjectName        string // name of the newly copied object.
 		copySourceHeader     string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
-		copySourceVersionID  string // data for "X-Amz-Copy-Source-Version-Id" header.
 		copyModifiedHeader   string // data for "X-Amz-Copy-Source-If-Modified-Since" header
 		copyUnmodifiedHeader string // data for "X-Amz-Copy-Source-If-Unmodified-Since" header
 		metadataGarbage      bool
@@ -2159,27 +2135,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=17",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusNotFound,
-		},
-		// Test case - 19, copy metadata from newObject1 with null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			newObjectName:       "newObject1",
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "null",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusOK,
-		},
-		// Test case - 20, copy metadata from newObject1 with non null X-Amz-Copy-Source-Version-Id
-		{
-			bucketName:          bucketName,
-			newObjectName:       "newObject1",
-			copySourceHeader:    url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
-			copySourceVersionID: "17",
-			accessKey:           credentials.AccessKey,
-			secretKey:           credentials.SecretKey,
-			expectedRespStatus:  http.StatusNotFound,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -2198,9 +2154,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
-		}
-		if testCase.copySourceVersionID != "" {
-			req.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
 		}
 		if testCase.copyModifiedHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)
@@ -2257,9 +2210,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			reqV2.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
-		}
-		if testCase.copySourceVersionID != "" {
-			reqV2.Header.Set("X-Amz-Copy-Source-Version-Id", testCase.copySourceVersionID)
 		}
 		if testCase.copyModifiedHeader != "" {
 			reqV2.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)
@@ -2319,7 +2269,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 }
 
-// Wrapper for calling NewMultipartUpload tests for both XL multiple disks and single node setup.
+// Wrapper for calling NewMultipartUpload tests for both Erasure multiple disks and single node setup.
 // First register the HTTP handler for NewMutlipartUpload, then a HTTP request for NewMultipart upload is made.
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandler(t *testing.T) {
@@ -2465,7 +2415,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 
 }
 
-// Wrapper for calling NewMultipartUploadParallel tests for both XL multiple disks and single node setup.
+// Wrapper for calling NewMultipartUploadParallel tests for both Erasure multiple disks and single node setup.
 // The objective of the test is to initialte multipart upload on the same object 10 times concurrently,
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandlerParallel(t *testing.T) {
@@ -3064,7 +3014,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling Delete Object API handler tests for both XL multiple disks and FS single drive setup.
+// Wrapper for calling Delete Object API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIDeleteObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIDeleteObjectHandler, []string{"DeleteObject"})

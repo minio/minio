@@ -19,7 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -28,17 +28,17 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/tinylib/msgp/msgp"
 )
 
-const dataUsageHashLen = 8
-
 //go:generate msgp -file $GOFILE -unexported
 
 // dataUsageHash is the hash type used.
-type dataUsageHash uint64
+type dataUsageHash string
 
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
@@ -53,6 +53,12 @@ type dataUsageEntry struct {
 	Children dataUsageHashMap
 }
 
+// dataUsageCache contains a cache of data usage entries.
+type dataUsageCache struct {
+	Info  dataUsageCacheInfo
+	Cache map[string]dataUsageEntry
+}
+
 //msgp:ignore dataUsageEntryInfo
 type dataUsageEntryInfo struct {
 	Name   string
@@ -62,9 +68,11 @@ type dataUsageEntryInfo struct {
 
 type dataUsageCacheInfo struct {
 	// Name of the bucket. Also root element.
-	Name       string
-	LastUpdate time.Time
-	NextCycle  uint8
+	Name        string
+	LastUpdate  time.Time
+	NextCycle   uint32
+	BloomFilter []byte               `msg:"BloomFilter,omitempty"`
+	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
 }
 
 // merge other data usage entry into this, excluding children.
@@ -77,8 +85,8 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 }
 
 // mod returns true if the hash mod cycles == cycle.
-func (h dataUsageHash) mod(cycle uint8, cycles uint8) bool {
-	return uint8(h)%cycles == cycle%cycles
+func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
+	return uint32(xxhash.Sum64String(string(h)))%cycles == cycle%cycles
 }
 
 // addChildString will add a child based on its name.
@@ -90,39 +98,110 @@ func (e *dataUsageEntry) addChildString(name string) {
 // addChild will add a child based on its hash.
 // If it already exists it will not be added again.
 func (e *dataUsageEntry) addChild(hash dataUsageHash) {
-	if _, ok := e.Children[hash]; ok {
+	if _, ok := e.Children[hash.Key()]; ok {
 		return
 	}
 	if e.Children == nil {
 		e.Children = make(dataUsageHashMap, 1)
 	}
-	e.Children[hash] = struct{}{}
+	e.Children[hash.Key()] = struct{}{}
 }
 
 // find a path in the cache.
 // Returns nil if not found.
 func (d *dataUsageCache) find(path string) *dataUsageEntry {
-	due, ok := d.Cache[hashPath(path)]
+	due, ok := d.Cache[hashPath(path).Key()]
 	if !ok {
 		return nil
 	}
 	return &due
 }
 
+// Returns nil if not found.
+func (d *dataUsageCache) subCache(path string) dataUsageCache {
+	dst := dataUsageCache{Info: dataUsageCacheInfo{
+		Name:        path,
+		LastUpdate:  d.Info.LastUpdate,
+		BloomFilter: d.Info.BloomFilter,
+	}}
+	dst.copyWithChildren(d, dataUsageHash(hashPath(path).Key()), nil)
+	return dst
+}
+
+func (d *dataUsageCache) deleteRecursive(h dataUsageHash) {
+	if existing, ok := d.Cache[h.String()]; ok {
+		// Delete first if there should be a loop.
+		delete(d.Cache, h.Key())
+		for child := range existing.Children {
+			d.deleteRecursive(dataUsageHash(child))
+		}
+	}
+}
+
+// replaceRootChild will replace the child of root in d with the root of 'other'.
+func (d *dataUsageCache) replaceRootChild(other dataUsageCache) {
+	otherRoot := other.root()
+	if otherRoot == nil {
+		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Source has no root"))
+		return
+	}
+	thisRoot := d.root()
+	if thisRoot == nil {
+		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of current not found"))
+		return
+	}
+	thisRootHash := d.rootHash()
+	otherRootHash := other.rootHash()
+	if thisRootHash == otherRootHash {
+		logger.LogIf(GlobalContext, errors.New("replaceRootChild: Root of child matches root of destination"))
+		return
+	}
+	d.deleteRecursive(other.rootHash())
+	d.copyWithChildren(&other, other.rootHash(), &thisRootHash)
+}
+
+// keepBuckets will keep only the buckets specified specified by delete all others.
+func (d *dataUsageCache) keepBuckets(b []BucketInfo) {
+	lu := make(map[dataUsageHash]struct{})
+	for _, v := range b {
+		lu[hashPath(v.Name)] = struct{}{}
+	}
+	d.keepRootChildren(lu)
+}
+
+// keepRootChildren will keep the root children specified by delete all others.
+func (d *dataUsageCache) keepRootChildren(list map[dataUsageHash]struct{}) {
+	if d.root() == nil {
+		return
+	}
+	rh := d.rootHash()
+	for k := range d.Cache {
+		h := dataUsageHash(k)
+		if h == rh {
+			continue
+		}
+		if _, ok := list[h]; !ok {
+			delete(d.Cache, k)
+			d.deleteRecursive(h)
+		}
+	}
+}
+
 // dui converts the flattened version of the path to DataUsageInfo.
+// As a side effect d will be flattened, use a clone if this is not ok.
 func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	e := d.find(path)
 	if e == nil {
-		return DataUsageInfo{LastUpdate: UTCNow()}
+		// No entry found, return empty.
+		return DataUsageInfo{}
 	}
 	flat := d.flatten(*e)
 	return DataUsageInfo{
-		LastUpdate:            d.Info.LastUpdate,
-		ObjectsCount:          flat.Objects,
-		ObjectsTotalSize:      uint64(flat.Size),
-		ObjectsSizesHistogram: flat.ObjSizes.asMap(),
-		BucketsCount:          uint64(len(e.Children)),
-		BucketsSizes:          d.pathSizes(buckets),
+		LastUpdate:        d.Info.LastUpdate,
+		ObjectsTotalCount: flat.Objects,
+		ObjectsTotalSize:  uint64(flat.Size),
+		BucketsCount:      uint64(len(e.Children)),
+		BucketsUsage:      d.bucketsUsageInfo(buckets),
 	}
 }
 
@@ -132,14 +211,14 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 	hash := hashPath(path)
 	if d.Cache == nil {
-		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
+		d.Cache = make(map[string]dataUsageEntry, 100)
 	}
-	d.Cache[hash] = e
+	d.Cache[hash.Key()] = e
 	if parent != "" {
 		phash := hashPath(parent)
-		p := d.Cache[phash]
+		p := d.Cache[phash.Key()]
 		p.addChild(hash)
-		d.Cache[phash] = p
+		d.Cache[phash.Key()] = p
 	}
 }
 
@@ -148,13 +227,39 @@ func (d *dataUsageCache) replace(path, parent string, e dataUsageEntry) {
 // If the parent does not exist, it will be added.
 func (d *dataUsageCache) replaceHashed(hash dataUsageHash, parent *dataUsageHash, e dataUsageEntry) {
 	if d.Cache == nil {
-		d.Cache = make(map[dataUsageHash]dataUsageEntry, 100)
+		d.Cache = make(map[string]dataUsageEntry, 100)
 	}
-	d.Cache[hash] = e
+	d.Cache[hash.Key()] = e
 	if parent != nil {
-		p := d.Cache[*parent]
+		p := d.Cache[parent.Key()]
 		p.addChild(hash)
-		d.Cache[*parent] = p
+		d.Cache[parent.Key()] = p
+	}
+}
+
+// copyWithChildren will copy entry with hash from src if it exists along with any children.
+// If a parent is specified it will be added to that if not already there.
+// If the parent does not exist, it will be added.
+func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHash, parent *dataUsageHash) {
+	if d.Cache == nil {
+		d.Cache = make(map[string]dataUsageEntry, 100)
+	}
+	e, ok := src.Cache[hash.String()]
+	if !ok {
+		return
+	}
+	d.Cache[hash.Key()] = e
+	for ch := range e.Children {
+		if ch == hash.Key() {
+			logger.LogIf(GlobalContext, errors.New("dataUsageCache.copyWithChildren: Circular reference"))
+			return
+		}
+		d.copyWithChildren(src, dataUsageHash(ch), &hash)
+	}
+	if parent != nil {
+		p := d.Cache[parent.Key()]
+		p.addChild(hash)
+		d.Cache[parent.Key()] = p
 	}
 }
 
@@ -169,7 +274,12 @@ func (d *dataUsageCache) StringAll() string {
 
 // String returns a human readable representation of the string.
 func (h dataUsageHash) String() string {
-	return fmt.Sprintf("%x", uint64(h))
+	return string(h)
+}
+
+// String returns a human readable representation of the string.
+func (h dataUsageHash) Key() string {
+	return string(h)
 }
 
 // flatten all children of the root into the root element and return it.
@@ -197,27 +307,47 @@ func (h *sizeHistogram) add(size int64) {
 	}
 }
 
-// asMap returns the map as a map[string]uint64.
-func (h *sizeHistogram) asMap() map[string]uint64 {
-	res := make(map[string]uint64, 7)
+// toMap returns the map to a map[string]uint64.
+func (h *sizeHistogram) toMap() map[string]uint64 {
+	res := make(map[string]uint64, dataUsageBucketLen)
 	for i, count := range h {
 		res[ObjectsHistogramIntervals[i].name] = count
 	}
 	return res
 }
 
-// pathSizes returns the path sizes as a map.
-func (d *dataUsageCache) pathSizes(buckets []BucketInfo) map[string]uint64 {
-	var dst = make(map[string]uint64, len(buckets))
+// bucketsUsageInfo returns the buckets usage info as a map, with
+// key as bucket name
+func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]BucketUsageInfo {
+	var dst = make(map[string]BucketUsageInfo, len(buckets))
 	for _, bucket := range buckets {
 		e := d.find(bucket.Name)
 		if e == nil {
 			continue
 		}
 		flat := d.flatten(*e)
-		dst[bucket.Name] = uint64(flat.Size)
+		dst[bucket.Name] = BucketUsageInfo{
+			Size:                 uint64(flat.Size),
+			ObjectsCount:         uint64(flat.Objects),
+			ObjectSizesHistogram: flat.ObjSizes.toMap(),
+		}
 	}
 	return dst
+}
+
+// bucketUsageInfo returns the buckets usage info.
+// If not found all values returned are zero values.
+func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
+	e := d.find(bucket)
+	if e == nil {
+		return BucketUsageInfo{}
+	}
+	flat := d.flatten(*e)
+	return BucketUsageInfo{
+		Size:                 uint64(flat.Size),
+		ObjectsCount:         uint64(flat.Objects),
+		ObjectSizesHistogram: flat.ObjSizes.toMap(),
+	}
 }
 
 // sizeRecursive returns the path as a flattened entry.
@@ -228,13 +358,6 @@ func (d *dataUsageCache) sizeRecursive(path string) *dataUsageEntry {
 	}
 	flat := d.flatten(*root)
 	return &flat
-}
-
-// dataUsageCache contains a cache of data usage entries.
-//msgp:ignore dataUsageCache
-type dataUsageCache struct {
-	Info  dataUsageCacheInfo
-	Cache map[dataUsageHash]dataUsageEntry
 }
 
 // root returns the root of the cache.
@@ -251,7 +374,7 @@ func (d *dataUsageCache) rootHash() dataUsageHash {
 func (d *dataUsageCache) clone() dataUsageCache {
 	clone := dataUsageCache{
 		Info:  d.Info,
-		Cache: make(map[dataUsageHash]dataUsageEntry, len(d.Cache)),
+		Cache: make(map[string]dataUsageEntry, len(d.Cache)),
 	}
 	for k, v := range d.Cache {
 		clone.Cache[k] = v
@@ -286,7 +409,7 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 		existing := d.Cache[key]
 		// If not found, merging simply adds.
 		existing.merge(flat)
-		d.replaceHashed(key, &eHash, existing)
+		d.replaceHashed(dataUsageHash(key), &eHash, existing)
 	}
 }
 
@@ -297,13 +420,13 @@ func (d *dataUsageCache) load(ctx context.Context, store ObjectLayer, name strin
 	var buf bytes.Buffer
 	err := store.GetObject(ctx, dataUsageBucket, name, 0, -1, &buf, "", ObjectOptions{})
 	if err != nil {
-		if !isErrObjectNotFound(err) {
+		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) && !errors.Is(err, InsufficientReadQuorum{}) {
 			return toObjectErr(err, dataUsageBucket, name)
 		}
 		*d = dataUsageCache{}
 		return nil
 	}
-	err = d.deserialize(buf.Bytes())
+	err = d.deserialize(&buf)
 	if err != nil {
 		*d = dataUsageCache{}
 		logger.LogIf(ctx, err)
@@ -325,95 +448,69 @@ func (d *dataUsageCache) save(ctx context.Context, store ObjectLayer, name strin
 		name,
 		NewPutObjReader(r, nil, nil),
 		ObjectOptions{})
+	if isErrBucketNotFound(err) {
+		return nil
+	}
 	return err
 }
 
 // dataUsageCacheVer indicates the cache version.
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
-const dataUsageCacheVer = 1
+const dataUsageCacheVer = 2
 
 // serialize the contents of the cache.
 func (d *dataUsageCache) serialize() []byte {
-	// Alloc pessimistically
-	// dataUsageCacheVer
-	due := dataUsageEntry{}
-	msgLen := 1
-	msgLen += d.Info.Msgsize()
-	// len(d.Cache)
-	msgLen += binary.MaxVarintLen64
-	// Hashes (one for key, assume 1 child/node)
-	msgLen += len(d.Cache) * dataUsageHashLen * 2
-	msgLen += len(d.Cache) * due.Msgsize()
-
-	// Create destination buffer...
-	dst := make([]byte, 0, msgLen)
-
-	var n int
-	tmp := make([]byte, 1024)
-	// byte: version.
+	// Prepend version and compress.
+	dst := make([]byte, 0, d.Msgsize()+1)
 	dst = append(dst, dataUsageCacheVer)
-	// Info...
-	dst, err := d.Info.MarshalMsg(dst)
+	buf := bytes.NewBuffer(dst)
+	enc, err := zstd.NewWriter(buf,
+		zstd.WithEncoderLevel(zstd.SpeedFastest),
+		zstd.WithWindowSize(1<<20),
+		zstd.WithEncoderConcurrency(2))
 	if err != nil {
-		panic(err)
+		logger.LogIf(GlobalContext, err)
+		return nil
 	}
-	n = binary.PutUvarint(tmp, uint64(len(d.Cache)))
-	dst = append(dst, tmp[:n]...)
-
-	for k, v := range d.Cache {
-		// Put key
-		binary.LittleEndian.PutUint64(tmp[:dataUsageHashLen], uint64(k))
-		dst = append(dst, tmp[:8]...)
-		tmp, err = v.MarshalMsg(tmp[:0])
-		if err != nil {
-			panic(err)
-		}
-		// key, value pairs.
-		dst = append(dst, tmp...)
-
+	mEnc := msgp.NewWriter(enc)
+	err = d.EncodeMsg(mEnc)
+	if err != nil {
+		logger.LogIf(GlobalContext, err)
+		return nil
 	}
-	return dst
+	mEnc.Flush()
+	err = enc.Close()
+	if err != nil {
+		logger.LogIf(GlobalContext, err)
+		return nil
+	}
+	return buf.Bytes()
 }
 
 // deserialize the supplied byte slice into the cache.
-func (d *dataUsageCache) deserialize(b []byte) error {
-	if len(b) < 1 {
+func (d *dataUsageCache) deserialize(r io.Reader) error {
+	var b [1]byte
+	n, _ := r.Read(b[:])
+	if n != 1 {
 		return io.ErrUnexpectedEOF
 	}
 	switch b[0] {
 	case 1:
+		return errors.New("cache version deprecated (will autoupdate)")
+	case dataUsageCacheVer:
 	default:
 		return fmt.Errorf("dataUsageCache: unknown version: %d", int(b[0]))
 	}
-	b = b[1:]
 
-	// Info...
-	b, err := d.Info.UnmarshalMsg(b)
+	// Zstd compressed.
+	dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
 	if err != nil {
 		return err
 	}
-	cacheLen, n := binary.Uvarint(b)
-	if n <= 0 {
-		return fmt.Errorf("dataUsageCache: reading cachelen, n <= 0 ")
-	}
-	b = b[n:]
-	d.Cache = make(map[dataUsageHash]dataUsageEntry, cacheLen)
+	defer dec.Close()
 
-	for i := 0; i < int(cacheLen); i++ {
-		if len(b) <= dataUsageHashLen {
-			return io.ErrUnexpectedEOF
-		}
-		k := binary.LittleEndian.Uint64(b[:dataUsageHashLen])
-		b = b[dataUsageHashLen:]
-		var v dataUsageEntry
-		b, err = v.UnmarshalMsg(b)
-		if err != nil {
-			return err
-		}
-		d.Cache[dataUsageHash(k)] = v
-	}
-	return nil
+	return d.DecodeMsg(msgp.NewReader(dec))
 }
 
 // Trim this from start+end of hashes.
@@ -430,88 +527,91 @@ func hashPath(data string) dataUsageHash {
 	if data != dataUsageRoot {
 		data = strings.Trim(data, hashPathCutSet)
 	}
-	data = path.Clean(data)
-	return dataUsageHash(xxhash.Sum64String(data))
+	return dataUsageHash(path.Clean(data))
 }
 
-//msgp:ignore dataUsageEntryInfo
-type dataUsageHashMap map[dataUsageHash]struct{}
+//msgp:ignore dataUsageHashMap
+type dataUsageHashMap map[string]struct{}
 
-// MarshalMsg implements msgp.Marshaler
-func (d dataUsageHashMap) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, d.Msgsize())
-
-	// Write bin header manually
-	const mbin32 uint8 = 0xc6
-	sz := uint32(len(d)) * dataUsageHashLen
-	o = append(o, mbin32, byte(sz>>24), byte(sz>>16), byte(sz>>8), byte(sz))
-
-	var tmp [dataUsageHashLen]byte
-	for k := range d {
-		binary.LittleEndian.PutUint64(tmp[:], uint64(k))
-		o = append(o, tmp[:]...)
+// DecodeMsg implements msgp.Decodable
+func (z *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
+	var zb0002 uint32
+	zb0002, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	*z = make(dataUsageHashMap, zb0002)
+	for i := uint32(0); i < zb0002; i++ {
+		{
+			var zb0003 string
+			zb0003, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			(*z)[zb0003] = struct{}{}
+		}
 	}
 	return
 }
 
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (d dataUsageHashMap) Msgsize() (s int) {
-	s = 5 + len(d)*dataUsageHashLen
+// EncodeMsg implements msgp.Encodable
+func (z dataUsageHashMap) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteArrayHeader(uint32(len(z)))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0004 := range z {
+		err = en.WriteString(zb0004)
+		if err != nil {
+			err = msgp.WrapError(err, zb0004)
+			return
+		}
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z dataUsageHashMap) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendArrayHeader(o, uint32(len(z)))
+	for zb0004 := range z {
+		o = msgp.AppendString(o, zb0004)
+	}
 	return
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (d *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var hashes []byte
-	hashes, bts, err = msgp.ReadBytesZC(bts)
+func (z *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
-		err = msgp.WrapError(err, "dataUsageHashMap")
+		err = msgp.WrapError(err)
 		return
 	}
-
-	var dst = make(dataUsageHashMap, len(hashes)/dataUsageHashLen)
-	for len(hashes) >= dataUsageHashLen {
-		dst[dataUsageHash(binary.LittleEndian.Uint64(hashes[:dataUsageHashLen]))] = struct{}{}
-		hashes = hashes[dataUsageHashLen:]
+	*z = make(dataUsageHashMap, zb0002)
+	for i := uint32(0); i < zb0002; i++ {
+		{
+			var zb0003 string
+			zb0003, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			(*z)[zb0003] = struct{}{}
+		}
 	}
-	*d = dst
 	o = bts
 	return
 }
 
-func (d *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
-	var zb0001 uint32
-	zb0001, err = dc.ReadBytesHeader()
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z dataUsageHashMap) Msgsize() (s int) {
+	s = msgp.ArrayHeaderSize
+	for zb0004 := range z {
+		s += msgp.StringPrefixSize + len(zb0004)
 	}
-	var dst = make(dataUsageHashMap, zb0001)
-	var tmp [8]byte
-	for i := uint32(0); i < zb0001; i++ {
-		_, err = io.ReadFull(dc, tmp[:])
-		if err != nil {
-			err = msgp.WrapError(err, "dataUsageHashMap")
-			return
-		}
-		dst[dataUsageHash(binary.LittleEndian.Uint64(tmp[:]))] = struct{}{}
-	}
-	return nil
-}
-func (d dataUsageHashMap) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteBytesHeader(uint32(len(d)) * dataUsageHashLen)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	var tmp [dataUsageHashLen]byte
-	for k := range d {
-		binary.LittleEndian.PutUint64(tmp[:], uint64(k))
-		_, err = en.Write(tmp[:])
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-	}
-	return nil
+	return
 }

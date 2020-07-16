@@ -88,11 +88,6 @@ export class ChangePasswordModal extends React.Component {
 
   canChangePassword() {
     const { serverInfo } = this.props
-    // Password change is not allowed in WORM mode
-    if (serverInfo.info.isWorm) {
-      return false
-    }
-
     // Password change is not allowed for temporary users(STS)
     if(serverInfo.userInfo.isTempUser) {
       return false

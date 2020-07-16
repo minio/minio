@@ -40,7 +40,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 
 	// Create a context we can cancel.
 	ctx, cancel := context.WithCancel(GlobalContext)
-	obj.MakeBucketWithLocation(ctx, bucketName, "")
+	obj.MakeBucketWithLocation(ctx, bucketName, BucketOptions{})
 
 	uploadID, err := obj.NewMultipartUpload(ctx, bucketName, objectName, ObjectOptions{})
 	if err != nil {
@@ -51,7 +51,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	cleanupWg.Add(1)
 	go func() {
 		defer cleanupWg.Done()
-		fs.cleanupStaleMultipartUploads(GlobalContext, time.Millisecond, 0, ctx.Done())
+		fs.cleanupStaleMultipartUploads(ctx, time.Millisecond, 0)
 	}()
 
 	// Wait for 100ms such that - we have given enough time for
@@ -81,7 +81,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -106,7 +106,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	data := []byte("12345")
 	dataLen := int64(len(data))
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -139,7 +139,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	objectName := "object"
 	data := []byte("12345")
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -172,7 +172,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	objectName := "object"
 	data := []byte("12345")
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -204,7 +204,7 @@ func TestAbortMultipartUpload(t *testing.T) {
 	objectName := "object"
 	data := []byte("12345")
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -235,7 +235,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 

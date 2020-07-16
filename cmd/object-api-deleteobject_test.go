@@ -24,7 +24,7 @@ import (
 	"testing"
 )
 
-// Wrapper for calling DeleteObject tests for both XL multiple disks and single node setup.
+// Wrapper for calling DeleteObject tests for both Erasure multiple disks and single node setup.
 func TestDeleteObject(t *testing.T) {
 	ExecObjectLayerTest(t, testDeleteObject)
 }
@@ -74,7 +74,7 @@ func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			"dir/",
 			[]string{"dir/object1", "object0"},
 		},
-		// Test 4: Remove an empty directory and checks it is really removed
+		// Test 5: Remove an empty directory and checks it is really removed
 		{
 			"bucket5",
 			[]objectUpload{{"object0", "content"}, {"dir/", ""}},
@@ -84,8 +84,7 @@ func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	for i, testCase := range testCases {
-
-		err := obj.MakeBucketWithLocation(context.Background(), testCase.bucketName, "")
+		err := obj.MakeBucketWithLocation(context.Background(), testCase.bucketName, BucketOptions{})
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -99,16 +98,17 @@ func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			}
 		}
 
-		// TODO: check the error in the future
-		_ = obj.DeleteObject(context.Background(), testCase.bucketName, testCase.pathToDelete)
+		_, _ = obj.DeleteObject(context.Background(), testCase.bucketName, testCase.pathToDelete, ObjectOptions{})
 
 		result, err := obj.ListObjects(context.Background(), testCase.bucketName, "", "", "", 1000)
 		if err != nil {
 			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
+			continue
 		}
 
 		if len(result.Objects) != len(testCase.objectsAfterDelete) {
-			t.Errorf("Test %d: %s: mismatch number of objects after delete, expected = %d, found = %d", i+1, instanceType, len(testCase.objectsAfterDelete), len(result.Objects))
+			t.Errorf("Test %d: %s: mismatch number of objects after delete, expected = %v, found = %v", i+1, instanceType, testCase.objectsAfterDelete, result.Objects)
+			continue
 		}
 
 		for idx := range result.Objects {

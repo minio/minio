@@ -1,4 +1,4 @@
-// +build !linux,!netbsd,!freebsd,!darwin
+// +build !linux,!netbsd,!freebsd,!darwin,!openbsd
 
 /*
  * Minio Cloud Storage, (C) 2019-2020 Minio, Inc.
@@ -47,16 +47,23 @@ import (
 // see this ZFS-on-Linux commit message:
 // https://github.com/openzfs/zfs/commit/a584ef26053065f486d46a7335bea222cb03eeea
 
+// OpenFileDirectIO wrapper around os.OpenFile nothing special
 func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(filePath, flag, perm)
 }
 
+// DisableDirectIO is a no-op
 func DisableDirectIO(f *os.File) error {
 	return nil
 }
 
-// AlignedBlock simply returns an unaligned buffer for systems that do not
-// support DirectIO.
+// AlignedBlock simply returns an unaligned buffer
+// for systems that do not support DirectIO.
 func AlignedBlock(BlockSize int) []byte {
 	return make([]byte, BlockSize)
+}
+
+// Fdatasync is a no-op
+func Fdatasync(f *os.File) error {
+	return nil
 }

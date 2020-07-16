@@ -20,6 +20,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -50,7 +52,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 	for _, adminVersion := range adminVersions {
 		// Restart and stop MinIO service.
-		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/service").HandlerFunc(httpTraceAll(adminAPI.ServiceActionHandler)).Queries("action", "{action:.*}")
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/service").HandlerFunc(httpTraceAll(adminAPI.ServiceHandler)).Queries("action", "{action:.*}")
 		// Update MinIO servers.
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/update").HandlerFunc(httpTraceAll(adminAPI.ServerUpdateHandler)).Queries("updateURL", "{updateURL:.*}")
 
@@ -62,9 +64,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		// DataUsageInfo operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/datausageinfo").HandlerFunc(httpTraceAll(adminAPI.DataUsageInfoHandler))
 
-		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountingusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountingUsageInfoHandler))
-
-		if globalIsDistXL || globalIsXL {
+		if globalIsDistErasure || globalIsErasure {
 			/// Heal operations
 
 			// Heal processing endpoint.
@@ -88,13 +88,19 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigKVHandler)).Queries("key", "{key:.*}")
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/set-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.SetConfigKVHandler))
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/del-config-kv").HandlerFunc(httpTraceHdrs(adminAPI.DelConfigKVHandler))
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
+		}
+
+		// Enable config help in all modes.
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/help-config-kv").HandlerFunc(httpTraceAll(adminAPI.HelpConfigKVHandler)).Queries("subSys", "{subSys:.*}", "key", "{key:.*}")
+
+		// Config KV history operations.
+		if enableConfigOps {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-config-history-kv").HandlerFunc(httpTraceAll(adminAPI.ListConfigHistoryKVHandler)).Queries("count", "{count:[0-9]+}")
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/clear-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.ClearConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/restore-config-history-kv").HandlerFunc(httpTraceHdrs(adminAPI.RestoreConfigHistoryKVHandler)).Queries("restoreId", "{restoreId:.*}")
 		}
 
-		/// Config operations
+		/// Config import/export bulk operations
 		if enableConfigOps {
 			// Get config
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/config").HandlerFunc(httpTraceHdrs(adminAPI.GetConfigHandler))
@@ -109,12 +115,17 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-canned-policy").HandlerFunc(httpTraceHdrs(adminAPI.AddCannedPolicy)).Queries("name", "{name:.*}")
 
 			// Add user IAM
+
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountUsageInfoHandler))
+
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
 
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-user-status").HandlerFunc(httpTraceHdrs(adminAPI.SetUserStatus)).Queries("accessKey", "{accessKey:.*}").Queries("status", "{status:.*}")
 
 			// Service accounts ops
 			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/add-service-account").HandlerFunc(httpTraceHdrs(adminAPI.AddServiceAccount))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-service-accounts").HandlerFunc(httpTraceHdrs(adminAPI.ListServiceAccounts))
+			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/delete-service-account").HandlerFunc(httpTraceHdrs(adminAPI.DeleteServiceAccount)).Queries("accessKey", "{accessKey:.*}")
 
 			if adminVersion == adminAPIVersionV2Prefix {
 				// Info policy IAM v2
@@ -158,12 +169,23 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 			// Set Group Status
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-group-status").HandlerFunc(httpTraceHdrs(adminAPI.SetGroupStatus)).Queries("group", "{group:.*}").Queries("status", "{status:.*}")
+		}
 
+		// Quota operations
+		if globalIsDistErasure || globalIsErasure {
+			if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
+				// GetBucketQuotaConfig
+				adminRouter.Methods(http.MethodGet).Path(adminVersion+"/get-bucket-quota").HandlerFunc(
+					httpTraceHdrs(adminAPI.GetBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+				// PutBucketQuotaConfig
+				adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-quota").HandlerFunc(
+					httpTraceHdrs(adminAPI.PutBucketQuotaConfigHandler)).Queries("bucket", "{bucket:.*}")
+			}
 		}
 
 		// -- Top APIs --
 		// Top locks
-		if globalIsDistXL {
+		if globalIsDistErasure {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
 		}
 
@@ -175,6 +197,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 		// -- KMS APIs --
 		//
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/kms/key/create").HandlerFunc(httpTraceAll(adminAPI.KMSCreateKeyHandler)).Queries("key-id", "{key-id:.*}")
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/kms/key/status").HandlerFunc(httpTraceAll(adminAPI.KMSKeyStatusHandler))
 
 		if !globalIsGateway {

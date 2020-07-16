@@ -18,13 +18,12 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"crypto"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -130,7 +129,7 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 //     "/.dockerenv":      "file",
 //
 func IsDocker() bool {
-	if env.Get("SIMPLE_CI", "") == "" {
+	if env.Get("MINIO_CI_CD", "") == "" {
 		_, err := os.Stat("/.dockerenv")
 		if os.IsNotExist(err) {
 			return false
@@ -146,7 +145,7 @@ func IsDocker() bool {
 
 // IsDCOS returns true if minio is running in DCOS.
 func IsDCOS() bool {
-	if env.Get("SIMPLE_CI", "") == "" {
+	if env.Get("MINIO_CI_CD", "") == "" {
 		// http://mesos.apache.org/documentation/latest/docker-containerizer/
 		// Mesos docker containerizer sets this value
 		return env.Get("MESOS_CONTAINER_NAME", "") != ""
@@ -161,7 +160,7 @@ func IsKubernetesReplicaSet() bool {
 
 // IsKubernetes returns true if minio is running in kubernetes.
 func IsKubernetes() bool {
-	if env.Get("SIMPLE_CI", "") == "" {
+	if env.Get("MINIO_CI_CD", "") == "" {
 		// Kubernetes env used to validate if we are
 		// indeed running inside a kubernetes pod
 		// is KUBERNETES_SERVICE_HOST but in future
@@ -409,19 +408,15 @@ const updateTimeout = 10 * time.Second
 
 func getUpdateTransport(timeout time.Duration) http.RoundTripper {
 	var updateTransport http.RoundTripper = &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			dialer := &net.Dialer{
-				Timeout:   timeout,
-				KeepAlive: timeout,
-				DualStack: true,
-			}
-			return dialer.DialContext(ctx, network, addr)
-		},
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           xhttp.NewCustomDialContext(timeout),
 		IdleConnTimeout:       timeout,
 		TLSHandshakeTimeout:   timeout,
 		ExpectContinueTimeout: timeout,
-		DisableCompression:    true,
+		TLSClientConfig: &tls.Config{
+			RootCAs: globalRootCAs,
+		},
+		DisableCompression: true,
 	}
 	return updateTransport
 }
@@ -502,7 +497,9 @@ func doUpdate(updateURL, sha256Hex, mode string) (err error) {
 		}
 	}
 
-	clnt := &http.Client{Transport: getUpdateTransport(30 * time.Second)}
+	clnt := &http.Client{
+		Transport: getUpdateTransport(30 * time.Second),
+	}
 	req, err := http.NewRequest(http.MethodGet, updateURL, nil)
 	if err != nil {
 		return AdminError{

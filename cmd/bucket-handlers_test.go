@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-// Wrapper for calling RemoveBucket HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling RemoveBucket HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestRemoveBucketHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testRemoveBucketHandler, []string{"RemoveBucket"})
 }
@@ -73,7 +74,7 @@ func testRemoveBucketHandler(obj ObjectLayer, instanceType, bucketName string, a
 	}
 }
 
-// Wrapper for calling GetBucketPolicy HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling GetBucketPolicy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestGetBucketLocationHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testGetBucketLocationHandler, []string{"GetBucketLocation"})
 }
@@ -115,7 +116,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 			errorResponse: APIErrorResponse{
 				Resource: SlashSeparator + bucketName + SlashSeparator,
 				Code:     "InvalidAccessKeyId",
-				Message:  "The access key ID you provided does not exist in our records.",
+				Message:  "The Access Key Id you provided does not exist in our records.",
 			},
 			shouldPass: false,
 		},
@@ -217,7 +218,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling HeadBucket HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling HeadBucket HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestHeadBucketHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testHeadBucketHandler, []string{"HeadBucket"})
 }
@@ -322,7 +323,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
+// Wrapper for calling TestListMultipartUploadsHandler tests for both Erasure multiple disks and single node setup.
 func TestListMultipartUploadsHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testListMultipartUploadsHandler, []string{"ListMultipartUploads"})
 }
@@ -559,7 +560,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling TestListBucketsHandler tests for both XL multiple disks and single node setup.
+// Wrapper for calling TestListBucketsHandler tests for both Erasure multiple disks and single node setup.
 func TestListBucketsHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testListBucketsHandler, []string{"ListBuckets"})
 }
@@ -653,7 +654,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 	ExecObjectLayerAPINilTest(t, "", "", instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling DeleteMultipleObjects HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling DeleteMultipleObjects HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestAPIDeleteMultipleObjectsHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPIDeleteMultipleObjectsHandler, []string{"DeleteMultipleObjects"})
 }
@@ -679,14 +680,17 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 		objectNames = append(objectNames, objectName)
 	}
 
-	getObjectIdentifierList := func(objectNames []string) (objectIdentifierList []ObjectIdentifier) {
+	getObjectToDeleteList := func(objectNames []string) (objectList []ObjectToDelete) {
 		for _, objectName := range objectNames {
-			objectIdentifierList = append(objectIdentifierList, ObjectIdentifier{objectName})
+			objectList = append(objectList, ObjectToDelete{
+				ObjectName: objectName,
+			})
 		}
 
-		return objectIdentifierList
+		return objectList
 	}
-	getDeleteErrorList := func(objects []ObjectIdentifier) (deleteErrorList []DeleteError) {
+
+	getDeleteErrorList := func(objects []ObjectToDelete) (deleteErrorList []DeleteError) {
 		for _, obj := range objects {
 			deleteErrorList = append(deleteErrorList, DeleteError{
 				Code:    errorCodes[ErrAccessDenied].Code,
@@ -699,22 +703,38 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	}
 
 	requestList := []DeleteObjectsRequest{
-		{Quiet: false, Objects: getObjectIdentifierList(objectNames[:5])},
-		{Quiet: true, Objects: getObjectIdentifierList(objectNames[5:])},
+		{Quiet: false, Objects: getObjectToDeleteList(objectNames[:5])},
+		{Quiet: true, Objects: getObjectToDeleteList(objectNames[5:])},
 	}
 
 	// generate multi objects delete response.
 	successRequest0 := encodeResponse(requestList[0])
-	successResponse0 := generateMultiDeleteResponse(requestList[0].Quiet, requestList[0].Objects, nil)
+
+	deletedObjects := make([]DeletedObject, len(requestList[0].Objects))
+	for i := range requestList[0].Objects {
+		deletedObjects[i] = DeletedObject{
+			ObjectName: requestList[0].Objects[i].ObjectName,
+		}
+	}
+
+	successResponse0 := generateMultiDeleteResponse(requestList[0].Quiet, deletedObjects, nil)
 	encodedSuccessResponse0 := encodeResponse(successResponse0)
 
 	successRequest1 := encodeResponse(requestList[1])
-	successResponse1 := generateMultiDeleteResponse(requestList[1].Quiet, requestList[1].Objects, nil)
+
+	deletedObjects = make([]DeletedObject, len(requestList[1].Objects))
+	for i := range requestList[0].Objects {
+		deletedObjects[i] = DeletedObject{
+			ObjectName: requestList[1].Objects[i].ObjectName,
+		}
+	}
+
+	successResponse1 := generateMultiDeleteResponse(requestList[1].Quiet, deletedObjects, nil)
 	encodedSuccessResponse1 := encodeResponse(successResponse1)
 
 	// generate multi objects delete response for errors.
 	// errorRequest := encodeResponse(requestList[1])
-	errorResponse := generateMultiDeleteResponse(requestList[1].Quiet, requestList[1].Objects, nil)
+	errorResponse := generateMultiDeleteResponse(requestList[1].Quiet, deletedObjects, nil)
 	encodedErrorResponse := encodeResponse(errorResponse)
 
 	anonRequest := encodeResponse(requestList[0])
@@ -817,6 +837,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 		// Verify whether the bucket obtained object is same as the one created.
 		if testCase.expectedContent != nil && !bytes.Equal(testCase.expectedContent, actualContent) {
+			fmt.Println(string(testCase.expectedContent), string(actualContent))
 			t.Errorf("Test %d : MinIO %s: Object content differs from expected value.", i+1, instanceType)
 		}
 	}

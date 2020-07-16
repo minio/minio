@@ -64,17 +64,6 @@ describe("ChangePasswordModal", () => {
     shallow(<ChangePasswordModal serverInfo={serverInfo} />)
   })
 
-  it("should not allow changing password when isWorm is true", () => {
-    const newServerInfo = { ...serverInfo, info: { isWorm: true } }
-    const wrapper = shallow(<ChangePasswordModal serverInfo={newServerInfo} />)
-    expect(
-      wrapper
-        .find("ModalBody")
-        .childAt(0)
-        .text()
-    ).toBe("Credentials of this user cannot be updated through MinIO Browser.")
-  })
-
   it("should not allow changing password when not IAM user", () => {
     const newServerInfo = {
       ...serverInfo,

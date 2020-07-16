@@ -33,5 +33,11 @@ var (
 			Optional:    true,
 			Type:        "duration",
 		},
+		config.HelpKV{
+			Key:         apiCorsAllowOrigin,
+			Description: `set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"`,
+			Optional:    true,
+			Type:        "csv",
+		},
 	}
 )

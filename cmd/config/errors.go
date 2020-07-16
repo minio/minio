@@ -24,6 +24,12 @@ var (
 		"Browser can only accept `on` and `off` values. To disable web browser access, set this value to `off`",
 	)
 
+	ErrInvalidFSOSyncValue = newErrFn(
+		"Invalid O_SYNC value",
+		"Please check the passed value",
+		"Can only accept `on` and `off` values. To enable O_SYNC for fs backend, set this value to `on`",
+	)
+
 	ErrInvalidDomainValue = newErrFn(
 		"Invalid domain value",
 		"Please check the passed value",
@@ -88,6 +94,12 @@ var (
 		"Invalid cache encryption master key value",
 		"Please check the passed value",
 		"MINIO_CACHE_ENCRYPTION_MASTER_KEY: For more information, please refer to https://docs.min.io/docs/minio-disk-cache-guide",
+	)
+
+	ErrInvalidCacheRange = newErrFn(
+		"Invalid cache range value",
+		"Please check the passed value",
+		"MINIO_CACHE_RANGE: Valid expected value is `on` or `off`",
 	)
 
 	ErrInvalidRotatingCredentialsBackendEncrypted = newErrFn(
@@ -167,6 +179,18 @@ Refer to the link https://github.com/minio/minio/tree/master/docs/erasure/storag
 		`FS mode requires only one writable disk path
 Example 1:
    $ minio server /data/minio/`,
+	)
+
+	ErrUnsupportedBackend = newErrFn(
+		"Unable to write to the backend",
+		"Please ensure your disk supports O_DIRECT",
+		"",
+	)
+
+	ErrCorruptedBackend = newErrFn(
+		"Unable to use the specified backend, pre-existing content detected",
+		"Please ensure your disk mount does not have any pre-existing content",
+		"",
 	)
 
 	ErrUnableToWriteInBackend = newErrFn(

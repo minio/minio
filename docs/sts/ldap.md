@@ -1,4 +1,4 @@
-# MinIO AD/LDAP Integration [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# AssumeRoleWithLDAPIdentity [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 **Table of Contents**
 
@@ -15,9 +15,8 @@
     - [Response Elements](#response-elements)
     - [Errors](#errors)
 - [Sample `POST` Request](#sample-post-request)
-- [Sample Response](#sample-response)
-- [Testing](#testing)
-
+- [Using LDAP STS API](#using-ldap-sts-api)
+- [Explore Further](#explore-further)
 
 ## Introduction
 
@@ -38,7 +37,7 @@ LDAP configuration is designed to be simple for the MinIO administrator. The ful
 
 MinIO can be configured to find the groups of a user from AD/LDAP by specifying the **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER** and **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** environment variables. When a user logs in via the STS API, the MinIO server queries the AD/LDAP server with the given search filter and extracts the given attribute from the search results. These values represent the groups that the user is a member of. On each access MinIO applies the IAM policies attached to these groups in MinIO.
 
-MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
+MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
 
 LDAP is configured via the following environment variables:
 
@@ -57,11 +56,12 @@ MINIO_IDENTITY_LDAP_USERNAME_SEARCH_BASE_DN  (list)      ";" separated list of u
 MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE     (string)    search attribute for group name e.g. "cn"
 MINIO_IDENTITY_LDAP_STS_EXPIRY               (duration)  temporary credentials validity duration in s,m,h,d. Default is "1h"
 MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY          (on|off)    trust server TLS without verification, defaults to "off" (verify)
+MINIO_IDENTITY_LDAP_SERVER_STARTTLS          (on|off)    use StartTLS instead of TLS
 MINIO_IDENTITY_LDAP_SERVER_INSECURE          (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
 MINIO_IDENTITY_LDAP_COMMENT                  (sentence)  optionally add a comment to this setting
 ```
 
-MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
+MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
 
 If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server. An example setup for development or experimentation:
 
@@ -104,7 +104,7 @@ member: CN=John,CN=Users,DC=minioad,DC=local
 
 The lines with "..." represent skipped content not shown here from brevity. Based on the output above, we see that the username format variable looks like `cn=%s,cn=users,dc=minioad,dc=local`.
 
-The group search filter looks like `(&(objectclass=group)(memberUid=%s))` and the group name attribute is clearly `cn`.
+The group search filter looks like `(&(objectclass=group)(member=%s))` and the group name attribute is clearly `cn`.
 
 Thus the key configuration parameters look like:
 
@@ -211,7 +211,7 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 </AssumeRoleWithLDAPIdentityResponse>
 ```
 
-## Testing
+## Using LDAP STS API
 
 With multiple OU hierarchies for users, and multiple group search base DN's.
 ```
@@ -236,3 +236,10 @@ $ go run ldap.go -u foouser -p foopassword
         "sessionToken": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NLZXkiOiJOVUlCT1JaWVRWMkhHMkJNUlNYUiIsImF1ZCI6IlBvRWdYUDZ1Vk80NUlzRU5SbmdEWGo1QXU1WWEiLCJhenAiOiJQb0VnWFA2dVZPNDVJc0VOUm5nRFhqNUF1NVlhIiwiZXhwIjoxNTM0ODk2NjI5LCJpYXQiOjE1MzQ4OTMwMjksImlzcyI6Imh0dHBzOi8vbG9jYWxob3N0Ojk0NDMvb2F1dGgyL3Rva2VuIiwianRpIjoiNjY2OTZjZTctN2U1Ny00ZjU5LWI0MWQtM2E1YTMzZGZiNjA4In0.eJONnVaSVHypiXKEARSMnSKgr-2mlC2Sr4fEGJitLcJF_at3LeNdTHv0_oHsv6ZZA3zueVGgFlVXMlREgr9LXA"
 }
 ```
+
+## Caveats
+**LDAP STS credentials are not yet supported on MinIO Browser UI, we may add this feature in future releases.**
+
+## Explore Further
+- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
+- [The MinIO documentation website](https://docs.min.io)

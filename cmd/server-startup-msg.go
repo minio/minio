@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	color "github.com/minio/minio/pkg/color"
 	xnet "github.com/minio/minio/pkg/net"
@@ -46,6 +47,11 @@ func getFormatStr(strLen int, padding int) string {
 	return "%" + formatStr
 }
 
+func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
+	storageInfo, _ := objAPI.StorageInfo(GlobalContext, false)
+	return storageInfo
+}
+
 func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	logStartupMessage(color.RedBold("Server startup failed with '%v'", err))
 	logStartupMessage(color.RedBold("Server switching to safe mode"))
@@ -54,7 +60,7 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo in safe mode.
 	objAPI := newObjectLayerWithoutSafeModeFn()
 	if objAPI != nil {
-		if msg := getStorageInfoMsgSafeMode(objAPI.StorageInfo(GlobalContext, false)); msg != "" {
+		if msg := getStorageInfoMsgSafeMode(mustGetStorageInfo(objAPI)); msg != "" {
 			logStartupMessage(msg)
 		}
 	}
@@ -116,7 +122,7 @@ func printStartupMessage(apiEndpoints []string) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(GlobalContext, false))
+		printStorageInfo(mustGetStorageInfo(objAPI))
 	}
 
 	// Prints credential, region and browser access.
@@ -131,8 +137,10 @@ func printStartupMessage(apiEndpoints []string) {
 
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
-	if globalIsSSL {
-		printCertificateMsg(globalPublicCerts)
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
+		if globalIsSSL {
+			printCertificateMsg(globalPublicCerts)
+		}
 	}
 }
 
@@ -202,7 +210,7 @@ func printEventNotifiers() {
 		return
 	}
 
-	arns := globalNotificationSys.GetARNList()
+	arns := globalNotificationSys.GetARNList(true)
 	if len(arns) == 0 {
 		return
 	}
@@ -298,25 +306,9 @@ func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	logStartupMessage(msg)
 }
 
-// Prints certificate expiry date warning
-func getCertificateChainMsg(certs []*x509.Certificate) string {
-	msg := color.Blue("\nCertificate expiry info:\n")
-	totalCerts := len(certs)
-	var expiringCerts int
-	for i := totalCerts - 1; i >= 0; i-- {
-		cert := certs[i]
-		if cert.NotAfter.Before(UTCNow().Add(globalMinioCertExpireWarnDays)) {
-			expiringCerts++
-			msg += fmt.Sprintf(color.Bold("#%d %s will expire on %s\n"), expiringCerts, cert.Subject.CommonName, cert.NotAfter)
-		}
-	}
-	if expiringCerts > 0 {
-		return msg
-	}
-	return ""
-}
-
 // Prints the certificate expiry message.
 func printCertificateMsg(certs []*x509.Certificate) {
-	logStartupMessage(getCertificateChainMsg(certs))
+	for _, cert := range certs {
+		logStartupMessage(config.CertificateText(cert))
+	}
 }

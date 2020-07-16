@@ -36,7 +36,7 @@ func TestFSParentDirIsObject(t *testing.T) {
 	bucketName := "testbucket"
 	objectName := "object"
 
-	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err = obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	objectContent := "12345"
@@ -124,7 +124,7 @@ func TestFSShutdown(t *testing.T) {
 		fs := obj.(*FSObjects)
 
 		objectContent := "12345"
-		obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+		obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
 		obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte(objectContent)), int64(len(objectContent)), "", ""), ObjectOptions{})
 		return fs, disk
 	}
@@ -138,7 +138,7 @@ func TestFSShutdown(t *testing.T) {
 
 	// Test Shutdown with faulty disk
 	fs, disk = prepareTest()
-	fs.DeleteObject(GlobalContext, bucketName, objectName)
+	fs.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{})
 	os.RemoveAll(disk)
 	if err := fs.Shutdown(GlobalContext); err != nil {
 		t.Fatal("Got unexpected fs shutdown error: ", err)
@@ -155,12 +155,12 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, "a", "")
+	err := obj.MakeBucketWithLocation(GlobalContext, "a", BucketOptions{})
 	if !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("BucketNameInvalid error not returned")
 	}
 
-	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	err = obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestFSPutObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "1/2/3/4/object"
 
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -267,33 +267,33 @@ func TestFSDeleteObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
 	obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{})
 
 	// Test with invalid bucket name
-	if err := fs.DeleteObject(GlobalContext, "fo", objectName); !isSameType(err, BucketNameInvalid{}) {
+	if _, err := fs.DeleteObject(GlobalContext, "fo", objectName, ObjectOptions{}); !isSameType(err, BucketNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with bucket does not exist
-	if err := fs.DeleteObject(GlobalContext, "foobucket", "fooobject"); !isSameType(err, BucketNotFound{}) {
+	if _, err := fs.DeleteObject(GlobalContext, "foobucket", "fooobject", ObjectOptions{}); !isSameType(err, BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with invalid object name
-	if err := fs.DeleteObject(GlobalContext, bucketName, "\\"); !isSameType(err, ObjectNotFound{}) {
+	if _, err := fs.DeleteObject(GlobalContext, bucketName, "\\", ObjectOptions{}); !(isSameType(err, ObjectNotFound{}) || isSameType(err, ObjectNameInvalid{})) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with object does not exist.
-	if err := fs.DeleteObject(GlobalContext, bucketName, "foooobject"); !isSameType(err, ObjectNotFound{}) {
+	if _, err := fs.DeleteObject(GlobalContext, bucketName, "foooobject", ObjectOptions{}); !isSameType(err, ObjectNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with valid condition
-	if err := fs.DeleteObject(GlobalContext, bucketName, objectName); err != nil {
+	if _, err := fs.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	// Delete object should err disk not found.
 	os.RemoveAll(disk)
-	if err := fs.DeleteObject(GlobalContext, bucketName, objectName); err != nil {
+	if _, err := fs.DeleteObject(GlobalContext, bucketName, objectName, ObjectOptions{}); err != nil {
 		if !isSameType(err, BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}
@@ -311,7 +311,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	fs := obj.(*FSObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -330,7 +330,7 @@ func TestFSDeleteBucket(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	obj.MakeBucketWithLocation(GlobalContext, bucketName, "")
+	obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{})
 
 	// Delete bucket should get error disk not found.
 	os.RemoveAll(disk)
@@ -351,7 +351,7 @@ func TestFSListBuckets(t *testing.T) {
 	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -389,7 +389,7 @@ func TestFSHealObject(t *testing.T) {
 	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	_, err := obj.HealObject(GlobalContext, "bucket", "object", madmin.HealOpts{})
+	_, err := obj.HealObject(GlobalContext, "bucket", "object", "", madmin.HealOpts{})
 	if err == nil || !isSameType(err, NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}

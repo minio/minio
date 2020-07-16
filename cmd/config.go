@@ -23,7 +23,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
@@ -40,9 +39,6 @@ const (
 
 	// MinIO configuration file.
 	minioConfigFile = "config.json"
-
-	// MinIO configuration backup file
-	minioConfigBackupFile = minioConfigFile + ".backup"
 )
 
 func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData bool, count int) (
@@ -95,7 +91,8 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData b
 
 func delServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) error {
 	historyFile := pathJoin(minioConfigHistoryPrefix, uuidKV+kvPrefix)
-	return objAPI.DeleteObject(ctx, minioMetaBucket, historyFile)
+	_, err := objAPI.DeleteObject(ctx, minioMetaBucket, historyFile, ObjectOptions{})
+	return err
 }
 
 func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV string) ([]byte, error) {
@@ -152,7 +149,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 	if err != nil {
 		// Config not found for some reason, allow things to continue
 		// by initializing a new fresh config in safe mode.
-		if err == errConfigNotFound && globalSafeMode {
+		if err == errConfigNotFound && newObjectLayerFn() == nil {
 			return newServerConfig(), nil
 		}
 		return nil, err
@@ -168,13 +165,14 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		}
 	}
 
-	var config = config.New()
+	var srvCfg = config.New()
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err = json.Unmarshal(configData, &config); err != nil {
+	if err = json.Unmarshal(configData, &srvCfg); err != nil {
 		return nil, err
 	}
 
-	return config, nil
+	// Add any missing entries
+	return srvCfg.Merge(), nil
 }
 
 // ConfigSys - config system.
@@ -183,25 +181,6 @@ type ConfigSys struct{}
 // Load - load config.json.
 func (sys *ConfigSys) Load(objAPI ObjectLayer) error {
 	return sys.Init(objAPI)
-}
-
-// WatchConfigNASDisk - watches nas disk on periodic basis.
-func (sys *ConfigSys) WatchConfigNASDisk(objAPI ObjectLayer) {
-	configInterval := globalRefreshIAMInterval
-	watchDisk := func() {
-		ticker := time.NewTicker(configInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-GlobalServiceDoneCh:
-				return
-			case <-ticker.C:
-				loadConfig(objAPI)
-			}
-		}
-	}
-	// Refresh configSys in background for NAS gateway.
-	go watchDisk()
 }
 
 // Init - initializes config system from config.json.

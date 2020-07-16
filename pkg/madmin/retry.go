@@ -20,10 +20,7 @@ package madmin
 import (
 	"context"
 	"math/rand"
-	"net"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 )
@@ -116,37 +113,6 @@ func (adm AdminClient) newRetryTimer(ctx context.Context, maxRetry int, unit tim
 	return attemptCh
 }
 
-// isHTTPReqErrorRetryable - is http requests error retryable, such
-// as i/o timeout, connection broken etc..
-func isHTTPReqErrorRetryable(err error) bool {
-	if err == nil {
-		return false
-	}
-	switch e := err.(type) {
-	case *url.Error:
-		switch e.Err.(type) {
-		case *net.DNSError, *net.OpError, net.UnknownNetworkError:
-			return true
-		}
-		if strings.Contains(err.Error(), "Connection closed by foreign host") {
-			return true
-		} else if strings.Contains(err.Error(), "net/http: TLS handshake timeout") {
-			// If error is - tlsHandshakeTimeoutError, retry.
-			return true
-		} else if strings.Contains(err.Error(), "i/o timeout") {
-			// If error is - tcp timeoutError, retry.
-			return true
-		} else if strings.Contains(err.Error(), "connection timed out") {
-			// If err is a net.Dial timeout, retry.
-			return true
-		} else if strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken") {
-			// If error is transport connection broken, retry.
-			return true
-		}
-	}
-	return false
-}
-
 // List of AWS S3 error codes which are retryable.
 var retryableS3Codes = map[string]struct{}{
 	"RequestError":         {},
@@ -168,6 +134,7 @@ func isS3CodeRetryable(s3Code string) (ok bool) {
 
 // List of HTTP status codes which are retryable.
 var retryableHTTPStatusCodes = map[int]struct{}{
+	http.StatusRequestTimeout:      {},
 	http.StatusTooManyRequests:     {},
 	http.StatusInternalServerError: {},
 	http.StatusBadGateway:          {},

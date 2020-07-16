@@ -83,6 +83,22 @@ func createNamespace(disk StorageAPI, volume string, files []string) error {
 	return err
 }
 
+// Returns function "listDir" of the type listDirFunc.
+// disks - used for doing disk.ListDir()
+func listDirFactory(ctx context.Context, disk StorageAPI) ListDirFunc {
+	return func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
+		entries, err := disk.ListDir(volume, dirPath, -1)
+		if err != nil {
+			return false, nil
+		}
+		if len(entries) == 0 {
+			return true, nil
+		}
+		sort.Strings(entries)
+		return false, filterMatchingPrefix(entries, dirEntry)
+	}
+}
+
 // Test if tree walker returns entries matching prefix alone are received
 // when a non empty prefix is supplied.
 func testTreeWalkPrefix(t *testing.T, listDir ListDirFunc) {
@@ -214,78 +230,6 @@ func TestTreeWalkTimeout(t *testing.T) {
 		t.Error("Tree-walk go routine has not exited after timeout.")
 	}
 	err = os.RemoveAll(fsDir)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-// Test ListDir - listDir should list entries from the first disk, if the first disk is down,
-// it should list from the next disk.
-func TestListDir(t *testing.T) {
-	file1 := "file1"
-	file2 := "file2"
-	// Create two backend directories fsDir1 and fsDir2.
-	fsDir1, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
-	}
-	fsDir2, err := ioutil.TempDir(globalTestTmpDir, "minio-")
-	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
-	}
-
-	// Create two StorageAPIs disk1 and disk2.
-	endpoints := mustGetNewEndpoints(fsDir1)
-	disk1, err := newStorageAPI(endpoints[0])
-	if err != nil {
-		t.Errorf("Unable to create StorageAPI: %s", err)
-	}
-
-	endpoints = mustGetNewEndpoints(fsDir2)
-	disk2, err := newStorageAPI(endpoints[0])
-	if err != nil {
-		t.Errorf("Unable to create StorageAPI: %s", err)
-	}
-
-	// create listDir function.
-	listDir := listDirFactory(context.Background(), disk1, disk2)
-
-	// Create file1 in fsDir1 and file2 in fsDir2.
-	disks := []StorageAPI{disk1, disk2}
-	for i, disk := range disks {
-		err = createNamespace(disk, volume, []string{fmt.Sprintf("file%d", i+1)})
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Should list "file1" from fsDir1.
-	_, entries := listDir(volume, "", "")
-	if len(entries) != 2 {
-		t.Fatal("Expected the number of entries to be 2")
-	}
-	if entries[0] != file1 {
-		t.Fatal("Expected the entry to be file1")
-	}
-	if entries[1] != file2 {
-		t.Fatal("Expected the entry to be file2")
-	}
-
-	// Remove fsDir1, list should return entries from fsDir2
-	err = os.RemoveAll(fsDir1)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// Should list "file2" from fsDir2.
-	_, entries = listDir(volume, "", "")
-	if len(entries) != 1 {
-		t.Fatal("Expected the number of entries to be 1")
-	}
-	if entries[0] != file2 {
-		t.Fatal("Expected the entry to be file2")
-	}
-	err = os.RemoveAll(fsDir2)
 	if err != nil {
 		t.Error(err)
 	}

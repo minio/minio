@@ -92,7 +92,7 @@ func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.Policy {
 	}
 }
 
-// Wrapper for calling Put Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling Put Bucket Policy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestPutBucketPolicyHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testPutBucketPolicyHandler, []string{"PutBucketPolicy"})
 }
@@ -102,7 +102,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	credentials auth.Credentials, t *testing.T) {
 
 	bucketName1 := fmt.Sprintf("%s-1", bucketName)
-	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, ""); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName1, BucketOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -314,7 +314,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 
 }
 
-// Wrapper for calling Get Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling Get Bucket Policy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestGetBucketPolicyHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testGetBucketPolicyHandler, []string{"PutBucketPolicy", "GetBucketPolicy"})
 }
@@ -520,7 +520,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
-// Wrapper for calling Delete Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
+// Wrapper for calling Delete Bucket Policy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestDeleteBucketPolicyHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testDeleteBucketPolicyHandler, []string{"PutBucketPolicy", "DeleteBucketPolicy"})
 }

@@ -36,7 +36,6 @@ import (
 
 const (
 	formatNamespace = "namespace"
-	formatAccess    = "access"
 )
 
 // ErrTargetsOffline - Indicates single/multiple target failures.
@@ -61,8 +60,7 @@ func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transpor
 
 // GetNotificationTargets registers and initializes all notification
 // targets, returns error if any.
-func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport) (*event.TargetList, error) {
-	test := false
+func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool) (*event.TargetList, error) {
 	returnOnTargetError := false
 	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test, returnOnTargetError)
 }
@@ -73,7 +71,6 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
 func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
-
 	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, returnOnTargetError)
 	if err != nil {
 		return targetList, err
@@ -102,8 +99,10 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 	var targetsOffline bool
 
 	defer func() {
-		// Automatically close all connections to targets when an error occur
-		if err != nil {
+		// Automatically close all connections to targets when an error occur.
+		// Close all the targets if returnOnTargetError is set
+		// Else, close only the failed targets
+		if err != nil && returnOnTargetError {
 			for _, t := range targetList.TargetMap() {
 				_ = t.Close()
 			}
@@ -174,6 +173,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 
 		if err = targetList.Add(newTarget); err != nil {
@@ -194,6 +194,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -214,6 +215,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -234,6 +236,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -253,6 +256,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -272,6 +276,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -291,6 +296,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -310,6 +316,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -329,6 +336,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -348,6 +356,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			if returnOnTargetError {
 				return nil, err
 			}
+			_ = newTarget.Close()
 		}
 		if err = targetList.Add(newTarget); err != nil {
 			logger.LogIf(context.Background(), err)
@@ -1417,6 +1426,14 @@ var (
 			Key:   target.WebhookQueueDir,
 			Value: "",
 		},
+		config.KV{
+			Key:   target.WebhookClientCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.WebhookClientKey,
+			Value: "",
+		},
 	}
 )
 
@@ -1460,6 +1477,15 @@ func GetNotifyWebhook(webhookKVS map[string]config.KVS, transport *http.Transpor
 		if k != config.Default {
 			authEnv = authEnv + config.Default + k
 		}
+		clientCertEnv := target.EnvWebhookClientCert
+		if k != config.Default {
+			clientCertEnv = clientCertEnv + config.Default + k
+		}
+
+		clientKeyEnv := target.EnvWebhookClientKey
+		if k != config.Default {
+			clientKeyEnv = clientKeyEnv + config.Default + k
+		}
 
 		webhookArgs := target.WebhookArgs{
 			Enable:     enabled,
@@ -1468,6 +1494,8 @@ func GetNotifyWebhook(webhookKVS map[string]config.KVS, transport *http.Transpor
 			AuthToken:  env.Get(authEnv, kv.Get(target.WebhookAuthToken)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.WebhookQueueDir)),
 			QueueLimit: uint64(queueLimit),
+			ClientCert: env.Get(clientCertEnv, kv.Get(target.WebhookClientCert)),
+			ClientKey:  env.Get(clientKeyEnv, kv.Get(target.WebhookClientKey)),
 		}
 		if err = webhookArgs.Validate(); err != nil {
 			return nil, err

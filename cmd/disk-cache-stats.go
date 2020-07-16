@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019, 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,45 +17,56 @@
 package cmd
 
 import (
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
+
+// CacheDiskStats represents cache disk statistics
+// such as current disk usage and available.
+type CacheDiskStats struct {
+	// indicates if usage is high or low, if high value is '1', if low its '0'
+	UsageState int32
+	// indicates the current usage percentage of this cache disk
+	UsagePercent uint64
+	Dir          string
+}
 
 // CacheStats - represents bytes served from cache,
 // cache hits and cache misses.
 type CacheStats struct {
-	BytesServed atomic.Uint64
-	Hits        atomic.Uint64
-	Misses      atomic.Uint64
+	BytesServed  uint64
+	Hits         uint64
+	Misses       uint64
+	GetDiskStats func() []CacheDiskStats
 }
 
 // Increase total bytes served from cache
 func (s *CacheStats) incBytesServed(n int64) {
-	s.BytesServed.Add(uint64(n))
+	atomic.AddUint64(&s.BytesServed, uint64(n))
 }
 
 // Increase cache hit by 1
 func (s *CacheStats) incHit() {
-	s.Hits.Add(uint64(1))
+	atomic.AddUint64(&s.Hits, 1)
 }
 
 // Increase cache miss by 1
 func (s *CacheStats) incMiss() {
-	s.Misses.Add(uint64(1))
+	atomic.AddUint64(&s.Misses, 1)
 }
 
 // Get total bytes served
 func (s *CacheStats) getBytesServed() uint64 {
-	return s.BytesServed.Load()
+	return atomic.LoadUint64(&s.BytesServed)
 }
 
 // Get total cache hits
 func (s *CacheStats) getHits() uint64 {
-	return s.Hits.Load()
+	return atomic.LoadUint64(&s.Hits)
 }
 
 // Get total cache misses
 func (s *CacheStats) getMisses() uint64 {
-	return s.Misses.Load()
+	return atomic.LoadUint64(&s.Misses)
 }
 
 // Prepare new CacheStats structure

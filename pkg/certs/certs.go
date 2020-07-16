@@ -36,7 +36,7 @@ type Certs struct {
 	loadCert LoadX509KeyPairFunc
 
 	// points to the latest certificate.
-	cert tls.Certificate
+	cert *tls.Certificate
 
 	// internal param to track for events, also
 	// used to close the watcher.
@@ -89,12 +89,13 @@ func checkSymlink(file string) (bool, error) {
 // watchSymlinks reloads symlinked files since fsnotify cannot watch
 // on symbolic links.
 func (c *Certs) watchSymlinks() (err error) {
-	c.Lock()
-	c.cert, err = c.loadCert(c.certFile, c.keyFile)
-	c.Unlock()
+	cert, err := c.loadCert(c.certFile, c.keyFile)
 	if err != nil {
 		return err
 	}
+	c.Lock()
+	c.cert = &cert
+	c.Unlock()
 	go func() {
 		for {
 			select {
@@ -107,7 +108,7 @@ func (c *Certs) watchSymlinks() (err error) {
 					continue
 				}
 				c.Lock()
-				c.cert = cert
+				c.cert = &cert
 				c.Unlock()
 			}
 		}
@@ -138,8 +139,12 @@ func (c *Certs) watch() (err error) {
 	if err = notify.Watch(filepath.Dir(c.keyFile), c.e, eventWrite...); err != nil {
 		return err
 	}
+	cert, err := c.loadCert(c.certFile, c.keyFile)
+	if err != nil {
+		return err
+	}
 	c.Lock()
-	c.cert, err = c.loadCert(c.certFile, c.keyFile)
+	c.cert = &cert
 	c.Unlock()
 	if err != nil {
 		return err
@@ -162,7 +167,7 @@ func (c *Certs) run() {
 					continue
 				}
 				c.Lock()
-				c.cert = cert
+				c.cert = &cert
 				c.Unlock()
 			}
 		}
@@ -177,7 +182,15 @@ type GetCertificateFunc func(hello *tls.ClientHelloInfo) (*tls.Certificate, erro
 func (c *Certs) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	c.RLock()
 	defer c.RUnlock()
-	return &c.cert, nil
+	return c.cert, nil
+}
+
+// GetClientCertificate returns the loaded certificate for use by
+// the TLSConfig fields GetClientCertificate field in a http.Server.
+func (c *Certs) GetClientCertificate(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+	c.RLock()
+	defer c.RUnlock()
+	return c.cert, nil
 }
 
 // Stop tells loader to stop watching for changes to the

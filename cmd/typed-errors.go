@@ -88,7 +88,13 @@ var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove 
 var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 
 // error returned in IAM subsystem when an external users systems is configured.
-var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed under the current configuration")
+var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed with LDAP configuration")
+
+// error returned in IAM subsystem when IAM sub-system is still being initialized.
+var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")
 
 // error returned when access is denied.
 var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
+
+// error returned when object is locked.
+var errLockedObject = errors.New("Object is WORM protected and cannot be overwritten or deleted")

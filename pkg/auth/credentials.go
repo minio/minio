@@ -91,6 +91,7 @@ type Credentials struct {
 	SessionToken string    `xml:"SessionToken" json:"sessionToken,omitempty"`
 	Status       string    `xml:"-" json:"status,omitempty"`
 	ParentUser   string    `xml:"-" json:"parentUser,omitempty"`
+	Groups       []string  `xml:"-" json:"groups,omitempty"`
 }
 
 func (cred Credentials) String() string {
@@ -120,7 +121,7 @@ func (cred Credentials) IsExpired() bool {
 
 // IsTemp - returns whether credential is temporary or not.
 func (cred Credentials) IsTemp() bool {
-	return cred.SessionToken != "" && cred.ParentUser == "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
+	return cred.SessionToken != "" && !cred.Expiration.IsZero() && !cred.Expiration.Equal(timeSentinel)
 }
 
 // IsServiceAccount - returns whether credential is a service account or not

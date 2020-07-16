@@ -1,0 +1,12 @@
+FROM ubuntu
+
+LABEL maintainer="MinIO Inc <dev@min.io>"
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends --no-install-suggests \
+      git golang make npm && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=$PATH:/root/go/bin
+
+RUN go get github.com/go-bindata/go-bindata/go-bindata && \
+    go get github.com/elazarl/go-bindata-assetfs/go-bindata-assetfs

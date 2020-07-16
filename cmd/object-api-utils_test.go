@@ -521,7 +521,7 @@ func TestGetActualSize(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		got := test.objInfo.GetActualSize()
+		got, _ := test.objInfo.GetActualSize()
 		if got != test.result {
 			t.Errorf("Test %d - expected %d but received %d",
 				i+1, test.result, got)

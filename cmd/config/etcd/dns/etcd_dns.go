@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2018,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
-	"github.com/coreos/etcd/clientv3"
+	"go.etcd.io/etcd/v3/clientv3"
 )
 
 // ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
@@ -45,6 +45,11 @@ func newCoreDNSMsg(ip string, port string, ttl uint32, t time.Time) ([]byte, err
 		TTL:          ttl,
 		CreationDate: t,
 	})
+}
+
+// Close closes the internal etcd client and cannot be used further
+func (c *CoreDNS) Close() {
+	c.etcdClient.Close()
 }
 
 // List - Retrieves list of DNS entries for the domain.

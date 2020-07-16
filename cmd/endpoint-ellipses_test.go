@@ -105,10 +105,17 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 			true,
 		},
 		{
+			[]string{"http://host{1...2}/data{1...180}"},
+			[]uint64{360},
+			[][]uint64{{15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15}},
+			15,
+			true,
+		},
+		{
 			[]string{"http://host{1...12}/data{1...12}"},
 			[]uint64{144},
-			[][]uint64{{16, 16, 16, 16, 16, 16, 16, 16, 16}},
-			16,
+			[][]uint64{{12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12}},
+			12,
 			true,
 		},
 		{
@@ -160,7 +167,16 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes, testCase.envOverride)
+			var argPatterns = make([]ellipses.ArgPattern, len(testCase.args))
+			for i, arg := range testCase.args {
+				patterns, err := ellipses.FindEllipsesPatterns(arg)
+				if err != nil {
+					t.Fatalf("Unexpected failure %s", err)
+				}
+				argPatterns[i] = patterns
+			}
+
+			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes, testCase.envOverride, argPatterns)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}
@@ -195,11 +211,35 @@ func TestGetSetIndexes(t *testing.T) {
 			nil,
 			false,
 		},
+		{
+			[]string{"data{1...17}/export{1...52}"},
+			[]uint64{14144},
+			nil,
+			false,
+		},
 		// Valid inputs.
 		{
 			[]string{"data{1...27}"},
 			[]uint64{27},
 			[][]uint64{{9, 9, 9}},
+			true,
+		},
+		{
+			[]string{"http://host{1...3}/data{1...180}"},
+			[]uint64{540},
+			[][]uint64{{15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15}},
+			true,
+		},
+		{
+			[]string{"http://host{1...2}.rack{1...4}/data{1...180}"},
+			[]uint64{1440},
+			[][]uint64{{16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16}},
+			true,
+		},
+		{
+			[]string{"http://host{1...2}/data{1...180}"},
+			[]uint64{360},
+			[][]uint64{{12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12}},
 			true,
 		},
 		{
@@ -238,12 +278,26 @@ func TestGetSetIndexes(t *testing.T) {
 			[][]uint64{{10}, {10}, {10}},
 			true,
 		},
+		{
+			[]string{"data{1...16}/export{1...52}"},
+			[]uint64{832},
+			[][]uint64{{16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16}},
+			true,
+		},
 	}
 
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes, 0)
+			var argPatterns = make([]ellipses.ArgPattern, len(testCase.args))
+			for i, arg := range testCase.args {
+				patterns, err := ellipses.FindEllipsesPatterns(arg)
+				if err != nil {
+					t.Fatalf("Unexpected failure %s", err)
+				}
+				argPatterns[i] = patterns
+			}
+			gotIndexes, err := getSetIndexes(testCase.args, testCase.totalSizes, 0, argPatterns)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}

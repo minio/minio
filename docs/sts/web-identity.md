@@ -12,15 +12,16 @@
     - [Errors](#errors)
 - [Sample `POST` Request](#sample-post-request)
 - [Sample Response](#sample-response)
-- [Testing](#testing)
+- [Using WebIdentity API](#using-webidentity-api)
 - [Authorization Flow](#authorization-flow)
-- [MinIO Browser](#minio-browser)
+- [Using MinIO Browser](#using-minio-browser)
+- [Explore Further](#explore-further)
 
 ## Introduction
 
 Calling AssumeRoleWithWebIdentity does not require the use of MinIO default credentials. Therefore, you can distribute an application (for example, on mobile devices) that requests temporary security credentials without including MinIO default credentials in the application. Instead, the identity of the caller is validated by using a JWT access token from the web identity provider. The temporary security credentials returned by this API consists of an access key, a secret key, and a security token. Applications can use these temporary security credentials to sign calls to MinIO API operations.
 
-By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration to 12 hours.
+By default, the temporary security credentials created by AssumeRoleWithWebIdentity last for one hour. However, use the optional DurationSeconds parameter to specify the duration of the credentials. This value varies from 900 seconds (15 minutes) up to the maximum session duration of 7 days.
 
 ## API Request Parameters
 ### WebIdentityToken
@@ -41,13 +42,13 @@ Indicates STS API version information, the only supported value is '2011-06-15'.
 | *Required* | *Yes*    |
 
 ### DurationSeconds
-The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 12 hours. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds.
+The duration, in seconds. The value can range from 900 seconds (15 minutes) up to 7 days. If value is higher than this setting, then operation fails. By default, the value is set to 3600 seconds. If no *DurationSeconds* is specified expiry seconds is obtained from *WebIdentityToken*.
 
-| Params        | Value                                           |
-| :--           | :--                                             |
-| *Type*        | *Integer*                                       |
-| *Valid Range* | *Minimum value of 900. Maximum value of 43200.* |
-| *Required*    | *No*                                            |
+| Params        | Value                                            |
+| :--           | :--                                              |
+| *Type*        | *Integer*                                        |
+| *Valid Range* | *Minimum value of 900. Maximum value of 604800.* |
+| *Required*    | *No*                                             |
 
 ### Policy
 An IAM policy in JSON format that you want to use as an inline session policy. This parameter is optional. Passing policies to this operation returns new temporary credentials. The resulting session's permissions are the intersection of the canned policy name and the policy set here. You cannot use this policy to grant more permissions than those allowed by the canned policy name being assumed.
@@ -89,12 +90,14 @@ http://minio.cluster:9000?Action=AssumeRoleWithWebIdentity&DurationSeconds=3600&
 </AssumeRoleWithWebIdentityResponse>
 ```
 
-## Testing
+## Using WebIdentity API
 ```
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio123
-export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 export MINIO_IDENTITY_OPENID_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
+export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
+# Optional: Allow to specify the requested OpenID scopes (OpenID only requires the `openid` scope)
+#export MINIO_IDENTITY_OPENID_SCOPES="openid,profile,email"
 minio server /mnt/export
 ```
 
@@ -112,7 +115,7 @@ $ go run web-identity.go -cid 204367807228-ok7601k6gj1pgge7m09h7d79co8p35xx.apps
 2018/12/26 17:49:36 listening on http://localhost:8080/
 ```
 
-Note: For a reasonable test outcome, make sure the assumed user has at least permission/policy to list all buckets. That policy would look like below:
+> NOTE: for a reasonable test outcome, make sure the assumed user has at least permission/policy to list all buckets. That policy would look like below:
 ```
 {
   "version": "2012-10-17",
@@ -138,11 +141,8 @@ Note: For a reasonable test outcome, make sure the assumed user has at least per
 - Once obtained the JWT id_token is further sent to STS endpoint i.e MinIO to retrive temporary credentials.
 - Temporary credentials are displayed on the browser upon successful retrieval.
 
-
-## MinIO Browser
-To support WebIdentity login on MinIO Browser
-
-- Set openid configuration and restart MinIO
+## Using MinIO Browser
+To support WebIdentity login on MinIO Browser, set openid configuration and restart MinIO
 
 ```
 mc admin config set myminio identity_openid config_url="<CONFIG_URL>" client_id="<client_identifier>"
@@ -162,3 +162,7 @@ JWT token returned by the Identity Provider should include a custom claim for th
 - Enter the `Client ID` obtained from Identity Provider and press ENTER, if not you can set a `client_id` on server to avoid this step.
 - The user will be redirected to the Identity Provider login page
 - Upon successful login on Identity Provider page the user will be automatically logged into MinIO Browser
+
+## Explore Further
+- [MinIO Admin Complete Guide](https://docs.min.io/docs/minio-admin-complete-guide.html)
+- [The MinIO documentation website](https://docs.min.io)

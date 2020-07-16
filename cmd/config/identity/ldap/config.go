@@ -58,6 +58,7 @@ type Config struct {
 	stsExpiryDuration time.Duration // contains converted value
 	tlsSkipVerify     bool          // allows skipping TLS verification
 	serverInsecure    bool          // allows plain text connection to LDAP Server
+	serverStartTLS    bool          // allows plain text connection to LDAP Server
 	rootCAs           *x509.CertPool
 }
 
@@ -73,11 +74,13 @@ const (
 	GroupSearchBaseDN    = "group_search_base_dn"
 	TLSSkipVerify        = "tls_skip_verify"
 	ServerInsecure       = "server_insecure"
+	ServerStartTLS       = "server_starttls"
 
 	EnvServerAddr           = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
 	EnvSTSExpiry            = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
 	EnvTLSSkipVerify        = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
 	EnvServerInsecure       = "MINIO_IDENTITY_LDAP_SERVER_INSECURE"
+	EnvServerStartTLS       = "MINIO_IDENTITY_LDAP_SERVER_STARTTLS"
 	EnvUsernameFormat       = "MINIO_IDENTITY_LDAP_USERNAME_FORMAT"
 	EnvUsernameSearchFilter = "MINIO_IDENTITY_LDAP_USERNAME_SEARCH_FILTER"
 	EnvUsernameSearchBaseDN = "MINIO_IDENTITY_LDAP_USERNAME_SEARCH_BASE_DN"
@@ -127,6 +130,10 @@ var (
 		},
 		config.KV{
 			Key:   ServerInsecure,
+			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   ServerStartTLS,
 			Value: config.EnableOff,
 		},
 	}
@@ -257,6 +264,18 @@ func (l *Config) Connect() (ldapConn *ldap.Conn, err error) {
 		return ldap.Dial("tcp", l.ServerAddr)
 	}
 
+	if l.serverStartTLS {
+		conn, err := ldap.Dial("tcp", l.ServerAddr)
+		if err != nil {
+			return nil, err
+		}
+		err = conn.StartTLS(&tls.Config{
+			InsecureSkipVerify: l.tlsSkipVerify,
+			RootCAs:            l.rootCAs,
+		})
+		return conn, err
+	}
+
 	return ldap.DialTLS("tcp", l.ServerAddr, &tls.Config{
 		InsecureSkipVerify: l.tlsSkipVerify,
 		RootCAs:            l.rootCAs,
@@ -299,6 +318,12 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	}
 	if v := env.Get(EnvServerInsecure, kvs.Get(ServerInsecure)); v != "" {
 		l.serverInsecure, err = config.ParseBool(v)
+		if err != nil {
+			return l, err
+		}
+	}
+	if v := env.Get(EnvServerStartTLS, kvs.Get(ServerStartTLS)); v != "" {
+		l.serverStartTLS, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
 		}

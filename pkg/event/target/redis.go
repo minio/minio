@@ -89,9 +89,6 @@ func (r RedisArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if r.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -129,6 +126,11 @@ type RedisTarget struct {
 // ID - returns target ID.
 func (target *RedisTarget) ID() event.TargetID {
 	return target.id
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *RedisTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 // IsActive - Return true if target is up and active
@@ -265,11 +267,17 @@ func NewRedisTarget(id string, args RedisArgs, doneCh <-chan struct{}, loggerOnc
 				return nil, err
 			}
 
-			if args.Password == "" {
-				return conn, nil
+			if args.Password != "" {
+				if _, err = conn.Do("AUTH", args.Password); err != nil {
+					cErr := conn.Close()
+					targetID := event.TargetID{ID: id, Name: "redis"}
+					loggerOnce(context.Background(), cErr, targetID)
+					return nil, err
+				}
 			}
 
-			if _, err = conn.Do("AUTH", args.Password); err != nil {
+			// Must be done after AUTH
+			if _, err = conn.Do("CLIENT", "SETNAME", "MinIO"); err != nil {
 				cErr := conn.Close()
 				targetID := event.TargetID{ID: id, Name: "redis"}
 				loggerOnce(context.Background(), cErr, targetID)

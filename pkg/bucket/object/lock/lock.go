@@ -24,7 +24,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/beevik/ntp"
@@ -138,13 +137,9 @@ func UTCNowNTP() (time.Time, error) {
 
 // Retention - bucket level retention configuration.
 type Retention struct {
-	Mode     RetMode
-	Validity time.Duration
-}
-
-// IsEmpty - returns whether retention is empty or not.
-func (r Retention) IsEmpty() bool {
-	return !r.Mode.Valid() || r.Validity == 0
+	Mode        RetMode
+	Validity    time.Duration
+	LockEnabled bool
 }
 
 // Retain - check whether given date is retainable by validity time.
@@ -156,41 +151,6 @@ func (r Retention) Retain(created time.Time) bool {
 		return true
 	}
 	return created.Add(r.Validity).After(t)
-}
-
-// BucketObjectLockConfig - map of bucket and retention configuration.
-type BucketObjectLockConfig struct {
-	sync.RWMutex
-	retentionMap map[string]Retention
-}
-
-// Set - set retention configuration.
-func (config *BucketObjectLockConfig) Set(bucketName string, retention Retention) {
-	config.Lock()
-	config.retentionMap[bucketName] = retention
-	config.Unlock()
-}
-
-// Get - Get retention configuration.
-func (config *BucketObjectLockConfig) Get(bucketName string) (r Retention, ok bool) {
-	config.RLock()
-	defer config.RUnlock()
-	r, ok = config.retentionMap[bucketName]
-	return r, ok
-}
-
-// Remove - removes retention configuration.
-func (config *BucketObjectLockConfig) Remove(bucketName string) {
-	config.Lock()
-	delete(config.retentionMap, bucketName)
-	config.Unlock()
-}
-
-// NewBucketObjectLockConfig returns initialized BucketObjectLockConfig
-func NewBucketObjectLockConfig() *BucketObjectLockConfig {
-	return &BucketObjectLockConfig{
-		retentionMap: map[string]Retention{},
-	}
 }
 
 // DefaultRetention - default retention configuration.
@@ -272,7 +232,7 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 	}
 
 	if parsedConfig.ObjectLockEnabled != "Enabled" {
-		return fmt.Errorf("only 'Enabled' value is allowd to ObjectLockEnabled element")
+		return fmt.Errorf("only 'Enabled' value is allowed to ObjectLockEnabled element")
 	}
 
 	*config = Config(parsedConfig)
@@ -280,7 +240,10 @@ func (config *Config) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error
 }
 
 // ToRetention - convert to Retention type.
-func (config *Config) ToRetention() (r Retention) {
+func (config *Config) ToRetention() Retention {
+	r := Retention{
+		LockEnabled: config.ObjectLockEnabled == "Enabled",
+	}
 	if config.Rule != nil {
 		r.Mode = config.Rule.DefaultRetention.Mode
 
@@ -374,8 +337,16 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 	if err := xml.NewDecoder(io.LimitReader(reader, maxObjectRetentionSize)).Decode(&ret); err != nil {
 		return nil, err
 	}
-	if !ret.Mode.Valid() {
+	if ret.Mode != "" && !ret.Mode.Valid() {
 		return &ret, ErrUnknownWORMModeDirective
+	}
+
+	if ret.Mode.Valid() && ret.RetainUntilDate.IsZero() {
+		return &ret, ErrMalformedXML
+	}
+
+	if !ret.Mode.Valid() && !ret.RetainUntilDate.IsZero() {
+		return &ret, ErrMalformedXML
 	}
 
 	t, err := UTCNowNTP()
@@ -384,7 +355,7 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 		return &ret, ErrPastObjectLockRetainDate
 	}
 
-	if ret.RetainUntilDate.Before(t) {
+	if !ret.RetainUntilDate.IsZero() && ret.RetainUntilDate.Before(t) {
 		return &ret, ErrPastObjectLockRetainDate
 	}
 
@@ -468,7 +439,10 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 	}
 	if ok {
 		mode = parseRetMode(modeStr)
+	} else {
+		return ObjectRetention{}
 	}
+
 	tillStr, ok = meta[strings.ToLower(AmzObjectLockRetainUntilDate)]
 	if !ok {
 		tillStr, ok = meta[AmzObjectLockRetainUntilDate]

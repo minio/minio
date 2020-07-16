@@ -59,7 +59,7 @@ func initHelp() {
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
 	}
-	if globalIsXL {
+	if globalIsErasure {
 		kvs[config.StorageClassSubSys] = storageclass.DefaultKVS
 	}
 	config.RegisterDefaultKVS(kvs)
@@ -168,7 +168,7 @@ func initHelp() {
 		},
 	}
 
-	if globalIsXL {
+	if globalIsErasure {
 		helpSubSys = append(helpSubSys, config.HelpKV{})
 		copy(helpSubSys[2:], helpSubSys[1:])
 		helpSubSys[1] = config.HelpKV{
@@ -232,9 +232,9 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	if globalIsXL {
+	if globalIsErasure {
 		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
-			globalXLSetDriveCount); err != nil {
+			globalErasureSetDriveCount); err != nil {
 			return err
 		}
 	}
@@ -307,7 +307,7 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
-	return notify.TestNotificationTargets(s, GlobalServiceDoneCh, NewGatewayHTTPTransport(),
+	return notify.TestNotificationTargets(s, GlobalContext.Done(), NewGatewayHTTPTransport(),
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
@@ -325,13 +325,40 @@ func lookupConfigs(s config.Config) {
 
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		if globalIsGateway {
+			logger.FatalIf(err, "Unable to initialize etcd config")
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		}
 	}
 
 	if etcdCfg.Enabled {
-		globalEtcdClient, err = etcd.New(etcdCfg)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		if globalEtcdClient == nil {
+			globalEtcdClient, err = etcd.New(etcdCfg)
+			if err != nil {
+				if globalIsGateway {
+					logger.FatalIf(err, "Unable to initialize etcd config")
+				} else {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+				}
+			}
+		}
+
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil && globalDNSConfig == nil {
+			globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+				dns.DomainNames(globalDomainNames),
+				dns.DomainIPs(globalDomainIPs),
+				dns.DomainPort(globalMinioPort),
+				dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+			)
+			if err != nil {
+				if globalIsGateway {
+					logger.FatalIf(err, "Unable to initialize DNS config")
+				} else {
+					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+						globalDomainNames, err))
+				}
+			}
 		}
 	}
 
@@ -341,19 +368,6 @@ func lookupConfigs(s config.Config) {
 	// we assume that users are interested in global bucket support
 	// but not federation.
 	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
-
-	if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-		globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
-			dns.DomainNames(globalDomainNames),
-			dns.DomainIPs(globalDomainIPs),
-			dns.DomainPort(globalMinioPort),
-			dns.CoreDNSPath(etcdCfg.CoreDNSPath),
-		)
-		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
-				globalDomainNames, err))
-		}
-	}
 
 	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
 	if err != nil {
@@ -365,16 +379,11 @@ func lookupConfigs(s config.Config) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	apiRequestsMax := apiConfig.APIRequestsMax
-	if len(globalEndpoints.Hosts()) > 0 {
-		apiRequestsMax /= len(globalEndpoints.Hosts())
-	}
+	globalAPIConfig.init(apiConfig)
 
-	globalAPIThrottling.init(apiRequestsMax, apiConfig.APIRequestsDeadline)
-
-	if globalIsXL {
+	if globalIsErasure {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
-			globalXLSetDriveCount)
+			globalErasureSetDriveCount)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 		}
@@ -382,7 +391,11 @@ func lookupConfigs(s config.Config) {
 
 	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
+		if globalIsGateway {
+			logger.FatalIf(err, "Unable to setup cache")
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
+		}
 	}
 
 	if globalCacheConfig.Enabled {
@@ -469,12 +482,12 @@ func lookupConfigs(s config.Config) {
 		}
 	}
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalServiceDoneCh, NewGatewayHTTPTransport())
+	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalContext.Done(), NewGatewayHTTPTransport(), false)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalServiceDoneCh, NewGatewayHTTPTransport())
+	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalContext.Done(), NewGatewayHTTPTransport(), true)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
@@ -565,9 +578,6 @@ func newServerConfig() config.Config {
 func newSrvConfig(objAPI ObjectLayer) error {
 	// Initialize server config.
 	srvCfg := newServerConfig()
-
-	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

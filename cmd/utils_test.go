@@ -366,7 +366,7 @@ func TestJSONSave(t *testing.T) {
 		t.Fatal(err)
 	}
 	if fi1.Size() != fi2.Size() {
-		t.Fatal("Size should not differ after jsonSave()", fi1.Size(), fi2.Size(), f.Name())
+		t.Fatal("Size should not differs after jsonSave()", fi1.Size(), fi2.Size(), f.Name())
 	}
 }
 
@@ -473,14 +473,14 @@ func TestGetMinioMode(t *testing.T) {
 			t.Fatalf("Expected %s got %s", expected, mode)
 		}
 	}
-	globalIsDistXL = true
-	testMinioMode(globalMinioModeDistXL)
+	globalIsDistErasure = true
+	testMinioMode(globalMinioModeDistErasure)
 
-	globalIsDistXL = false
-	globalIsXL = true
-	testMinioMode(globalMinioModeXL)
+	globalIsDistErasure = false
+	globalIsErasure = true
+	testMinioMode(globalMinioModeErasure)
 
-	globalIsDistXL, globalIsXL = false, false
+	globalIsDistErasure, globalIsErasure = false, false
 	testMinioMode(globalMinioModeFS)
 
 	globalIsGateway, globalGatewayName = true, "azure"

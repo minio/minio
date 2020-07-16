@@ -101,9 +101,6 @@ func (a *AMQPArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-	if a.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 
 	return nil
 }
@@ -133,6 +130,11 @@ func (target *AMQPTarget) IsActive() (bool, error) {
 		ch.Close()
 	}()
 	return true, nil
+}
+
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *AMQPTarget) HasQueueStore() bool {
+	return target.store != nil
 }
 
 func (target *AMQPTarget) channel() (*amqp.Channel, error) {

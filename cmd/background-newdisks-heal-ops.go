@@ -20,10 +20,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 )
 
-const defaultMonitorNewDiskInterval = time.Minute * 10
+const defaultMonitorNewDiskInterval = time.Minute * 5
 
 func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 	go monitorLocalDisksAndHeal(ctx, objAPI)
@@ -33,7 +34,7 @@ func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 //  1. Only the concerned erasure set will be listed and healed
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
-	z, ok := objAPI.(*xlZones)
+	z, ok := objAPI.(*erasureZones)
 	if !ok {
 		return
 	}
@@ -57,6 +58,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 		case <-time.After(defaultMonitorNewDiskInterval):
 			// Attempt a heal as the server starts-up first.
 			localDisksInZoneHeal := make([]Endpoints, len(z.zones))
+			var healNewDisks bool
 			for i, ep := range globalEndpoints {
 				localDisksToHeal := Endpoints{}
 				for _, endpoint := range ep.Endpoints {
@@ -74,13 +76,26 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 					continue
 				}
 				localDisksInZoneHeal[i] = localDisksToHeal
+				healNewDisks = true
+			}
+
+			// Reformat disks only if needed.
+			if !healNewDisks {
+				continue
+			}
+
+			logger.Info("New unformatted drives detected attempting to heal...")
+			for i, disks := range localDisksInZoneHeal {
+				for _, disk := range disks {
+					logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
+				}
 			}
 
 			// Reformat disks
-			bgSeq.sourceCh <- healSource{path: SlashSeparator}
+			bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
 
 			// Ensure that reformatting disks is finished
-			bgSeq.sourceCh <- healSource{path: nopHeal}
+			bgSeq.sourceCh <- healSource{bucket: nopHeal}
 
 			var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
 			// Compute the list of erasure set to heal
@@ -108,7 +123,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 			// Heal all erasure sets that need
 			for i, erasureSetToHeal := range erasureSetInZoneToHeal {
 				for _, setIndex := range erasureSetToHeal {
-					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex])
+					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].drivesPerSet)
 					if err != nil {
 						logger.LogIf(ctx, err)
 					}

@@ -45,7 +45,7 @@ func mustGetNodeName(endpointZones EndpointZones) (nodeName string) {
 	if err != nil {
 		logger.FatalIf(err, "Unable to start console logging subsystem")
 	}
-	if globalIsDistXL {
+	if globalIsDistErasure {
 		nodeName = host.Name
 	}
 	return nodeName
@@ -74,7 +74,7 @@ func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
 }
 
 // Subscribe starts console logging for this node.
-func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
+func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, node string, last int, logKind string, filter func(entry interface{}) bool) {
 	// Enable console logging for remote client.
 	if !sys.HasLogListeners() {
 		logger.AddTarget(sys)

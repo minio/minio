@@ -18,8 +18,6 @@ package lifecycle
 
 import (
 	"encoding/xml"
-
-	"github.com/minio/minio/pkg/bucket/object/tagging"
 )
 
 var (
@@ -31,7 +29,10 @@ type Filter struct {
 	XMLName xml.Name `xml:"Filter"`
 	Prefix  string
 	And     And
-	Tag     tagging.Tag
+	Tag     Tag
+
+	// Caching tags, only once
+	cachedTags []string
 }
 
 // MarshalXML - produces the xml representation of the Filter struct
@@ -87,7 +88,29 @@ func (f Filter) Validate() error {
 	return nil
 }
 
-// isEmpty - returns true if Filter tag is empty
-func (f Filter) isEmpty() bool {
-	return f.And.isEmpty() && f.Prefix == "" && f.Tag == tagging.Tag{}
+// TestTags tests if the object tags satisfy the Filter tags requirement,
+// it returns true if there is no tags in the underlying Filter.
+func (f Filter) TestTags(tags []string) bool {
+	if f.cachedTags == nil {
+		tags := make([]string, 0)
+		for _, t := range append(f.And.Tags, f.Tag) {
+			if !t.IsEmpty() {
+				tags = append(tags, t.String())
+			}
+		}
+		f.cachedTags = tags
+	}
+	for _, ct := range f.cachedTags {
+		foundTag := false
+		for _, t := range tags {
+			if ct == t {
+				foundTag = true
+				break
+			}
+		}
+		if !foundTag {
+			return false
+		}
+	}
+	return true
 }

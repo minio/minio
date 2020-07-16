@@ -41,7 +41,7 @@ minio server /data
 NOTE: If `etcd` is configured with `Client-to-server authentication with HTTPS client certificates` then you need to use additional envs such as `MINIO_ETCD_CLIENT_CERT` pointing to path to `etcd-client.crt` and `MINIO_ETCD_CLIENT_CERT_KEY` path to `etcd-client.key` .
 
 ### 4. Test with MinIO STS API
-Assuming that you have configured MinIO server to support STS API by following the doc [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from WSO2 as mentioned in [WSO2 Quickstart Guide](https://github.com/minio/minio/blob/master/docs/sts/wso2.md).
+Assuming that you have configured MinIO server to support STS API by following the doc [MinIO STS Quickstart Guide](https://docs.min.io/docs/minio-sts-quickstart-guide) and once you have obtained the JWT from KeyCloak as mentioned in [KeyCloak Configuration Guide](https://github.com/minio/minio/blob/master/docs/sts/keycloak.md).
 ```
 go run client-grants.go -cid PoEgXP6uVO45IsENRngDXj5Au5Ya -csec eKsw6z8CtOJVBtrOWvhRWL4TUCga
 

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,23 @@
 package gateway
 
 import (
-	// Import all gateways.
-	_ "github.com/minio/minio/cmd/gateway/azure"
-	_ "github.com/minio/minio/cmd/gateway/gcs"
-	_ "github.com/minio/minio/cmd/gateway/hdfs"
+	// Import all gateways please keep the order
+
+	// NAS
 	_ "github.com/minio/minio/cmd/gateway/nas"
-	_ "github.com/minio/minio/cmd/gateway/oss"
+
+	// Azure
+	_ "github.com/minio/minio/cmd/gateway/azure"
+
+	// S3
 	_ "github.com/minio/minio/cmd/gateway/s3"
 
-	// B2 is specifically kept here to avoid re-ordering by goimports,
-	// please ask on github.com/minio/minio/issues before changing this.
-	_ "github.com/minio/minio/cmd/gateway/b2"
-	// Add your gateway here.
+	// HDFS
+	_ "github.com/minio/minio/cmd/gateway/hdfs"
+
+	// GCS (use only if you must, GCS already supports S3 API)
+	_ "github.com/minio/minio/cmd/gateway/gcs"
+	// gateway functionality is frozen, no new gateways are being implemented
+	// or considered for upstream inclusion at this point in time. if needed
+	// please keep a fork of the project.
 )

@@ -38,6 +38,7 @@ const (
 	ContentDisposition = "Content-Disposition"
 	Authorization      = "Authorization"
 	Action             = "Action"
+	Range              = "Range"
 )
 
 // Non standard S3 HTTP response constants
@@ -56,9 +57,13 @@ const (
 	// S3 storage class
 	AmzStorageClass = "x-amz-storage-class"
 
+	// S3 object version ID
+	AmzVersionID    = "x-amz-version-id"
+	AmzDeleteMarker = "x-amz-delete-marker"
+
 	// S3 object tagging
 	AmzObjectTagging = "X-Amz-Tagging"
-	AmzTagCount      = "X-Amz-Tag-Count"
+	AmzTagCount      = "x-amz-tagging-count"
 	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
 	// S3 extensions
@@ -79,6 +84,9 @@ const (
 
 	// Multipart parts count
 	AmzMpPartsCount = "x-amz-mp-parts-count"
+
+	// Object date/time of expiration
+	AmzExpiration = "x-amz-expiration"
 
 	// Dummy putBucketACL
 	AmzACL = "x-amz-acl"
@@ -107,6 +115,18 @@ const (
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
 
-	// Delete special flag
+	// Delete special flag to force delete a bucket
 	MinIOForceDelete = "x-minio-force-delete"
+
+	// Header indicates if the mtime should be preserved by client
+	MinIOSourceMTime = "x-minio-source-mtime"
+)
+
+// Common http query params S3 API
+const (
+	VersionID = "versionId"
+
+	PartNumber = "partNumber"
+
+	UploadID = "uploadId"
 )

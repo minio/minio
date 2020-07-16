@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
+	"github.com/minio/minio/pkg/retry"
 )
 
 // FS format version strings.
@@ -74,7 +75,7 @@ func newFormatFSV1() (format *formatFSV1) {
 }
 
 // Returns the field formatMetaV1.Format i.e the string "fs" which is never likely to change.
-// We do not use this function in XL to get the format as the file is not fcntl-locked on XL.
+// We do not use this function in Erasure to get the format as the file is not fcntl-locked on Erasure.
 func formatMetaGetFormatBackendFS(r io.ReadSeeker) (string, error) {
 	format := &formatMetaV1{}
 	if err := jsonLoad(r, format); err != nil {
@@ -190,7 +191,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
 	// Add a deployment ID, if it does not exist.
-	if err := formatFSFixDeploymentID(fsFormatPath); err != nil {
+	if err := formatFSFixDeploymentID(ctx, fsFormatPath); err != nil {
 		return nil, err
 	}
 
@@ -288,7 +289,7 @@ func formatFSGetDeploymentID(rlk *lock.RLockedFile) (id string, err error) {
 }
 
 // Generate a deployment ID if one does not exist already.
-func formatFSFixDeploymentID(fsFormatPath string) error {
+func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 	rlk, err := lock.RLockedOpenFile(fsFormatPath)
 	if err == nil {
 		// format.json can be empty in a rare condition when another
@@ -339,11 +340,12 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	doneCh := make(chan struct{})
-	defer close(doneCh)
+	retryCtx, cancel := context.WithCancel(ctx)
+	// Indicate to our routine to exit cleanly upon return.
+	defer cancel()
 
 	var wlk *lock.LockedFile
-	retryCh := newRetryTimerSimple(doneCh)
+	retryCh := retry.NewTimerWithJitter(retryCtx, time.Second, 30*time.Second, retry.MaxJitter)
 	var stop bool
 	for !stop {
 		select {
@@ -358,7 +360,7 @@ func formatFSFixDeploymentID(fsFormatPath string) error {
 				return err
 			}
 			stop = true
-		case <-globalOSSignalCh:
+		case <-ctx.Done():
 			return fmt.Errorf("Initializing FS format stopped gracefully")
 		}
 	}

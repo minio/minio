@@ -19,10 +19,12 @@ package target
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/pkg/event"
 	xnet "github.com/minio/minio/pkg/net"
@@ -74,9 +76,6 @@ func (a ElasticsearchArgs) Validate() error {
 	if a.Index == "" {
 		return errors.New("empty index value")
 	}
-	if a.QueueLimit > 10000 {
-		return errors.New("queueLimit should not exceed 10000")
-	}
 	return nil
 }
 
@@ -94,15 +93,31 @@ func (target *ElasticsearchTarget) ID() event.TargetID {
 	return target.id
 }
 
+// HasQueueStore - Checks if the queueStore has been configured for the target
+func (target *ElasticsearchTarget) HasQueueStore() bool {
+	return target.store != nil
+}
+
 // IsActive - Return true if target is up and active
 func (target *ElasticsearchTarget) IsActive() (bool, error) {
-	if dErr := target.args.URL.DialHTTP(nil); dErr != nil {
-		if xnet.IsNetworkOrHostDown(dErr) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if target.client == nil {
+		client, err := newClient(target.args)
+		if err != nil {
+			return false, err
+		}
+		target.client = client
+	}
+	_, code, err := target.client.Ping(target.args.URL.String()).HttpHeadOnly(true).Do(ctx)
+	if err != nil {
+		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
 			return false, errNotConnected
 		}
-		return false, dErr
+		return false, err
 	}
-	return true, nil
+	return !(code >= http.StatusBadRequest), nil
 }
 
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the elasticsearch connection is active.
@@ -110,11 +125,11 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 	if target.store != nil {
 		return target.store.Put(eventData)
 	}
-	_, err := target.IsActive()
-	if err != nil {
-		return err
+	err := target.send(eventData)
+	if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
+		return errNotConnected
 	}
-	return target.send(eventData)
+	return err
 }
 
 // send - sends the event to the target.
@@ -168,18 +183,12 @@ func (target *ElasticsearchTarget) send(eventData event.Event) error {
 
 // Send - reads an event from store and sends it to Elasticsearch.
 func (target *ElasticsearchTarget) Send(eventKey string) error {
-
 	var err error
-
 	if target.client == nil {
 		target.client, err = newClient(target.args)
 		if err != nil {
 			return err
 		}
-	}
-	_, err = target.IsActive()
-	if err != nil {
-		return err
 	}
 
 	eventData, eErr := target.store.Get(eventKey)
@@ -193,7 +202,7 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
 			return errNotConnected
 		}
 		return err
@@ -233,26 +242,22 @@ func createIndex(client *elastic.Client, args ElasticsearchArgs) error {
 
 // newClient - creates a new elastic client with args provided.
 func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
-	client, clientErr := elastic.NewClient(elastic.SetURL(args.URL.String()), elastic.SetSniff(false), elastic.SetMaxRetries(10))
-	if clientErr != nil {
-		if !(errors.Cause(clientErr) == elastic.ErrNoClient) {
-			return nil, clientErr
+	client, err := elastic.NewClient(elastic.SetURL(args.URL.String()), elastic.SetMaxRetries(10))
+	if err != nil {
+		// https://github.com/olivere/elastic/wiki/Connection-Errors
+		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
+			return nil, errNotConnected
 		}
-	} else {
-		if err := createIndex(client, args); err != nil {
-			return nil, err
-		}
+		return nil, err
+	}
+	if err = createIndex(client, args); err != nil {
+		return nil, err
 	}
 	return client, nil
 }
 
 // NewElasticsearchTarget - creates new Elasticsearch target.
 func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*ElasticsearchTarget, error) {
-	var client *elastic.Client
-	var err error
-
-	var store Store
-
 	target := &ElasticsearchTarget{
 		id:         event.TargetID{ID: id, Name: "elasticsearch"},
 		args:       args,
@@ -261,27 +266,20 @@ func NewElasticsearchTarget(id string, args ElasticsearchArgs, doneCh <-chan str
 
 	if args.QueueDir != "" {
 		queueDir := filepath.Join(args.QueueDir, storePrefix+"-elasticsearch-"+id)
-		store = NewQueueStore(queueDir, args.QueueLimit)
-		if oErr := store.Open(); oErr != nil {
-			target.loggerOnce(context.Background(), oErr, target.ID())
-			return target, oErr
-		}
-		target.store = store
-	}
-
-	dErr := args.URL.DialHTTP(nil)
-	if dErr != nil {
-		if store == nil {
-			target.loggerOnce(context.Background(), dErr, target.ID())
-			return target, dErr
-		}
-	} else {
-		client, err = newClient(args)
-		if err != nil {
+		target.store = NewQueueStore(queueDir, args.QueueLimit)
+		if err := target.store.Open(); err != nil {
 			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
-		target.client = client
+	}
+
+	var err error
+	target.client, err = newClient(args)
+	if err != nil {
+		if target.store == nil || err != errNotConnected {
+			target.loggerOnce(context.Background(), err, target.ID())
+			return target, err
+		}
 	}
 
 	if target.store != nil && !test {
