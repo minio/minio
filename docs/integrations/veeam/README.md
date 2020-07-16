@@ -9,8 +9,6 @@ __Prerequisites__
 - The S3 bucket, Access Key and Secret Key have to be created before and outside of Veeam.
 - Configure the minio client for the Veeam MinIO endpoint - https://docs.min.io/docs/minio-client-quickstart-guide.html
 
-
-
 ## Setting up an S3 compatible object store for Veeam Backup and Replication
 ### Create a bucket for Veeam backups
 Create a bucket for Veeam Backup, e.g., `mc mb myminio/veeambackup`
@@ -18,46 +16,44 @@ Create a bucket for Veeam Backup, e.g., `mc mb myminio/veeambackup`
 ### Add MinIO as an object store for Veeam
 Follow the steps from the Veeam documentation for adding MinIO as an object store - https://helpcenter.veeam.com/docs/backup/vsphere/adding_s3c_object_storage.html?ver=100
 
-
 ### Creating the Scale-out Backup Repository
 
-1. Under the Backup Infrastructure view, click on Scale-out Repositories and click the Add Scale-out Repository button on the ribbon.
+- Under the Backup Infrastructure view, click on Scale-out Repositories and click the Add Scale-out Repository button on the ribbon.
 
-2. Follow the on screen wizard
+- Follow the on screen wizard
 
-3. On the Capacity Tier screen, check the box to Extend scale-out backup repository capacity with object storage checkbox and select the object storage. If you want to be able to test backup data immediately after a job is run, under the object storage selection, check the "Copy" box and uncheck the "Move" box.
- 
+- On the Capacity Tier screen, check the box to Extend scale-out backup repository capacity with object storage checkbox and select the object storage. If you want to be able to test backup data immediately after a job is run, under the object storage selection, check the "Copy" box and uncheck the "Move" box.
 
 ### Create a backup job
 #### Backup Virtual Machines with Veeam Backup and Replication
 
-1. Under Home > Jobs > Backup in Navigation Pane, click on Backup Job button in the ribbon and choose Virtual Machine. Follow the on screen wizard.
+- Under Home > Jobs > Backup in Navigation Pane, click on Backup Job button in the ribbon and choose Virtual Machine. Follow the on screen wizard.
 
-2. On the Storage screen, choose the Scale-out Backup Repository that was configured previously.    
+- On the Storage screen, choose the Scale-out Backup Repository that was configured previously.
 
-4. Continue with the backup job creation.  On the Summary screen, check the Run the Job when I click Finish checkbox and click the Finish button.
-The backup job will start immediately.  This will create an Active Full backup of the VMs within the backup job. 
+- Continue with the backup job creation.  On the Summary screen, check the Run the Job when I click Finish checkbox and click the Finish button. The backup job will start immediately.  This will create an Active Full backup of the VMs within the backup job.
 
-5. Since we selected Copy mode when creating the SOBR, the backup will be copied to the capacity tier as soon as it is created on the performance tier.  
- 
+- Since we selected Copy mode when creating the SOBR, the backup will be copied to the capacity tier as soon as it is created on the performance tier.
+
 #### Backup Office 365 with VBO
-1. Create a new bucket for VBO backups
-`mc mb myminio/vbo`
+- Create a new bucket for VBO backups
+```
+mc mb-l myminio/vbo
+```
 
-2. Under Backup Infrastructure, right click on Object Storage Repositories and choose "Add object storage"
+- Under Backup Infrastructure, right click on Object Storage Repositories and choose "Add object storage"
 
-![Adding Object Storage to VBO Step 1](screenshots/1_add_object_store.png)
+![Adding Object Storage to VBO Step 1](https://raw.githubusercontent.com/minio/minio/master/docs/integrations/veeam/screenshots/1_add_object_store.png)
 
-3. Follow through the wizard as above for Veeam Backup and Replication as the steps are the same between both products
+- Follow through the wizard as above for Veeam Backup and Replication as the steps are the same between both products
 
-4. Under Backup Infrastructure -> Backup Repositories, right click and "Add Backup Repository"
+- Under Backup Infrastructure -> Backup Repositories, right click and "Add Backup Repository"
 
-5. Follow the wizard.  Under the "Object Storage Backup Repository" section, choose the MinIO object storage you created above
+- Follow the wizard.  Under the "Object Storage Backup Repository" section, choose the MinIO object storage you created above
 
-![Adding Object Storage to VBO Backup Repository](screenshots/6_add_sobr_with_object_store.png)
+![Adding Object Storage to VBO Backup Repository](https://raw.githubusercontent.com/minio/minio/master/docs/integrations/veeam/screenshots/6_add_sobr_with_object_store.png)
 
-6. When you create your backup job, choose the backup repository you created above.  
-
+- When you create your backup job, choose the backup repository you created above.
 
 ## Test the setup
 The next time the backup job runs, you can use the  `mc admin trace myminio` command and verify traffic is flowing to the MinIO nodes. For Veeam Backup and Replication you will need to wait for the backup to complete to the performance tier before it migrates data to the capacity tier (i.e., MinIO).
