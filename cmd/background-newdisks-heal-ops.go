@@ -20,10 +20,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 )
 
-const defaultMonitorNewDiskInterval = time.Minute * 10
+const defaultMonitorNewDiskInterval = time.Minute * 5
 
 func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 	go monitorLocalDisksAndHeal(ctx, objAPI)
@@ -81,6 +82,13 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 			// Reformat disks only if needed.
 			if !healNewDisks {
 				continue
+			}
+
+			logger.Info("New unformatted drives detected attempting to heal...")
+			for i, disks := range localDisksInZoneHeal {
+				for _, disk := range disks {
+					logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
+				}
 			}
 
 			// Reformat disks
