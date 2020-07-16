@@ -293,8 +293,8 @@ github.com/minio/highwayhash v1.0.0 h1:iMSDhgUILCr0TNm8LWlSjF8N0ZIj2qbO8WHp6Q/J2
 github.com/minio/highwayhash v1.0.0/go.mod h1:xQboMTeM9nY9v/LlAOxFctujiv5+Aq2hR5dxBpaMbdc=
 github.com/minio/md5-simd v1.1.0 h1:QPfiOqlZH+Cj9teu0t9b1nTBfPbyTl16Of5MeuShdK4=
 github.com/minio/md5-simd v1.1.0/go.mod h1:XpBqgZULrMYD3R+M28PcmP0CkI7PEMzB3U77ZrKZ0Gw=
-github.com/minio/minio-go/v7 v7.0.0-20200714085548-47e386e2cde8 h1:Xh5yHlXj/367YMabi7tWHol1AslXcuAFWaedBtGgbU0=
-github.com/minio/minio-go/v7 v7.0.0-20200714085548-47e386e2cde8/go.mod h1:QTstSRgetEDVpqiEpFniLoCslH4d9cNAa4BtjuRQrwE=
+github.com/minio/minio-go/v7 v7.0.1 h1:sL2y4uuNUEi7AjvWjoGyDFQKFX2zA0DU2tGM9m3s5f8=
+github.com/minio/minio-go/v7 v7.0.1/go.mod h1:dJ80Mv2HeGkYLH1sqS/ksz07ON6csH3S6JUMSQ2zAns=
 github.com/minio/sha256-simd v0.1.1 h1:5QHSlgo3nt5yKOJrC7W8w7X+NFl8cMPZm96iu8kKUJU=
 github.com/minio/sha256-simd v0.1.1/go.mod h1:B5e1o+1/KgNmWrSQK08Y6Z1Vb5pwIktudl0J58iy0KM=
 github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37 h1:pDeao6M5AEd8hwTtGmE0pVKomlL56JFRa5SiXDZAuJE=
