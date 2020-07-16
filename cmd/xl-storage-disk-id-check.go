@@ -89,8 +89,12 @@ func (p *xlStorageDiskIDCheck) DiskInfo() (info DiskInfo, err error) {
 	if err != nil {
 		return info, err
 	}
-	if p.diskID != info.ID {
-		return info, errDiskNotFound
+	// check cached diskID against backend
+	// only if its non-empty.
+	if p.diskID != "" {
+		if p.diskID != info.ID {
+			return info, errDiskNotFound
+		}
 	}
 	return info, nil
 }

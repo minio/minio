@@ -1256,8 +1256,9 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 func isTestSetup(infos []DiskInfo, errs []error) bool {
 	rootDiskCount := 0
 	for i := range errs {
-		if errs[i] != nil {
-			// On error it is safer to assume that this is not a test setup.
+		if errs[i] != nil && errs[i] != errUnformattedDisk {
+			// On any error which is not unformatted disk
+			// it is safer to reject healing.
 			return false
 		}
 		if infos[i].RootDisk {
@@ -1268,7 +1269,7 @@ func isTestSetup(infos []DiskInfo, errs []error) bool {
 	return rootDiskCount == len(infos)
 }
 
-func getAllDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
+func getHealDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
 	infos := make([]DiskInfo, len(storageDisks))
 	g := errgroup.WithNErrs(len(storageDisks))
 	for index := range storageDisks {
@@ -1289,7 +1290,7 @@ func getAllDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
 
 // Mark root disks as down so as not to heal them.
 func markRootDisksAsDown(storageDisks []StorageAPI) {
-	infos, errs := getAllDiskInfos(storageDisks)
+	infos, errs := getHealDiskInfos(storageDisks)
 	if isTestSetup(infos, errs) {
 		// Allow healing of disks for test setups to help with testing.
 		return
