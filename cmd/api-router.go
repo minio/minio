@@ -21,6 +21,8 @@ import (
 
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/wildcard"
+	"github.com/rs/cors"
 )
 
 func newHTTPServerFn() *xhttp.Server {
@@ -83,7 +85,6 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
 		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName+":{port:.*}").Subrouter())
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
@@ -294,4 +295,45 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	apiRouter.NotFoundHandler = http.HandlerFunc(collectAPIStats("notfound", httpTraceAll(errorResponseHandler)))
 	apiRouter.MethodNotAllowedHandler = http.HandlerFunc(collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler)))
 
+}
+
+// corsHandler handler for CORS (Cross Origin Resource Sharing)
+func corsHandler(handler http.Handler) http.Handler {
+	commonS3Headers := []string{
+		xhttp.Date,
+		xhttp.ETag,
+		xhttp.ServerInfo,
+		xhttp.Connection,
+		xhttp.AcceptRanges,
+		xhttp.ContentRange,
+		xhttp.ContentEncoding,
+		xhttp.ContentLength,
+		xhttp.ContentType,
+		"X-Amz*",
+		"x-amz*",
+		"*",
+	}
+
+	return cors.New(cors.Options{
+		AllowOriginFunc: func(origin string) bool {
+			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
+				if wildcard.MatchSimple(allowedOrigin, origin) {
+					return true
+				}
+			}
+			return false
+		},
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPut,
+			http.MethodHead,
+			http.MethodPost,
+			http.MethodDelete,
+			http.MethodOptions,
+			http.MethodPatch,
+		},
+		AllowedHeaders:   commonS3Headers,
+		ExposedHeaders:   commonS3Headers,
+		AllowCredentials: true,
+	}).Handler(handler)
 }

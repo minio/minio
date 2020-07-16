@@ -25,7 +25,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
+	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/policy"

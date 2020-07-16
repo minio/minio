@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/set"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -149,12 +149,10 @@ func (z *erasureZones) getZonesAvailableSpace(ctx context.Context, size int64) z
 
 	for i, zinfo := range storageInfos {
 		var available uint64
-		for _, davailable := range zinfo.Available {
-			available += davailable
-		}
 		var total uint64
-		for _, dtotal := range zinfo.Total {
-			total += dtotal
+		for _, disk := range zinfo.Disks {
+			total += disk.TotalSpace
+			available += disk.TotalSpace - disk.UsedSpace
 		}
 		// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
 		if available < uint64(size) {
@@ -260,13 +258,9 @@ func (z *erasureZones) StorageInfo(ctx context.Context, local bool) (StorageInfo
 	g.Wait()
 
 	for _, lstorageInfo := range storageInfos {
-		storageInfo.Used = append(storageInfo.Used, lstorageInfo.Used...)
-		storageInfo.Total = append(storageInfo.Total, lstorageInfo.Total...)
-		storageInfo.Available = append(storageInfo.Available, lstorageInfo.Available...)
-		storageInfo.MountPaths = append(storageInfo.MountPaths, lstorageInfo.MountPaths...)
+		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
-		storageInfo.Backend.Sets = append(storageInfo.Backend.Sets, lstorageInfo.Backend.Sets...)
 	}
 
 	storageInfo.Backend.Type = storageInfos[0].Backend.Type
@@ -343,13 +337,15 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 		updateTicker := time.NewTicker(30 * time.Second)
 		defer updateTicker.Stop()
 		var lastUpdate time.Time
+
+		// We need to merge since we will get the same buckets from each zone.
+		// Therefore to get the exact bucket sizes we must merge before we can convert.
+		allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
+
 		update := func() {
 			mu.Lock()
 			defer mu.Unlock()
 
-			// We need to merge since we will get the same buckets from each zone.
-			// Therefore to get the exact bucket sizes we must merge before we can convert.
-			allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
 			for _, info := range results {
 				if info.Info.LastUpdate.IsZero() {
 					// Not filled yet.
@@ -368,6 +364,10 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 				return
 			case v := <-updateCloser:
 				update()
+				// Enforce quotas when all is done.
+				for _, b := range allBuckets {
+					enforceFIFOQuotaBucket(ctx, z, b.Name, allMerged.bucketUsageInfo(b.Name))
+				}
 				close(v)
 				return
 			case <-updateTicker.C:
@@ -465,19 +465,22 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 
 	for _, zone := range z.zones {
-		gr, err := zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
+		gr, err = zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			nsUnlocker()
-			return nil, err
+			return gr, err
 		}
 		gr.cleanUpFns = append(gr.cleanUpFns, nsUnlocker)
 		return gr, nil
 	}
 	nsUnlocker()
-	return nil, ObjectNotFound{Bucket: bucket, Object: object}
+	if opts.VersionID != "" {
+		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
+	return gr, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
@@ -491,9 +494,10 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 	if z.SingleZone() {
 		return z.zones[0].GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 	}
+
 	for _, zone := range z.zones {
 		if err := zone.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return err
@@ -503,7 +507,7 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 	return ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := z.NewNSLock(ctx, bucket, object)
 	if err := lk.GetRLock(globalObjectTimeout); err != nil {
@@ -515,16 +519,19 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 		return z.zones[0].GetObjectInfo(ctx, bucket, object, opts)
 	}
 	for _, zone := range z.zones {
-		objInfo, err := zone.GetObjectInfo(ctx, bucket, object, opts)
+		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return objInfo, err
 		}
 		return objInfo, nil
 	}
-	return ObjectInfo{}, ObjectNotFound{Bucket: bucket, Object: object}
+	if opts.VersionID != "" {
+		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
+	return objInfo, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 // PutObject - writes an object to least used erasure zone.
@@ -565,7 +572,7 @@ func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object s
 		if err == nil {
 			return objInfo, nil
 		}
-		if err != nil && !isErrObjectNotFound(err) {
+		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			break
 		}
 	}
@@ -595,7 +602,7 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 		deletedObjects, errs := zone.DeleteObjects(ctx, bucket, objects, opts)
 		for i, derr := range errs {
 			if derrs[i] == nil {
-				if derr != nil && !isErrObjectNotFound(derr) {
+				if derr != nil && !isErrObjectNotFound(derr) && !isErrVersionNotFound(derr) {
 					derrs[i] = derr
 				}
 			}
@@ -1315,16 +1322,6 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 			}
 			loi.Objects = append(loi.Objects, objInfo)
 		}
-		for _, deleted := range entry.Deleted {
-			loi.DeleteObjects = append(loi.DeleteObjects, DeletedObjectInfo{
-				Bucket:    bucket,
-				Name:      entry.Name,
-				VersionID: deleted.VersionID,
-				ModTime:   deleted.ModTime,
-				IsLatest:  deleted.IsLatest,
-			})
-		}
-
 	}
 	if loi.IsTruncated {
 		for i, zone := range z.zones {
@@ -1802,16 +1799,58 @@ func (z *erasureZones) HealBucket(ctx context.Context, bucket string, dryRun, re
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
 		// Upon error close the channel.
 		close(results)
 		return err
 	}
 
-	var zonesEntryChs [][]FileInfoVersionsCh
+	if opts.WalkVersions {
+		var zonesEntryChs [][]FileInfoVersionsCh
+		for _, zone := range z.zones {
+			zonesEntryChs = append(zonesEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
+		}
+
+		var zoneDrivesPerSet []int
+		for _, zone := range z.zones {
+			zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+		}
+
+		var zonesEntriesInfos [][]FileInfoVersions
+		var zonesEntriesValid [][]bool
+		for _, entryChs := range zonesEntryChs {
+			zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+			zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+		}
+
+		go func() {
+			defer close(results)
+
+			for {
+				entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+				if !ok {
+					// We have reached EOF across all entryChs, break the loop.
+					return
+				}
+
+				if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
+					// Read quorum exists proceed
+					for _, version := range entry.Versions {
+						results <- version.ToObjectInfo(bucket, version.Name)
+					}
+				}
+
+				// skip entries which do not have quorum
+			}
+		}()
+
+		return nil
+	}
+
+	var zonesEntryChs [][]FileInfoCh
 	for _, zone := range z.zones {
-		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
+		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
 	}
 
 	var zoneDrivesPerSet []int
@@ -1819,10 +1858,10 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
 	}
 
-	var zonesEntriesInfos [][]FileInfoVersions
+	var zonesEntriesInfos [][]FileInfo
 	var zonesEntriesValid [][]bool
 	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 
@@ -1830,7 +1869,7 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		defer close(results)
 
 		for {
-			entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+			entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 			if !ok {
 				// We have reached EOF across all entryChs, break the loop.
 				return
@@ -1838,14 +1877,8 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 
 			if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
 				// Read quorum exists proceed
-				for _, version := range entry.Versions {
-					results <- version.ToObjectInfo(bucket, version.Name)
-				}
-				for _, deleted := range entry.Deleted {
-					results <- deleted.ToObjectInfo(bucket, deleted.Name)
-				}
+				results <- entry.ToObjectInfo(bucket, entry.Name)
 			}
-
 			// skip entries which do not have quorum
 		}
 	}()
@@ -1918,7 +1951,7 @@ func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID
 	for _, zone := range z.zones {
 		result, err := zone.HealObject(ctx, bucket, object, versionID, opts)
 		if err != nil {
-			if isErrObjectNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return result, err
@@ -2018,18 +2051,27 @@ func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string,
 	if z.SingleZone() {
 		return z.zones[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
+
 	for _, zone := range z.zones {
 		err := zone.PutObjectTags(ctx, bucket, object, tags, opts)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return err
 		}
 		return nil
 	}
-	return BucketNotFound{
+	if opts.VersionID != "" {
+		return VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	return ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }
 
@@ -2041,15 +2083,23 @@ func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object stri
 	for _, zone := range z.zones {
 		err := zone.DeleteObjectTags(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return err
 		}
 		return nil
 	}
-	return BucketNotFound{
+	if opts.VersionID != "" {
+		return VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	return ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }
 
@@ -2061,14 +2111,22 @@ func (z *erasureZones) GetObjectTags(ctx context.Context, bucket, object string,
 	for _, zone := range z.zones {
 		tags, err := zone.GetObjectTags(ctx, bucket, object, opts)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
 			return tags, err
 		}
 		return tags, nil
 	}
-	return nil, BucketNotFound{
+	if opts.VersionID != "" {
+		return nil, VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+		}
+	}
+	return nil, ObjectNotFound{
 		Bucket: bucket,
+		Object: object,
 	}
 }

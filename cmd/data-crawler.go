@@ -509,8 +509,9 @@ func (i *crawlItem) transformMetaDir() {
 
 // actionMeta contains information used to apply actions.
 type actionMeta struct {
-	oi      ObjectInfo
-	trustOI bool // Set true if oi can be trusted and has been read with quorum.
+	oi          ObjectInfo
+	trustOI     bool // Set true if oi can be trusted and has been read with quorum.
+	numVersions int  // The number of versions of this object
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -535,12 +536,13 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			VersionID:    meta.oi.VersionID,
 			DeleteMarker: meta.oi.DeleteMarker,
 			IsLatest:     meta.oi.IsLatest,
+			NumVersions:  meta.numVersions,
 		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: %q, Initial scan: %v", i.objectPath(), action)
 	}
 	switch action {
-	case lifecycle.DeleteAction:
+	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
 	default:
 		// No action.
 		return size
@@ -580,20 +582,29 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 				VersionID:    obj.VersionID,
 				DeleteMarker: obj.DeleteMarker,
 				IsLatest:     obj.IsLatest,
+				NumVersions:  meta.numVersions,
 			})
 		if i.debug {
 			logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
 		}
 		versionID = obj.VersionID
 		switch action {
-		case lifecycle.DeleteAction:
+		case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
 		default:
 			// No action.
 			return size
 		}
 	}
 
-	obj, err := o.DeleteObject(ctx, i.bucket, i.objectPath(), ObjectOptions{VersionID: versionID})
+	opts := ObjectOptions{}
+	switch action {
+	case lifecycle.DeleteVersionAction:
+		opts.VersionID = versionID
+	case lifecycle.DeleteAction:
+		opts.Versioned = globalBucketVersioningSys.Enabled(i.bucket)
+	}
+
+	obj, err := o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
 	if err != nil {
 		// Assume it is still there.
 		logger.LogIf(ctx, err)

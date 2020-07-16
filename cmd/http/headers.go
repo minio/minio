@@ -38,6 +38,7 @@ const (
 	ContentDisposition = "Content-Disposition"
 	Authorization      = "Authorization"
 	Action             = "Action"
+	Range              = "Range"
 )
 
 // Non standard S3 HTTP response constants
@@ -114,6 +115,18 @@ const (
 	// Server-Status
 	MinIOServerStatus = "x-minio-server-status"
 
-	// Delete special flag
+	// Delete special flag to force delete a bucket
 	MinIOForceDelete = "x-minio-force-delete"
+
+	// Header indicates if the mtime should be preserved by client
+	MinIOSourceMTime = "x-minio-source-mtime"
+)
+
+// Common http query params S3 API
+const (
+	VersionID = "versionId"
+
+	PartNumber = "partNumber"
+
+	UploadID = "uploadId"
 )

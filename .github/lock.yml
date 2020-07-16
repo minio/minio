@@ -11,7 +11,7 @@ skipCreatedBefore: false
 exemptLabels: []
 
 # Label to add before locking, such as `outdated`. Set to `false` to disable
-lockLabel: false
+lockLabel: true
 
 # Comment to post before locking. Set to `false` to disable
 lockComment: >-

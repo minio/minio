@@ -34,6 +34,7 @@ const (
 	After         = "after"
 	WatermarkLow  = "watermark_low"
 	WatermarkHigh = "watermark_high"
+	Range         = "range"
 
 	EnvCacheDrives        = "MINIO_CACHE_DRIVES"
 	EnvCacheExclude       = "MINIO_CACHE_EXCLUDE"
@@ -43,6 +44,7 @@ const (
 	EnvCacheAfter         = "MINIO_CACHE_AFTER"
 	EnvCacheWatermarkLow  = "MINIO_CACHE_WATERMARK_LOW"
 	EnvCacheWatermarkHigh = "MINIO_CACHE_WATERMARK_HIGH"
+	EnvCacheRange         = "MINIO_CACHE_RANGE"
 
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 
@@ -83,6 +85,10 @@ var (
 		config.KV{
 			Key:   WatermarkHigh,
 			Value: DefaultWaterMarkHigh,
+		},
+		config.KV{
+			Key:   Range,
+			Value: config.EnableOn,
 		},
 	}
 )
@@ -195,5 +201,15 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		err := errors.New("config high watermark value should be greater than low watermark value")
 		return cfg, config.ErrInvalidCacheWatermarkHigh(err)
 	}
+
+	cfg.Range = true // by default range caching is enabled.
+	if rangeStr := env.Get(EnvCacheRange, kvs.Get(Range)); rangeStr != "" {
+		rng, err := config.ParseBool(rangeStr)
+		if err != nil {
+			return cfg, config.ErrInvalidCacheRange(err)
+		}
+		cfg.Range = rng
+	}
+
 	return cfg, nil
 }

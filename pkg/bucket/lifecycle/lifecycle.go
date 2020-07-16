@@ -40,6 +40,8 @@ const (
 	NoneAction Action = iota
 	// DeleteAction means the object needs to be removed after evaluting lifecycle rules
 	DeleteAction
+	// DeleteVersionAction deletes a particular version
+	DeleteVersionAction
 )
 
 // Lifecycle - Configuration for bucket lifecycle.
@@ -176,6 +178,7 @@ type ObjectOpts struct {
 	VersionID    string
 	IsLatest     bool
 	DeleteMarker bool
+	NumVersions  int
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
@@ -187,27 +190,26 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 	}
 
 	for _, rule := range lc.FilterActionableRules(obj) {
-		if obj.DeleteMarker && obj.IsLatest && bool(rule.Expiration.DeleteMarker) {
+		if obj.DeleteMarker && obj.NumVersions == 1 && bool(rule.Expiration.DeleteMarker) {
 			// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
 			// Only latest marker is removed. If set to true, the delete marker will be expired;
 			// if set to false the policy takes no action. This cannot be specified with Days or
 			// Date in a Lifecycle Expiration Policy.
-			return DeleteAction
+			return DeleteVersionAction
 		}
 
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
 			if obj.VersionID != "" && !obj.IsLatest {
 				// Non current versions should be deleted.
 				if time.Now().After(expectedExpiryTime(obj.ModTime, rule.NoncurrentVersionExpiration.NoncurrentDays)) {
-					return DeleteAction
+					return DeleteVersionAction
 				}
-				return NoneAction
 			}
-			return NoneAction
 		}
 
-		// All other expiration only applies to latest versions.
-		if obj.IsLatest {
+		// All other expiration only applies to latest versions
+		// (except if this is a delete marker)
+		if obj.IsLatest && !obj.DeleteMarker {
 			switch {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {

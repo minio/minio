@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/credentials"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -85,7 +85,7 @@ var (
 )
 
 // DiscoveryDoc - parses the output from openid-configuration
-// for example https://accounts.google.com/.well-known/openid-configuration
+// for example http://localhost:8080/auth/realms/minio/.well-known/openid-configuration
 type DiscoveryDoc struct {
 	Issuer                           string   `json:"issuer,omitempty"`
 	AuthEndpoint                     string   `json:"authorization_endpoint,omitempty"`
@@ -129,7 +129,7 @@ func parseDiscoveryDoc(ustr string) (DiscoveryDoc, error) {
 func init() {
 	flag.StringVar(&stsEndpoint, "sts-ep", "http://localhost:9000", "STS endpoint")
 	flag.StringVar(&configEndpoint, "config-ep",
-		"https://accounts.google.com/.well-known/openid-configuration",
+		"http://localhost:8080/auth/realms/minio/.well-known/openid-configuration",
 		"OpenID discovery document endpoint")
 	flag.StringVar(&clientID, "cid", "", "Client ID")
 	flag.StringVar(&clientSec, "csec", "", "Client Secret")
@@ -151,9 +151,9 @@ func main() {
 		return
 	}
 
-	scopes :=  ddoc.ScopesSupported
+	scopes := ddoc.ScopesSupported
 	if clientScopes != "" {
-		scopes = strings.Split(clientScopes, ",");
+		scopes = strings.Split(clientScopes, ",")
 	}
 
 	ctx := context.Background()

@@ -33,8 +33,8 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -52,9 +52,6 @@ var defaultEtag = "00000000000000000000000000000000-1"
 // FSObjects - Implements fs object layer.
 type FSObjects struct {
 	GatewayUnsupported
-
-	// Disk usage metrics
-	totalUsed uint64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 
 	// The count of concurrent calls on FSObjects API
 	activeIOCount int64
@@ -215,15 +212,15 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []er
 		return StorageInfo{}, []error{err}
 	}
 	used := di.Total - di.Free
-	if !fs.diskMount {
-		used = atomic.LoadUint64(&fs.totalUsed)
-	}
-
 	storageInfo := StorageInfo{
-		Used:       []uint64{used},
-		Total:      []uint64{di.Total},
-		Available:  []uint64{di.Free},
-		MountPaths: []string{fs.fsPath},
+		Disks: []madmin.Disk{
+			{
+				TotalSpace:     di.Total,
+				UsedSpace:      used,
+				AvailableSpace: di.Free,
+				DrivePath:      fs.fsPath,
+			},
+		},
 	}
 	storageInfo.Backend.Type = BackendFS
 	return storageInfo, nil
@@ -280,6 +277,13 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		}
 		logger.LogIf(ctx, err)
 		cache.Info.BloomFilter = nil
+
+		if cache.root() == nil {
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("CrawlAndGetDataUsage:") + " No root added. Adding empty")
+			}
+			cache.replace(cache.Info.Name, dataUsageRoot, dataUsageEntry{})
+		}
 		if cache.Info.LastUpdate.After(bCache.Info.LastUpdate) {
 			if intDataUpdateTracker.debug {
 				logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving bucket %q cache with %d entries", b.Name, len(cache.Cache))
@@ -297,6 +301,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		logger.LogIf(ctx, totalCache.save(ctx, fs, dataUsageCacheName))
 		cloned := totalCache.clone()
 		updates <- cloned.dui(dataUsageRoot, buckets)
+		enforceFIFOQuotaBucket(ctx, fs, b.Name, cloned.bucketUsageInfo(b.Name))
 	}
 
 	return nil
@@ -1477,7 +1482,7 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), results, fs.getObjectInfo, fs.getObjectInfo)
 }
 
@@ -1552,9 +1557,5 @@ func (fs *FSObjects) IsReady(_ context.Context) bool {
 		return false
 	}
 
-	globalObjLayerMutex.RLock()
-	res := globalObjectAPI != nil && !globalSafeMode
-	globalObjLayerMutex.RUnlock()
-
-	return res
+	return newObjectLayerFn() != nil
 }

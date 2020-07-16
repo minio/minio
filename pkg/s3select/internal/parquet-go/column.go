@@ -17,11 +17,12 @@
 package parquet
 
 import (
+	"errors"
 	"io"
 	"strings"
 
 	"git.apache.org/thrift.git/lib/go/thrift"
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/s3select/internal/parquet-go/gen-go/parquet"
 )
 
@@ -34,6 +35,9 @@ func getColumns(
 	nameIndexMap := make(map[string]int)
 	for colIndex, columnChunk := range rowGroup.GetColumns() {
 		meta := columnChunk.GetMetaData()
+		if meta == nil {
+			return nil, errors.New("parquet: column metadata missing")
+		}
 		columnName := strings.Join(meta.GetPathInSchema(), ".")
 		if columnNames != nil && !columnNames.Contains(columnName) {
 			continue
@@ -50,7 +54,9 @@ func getColumns(
 		}
 
 		size := meta.GetTotalCompressedSize()
-
+		if size < 0 {
+			return nil, errors.New("parquet: negative compressed size")
+		}
 		rc, err := getReaderFunc(offset, size)
 		if err != nil {
 			return nil, err

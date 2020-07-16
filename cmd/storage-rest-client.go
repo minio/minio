@@ -190,7 +190,13 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 	}
 	defer http.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
+	if err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -289,8 +295,9 @@ func (client *storageRESTClient) DeleteVersion(volume, path string, fi FileInfo)
 	values.Set(storageRESTFilePath, path)
 
 	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
-	encoder.Encode(&fi)
+	if err := gob.NewEncoder(&buffer).Encode(fi); err != nil {
+		return err
+	}
 
 	respBody, err := client.call(storageRESTMethodDeleteVersion, values, &buffer, -1)
 	defer http.DrainBody(respBody)
@@ -453,7 +460,7 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
+	respBody, err := client.call(storageRESTMethodWalkVersions, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -468,6 +475,9 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			var fi FileInfoVersions
 			if gerr := decoder.Decode(&fi); gerr != nil {
 				// Upon error return
+				if gerr != io.EOF {
+					logger.LogIf(context.Background(), gerr)
+				}
 				return
 			}
 			select {
@@ -475,7 +485,6 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			case <-endWalkCh:
 				return
 			}
-
 		}
 	}()
 
@@ -657,15 +666,13 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 	}
 
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		logger.Fatal(err, "Unable to initialize remote REST disks")
-	}
-
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckInterval = 500 * time.Millisecond
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		respBody, err := restClient.CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound

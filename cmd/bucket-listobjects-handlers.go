@@ -17,7 +17,10 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -157,6 +160,13 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Analyze continuation token and route the request accordingly
+	var success bool
+	token, success = proxyRequestByToken(ctx, w, r, token)
+	if success {
+		return
+	}
+
 	listObjectsV2 := objectAPI.ListObjectsV2
 
 	// Inititate a list objects operation based on the input params.
@@ -179,8 +189,13 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token,
-		listObjectsV2Info.NextContinuationToken, startAfter,
+	// The next continuation token has id@node_index format to optimize paginated listing
+	nextContinuationToken := listObjectsV2Info.NextContinuationToken
+	if nextContinuationToken != "" && listObjectsV2Info.IsTruncated {
+		nextContinuationToken = fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+	}
+
+	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, true)
 
@@ -231,6 +246,13 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Analyze continuation token and route the request accordingly
+	var success bool
+	token, success = proxyRequestByToken(ctx, w, r, token)
+	if success {
+		return
+	}
+
 	listObjectsV2 := objectAPI.ListObjectsV2
 
 	// Inititate a list objects operation based on the input params.
@@ -253,13 +275,72 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		}
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token,
-		listObjectsV2Info.NextContinuationToken, startAfter,
+	// The next continuation token has id@node_index format to optimize paginated listing
+	nextContinuationToken := listObjectsV2Info.NextContinuationToken
+	if nextContinuationToken != "" && listObjectsV2Info.IsTruncated {
+		nextContinuationToken = fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
+	}
+
+	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, false)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))
+}
+
+func getLocalNodeIndex() int {
+	if len(globalProxyEndpoints) == 0 {
+		return -1
+	}
+	for i, ep := range globalProxyEndpoints {
+		if ep.IsLocal {
+			return i
+		}
+	}
+	return -1
+}
+
+func parseRequestToken(token string) (subToken string, nodeIndex int) {
+	if token == "" {
+		return token, -1
+	}
+	i := strings.Index(token, "@")
+	if i < 0 {
+		return token, -1
+	}
+	nodeIndex, err := strconv.Atoi(token[i+1:])
+	if err != nil {
+		return token, -1
+	}
+	subToken = token[:i]
+	return subToken, nodeIndex
+}
+
+func proxyRequestByToken(ctx context.Context, w http.ResponseWriter, r *http.Request, token string) (string, bool) {
+	subToken, nodeIndex := parseRequestToken(token)
+	if nodeIndex > 0 {
+		return subToken, proxyRequestByNodeIndex(ctx, w, r, nodeIndex)
+	}
+	return subToken, false
+}
+
+func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int) (success bool) {
+	if len(globalProxyEndpoints) == 0 {
+		return false
+	}
+	if index < 0 || index >= len(globalProxyEndpoints) {
+		return false
+	}
+	ep := globalProxyEndpoints[index]
+	if ep.IsLocal {
+		return false
+	}
+	return proxyRequest(ctx, w, r, ep)
+}
+
+func proxyRequestByBucket(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket string) (success bool) {
+	return proxyRequestByNodeIndex(ctx, w, r, crcHashMod(bucket, len(globalProxyEndpoints)))
 }
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
@@ -297,6 +378,10 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	// Validate all the query params before beginning to serve the request.
 	if s3Error := validateListObjectsArgs(marker, delimiter, encodingType, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if proxyRequestByBucket(ctx, w, r, bucket) {
 		return
 	}
 

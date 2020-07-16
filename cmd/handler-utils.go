@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,9 +126,28 @@ func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]
 	}
 
 	// Set content-type to default value if it is not set.
-	if _, ok := metadata["content-type"]; !ok {
-		metadata["content-type"] = "application/octet-stream"
+	if _, ok := metadata[strings.ToLower(xhttp.ContentType)]; !ok {
+		metadata[strings.ToLower(xhttp.ContentType)] = "application/octet-stream"
 	}
+
+	if contentEncoding, ok := metadata[strings.ToLower(xhttp.ContentEncoding)]; ok {
+		contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
+		if contentEncoding != "" {
+			// Make sure to trim and save the content-encoding
+			// parameter for a streaming signature which is set
+			// to a custom value for example: "aws-chunked,gzip".
+			metadata[strings.ToLower(xhttp.ContentEncoding)] = contentEncoding
+		} else {
+			// Trimmed content encoding is empty when the header
+			// value is set to "aws-chunked" only.
+
+			// Make sure to delete the content-encoding parameter
+			// for a streaming signature which is set to value
+			// for example: "aws-chunked"
+			delete(metadata, strings.ToLower(xhttp.ContentEncoding))
+		}
+	}
+
 	// Success.
 	return metadata, nil
 }
@@ -450,5 +469,31 @@ func getHostName(r *http.Request) (hostName string) {
 	} else {
 		hostName = r.Host
 	}
+	return
+}
+
+// Proxy any request to an endpoint.
+func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
+	success = true
+
+	f := handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: ep.Transport,
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			success = false
+			w.WriteHeader(http.StatusBadGateway)
+		},
+		Logger: func(err error) {
+			logger.LogIf(GlobalContext, err)
+		},
+	})
+
+	r.URL.Scheme = "http"
+	if globalIsSSL {
+		r.URL.Scheme = "https"
+	}
+
+	r.URL.Host = ep.Host
+	f.ServeHTTP(w, r)
 	return
 }

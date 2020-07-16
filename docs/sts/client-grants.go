@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * MinIO Cloud Storage, (C) 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ import (
 	"net/url"
 	"strings"
 
-	minio "github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/credentials"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 // JWTToken - parses the output from IDP access token.
@@ -48,7 +48,7 @@ var (
 
 func init() {
 	flag.StringVar(&stsEndpoint, "sts-ep", "http://localhost:9000", "STS endpoint")
-	flag.StringVar(&idpEndpoint, "idp-ep", "https://localhost:9443/oauth2/token", "IDP endpoint")
+	flag.StringVar(&idpEndpoint, "idp-ep", "http://localhost:8080/auth/realms/minio/protocol/openid-connect/token", "IDP token endpoint")
 	flag.StringVar(&clientID, "cid", "", "Client ID")
 	flag.StringVar(&clientSecret, "csec", "", "Client secret")
 }

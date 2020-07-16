@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/etcd/dns"
@@ -30,8 +30,6 @@ import (
 	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
-	"github.com/minio/minio/pkg/wildcard"
-	"github.com/rs/cors"
 )
 
 // MiddlewareFunc - useful to chain different http.Handler middlewares
@@ -214,7 +212,8 @@ func guessIsHealthCheckReq(req *http.Request) bool {
 	aType := getRequestAuthType(req)
 	return aType == authTypeAnonymous && (req.Method == http.MethodGet || req.Method == http.MethodHead) &&
 		(req.URL.Path == healthCheckPathPrefix+healthCheckLivenessPath ||
-			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath)
+			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath ||
+			req.URL.Path == healthCheckPathPrefix+healthCheckClusterPath)
 }
 
 // guessIsMetricsReq - returns true if incoming request looks
@@ -391,49 +390,6 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type resourceHandler struct {
 	handler http.Handler
-}
-
-// setCorsHandler handler for CORS (Cross Origin Resource Sharing)
-func setCorsHandler(h http.Handler) http.Handler {
-	commonS3Headers := []string{
-		xhttp.Date,
-		xhttp.ETag,
-		xhttp.ServerInfo,
-		xhttp.Connection,
-		xhttp.AcceptRanges,
-		xhttp.ContentRange,
-		xhttp.ContentEncoding,
-		xhttp.ContentLength,
-		xhttp.ContentType,
-		"X-Amz*",
-		"x-amz*",
-		"*",
-	}
-
-	c := cors.New(cors.Options{
-		AllowOriginFunc: func(origin string) bool {
-			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
-				if wildcard.MatchSimple(allowedOrigin, origin) {
-					return true
-				}
-			}
-			return false
-		},
-		AllowedMethods: []string{
-			http.MethodGet,
-			http.MethodPut,
-			http.MethodHead,
-			http.MethodPost,
-			http.MethodDelete,
-			http.MethodOptions,
-			http.MethodPatch,
-		},
-		AllowedHeaders:   commonS3Headers,
-		ExposedHeaders:   commonS3Headers,
-		AllowCredentials: true,
-	})
-
-	return c.Handler(h)
 }
 
 // setIgnoreResourcesHandler -
@@ -744,7 +700,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 func setBucketForwardingHandler(h http.Handler) http.Handler {
 	fwd := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
-		RoundTripper: NewGatewayHTTPTransport(),
+		RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
 		Logger: func(err error) {
 			logger.LogIf(GlobalContext, err)
 		},

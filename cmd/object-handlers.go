@@ -33,9 +33,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	miniogo "github.com/minio/minio-go/v6"
-	"github.com/minio/minio-go/v6/pkg/encrypt"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	miniogo "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
@@ -116,7 +116,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -159,7 +159,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	// Get request range.
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrUnsupportedRangeHeader), r.URL, guessIsBrowserReq(r))
 		return
@@ -192,6 +192,14 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
+		if globalBucketVersioningSys.Enabled(bucket) {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if objInfo.VersionID != "" && objInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -256,7 +264,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
 				// Validate the SSE-C Key set in the header.
 				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
-					writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
 				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
@@ -313,7 +321,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// get gateway encryption options
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -362,7 +370,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
@@ -379,6 +387,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
+		if globalBucketVersioningSys.Enabled(bucket) && gr != nil {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -435,6 +451,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
 	}
+
 	// Write object content to response body
 	if _, err = io.Copy(httpWriter, gr); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
@@ -535,7 +552,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get("Range")
+	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
 			// Handle only errInvalidRange. Ignore other
@@ -552,6 +569,14 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
+		if globalBucketVersioningSys.Enabled(bucket) {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if objInfo.VersionID != "" && objInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+			}
+		}
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
@@ -676,6 +701,7 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 
 // getRemoteInstanceTransport contains a singleton roundtripper.
 var getRemoteInstanceTransport http.RoundTripper
+var getRemoteInstanceTransportLongTO http.RoundTripper
 var getRemoteInstanceTransportOnce sync.Once
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
@@ -690,8 +716,28 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	}
 	getRemoteInstanceTransportOnce.Do(func() {
 		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
 	})
 	core.SetCustomTransport(getRemoteInstanceTransport)
+	return core, nil
+}
+
+// Returns a minio-go Client configured to access remote host described by destDNSRecord
+// Applicable only in a federated deployment.
+// The transport does not contain any timeout except for dialing.
+func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.Core, error) {
+	cred := getReqAccessCred(r, globalServerRegion)
+	// In a federated deployment, all the instances share config files
+	// and hence expected to have same credentials.
+	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
+	if err != nil {
+		return nil, err
+	}
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
+	})
+	core.SetCustomTransport(getRemoteInstanceTransportLongTO)
 	return core, nil
 }
 
@@ -764,7 +810,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
 	var vid string
 	if u, err := url.Parse(cpSrcPath); err == nil {
-		vid = strings.TrimSpace(u.Query().Get("versionId"))
+		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
@@ -860,6 +906,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		if isErrPreconditionFailed(err) {
 			return
+		}
+		if globalBucketVersioningSys.Enabled(srcBucket) && gr != nil {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+			}
 		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1133,7 +1187,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		client, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -1148,7 +1202,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			ServerSideEncryption: dstOpts.ServerSideEncryption,
 			UserTags:             tag.ToMap(),
 		}
-		remoteObjInfo, rerr := client.PutObject(dstBucket, dstObject, srcInfo.Reader,
+		remoteObjInfo, rerr := core.PutObject(ctx, dstBucket, dstObject, srcInfo.Reader,
 			srcInfo.Size, "", "", opts)
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
@@ -1301,26 +1355,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		metadata[xhttp.AmzObjectTagging] = objTags
 	}
 
-	if rAuthType == authTypeStreamingSigned {
-		if contentEncoding, ok := metadata["content-encoding"]; ok {
-			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
-			if contentEncoding != "" {
-				// Make sure to trim and save the content-encoding
-				// parameter for a streaming signature which is set
-				// to a custom value for example: "aws-chunked,gzip".
-				metadata["content-encoding"] = contentEncoding
-			} else {
-				// Trimmed content encoding is empty when the header
-				// value is set to "aws-chunked" only.
-
-				// Make sure to delete the content-encoding parameter
-				// for a streaming signature which is set to value
-				// for example: "aws-chunked"
-				delete(metadata, "content-encoding")
-			}
-		}
-	}
-
 	var (
 		md5hex    = hex.EncodeToString(md5Bytes)
 		sha256hex = ""
@@ -1408,7 +1442,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	var opts ObjectOptions
 	opts, err = putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -1620,7 +1654,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	newMultipartUpload := objectAPI.NewMultipartUpload
@@ -1675,7 +1709,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	cpSrcPath := r.Header.Get(xhttp.AmzCopySource)
 	var vid string
 	if u, err := url.Parse(cpSrcPath); err == nil {
-		vid = strings.TrimSpace(u.Query().Get("versionId"))
+		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
@@ -1707,8 +1741,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	uploadID := r.URL.Query().Get("uploadId")
-	partIDString := r.URL.Query().Get("partNumber")
+	uploadID := r.URL.Query().Get(xhttp.UploadID)
+	partIDString := r.URL.Query().Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -1771,6 +1805,14 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		if isErrPreconditionFailed(err) {
 			return
 		}
+		if globalBucketVersioningSys.Enabled(srcBucket) && gr != nil {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1817,13 +1859,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		client, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
-		partInfo, err := client.PutObjectPart(dstBucket, dstObject, uploadID, partID,
+		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID,
 			srcInfo.Reader, srcInfo.Size, "", "", dstOpts.ServerSideEncryption)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2009,8 +2051,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	uploadID := r.URL.Query().Get("uploadId")
-	partIDString := r.URL.Query().Get("partNumber")
+	uploadID := r.URL.Query().Get(xhttp.UploadID)
+	partIDString := r.URL.Query().Get(xhttp.PartNumber)
 
 	partID, err := strconv.Atoi(partIDString)
 	if err != nil {
@@ -2285,13 +2327,20 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 				return
 			}
 		}
-		parts := make([]PartInfo, len(listPartsInfo.Parts))
-		for i, p := range listPartsInfo.Parts {
-			part := p
-			part.ETag = tryDecryptETag(objectEncryptionKey, p.ETag, ssec)
-			parts[i] = part
+		for i := range listPartsInfo.Parts {
+			curp := listPartsInfo.Parts[i]
+			curp.ETag = tryDecryptETag(objectEncryptionKey, curp.ETag, ssec)
+			if !ssec {
+				var partSize uint64
+				partSize, err = sio.DecryptedSize(uint64(curp.Size))
+				if err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
+				}
+				curp.Size = int64(partSize)
+			}
+			listPartsInfo.Parts[i] = curp
 		}
-		listPartsInfo.Parts = parts
 	}
 
 	response := generateListPartsResponse(listPartsInfo, encodingType)
@@ -2844,8 +2893,13 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
-	objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
+	if objRetention.Mode.Valid() {
+		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objRetention.Mode)
+		objInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = objRetention.RetainUntilDate.UTC().Format(time.RFC3339)
+	} else {
+		delete(objInfo.UserDefined, strings.ToLower(xhttp.AmzObjectLockRetainUntilDate))
+		delete(objInfo.UserDefined, strings.ToLower(xhttp.AmzObjectLockMode))
+	}
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
@@ -2913,6 +2967,11 @@ func (api objectAPIHandlers) GetObjectRetentionHandler(w http.ResponseWriter, r 
 	}
 
 	retention := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
+
+	if !retention.Mode.Valid() {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoSuchObjectLockConfiguration), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	writeSuccessResponseXML(w, encodeResponse(retention))
 	// Notify object retention accessed via a GET request.

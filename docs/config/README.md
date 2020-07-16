@@ -190,7 +190,6 @@ or environment variables
 ```
 MINIO_API_REQUESTS_MAX       (number)    set the maximum number of concurrent requests, e.g. "1600"
 MINIO_API_REQUESTS_DEADLINE  (duration)  set the deadline for API requests waiting to be processed e.g. "1m"
-MINIO_API_READY_DEADLINE     (duration)  set the deadline for health check API /minio/health/ready e.g. "1m"
 MINIO_API_CORS_ALLOW_ORIGIN  (csv)       set comma separated list of origins allowed for CORS requests e.g. "https://example1.com,https://example2.com"
 ```
 

@@ -312,6 +312,10 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	if rs != nil {
 		go func() {
+			// if range caching is disabled, download entire object.
+			if !dcache.enableRange {
+				rs = nil
+			}
 			// fill cache in the background for range GET requests
 			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 			if bErr != nil {
@@ -321,7 +325,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			oi, _, _, err := dcache.statRange(ctx, bucket, object, rs)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
+				// use a new context to avoid locker prematurely timing out operation when the GetObjectNInfo returns.
+				dcache.Put(context.Background(), bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
+				return
 			}
 		}()
 		return bkReader, bkErr
@@ -542,11 +548,7 @@ func newCache(config cache.Config) ([]*diskCache, bool, error) {
 			return nil, false, errors.New("Atime support required for disk caching")
 		}
 
-		quota := config.MaxUse
-		if quota == 0 {
-			quota = config.Quota
-		}
-		cache, err := newDiskCache(ctx, dir, quota, config.After, config.WatermarkLow, config.WatermarkHigh)
+		cache, err := newDiskCache(ctx, dir, config)
 		if err != nil {
 			return nil, false, err
 		}

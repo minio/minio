@@ -43,11 +43,11 @@ func main() {
 
 ```
 
-| Service operations                  | Info operations               | Healing operations | Config operations         |
-|:------------------------------------|:------------------------------|:-------------------|:--------------------------|
-| [`ServiceTrace`](#ServiceTrace)     | [`ServerInfo`](#ServerInfo)   | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) |
-| [`ServiceStop`](#ServiceStop)       | [`StorageInfo`](#StorageInfo) |                    | [`SetConfig`](#SetConfig) |
-| [`ServiceRestart`](#ServiceRestart) |                               |                    |                           |
+| Service operations                  | Info operations                          | Healing operations | Config operations         |
+|:------------------------------------|:-----------------------------------------|:-------------------|:--------------------------|
+| [`ServiceTrace`](#ServiceTrace)     | [`ServerInfo`](#ServerInfo)              | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) |
+| [`ServiceStop`](#ServiceStop)       | [`StorageInfo`](#StorageInfo)            |                    | [`SetConfig`](#SetConfig) |
+| [`ServiceRestart`](#ServiceRestart) | [`AccountUsageInfo`](#AccountUsageInfo)  |                    |                           |
 
 
 
@@ -250,6 +250,47 @@ __Example__
     log.Println(storageInfo)
 
  ```
+
+<a name="AccountUsageInfo"></a>
+
+### AccountUsageInfo(ctx context.Context) (AccountUsageInfo, error)
+
+Fetches accounting usage information for the current authenticated user
+
+| Param                          | Type                 | Description             |
+|--------------------------------|----------------------|-------------------------|
+| `AccountUsageInfo.AccountName` | _string_             | Account name.           |
+| `AccountUsageInfo.Buckets`     | _[]BucketUsageInfo_  | Bucket usage info.      |
+
+
+| Param                      | Type            | Description                             |
+|----------------------------|-----------------|-----------------------------------------|
+| `BucketUsageInfo.Name`     | _string_        | The name of the current bucket
+| `BucketUsageInfo.Size`     | _uint64_        | The total size of the current bucket
+| `BucketUsageInfo.Created`  | _time.Time_     | Bucket creation time
+| `BucketUsageInfo.Access`   | _AccountAccess_ | Type of access of the current account
+
+
+| Param                  | Type    | Description                                                                                                              |
+|------------------------|---------|------------------------------------------------------------------|
+| `AccountAccess.Read`   | _bool_  | Indicate if the bucket is readable by the current account name.  |
+| `AccountAccess.Write`  | _bool_  | Indocate if the bucket is writable by the current account name.  |
+
+
+__Example__
+
+```go
+
+   accountUsageInfo, err := madmClnt.AccountUsageInfo(context.Background())
+   if err != nil {
+	log.Fatalln(err)
+   }
+
+   log.Println(accountUsageInfo)
+
+```
+
+
 
 ## 5. Heal operations
 

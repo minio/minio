@@ -33,6 +33,7 @@ function start_minio_3_node() {
     declare -a ARGS
     export MINIO_ACCESS_KEY=minio
     export MINIO_SECRET_KEY=minio123
+    export MINIO_ERASURE_SET_DRIVE_COUNT=6
 
     start_port=$(shuf -i 10000-65000 -n 1)
     for i in $(seq 1 3); do

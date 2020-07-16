@@ -35,8 +35,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/klauspost/compress/zip"
-	miniogopolicy "github.com/minio/minio-go/v6/pkg/policy"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
+	"github.com/minio/minio-go/v7"
+	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/browser"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
@@ -166,7 +167,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, true) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	opts := BucketOptions{
@@ -233,7 +234,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -252,7 +253,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		if err = core.RemoveBucket(args.BucketName); err != nil {
+		if err = core.RemoveBucket(ctx, args.BucketName); err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
 		return nil
@@ -406,7 +407,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			}
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		core, err := getRemoteInstanceClient(r, getHostFromSrv(sr))
+		core, err := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(sr))
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -523,7 +524,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	nextMarker := ""
@@ -618,7 +619,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -632,7 +633,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 			}
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		core, err := getRemoteInstanceClient(r, getHostFromSrv(sr))
+		core, err := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(sr))
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -647,7 +648,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 			}
 		}()
 
-		for resp := range core.RemoveObjects(args.BucketName, objectsCh) {
+		for resp := range core.RemoveObjects(ctx, args.BucketName, objectsCh, minio.RemoveObjectsOptions{}) {
 			if resp.Err != nil {
 				return toJSONError(ctx, resp.Err, args.BucketName, resp.ObjectName)
 			}
@@ -655,8 +656,9 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return nil
 	}
 
-	versioned := globalBucketVersioningSys.Enabled(args.BucketName)
-
+	opts := ObjectOptions{
+		Versioned: globalBucketVersioningSys.Enabled(args.BucketName),
+	}
 	var err error
 next:
 	for _, objectName := range args.Objects {
@@ -690,7 +692,7 @@ next:
 				}
 			}
 
-			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, ObjectOptions{})
+			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, opts)
 			logger.LogIf(ctx, err)
 		}
 
@@ -723,7 +725,7 @@ next:
 		objInfoCh := make(chan ObjectInfo)
 
 		// Walk through all objects
-		if err = objectAPI.Walk(ctx, args.BucketName, objectName, objInfoCh); err != nil {
+		if err = objectAPI.Walk(ctx, args.BucketName, objectName, objInfoCh, ObjectOptions{}); err != nil {
 			break next
 		}
 
@@ -736,7 +738,6 @@ next:
 				}
 				objects = append(objects, ObjectToDelete{
 					ObjectName: obj.Name,
-					VersionID:  obj.VersionID,
 				})
 			}
 
@@ -746,7 +747,7 @@ next:
 			}
 
 			// Deletes a list of objects.
-			_, errs := deleteObjects(ctx, args.BucketName, objects, ObjectOptions{Versioned: versioned})
+			_, errs := deleteObjects(ctx, args.BucketName, objects, opts)
 			for _, err := range errs {
 				if err != nil {
 					logger.LogIf(ctx, err)
@@ -756,7 +757,7 @@ next:
 		}
 	}
 
-	if err != nil && !isErrObjectNotFound(err) {
+	if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 		// Ignore object not found error.
 		return toJSONError(ctx, err, args.BucketName, "")
 	}
@@ -1030,6 +1031,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, err)
 		return
 	}
+
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -1052,15 +1054,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	pReader = NewPutObjReader(hashReader, nil, nil)
 	// get gateway encryption options
-	var opts ObjectOptions
-	opts, err = putOpts(ctx, r, bucket, object, metadata)
-
+	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
+
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
@@ -1545,7 +1547,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		objInfoCh := make(chan ObjectInfo)
 
 		// Walk through all objects
-		if err := objectAPI.Walk(ctx, args.BucketName, pathJoin(args.Prefix, object), objInfoCh); err != nil {
+		if err := objectAPI.Walk(ctx, args.BucketName, pathJoin(args.Prefix, object), objInfoCh, ObjectOptions{}); err != nil {
 			logger.LogIf(ctx, err)
 			continue
 		}
@@ -1599,7 +1601,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
@@ -1617,7 +1619,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		if rerr != nil {
 			return toJSONError(ctx, rerr, args.BucketName)
 		}
-		policyStr, err := client.GetBucketPolicy(args.BucketName)
+		policyStr, err := client.GetBucketPolicy(ctx, args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, rerr, args.BucketName)
 		}
@@ -1696,7 +1698,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
@@ -1715,7 +1717,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 			return toJSONError(ctx, rerr, args.BucketName)
 		}
 		var policyStr string
-		policyStr, err = core.Client.GetBucketPolicy(args.BucketName)
+		policyStr, err = core.Client.GetBucketPolicy(ctx, args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -1787,7 +1789,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	policyType := miniogopolicy.BucketPolicy(args.Policy)
@@ -1814,7 +1816,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		var policyStr string
 		// Use the abstracted API instead of core, such that
 		// NoSuchBucketPolicy errors are automatically handled.
-		policyStr, err = core.Client.GetBucketPolicy(args.BucketName)
+		policyStr, err = core.Client.GetBucketPolicy(ctx, args.BucketName)
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -1827,7 +1829,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 		policyInfo.Statements = miniogopolicy.SetPolicy(policyInfo.Statements, policyType, args.BucketName, args.Prefix)
 		if len(policyInfo.Statements) == 0 {
-			if err = core.SetBucketPolicy(args.BucketName, ""); err != nil {
+			if err = core.SetBucketPolicy(ctx, args.BucketName, ""); err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
 			return nil
@@ -1844,7 +1846,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
-		if err = core.SetBucketPolicy(args.BucketName, string(policyData)); err != nil {
+		if err = core.SetBucketPolicy(ctx, args.BucketName, string(policyData)); err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
 
@@ -1939,7 +1941,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 
 	// Check if bucket is a reserved bucket name or invalid.
 	if isReservedOrInvalidBucket(args.BucketName, false) {
-		return toJSONError(ctx, errInvalidBucketName)
+		return toJSONError(ctx, errInvalidBucketName, args.BucketName)
 	}
 
 	// Check if the user indeed has GetObject access,

@@ -10,11 +10,12 @@ func _() {
 	var x [1]struct{}
 	_ = x[NoneAction-0]
 	_ = x[DeleteAction-1]
+	_ = x[DeleteVersionAction-2]
 }
 
-const _Action_name = "NoneActionDeleteAction"
+const _Action_name = "NoneActionDeleteActionDeleteVersionAction"
 
-var _Action_index = [...]uint8{0, 10, 22}
+var _Action_index = [...]uint8{0, 10, 22, 41}
 
 func (i Action) String() string {
 	if i < 0 || i >= Action(len(_Action_index)-1) {

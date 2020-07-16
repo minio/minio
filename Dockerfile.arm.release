@@ -1,10 +1,9 @@
 FROM multiarch/qemu-user-static:x86_64-arm as qemu
-FROM arm32v7/alpine:3.10
+FROM arm32v7/alpine:3.12
 
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
 COPY --from=qemu /usr/bin/qemu-arm-static /usr/bin
-COPY minio /usr/bin/minio
 
 ENV MINIO_UPDATE off
 ENV MINIO_ACCESS_KEY_FILE=access_key \
@@ -15,7 +14,9 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 RUN \
      apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-arm/minio -o /usr/bin/minio && \
      curl -s -q https://raw.githubusercontent.com/minio/minio/release/dockerscripts/docker-entrypoint.sh -o /usr/bin/docker-entrypoint.sh && \
+     chmod +x /usr/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      curl -s -q -O https://raw.githubusercontent.com/minio/minio/release/CREDITS
 

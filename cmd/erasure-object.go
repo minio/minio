@@ -25,7 +25,7 @@ import (
 	"path"
 	"sync"
 
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/mimedb"
@@ -145,7 +145,20 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return nil, toObjectErr(err, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, fi.ToObjectInfo(bucket, object), opts)
+	objInfo := fi.ToObjectInfo(bucket, object)
+	if objInfo.DeleteMarker {
+		if opts.VersionID == "" {
+			return &GetObjectReader{
+				ObjInfo: objInfo,
+			}, toObjectErr(errFileNotFound, bucket, object)
+		}
+		// Make sure to return object info to provide extra information.
+		return &GetObjectReader{
+			ObjInfo: objInfo,
+		}, toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -310,6 +323,14 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+	if fi.Deleted {
+		if opts.VersionID == "" {
+			return toObjectErr(errFileNotFound, bucket, object)
+		}
+		// Make sure to return object info to provide extra information.
+		return toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
 	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, etag, opts, fi, metaArr, onlineDisks)
 }
 
@@ -358,12 +379,7 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 		return info, nil
 	}
 
-	info, err = er.getObjectInfo(ctx, bucket, object, opts)
-	if err != nil {
-		return info, toObjectErr(err, bucket, object)
-	}
-
-	return info, nil
+	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
 func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI, err error) {
@@ -397,7 +413,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts)
 	if err != nil {
-		return objInfo, err
+		return objInfo, toObjectErr(err, bucket, object)
 	}
 
 	if fi.Deleted {
@@ -682,14 +698,16 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		})
 	}
 
-	// Save additional erasureMetadata.
-	modTime := UTCNow()
-
 	opts.UserDefined["etag"] = r.MD5CurrentHexString()
 
 	// Guess content-type from the extension if possible.
 	if opts.UserDefined["content-type"] == "" {
 		opts.UserDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	}
+
+	modTime := opts.MTime
+	if opts.MTime.IsZero() {
+		modTime = UTCNow()
 	}
 
 	// Fill all the necessary metadata.
@@ -714,7 +732,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// during this upload, send it to the MRF list.
 	for i := 0; i < len(onlineDisks); i++ {
 		if onlineDisks[i] == nil || storageDisks[i] == nil {
-			er.addPartialUpload(bucket, object)
+			er.addPartial(bucket, object, fi.VersionID)
 			break
 		}
 	}
@@ -897,6 +915,23 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		}
 	}
 
+	// Check failed deletes across multiple objects
+	for _, version := range versions {
+		// Check if there is any offline disk and add it to the MRF list
+		for _, disk := range storageDisks {
+			if disk == nil {
+				// ignore delete markers for quorum
+				if version.Deleted {
+					continue
+				}
+				// all other direct versionId references we should
+				// ensure no dangling file is left over.
+				er.addPartial(bucket, version.Name, version.VersionID)
+				break
+			}
+		}
+	}
+
 	return dobjects, errs
 }
 
@@ -935,14 +970,21 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
+	for _, disk := range storageDisks {
+		if disk == nil {
+			er.addPartial(bucket, object, opts.VersionID)
+			break
+		}
+	}
+
 	return ObjectInfo{Bucket: bucket, Name: object, VersionID: opts.VersionID}, nil
 }
 
-// Send the successful but partial upload, however ignore
+// Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartialUpload(bucket, key string) {
+func (er erasureObjects) addPartial(bucket, object, versionID string) {
 	select {
-	case er.mrfUploadCh <- partialUpload{bucket: bucket, object: key}:
+	case er.mrfOpCh <- partialOperation{bucket: bucket, object: object, versionID: versionID}:
 	default:
 	}
 }

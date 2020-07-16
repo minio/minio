@@ -606,15 +606,15 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 			}
 		case "Size":
-			z.StatSize, err = dc.ReadInt64()
+			z.Size, err = dc.ReadInt64()
 			if err != nil {
-				err = msgp.WrapError(err, "StatSize")
+				err = msgp.WrapError(err, "Size")
 				return
 			}
 		case "MTime":
-			z.StatModTime, err = dc.ReadInt64()
+			z.ModTime, err = dc.ReadInt64()
 			if err != nil {
-				err = msgp.WrapError(err, "StatModTime")
+				err = msgp.WrapError(err, "ModTime")
 				return
 			}
 		case "MetaSys":
@@ -885,9 +885,9 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(z.StatSize)
+	err = en.WriteInt64(z.Size)
 	if err != nil {
-		err = msgp.WrapError(err, "StatSize")
+		err = msgp.WrapError(err, "Size")
 		return
 	}
 	// write "MTime"
@@ -895,9 +895,9 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteInt64(z.StatModTime)
+	err = en.WriteInt64(z.ModTime)
 	if err != nil {
-		err = msgp.WrapError(err, "StatModTime")
+		err = msgp.WrapError(err, "ModTime")
 		return
 	}
 	if (zb0001Mask & 0x8000) == 0 { // if not empty
@@ -1032,10 +1032,10 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "Size"
 	o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
-	o = msgp.AppendInt64(o, z.StatSize)
+	o = msgp.AppendInt64(o, z.Size)
 	// string "MTime"
 	o = append(o, 0xa5, 0x4d, 0x54, 0x69, 0x6d, 0x65)
-	o = msgp.AppendInt64(o, z.StatModTime)
+	o = msgp.AppendInt64(o, z.ModTime)
 	if (zb0001Mask & 0x8000) == 0 { // if not empty
 		// string "MetaSys"
 		o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
@@ -1227,15 +1227,15 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			}
 		case "Size":
-			z.StatSize, bts, err = msgp.ReadInt64Bytes(bts)
+			z.Size, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "StatSize")
+				err = msgp.WrapError(err, "Size")
 				return
 			}
 		case "MTime":
-			z.StatModTime, bts, err = msgp.ReadInt64Bytes(bts)
+			z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "StatModTime")
+				err = msgp.WrapError(err, "ModTime")
 				return
 			}
 		case "MetaSys":

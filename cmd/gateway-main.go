@@ -45,6 +45,61 @@ var (
 	}
 )
 
+// GatewayLocker implements custom NewNSLock implementation
+type GatewayLocker struct {
+	ObjectLayer
+	nsMutex *nsLockMap
+}
+
+// NewNSLock - implements gateway level locker
+func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return l.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
+}
+
+// Walk - implements common gateway level Walker, to walk on all objects recursively at a prefix
+func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
+	walk := func(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+		var marker string
+
+		// Make sure the results channel is ready to be read when we're done.
+		defer close(results)
+
+		for {
+			// set maxKeys to '0' to list maximum possible objects in single call.
+			loi, err := l.ObjectLayer.ListObjects(ctx, bucket, prefix, marker, "", 0)
+			if err != nil {
+				return err
+			}
+			marker = loi.NextMarker
+			for _, obj := range loi.Objects {
+				select {
+				case results <- obj:
+				case <-ctx.Done():
+					return nil
+				}
+			}
+			if !loi.IsTruncated {
+				break
+			}
+		}
+		return nil
+	}
+
+	if err := l.ObjectLayer.Walk(ctx, bucket, prefix, results, opts); err != nil {
+		if _, ok := err.(NotImplemented); ok {
+			return walk(ctx, bucket, prefix, results)
+		}
+		return err
+	}
+
+	return nil
+}
+
+// NewGatewayLayerWithLocker - initialize gateway with locker.
+func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
+	return &GatewayLocker{ObjectLayer: gwLayer, nsMutex: newNSLock(false)}
+}
+
 // RegisterGatewayCommand registers a new command for gateway.
 func RegisterGatewayCommand(cmd cli.Command) error {
 	cmd.Flags = append(append(cmd.Flags, ServerFlags...), GlobalFlags...)
@@ -212,7 +267,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	httpServer := xhttp.NewServer([]string{globalCLIContext.Addr},
-		criticalErrorHandler{router}, getCert)
+		criticalErrorHandler{corsHandler(router)}, getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}

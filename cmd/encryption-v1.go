@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2017, 2018 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/subtle"
@@ -31,8 +30,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
-	"github.com/minio/minio-go/v6/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	sha256 "github.com/minio/sha256-simd"
@@ -160,12 +157,12 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 			return err
 		}
 
-		newKey, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
+		newKey, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
 		sealedKey = objectKey.Seal(newKey, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, GlobalKMS.KeyID(), encKey, sealedKey)
+		crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encKey, sealedKey)
 		return nil
 	}
 }
@@ -176,14 +173,14 @@ func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]s
 		if GlobalKMS == nil {
 			return crypto.ObjectKey{}, errKMSNotConfigured
 		}
-		key, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.KeyID(), crypto.Context{bucket: path.Join(bucket, object)})
+		key, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return crypto.ObjectKey{}, err
 		}
 
 		objectKey := crypto.GenerateKey(key, rand.Reader)
 		sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, GlobalKMS.KeyID(), encKey, sealedKey)
+		crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encKey, sealedKey)
 		return objectKey, nil
 	}
 	var extKey [32]byte
@@ -853,201 +850,4 @@ func deriveClientKey(clientKey [32]byte, bucket, object string) [32]byte {
 	mac.Write([]byte(path.Join(bucket, object)))
 	mac.Sum(key[:0])
 	return key
-}
-
-// set encryption options for pass through to backend in the case of gateway and UserDefined metadata
-func getDefaultOpts(header http.Header, copySource bool, metadata map[string]string) (opts ObjectOptions, err error) {
-	var clientKey [32]byte
-	var sse encrypt.ServerSide
-
-	opts = ObjectOptions{UserDefined: metadata}
-	if copySource {
-		if crypto.SSECopy.IsRequested(header) {
-			clientKey, err = crypto.SSECopy.ParseHTTP(header)
-			if err != nil {
-				return
-			}
-			if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
-				return
-			}
-			opts.ServerSideEncryption = encrypt.SSECopy(sse)
-			return
-		}
-		return
-	}
-
-	if crypto.SSEC.IsRequested(header) {
-		clientKey, err = crypto.SSEC.ParseHTTP(header)
-		if err != nil {
-			return
-		}
-		if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
-			return
-		}
-		opts.ServerSideEncryption = sse
-		return
-	}
-	if crypto.S3.IsRequested(header) || (metadata != nil && crypto.S3.IsEncrypted(metadata)) {
-		opts.ServerSideEncryption = encrypt.NewSSE()
-	}
-	return
-}
-
-// get ObjectOptions for GET calls from encryption headers
-func getOpts(ctx context.Context, r *http.Request, bucket, object string) (ObjectOptions, error) {
-	var (
-		encryption encrypt.ServerSide
-		opts       ObjectOptions
-	)
-
-	var partNumber int
-	var err error
-	if pn := r.URL.Query().Get("partNumber"); pn != "" {
-		partNumber, err = strconv.Atoi(pn)
-		if err != nil {
-			return opts, err
-		}
-		if partNumber <= 0 {
-			return opts, errInvalidArgument
-		}
-	}
-
-	vid := strings.TrimSpace(r.URL.Query().Get("versionId"))
-	if vid != "" && vid != nullVersionID {
-		_, err := uuid.Parse(vid)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return opts, VersionNotFound{
-				Bucket:    bucket,
-				Object:    object,
-				VersionID: vid,
-			}
-		}
-	}
-
-	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
-		key, err := crypto.SSEC.ParseHTTP(r.Header)
-		if err != nil {
-			return opts, err
-		}
-		derivedKey := deriveClientKey(key, bucket, object)
-		encryption, err = encrypt.NewSSEC(derivedKey[:])
-		logger.CriticalIf(ctx, err)
-		return ObjectOptions{
-			ServerSideEncryption: encryption,
-			VersionID:            vid,
-			PartNumber:           partNumber,
-		}, nil
-	}
-
-	// default case of passing encryption headers to backend
-	opts, err = getDefaultOpts(r.Header, false, nil)
-	if err != nil {
-		return opts, err
-	}
-	opts.PartNumber = partNumber
-	opts.VersionID = vid
-	return opts, nil
-}
-
-func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts ObjectOptions, err error) {
-	versioned := globalBucketVersioningSys.Enabled(bucket)
-	opts, err = getOpts(ctx, r, bucket, object)
-	if err != nil {
-		return opts, err
-	}
-	opts.Versioned = versioned
-	return opts, nil
-}
-
-// get ObjectOptions for PUT calls from encryption headers and metadata
-func putOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
-	versioned := globalBucketVersioningSys.Enabled(bucket)
-	vid := strings.TrimSpace(r.URL.Query().Get("versionId"))
-	if vid != "" && vid != nullVersionID {
-		_, err := uuid.Parse(vid)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return opts, VersionNotFound{
-				Bucket:    bucket,
-				Object:    object,
-				VersionID: vid,
-			}
-		}
-	}
-
-	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
-	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
-	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {
-		return ObjectOptions{
-			ServerSideEncryption: encrypt.NewSSE(),
-			UserDefined:          metadata,
-			VersionID:            vid,
-			Versioned:            versioned,
-		}, nil
-	}
-	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
-		opts, err = getOpts(ctx, r, bucket, object)
-		opts.VersionID = vid
-		opts.Versioned = versioned
-		opts.UserDefined = metadata
-		return
-	}
-	if crypto.S3KMS.IsRequested(r.Header) {
-		keyID, context, err := crypto.S3KMS.ParseHTTP(r.Header)
-		if err != nil {
-			return ObjectOptions{}, err
-		}
-		sseKms, err := encrypt.NewSSEKMS(keyID, context)
-		if err != nil {
-			return ObjectOptions{}, err
-		}
-		return ObjectOptions{
-			ServerSideEncryption: sseKms,
-			UserDefined:          metadata,
-			VersionID:            vid,
-			Versioned:            versioned,
-		}, nil
-	}
-	// default case of passing encryption headers and UserDefined metadata to backend
-	opts, err = getDefaultOpts(r.Header, false, metadata)
-	if err != nil {
-		return opts, err
-	}
-	opts.VersionID = vid
-	opts.Versioned = versioned
-	return opts, nil
-}
-
-// get ObjectOptions for Copy calls with encryption headers provided on the target side and source side metadata
-func copyDstOpts(ctx context.Context, r *http.Request, bucket, object string, metadata map[string]string) (opts ObjectOptions, err error) {
-	return putOpts(ctx, r, bucket, object, metadata)
-}
-
-// get ObjectOptions for Copy calls with encryption headers provided on the source side
-func copySrcOpts(ctx context.Context, r *http.Request, bucket, object string) (ObjectOptions, error) {
-	var (
-		ssec encrypt.ServerSide
-		opts ObjectOptions
-	)
-
-	if GlobalGatewaySSE.SSEC() && crypto.SSECopy.IsRequested(r.Header) {
-		key, err := crypto.SSECopy.ParseHTTP(r.Header)
-		if err != nil {
-			return opts, err
-		}
-		derivedKey := deriveClientKey(key, bucket, object)
-		ssec, err = encrypt.NewSSEC(derivedKey[:])
-		if err != nil {
-			return opts, err
-		}
-		return ObjectOptions{ServerSideEncryption: encrypt.SSECopy(ssec)}, nil
-	}
-
-	// default case of passing encryption headers to backend
-	opts, err := getDefaultOpts(r.Header, false, nil)
-	if err != nil {
-		return opts, err
-	}
-	return opts, nil
 }

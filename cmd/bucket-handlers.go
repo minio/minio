@@ -25,12 +25,13 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
 
-	"github.com/minio/minio-go/v6/pkg/set"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -372,6 +373,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	deleteObjects := &DeleteObjectsRequest{}
 	if err := xmlDecoder(r.Body, deleteObjects, maxBodySize); err != nil {
 		logger.LogIf(ctx, err, logger.Application)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Before proceeding validate if bucket exists.
+	_, err := objectAPI.GetBucketInfo(ctx, bucket)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -918,34 +926,35 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	forceDelete := false
-	if value := r.Header.Get(xhttp.MinIOForceDelete); value != "" {
-		switch value {
-		case "true":
-			forceDelete = true
-		case "false":
-		default:
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
-			return
-		}
+	// Verify if the caller has sufficient permissions.
+	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
 	}
 
-	if forceDelete {
+	forceDelete := false
+	if value := r.Header.Get(xhttp.MinIOForceDelete); value != "" {
+		var err error
+		forceDelete, err = strconv.ParseBool(value)
+		if err != nil {
+			apiErr := errorCodes.ToAPIErr(ErrInvalidRequest)
+			apiErr.Description = err.Error()
+			writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		// if force delete header is set, we need to evaluate the policy anyways
+		// regardless of it being true or not.
 		if s3Error := checkRequestAuthType(ctx, r, policy.ForceDeleteBucketAction, bucket, ""); s3Error != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 			return
 		}
-	} else {
-		if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketAction, bucket, ""); s3Error != ErrNone {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
 
-	if forceDelete {
-		if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
-			return
+		if forceDelete {
+			if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 	}
 

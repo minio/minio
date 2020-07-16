@@ -341,6 +341,14 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 		return &ret, ErrUnknownWORMModeDirective
 	}
 
+	if ret.Mode.Valid() && ret.RetainUntilDate.IsZero() {
+		return &ret, ErrMalformedXML
+	}
+
+	if !ret.Mode.Valid() && !ret.RetainUntilDate.IsZero() {
+		return &ret, ErrMalformedXML
+	}
+
 	t, err := UTCNowNTP()
 	if err != nil {
 		logger.LogIf(context.Background(), err)
@@ -431,7 +439,10 @@ func GetObjectRetentionMeta(meta map[string]string) ObjectRetention {
 	}
 	if ok {
 		mode = parseRetMode(modeStr)
+	} else {
+		return ObjectRetention{}
 	}
+
 	tillStr, ok = meta[strings.ToLower(AmzObjectLockRetainUntilDate)]
 	if !ok {
 		tillStr, ok = meta[AmzObjectLockRetainUntilDate]

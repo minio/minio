@@ -22,7 +22,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -30,22 +30,6 @@ import (
 
 	"github.com/minio/minio/pkg/madmin"
 )
-
-// GatewayLocker implements custom NeNSLock implementation
-type GatewayLocker struct {
-	ObjectLayer
-	nsMutex *nsLockMap
-}
-
-// NewNSLock - implements gateway level locker
-func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return l.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
-}
-
-// NewGatewayLayerWithLocker - initialize gateway with locker.
-func NewGatewayLayerWithLocker(gwLayer ObjectLayer) ObjectLayer {
-	return &GatewayLocker{ObjectLayer: gwLayer, nsMutex: newNSLock(false)}
-}
 
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
@@ -202,7 +186,7 @@ func (a GatewayUnsupported) ListObjectsV2(ctx context.Context, bucket, prefix, c
 }
 
 // Walk - Not implemented stub
-func (a GatewayUnsupported) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
+func (a GatewayUnsupported) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	return NotImplemented{}
 }
 

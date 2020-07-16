@@ -16,4 +16,3 @@
 - [ ] Fixes a regression (If yes, please add `commit-id` or `PR #` here)
 - [ ] Documentation needed
 - [ ] Unit tests needed
-- [ ] Functional tests needed (If yes, add [mint](https://github.com/minio/mint) PR # here: )

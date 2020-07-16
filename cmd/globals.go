@@ -21,9 +21,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 
-	etcd "github.com/coreos/etcd/clientv3"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
@@ -35,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
+	etcd "go.etcd.io/etcd/v3/clientv3"
 
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
@@ -279,6 +279,7 @@ var (
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
+	globalProxyEndpoints []ProxyEndpoint
 	// Add new variable global values here.
 )
 

@@ -846,19 +846,14 @@ func newPeerRestClients(endpoints EndpointZones) []*peerRESTClient {
 	peerHosts := getRemoteHosts(endpoints)
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {
-		client, err := newPeerRESTClient(host)
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
-			continue
-		}
-		restClients[i] = client
+		restClients[i] = newPeerRESTClient(host)
 	}
 
 	return restClients
 }
 
 // Returns a peer rest client.
-func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
+func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	scheme := "http"
 	if globalIsSSL {
 		scheme = "https"
@@ -879,20 +874,19 @@ func newPeerRESTClient(peer *xnet.Host) (*peerRESTClient, error) {
 	}
 
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		return nil, err
-	}
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 
 	// Construct a new health function.
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		respBody, err := restClient.CallWithContext(ctx, peerRESTMethodHealth, nil, nil, -1)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError
 		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
 	}
 
-	return &peerRESTClient{host: peer, restClient: restClient}, nil
+	return &peerRESTClient{host: peer, restClient: restClient}
 }

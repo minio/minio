@@ -15,6 +15,7 @@ minio gateway <name> -h
      MINIO_CACHE_AFTER: Minimum number of access before caching an object.
      MINIO_CACHE_WATERMARK_LOW: % of cache quota at which cache eviction stops
      MINIO_CACHE_WATERMARK_HIGH: % of cache quota at which cache eviction starts
+     MINIO_CACHE_RANGE: set to "on" or "off" caching of independent range requests per object, defaults to "on"
 
 
 ...
@@ -62,6 +63,7 @@ Disk caching caches objects for **downloaded** objects i.e
 - When an object is deleted, corresponding entry in cache if any is deleted as well.
 - Cache continues to work for read-only operations such as GET, HEAD when backend is offline.
 - Cache-Control and Expires headers can be used to control how long objects stay in the cache. ETag of cached objects are not validated with backend until expiry time as per the Cache-Control or Expires header is met.
+- All range GET requests are cached by default independently, this may be not desirable in all situations when cache storage is limited and where downloading an entire object at once might be more optimal. To optionally turn this feature off, and allow downloading entire object in the background `export MINIO_CACHE_RANGE=off`.
 - To ensure security guarantees, encrypted objects are normally not cached. However, if you wish to encrypt cached content on disk, you can set MINIO_CACHE_ENCRYPTION_MASTER_KEY environment variable to set a cache KMS
 master key to automatically encrypt all cached content.
 

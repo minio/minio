@@ -454,7 +454,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewCustomDialContext(dialTimeout, 15*time.Second),
+		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
 		MaxIdleConns:          16,
 		IdleConnTimeout:       1 * time.Minute,
@@ -477,13 +477,16 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 // This sets the value for MaxIdleConnsPerHost from 2 (go default)
 // to 256.
 func NewGatewayHTTPTransport() *http.Transport {
+	return newGatewayHTTPTransport(1 * time.Minute)
+}
+
+func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 	tr := newCustomHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
 	}, defaultDialTimeout)()
-	// Set aggressive timeouts for gateway
-	tr.ResponseHeaderTimeout = 1 * time.Minute
 
 	// Allow more requests to be in flight.
+	tr.ResponseHeaderTimeout = timeout
 	tr.MaxConnsPerHost = 256
 	tr.MaxIdleConnsPerHost = 16
 	tr.MaxIdleConns = 256

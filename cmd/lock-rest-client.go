@@ -26,7 +26,6 @@ import (
 
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
 )
@@ -155,13 +154,12 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	}
 
 	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient, err := rest.NewClient(serverURL, trFn, newAuthToken)
-	if err != nil {
-		logger.Fatal(err, "Unable to create lock rest client")
-	}
+	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		respBody, err := restClient.CallWithContext(ctx, lockRESTMethodHealth, nil, nil, -1)
+		// Instantiate a new rest client for healthcheck
+		// to avoid recursive healthCheckFn()
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, lockRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError

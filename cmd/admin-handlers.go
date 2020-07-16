@@ -652,6 +652,16 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Analyze the heal token and route the request accordingly
+	token, success := proxyRequestByToken(ctx, w, r, hip.clientToken)
+	if success {
+		return
+	}
+	hip.clientToken = token
+	// if request was not successful, try this server locally if token
+	// is not found the call will fail anyways. if token is empty
+	// try this server to generate a new token.
+
 	type healResp struct {
 		respBytes []byte
 		apiErr    APIError
@@ -718,16 +728,16 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// find number of disks in the setup, ignore any errors here.
-	info, _ := objectAPI.StorageInfo(ctx, false)
-	numDisks := info.Backend.OfflineDisks.Sum() + info.Backend.OnlineDisks.Sum()
-
 	healPath := pathJoin(hip.bucket, hip.objPrefix)
 	if hip.clientToken == "" && !hip.forceStart && !hip.forceStop {
 		nh, exists := globalAllHealState.getHealSequence(healPath)
 		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
+			clientToken := nh.clientToken
+			if globalIsDistErasure {
+				clientToken = fmt.Sprintf("%s@%d", nh.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+			}
 			b, err := json.Marshal(madmin.HealStartSuccess{
-				ClientToken:   nh.clientToken,
+				ClientToken:   clientToken,
 				ClientAddress: nh.clientAddress,
 				StartTime:     nh.startTime,
 			})
@@ -764,7 +774,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 			respCh <- hr
 		}()
 	case hip.clientToken == "":
-		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), numDisks, hip.hs, hip.forceStart)
+		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), hip.hs, hip.forceStart)
 		go func() {
 			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
 			hr := healResp{respBytes, apiErr, errMsg}
@@ -928,6 +938,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusServiceUnavailable,
 			}
+		case errors.Is(err, crypto.ErrKESKeyExists):
+			apiErr = APIError{
+				Code:           "XMinioKMSKeyExists",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusConflict,
+			}
 		default:
 			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}
@@ -1080,6 +1096,28 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// KMSCreateKeyHandler - POST /minio/admin/v3/kms/key/create?key-id=<master-key-id>
+func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "KMSCreateKey")
+	defer logger.AuditLog(w, r, "KMSCreateKey", mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSCreateKeyAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if GlobalKMS == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
+		return
+	}
+
+	if err := GlobalKMS.CreateKey(r.URL.Query().Get("key-id")); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseHeadersOnly(w)
+}
+
 // KMSKeyStatusHandler - GET /minio/admin/v3/kms/key/status?key-id=<master-key-id>
 func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSKeyStatus")
@@ -1098,7 +1136,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = GlobalKMS.KeyID()
+		keyID = GlobalKMS.DefaultKeyID()
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,
@@ -1381,23 +1419,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Fetching the Storage information, ignore any errors.
 	storageInfo, _ := objectAPI.StorageInfo(ctx, false)
 
-	var OnDisks int
-	var OffDisks int
 	var backend interface{}
-
 	if storageInfo.Backend.Type == BackendType(madmin.Erasure) {
-
-		for _, v := range storageInfo.Backend.OnlineDisks {
-			OnDisks += v
-		}
-		for _, v := range storageInfo.Backend.OfflineDisks {
-			OffDisks += v
-		}
-
 		backend = madmin.ErasureBackend{
 			Type:             madmin.ErasureType,
-			OnlineDisks:      OnDisks,
-			OfflineDisks:     OffDisks,
+			OnlineDisks:      storageInfo.Backend.OnlineDisks.Sum(),
+			OfflineDisks:     storageInfo.Backend.OfflineDisks.Sum(),
 			StandardSCData:   storageInfo.Backend.StandardSCData,
 			StandardSCParity: storageInfo.Backend.StandardSCParity,
 			RRSCData:         storageInfo.Backend.RRSCData,
@@ -1409,48 +1436,14 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	mode := ""
-	if globalSafeMode {
-		mode = "safe"
-	} else {
+	mode := "safemode"
+	if newObjectLayerFn() != nil {
 		mode = "online"
 	}
 
 	server := getLocalServerProperty(globalEndpoints, r)
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)
-
-	for _, sp := range servers {
-		for i, di := range sp.Disks {
-			path := ""
-			if globalIsErasure {
-				path = di.DrivePath
-			}
-			if globalIsDistErasure {
-				path = sp.Endpoint + di.DrivePath
-			}
-			// For distributed
-			for a := range storageInfo.Backend.Sets {
-				for b := range storageInfo.Backend.Sets[a] {
-					ep := storageInfo.Backend.Sets[a][b].Endpoint
-
-					if globalIsDistErasure {
-						if strings.Replace(ep, "http://", "", -1) == path || strings.Replace(ep, "https://", "", -1) == path {
-							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
-							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
-						}
-					}
-					if globalIsErasure {
-						if ep == path {
-							sp.Disks[i].State = storageInfo.Backend.Sets[a][b].State
-							sp.Disks[i].UUID = storageInfo.Backend.Sets[a][b].UUID
-						}
-					}
-				}
-			}
-
-		}
-	}
 
 	domain := globalDomainNames
 	services := madmin.Services{
@@ -1459,6 +1452,21 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Logger:        log,
 		Audit:         audit,
 		Notifications: notifyTarget,
+	}
+
+	// find all disks which belong to each respective endpoints
+	for i := range servers {
+		for _, disk := range storageInfo.Disks {
+			if strings.Contains(disk.Endpoint, servers[i].Endpoint) {
+				servers[i].Disks = append(servers[i].Disks, disk)
+			}
+		}
+	}
+	// add all the disks local to this server.
+	for _, disk := range storageInfo.Disks {
+		if disk.Endpoint == disk.DrivePath {
+			servers[len(servers)-1].Disks = append(servers[len(servers)-1].Disks, disk)
+		}
 	}
 
 	infoMsg := madmin.InfoMessage{
@@ -1533,7 +1541,7 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 		vault.Status = "disabled"
 		return vault
 	}
-	keyID := GlobalKMS.KeyID()
+	keyID := GlobalKMS.DefaultKeyID()
 	kmsInfo := GlobalKMS.Info()
 
 	if kmsInfo.Endpoint == "" {

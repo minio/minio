@@ -16,6 +16,7 @@ This document explains how to setup Prometheus and configure it to scrape data f
         - [3.2 Public Prometheus config](#32-public-prometheus-config)
     - [4. Update `scrape_configs` section in prometheus.yml](#4-update-scrapeconfigs-section-in-prometheusyml)
     - [5. Start Prometheus](#5-start-prometheus)
+    - [6. Configure Grafana](#6-configure-grafana)
 - [List of metrics exposed by MinIO](#list-of-metrics-exposed-by-minio)
 
 ## Prerequisites
@@ -99,6 +100,10 @@ Start (or) Restart Prometheus service by running
 ```
 
 Here `prometheus.yml` is the name of configuration file. You can now see MinIO metrics in Prometheus dashboard. By default Prometheus dashboard is accessible at `http://localhost:9090`.
+
+### 6. Configure Grafana
+
+After Prometheus is configured, you can use Grafana to visualize MinIO metrics. Refer the [document here to setup Grafana with MinIO prometheus metrics](https://github.com/minio/minio/blob/master/docs/metrics/prometheus/grafana/README.md).
 
 ## List of metrics exposed by MinIO
 

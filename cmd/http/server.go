@@ -28,8 +28,10 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/env"
 )
 
 const (
@@ -38,9 +40,6 @@ const (
 	// DefaultShutdownTimeout - default shutdown timeout used for graceful http server shutdown.
 	DefaultShutdownTimeout = 5 * time.Second
 
-	// DefaultTCPKeepAliveTimeout - default TCP keep alive timeout for accepted connection.
-	DefaultTCPKeepAliveTimeout = 30 * time.Second
-
 	// DefaultMaxHeaderBytes - default maximum HTTP header size in bytes.
 	DefaultMaxHeaderBytes = 1 * humanize.MiByte
 )
@@ -48,13 +47,12 @@ const (
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs               []string      // addresses on which the server listens for new connection.
-	ShutdownTimeout     time.Duration // timeout used for graceful server shutdown.
-	TCPKeepAliveTimeout time.Duration // timeout used for underneath TCP connection.
-	listenerMutex       sync.Mutex    // to guard 'listener' field.
-	listener            *httpListener // HTTP listener for all 'Addrs' field.
-	inShutdown          uint32        // indicates whether the server is in shutdown or not
-	requestCount        int32         // counter holds no. of request in progress.
+	Addrs           []string      // addresses on which the server listens for new connection.
+	ShutdownTimeout time.Duration // timeout used for graceful server shutdown.
+	listenerMutex   sync.Mutex    // to guard 'listener' field.
+	listener        *httpListener // HTTP listener for all 'Addrs' field.
+	inShutdown      uint32        // indicates whether the server is in shutdown or not
+	requestCount    int32         // counter holds no. of request in progress.
 }
 
 // GetRequestCount - returns number of request in progress.
@@ -72,13 +70,11 @@ func (srv *Server) Start() (err error) {
 	handler := srv.Handler // if srv.Handler holds non-synced state -> possible data race
 
 	addrs := set.CreateStringSet(srv.Addrs...).ToSlice() // copy and remove duplicates
-	tcpKeepAliveTimeout := srv.TCPKeepAliveTimeout
 
 	// Create new HTTP listener.
 	var listener *httpListener
 	listener, err = newHTTPListener(
 		addrs,
-		tcpKeepAliveTimeout,
 	)
 	if err != nil {
 		return err
@@ -169,7 +165,7 @@ func (srv *Server) Shutdown() error {
 //                              (CBC-SHA ciphers can be enabled again if required)
 //  - RSA key exchange ciphers: Disabled because of dangerous PKCS1-v1.5 RSA
 //                              padding scheme. See Bleichenbacher attacks.
-var defaultCipherSuites = []uint16{
+var secureCipherSuites = []uint16{
 	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
@@ -181,15 +177,19 @@ var defaultCipherSuites = []uint16{
 // Go only provides constant-time implementations of Curve25519 and NIST P-256 curve.
 var secureCurves = []tls.CurveID{tls.X25519, tls.CurveP256}
 
+const (
+	enableSecureCiphersEnv = "MINIO_API_SECURE_CIPHERS"
+)
+
 // NewServer - creates new HTTP server using given arguments.
 func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificateFunc) *Server {
+	secureCiphers := env.Get(enableSecureCiphersEnv, config.EnableOn) == config.EnableOn
+
 	var tlsConfig *tls.Config
 	if getCert != nil {
 		tlsConfig = &tls.Config{
 			// TLS hardening
 			PreferServerCipherSuites: true,
-			CipherSuites:             defaultCipherSuites,
-			CurvePreferences:         secureCurves,
 			MinVersion:               tls.VersionTLS12,
 			// Do not edit the next line, protos priority is kept
 			// on purpose in this manner for HTTP 2.0, we would
@@ -203,10 +203,14 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 		tlsConfig.GetCertificate = getCert
 	}
 
+	if secureCiphers && tlsConfig != nil {
+		tlsConfig.CipherSuites = secureCipherSuites
+		tlsConfig.CurvePreferences = secureCurves
+	}
+
 	httpServer := &Server{
-		Addrs:               addrs,
-		ShutdownTimeout:     DefaultShutdownTimeout,
-		TCPKeepAliveTimeout: DefaultTCPKeepAliveTimeout,
+		Addrs:           addrs,
+		ShutdownTimeout: DefaultShutdownTimeout,
 	}
 	httpServer.Handler = handler
 	httpServer.TLSConfig = tlsConfig

@@ -26,7 +26,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
@@ -186,6 +186,10 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.taggingConfig = nil
 	}
 
+	if bytes.Equal(b.ObjectLockConfigXML, enabledBucketObjectLockConfig) {
+		b.VersioningConfigXML = enabledBucketVersioningConfig
+	}
+
 	if len(b.ObjectLockConfigXML) != 0 {
 		b.objectLockConfig, err = objectlock.ParseObjectLockConfig(bytes.NewReader(b.ObjectLockConfigXML))
 		if err != nil {
@@ -319,9 +323,15 @@ func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
 // deleteBucketMetadata deletes bucket metadata
 // If config does not exist no error is returned.
 func deleteBucketMetadata(ctx context.Context, obj ObjectLayer, bucket string) error {
-	configFile := path.Join(bucketConfigPrefix, bucket, bucketMetadataFile)
-	if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
-		return err
+	metadataFiles := []string{
+		dataUsageCacheName,
+		bucketMetadataFile,
+	}
+	for _, metaFile := range metadataFiles {
+		configFile := path.Join(bucketConfigPrefix, bucket, metaFile)
+		if err := deleteConfig(ctx, obj, configFile); err != nil && err != errConfigNotFound {
+			return err
+		}
 	}
 	return nil
 }

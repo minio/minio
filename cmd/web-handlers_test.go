@@ -329,13 +329,23 @@ func testDeleteBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// Empty string = no error
 		expect string
 	}{
-		{"", false, token, "The specified bucket is not valid"},
+		{"", false, token, "Bucket Name  is invalid. Lowercase letters, period, " +
+			"hyphen, numerals are the only allowed characters and should be minimum " +
+			"3 characters in length."},
 		{".", false, "auth", "Authentication failed"},
-		{".", false, token, "The specified bucket is not valid"},
-		{"..", false, token, "The specified bucket is not valid"},
-		{"ab", false, token, "The specified bucket is not valid"},
+		{".", false, token, "Bucket Name . is invalid. Lowercase letters, period, " +
+			"hyphen, numerals are the only allowed characters and should be minimum " +
+			"3 characters in length."},
+		{"..", false, token, "Bucket Name .. is invalid. Lowercase letters, period, " +
+			"hyphen, numerals are the only allowed characters and should be minimum " +
+			"3 characters in length."},
+		{"ab", false, token, "Bucket Name ab is invalid. Lowercase letters, period, " +
+			"hyphen, numerals are the only allowed characters and should be minimum " +
+			"3 characters in length."},
 		{"minio", false, "false token", "Authentication failed"},
-		{"minio", false, token, "The specified bucket is not valid"},
+		{"minio", false, token, "Bucket Name minio is invalid. Lowercase letters, period, " +
+			"hyphen, numerals are the only allowed characters and should be minimum " +
+			"3 characters in length."},
 		{bucketName, false, token, ""},
 		{bucketName, true, token, "The bucket you tried to delete is not empty"},
 		{bucketName, false, "", "JWT token missing"},

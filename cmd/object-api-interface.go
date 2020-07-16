@@ -20,9 +20,10 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"time"
 
-	"github.com/minio/minio-go/v6/pkg/encrypt"
-	"github.com/minio/minio-go/v6/pkg/tags"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -36,11 +37,13 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 // ObjectOptions represents object options for ObjectLayer object operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
-	Versioned            bool
-	VersionID            string
-	UserDefined          map[string]string
-	PartNumber           int
-	CheckCopyPrecondFn   CheckCopyPreconditionFn
+	Versioned            bool                    // indicates if the bucket is versioned
+	WalkVersions         bool                    // indicates if the we are interested in walking versions
+	VersionID            string                  // Specifies the versionID which needs to be overwritten or read
+	MTime                time.Time               // Is only set in POST/PUT operations
+	UserDefined          map[string]string       // only set in case of POST/PUT operations
+	PartNumber           int                     // only useful in case of GetObject/HeadObject
+	CheckCopyPrecondFn   CheckCopyPreconditionFn // only set during CopyObject preconditional valuation
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -78,7 +81,7 @@ type ObjectLayer interface {
 	ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error)
 	ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (result ListObjectVersionsInfo, err error)
 	// Walk lists all objects including versions, delete markers.
-	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error
+	Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error
 
 	// Object operations.
 

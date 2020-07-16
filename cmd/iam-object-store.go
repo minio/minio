@@ -256,8 +256,7 @@ func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]ia
 		}
 
 		policyName := item.Item
-		err := iamOS.loadPolicyDoc(policyName, m)
-		if err != nil {
+		if err := iamOS.loadPolicyDoc(policyName, m); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}
@@ -325,8 +324,7 @@ func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType
 		}
 
 		userName := item.Item
-		err := iamOS.loadUser(userName, userType, m)
-		if err != nil {
+		if err := iamOS.loadUser(userName, userType, m); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}
@@ -353,8 +351,7 @@ func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupI
 		}
 
 		group := item.Item
-		err := iamOS.loadGroup(group, m)
-		if err != nil {
+		if err := iamOS.loadGroup(group, m); err != nil && err != errNoSuchGroup {
 			return err
 		}
 	}
@@ -397,8 +394,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 
 		policyFile := item.Item
 		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		err := iamOS.loadMappedPolicy(userOrGroupName, userType, isGroup, m)
-		if err != nil && err != errNoSuchPolicy {
+		if err := iamOS.loadMappedPolicy(userOrGroupName, userType, isGroup, m); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}

@@ -18,16 +18,13 @@ package cmd
 
 import (
 	"net/http"
-	"os"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/madmin"
 )
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
 // local endpoints from given list of endpoints
 func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin.ServerProperties {
-	var disks []madmin.Disk
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(endpointZones)
@@ -42,33 +39,14 @@ func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin
 			if endpoint.IsLocal {
 				// Only proceed for local endpoints
 				network[nodeName] = "online"
-				var di = madmin.Disk{
-					DrivePath: endpoint.Path,
-				}
-				diInfo, err := disk.GetInfo(endpoint.Path)
-				if err != nil {
-					if os.IsNotExist(err) || isSysErrPathNotFound(err) {
-						di.State = madmin.DriveStateMissing
-					} else {
-						di.State = madmin.DriveStateCorrupt
-					}
+				continue
+			}
+			_, present := network[nodeName]
+			if !present {
+				if err := IsServerResolvable(endpoint); err == nil {
+					network[nodeName] = "online"
 				} else {
-					di.State = madmin.DriveStateOk
-					di.DrivePath = endpoint.Path
-					di.TotalSpace = diInfo.Total
-					di.UsedSpace = diInfo.Total - diInfo.Free
-					di.Utilization = float64((diInfo.Total - diInfo.Free) / diInfo.Total * 100)
-				}
-				disks = append(disks, di)
-			} else {
-				_, present := network[nodeName]
-				if !present {
-					err := IsServerResolvable(endpoint)
-					if err == nil {
-						network[nodeName] = "online"
-					} else {
-						network[nodeName] = "offline"
-					}
+					network[nodeName] = "offline"
 				}
 			}
 		}
@@ -81,6 +59,5 @@ func getLocalServerProperty(endpointZones EndpointZones, r *http.Request) madmin
 		Version:  Version,
 		CommitID: CommitID,
 		Network:  network,
-		Disks:    disks,
 	}
 }

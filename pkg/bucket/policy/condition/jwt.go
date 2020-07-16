@@ -31,7 +31,9 @@ const (
 	// JWTJti JWT unique identifier claim substitution.
 	JWTJti Key = "jwt:jti"
 
+	JWTUpn          Key = "jwt:upn"
 	JWTName         Key = "jwt:name"
+	JWTGroups       Key = "jwt:groups"
 	JWTGivenName    Key = "jwt:given_name"
 	JWTFamilyName   Key = "jwt:family_name"
 	JWTMiddleName   Key = "jwt:middle_name"
@@ -57,6 +59,8 @@ var JWTKeys = []Key{
 	JWTAud,
 	JWTJti,
 	JWTName,
+	JWTUpn,
+	JWTGroups,
 	JWTGivenName,
 	JWTFamilyName,
 	JWTMiddleName,

@@ -54,8 +54,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/gorilla/mux"
-	"github.com/minio/minio-go/v6/pkg/s3utils"
-	"github.com/minio/minio-go/v6/pkg/signer"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
@@ -66,6 +66,13 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	globalActiveCred = auth.Credentials{
+		AccessKey: auth.DefaultAccessKey,
+		SecretKey: auth.DefaultSecretKey,
+	}
+
+	globalConfigEncrypted = true
+
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
 		crypto.EnvAutoEncryptionLegacy,
@@ -407,7 +414,7 @@ func resetGlobalIsErasure() {
 func resetGlobalHealState() {
 	// Init global heal state
 	if globalAllHealState == nil {
-		globalAllHealState = initHealState()
+		globalAllHealState = newHealState()
 	} else {
 		globalAllHealState.Lock()
 		for _, v := range globalAllHealState.healSeqMap {
@@ -420,7 +427,7 @@ func resetGlobalHealState() {
 
 	// Init background heal state
 	if globalBackgroundHealState == nil {
-		globalBackgroundHealState = initHealState()
+		globalBackgroundHealState = newHealState()
 	} else {
 		globalBackgroundHealState.Lock()
 		for _, v := range globalBackgroundHealState.healSeqMap {
@@ -462,13 +469,6 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 	if err = newSrvConfig(obj); err != nil {
 		return err
 	}
-
-	globalActiveCred = auth.Credentials{
-		AccessKey: auth.DefaultAccessKey,
-		SecretKey: auth.DefaultSecretKey,
-	}
-
-	globalConfigEncrypted = true
 
 	// Set a default region.
 	config.SetRegion(globalServerConfig, bucketLocation)

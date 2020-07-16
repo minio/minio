@@ -23,29 +23,51 @@ import (
 	"net"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
-const (
-	// TCPFastOpenConnect sets the underlying socket to use
-	// the TCP fast open connect. This feature is supported
-	// since Linux 4.11.
-	TCPFastOpenConnect = 30
-)
+func setTCPParameters(c syscall.RawConn) error {
+	return c.Control(func(fdPtr uintptr) {
+		// got socket file descriptor to set parameters.
+		fd := int(fdPtr)
+
+		// Enable TCP fast connect
+		// TCPFastOpenConnect sets the underlying socket to use
+		// the TCP fast open connect. This feature is supported
+		// since Linux 4.11.
+		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+
+		// The time (in seconds) the connection needs to remain idle before
+		// TCP starts sending keepalive probes, set this to 5 secs
+		// system defaults to 7200 secs!!!
+		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 5)
+
+		// Number of probes.
+		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_probes (defaults to 9, we reduce it to 5)
+		// 9
+		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
+
+		// Wait time after successful probe in seconds.
+		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 2 secs)
+		// 75
+		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 2)
+
+		// Set TCP_USER_TIMEOUT to TCP_KEEPIDLE + TCP_KEEPINTVL * TCP_KEEPCNT.
+		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, 15)
+	})
+}
 
 // DialContext is a function to make custom Dial for internode communications
 type DialContext func(ctx context.Context, network, address string) (net.Conn, error)
 
 // NewCustomDialContext setups a custom dialer for internode communications
-func NewCustomDialContext(dialTimeout, dialKeepAlive time.Duration) DialContext {
+func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
-			Timeout:   dialTimeout,
-			KeepAlive: dialKeepAlive,
+			Timeout: dialTimeout,
 			Control: func(network, address string, c syscall.RawConn) error {
-				return c.Control(func(fd uintptr) {
-					// Enable TCP fast connect
-					_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, TCPFastOpenConnect, 1)
-				})
+				return setTCPParameters(c)
 			},
 		}
 		return dialer.DialContext(ctx, network, addr)

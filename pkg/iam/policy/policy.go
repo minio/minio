@@ -21,7 +21,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/minio/minio-go/v6/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
@@ -39,32 +39,52 @@ type Args struct {
 	Claims          map[string]interface{} `json:"claims"`
 }
 
-// GetPolicies get policies
-func (a Args) GetPolicies(policyClaimName string) (set.StringSet, bool) {
+// GetPoliciesFromClaims returns the list of policies to be applied for this
+// incoming request, extracting the information from input JWT claims.
+func GetPoliciesFromClaims(claims map[string]interface{}, policyClaimName string) (set.StringSet, bool) {
 	s := set.NewStringSet()
-	pname, ok := a.Claims[policyClaimName]
+	pname, ok := claims[policyClaimName]
 	if !ok {
 		return s, false
 	}
-	pnames, ok := pname.([]string)
+	pnames, ok := pname.([]interface{})
 	if !ok {
 		pnameStr, ok := pname.(string)
 		if ok {
-			pnames = strings.Split(pnameStr, ",")
-		} else {
-			return s, false
+			for _, pname := range strings.Split(pnameStr, ",") {
+				pname = strings.TrimSpace(pname)
+				if pname == "" {
+					// ignore any empty strings, considerate
+					// towards some user errors.
+					continue
+				}
+				s.Add(pname)
+			}
+			return s, true
 		}
+		return s, false
 	}
 	for _, pname := range pnames {
-		pname = strings.TrimSpace(pname)
-		if pname == "" {
-			// ignore any empty strings, considerate
-			// towards some user errors.
-			continue
+		pnameStr, ok := pname.(string)
+		if ok {
+			for _, pnameStr := range strings.Split(pnameStr, ",") {
+				pnameStr = strings.TrimSpace(pnameStr)
+				if pnameStr == "" {
+					// ignore any empty strings, considerate
+					// towards some user errors.
+					continue
+				}
+				s.Add(pnameStr)
+			}
 		}
-		s.Add(pname)
 	}
 	return s, true
+}
+
+// GetPolicies returns the list of policies to be applied for this
+// incoming request, extracting the information from JWT claims.
+func (a Args) GetPolicies(policyClaimName string) (set.StringSet, bool) {
+	return GetPoliciesFromClaims(a.Claims, policyClaimName)
 }
 
 // Policy - iam bucket iamp.

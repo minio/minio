@@ -207,6 +207,12 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		}
 	}(txnLk)
 
+	// Enable healing to heal drives if possible
+	if globalIsErasure {
+		initBackgroundHealing(ctx, newObject)
+		initLocalDisksAutoHeal(ctx, newObject)
+	}
+
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
@@ -222,7 +228,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 10*time.Second)); err != nil {
+		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 3*time.Second)); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -342,7 +348,7 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	for {
 		err := locker.GetLock(leaderLockTimeout)
 		if err != nil {
-			time.Sleep(leaderTick)
+			time.Sleep(leaderLockTimeoutSleepInterval)
 			continue
 		}
 		break
@@ -354,7 +360,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	}
 
 	initDataCrawler(ctx, objAPI)
-	initQuotaEnforcement(ctx, objAPI)
 }
 
 // serverMain handler called for 'minio server' command.
@@ -390,6 +395,9 @@ func serverMain(ctx *cli.Context) {
 	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	globalProxyEndpoints, err = GetProxyEndpoints(globalEndpoints)
+	logger.FatalIf(err, "Invalid command line arguments")
+
 	globalMinioEndpoint = func() string {
 		host := globalMinioHost
 		if host == "" {
@@ -422,9 +430,9 @@ func serverMain(ctx *cli.Context) {
 	setMaxResources()
 
 	if globalIsErasure {
-		// Init global heal state
-		globalAllHealState = initHealState()
-		globalBackgroundHealState = initHealState()
+		// New global heal state
+		globalAllHealState = newHealState()
+		globalBackgroundHealState = newHealState()
 	}
 
 	// Configure server.
@@ -457,7 +465,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}()
 
-	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{handler}, getCert)
+	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{corsHandler(handler)}, getCert)
 	httpServer.ErrorLog = log.New(pw, "", 0)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
@@ -473,11 +481,11 @@ func serverMain(ctx *cli.Context) {
 	if globalIsDistErasure && globalEndpoints.FirstLocal() {
 		for {
 			// Additionally in distributed setup, validate the setup and configuration.
-			err := verifyServerSystemConfig(globalEndpoints)
+			err := verifyServerSystemConfig(GlobalContext, globalEndpoints)
 			if err == nil {
 				break
 			}
-			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup")
+			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup, retrying.. after 5 seconds")
 			select {
 			case <-GlobalContext.Done():
 				return
@@ -503,12 +511,6 @@ func serverMain(ctx *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	newAllSubsystems()
-
-	// Enable healing to heal drives if possible
-	if globalIsErasure {
-		initBackgroundHealing(GlobalContext, newObject)
-		initLocalDisksAutoHeal(GlobalContext, newObject)
-	}
 
 	go startBackgroundOps(GlobalContext, newObject)
 
