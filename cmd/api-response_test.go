@@ -77,7 +77,7 @@ func TestObjectLocation(t *testing.T) {
 		// Server with virtual domain name.
 		{
 			request: &http.Request{
-				Host:   "mys3.bucket.org",
+				Host:   "mybucket.mys3.bucket.org",
 				Header: map[string][]string{},
 			},
 			domains:          []string{"mys3.bucket.org"},
@@ -87,7 +87,7 @@ func TestObjectLocation(t *testing.T) {
 		},
 		{
 			request: &http.Request{
-				Host: "mys3.bucket.org",
+				Host: "mybucket.mys3.bucket.org",
 				Header: map[string][]string{
 					"X-Forwarded-Scheme": {httpsScheme},
 				},
@@ -98,11 +98,14 @@ func TestObjectLocation(t *testing.T) {
 			expectedLocation: "https://mybucket.mys3.bucket.org/test/1.txt",
 		},
 	}
-	for i, testCase := range testCases {
-		gotLocation := getObjectLocation(testCase.request, testCase.domains, testCase.bucket, testCase.object)
-		if testCase.expectedLocation != gotLocation {
-			t.Errorf("Test %d: expected %s, got %s", i+1, testCase.expectedLocation, gotLocation)
-		}
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run("", func(t *testing.T) {
+			gotLocation := getObjectLocation(testCase.request, testCase.domains, testCase.bucket, testCase.object)
+			if testCase.expectedLocation != gotLocation {
+				t.Errorf("expected %s, got %s", testCase.expectedLocation, gotLocation)
+			}
+		})
 	}
 }
 
