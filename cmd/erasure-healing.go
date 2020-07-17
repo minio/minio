@@ -459,7 +459,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 		// Attempt a rename now from healed data to final location.
 		if err = disk.RenameData(minioMetaTmpBucket, tmpID, latestMeta.DataDir, bucket, object); err != nil {
-			logger.LogIf(ctx, err)
+			if err != errIsNotRegular && err != errFileNotFound {
+				logger.LogIf(ctx, err)
+			}
 			return result, toObjectErr(err, bucket, object)
 		}
 

@@ -709,6 +709,9 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
+			if formats[index] == nil {
+				return errDiskNotFound
+			}
 			return saveFormatErasure(storageDisks[index], formats[index], formats[index].Erasure.This)
 		}, index)
 	}

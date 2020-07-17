@@ -704,7 +704,12 @@ func (h *healSequence) healItemsFromSourceCh() error {
 			}
 
 			if err := h.queueHealTask(source, itemType); err != nil {
-				logger.LogIf(h.ctx, err)
+				switch err.(type) {
+				case ObjectExistsAsDirectory:
+				default:
+					logger.LogIf(h.ctx, fmt.Errorf("Heal attempt failed for %s: %w",
+						pathJoin(source.bucket, source.object), err))
+				}
 			}
 
 			h.scannedItemsMap[itemType]++
