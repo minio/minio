@@ -165,7 +165,7 @@ var defaultAWSCredProviders = []credentials.Provider{
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
-func newS3(urlStr string) (*miniogo.Core, error) {
+func newS3(urlStr string, tripper http.RoundTripper) (*miniogo.Core, error) {
 	if urlStr == "" {
 		urlStr = "https://s3.amazonaws.com"
 	}
@@ -191,14 +191,15 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 		creds = credentials.NewChainCredentials(defaultProviders)
 	}
 
-	options := miniogo.Options{
+	options := &miniogo.Options{
 		Creds:        creds,
 		Secure:       secure,
 		Region:       s3utils.GetRegionFromURL(*u),
 		BucketLookup: miniogo.BucketLookupAuto,
+		Transport:    tripper,
 	}
 
-	clnt, err := miniogo.NewWithOptions(endpoint, &options)
+	clnt, err := miniogo.New(endpoint, options)
 	if err != nil {
 		return nil, err
 	}
@@ -208,13 +209,6 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 
 // NewGatewayLayer returns s3 ObjectLayer.
 func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	// creds are ignored here, since S3 gateway implements chaining
-	// all credentials.
-	clnt, err := newS3(g.host)
-	if err != nil {
-		return nil, err
-	}
-
 	metrics := minio.NewMetrics()
 
 	t := &minio.MetricsTransport{
@@ -222,8 +216,12 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		Metrics:   metrics,
 	}
 
-	// Set custom transport
-	clnt.SetCustomTransport(t)
+	// creds are ignored here, since S3 gateway implements chaining
+	// all credentials.
+	clnt, err := newS3(g.host, t)
+	if err != nil {
+		return nil, err
+	}
 
 	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
 
@@ -719,17 +717,12 @@ func (l *s3Objects) GetObjectTags(ctx context.Context, bucket string, object str
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	tagsMap, err := l.Client.GetObjectTagging(ctx, bucket, object, miniogo.GetObjectTaggingOptions{})
+	t, err := l.Client.GetObjectTagging(ctx, bucket, object, miniogo.GetObjectTaggingOptions{})
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	tagObj := tags.Tags{}
-	for k, v := range tagsMap {
-		tagObj.Set(k, v)
-	}
-
-	return &tagObj, err
+	return t, nil
 }
 
 // PutObjectTags attaches the tags to the object
@@ -738,7 +731,7 @@ func (l *s3Objects) PutObjectTags(ctx context.Context, bucket, object string, ta
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	if err = l.Client.PutObjectTagging(ctx, bucket, object, tagObj.ToMap(), miniogo.PutObjectTaggingOptions{}); err != nil {
+	if err = l.Client.PutObjectTagging(ctx, bucket, object, tagObj, miniogo.PutObjectTaggingOptions{}); err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	return nil

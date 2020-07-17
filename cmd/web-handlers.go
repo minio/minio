@@ -36,6 +36,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio-go/v7"
+	miniogo "github.com/minio/minio-go/v7"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/browser"
@@ -637,14 +638,16 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		objectsCh := make(chan string)
+		objectsCh := make(chan miniogo.ObjectInfo)
 
 		// Send object names that are needed to be removed to objectsCh
 		go func() {
 			defer close(objectsCh)
 
 			for _, objectName := range args.Objects {
-				objectsCh <- objectName
+				objectsCh <- miniogo.ObjectInfo{
+					Key: objectName,
+				}
 			}
 		}()
 

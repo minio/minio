@@ -34,6 +34,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	miniogo "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/etcd/dns"
@@ -700,8 +701,8 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 }
 
 // getRemoteInstanceTransport contains a singleton roundtripper.
-var getRemoteInstanceTransport http.RoundTripper
-var getRemoteInstanceTransportLongTO http.RoundTripper
+var getRemoteInstanceTransport *http.Transport
+var getRemoteInstanceTransportLongTO *http.Transport
 var getRemoteInstanceTransportOnce sync.Once
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
@@ -710,7 +711,11 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
-	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
+	core, err := miniogo.NewCore(host, &miniogo.Options{
+		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
+		Secure:    globalIsSSL,
+		Transport: getRemoteInstanceTransport,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -718,7 +723,6 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 		getRemoteInstanceTransport = NewGatewayHTTPTransport()
 		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
 	})
-	core.SetCustomTransport(getRemoteInstanceTransport)
 	return core, nil
 }
 
@@ -729,7 +733,11 @@ func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
-	core, err := miniogo.NewCore(host, cred.AccessKey, cred.SecretKey, globalIsSSL)
+	core, err := miniogo.NewCore(host, &miniogo.Options{
+		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
+		Secure:    globalIsSSL,
+		Transport: getRemoteInstanceTransportLongTO,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -737,7 +745,6 @@ func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.
 		getRemoteInstanceTransport = NewGatewayHTTPTransport()
 		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
 	})
-	core.SetCustomTransport(getRemoteInstanceTransportLongTO)
 	return core, nil
 }
 
@@ -3009,6 +3016,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// Allow getObjectTagging if policy action is set.
 	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectTaggingAction, bucket, object); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
@@ -3026,6 +3034,10 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	if opts.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
 	}
 
 	writeSuccessResponseXML(w, encodeResponse(tags))
@@ -3079,6 +3091,10 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	if opts.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
+	}
+
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -3118,9 +3134,13 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	// Delete object tags
-	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil && err != errConfigNotFound {
+	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	if opts.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
 	}
 
 	writeSuccessNoContent(w)
