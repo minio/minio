@@ -752,7 +752,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(reader, h, opts.CheckCopyPrecondFn, closeFn)
+	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn)
 }
 
 // GetObject - reads an object from the disk.

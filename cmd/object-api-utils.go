@@ -509,14 +509,12 @@ type GetObjectReader struct {
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
 func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions, cleanupFns ...func()) (*GetObjectReader, error) {
-	if opts.CheckCopyPrecondFn != nil {
-		if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
-			// Call the cleanup funcs
-			for i := len(cleanupFns) - 1; i >= 0; i-- {
-				cleanupFns[i]()
-			}
-			return nil, PreConditionFailed{}
+	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+		// Call the cleanup funcs
+		for i := len(cleanupFns) - 1; i >= 0; i-- {
+			cleanupFns[i]()
 		}
+		return nil, PreConditionFailed{}
 	}
 	return &GetObjectReader{
 		ObjInfo:    oi,
@@ -530,7 +528,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 // GetObjectReader and an error. Request headers are passed to provide
 // encryption parameters. cleanupFns allow cleanup funcs to be
 // registered for calling after usage of the reader.
-type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckCopyPreconditionFn, cleanupFns ...func()) (r *GetObjectReader, err error)
+type ObjReaderFn func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cleanupFns ...func()) (r *GetObjectReader, err error)
 
 // NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
 // are called on Close() in reverse order as passed here. NOTE: It is
@@ -581,7 +579,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		// a reader that returns the desired range of
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
-		fn = func(inputReader io.Reader, h http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
 
 			cFns = append(cleanUpFns, cFns...)
@@ -596,17 +594,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				}
 				return nil, err
 			}
-			encETag := oi.ETag
 			oi.ETag = getDecryptedETag(h, oi, copySource) // Decrypt the ETag before top layer consumes this value.
 
-			if opts.CheckCopyPrecondFn != nil {
-				if ok := opts.CheckCopyPrecondFn(oi, encETag); ok {
-					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
-					}
-					return nil, PreConditionFailed{}
+			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
 				}
+				return nil, PreConditionFailed{}
 			}
 
 			// Apply the skipLen and limit on the
@@ -650,16 +645,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				return nil, 0, 0, errInvalidRange
 			}
 		}
-		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			cFns = append(cleanUpFns, cFns...)
-			if opts.CheckCopyPrecondFn != nil {
-				if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
-					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
-					}
-					return nil, PreConditionFailed{}
+			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
 				}
+				return nil, PreConditionFailed{}
 			}
 			// Decompression reader.
 			s2Reader := s2.NewReader(inputReader)
@@ -700,16 +693,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		if err != nil {
 			return nil, 0, 0, err
 		}
-		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckCopyPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
 			cFns = append(cleanUpFns, cFns...)
-			if opts.CheckCopyPrecondFn != nil {
-				if ok := opts.CheckCopyPrecondFn(oi, ""); ok {
-					// Call the cleanup funcs
-					for i := len(cFns) - 1; i >= 0; i-- {
-						cFns[i]()
-					}
-					return nil, PreConditionFailed{}
+			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
 				}
+				return nil, PreConditionFailed{}
 			}
 			r = &GetObjectReader{
 				ObjInfo:    oi,
