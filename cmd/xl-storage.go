@@ -1775,6 +1775,9 @@ func (s *xlStorage) CheckParts(volume, path string, fi FileInfo) error {
 
 	for _, part := range fi.Parts {
 		partPath := pathJoin(path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
+		if fi.XLV1 {
+			partPath = pathJoin(path, fmt.Sprintf("part.%d", part.Number))
+		}
 		filePath := pathJoin(volumeDir, partPath)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -2380,6 +2383,9 @@ func (s *xlStorage) VerifyFile(volume, path string, fi FileInfo) (err error) {
 	for _, part := range fi.Parts {
 		checksumInfo := erasure.GetChecksumInfo(part.Number)
 		partPath := pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
+		if fi.XLV1 {
+			partPath = pathJoin(volumeDir, path, fmt.Sprintf("part.%d", part.Number))
+		}
 		if err := s.bitrotVerify(partPath,
 			erasure.ShardFileSize(part.Size),
 			checksumInfo.Algorithm,
