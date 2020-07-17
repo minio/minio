@@ -346,18 +346,36 @@ func isMinioReservedBucket(bucketName string) bool {
 
 // returns a slice of hosts by reading a slice of DNS records
 func getHostsSlice(records []dns.SrvRecord) []string {
-	var hosts []string
-	for _, r := range records {
-		hosts = append(hosts, net.JoinHostPort(r.Host, string(r.Port)))
+	hosts := make([]string, len(records))
+	for i, r := range records {
+		hosts[i] = net.JoinHostPort(r.Host, string(r.Port))
 	}
 	return hosts
 }
 
-// returns a host (and corresponding port) from a slice of DNS records
-func getHostFromSrv(records []dns.SrvRecord) string {
-	rand.Seed(time.Now().Unix())
-	srvRecord := records[rand.Intn(len(records))]
-	return net.JoinHostPort(srvRecord.Host, string(srvRecord.Port))
+var rng = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+
+// returns an online host (and corresponding port) from a slice of DNS records
+func getHostFromSrv(records []dns.SrvRecord) (host string) {
+	hosts := getHostsSlice(records)
+
+	var d net.Dialer
+	var retry int
+	for retry < len(hosts) {
+		ctx, cancel := context.WithTimeout(GlobalContext, 300*time.Millisecond)
+
+		host = hosts[rng.Intn(len(hosts))]
+		conn, err := d.DialContext(ctx, "tcp", host)
+		cancel()
+		if err != nil {
+			retry++
+			continue
+		}
+		conn.Close()
+		break
+	}
+
+	return host
 }
 
 // IsCompressed returns true if the object is marked as compressed.
