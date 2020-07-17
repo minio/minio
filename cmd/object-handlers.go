@@ -708,6 +708,11 @@ var getRemoteInstanceTransportOnce sync.Once
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
+	})
+
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
@@ -719,10 +724,6 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	if err != nil {
 		return nil, err
 	}
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
 	return core, nil
 }
 
@@ -730,6 +731,11 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 // Applicable only in a federated deployment.
 // The transport does not contain any timeout except for dialing.
 func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.Core, error) {
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
+	})
+
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
@@ -741,10 +747,6 @@ func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.
 	if err != nil {
 		return nil, err
 	}
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
 	return core, nil
 }
 
