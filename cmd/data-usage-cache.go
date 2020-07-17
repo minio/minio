@@ -86,6 +86,9 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 
 // mod returns true if the hash mod cycles == cycle.
 func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
+	if cycles <= 1 {
+		return true
+	}
 	return uint32(xxhash.Sum64String(string(h)))%cycles == cycle%cycles
 }
 
@@ -115,6 +118,16 @@ func (d *dataUsageCache) find(path string) *dataUsageEntry {
 		return nil
 	}
 	return &due
+}
+
+// findChildrenCopy returns a copy of the children of the supplied hash.
+func (d *dataUsageCache) findChildrenCopy(h dataUsageHash) dataUsageHashMap {
+	ch := d.Cache[h.String()].Children
+	res := make(dataUsageHashMap, len(ch))
+	for k := range ch {
+		res[k] = struct{}{}
+	}
+	return res
 }
 
 // Returns nil if not found.

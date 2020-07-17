@@ -72,11 +72,11 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 	if !ok {
 		return madmin.BgHealState{}
 	}
-
+	// FIXME:
 	return madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
-		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
+		NextHealRound:     UTCNow(),
 	}
 }
 
@@ -179,56 +179,4 @@ func durationToNextHealRound(lastHeal time.Time) time.Duration {
 		return time.Second
 	}
 	return d
-}
-
-// Healing leader will take the charge of healing all erasure sets
-func execLeaderTasks(ctx context.Context, z *erasureZones) {
-	// So that we don't heal immediately, but after one month.
-	lastScanTime := UTCNow()
-	// Get background heal sequence to send elements to heal
-	var bgSeq *healSequence
-	var ok bool
-	for {
-		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if ok {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Second):
-			continue
-		}
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.NewTimer(durationToNextHealRound(lastScanTime)).C:
-			bgSeq.resetHealStatusCounters()
-			for _, zone := range z.zones {
-				// Heal set by set
-				for i, set := range zone.sets {
-					if err := healErasureSet(ctx, i, set, zone.drivesPerSet); err != nil {
-						logger.LogIf(ctx, err)
-						continue
-					}
-				}
-			}
-			lastScanTime = UTCNow()
-		}
-	}
-}
-
-func startGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
-	zones, ok := objAPI.(*erasureZones)
-	if !ok {
-		return
-	}
-
-	execLeaderTasks(ctx, zones)
-}
-
-func initGlobalHeal(ctx context.Context, objAPI ObjectLayer) {
-	go startGlobalHeal(ctx, objAPI)
 }

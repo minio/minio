@@ -332,10 +332,11 @@ func (client *storageRESTClient) CheckParts(volume, path string, fi FileInfo) er
 
 	var reader bytes.Buffer
 	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+		logger.LogIf(context.Background(), err)
 		return err
 	}
 
-	respBody, err := client.call(storageRESTMethodWriteMetadata, values, &reader, -1)
+	respBody, err := client.call(storageRESTMethodCheckParts, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }

@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio/pkg/madmin"
+
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
@@ -40,8 +42,11 @@ import (
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
 	dataCrawlSleepDefMult    = 10.0             // Default multiplier for waits between operations.
-	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
+	dataCrawlStartDelay      = 5 * time.Second  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
+
+	crawlerHealFolderInclude = 32   // Include a clean folder one in n cycles.
+	crawlerHealObjectSelect  = 1024 // Do a heal check on an object once every n cycles. Must divide into crawlerHealFolderInclude
 
 )
 
@@ -110,8 +115,9 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 }
 
 type cachedFolder struct {
-	name   string
-	parent *dataUsageHash
+	name              string
+	parent            *dataUsageHash
+	objectHealProbDiv uint32
 }
 
 type folderScanner struct {
@@ -188,7 +194,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 
 	// Always scan flattenLevels deep. Cache root is level 0.
-	todo := []cachedFolder{{name: cache.Info.Name}}
+	todo := []cachedFolder{{name: cache.Info.Name, objectHealProbDiv: 1}}
 	for i := 0; i < flattenLevels; i++ {
 		if s.dataUsageCrawlDebug {
 			logger.Info(logPrefix+"Level %v, scanning %v directories."+logSuffix, i, len(todo))
@@ -217,7 +223,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 			return s.newCache, ctx.Err()
 		default:
 		}
-		du, err := s.deepScanFolder(ctx, folder.name)
+		du, err := s.deepScanFolder(ctx, folder)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
@@ -248,26 +254,38 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		}
 		h := hashPath(folder.name)
 		if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-			s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-			continue
+			if !h.mod(s.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
+				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
+				continue
+			} else {
+				folder.objectHealProbDiv = crawlerHealFolderInclude
+			}
+			folder.objectHealProbDiv = dataUsageUpdateDirCycles
 		}
-
 		if s.withFilter != nil {
 			_, prefix := path2BucketObjectWithBasePath(basePath, folder.name)
 			if s.oldCache.Info.lifeCycle == nil || !s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 				// If folder isn't in filter, skip it completely.
 				if !s.withFilter.containsDir(folder.name) {
-					if s.dataUsageCrawlDebug {
-						logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
+					if !h.mod(s.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
+						if s.dataUsageCrawlDebug {
+							logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
+						}
+						s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
+						continue
+					} else {
+						if s.dataUsageCrawlDebug {
+							logger.Info(logPrefix+"Adding non-updated folder to heal check: %v"+logSuffix, folder)
+						}
 					}
-					s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-					continue
+					// Update probability of including objects
+					folder.objectHealProbDiv = crawlerHealFolderInclude
 				}
 			}
 		}
 
 		// Update on this cycle...
-		du, err := s.deepScanFolder(ctx, folder.name)
+		du, err := s.deepScanFolder(ctx, folder)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
@@ -300,6 +318,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		default:
 		}
 		thisHash := hashPath(folder.name)
+		existing := f.oldCache.findChildrenCopy(thisHash)
 
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
@@ -318,11 +337,19 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
-				f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
-				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
+				if !thisHash.mod(f.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
+					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
+					}
+					continue
+				} else {
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("data-usage:")+" Adding non-updated folder to heal check: %v", folder.name)
+					}
+					// If probability was already crawlerHealFolderInclude, keep it.
+					folder.objectHealProbDiv = crawlerHealFolderInclude
 				}
-				continue
 			}
 		}
 		f.waitForLowActiveIO()
@@ -359,7 +386,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				_, exists := f.oldCache.Cache[h.Key()]
 				cache.addChildString(entName)
 
-				this := cachedFolder{name: entName, parent: &thisHash}
+				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
+				delete(existing, entName)
 				cache.addChild(h)
 				if final {
 					if exists {
@@ -385,6 +413,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
+				heal:       thisHash.mod(f.oldCache.Info.NextCycle, crawlerHealObjectSelect/folder.objectHealProbDiv),
 			}
 			size, err := f.getSize(item)
 
@@ -402,19 +431,44 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		if err != nil {
 			return nil, err
 		}
+
+		// Whatever remains in existing must have been deleted or is missing and requires healing.
+		objAPI := newObjectLayerWithoutSafeModeFn()
+		for k := range existing {
+			if f.dataUsageCrawlDebug {
+				logger.Info(color.Green("data-usage:")+" checking missing folder: %v", k)
+			}
+			bucket, prefix := path2BucketObject(k)
+			// This is a folder. Make that clear to the healer.
+			prefix = prefix + slashSeparator
+			_, err := objAPI.HealObject(ctx, bucket, prefix, "", madmin.HealOpts{Recursive: true})
+			if f.dataUsageCrawlDebug {
+				logger.LogIf(ctx, err)
+			}
+			// Add unless healing returned an error.
+			if err == nil {
+				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
+				cache.addChild(hashPath(k))
+				if final {
+					f.existingFolders = append(f.existingFolders, this)
+				} else {
+					nextFolders = append(nextFolders, this)
+				}
+			}
+		}
 		f.newCache.replaceHashed(thisHash, folder.parent, cache)
 	}
 	return nextFolders, nil
 }
 
 // deepScanFolder will deep scan a folder and return the size if no error occurs.
-func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dataUsageEntry, error) {
+func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder) (*dataUsageEntry, error) {
 	var cache dataUsageEntry
 
 	done := ctx.Done()
 
 	var addDir func(entName string, typ os.FileMode) error
-	var dirStack = []string{f.root, folder}
+	var dirStack = []string{f.root, folder.name}
 
 	addDir = func(entName string, typ os.FileMode) error {
 		select {
@@ -426,6 +480,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 		f.waitForLowActiveIO()
 		if typ&os.ModeDir != 0 {
 			dirStack = append(dirStack, entName)
+			//FIXME: We need to check dirs randomly as well.
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
 			sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
@@ -460,7 +515,9 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder string) (*dat
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
+				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, crawlerHealObjectSelect/folder.objectHealProbDiv),
 			})
+		logger.Info(color.Green("data-usage:")+" %q: Heal prop 1:%d ", path.Join(prefix, entName), crawlerHealObjectSelect/folder.objectHealProbDiv)
 
 		// Don't sleep for really small amount of time
 		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
@@ -490,6 +547,7 @@ type crawlItem struct {
 	prefix     string // Only the prefix if any, does not have final object name.
 	objectName string // Only the object name without prefixes.
 	lifeCycle  *lifecycle.Lifecycle
+	heal       bool // Has the object been selected for heal check?
 	debug      bool
 }
 
@@ -522,6 +580,18 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	size, err := meta.oi.GetActualSize()
 	if i.debug {
 		logger.LogIf(ctx, err)
+	}
+	if i.heal {
+		if i.debug {
+			logger.Info("heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+		}
+		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{})
+		if !errors.Is(err, NotImplemented{}) {
+			logger.LogIf(ctx, err)
+			return 0
+		}
+		// Maybe, maybe not. Only 1 version?
+		size = res.ObjectSize
 	}
 	if i.lifeCycle == nil {
 		return size
