@@ -204,14 +204,14 @@ func (s *erasureSets) connectDisks() {
 			defer wg.Done()
 			disk, format, err := connectEndpoint(endpoint)
 			if err != nil {
-				printEndpointError(endpoint, err)
+				printEndpointError(endpoint, err, true)
 				return
 			}
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
 			if err != nil {
 				// Close the internal connection to avoid connection leaks.
 				disk.Close()
-				printEndpointError(endpoint, err)
+				printEndpointError(endpoint, err, false)
 				return
 			}
 			disk.SetDiskID(format.Erasure.This)
@@ -1296,10 +1296,6 @@ func markRootDisksAsDown(storageDisks []StorageAPI) {
 		return
 	}
 	for i := range storageDisks {
-		if errs[i] != nil {
-			storageDisks[i] = nil
-			continue
-		}
 		if infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.

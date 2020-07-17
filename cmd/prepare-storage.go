@@ -33,28 +33,41 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
-var printEndpointError = func() func(Endpoint, error) {
+var printEndpointError = func() func(Endpoint, error, bool) {
 	var mutex sync.Mutex
-	printOnce := make(map[Endpoint]map[string]bool)
+	printOnce := make(map[Endpoint]map[string]int)
 
-	return func(endpoint Endpoint, err error) {
+	return func(endpoint Endpoint, err error, once bool) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.String())
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		mutex.Lock()
 		defer mutex.Unlock()
+
 		m, ok := printOnce[endpoint]
 		if !ok {
-			m = make(map[string]bool)
-			m[err.Error()] = true
+			m = make(map[string]int)
+			m[err.Error()]++
 			printOnce[endpoint] = m
-			logger.LogAlwaysIf(ctx, err)
+			if once {
+				logger.LogAlwaysIf(ctx, err)
+				return
+			}
+		}
+		// Once is set and we are here means error was already
+		// printed once.
+		if once {
 			return
 		}
-		if m[err.Error()] {
-			return
+		// once not set, check if same error occurred 3 times in
+		// a row, then make sure we print it to call attention.
+		if m[err.Error()] > 2 {
+			logger.LogAlwaysIf(ctx, fmt.Errorf("Following error has been printed %d times.. %w", m[err.Error()], err))
+			// Reduce the count to introduce further delay in printing
+			// but let it again print after the 2th attempt
+			m[err.Error()]--
+			m[err.Error()]--
 		}
-		m[err.Error()] = true
-		logger.LogAlwaysIf(ctx, err)
+		m[err.Error()]++
 	}
 }()
 
