@@ -62,14 +62,19 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.Status == Disabled {
 			continue
 		}
+
 		if len(prefix) > 0 && len(rule.Filter.Prefix) > 0 {
-			// incoming prefix must be in rule prefix
-			if !recursive && !strings.HasPrefix(prefix, rule.Filter.Prefix) {
-				continue
+			if !recursive {
+				// If not recursive, incoming prefix must be in rule prefix
+				if !strings.HasPrefix(prefix, rule.Filter.Prefix) {
+					continue
+				}
 			}
-			// If recursive, we can skip this rule if it doesn't match the tested prefix.
-			if recursive && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
-				continue
+			if recursive {
+				// If recursive, we can skip this rule if it doesn't match the tested prefix.
+				if !strings.HasPrefix(prefix, rule.Filter.Prefix) && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
+					continue
+				}
 			}
 		}
 
