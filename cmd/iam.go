@@ -675,6 +675,24 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	return err
 }
 
+// returns comma separated policy string, from an input policy
+// after validating if there are any current policies which exist
+// on MinIO corresponding to the input.
+func (sys *IAMSys) currentPolicies(policyName string) string {
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	var policies []string
+	mp := newMappedPolicy(policyName)
+	for _, policy := range mp.toSlice() {
+		_, found := sys.iamPolicyDocsMap[policy]
+		if found {
+			policies = append(policies, policy)
+		}
+	}
+	return strings.Join(policies, ",")
+}
+
 // SetTempUser - set temporary user credentials, these credentials have an expiry.
 func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyName string) error {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
@@ -693,10 +711,9 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		mp := newMappedPolicy(policyName)
 		for _, policy := range mp.toSlice() {
 			p, found := sys.iamPolicyDocsMap[policy]
-			if !found {
-				return fmt.Errorf("%w: (%s)", errNoSuchPolicy, policy)
+			if found {
+				availablePolicies = append(availablePolicies, p)
 			}
-			availablePolicies = append(availablePolicies, p)
 		}
 
 		combinedPolicy := availablePolicies[0]
@@ -1671,6 +1688,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args) bool {
 		for _, pname := range mp.toSlice() {
 			p, found := sys.iamPolicyDocsMap[pname]
 			if !found {
+				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing for the LDAPUser %s, rejecting the request", pname, user))
 				return false
 			}
 			policies = append(policies, p)
@@ -1684,6 +1702,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args) bool {
 		for _, pname := range mp.toSlice() {
 			p, found := sys.iamPolicyDocsMap[pname]
 			if !found {
+				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing for the LDAPGroup %s, rejecting the request", pname, group))
 				return false
 			}
 			policies = append(policies, p)
@@ -1744,7 +1763,8 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	for pname := range policies {
 		p, found := sys.iamPolicyDocsMap[pname]
 		if !found {
-			logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, pname))
+			// all policies presented in the claim should exist
+			logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
 			return false
 		}
 		availablePolicies = append(availablePolicies, p)
