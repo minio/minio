@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/cache"
@@ -2506,7 +2507,7 @@ func checkConfigVersion(objAPI ObjectLayer, configFile string, version string) (
 		return false, nil, err
 	}
 
-	if globalConfigEncrypted {
+	if globalConfigEncrypted && !utf8.Valid(data) {
 		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 		if err != nil {
 			if err == madmin.ErrMaliciousData {

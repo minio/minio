@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 
@@ -223,7 +224,7 @@ func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error 
 	if err != nil {
 		return err
 	}
-	if globalConfigEncrypted {
+	if globalConfigEncrypted && !utf8.Valid(data) {
 		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 		if err != nil {
 			return err

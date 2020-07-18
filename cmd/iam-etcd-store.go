@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -120,7 +121,7 @@ func (ies *IAMEtcdStore) loadIAMConfig(item interface{}, path string) error {
 		return err
 	}
 
-	if globalConfigEncrypted {
+	if globalConfigEncrypted && !utf8.Valid(pdata) {
 		pdata, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(pdata))
 		if err != nil {
 			return err

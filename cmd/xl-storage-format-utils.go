@@ -50,6 +50,7 @@ func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersion
 	}
 
 	fi.IsLatest = true // No versions so current version is latest.
+	fi.XLV1 = true     // indicates older version
 	return FileInfoVersions{
 		Volume:        volume,
 		Name:          path,
@@ -76,5 +77,6 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string) (FileInfo, er
 	if err == errFileNotFound && versionID != "" {
 		return fi, errFileVersionNotFound
 	}
+	fi.XLV1 = true // indicates older version
 	return fi, err
 }
