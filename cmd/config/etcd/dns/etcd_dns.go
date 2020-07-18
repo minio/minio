@@ -48,8 +48,9 @@ func newCoreDNSMsg(ip string, port string, ttl uint32, t time.Time) ([]byte, err
 }
 
 // Close closes the internal etcd client and cannot be used further
-func (c *CoreDNS) Close() {
+func (c *CoreDNS) Close() error {
 	c.etcdClient.Close()
+	return nil
 }
 
 // List - Retrieves list of DNS entries for the domain.
@@ -259,7 +260,7 @@ func CoreDNSPath(prefix string) Option {
 }
 
 // NewCoreDNS - initialize a new coreDNS set/unset values.
-func NewCoreDNS(cfg clientv3.Config, setters ...Option) (*CoreDNS, error) {
+func NewCoreDNS(cfg clientv3.Config, setters ...Option) (Store, error) {
 	etcdClient, err := clientv3.New(cfg)
 	if err != nil {
 		return nil, err

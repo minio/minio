@@ -206,7 +206,7 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 			continue
 		}
 		err = d.deserialize(f, d.Saved)
-		if err != nil && err != io.EOF {
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			logger.LogIf(ctx, err)
 		}
 		f.Close()
