@@ -612,10 +612,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
-			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-			return
-		}
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
@@ -1743,9 +1739,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		vid = strings.TrimSpace(u.Query().Get(xhttp.VersionID))
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
-	}
-	if vid == "" {
-		vid = strings.TrimSpace(r.Header.Get(xhttp.AmzCopySourceVersionID))
 	}
 
 	srcBucket, srcObject := path2BucketObject(cpSrcPath)

@@ -612,7 +612,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				}
 				return nil, err
 			}
-			oi.ETag = getDecryptedETag(h, oi, copySource) // Decrypt the ETag before top layer consumes this value.
 
 			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
 				// Call the cleanup funcs
@@ -621,6 +620,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				}
 				return nil, PreConditionFailed{}
 			}
+
+			oi.ETag = getDecryptedETag(h, oi, false)
 
 			// Apply the skipLen and limit on the
 			// decrypted stream
