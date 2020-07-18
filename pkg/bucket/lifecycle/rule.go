@@ -44,7 +44,7 @@ type Rule struct {
 }
 
 var (
-	errInvalidRuleID           = Errorf("ID must be less than 255 characters")
+	errInvalidRuleID           = Errorf("ID cannot be empty, must be unique and allowed maximal length is 255 characters")
 	errEmptyRuleStatus         = Errorf("Status should not be empty")
 	errInvalidRuleStatus       = Errorf("Status must be set to either Enabled or Disabled")
 	errMissingExpirationAction = Errorf("No expiration action found")
@@ -52,8 +52,9 @@ var (
 
 // validateID - checks if ID is valid or not.
 func (r Rule) validateID() error {
-	// cannot be longer than 255 characters
-	if len(string(r.ID)) > 255 {
+	// cannot be empty and longer than 255 characters
+	idLen := len(string(r.ID))
+	if idLen == 0 || idLen > 255 {
 		return errInvalidRuleID
 	}
 	return nil

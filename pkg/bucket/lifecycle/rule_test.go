@@ -64,6 +64,7 @@ func TestInvalidRules(t *testing.T) {
 	}{
 		{ // Rule without expiration action
 			inputXML: ` <Rule>
+			                <ID>rule without expiration</ID>
                             <Status>Enabled</Status>
 	                    </Rule>`,
 			expectedErr: errMissingExpirationAction,
@@ -74,14 +75,22 @@ func TestInvalidRules(t *testing.T) {
 	                    </Rule>`,
 			expectedErr: errInvalidRuleID,
 		},
+		{ // Rule with empty ID
+			inputXML: ` <Rule>
+	                    <ID></ID>
+	                    </Rule>`,
+			expectedErr: errInvalidRuleID,
+		},
 		{ // Rule with empty status
 			inputXML: ` <Rule>
+			                  <ID>rule with empty status</ID>
                               <Status></Status>
 	                    </Rule>`,
 			expectedErr: errEmptyRuleStatus,
 		},
 		{ // Rule with invalid status
 			inputXML: ` <Rule>
+			                  <ID>rule with invalid status</ID>
                               <Status>OK</Status>
 	                    </Rule>`,
 			expectedErr: errInvalidRuleStatus,
