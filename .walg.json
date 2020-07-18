@@ -1,0 +1,14 @@
+{
+  "WALE_S3_PREFIX": "s3://pg-backups",
+  "AWS_ACCESS_KEY_ID": "minio",
+  "AWS_ENDPOINT": "http://<ip>:9000",
+  "AWS_S3_FORCE_PATH_STYLE": "true",
+  "AWS_SECRET_ACCESS_KEY": "miniosecret",
+  "PGDATA": "/var/lib/pgsql/9.6/data/",
+  "PGHOST": "/var/run/postgresql/.s.PGSQL.5432",
+  "WALG_UPLOAD_CONCURRENCY": "2",
+  "WALG_DOWNLOAD_CONCURRENCY": "2",
+  "WALG_UPLOAD_DISK_CONCURRENCY": "2",
+  "WALG_DELTA_MAX_STEPS": "7",
+  "WALG_COMPRESSION_METHOD": "brotli"
+}
