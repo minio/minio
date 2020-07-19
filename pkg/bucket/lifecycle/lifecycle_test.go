@@ -146,7 +146,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
-		{ // lifecycle config with rules having overlapping prefix
+		{ // lifecycle config with rules having duplicate ID
 			inputConfig:           string(duplicateIDLcConfig),
 			expectedParsingErr:    nil,
 			expectedValidationErr: errLifecycleDuplicateID,
