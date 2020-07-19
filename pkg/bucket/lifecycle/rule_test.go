@@ -76,10 +76,14 @@ func TestInvalidRules(t *testing.T) {
 			expectedErr: errInvalidRuleID,
 		},
 		{ // Rule with empty ID
-			inputXML: ` <Rule>
-	                    <ID></ID>
+			inputXML: `<Rule>
+							<ID></ID>
+							<Expiration>
+								<Days>365</Days>
+							</Expiration>
+                            <Status>Enabled</Status>
 	                    </Rule>`,
-			expectedErr: errInvalidRuleID,
+			expectedErr: nil,
 		},
 		{ // Rule with empty status
 			inputXML: ` <Rule>
