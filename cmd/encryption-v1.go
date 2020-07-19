@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
@@ -809,9 +810,16 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 	}
 
 	if encrypted {
-		if (crypto.SSEC.IsEncrypted(info.UserDefined) && !crypto.SSEC.IsRequested(headers)) ||
-			(crypto.S3.IsEncrypted(info.UserDefined) && crypto.SSEC.IsRequested(headers)) {
-			return encrypted, errEncryptedObject
+		if crypto.SSEC.IsEncrypted(info.UserDefined) {
+			if !(crypto.SSEC.IsRequested(headers) || crypto.SSECopy.IsRequested(headers)) {
+				return encrypted, errEncryptedObject
+			}
+		}
+
+		if crypto.S3.IsEncrypted(info.UserDefined) && r.Header.Get(xhttp.AmzCopySource) == "" {
+			if crypto.SSEC.IsRequested(headers) || crypto.SSECopy.IsRequested(headers) {
+				return encrypted, errEncryptedObject
+			}
 		}
 
 		if _, err = info.DecryptedSize(); err != nil {
@@ -819,7 +827,7 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 		}
 
 		if crypto.IsEncrypted(info.UserDefined) && !crypto.IsMultiPart(info.UserDefined) {
-			info.ETag = getDecryptedETag(headers, *info, headers.Get(crypto.SSECopyAlgorithm) != "")
+			info.ETag = getDecryptedETag(headers, *info, false)
 		}
 	}
 
