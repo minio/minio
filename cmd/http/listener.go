@@ -81,10 +81,7 @@ func (listener *httpListener) start() {
 
 	// Closure to handle single connection.
 	handleConn := func(tcpConn *net.TCPConn, doneCh <-chan struct{}) {
-		rawConn, err := tcpConn.SyscallConn()
-		if err == nil {
-			setTCPParameters(rawConn)
-		}
+		tcpConn.SetKeepAlive(true)
 		send(acceptResult{tcpConn, nil}, doneCh)
 	}
 
