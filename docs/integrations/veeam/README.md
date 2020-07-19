@@ -11,22 +11,25 @@ __Prerequisites__
 
 ## Setting up an S3 compatible object store for Veeam Backup and Replication
 ### Create a bucket for Veeam backups
-Create a bucket for Veeam Backup, e.g., 
+Create a bucket for Veeam Backup, e.g.,
 
 ```
 mc mb myminio/veeambackup
 ```
 
-> NOTE: For Veeam Backup with Immutability, create the bucket with object lock enabled, e.g., 
-> ```
-> mc mb -l myminio/veeambackup
-> ```.  
-> Object locking requires erasure coding enabled on the minio server. For more information see https://docs.minio.io/docs/minio-erasure-code-quickstart-guide.html. 
+> NOTE: For Veeam Backup with Immutability, create the bucket with object lock enabled, e.g.,
+
+```
+mc mb -l myminio/veeambackup
+```
+
+> Object locking requires erasure coding enabled on the minio server. For more information see https://docs.minio.io/docs/minio-erasure-code-quickstart-guide.html.
 
 ### Add MinIO as an object store for Veeam
 Follow the steps from the Veeam documentation for adding MinIO as an object store - https://helpcenter.veeam.com/docs/backup/vsphere/adding_s3c_object_storage.html?ver=100
 
-For Veeam Backup with Immutability, choose the amount of days you want to make backups immutable for <br />
+For Veeam Backup with Immutability, choose the amount of days you want to make backups immutable for
+
 ![Choose Immutability Days for Object Store](https://raw.githubusercontent.com/minio/minio/master/docs/integrations/veeam/screenshots/object_store_immutable_days.png)
 
 ### Creating the Scale-out Backup Repository
@@ -49,10 +52,12 @@ For Veeam Backup with Immutability, choose the amount of days you want to make b
 - Since we selected Copy mode when creating the SOBR, the backup will be copied to the capacity tier as soon as it is created on the performance tier.
 
 - For Veeam Backup with Immutability, you can choose a number of restore points or days to make backups immutable.
+
 ![Choose Immutability Options for Backups](https://raw.githubusercontent.com/minio/minio/master/docs/integrations/veeam/screenshots/backup_job_immutable_days.png)
 
 #### Backup Office 365 with VBO
 - Create a new bucket for VBO backups
+
 ```
 mc mb -l myminio/vbo
 ```
