@@ -391,8 +391,8 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	return nil
 }
 
-// IsReady - shouldn't be called will panic.
-func (er erasureObjects) IsReady(ctx context.Context) bool {
+// Health shouldn't be called directly - will panic
+func (er erasureObjects) Health(ctx context.Context, _ HealthOptions) HealthResult {
 	logger.CriticalIf(ctx, NotImplemented{})
-	return true
+	return HealthResult{}
 }

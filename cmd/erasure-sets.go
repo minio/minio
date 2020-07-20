@@ -1633,9 +1633,10 @@ func (s *erasureSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns true if atleast n/2 disks (read quorum) are online
-func (s *erasureSets) IsReady(_ context.Context) bool {
-	return false
+// Health shouldn't be called directly - will panic
+func (s *erasureSets) Health(ctx context.Context, _ HealthOptions) HealthResult {
+	logger.CriticalIf(ctx, NotImplemented{})
+	return HealthResult{}
 }
 
 // maintainMRFList gathers the list of successful partial uploads
