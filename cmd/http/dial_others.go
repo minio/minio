@@ -26,7 +26,7 @@ import (
 )
 
 // TODO: if possible implement for non-linux platforms, not a priority at the moment
-func setTCPParameters(c syscall.RawConn) error {
+func setInternalTCPParameters(c syscall.RawConn) error {
 	return nil
 }
 
