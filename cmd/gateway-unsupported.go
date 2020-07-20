@@ -230,8 +230,8 @@ func (a GatewayUnsupported) IsNotificationSupported() bool {
 	return false
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (a GatewayUnsupported) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (a GatewayUnsupported) IsListenSupported() bool {
 	return false
 }
 

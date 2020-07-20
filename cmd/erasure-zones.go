@@ -1614,8 +1614,8 @@ func (z *erasureZones) IsNotificationSupported() bool {
 	return true
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (z *erasureZones) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (z *erasureZones) IsListenSupported() bool {
 	return true
 }
 

@@ -58,7 +58,7 @@ func (sys *NotificationSys) GetARNList(onlyActive bool) []string {
 	}
 	region := globalServerRegion
 	for targetID, target := range sys.targetList.TargetMap() {
-		// httpclient target is part of ListenBucketNotification
+		// httpclient target is part of ListenNotification
 		// which doesn't need to be listed as part of the ARN list
 		// This list is only meant for external targets, filter
 		// this out pro-actively.

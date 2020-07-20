@@ -183,6 +183,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
 				}
+
 				if err = globalDNSConfig.Put(args.BucketName); err != nil {
 					objectAPI.DeleteBucket(ctx, args.BucketName, false)
 					return toJSONError(ctx, err)
@@ -201,6 +202,15 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	}
 
 	reply.UIVersion = browser.UIVersion
+
+	sendEvent(eventArgs{
+		EventName:  event.BucketCreated,
+		BucketName: args.BucketName,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       handlers.GetSourceIP(r),
+	})
+
 	return nil
 }
 
@@ -274,6 +284,14 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 			return toJSONError(ctx, err)
 		}
 	}
+
+	sendEvent(eventArgs{
+		EventName:  event.BucketRemoved,
+		BucketName: args.BucketName,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       handlers.GetSourceIP(r),
+	})
 
 	return nil
 }

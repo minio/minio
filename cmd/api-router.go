@@ -214,8 +214,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketNotification
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbucketnotification", httpTraceAll(api.GetBucketNotificationHandler)))).Queries("notification", "")
-		// ListenBucketNotification
-		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listenbucketnotification", httpTraceAll(api.ListenBucketNotificationHandler))).Queries("events", "{events:.*}")
+		// ListenNotification
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listennotification", httpTraceAll(api.ListenNotificationHandler))).Queries("events", "{events:.*}")
 		// ListMultipartUploads
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("listmultipartuploads", httpTraceAll(api.ListMultipartUploadsHandler)))).Queries("uploads", "")
@@ -281,6 +281,10 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	}
 
 	/// Root operation
+
+	// ListenNotification
+	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(
+		collectAPIStats("listennotification", httpTraceAll(api.ListenNotificationHandler))).Queries("events", "{events:.*}")
 
 	// ListBuckets
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).HandlerFunc(

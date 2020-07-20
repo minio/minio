@@ -578,6 +578,16 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					getObjectLocation(r, globalDomainNames, bucket, ""))
 
 				writeSuccessResponseHeadersOnly(w)
+
+				sendEvent(eventArgs{
+					EventName:    event.BucketCreated,
+					BucketName:   bucket,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent(),
+					Host:         handlers.GetSourceIP(r),
+				})
+
 				return
 			}
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -610,6 +620,15 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set(xhttp.Location, path.Clean(r.URL.Path)) // Clean any trailing slashes.
 
 	writeSuccessResponseHeadersOnly(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.BucketCreated,
+		BucketName:   bucket,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 }
 
 // PostPolicyBucketHandler - POST policy
@@ -984,6 +1003,15 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	// Write success response.
 	writeSuccessNoContent(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.BucketRemoved,
+		BucketName:   bucket,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 }
 
 // PutBucketObjectLockConfigHandler - PUT Bucket object lock configuration.

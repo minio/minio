@@ -50,7 +50,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 	}{
 		// GET empty credentials
 		{
-			method: "GET", bucketName: bucketName,
+			method: http.MethodGet, bucketName: bucketName,
 			accessKey:          "",
 			secretKey:          "",
 			expectedRespStatus: http.StatusForbidden,
@@ -64,7 +64,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 		},
 		// GET wrong credentials
 		{
-			method: "GET", bucketName: bucketName,
+			method: http.MethodGet, bucketName: bucketName,
 			accessKey:          "abcd",
 			secretKey:          "abcd",
 			expectedRespStatus: http.StatusForbidden,
@@ -78,7 +78,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 		},
 		// PUT empty credentials
 		{
-			method:             "PUT",
+			method:             http.MethodPut,
 			bucketName:         bucketName,
 			accessKey:          "",
 			secretKey:          "",
@@ -93,7 +93,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 		},
 		// PUT wrong credentials
 		{
-			method:             "PUT",
+			method:             http.MethodPut,
 			bucketName:         bucketName,
 			accessKey:          "abcd",
 			secretKey:          "abcd",
@@ -108,7 +108,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 		},
 		// DELETE empty credentials
 		{
-			method:             "DELETE",
+			method:             http.MethodDelete,
 			bucketName:         bucketName,
 			accessKey:          "",
 			secretKey:          "",
@@ -123,7 +123,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 		},
 		// DELETE wrong credentials
 		{
-			method:             "DELETE",
+			method:             http.MethodDelete,
 			bucketName:         bucketName,
 			accessKey:          "abcd",
 			secretKey:          "abcd",
@@ -168,7 +168,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 		// Test case - 1.
 		// Filter contains more than (Prefix,Tag,And) rule
 		{
-			method:             "PUT",
+			method:             http.MethodPut,
 			bucketName:         bucketName,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
@@ -185,7 +185,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 		},
 		// Date contains wrong format
 		{
-			method:             "PUT",
+			method:             http.MethodPut,
 			bucketName:         bucketName,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
@@ -201,7 +201,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			shouldPass: false,
 		},
 		{
-			method:             "PUT",
+			method:             http.MethodPut,
 			bucketName:         bucketName,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
@@ -212,7 +212,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			shouldPass:         true,
 		},
 		{
-			method:             "GET",
+			method:             http.MethodGet,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
 			bucketName:         bucketName,
@@ -223,7 +223,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			shouldPass:         true,
 		},
 		{
-			method:             "DELETE",
+			method:             http.MethodDelete,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
 			bucketName:         bucketName,
@@ -234,7 +234,7 @@ func testBucketLifecycleHandlers(obj ObjectLayer, instanceType, bucketName strin
 			shouldPass:         true,
 		},
 		{
-			method:             "GET",
+			method:             http.MethodGet,
 			accessKey:          creds.AccessKey,
 			secretKey:          creds.SecretKey,
 			bucketName:         bucketName,
