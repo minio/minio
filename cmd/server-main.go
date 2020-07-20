@@ -73,7 +73,6 @@ DIR:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
@@ -91,7 +90,6 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
             http://node{17...64}.example.com/mnt/export{1...64}
-
 `,
 }
 
