@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,23 +80,21 @@ func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult,
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
-	if ok {
-		if len(walks) > 0 {
-			// Pop out the first valid walk entry.
-			walk := walks[0]
-			walks[0] = treeWalk{} // clear references.
-			walks = walks[1:]
-			if len(walks) > 0 {
-				t.pool[params] = walks
-			} else {
-				delete(t.pool, params)
-			}
-			walk.endTimerCh <- struct{}{}
-			return walk.resultCh, walk.endWalkCh
-		}
+	if !ok || len(walks) == 0 {
+		// Release return nil if params not found.
+		return nil, nil
 	}
-	// Release return nil if params not found.
-	return nil, nil
+
+	// Pop out the first valid walk entry.
+	walk := walks[0]
+	walks = walks[1:]
+	if len(walks) > 0 {
+		t.pool[params] = walks
+	} else {
+		delete(t.pool, params)
+	}
+	walk.endTimerCh <- struct{}{}
+	return walk.resultCh, walk.endWalkCh
 }
 
 // Set - adds a treeWalk to the treeWalkPool.
@@ -129,6 +127,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 		// Invalidate and delete oldest.
 		if walks, ok := t.pool[oldest]; ok && len(walks) > 0 {
 			endCh := walks[0].endTimerCh
+			endWalkCh := walks[0].endWalkCh
 			if len(walks) > 1 {
 				// Move walks forward
 				copy(walks, walks[1:])
@@ -140,6 +139,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 			}
 			select {
 			case endCh <- struct{}{}:
+				close(endWalkCh)
 			default:
 			}
 		} else {
@@ -156,6 +156,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 		endWalkCh:  endWalkCh,
 		endTimerCh: endTimerCh,
 	}
+
 	// Append new walk info.
 	walks := t.pool[params]
 	if len(walks) < treeWalkSameEntryLimit {
@@ -164,6 +165,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 		// We are at limit, invalidate oldest, move list down and add new as last.
 		select {
 		case walks[0].endTimerCh <- struct{}{}:
+			close(walks[0].endWalkCh)
 		default:
 		}
 		copy(walks, walks[1:])
@@ -171,7 +173,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 	}
 
 	// Timer go-routine which times out after t.timeOut seconds.
-	go func(endTimerCh <-chan struct{}) {
+	go func(endTimerCh <-chan struct{}, walkInfo treeWalk) {
 		select {
 		// Wait until timeOut
 		case <-time.After(t.timeOut):
@@ -205,5 +207,5 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 		case <-endTimerCh:
 			return
 		}
-	}(endTimerCh)
+	}(endTimerCh, walkInfo)
 }
