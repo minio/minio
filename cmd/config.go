@@ -23,6 +23,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/config"
@@ -63,7 +64,7 @@ func listServerConfigHistory(ctx context.Context, objAPI ObjectLayer, withData b
 				if err != nil {
 					return nil, err
 				}
-				if globalConfigEncrypted {
+				if globalConfigEncrypted && !utf8.Valid(data) {
 					data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 					if err != nil {
 						return nil, err
@@ -102,7 +103,7 @@ func readServerConfigHistory(ctx context.Context, objAPI ObjectLayer, uuidKV str
 		return nil, err
 	}
 
-	if globalConfigEncrypted {
+	if globalConfigEncrypted && !utf8.Valid(data) {
 		data, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(data))
 	}
 
@@ -155,7 +156,7 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		return nil, err
 	}
 
-	if globalConfigEncrypted {
+	if globalConfigEncrypted && !utf8.Valid(configData) {
 		configData, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(configData))
 		if err != nil {
 			if err == madmin.ErrMaliciousData {

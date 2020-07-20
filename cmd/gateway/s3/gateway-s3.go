@@ -490,7 +490,7 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
 	}
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
@@ -594,7 +594,7 @@ func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object str
 // existing object or a part of it.
 func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
 	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (p minio.PartInfo, err error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.PartInfo{}, minio.PreConditionFailed{}
 	}
 	srcInfo.UserDefined = map[string]string{

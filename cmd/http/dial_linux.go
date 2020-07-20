@@ -27,7 +27,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func setTCPParameters(c syscall.RawConn) error {
+func setInternalTCPParameters(c syscall.RawConn) error {
 	return c.Control(func(fdPtr uintptr) {
 		// got socket file descriptor to set parameters.
 		fd := int(fdPtr)
@@ -67,7 +67,7 @@ func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
 			Control: func(network, address string, c syscall.RawConn) error {
-				return setTCPParameters(c)
+				return setInternalTCPParameters(c)
 			},
 		}
 		return dialer.DialContext(ctx, network, addr)

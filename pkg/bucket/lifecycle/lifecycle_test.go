@@ -146,7 +146,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
-		{ // lifecycle config with rules having overlapping prefix
+		{ // lifecycle config with rules having duplicate ID
 			inputConfig:           string(duplicateIDLcConfig),
 			expectedParsingErr:    nil,
 			expectedValidationErr: errLifecycleDuplicateID,
@@ -383,6 +383,59 @@ func TestComputeActions(t *testing.T) {
 			}); resultAction != tc.expectedAction {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, resultAction)
 			}
+		})
+
+	}
+}
+
+func TestHasActiveRules(t *testing.T) {
+	testCases := []struct {
+		inputConfig    string
+		prefix         string
+		expectedNonRec bool
+		expectedRec    bool
+	}{
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/foobject",
+			expectedNonRec: true, expectedRec: true,
+		},
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:         "zdir/foobject",
+			expectedNonRec: false, expectedRec: false,
+		},
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/zdir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/",
+			expectedNonRec: false, expectedRec: true,
+		},
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix></Prefix></Filter><Status>Disabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/",
+			expectedNonRec: false, expectedRec: false,
+		},
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>2999-01-01T00:00:00.000Z</Date></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/foobject",
+			expectedNonRec: false, expectedRec: false,
+		},
+	}
+
+	for i, tc := range testCases {
+		tc := tc
+		t.Run(fmt.Sprintf("Test_%d", i+1), func(t *testing.T) {
+			lc, err := ParseLifecycleConfig(bytes.NewReader([]byte(tc.inputConfig)))
+			if err != nil {
+				t.Fatalf("Got unexpected error: %v", err)
+			}
+			if got := lc.HasActiveRules(tc.prefix, false); got != tc.expectedNonRec {
+				t.Fatalf("Expected result with recursive set to false: `%v`, got: `%v`", tc.expectedNonRec, got)
+			}
+			if got := lc.HasActiveRules(tc.prefix, true); got != tc.expectedRec {
+				t.Fatalf("Expected result with recursive set to true: `%v`, got: `%v`", tc.expectedRec, got)
+			}
+
 		})
 
 	}

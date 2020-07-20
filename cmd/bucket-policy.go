@@ -75,9 +75,6 @@ func getConditionValues(r *http.Request, lc string, username string, claims map[
 		if u, err := url.Parse(r.Header.Get(xhttp.AmzCopySource)); err == nil {
 			vid = u.Query().Get("versionId")
 		}
-		if vid == "" {
-			vid = r.Header.Get(xhttp.AmzCopySourceVersionID)
-		}
 	}
 
 	args := map[string][]string{

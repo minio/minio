@@ -908,7 +908,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Azure equivalent `BlobURL.StartCopyFromURL`.
 func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
 	}
 	srcBlob := a.client.NewContainerURL(srcBucket).NewBlobURL(srcObject)

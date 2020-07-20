@@ -213,7 +213,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+		if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -371,23 +371,43 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Get request range.
 	var rs *HTTPRangeSpec
+	var rangeErr error
 	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
-		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
-			// Handle only errInvalidRange. Ignore other
-			// parse error and treat it as regular Get
-			// request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL, guessIsBrowserReq(r))
-				return
-			}
+		rs, rangeErr = parseRequestRangeSpec(rangeHeader)
+	}
 
-			logger.LogIf(ctx, err, logger.Application)
+	// Validate pre-conditions if any.
+	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+		if objectAPI.IsEncryptionSupported() {
+			if _, err := DecryptObjectInfo(&oi, r); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return true
+			}
 		}
+
+		if checkPreconditions(ctx, w, r, oi, opts) {
+			return true
+		}
+
+		// Handle only errInvalidRange. Ignore other
+		// parse error and treat it as regular Get
+		// request like Amazon S3.
+		if rangeErr == errInvalidRange {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL, guessIsBrowserReq(r))
+			return true
+		}
+		if rangeErr != nil {
+			logger.LogIf(ctx, rangeErr, logger.Application)
+		}
+		return false
 	}
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
+		if isErrPreconditionFailed(err) {
+			return
+		}
 		if globalBucketVersioningSys.Enabled(bucket) && gr != nil {
 			// Versioning enabled quite possibly object is deleted might be delete-marker
 			// if present set the headers, no idea why AWS S3 sets these headers.
@@ -408,18 +428,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// filter object lock metadata if permission does not permit
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
-
-	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
-
-	// Validate pre-conditions if any.
-	if checkPreconditions(ctx, w, r, objInfo, opts) {
-		return
-	}
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
@@ -455,7 +463,8 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Write object content to response body
 	if _, err = io.Copy(httpWriter, gr); err != nil {
-		if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
+		if !httpWriter.HasWritten() && !statusCodeWritten {
+			// write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		}
 		return
@@ -551,23 +560,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get request range.
-	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get(xhttp.Range)
-	if rangeHeader != "" {
-		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
-			// Handle only errInvalidRange. Ignore other
-			// parse error and treat it as regular Get
-			// request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRange))
-				return
-			}
-
-			logger.LogIf(ctx, err)
-		}
-	}
-
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		if globalBucketVersioningSys.Enabled(bucket) {
@@ -590,9 +582,31 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+		if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
 			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 			return
+		}
+	}
+
+	// Validate pre-conditions if any.
+	if checkPreconditions(ctx, w, r, objInfo, opts) {
+		return
+	}
+
+	// Get request range.
+	var rs *HTTPRangeSpec
+	rangeHeader := r.Header.Get(xhttp.Range)
+	if rangeHeader != "" {
+		if rs, err = parseRequestRangeSpec(rangeHeader); err != nil {
+			// Handle only errInvalidRange. Ignore other
+			// parse error and treat it as regular Get
+			// request like Amazon S3.
+			if err == errInvalidRange {
+				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRange))
+				return
+			}
+
+			logger.LogIf(ctx, err)
 		}
 	}
 
@@ -612,11 +626,6 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
 			}
 		}
-	}
-
-	// Validate pre-conditions if any.
-	if checkPreconditions(ctx, w, r, objInfo, opts) {
-		return
 	}
 
 	// Set standard object headers.
@@ -708,6 +717,11 @@ var getRemoteInstanceTransportOnce sync.Once
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
+	})
+
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
@@ -719,10 +733,6 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	if err != nil {
 		return nil, err
 	}
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
 	return core, nil
 }
 
@@ -730,6 +740,11 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 // Applicable only in a federated deployment.
 // The transport does not contain any timeout except for dialing.
 func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.Core, error) {
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
+	})
+
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
@@ -741,10 +756,6 @@ func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.
 	if err != nil {
 		return nil, err
 	}
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
 	return core, nil
 }
 
@@ -898,16 +909,25 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
 
 	var lock = noLock
 	if !cpSrcDstSame {
 		lock = readLock
 	}
-	checkCopyPrecondFn := func(o ObjectInfo, encETag string) bool {
-		return checkCopyObjectPreconditions(ctx, w, r, o, encETag)
+	checkCopyPrecondFn := func(o ObjectInfo) bool {
+		if objectAPI.IsEncryptionSupported() {
+			if _, err := DecryptObjectInfo(&o, r); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return true
+			}
+		}
+		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
-	getOpts.CheckCopyPrecondFn = checkCopyPrecondFn
-	srcOpts.CheckCopyPrecondFn = checkCopyPrecondFn
+	getOpts.CheckPrecondFn = checkCopyPrecondFn
+
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
 	if err != nil {
@@ -1720,9 +1740,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		// Note that url.Parse does the unescaping
 		cpSrcPath = u.Path
 	}
-	if vid == "" {
-		vid = strings.TrimSpace(r.Header.Get(xhttp.AmzCopySourceVersionID))
-	}
 
 	srcBucket, srcObject := path2BucketObject(cpSrcPath)
 	// If source object is empty or bucket is empty, reply back invalid copy source.
@@ -1790,22 +1807,31 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	// Get request range.
 	var rs *HTTPRangeSpec
-	rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange)
-	if rangeHeader != "" {
-		var parseRangeErr error
-		if rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader); parseRangeErr != nil {
-			logger.GetReqInfo(ctx).AppendTags("rangeHeader", rangeHeader)
+	var parseRangeErr error
+	if rangeHeader := r.Header.Get(xhttp.AmzCopySourceRange); rangeHeader != "" {
+		rs, parseRangeErr = parseCopyPartRangeSpec(rangeHeader)
+	}
+
+	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
+		if objectAPI.IsEncryptionSupported() {
+			if _, err := DecryptObjectInfo(&o, r); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return true
+			}
+		}
+		if checkCopyObjectPartPreconditions(ctx, w, r, o) {
+			return true
+		}
+		if parseRangeErr != nil {
 			logger.LogIf(ctx, parseRangeErr)
 			writeCopyPartErr(ctx, w, parseRangeErr, r.URL, guessIsBrowserReq(r))
-			return
-
+			// Range header mismatch is pre-condition like failure
+			// so return true to indicate Range precondition failed.
+			return true
 		}
+		return false
 	}
-	checkCopyPartPrecondFn := func(o ObjectInfo, encETag string) bool {
-		return checkCopyObjectPartPreconditions(ctx, w, r, o, encETag)
-	}
-	getOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
-	srcOpts.CheckCopyPrecondFn = checkCopyPartPrecondFn
+	getOpts.CheckPrecondFn = checkCopyPartPrecondFn
 
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
 	if err != nil {

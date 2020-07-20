@@ -173,7 +173,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
 
-	return fn(pr, h, opts.CheckCopyPrecondFn, pipeCloser)
+	return fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 }
 
 // GetObject - reads an object erasured coded across multiple

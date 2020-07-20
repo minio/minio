@@ -204,12 +204,15 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime t
 		return true
 	}
 	if erErr == nil {
-		// If er.meta was read fine but there may be problem with the part.N files.
+		// If xl.meta was read fine but there may be problem with the part.N files.
 		if IsErr(dataErr, []error{
 			errFileNotFound,
 			errFileVersionNotFound,
 			errFileCorrupt,
 		}...) {
+			return true
+		}
+		if meta.XLV1 {
 			return true
 		}
 		if !quorumModTime.Equal(meta.ModTime) {
@@ -356,6 +359,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	// We write at temporary location and then rename to final location.
 	tmpID := mustGetUUID()
+	migrateDataDir := mustGetUUID()
 
 	for i := range outDatedDisks {
 		if outDatedDisks[i] == nil {
@@ -396,6 +400,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				}
 				checksumInfo := partsMetadata[i].Erasure.GetChecksumInfo(partNumber)
 				partPath := pathJoin(object, latestMeta.DataDir, fmt.Sprintf("part.%d", partNumber))
+				if latestMeta.XLV1 {
+					partPath = pathJoin(object, fmt.Sprintf("part.%d", partNumber))
+				}
 				readers[i] = newBitrotReader(disk, bucket, partPath, tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
@@ -404,6 +411,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					continue
 				}
 				partPath := pathJoin(tmpID, latestMeta.DataDir, fmt.Sprintf("part.%d", partNumber))
+				if latestMeta.XLV1 {
+					partPath = pathJoin(tmpID, migrateDataDir, fmt.Sprintf("part.%d", partNumber))
+				}
 				writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath, tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 			}
 			err = erasure.Heal(ctx, readers, writers, partSize)
@@ -427,6 +437,9 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 					continue
 				}
 
+				if partsMetadata[i].XLV1 {
+					partsMetadata[i].DataDir = migrateDataDir
+				}
 				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize)
 				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{
 					PartNumber: partNumber,
@@ -458,8 +471,10 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		}
 
 		// Attempt a rename now from healed data to final location.
-		if err = disk.RenameData(minioMetaTmpBucket, tmpID, latestMeta.DataDir, bucket, object); err != nil {
-			logger.LogIf(ctx, err)
+		if err = disk.RenameData(minioMetaTmpBucket, tmpID, partsMetadata[0].DataDir, bucket, object); err != nil {
+			if err != errIsNotRegular && err != errFileNotFound {
+				logger.LogIf(ctx, err)
+			}
 			return result, toObjectErr(err, bucket, object)
 		}
 

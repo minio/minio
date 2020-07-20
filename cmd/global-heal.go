@@ -103,6 +103,12 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, dr
 		}
 	}
 
+	buckets = append(buckets, BucketInfo{
+		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
+	}, BucketInfo{
+		Name: pathJoin(minioMetaBucket, bucketConfigPrefix),
+	}) // add metadata .minio.sys/ bucket prefixes to heal
+
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		// Heal current bucket

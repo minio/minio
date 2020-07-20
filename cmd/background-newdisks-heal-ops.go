@@ -24,7 +24,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-const defaultMonitorNewDiskInterval = time.Minute * 5
+const defaultMonitorNewDiskInterval = time.Minute * 3
 
 func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 	go monitorLocalDisksAndHeal(ctx, objAPI)
@@ -105,13 +105,13 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 					// Load the new format of this passed endpoint
 					_, format, err := connectEndpoint(endpoint)
 					if err != nil {
-						logger.LogIf(ctx, err)
+						printEndpointError(endpoint, err, true)
 						continue
 					}
 					// Calculate the set index where the current endpoint belongs
 					setIndex, _, err := findDiskIndex(z.zones[i].format, format)
 					if err != nil {
-						logger.LogIf(ctx, err)
+						printEndpointError(endpoint, err, false)
 						continue
 					}
 

@@ -1269,7 +1269,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
 
 	if objectAPI.IsEncryptionSupported() {
-		if _, err = DecryptObjectInfo(&objInfo, r.Header); err != nil {
+		if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
 			writeWebErrorResponse(w, err)
 			return
 		}
