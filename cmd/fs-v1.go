@@ -1237,23 +1237,29 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 		return objInfo, toObjectErr(err, bucket)
 	}
 
+	var rwlk *lock.LockedFile
+
 	minioMetaBucketDir := pathJoin(fs.fsPath, minioMetaBucket)
 	fsMetaPath := pathJoin(minioMetaBucketDir, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
 	if bucket != minioMetaBucket {
-		rwlk, lerr := fs.rwPool.Write(fsMetaPath)
-		if lerr == nil {
-			// This close will allow for fs locks to be synchronized on `fs.json`.
-			defer rwlk.Close()
-		}
-		if lerr != nil && lerr != errFileNotFound {
-			logger.LogIf(ctx, lerr)
-			return objInfo, toObjectErr(lerr, bucket, object)
+		rwlk, err = fs.rwPool.Write(fsMetaPath)
+		if err != nil && err != errFileNotFound {
+			logger.LogIf(ctx, err)
+			return objInfo, toObjectErr(err, bucket, object)
 		}
 	}
 
 	// Delete the object.
 	if err = fsDeleteFile(ctx, pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
+		if rwlk != nil {
+			rwlk.Close()
+		}
 		return objInfo, toObjectErr(err, bucket, object)
+	}
+
+	// Close fsMetaPath before deletion
+	if rwlk != nil {
+		rwlk.Close()
 	}
 
 	if bucket != minioMetaBucket {
