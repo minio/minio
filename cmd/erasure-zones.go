@@ -1883,7 +1883,7 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 }
 
 // HealObjectFn closure function heals the object.
-type HealObjectFn func(string, string, string) error
+type HealObjectFn func(bucket, object, versionID string) error
 
 func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
 	var zonesEntryChs [][]FileInfoVersionsCh

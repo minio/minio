@@ -23,6 +23,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -45,9 +46,9 @@ const (
 	dataCrawlStartDelay      = 5 * time.Second  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
-	crawlerHealFolderInclude = 32   // Include a clean folder one in n cycles.
-	crawlerHealObjectSelect  = 1024 // Do a heal check on an object once every n cycles. Must divide into crawlerHealFolderInclude
-
+	crawlerHealFolderInclude = 16  // Include a clean folder one in n cycles.
+	crawlerHealObjectSelect  = 512 // Do a heal check on an object once every n cycles. Must divide into crawlerHealFolderInclude
+	healDeleteDangling       = true
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -275,7 +276,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 						continue
 					} else {
 						if s.dataUsageCrawlDebug {
-							logger.Info(logPrefix+"Adding non-updated folder to heal check: %v"+logSuffix, folder)
+							logger.Info(logPrefix+"Adding non-updated folder to heal check: %v"+logSuffix, folder.name)
 						}
 					}
 					// Update probability of including objects
@@ -327,7 +328,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("data-usage:")+" Prefix %q has active rules", prefix)
+					logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
 				}
 				activeLifeCycle = f.oldCache.Info.lifeCycle
 				filter = nil
@@ -340,12 +341,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				if !thisHash.mod(f.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
 					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("data-usage:")+" Skipping non-updated folder: %v", folder.name)
+						logger.Info(color.Green("folder-scanner:")+" Skipping non-updated folder: %v", folder.name)
 					}
 					continue
 				} else {
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("data-usage:")+" Adding non-updated folder to heal check: %v", folder.name)
+						logger.Info(color.Green("folder-scanner:")+" Adding non-updated folder to heal check: %v", folder.name)
 					}
 					// If probability was already crawlerHealFolderInclude, keep it.
 					folder.objectHealProbDiv = crawlerHealFolderInclude
@@ -363,14 +364,14 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			bucket, prefix := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("data-usage:")+" no bucket (%s,%s)", f.root, entName)
+					logger.Info(color.Green("folder-scanner:")+" no bucket (%s,%s)", f.root, entName)
 				}
 				return nil
 			}
 
 			if isReservedOrInvalidBucket(bucket, false) {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("data-usage:")+" invalid bucket: %v, entry: %v", bucket, entName)
+					logger.Info(color.Green("folder-scanner:")+" invalid bucket: %v, entry: %v", bucket, entName)
 				}
 				return nil
 			}
@@ -435,16 +436,41 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// Whatever remains in existing must have been deleted or is missing and requires healing.
 		objAPI := newObjectLayerWithoutSafeModeFn()
 		for k := range existing {
-			if f.dataUsageCrawlDebug {
-				logger.Info(color.Green("data-usage:")+" checking missing folder: %v", k)
-			}
 			bucket, prefix := path2BucketObject(k)
-			// This is a folder. Make that clear to the healer.
-			prefix = prefix + slashSeparator
-			_, err := objAPI.HealObject(ctx, bucket, prefix, "", madmin.HealOpts{Recursive: true})
 			if f.dataUsageCrawlDebug {
-				logger.LogIf(ctx, err)
+				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
 			}
+			// Try as a folder first.
+			err := objAPI.HealObjects(ctx, bucket, prefix+slashSeparator, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
+				func(bucket, object, versionID string) error {
+					_, err := objAPI.HealObject(ctx, bucket, object, versionID, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling})
+					return err
+				})
+			if err != nil {
+				// If path is an object nil is still returned.
+				logger.LogIf(ctx, err)
+				continue
+			}
+
+			// If it still doesn't exist it may be an object.
+			_, err = os.Stat(filepath.Join(f.root, k))
+			if os.IsNotExist(err) {
+				// Try as an object.
+				_, err = objAPI.HealObject(ctx, bucket, prefix, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
+				if isErrObjectNotFound(err) {
+					// If not found it may be a dangling folder.
+					_, err = objAPI.HealObject(ctx, bucket, prefix+slashSeparator, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
+					if err == nil {
+						// If the folder was removed nil is returned.
+						// Make sure we don't re-add the folder.
+						err = ObjectNotFound{}
+					}
+				}
+				if f.dataUsageCrawlDebug && !isErrObjectNotFound(err) {
+					logger.LogIf(ctx, err)
+				}
+			}
+
 			// Add unless healing returned an error.
 			if err == nil {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
@@ -480,7 +506,6 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 		f.waitForLowActiveIO()
 		if typ&os.ModeDir != 0 {
 			dirStack = append(dirStack, entName)
-			//FIXME: We need to check dirs randomly as well.
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
 			sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
@@ -500,7 +525,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 		if f.oldCache.Info.lifeCycle != nil {
 			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("data-usage:")+" Prefix %q has active rules", prefix)
+					logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
 				}
 				activeLifeCycle = f.oldCache.Info.lifeCycle
 			}
@@ -517,7 +542,9 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				lifeCycle:  activeLifeCycle,
 				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, crawlerHealObjectSelect/folder.objectHealProbDiv),
 			})
-		logger.Info(color.Green("data-usage:")+" %q: Heal prop 1:%d ", path.Join(prefix, entName), crawlerHealObjectSelect/folder.objectHealProbDiv)
+		if false {
+			logger.Info(color.Green("folder-scanner:")+" %q: Heal prop 1:%d ", path.Join(prefix, entName), crawlerHealObjectSelect/folder.objectHealProbDiv)
+		}
 
 		// Don't sleep for really small amount of time
 		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
@@ -583,9 +610,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	}
 	if i.heal {
 		if i.debug {
-			logger.Info("heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+			logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
 		}
-		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{})
+		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling})
 		if !errors.Is(err, NotImplemented{}) {
 			logger.LogIf(ctx, err)
 			return 0
