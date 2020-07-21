@@ -46,9 +46,7 @@ const (
 	dataCrawlStartDelay      = 5 * time.Second  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
-	crawlerHealFolderInclude = 16  // Include a clean folder one in n cycles.
-	crawlerHealObjectSelect  = 512 // Do a heal check on an object once every n cycles. Must divide into crawlerHealFolderInclude
-	healDeleteDangling       = true
+	healDeleteDangling = true
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -92,12 +90,6 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 			if err == nil {
 				// Store new cycle...
 				nextBloomCycle++
-				if nextBloomCycle%dataUpdateTrackerResetEvery == 0 {
-					if intDataUpdateTracker.debug {
-						logger.Info(color.Green("runDataCrawler:") + " Resetting bloom filter for next runs.")
-					}
-					nextBloomCycle++
-				}
 				var tmp [8]byte
 				binary.LittleEndian.PutUint64(tmp[:], nextBloomCycle)
 				r, err := hash.NewReader(bytes.NewReader(tmp[:]), int64(len(tmp)), "", "", int64(len(tmp)), false)
@@ -131,6 +123,8 @@ type folderScanner struct {
 
 	dataUsageCrawlMult  float64
 	dataUsageCrawlDebug bool
+	healFolderInclude   uint32 // Include a clean folder one in n cycles.
+	healObjectSelect    uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 
 	newFolders      []cachedFolder
 	existingFolders []cachedFolder
@@ -173,8 +167,17 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		existingFolders:     nil,
 		dataUsageCrawlMult:  delayMult,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
+		healFolderInclude:   0,
+		healObjectSelect:    0,
 	}
 
+	// Enable healing in XL mode.
+	if globalIsErasure {
+		// Include a clean folder one in n cycles.
+		s.healFolderInclude = 32
+		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
+		s.healObjectSelect = 512
+	}
 	if len(cache.Info.BloomFilter) > 0 {
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
 		_, err := s.withFilter.ReadFrom(bytes.NewBuffer(cache.Info.BloomFilter))
@@ -255,11 +258,11 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		}
 		h := hashPath(folder.name)
 		if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-			if !h.mod(s.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
+			if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
 				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
 				continue
 			} else {
-				folder.objectHealProbDiv = crawlerHealFolderInclude
+				folder.objectHealProbDiv = s.healFolderInclude
 			}
 			folder.objectHealProbDiv = dataUsageUpdateDirCycles
 		}
@@ -268,7 +271,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 			if s.oldCache.Info.lifeCycle == nil || !s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 				// If folder isn't in filter, skip it completely.
 				if !s.withFilter.containsDir(folder.name) {
-					if !h.mod(s.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
+					if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
 						if s.dataUsageCrawlDebug {
 							logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
 						}
@@ -278,9 +281,9 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 						if s.dataUsageCrawlDebug {
 							logger.Info(logPrefix+"Adding non-updated folder to heal check: %v"+logSuffix, folder.name)
 						}
+						// Update probability of including objects
+						folder.objectHealProbDiv = s.healFolderInclude
 					}
-					// Update probability of including objects
-					folder.objectHealProbDiv = crawlerHealFolderInclude
 				}
 			}
 		}
@@ -338,7 +341,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
 			if folder.name != dataUsageRoot && !filter.containsDir(folder.name) {
-				if !thisHash.mod(f.oldCache.Info.NextCycle, crawlerHealFolderInclude/folder.objectHealProbDiv) {
+				if !thisHash.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
 					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 					if f.dataUsageCrawlDebug {
 						logger.Info(color.Green("folder-scanner:")+" Skipping non-updated folder: %v", folder.name)
@@ -349,7 +352,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						logger.Info(color.Green("folder-scanner:")+" Adding non-updated folder to heal check: %v", folder.name)
 					}
 					// If probability was already crawlerHealFolderInclude, keep it.
-					folder.objectHealProbDiv = crawlerHealFolderInclude
+					folder.objectHealProbDiv = f.healFolderInclude
 				}
 			}
 		}
@@ -414,7 +417,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
-				heal:       thisHash.mod(f.oldCache.Info.NextCycle, crawlerHealObjectSelect/folder.objectHealProbDiv),
+				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
 			}
 			size, err := f.getSize(item)
 
@@ -436,6 +439,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// Whatever remains in existing must have been deleted or is missing and requires healing.
 		objAPI := newObjectLayerWithoutSafeModeFn()
 		for k := range existing {
+			f.waitForLowActiveIO()
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
 				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
@@ -540,11 +544,8 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
-				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, crawlerHealObjectSelect/folder.objectHealProbDiv),
+				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
 			})
-		if false {
-			logger.Info(color.Green("folder-scanner:")+" %q: Heal prop 1:%d ", path.Join(prefix, entName), crawlerHealObjectSelect/folder.objectHealProbDiv)
-		}
 
 		// Don't sleep for really small amount of time
 		sleepDuration(time.Since(t), f.dataUsageCrawlMult)

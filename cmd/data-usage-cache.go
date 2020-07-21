@@ -85,9 +85,11 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 }
 
 // mod returns true if the hash mod cycles == cycle.
+// If cycles is 0 false is always returned.
+// If cycles is 1 true is always returned (as expected).
 func (h dataUsageHash) mod(cycle uint32, cycles uint32) bool {
 	if cycles <= 1 {
-		return true
+		return cycles == 1
 	}
 	return uint32(xxhash.Sum64String(string(h)))%cycles == cycle%cycles
 }
