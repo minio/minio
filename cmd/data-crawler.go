@@ -436,6 +436,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			return nil, err
 		}
 
+		if f.healObjectSelect == 0 {
+			// If we are not scanning, return now.
+			continue
+		}
+
 		// Whatever remains in existing must have been deleted or is missing and requires healing.
 		objAPI := newObjectLayerWithoutSafeModeFn()
 		for k := range existing {
