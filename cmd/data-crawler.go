@@ -623,7 +623,6 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			logger.LogIf(ctx, err)
 			return 0
 		}
-		// Maybe, maybe not. Only 1 version?
 		size = res.ObjectSize
 	}
 	if i.lifeCycle == nil {
