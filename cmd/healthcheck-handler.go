@@ -35,8 +35,17 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getReadyDeadline())
 	defer cancel()
 
-	if !objLayer.IsReady(ctx) {
-		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
+	result := objLayer.Health(ctx, opts)
+	if !result.Healthy {
+		// As a maintenance call we are purposefully asked to be taken
+		// down, this is for orchestrators to know if we can safely
+		// take this server down, return appropriate error.
+		if opts.Maintenance {
+			writeResponse(w, http.StatusPreconditionFailed, nil, mimeNone)
+		} else {
+			writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		}
 		return
 	}
 

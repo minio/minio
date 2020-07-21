@@ -121,12 +121,6 @@ type nasObjects struct {
 	minio.ObjectLayer
 }
 
-// IsReady returns whether the layer is ready to take requests.
-func (n *nasObjects) IsReady(ctx context.Context) bool {
-	si, _ := n.StorageInfo(ctx, false)
-	return si.Backend.GatewayOnline
-}
-
 func (n *nasObjects) IsTaggingSupported() bool {
 	return true
 }

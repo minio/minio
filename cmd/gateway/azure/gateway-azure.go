@@ -1436,8 +1436,3 @@ func (a *azureObjects) DeleteBucketPolicy(ctx context.Context, bucket string) er
 func (a *azureObjects) IsCompressionSupported() bool {
 	return false
 }
-
-// IsReady returns whether the layer is ready to take requests.
-func (a *azureObjects) IsReady(ctx context.Context) bool {
-	return minio.IsBackendOnline(ctx, a.httpClient, a.endpoint)
-}

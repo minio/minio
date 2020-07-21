@@ -133,8 +133,8 @@ type ObjectLayer interface {
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)
 
-	// Check Readiness
-	IsReady(ctx context.Context) bool
+	// Returns health of the backend
+	Health(ctx context.Context, opts HealthOptions) HealthResult
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) error

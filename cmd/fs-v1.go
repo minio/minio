@@ -1557,11 +1557,12 @@ func (fs *FSObjects) IsTaggingSupported() bool {
 	return true
 }
 
-// IsReady - Check if the backend disk is ready to accept traffic.
-func (fs *FSObjects) IsReady(_ context.Context) bool {
+// Health returns health of the object layer
+func (fs *FSObjects) Health(ctx context.Context, opts HealthOptions) HealthResult {
 	if _, err := os.Stat(fs.fsPath); err != nil {
-		return false
+		return HealthResult{}
 	}
-
-	return newObjectLayerFn() != nil
+	return HealthResult{
+		Healthy: newObjectLayerFn() != nil,
+	}
 }
