@@ -925,8 +925,8 @@ func TestJSONInput(t *testing.T) {
 }
 
 func TestParquetInput(t *testing.T) {
-	os.Setenv("MINIO_SELECT_PARQUET", "on")
-	defer os.Setenv("MINIO_SELECT_PARQUET", "off")
+	os.Setenv("MINIO_API_SELECT_PARQUET", "on")
+	defer os.Setenv("MINIO_API_SELECT_PARQUET", "off")
 
 	var testTable = []struct {
 		requestXML     []byte

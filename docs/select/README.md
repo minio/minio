@@ -19,7 +19,7 @@ The [mc sql](https://docs.min.io/docs/minio-client-complete-guide.html#sql) comm
 Parquet is DISABLED by default since hostile crafted input can easily crash the server.
 
 If you are in a controlled environment where it is safe to assume no hostile content can be uploaded to your cluster you can safely enable Parquet.
-To enable Parquet set the environment variable `MINIO_SELECT_PARQUET=on`.
+To enable Parquet set the environment variable `MINIO_API_SELECT_PARQUET=on`.
 
 # Example using Python API 
 
