@@ -1940,13 +1940,21 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 }
 
 func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
-	// Lock the object before healing. Use read lock since healing
-	// will only regenerate parts & xl.meta of outdated disks.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalHealingTimeout); err != nil {
-		return madmin.HealResultItem{}, err
+	if bucket == minioMetaBucket {
+		// For .minio.sys bucket heals we should hold write locks.
+		if err := lk.GetLock(globalHealingTimeout); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+		defer lk.Unlock()
+	} else {
+		// Lock the object before healing. Use read lock since healing
+		// will only regenerate parts & xl.meta of outdated disks.
+		if err := lk.GetRLock(globalHealingTimeout); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+		defer lk.RUnlock()
 	}
-	defer lk.RUnlock()
 
 	if z.SingleZone() {
 		return z.zones[0].HealObject(ctx, bucket, object, versionID, opts)
