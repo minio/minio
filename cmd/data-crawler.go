@@ -441,7 +441,17 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
-		// Whatever remains in existing must have been deleted or is missing and requires healing.
+		// Whatever remains in 'existing' are folders at this level
+		// that existed in the previous run but wasn't found now.
+		//
+		// This may be because of 2 reasons:
+		//
+		// 1) The folder/object was deleted.
+		// 2) We come from another disk and this disk missed the write.
+		//
+		// We therefore perform a heal check.
+		// If that doesn't bring it back we remove the folder and assume it was deleted.
+		// This means that the next run will not look for it.
 		objAPI := newObjectLayerWithoutSafeModeFn()
 		for k := range existing {
 			f.waitForLowActiveIO()
@@ -450,6 +460,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
 			}
 			// Try as a folder first.
+			//
+			// A folder on the disk can either be a prefix level or an object.
+			// There is no way to tell, and since it is missing on this disk we cannot cheaply check.
+			// If it is a prefix folder the call below will restore any objects in it.
+			// However, if the path is an object itself this will not be restored.
 			err := objAPI.HealObjects(ctx, bucket, prefix+slashSeparator, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
 				func(bucket, object, versionID string) error {
 					_, err := objAPI.HealObject(ctx, bucket, object, versionID, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling})
@@ -464,10 +479,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			// If it still doesn't exist it may be an object.
 			_, err = os.Stat(filepath.Join(f.root, k))
 			if os.IsNotExist(err) {
-				// Try as an object.
+				// The 'HealObjects' above will not work if the folder only contains an object.
+				// So we do a single check on whether this is an object.
 				_, err = objAPI.HealObject(ctx, bucket, prefix, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
 				if isErrObjectNotFound(err) {
-					// If not found it may be a dangling folder.
+					// If not found it may be a dangling folder on other disks.
+					// In that case this will remove it on other hosts.
 					_, err = objAPI.HealObject(ctx, bucket, prefix+slashSeparator, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
 					if err == nil {
 						// If the folder was removed nil is returned.

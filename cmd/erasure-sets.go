@@ -1599,10 +1599,10 @@ func (s *erasureSets) HealObjects(ctx context.Context, bucket, prefix string, op
 			continue
 		}
 
-		// Wait and proceed if there are active requests
-		waitForLowHTTPReq(int32(s.drivesPerSet))
-
 		for _, version := range entry.Versions {
+			// Wait and proceed if there are active requests
+			waitForLowHTTPReq(int32(s.drivesPerSet), time.Second)
+
 			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
 				return toObjectErr(err, bucket, version.Name)
 			}

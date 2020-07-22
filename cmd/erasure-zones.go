@@ -1919,10 +1919,9 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 			continue
 		}
 
-		// Wait and proceed if there are active requests
-		waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]))
-
 		for _, version := range entry.Versions {
+			// Wait and proceed if there are active requests
+			waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]), time.Second)
 			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
 				return toObjectErr(err, bucket, version.Name)
 			}
