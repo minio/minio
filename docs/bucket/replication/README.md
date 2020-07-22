@@ -17,7 +17,7 @@ mc admin bucket replication set myminio/srcbucket https://accessKey:secretKey@re
 Replication ARN = 'arn:minio:s3::dadddae7-f1d7-440f-b5d6-651aa9a8c8a7:*'
 ```
 
-Note that the admin needs *s3:GetReplicationConfigurationAction* permission on source cluster, and also *s3:ReplicateObject* permission on destination side. Once successfully created and authorized this generates an replication target ARN - as shown below list all the currently authorized replication target's:
+Note that the admin needs *s3:GetReplicationConfigurationAction* permission on source cluster. The credential used at the destination requires *s3:ReplicateObject* permission. Once successfully created and authorized this generates a replication target ARN.  The command below lists all the currently authorized replication targets:
 
 ```
 mc admin bucket remote myminio/srcbucket https://replica-endpoint:9000
