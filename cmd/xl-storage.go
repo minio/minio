@@ -414,6 +414,9 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			}
 		}
 
+		for _, version := range fivs.Versions {
+			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
+		}
 		return totalSize, nil
 	})
 

@@ -166,6 +166,21 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketEncryption
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbucketencryption", httpTraceAll(api.GetBucketEncryptionHandler)))).Queries("encryption", "")
+		// GetBucketObjectLockConfig
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			maxClients(collectAPIStats("getbucketobjectlockconfiguration", httpTraceAll(api.GetBucketObjectLockConfigHandler)))).Queries("object-lock", "")
+		// GetBucketReplicationConfig
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			maxClients(collectAPIStats("getbucketreplicationconfiguration", httpTraceAll(api.GetBucketReplicationConfigHandler)))).Queries("replication", "")
+
+		// GetBucketVersioning
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			maxClients(collectAPIStats("getbucketversioning", httpTraceAll(api.GetBucketVersioningHandler)))).Queries("versioning", "")
+		// GetBucketNotification
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			maxClients(collectAPIStats("getbucketnotification", httpTraceAll(api.GetBucketNotificationHandler)))).Queries("notification", "")
+		// ListenNotification
+		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listennotification", httpTraceAll(api.ListenNotificationHandler))).Queries("events", "{events:.*}")
 
 		// Dummy Bucket Calls
 		// GetBucketACL -- this is a dummy call.
@@ -192,9 +207,6 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// GetBucketLifecycleHandler - this is a dummy call.
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbucketlifecycle", httpTraceAll(api.GetBucketLifecycleHandler)))).Queries("lifecycle", "")
-		// GetBucketReplicationHandler - this is a dummy call.
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			maxClients(collectAPIStats("getbucketreplication", httpTraceAll(api.GetBucketReplicationHandler)))).Queries("replication", "")
 		// GetBucketTaggingHandler
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("getbuckettagging", httpTraceAll(api.GetBucketTaggingHandler)))).Queries("tagging", "")
@@ -205,17 +217,6 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodDelete).HandlerFunc(
 			maxClients(collectAPIStats("deletebuckettagging", httpTraceAll(api.DeleteBucketTaggingHandler)))).Queries("tagging", "")
 
-		// GetBucketObjectLockConfig
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			maxClients(collectAPIStats("getbucketobjectlockconfiguration", httpTraceAll(api.GetBucketObjectLockConfigHandler)))).Queries("object-lock", "")
-		// GetBucketVersioning
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			maxClients(collectAPIStats("getbucketversioning", httpTraceAll(api.GetBucketVersioningHandler)))).Queries("versioning", "")
-		// GetBucketNotification
-		bucket.Methods(http.MethodGet).HandlerFunc(
-			maxClients(collectAPIStats("getbucketnotification", httpTraceAll(api.GetBucketNotificationHandler)))).Queries("notification", "")
-		// ListenNotification
-		bucket.Methods(http.MethodGet).HandlerFunc(collectAPIStats("listennotification", httpTraceAll(api.ListenNotificationHandler))).Queries("events", "{events:.*}")
 		// ListMultipartUploads
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			maxClients(collectAPIStats("listmultipartuploads", httpTraceAll(api.ListMultipartUploadsHandler)))).Queries("uploads", "")
@@ -234,6 +235,11 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// PutBucketLifecycle
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			maxClients(collectAPIStats("putbucketlifecycle", httpTraceAll(api.PutBucketLifecycleHandler)))).Queries("lifecycle", "")
+		// PutBucketReplicationConfig
+		bucket.Methods(http.MethodPut).HandlerFunc(
+			maxClients(collectAPIStats("putbucketreplicationconfiguration", httpTraceAll(api.PutBucketReplicationConfigHandler)))).Queries("replication", "")
+		// GetObjectRetention
+
 		// PutBucketEncryption
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			maxClients(collectAPIStats("putbucketencryption", httpTraceAll(api.PutBucketEncryptionHandler)))).Queries("encryption", "")
@@ -269,6 +275,9 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// DeleteBucketPolicy
 		bucket.Methods(http.MethodDelete).HandlerFunc(
 			maxClients(collectAPIStats("deletebucketpolicy", httpTraceAll(api.DeleteBucketPolicyHandler)))).Queries("policy", "")
+		// DeleteBucketReplication
+		bucket.Methods(http.MethodDelete).HandlerFunc(
+			maxClients(collectAPIStats("deletebucketreplicationconfiguration", httpTraceAll(api.DeleteBucketReplicationConfigHandler)))).Queries("replication", "")
 		// DeleteBucketLifecycle
 		bucket.Methods(http.MethodDelete).HandlerFunc(
 			maxClients(collectAPIStats("deletebucketlifecycle", httpTraceAll(api.DeleteBucketLifecycleHandler)))).Queries("lifecycle", "")

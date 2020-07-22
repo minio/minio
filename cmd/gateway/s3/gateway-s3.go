@@ -471,12 +471,10 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 		ServerSideEncryption: opts.ServerSideEncryption,
 		UserTags:             tagMap,
 	}
-
 	ui, err := l.Client.PutObject(ctx, bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), putOpts)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-
 	// On success, populate the key & metadata so they are present in the notification
 	oi := miniogo.ObjectInfo{
 		ETag:     ui.ETag,
@@ -712,7 +710,6 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 // GetObjectTags gets the tags set on the object
 func (l *s3Objects) GetObjectTags(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (*tags.Tags, error) {
 	var err error
-
 	if _, err = l.GetObjectInfo(ctx, bucket, object, opts); err != nil {
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}

@@ -406,7 +406,6 @@ var supportedDummyBucketAPIs = map[string][]string{
 	"website":        {http.MethodGet, http.MethodDelete},
 	"logging":        {http.MethodGet},
 	"accelerate":     {http.MethodGet},
-	"replication":    {http.MethodGet},
 	"requestPayment": {http.MethodGet},
 }
 
@@ -418,7 +417,6 @@ var notImplementedBucketResourceNames = map[string]struct{}{
 	"logging":        {},
 	"inventory":      {},
 	"accelerate":     {},
-	"replication":    {},
 	"requestPayment": {},
 }
 

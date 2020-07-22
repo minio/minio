@@ -81,7 +81,7 @@ const (
 	AmzObjectLockRetainUntilDate  = "X-Amz-Object-Lock-Retain-Until-Date"
 	AmzObjectLockLegalHold        = "X-Amz-Object-Lock-Legal-Hold"
 	AmzObjectLockBypassGovernance = "X-Amz-Bypass-Governance-Retention"
-
+	AmzBucketReplicationStatus    = "X-Amz-Replication-Status"
 	// Multipart parts count
 	AmzMpPartsCount = "x-amz-mp-parts-count"
 

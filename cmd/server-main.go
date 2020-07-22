@@ -168,6 +168,9 @@ func newAllSubsystems() {
 
 	// Create new bucket versioning subsystem
 	globalBucketVersioningSys = NewBucketVersioningSys()
+
+	// Create new bucket replication subsytem
+	globalBucketReplicationSys = NewBucketReplicationSys()
 }
 
 func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
@@ -337,6 +340,10 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
+	// Initialize bucket replication sub-system.
+	if err = globalBucketReplicationSys.Init(GlobalContext, buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket replication sub-system: %w", err)
+	}
 	return nil
 }
 
