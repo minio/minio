@@ -135,6 +135,10 @@ func (a adminAPIHandlers) SetBucketReplicationTargetHandler(w http.ResponseWrite
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
 	// Turn off replication if disk crawl is unavailable.
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketReplicationDisabledError), r.URL)
@@ -214,8 +218,7 @@ func (a adminAPIHandlers) GetBucketReplicationTargetsHandler(w http.ResponseWrit
 	if !target.Empty() {
 		var creds auth.Credentials
 		creds.AccessKey = target.Credentials.AccessKey
-		tgt = madmin.BucketReplicationTarget{Endpoint: target.Endpoint, TargetBucket: target.TargetBucket, Credentials: &creds}
-
+		tgt = madmin.BucketReplicationTarget{Endpoint: target.Endpoint, TargetBucket: target.TargetBucket, Credentials: &creds, Arn: target.Arn}
 	}
 	data, err := json.Marshal(tgt)
 	if err != nil {

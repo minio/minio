@@ -369,6 +369,13 @@ func (e BucketReplicationTargetNotFound) Error() string {
 	return "Replication target not found: " + e.Bucket
 }
 
+// BucketReplicationTargetNotVersioned replication target does not have versioning enabled.
+type BucketReplicationTargetNotVersioned GenericError
+
+func (e BucketReplicationTargetNotVersioned) Error() string {
+	return "Replication target does not have versioning enabled: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.
