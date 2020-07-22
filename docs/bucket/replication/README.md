@@ -17,7 +17,8 @@ Next, the replication ARN associated with the replica URL https://replica-endpoi
 The replication configuration can now be added to the source bucket by applying the json file with replication configuration. The ReplicationArn is passed in as a json element in the configuration.
 
 The replication configuration follows [S3 Spec](https://docs.aws.amazon.com/AmazonS3/latest/dev/replication-add-config.html). Any
-objects uploaded to the source bucket that meet replication criteria will now automatically be replicated by the MinIO server. Replication can be stopped at any time by disabling specific rules in the configuration or deleting the replication configuration.
+objects uploaded to the source bucket that meet replication criteria will now automatically be replicated by the MinIO server. Replication can be stopped at any time by disabling specific rules in the configuration or deleting the replication configuration. Replication configuration can be set using the command
+`mc bucket replicate add myminio/source --config /tmp/config.json`
 
 When an object is deleted from the source bucket, the replica will not be deleted as per S3 spec.
 ![delete](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/DELETE_bucket_replication.png)
