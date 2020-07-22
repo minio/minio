@@ -73,9 +73,14 @@ func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filt
 
 // HasSubscribers returns true if pubsub system has subscribers
 func (ps *PubSub) HasSubscribers() bool {
+	return ps.NumSubscribers() > 0
+}
+
+// NumSubscribers returns the number of current subscribers
+func (ps *PubSub) NumSubscribers() int {
 	ps.RLock()
 	defer ps.RUnlock()
-	return len(ps.subs) > 0
+	return len(ps.subs)
 }
 
 // New inits a PubSub system

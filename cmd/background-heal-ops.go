@@ -56,6 +56,10 @@ func (h *healRoutine) queueHealTask(task healTask) {
 }
 
 func waitForLowHTTPReq(tolerance int32) {
+	// Bucket notification and http trace are not costly, it is okay to ignore them
+	// while counting the number of concurrent connections
+	tolerance += int32(globalHTTPListen.NumSubscribers() + globalHTTPTrace.NumSubscribers())
+
 	if httpServer := newHTTPServerFn(); httpServer != nil {
 		// Wait at max 10 minute for an inprogress request before proceeding to heal
 		waitCount := 600
