@@ -173,16 +173,3 @@ func deepHealObject(bucket, object, versionID string) {
 		opts:      &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
 	}
 }
-
-// Returns the duration to the next background healing round
-func durationToNextHealRound(lastHeal time.Time) time.Duration {
-	if lastHeal.IsZero() {
-		lastHeal = globalBootTime
-	}
-
-	d := lastHeal.Add(healInterval).Sub(UTCNow())
-	if d < 0 {
-		return time.Second
-	}
-	return d
-}
