@@ -66,31 +66,13 @@ const (
 	mgmtForceStop                = "forceStop"
 )
 
-func updateServer(updateURL, sha256Hex string, latestReleaseTime time.Time) (us madmin.ServerUpdateStatus, err error) {
-	minioMode := getMinioMode()
-	// No inputs provided we should try to update using the default URL.
-	if updateURL == "" && sha256Hex == "" && latestReleaseTime.IsZero() {
-		var updateMsg string
-		updateMsg, sha256Hex, _, latestReleaseTime, err = getUpdateInfo(updateTimeout, minioMode)
-		if err != nil {
-			return us, err
-		}
-		if updateMsg == "" {
-			us.CurrentVersion = Version
-			us.UpdatedVersion = Version
-			return us, nil
-		}
-		if runtime.GOOS == "windows" {
-			updateURL = minioReleaseURL + "minio.exe"
-		} else {
-			updateURL = minioReleaseURL + "minio"
-		}
-	}
-	if err = doUpdate(updateURL, sha256Hex, minioMode); err != nil {
+func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (us madmin.ServerUpdateStatus, err error) {
+	if err = doUpdate(u, lrTime, sha256Sum, mode); err != nil {
 		return us, err
 	}
+
 	us.CurrentVersion = Version
-	us.UpdatedVersion = latestReleaseTime.Format(minioReleaseTagTimeLayout)
+	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
 	return us, nil
 }
 
@@ -115,47 +97,71 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
-	updateURL := vars[peerRESTUpdateURL]
+	updateURL := vars["updateURL"]
 	mode := getMinioMode()
-	var sha256Hex string
-	var latestReleaseTime time.Time
-	if updateURL != "" {
-		u, err := url.Parse(updateURL)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
+	if updateURL == "" {
+		updateURL = minioReleaseInfoURL
+		if runtime.GOOS == globalWindowsOSName {
+			updateURL = minioReleaseWindowsInfoURL
 		}
-
-		content, err := downloadReleaseURL(updateURL, updateTimeout, mode)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		sha256Hex, latestReleaseTime, err = parseReleaseData(content)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		if runtime.GOOS == "windows" {
-			u.Path = path.Dir(u.Path) + SlashSeparator + "minio.exe"
-		} else {
-			u.Path = path.Dir(u.Path) + SlashSeparator + "minio"
-		}
-
-		updateURL = u.String()
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(updateURL, sha256Hex, latestReleaseTime) {
+	u, err := url.Parse(updateURL)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	content, err := downloadReleaseURL(u, updateTimeout, mode)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	sha256Sum, lrTime, err := parseReleaseData(content)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	u.Path = path.Dir(u.Path) + SlashSeparator + "minio.RELEASE." + lrTime.Format(minioReleaseTagTimeLayout)
+
+	crTime, err := GetCurrentReleaseTime()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if lrTime.Sub(crTime) < 0 {
+		updateStatus := madmin.ServerUpdateStatus{
+			CurrentVersion: Version,
+			UpdatedVersion: Version,
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(updateStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+		return
+	}
+
+	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
+			err = fmt.Errorf("Server update failed, please do not restart the servers yet: failed with %w", nerr.Err)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
 	}
 
-	updateStatus, err := updateServer(updateURL, sha256Hex, latestReleaseTime)
+	updateStatus, err := updateServer(u, sha256Sum, lrTime, mode)
 	if err != nil {
+		err = fmt.Errorf("Server update failed, please do not restart the servers yet: failed with %w", err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -169,10 +175,15 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	writeSuccessResponseJSON(w, jsonBytes)
 
-	if updateStatus.CurrentVersion != updateStatus.UpdatedVersion {
-		// We did upgrade - restart all services.
-		globalServiceSignalCh <- serviceRestart
+	// Notify all other MinIO peers signal service.
+	for _, nerr := range globalNotificationSys.SignalService(serviceRestart) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
 	}
+
+	globalServiceSignalCh <- serviceRestart
 }
 
 // ServiceHandler - POST /minio/admin/v3/service?action={action}

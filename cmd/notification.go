@@ -401,15 +401,15 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 }
 
 // ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdate(updateURL, sha256Hex string, latestReleaseTime time.Time) []NotificationPeerErr {
+func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
 		client := client
-		ng.Go(GlobalContext, func() error {
-			return client.ServerUpdate(updateURL, sha256Hex, latestReleaseTime)
+		ng.Go(ctx, func() error {
+			return client.ServerUpdate(ctx, u, sha256Sum, lrTime)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
