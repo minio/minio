@@ -384,15 +384,41 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
-	if _, err := n.clnt.Stat(n.hdfsPathJoin(bucket)); err != nil {
+	directoryPath := n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator
+	dirReader, err := n.clnt.Open(directoryPath)
+
+	if err != nil {
 		return loi, hdfsToObjectErr(ctx, err, bucket)
 	}
 
+	fileInfos := make(map[string]os.FileInfo)
+	fileInfos[directoryPath] = dirReader.Stat()
+
+	infos, err := dirReader.Readdir(0)
+
+	if err != nil {
+		return loi, hdfsToObjectErr(ctx, err, bucket)
+	}
+
+	for _, fileInfo := range infos {
+		filePath := n.hdfsPathJoin(directoryPath, fileInfo.Name())
+
+		if fileInfo.IsDir() {
+			filePath += minio.SlashSeparator
+		}
+
+		fileInfos[filePath] = fileInfo
+	}
+
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
-		fi, err := n.clnt.Stat(n.hdfsPathJoin(bucket, entry))
-		if err != nil {
+		filePath := n.hdfsPathJoin(bucket, entry)
+		fi, ok := fileInfos[filePath]
+
+		if !ok {
+			err := fmt.Errorf("could not get FileInfo for path '%s'", filePath)
 			return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket, entry)
 		}
+
 		return minio.ObjectInfo{
 			Bucket:  bucket,
 			Name:    entry,
