@@ -114,11 +114,11 @@ checksum:
 
 signs:
   -
-    signature: "${artifact}.asc"
+    signature: "${artifact}.minisig"
     cmd: "sh"
     args:
       - '-c'
-      - 'gpg --quiet --detach-sign -a ${artifact}'
+      - 'minisign -s /media/${USER}/minio/minisign.key -qQSm ${artifact} < /media/${USER}/minio/minisign-passphrase'
     artifacts: all
 
 changelog:
