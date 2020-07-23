@@ -32,6 +32,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -83,6 +84,10 @@ func (sys *BucketReplicationSys) SetTarget(ctx context.Context, bucket string, t
 	}
 	if !ok {
 		return BucketReplicationDestinationNotFound{Bucket: tgt.TargetBucket}
+	}
+	vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
+	if err != nil || vcfg.Status != string(versioning.Enabled) {
+		return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
 	}
 	sys.Lock()
 	sys.targetsMap[bucket] = clnt

@@ -108,7 +108,7 @@ const (
 	ErrReplicationConfigurationNotFoundError
 	ErrReplicationDestinationNotFoundError
 	ErrReplicationTargetNotFoundError
-
+	ErrReplicationTargetNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrBucketReplicationDisabledError
@@ -828,6 +828,11 @@ var errorCodes = errorCodeMap{
 	ErrReplicationTargetNotFoundError: {
 		Code:           "ReplicationTargetNotFoundError",
 		Description:    "The replication target does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationTargetNotVersionedError: {
+		Code:           "ReplicationTargetNotVersionedError",
+		Description:    "The replication target does not have versioning enabled",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationNeedsVersioningError: {
@@ -1876,6 +1881,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrReplicationDestinationNotFoundError
 	case BucketReplicationTargetNotFound:
 		apiErr = ErrReplicationTargetNotFoundError
+	case BucketReplicationTargetNotVersioned:
+		apiErr = ErrReplicationTargetNotVersionedError
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:
