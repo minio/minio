@@ -26,7 +26,7 @@ import (
 )
 
 // list all errors that can be ignore in a bucket operation.
-var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
+var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
 // list all errors that can be ignored in a bucket metadata operation.
 var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)

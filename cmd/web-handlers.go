@@ -715,6 +715,7 @@ next:
 
 			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, opts)
 			logger.LogIf(ctx, err)
+			continue
 		}
 
 		if authErr == errNoAuthToken {
