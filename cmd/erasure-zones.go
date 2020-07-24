@@ -340,12 +340,13 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 
 		// We need to merge since we will get the same buckets from each zone.
 		// Therefore to get the exact bucket sizes we must merge before we can convert.
-		allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
+		var allMerged dataUsageCache
 
 		update := func() {
 			mu.Lock()
 			defer mu.Unlock()
 
+			allMerged = dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
 			for _, info := range results {
 				if info.Info.LastUpdate.IsZero() {
 					// Not filled yet.
