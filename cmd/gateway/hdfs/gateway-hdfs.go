@@ -442,7 +442,7 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 		return err
 	}
 
-	fileInfos[filePath + minio.SlashSeparator] = dirReader.Stat()
+	fileInfos[filePath+minio.SlashSeparator] = dirReader.Stat()
 	infos, err := dirReader.Readdir(0)
 
 	if err != nil {
