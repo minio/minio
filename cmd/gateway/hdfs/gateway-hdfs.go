@@ -387,13 +387,9 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	fileInfos := make(map[string]os.FileInfo)
 	directoryPath := n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator
 
-	var directoryFileInfo os.FileInfo
-
-	if directoryFileInfo, err = n.populateDirectoryListing(directoryPath, fileInfos); err != nil {
+	if err = n.populateDirectoryListing(directoryPath, fileInfos); err != nil {
 		return loi, hdfsToObjectErr(ctx, err, bucket)
 	}
-
-	fileInfos[directoryPath] = directoryFileInfo
 
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
 		filePath := n.hdfsPathJoin(bucket, entry)
@@ -404,7 +400,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 		if !ok {
 			parentPath := path.Dir(filePath)
 
-			if _, err := n.populateDirectoryListing(parentPath, fileInfos); err != nil {
+			if err := n.populateDirectoryListing(parentPath, fileInfos); err != nil {
 				return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket)
 			}
 
@@ -433,18 +429,19 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
 }
 
-func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) (os.FileInfo, error) {
+func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) error {
 	dirReader, err := n.clnt.Open(filePath)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	fileInfos[filePath+minio.SlashSeparator] = dirReader.Stat()
+	dirStat := dirReader.Stat()
+	fileInfos[filePath+minio.SlashSeparator] = dirStat
 	infos, err := dirReader.Readdir(0)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, fileInfo := range infos {
@@ -457,7 +454,7 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 		fileInfos[filePath] = fileInfo
 	}
 
-	return dirReader.Stat(), nil
+	return nil
 }
 
 // deleteObject deletes a file path if its empty. If it's successfully deleted,
