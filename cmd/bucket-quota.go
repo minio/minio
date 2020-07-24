@@ -68,43 +68,36 @@ func (sys *BucketQuotaSys) check(ctx context.Context, bucket string, size int64)
 		return errServerNotInitialized
 	}
 
-	q, err := sys.Get(bucket)
-	if err != nil {
-		return nil
-	}
-
-	if q.Type == madmin.FIFOQuota {
-		return nil
-	}
-
-	if q.Quota == 0 {
-		// No quota set return quickly.
-		return nil
-	}
-
 	sys.bucketStorageCache.Once.Do(func() {
-		sys.bucketStorageCache.TTL = 10 * time.Second
+		sys.bucketStorageCache.TTL = 1 * time.Second
 		sys.bucketStorageCache.Update = func() (interface{}, error) {
 			return loadDataUsageFromBackend(ctx, objAPI)
 		}
 	})
 
-	v, err := sys.bucketStorageCache.Get()
+	q, err := sys.Get(bucket)
 	if err != nil {
 		return err
 	}
 
-	dui := v.(DataUsageInfo)
+	if q != nil && q.Type == madmin.HardQuota && q.Quota > 0 {
+		v, err := sys.bucketStorageCache.Get()
+		if err != nil {
+			return err
+		}
 
-	bui, ok := dui.BucketsUsage[bucket]
-	if !ok {
-		// bucket not found, cannot enforce quota
-		// call will fail anyways later.
-		return nil
-	}
+		dui := v.(DataUsageInfo)
 
-	if (bui.Size + uint64(size)) > q.Quota {
-		return BucketQuotaExceeded{Bucket: bucket}
+		bui, ok := dui.BucketsUsage[bucket]
+		if !ok {
+			// bucket not found, cannot enforce quota
+			// call will fail anyways later.
+			return nil
+		}
+
+		if (bui.Size + uint64(size)) >= q.Quota {
+			return BucketQuotaExceeded{Bucket: bucket}
+		}
 	}
 
 	return nil

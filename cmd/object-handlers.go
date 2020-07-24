@@ -980,6 +980,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		length = actualSize
 	}
+
 	if !cpSrcDstSame {
 		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1893,10 +1894,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 	}
+
 	if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// Special care for CopyObjectPart
 	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
 		writeCopyPartErr(ctx, w, partRangeErr, r.URL, guessIsBrowserReq(r))
