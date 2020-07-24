@@ -385,14 +385,14 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 // ListObjects lists all blobs in HDFS bucket filtered by prefix.
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
 	fileInfos := make(map[string]os.FileInfo)
-	directoryPath := n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator
+	directoryPath := n.hdfsPathJoin(bucket, prefix)
 
 	if err = n.populateDirectoryListing(directoryPath, fileInfos); err != nil {
 		return loi, hdfsToObjectErr(ctx, err, bucket)
 	}
 
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
-		filePath := n.hdfsPathJoin(bucket, entry)
+		filePath := path.Clean(n.hdfsPathJoin(bucket, entry))
 		fi, ok := fileInfos[filePath]
 
 		// If the file info is not known, this may be a recursive listing and filePath is a
@@ -437,7 +437,9 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 	}
 
 	dirStat := dirReader.Stat()
-	fileInfos[filePath+minio.SlashSeparator] = dirStat
+	key := path.Clean(filePath)
+
+	fileInfos[key] = dirStat
 	infos, err := dirReader.Readdir(0)
 
 	if err != nil {
@@ -446,11 +448,6 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 
 	for _, fileInfo := range infos {
 		filePath := n.hdfsPathJoin(filePath, fileInfo.Name())
-
-		if fileInfo.IsDir() {
-			filePath += minio.SlashSeparator
-		}
-
 		fileInfos[filePath] = fileInfo
 	}
 
