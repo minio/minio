@@ -160,38 +160,6 @@ func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *h
 	writeSuccessResponseXML(w, []byte(loggingDefaultConfig))
 }
 
-// GetBucketReplicationHandler - GET bucket replication, a dummy api
-func (api objectAPIHandlers) GetBucketReplicationHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketReplication")
-
-	defer logger.AuditLog(w, r, "GetBucketReplication", mustGetClaimsFromToken(r))
-
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-
-	objAPI := api.ObjectAPI()
-	if objAPI == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Allow getBucketCors if policy action is set, since this is a dummy call
-	// we are simply re-purposing the bucketPolicyAction.
-	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Validate if bucket exists, before proceeding further...
-	_, err := objAPI.GetBucketInfo(ctx, bucket)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationConfigurationNotFoundError), r.URL, guessIsBrowserReq(r))
-}
-
 // DeleteBucketWebsiteHandler - DELETE bucket website, a dummy api
 func (api objectAPIHandlers) DeleteBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseHeadersOnly(w)

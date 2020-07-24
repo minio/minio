@@ -69,12 +69,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if !srcInfo.metadataOnly {
 		return oi, NotImplemented{}
 	}
-
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
-
 	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID)
 
 	// get Quorum for this object

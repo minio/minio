@@ -836,9 +836,3 @@ func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, 
 	}
 	return hdfsToObjectErr(ctx, n.clnt.Remove(n.hdfsPathJoin(minioMetaTmpBucket, uploadID)), bucket, object, uploadID)
 }
-
-// IsReady returns whether the layer is ready to take requests.
-func (n *hdfsObjects) IsReady(ctx context.Context) bool {
-	si, _ := n.StorageInfo(ctx, false)
-	return si.Backend.GatewayOnline
-}

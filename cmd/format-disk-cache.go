@@ -131,29 +131,11 @@ func createFormatCache(fsFormatPath string, format *formatCacheV1) error {
 // of format cache config
 func initFormatCache(ctx context.Context, drives []string) (formats []*formatCacheV2, err error) {
 	nformats := newFormatCacheV2(drives)
-	for _, drive := range drives {
-		_, err = os.Stat(drive)
-		if err == nil {
-			continue
-		}
-		if !os.IsNotExist(err) {
-			logger.GetReqInfo(ctx).AppendTags("drive", drive)
-			logger.LogIf(ctx, err, logger.Application)
-			return nil, err
-		}
-		if err = os.Mkdir(drive, 0777); err != nil {
-			logger.GetReqInfo(ctx).AppendTags("drive", drive)
-			logger.LogIf(ctx, err, logger.Application)
-			return nil, err
-		}
-	}
 	for i, drive := range drives {
-		if err = os.Mkdir(pathJoin(drive, minioMetaBucket), 0777); err != nil {
-			if !os.IsExist(err) {
-				logger.GetReqInfo(ctx).AppendTags("drive", drive)
-				logger.LogIf(ctx, err)
-				return nil, err
-			}
+		if err = os.MkdirAll(pathJoin(drive, minioMetaBucket), 0777); err != nil {
+			logger.GetReqInfo(ctx).AppendTags("drive", drive)
+			logger.LogIf(ctx, err)
+			return nil, err
 		}
 		cacheFormatPath := pathJoin(drive, minioMetaBucket, formatConfigFile)
 		// Fresh disk - create format.json for this cfs

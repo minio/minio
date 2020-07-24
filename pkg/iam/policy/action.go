@@ -158,6 +158,22 @@ const (
 
 	// GetBucketVersioningAction - GetBucketVersioning REST API action
 	GetBucketVersioningAction = "s3:GetBucketVersioning"
+	// GetReplicationConfigurationAction  - GetReplicationConfiguration REST API action
+	GetReplicationConfigurationAction = "s3:GetReplicationConfiguration"
+	// PutReplicationConfigurationAction  - PutReplicationConfiguration REST API action
+	PutReplicationConfigurationAction = "s3:PutReplicationConfiguration"
+
+	// ReplicateObjectAction  - ReplicateObject REST API action
+	ReplicateObjectAction = "s3:ReplicateObject"
+
+	// ReplicateDeleteAction  - ReplicateDelete REST API action
+	ReplicateDeleteAction = "s3:ReplicateDelete"
+
+	// ReplicateTagsAction  - ReplicateTags REST API action
+	ReplicateTagsAction = "s3:ReplicateTags"
+
+	// GetObjectVersionForReplicationAction  - GetObjectVersionForReplication REST API action
+	GetObjectVersionForReplicationAction = "s3:GetObjectVersionForReplication"
 
 	// AllActions - all API actions
 	AllActions = "s3:*"
@@ -208,30 +224,40 @@ var supportedActions = map[Action]struct{}{
 	GetBucketEncryptionAction:              {},
 	PutBucketVersioningAction:              {},
 	GetBucketVersioningAction:              {},
+	GetReplicationConfigurationAction:      {},
+	PutReplicationConfigurationAction:      {},
+	ReplicateObjectAction:                  {},
+	ReplicateDeleteAction:                  {},
+	ReplicateTagsAction:                    {},
+	GetObjectVersionForReplicationAction:   {},
 	AllActions:                             {},
 }
 
 // List of all supported object actions.
 var supportedObjectActions = map[Action]struct{}{
-	AllActions:                       {},
-	AbortMultipartUploadAction:       {},
-	DeleteObjectAction:               {},
-	GetObjectAction:                  {},
-	ListMultipartUploadPartsAction:   {},
-	PutObjectAction:                  {},
-	BypassGovernanceRetentionAction:  {},
-	PutObjectRetentionAction:         {},
-	GetObjectRetentionAction:         {},
-	PutObjectLegalHoldAction:         {},
-	GetObjectLegalHoldAction:         {},
-	GetObjectTaggingAction:           {},
-	PutObjectTaggingAction:           {},
-	DeleteObjectTaggingAction:        {},
-	GetObjectVersionAction:           {},
-	GetObjectVersionTaggingAction:    {},
-	DeleteObjectVersionAction:        {},
-	DeleteObjectVersionTaggingAction: {},
-	PutObjectVersionTaggingAction:    {},
+	AllActions:                           {},
+	AbortMultipartUploadAction:           {},
+	DeleteObjectAction:                   {},
+	GetObjectAction:                      {},
+	ListMultipartUploadPartsAction:       {},
+	PutObjectAction:                      {},
+	BypassGovernanceRetentionAction:      {},
+	PutObjectRetentionAction:             {},
+	GetObjectRetentionAction:             {},
+	PutObjectLegalHoldAction:             {},
+	GetObjectLegalHoldAction:             {},
+	GetObjectTaggingAction:               {},
+	PutObjectTaggingAction:               {},
+	DeleteObjectTaggingAction:            {},
+	GetObjectVersionAction:               {},
+	GetObjectVersionTaggingAction:        {},
+	DeleteObjectVersionAction:            {},
+	DeleteObjectVersionTaggingAction:     {},
+	PutObjectVersionTaggingAction:        {},
+	ReplicateObjectAction:                {},
+	ReplicateDeleteAction:                {},
+	ReplicateTagsAction:                  {},
+	GetObjectVersionForReplicationAction: {},
 }
 
 // isObjectAction - returns whether action is object type or not.
@@ -360,4 +386,10 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 		append([]condition.Key{
 			condition.S3VersionID,
 		}, condition.CommonKeys...)...),
+	GetReplicationConfigurationAction:    condition.NewKeySet(condition.CommonKeys...),
+	PutReplicationConfigurationAction:    condition.NewKeySet(condition.CommonKeys...),
+	ReplicateObjectAction:                condition.NewKeySet(condition.CommonKeys...),
+	ReplicateDeleteAction:                condition.NewKeySet(condition.CommonKeys...),
+	ReplicateTagsAction:                  condition.NewKeySet(condition.CommonKeys...),
+	GetObjectVersionForReplicationAction: condition.NewKeySet(condition.CommonKeys...),
 }

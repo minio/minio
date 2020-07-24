@@ -77,6 +77,7 @@ var supportedHeaders = []string{
 	xhttp.AmzStorageClass,
 	xhttp.AmzObjectTagging,
 	"expires",
+	xhttp.AmzBucketReplicationStatus,
 	// Add more supported headers here.
 }
 

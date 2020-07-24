@@ -32,12 +32,15 @@ import (
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
@@ -46,8 +49,9 @@ import (
 )
 
 const (
-	objectLockConfig    = "object-lock.xml"
-	bucketTaggingConfig = "tagging.xml"
+	objectLockConfig        = "object-lock.xml"
+	bucketTaggingConfig     = "tagging.xml"
+	bucketReplicationConfig = "replication.xml"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -1032,7 +1036,10 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
 	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketObjectLockConfigurationAction, bucket, ""); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -1212,6 +1219,150 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 	}
 
 	if err := globalBucketMetadataSys.Update(bucket, bucketTaggingConfig, nil); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Write success response.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// PutBucketReplicationConfigHandler - PUT Bucket replication configuration.
+// ----------
+// Add a replication configuration on the specified bucket as specified in https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketReplication.html
+func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutBucketReplicationConfig")
+	defer logger.AuditLog(w, r, "PutBucketReplicationConfig", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+	// Turn off replication if disk crawl is unavailable.
+	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketReplicationDisabledError), r.URL)
+		return
+	}
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if versioned := globalBucketVersioningSys.Enabled(bucket); !versioned {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrReplicationNeedsVersioningError), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	replicationConfig, err := replication.ParseConfig(io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
+		apiErr.Description = err.Error()
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+	sameTarget, err := globalBucketReplicationSys.validateDestination(ctx, bucket, replicationConfig)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	// Validate the received bucket replication config
+	if err = replicationConfig.Validate(bucket, sameTarget); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	configData, err := xml.Marshal(replicationConfig)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if err = globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Write success response.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// GetBucketReplicationConfigHandler - GET Bucket replication configuration.
+// ----------
+// Gets the replication configuration for a bucket.
+func (api objectAPIHandlers) GetBucketReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketReplicationConfig")
+
+	defer logger.AuditLog(w, r, "GetBucketReplicationConfig", mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// check if user has permissions to perform this operation
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	config, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	configData, err := xml.Marshal(config)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Write success response.
+	writeSuccessResponseXML(w, configData)
+}
+
+// DeleteBucketReplicationConfigHandler - DELETE Bucket replication config.
+// ----------
+func (api objectAPIHandlers) DeleteBucketReplicationConfigHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DeleteBucketReplicationConfig")
+	defer logger.AuditLog(w, r, "DeleteBucketReplicationConfig", mustGetClaimsFromToken(r))
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutReplicationConfigurationAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if err := globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, nil); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

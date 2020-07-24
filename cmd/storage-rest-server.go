@@ -114,12 +114,18 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		return true
 	}
 	storedDiskID, err := s.storage.GetDiskID()
-	if err == nil && diskID == storedDiskID {
-		// If format.json is available and request sent the right disk-id, we allow the request
-		return true
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return false
 	}
-	s.writeErrorResponse(w, errDiskStale)
-	return false
+
+	if diskID != storedDiskID {
+		s.writeErrorResponse(w, errDiskStale)
+		return false
+	}
+
+	// If format.json is available and request sent the right disk-id, we allow the request
+	return true
 }
 
 // HealthHandler handler checks if disk is stale

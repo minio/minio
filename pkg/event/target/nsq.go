@@ -40,7 +40,7 @@ const (
 	NSQQueueDir      = "queue_dir"
 	NSQQueueLimit    = "queue_limit"
 
-	EnvNSQEnable        = "MINIO_NOTIFY_NSQ"
+	EnvNSQEnable        = "MINIO_NOTIFY_NSQ_ENABLE"
 	EnvNSQAddress       = "MINIO_NOTIFY_NSQ_NSQD_ADDRESS"
 	EnvNSQTopic         = "MINIO_NOTIFY_NSQ_TOPIC"
 	EnvNSQTLS           = "MINIO_NOTIFY_NSQ_TLS"
@@ -210,7 +210,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 		store = NewQueueStore(queueDir, args.QueueLimit)
 		if oErr := store.Open(); oErr != nil {
 			target.loggerOnce(context.Background(), oErr, target.ID())
-			return nil, oErr
+			return target, oErr
 		}
 		target.store = store
 	}
@@ -226,7 +226,7 @@ func NewNSQTarget(id string, args NSQArgs, doneCh <-chan struct{}, loggerOnce fu
 		// To treat "connection refused" errors as errNotConnected.
 		if target.store == nil || !(IsConnRefusedErr(err) || IsConnResetErr(err)) {
 			target.loggerOnce(context.Background(), err, target.ID())
-			return nil, err
+			return target, err
 		}
 	}
 

@@ -34,7 +34,6 @@ require (
 	github.com/gorilla/mux v1.7.5-0.20200711200521-98cb6bf42e08
 	github.com/gorilla/rpc v1.2.0
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.10.3
 	github.com/klauspost/cpuid v1.3.1
@@ -49,6 +48,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/minio-go/v7 v7.0.1
+	github.com/minio/selfupdate v0.3.0
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
 	github.com/minio/sio v0.2.0

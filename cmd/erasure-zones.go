@@ -1940,13 +1940,21 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 }
 
 func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
-	// Lock the object before healing. Use read lock since healing
-	// will only regenerate parts & xl.meta of outdated disks.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalHealingTimeout); err != nil {
-		return madmin.HealResultItem{}, err
+	if bucket == minioMetaBucket {
+		// For .minio.sys bucket heals we should hold write locks.
+		if err := lk.GetLock(globalHealingTimeout); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+		defer lk.Unlock()
+	} else {
+		// Lock the object before healing. Use read lock since healing
+		// will only regenerate parts & xl.meta of outdated disks.
+		if err := lk.GetRLock(globalHealingTimeout); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+		defer lk.RUnlock()
 	}
-	defer lk.RUnlock()
 
 	if z.SingleZone() {
 		return z.zones[0].HealObject(ctx, bucket, object, versionID, opts)
@@ -2007,29 +2015,49 @@ func (z *erasureZones) getZoneAndSet(id string) (int, int, error) {
 	return 0, 0, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
 }
 
-// IsReady - Returns true, when all the erasure sets are writable.
-func (z *erasureZones) IsReady(ctx context.Context) bool {
+// HealthOptions takes input options to return sepcific information
+type HealthOptions struct {
+	Maintenance bool
+}
+
+// HealthResult returns the current state of the system, also
+// additionally with any specific heuristic information which
+// was queried
+type HealthResult struct {
+	Healthy       bool
+	ZoneID, SetID int
+	WriteQuorum   int
+}
+
+// Health - returns current status of the object layer health,
+// provides if write access exists across sets, additionally
+// can be used to query scenarios if health may be lost
+// if this node is taken down by an external orchestrator.
+func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthResult {
 	erasureSetUpCount := make([][]int, len(z.zones))
 	for i := range z.zones {
 		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
 	}
 
 	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
+	if !opts.Maintenance {
+		diskIDs = append(diskIDs, getLocalDiskIDs(z))
+	}
 
-	diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
-
-	for _, id := range diskIDs {
-		zoneIdx, setIdx, err := z.getZoneAndSet(id)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
+	for _, localDiskIDs := range diskIDs {
+		for _, id := range localDiskIDs {
+			zoneIdx, setIdx, err := z.getZoneAndSet(id)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+			erasureSetUpCount[zoneIdx][setIdx]++
 		}
-		erasureSetUpCount[zoneIdx][setIdx]++
 	}
 
 	for zoneIdx := range erasureSetUpCount {
 		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-		diskCount := len(z.zones[zoneIdx].format.Erasure.Sets[0])
+		diskCount := z.zones[zoneIdx].drivesPerSet
 		if parityDrives == 0 {
 			parityDrives = getDefaultParityBlocks(diskCount)
 		}
@@ -2042,11 +2070,18 @@ func (z *erasureZones) IsReady(ctx context.Context) bool {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
 				logger.LogIf(ctx, fmt.Errorf("Write quorum lost on zone: %d, set: %d, expected write quorum: %d",
 					zoneIdx, setIdx, writeQuorum))
-				return false
+				return HealthResult{
+					Healthy:     false,
+					ZoneID:      zoneIdx,
+					SetID:       setIdx,
+					WriteQuorum: writeQuorum,
+				}
 			}
 		}
 	}
-	return true
+	return HealthResult{
+		Healthy: true,
+	}
 }
 
 // PutObjectTags - replace or add tags to an existing object
