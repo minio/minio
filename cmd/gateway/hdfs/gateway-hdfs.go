@@ -429,6 +429,8 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
 }
 
+// Lists a path's direct, first-level entries and populates them in the `fileInfos` cache which maps
+// a path entry to an `os.FileInfo`. It also saves the listed path's `os.FileInfo` in the cache.
 func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) error {
 	dirReader, err := n.clnt.Open(filePath)
 
