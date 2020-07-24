@@ -386,15 +386,12 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, err error) {
 	fileInfos := make(map[string]os.FileInfo)
 
-	if stat, err := n.clnt.Stat(n.hdfsPathJoin(bucket)); err != nil {
+	directoryPath := n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator
+
+	if directoryFileInfo, err := n.populateDirectoryListing(directoryPath, fileInfos); err != nil {
 		return loi, hdfsToObjectErr(ctx, err, bucket)
 	} else {
-		directoryPath := n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator
-		fileInfos[directoryPath] = stat
-
-		if err := n.populateDirectoryListing(directoryPath, fileInfos); err != nil {
-			return loi, hdfsToObjectErr(ctx, err, bucket)
-		}
+		fileInfos[directoryPath] = directoryFileInfo
 	}
 
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
@@ -406,7 +403,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 		if !ok {
 			parentPath := path.Dir(filePath)
 
-			if err := n.populateDirectoryListing(parentPath, fileInfos); err != nil {
+			if _, err := n.populateDirectoryListing(parentPath, fileInfos); err != nil {
 				return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket)
 			}
 
@@ -435,18 +432,18 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
 }
 
-func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) error {
+func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) (os.FileInfo, error) {
 	dirReader, err := n.clnt.Open(filePath)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fileInfos[filePath+minio.SlashSeparator] = dirReader.Stat()
 	infos, err := dirReader.Readdir(0)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, fileInfo := range infos {
@@ -459,7 +456,7 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 		fileInfos[filePath] = fileInfo
 	}
 
-	return nil
+	return dirReader.Stat(), nil
 }
 
 // deleteObject deletes a file path if its empty. If it's successfully deleted,
