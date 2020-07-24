@@ -33,7 +33,7 @@ import (
 )
 
 // list all errors which can be ignored in object operations.
-var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
+var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
 // putObjectDir hints the bottom layer to create a new directory.
 func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string, writeQuorum int) error {
