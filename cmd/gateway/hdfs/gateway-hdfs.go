@@ -389,36 +389,25 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	if stat, err := n.clnt.Stat(n.hdfsPathJoin(bucket)); err != nil {
 		return loi, hdfsToObjectErr(ctx, err, bucket)
 	} else {
-		fileInfos[n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator] = stat
+		directoryPath := n.hdfsPathJoin(bucket, prefix) + minio.SlashSeparator
+		fileInfos[directoryPath] = stat
+
+		if err := n.populateDirectoryListing(directoryPath, fileInfos); err != nil {
+			return loi, hdfsToObjectErr(ctx, err, bucket)
+		}
 	}
 
 	getObjectInfo := func(ctx context.Context, bucket, entry string) (minio.ObjectInfo, error) {
 		filePath := n.hdfsPathJoin(bucket, entry)
 		fi, ok := fileInfos[filePath]
 
+		// If the file info is not known, this may be a recursive listing and filePath is a
+		// child of a sub-directory. In this case, obtain that sub-directory's listing.
 		if !ok {
 			parentPath := path.Dir(filePath)
-			dirReader, err := n.clnt.Open(parentPath)
 
-			if err != nil {
+			if err := n.populateDirectoryListing(parentPath, fileInfos); err != nil {
 				return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket)
-			}
-
-			fileInfos[parentPath + minio.SlashSeparator] = dirReader.Stat()
-			infos, err := dirReader.Readdir(0)
-
-			if err != nil {
-				return minio.ObjectInfo{}, hdfsToObjectErr(ctx, err, bucket)
-			}
-
-			for _, fileInfo := range infos {
-				filePath := n.hdfsPathJoin(parentPath, fileInfo.Name())
-
-				if fileInfo.IsDir() {
-					filePath += minio.SlashSeparator
-				}
-
-				fileInfos[filePath] = fileInfo
 			}
 
 			fi, ok = fileInfos[filePath]
@@ -444,6 +433,33 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 	}
 
 	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
+}
+
+func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[string]os.FileInfo) error {
+	dirReader, err := n.clnt.Open(filePath)
+
+	if err != nil {
+		return err
+	}
+
+	fileInfos[filePath + minio.SlashSeparator] = dirReader.Stat()
+	infos, err := dirReader.Readdir(0)
+
+	if err != nil {
+		return err
+	}
+
+	for _, fileInfo := range infos {
+		filePath := n.hdfsPathJoin(filePath, fileInfo.Name())
+
+		if fileInfo.IsDir() {
+			filePath += minio.SlashSeparator
+		}
+
+		fileInfos[filePath] = fileInfo
+	}
+
+	return nil
 }
 
 // deleteObject deletes a file path if its empty. If it's successfully deleted,
