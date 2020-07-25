@@ -59,29 +59,32 @@ func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ..
 // Walk - implements common gateway level Walker, to walk on all objects recursively at a prefix
 func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	walk := func(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
-		var marker string
+		go func() {
+			// Make sure the results channel is ready to be read when we're done.
+			defer close(results)
 
-		// Make sure the results channel is ready to be read when we're done.
-		defer close(results)
+			var marker string
 
-		for {
-			// set maxKeys to '0' to list maximum possible objects in single call.
-			loi, err := l.ObjectLayer.ListObjects(ctx, bucket, prefix, marker, "", 0)
-			if err != nil {
-				return err
-			}
-			marker = loi.NextMarker
-			for _, obj := range loi.Objects {
-				select {
-				case results <- obj:
-				case <-ctx.Done():
-					return nil
+			for {
+				// set maxKeys to '0' to list maximum possible objects in single call.
+				loi, err := l.ObjectLayer.ListObjects(ctx, bucket, prefix, marker, "", 0)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					return
+				}
+				marker = loi.NextMarker
+				for _, obj := range loi.Objects {
+					select {
+					case results <- obj:
+					case <-ctx.Done():
+						return
+					}
+				}
+				if !loi.IsTruncated {
+					break
 				}
 			}
-			if !loi.IsTruncated {
-				break
-			}
-		}
+		}()
 		return nil
 	}
 
