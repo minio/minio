@@ -42,19 +42,19 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	target := madmin.BucketReplicationTarget{Endpoint: "site2:9000", Credentials: creds, TargetBucket: "destbucket", IsSSL: false}
-	// Set bucket replication target
-	if err := madmClnt.SetBucketReplicationTarget(ctx, "srcbucket", &target); err != nil {
+	target := madmin.BucketTarget{Endpoint: "site2:9000", Credentials: creds, TargetBucket: "destbucket", IsSSL: false}
+	// Set bucket target
+	if err := madmClnt.SetBucketTarget(ctx, "srcbucket", &target); err != nil {
 		log.Fatalln(err)
 	}
-	// Get bucket replication target
-	target, err = madmClnt.GetBucketReplicationTarget(ctx, "srcbucket")
+	// Get bucket target
+	target, err = madmClnt.GetBucketTarget(ctx, "srcbucket")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// Remove bucket replication target
-	if err := madmClnt.SetBucketReplicationTarget(ctx, "srcbucket", nil); err != nil {
+	// Remove bucket target
+	if err := madmClnt.SetBucketTarget(ctx, "srcbucket", nil); err != nil {
 		log.Fatalln(err)
 	}
 
