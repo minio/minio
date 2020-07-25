@@ -1037,6 +1037,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
+
 	// Extract incoming metadata if any.
 	metadata, err := extractMetadata(ctx, r)
 	if err != nil {
@@ -2201,6 +2206,8 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 	switch err.(type) {
 	case StorageFull:
 		return getAPIError(ErrStorageFull)
+	case BucketQuotaExceeded:
+		return getAPIError(ErrAdminBucketQuotaExceeded)
 	case BucketNotFound:
 		return getAPIError(ErrNoSuchBucket)
 	case BucketNotEmpty:
