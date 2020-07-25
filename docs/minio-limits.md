@@ -7,6 +7,9 @@
 |Maximum number of servers per cluster| no-limit|
 |Maximum number of federated clusters | no-limit|
 |Minimum number of servers| 02|
+|Minimum number of drives per server when server count is 1 | 04 |
+|Minimum number of drives per server when server count is 2 or 3 | 02|
+|Minimum number of drives per server when server count is 4 | 01|
 |Maximum number of drives per server| no-limit|
 |Read quorum| N/2|
 |Write quorum| N/2+1|
