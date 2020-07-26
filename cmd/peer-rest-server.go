@@ -773,25 +773,21 @@ func (s *peerRESTServer) ServerUpdateHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	vars := mux.Vars(r)
-	updateURL := vars[peerRESTUpdateURL]
-	sha256Hex := vars[peerRESTSha256Hex]
-	var latestReleaseTime time.Time
-	var err error
-	if latestRelease := vars[peerRESTLatestRelease]; latestRelease != "" {
-		latestReleaseTime, err = time.Parse(time.RFC3339, latestRelease)
-		if err != nil {
-			s.writeErrorResponse(w, err)
-			return
-		}
+	if r.ContentLength < 0 {
+		s.writeErrorResponse(w, errInvalidArgument)
+		return
 	}
-	us, err := updateServer(updateURL, sha256Hex, latestReleaseTime)
+
+	var info serverUpdateInfo
+	err := gob.NewDecoder(r.Body).Decode(&info)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	if us.CurrentVersion != us.UpdatedVersion {
-		globalServiceSignalCh <- serviceRestart
+
+	if _, err = updateServer(info.URL, info.Sha256Sum, info.Time, getMinioMode()); err != nil {
+		s.writeErrorResponse(w, err)
+		return
 	}
 }
 
@@ -897,8 +893,10 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return false
 		}
-		if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
-			return false
+		if ev.S3.Bucket.Name != "" && values.Get(peerRESTListenBucket) != "" {
+			if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
+				return false
+			}
 		}
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
@@ -1044,8 +1042,7 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeleteBucketMetadata).HandlerFunc(httpTraceHdrs(server.DeleteBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadBucketMetadata).HandlerFunc(httpTraceHdrs(server.LoadBucketMetadataHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSignalService).HandlerFunc(httpTraceHdrs(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler)).Queries(restQueries(peerRESTUpdateURL, peerRESTSha256Hex, peerRESTLatestRelease)...)
-
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerUpdate).HandlerFunc(httpTraceHdrs(server.ServerUpdateHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDeletePolicy).HandlerFunc(httpTraceAll(server.DeletePolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadPolicy).HandlerFunc(httpTraceAll(server.LoadPolicyHandler)).Queries(restQueries(peerRESTPolicy)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadPolicyMapping).HandlerFunc(httpTraceAll(server.LoadPolicyMappingHandler)).Queries(restQueries(peerRESTUserOrGroup)...)

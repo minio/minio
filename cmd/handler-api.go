@@ -44,8 +44,8 @@ func (t *apiConfig) init(cfg api.Config) {
 	}
 
 	apiRequestsMax := cfg.APIRequestsMax
-	if len(globalEndpoints.Hosts()) > 0 {
-		apiRequestsMax /= len(globalEndpoints.Hosts())
+	if len(globalEndpoints.Hostnames()) > 0 {
+		apiRequestsMax /= len(globalEndpoints.Hostnames())
 	}
 
 	t.requestsPool = make(chan struct{}, apiRequestsMax)

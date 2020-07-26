@@ -58,7 +58,7 @@ func (sys *NotificationSys) GetARNList(onlyActive bool) []string {
 	}
 	region := globalServerRegion
 	for targetID, target := range sys.targetList.TargetMap() {
-		// httpclient target is part of ListenBucketNotification
+		// httpclient target is part of ListenNotification
 		// which doesn't need to be listed as part of the ARN list
 		// This list is only meant for external targets, filter
 		// this out pro-actively.
@@ -401,15 +401,15 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 }
 
 // ServerUpdate - updates remote peers.
-func (sys *NotificationSys) ServerUpdate(updateURL, sha256Hex string, latestReleaseTime time.Time) []NotificationPeerErr {
+func (sys *NotificationSys) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
 		client := client
-		ng.Go(GlobalContext, func() error {
-			return client.ServerUpdate(updateURL, sha256Hex, latestReleaseTime)
+		ng.Go(ctx, func() error {
+			return client.ServerUpdate(ctx, u, sha256Sum, lrTime)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -1164,26 +1164,21 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 }
 
 // GetLocalDiskIDs - return disk ids of the local disks of the peers.
-func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) []string {
-	var diskIDs []string
-	var mu sync.Mutex
-
+func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) (localDiskIDs [][]string) {
+	localDiskIDs = make([][]string, len(sys.peerClients))
 	var wg sync.WaitGroup
-	for _, client := range sys.peerClients {
+	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
 		wg.Add(1)
-		go func(client *peerRESTClient) {
+		go func(idx int, client *peerRESTClient) {
 			defer wg.Done()
-			ids := client.GetLocalDiskIDs(ctx)
-			mu.Lock()
-			diskIDs = append(diskIDs, ids...)
-			mu.Unlock()
-		}(client)
+			localDiskIDs[idx] = client.GetLocalDiskIDs(ctx)
+		}(idx, client)
 	}
 	wg.Wait()
-	return diskIDs
+	return localDiskIDs
 }
 
 // NewNotificationSys - creates new notification system object.

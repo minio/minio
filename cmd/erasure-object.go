@@ -33,7 +33,7 @@ import (
 )
 
 // list all errors which can be ignored in object operations.
-var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
+var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
 // putObjectDir hints the bottom layer to create a new directory.
 func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string, writeQuorum int) error {
@@ -69,12 +69,10 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if !srcInfo.metadataOnly {
 		return oi, NotImplemented{}
 	}
-
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
-
 	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID)
 
 	// get Quorum for this object

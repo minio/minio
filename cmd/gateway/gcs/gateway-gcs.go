@@ -1508,8 +1508,3 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 func (l *gcsGateway) IsCompressionSupported() bool {
 	return false
 }
-
-// IsReady returns whether the layer is ready to take requests.
-func (l *gcsGateway) IsReady(ctx context.Context) bool {
-	return minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
-}

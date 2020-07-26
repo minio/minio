@@ -23,9 +23,10 @@ import (
 
 // Name - event type enum.
 // Refer http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#notification-how-to-event-types-and-destinations
+// for most basic values we have since extend this and its not really much applicable other than a reference point.
 type Name int
 
-// Values of Name
+// Values of event Name
 const (
 	ObjectAccessedAll Name = 1 + iota
 	ObjectAccessedGet
@@ -42,15 +43,23 @@ const (
 	ObjectRemovedAll
 	ObjectRemovedDelete
 	ObjectRemovedDeleteMarkerCreated
+	BucketCreated
+	BucketRemoved
+	OperationReplicationFailed
 )
 
 // Expand - returns expanded values of abbreviated event type.
 func (name Name) Expand() []Name {
 	switch name {
+	case BucketCreated:
+		return []Name{BucketCreated}
+	case BucketRemoved:
+		return []Name{BucketRemoved}
 	case ObjectAccessedAll:
 		return []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}
 	case ObjectCreatedAll:
-		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention, ObjectCreatedPutLegalHold}
+		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy,
+			ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention, ObjectCreatedPutLegalHold}
 	case ObjectRemovedAll:
 		return []Name{ObjectRemovedDelete}
 	default:
@@ -61,6 +70,10 @@ func (name Name) Expand() []Name {
 // String - returns string representation of event type.
 func (name Name) String() string {
 	switch name {
+	case BucketCreated:
+		return "s3:BucketCreated:*"
+	case BucketRemoved:
+		return "s3:BucketRemoved:*"
 	case ObjectAccessedAll:
 		return "s3:ObjectAccessed:*"
 	case ObjectAccessedGet:
@@ -91,6 +104,8 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:Delete"
 	case ObjectRemovedDeleteMarkerCreated:
 		return "s3:ObjectRemoved:DeleteMarkerCreated"
+	case OperationReplicationFailed:
+		return "s3:Replication:OperationFailedReplication"
 	}
 
 	return ""
@@ -141,6 +156,10 @@ func (name *Name) UnmarshalJSON(data []byte) error {
 // ParseName - parses string to Name.
 func ParseName(s string) (Name, error) {
 	switch s {
+	case "s3:BucketCreated:*":
+		return BucketCreated, nil
+	case "s3:BucketRemoved:*":
+		return BucketRemoved, nil
 	case "s3:ObjectAccessed:*":
 		return ObjectAccessedAll, nil
 	case "s3:ObjectAccessed:Get":
@@ -171,6 +190,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedDelete, nil
 	case "s3:ObjectRemoved:DeleteMarkerCreated":
 		return ObjectRemovedDeleteMarkerCreated, nil
+	case "s3:Replication:OperationFailedReplication":
+		return OperationReplicationFailed, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

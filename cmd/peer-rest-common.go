@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v9"
+	peerRESTVersion       = "v10"
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -59,21 +59,18 @@ const (
 )
 
 const (
-	peerRESTBucket        = "bucket"
-	peerRESTUser          = "user"
-	peerRESTGroup         = "group"
-	peerRESTUserTemp      = "user-temp"
-	peerRESTPolicy        = "policy"
-	peerRESTUserOrGroup   = "user-or-group"
-	peerRESTIsGroup       = "is-group"
-	peerRESTUpdateURL     = "updateURL"
-	peerRESTSha256Hex     = "sha256Hex"
-	peerRESTLatestRelease = "latestReleaseTime"
-	peerRESTSignal        = "signal"
-	peerRESTProfiler      = "profiler"
-	peerRESTDryRun        = "dry-run"
-	peerRESTTraceAll      = "all"
-	peerRESTTraceErr      = "err"
+	peerRESTBucket      = "bucket"
+	peerRESTUser        = "user"
+	peerRESTGroup       = "group"
+	peerRESTUserTemp    = "user-temp"
+	peerRESTPolicy      = "policy"
+	peerRESTUserOrGroup = "user-or-group"
+	peerRESTIsGroup     = "is-group"
+	peerRESTSignal      = "signal"
+	peerRESTProfiler    = "profiler"
+	peerRESTDryRun      = "dry-run"
+	peerRESTTraceAll    = "all"
+	peerRESTTraceErr    = "err"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

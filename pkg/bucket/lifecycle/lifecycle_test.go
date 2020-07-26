@@ -282,6 +282,13 @@ func TestComputeActions(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
 			expectedAction: NoneAction,
 		},
+		// Test rule with empty prefix e.g. for whole bucket
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix></Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foxdir/fooobject/foo.txt",
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			expectedAction: DeleteAction,
+		},
 		// Too early to remove (test Days)
 		{
 			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
@@ -359,6 +366,22 @@ func TestComputeActions(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
 			expectedAction: NoneAction,
 		},
+		// Should remove - empty prefix, tags match, date expiration kicked in
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Tag><Key>tag1</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foxdir/fooobject",
+			objectTags:     "tag1=value1",
+			objectModTime:  time.Now().UTC().Add(-24 * time.Hour), // Created 1 day ago
+			expectedAction: DeleteAction,
+		},
+		// Should remove - empty prefix, tags match, object is expired based on specified Days
+		{
+			inputConfig:    `<LifecycleConfiguration><Rule><Filter><And><Prefix></Prefix><Tag><Key>tag1</Key><Value>value1</Value></Tag></And></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></LifecycleConfiguration>`,
+			objectName:     "foxdir/fooobject",
+			objectTags:     "tag1=value1",
+			objectModTime:  time.Now().UTC().Add(-48 * time.Hour), // Created 2 day ago
+			expectedAction: DeleteAction,
+		},
 		// Should remove, the second rule has expiration kicked in
 		{
 			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule><Rule><Filter><Prefix>foxdir/</Prefix></Filter><Status>Enabled</Status><Expiration><Date>` + time.Now().Truncate(24*time.Hour).UTC().Add(-24*time.Hour).Format(time.RFC3339) + `</Date></Expiration></Rule></LifecycleConfiguration>`,
@@ -398,6 +421,11 @@ func TestHasActiveRules(t *testing.T) {
 		{
 			inputConfig:    `<LifecycleConfiguration><Rule><Filter><Prefix>foodir/</Prefix></Filter><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
 			prefix:         "foodir/foobject",
+			expectedNonRec: true, expectedRec: true,
+		},
+		{ // empty prefix
+			inputConfig:    `<LifecycleConfiguration><Rule><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:         "foodir/foobject/foo.txt",
 			expectedNonRec: true, expectedRec: true,
 		},
 		{

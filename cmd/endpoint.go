@@ -239,15 +239,15 @@ func (l EndpointZones) NEndpoints() (count int) {
 	return count
 }
 
-// Hosts - returns list of unique hosts
-func (l EndpointZones) Hosts() []string {
+// Hostnames - returns list of unique hostnames
+func (l EndpointZones) Hostnames() []string {
 	foundSet := set.NewStringSet()
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
-			if foundSet.Contains(endpoint.Host) {
+			if foundSet.Contains(endpoint.Hostname()) {
 				continue
 			}
-			foundSet.Add(endpoint.Host)
+			foundSet.Add(endpoint.Hostname())
 		}
 	}
 	return foundSet.ToSlice()

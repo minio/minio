@@ -616,17 +616,24 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return nil
 }
 
+type serverUpdateInfo struct {
+	URL       *url.URL
+	Sha256Sum []byte
+	Time      time.Time
+}
+
 // ServerUpdate - sends server update message to remote peers.
-func (client *peerRESTClient) ServerUpdate(updateURL, sha256Hex string, latestReleaseTime time.Time) error {
+func (client *peerRESTClient) ServerUpdate(ctx context.Context, u *url.URL, sha256Sum []byte, lrTime time.Time) error {
 	values := make(url.Values)
-	values.Set(peerRESTUpdateURL, updateURL)
-	values.Set(peerRESTSha256Hex, sha256Hex)
-	if !latestReleaseTime.IsZero() {
-		values.Set(peerRESTLatestRelease, latestReleaseTime.Format(time.RFC3339))
-	} else {
-		values.Set(peerRESTLatestRelease, "")
+	var reader bytes.Buffer
+	if err := gob.NewEncoder(&reader).Encode(serverUpdateInfo{
+		URL:       u,
+		Sha256Sum: sha256Sum,
+		Time:      lrTime,
+	}); err != nil {
+		return err
 	}
-	respBody, err := client.call(peerRESTMethodServerUpdate, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodServerUpdate, values, &reader, -1)
 	if err != nil {
 		return err
 	}

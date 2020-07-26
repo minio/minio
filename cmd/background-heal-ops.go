@@ -59,6 +59,10 @@ func waitForLowHTTPReq(tolerance int32, maxWait time.Duration) {
 	const wait = 10 * time.Millisecond
 	waitCount := maxWait / wait
 
+	// Bucket notification and http trace are not costly, it is okay to ignore them
+	// while counting the number of concurrent connections
+	tolerance += int32(globalHTTPListen.NumSubscribers() + globalHTTPTrace.NumSubscribers())
+
 	if httpServer := newHTTPServerFn(); httpServer != nil {
 		// Any requests in progress, delay the heal.
 		for (httpServer.GetRequestCount() >= tolerance) &&

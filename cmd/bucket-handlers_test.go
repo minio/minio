@@ -45,7 +45,7 @@ func testRemoveBucketHandler(obj ObjectLayer, instanceType, bucketName string, a
 	// initialize httptest Recorder, this records any mutations to response writer inside the handler.
 	rec := httptest.NewRecorder()
 	// construct HTTP request for DELETE bucket.
-	req, err := newTestSignedRequestV4("DELETE", getBucketLocationURL("", bucketName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
+	req, err := newTestSignedRequestV4(http.MethodDelete, getBucketLocationURL("", bucketName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 	if err != nil {
 		t.Fatalf("Test %s: Failed to create HTTP request for RemoveBucketHandler: <ERROR> %v", instanceType, err)
 	}
@@ -61,7 +61,7 @@ func testRemoveBucketHandler(obj ObjectLayer, instanceType, bucketName string, a
 	// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 	recV2 := httptest.NewRecorder()
 	// construct HTTP request for DELETE bucket.
-	reqV2, err := newTestSignedRequestV2("DELETE", getBucketLocationURL("", bucketName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
+	reqV2, err := newTestSignedRequestV2(http.MethodDelete, getBucketLocationURL("", bucketName), 0, nil, credentials.AccessKey, credentials.SecretKey, nil)
 	if err != nil {
 		t.Fatalf("Test %s: Failed to create HTTP request for RemoveBucketHandler: <ERROR> %v", instanceType, err)
 	}
@@ -129,7 +129,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		// initialize httptest Recorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get bucket location.
-		req, err := newTestSignedRequestV4("GET", getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		req, err := newTestSignedRequestV4(http.MethodGet, getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketLocationHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -161,7 +161,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		reqV2, err := newTestSignedRequestV2("GET", getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		reqV2, err := newTestSignedRequestV2(http.MethodGet, getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
@@ -192,7 +192,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 
 	// Test for Anonymous/unsigned http request.
 	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make any difference.
-	anonReq, err := newTestRequest("GET", getBucketLocationURL("", bucketName), 0, nil)
+	anonReq, err := newTestRequest(http.MethodGet, getBucketLocationURL("", bucketName), 0, nil)
 	if err != nil {
 		t.Fatalf("MinIO %s: Failed to create an anonymous request.", instanceType)
 	}
@@ -208,7 +208,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 
 	nilBucket := "dummy-bucket"
-	nilReq, err := newTestRequest("GET", getBucketLocationURL("", nilBucket), 0, nil)
+	nilReq, err := newTestRequest(http.MethodGet, getBucketLocationURL("", nilBucket), 0, nil)
 
 	if err != nil {
 		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -265,7 +265,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for HEAD bucket.
-		req, err := newTestSignedRequestV4("HEAD", getHEADBucketURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		req, err := newTestSignedRequestV4(http.MethodHead, getHEADBucketURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for HeadBucketHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -280,7 +280,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		reqV2, err := newTestSignedRequestV2("HEAD", getHEADBucketURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		reqV2, err := newTestSignedRequestV2(http.MethodHead, getHEADBucketURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
@@ -295,7 +295,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 	}
 
 	// Test for Anonymous/unsigned http request.
-	anonReq, err := newTestRequest("HEAD", getHEADBucketURL("", bucketName), 0, nil)
+	anonReq, err := newTestRequest(http.MethodHead, getHEADBucketURL("", bucketName), 0, nil)
 
 	if err != nil {
 		t.Fatalf("MinIO %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
@@ -313,7 +313,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 
 	nilBucket := "dummy-bucket"
-	nilReq, err := newTestRequest("HEAD", getHEADBucketURL("", nilBucket), 0, nil)
+	nilReq, err := newTestRequest(http.MethodHead, getHEADBucketURL("", nilBucket), 0, nil)
 
 	if err != nil {
 		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -482,7 +482,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 
 		// construct HTTP request for List multipart uploads endpoint.
 		u := getListMultipartUploadsURLWithParams("", testCase.bucket, testCase.prefix, testCase.keyMarker, testCase.uploadIDMarker, testCase.delimiter, testCase.maxUploads)
-		req, gerr := newTestSignedRequestV4("GET", u, 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		req, gerr := newTestSignedRequestV4(http.MethodGet, u, 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if gerr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for ListMultipartUploadsHandler: <ERROR> %v", i+1, instanceType, gerr)
 		}
@@ -499,7 +499,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 		// construct HTTP request for PUT bucket policy endpoint.
 
 		// verify response for V2 signed HTTP request.
-		reqV2, err := newTestSignedRequestV2("GET", u, 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		reqV2, err := newTestSignedRequestV2(http.MethodGet, u, 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -516,7 +516,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 
 	// construct HTTP request for List multipart uploads endpoint.
 	u := getListMultipartUploadsURLWithParams("", bucketName, "", "", "", "", "")
-	req, err := newTestSignedRequestV4("GET", u, 0, nil, "", "", nil) // Generate an anonymous request.
+	req, err := newTestSignedRequestV4(http.MethodGet, u, 0, nil, "", "", nil) // Generate an anonymous request.
 	if err != nil {
 		t.Fatalf("Test %s: Failed to create HTTP request for ListMultipartUploadsHandler: <ERROR> %v", instanceType, err)
 	}
@@ -530,7 +530,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	url := getListMultipartUploadsURLWithParams("", testCases[6].bucket, testCases[6].prefix, testCases[6].keyMarker,
 		testCases[6].uploadIDMarker, testCases[6].delimiter, testCases[6].maxUploads)
 	// Test for Anonymous/unsigned http request.
-	anonReq, err := newTestRequest("GET", url, 0, nil)
+	anonReq, err := newTestRequest(http.MethodGet, url, 0, nil)
 	if err != nil {
 		t.Fatalf("MinIO %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
 			instanceType, bucketName, err)
@@ -550,7 +550,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	url = getListMultipartUploadsURLWithParams("", nilBucket, "dummy-prefix", testCases[6].keyMarker,
 		testCases[6].uploadIDMarker, testCases[6].delimiter, testCases[6].maxUploads)
 
-	nilReq, err := newTestRequest("GET", url, 0, nil)
+	nilReq, err := newTestRequest(http.MethodGet, url, 0, nil)
 
 	if err != nil {
 		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -596,7 +596,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 	for i, testCase := range testCases {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		req, lerr := newTestSignedRequestV4("GET", getListBucketURL(""), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		req, lerr := newTestSignedRequestV4(http.MethodGet, getListBucketURL(""), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 		if lerr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for ListBucketsHandler: <ERROR> %v", i+1, instanceType, lerr)
 		}
@@ -613,7 +613,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 		// construct HTTP request for PUT bucket policy endpoint.
 
 		// verify response for V2 signed HTTP request.
-		reqV2, err := newTestSignedRequestV2("GET", getListBucketURL(""), 0, nil, testCase.accessKey, testCase.secretKey, nil)
+		reqV2, err := newTestSignedRequestV2(http.MethodGet, getListBucketURL(""), 0, nil, testCase.accessKey, testCase.secretKey, nil)
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
@@ -628,7 +628,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 
 	// Test for Anonymous/unsigned http request.
 	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make a difference.
-	anonReq, err := newTestRequest("GET", getListBucketURL(""), 0, nil)
+	anonReq, err := newTestRequest(http.MethodGet, getListBucketURL(""), 0, nil)
 
 	if err != nil {
 		t.Fatalf("MinIO %s: Failed to create an anonymous request.", instanceType)
@@ -644,7 +644,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
 
-	nilReq, err := newTestRequest("GET", getListBucketURL(""), 0, nil)
+	nilReq, err := newTestRequest(http.MethodGet, getListBucketURL(""), 0, nil)
 
 	if err != nil {
 		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
@@ -808,10 +808,10 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 		// Generate a signed or anonymous request based on the testCase
 		if testCase.accessKey != "" {
-			req, err = newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", bucketName),
+			req, err = newTestSignedRequestV4(http.MethodPost, getDeleteMultipleObjectsURL("", bucketName),
 				int64(len(testCase.objects)), bytes.NewReader(testCase.objects), testCase.accessKey, testCase.secretKey, nil)
 		} else {
-			req, err = newTestRequest("POST", getDeleteMultipleObjectsURL("", bucketName),
+			req, err = newTestRequest(http.MethodPost, getDeleteMultipleObjectsURL("", bucketName),
 				int64(len(testCase.objects)), bytes.NewReader(testCase.objects))
 		}
 
@@ -850,7 +850,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	nilBucket := "dummy-bucket"
 	nilObject := ""
 
-	nilReq, err := newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", nilBucket), 0, nil, "", "", nil)
+	nilReq, err := newTestSignedRequestV4(http.MethodPost, getDeleteMultipleObjectsURL("", nilBucket), 0, nil, "", "", nil)
 	if err != nil {
 		t.Errorf("MinIO %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}

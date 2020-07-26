@@ -805,7 +805,7 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 	}
 
 	encrypted = crypto.IsEncrypted(info.UserDefined)
-	if !encrypted && crypto.SSEC.IsRequested(headers) {
+	if !encrypted && crypto.SSEC.IsRequested(headers) && r.Header.Get(xhttp.AmzCopySource) == "" {
 		return false, errInvalidEncryptionParameters
 	}
 

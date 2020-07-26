@@ -183,6 +183,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
 				}
+
 				if err = globalDNSConfig.Put(args.BucketName); err != nil {
 					objectAPI.DeleteBucket(ctx, args.BucketName, false)
 					return toJSONError(ctx, err)
@@ -201,6 +202,15 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	}
 
 	reply.UIVersion = browser.UIVersion
+
+	sendEvent(eventArgs{
+		EventName:  event.BucketCreated,
+		BucketName: args.BucketName,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       handlers.GetSourceIP(r),
+	})
+
 	return nil
 }
 
@@ -274,6 +284,14 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 			return toJSONError(ctx, err)
 		}
 	}
+
+	sendEvent(eventArgs{
+		EventName:  event.BucketRemoved,
+		BucketName: args.BucketName,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       handlers.GetSourceIP(r),
+	})
 
 	return nil
 }
@@ -697,6 +715,7 @@ next:
 
 			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, opts)
 			logger.LogIf(ctx, err)
+			continue
 		}
 
 		if authErr == errNoAuthToken {
@@ -1015,6 +1034,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	size := r.ContentLength
 	if size < 0 {
 		writeWebErrorResponse(w, errSizeUnspecified)
+		return
+	}
+
+	if err := enforceBucketQuota(ctx, bucket, size); err != nil {
+		writeWebErrorResponse(w, err)
 		return
 	}
 
@@ -2182,6 +2206,8 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 	switch err.(type) {
 	case StorageFull:
 		return getAPIError(ErrStorageFull)
+	case BucketQuotaExceeded:
+		return getAPIError(ErrAdminBucketQuotaExceeded)
 	case BucketNotFound:
 		return getAPIError(ErrNoSuchBucket)
 	case BucketNotEmpty:

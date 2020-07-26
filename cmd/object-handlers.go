@@ -44,6 +44,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
@@ -979,6 +980,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		length = actualSize
 	}
+
 	if !cpSrcDstSame {
 		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1153,7 +1155,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if objTags != "" {
 		srcInfo.UserDefined[xhttp.AmzObjectTagging] = objTags
 	}
-
 	srcInfo.UserDefined = objectlock.FilterObjectLockMetadata(srcInfo.UserDefined, true, true)
 	retPerms := isPutActionAllowed(getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectRetentionAction)
 	holdPerms := isPutActionAllowed(getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectLegalHoldAction)
@@ -1175,6 +1176,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
+	}
+	if globalBucketReplicationSys.mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()) {
+		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
 	// Store the preserved compression metadata.
@@ -1254,7 +1258,17 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
-
+	if globalBucketReplicationSys.mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
+		defer replicateObject(ctx, dstBucket, dstObject, objInfo.VersionID, objectAPI, &eventArgs{
+			EventName:    event.ObjectCreatedCopy,
+			BucketName:   dstBucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		}, false)
+	}
 	setPutObjHeaders(w, objInfo, false)
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the x-amz-copy-source-version-id header key to be literally
@@ -1497,7 +1511,15 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, metadata, "") {
+		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
+	}
+	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
+		if s3Err = isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.ReplicateObjectAction); s3Err != ErrNone {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
 	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
@@ -1552,7 +1574,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-
+	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, metadata, "") {
+		defer replicateObject(ctx, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+			EventName:    event.ObjectCreatedPut,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		}, false)
+	}
 	setPutObjHeaders(w, objInfo, false)
 
 	writeSuccessResponseHeadersOnly(w)
@@ -1664,7 +1696,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, metadata, "") {
+		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
+	}
 	// We need to preserve the encryption headers set in EncryptRequest,
 	// so we do not want to override them, copy them instead.
 	for k, v := range encMetadata {
@@ -1860,10 +1894,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 	}
+
 	if err := enforceBucketQuota(ctx, dstBucket, actualPartSize); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	// Special care for CopyObjectPart
 	if partRangeErr := checkCopyPartRangeWithSize(rs, actualPartSize); partRangeErr != nil {
 		writeCopyPartErr(ctx, w, partRangeErr, r.URL, guessIsBrowserReq(r))
@@ -2611,7 +2647,17 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-
+	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
+		defer replicateObject(ctx, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+			EventName:    event.ObjectCreatedCompleteMultipartUpload,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		}, false)
+	}
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 

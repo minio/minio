@@ -103,6 +103,8 @@ func toStorageErr(err error) error {
 		return io.ErrUnexpectedEOF
 	case errDiskStale.Error():
 		return errDiskNotFound
+	case errDiskNotFound.Error():
+		return errDiskNotFound
 	}
 	return err
 }

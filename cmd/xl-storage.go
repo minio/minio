@@ -414,6 +414,9 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			}
 		}
 
+		for _, version := range fivs.Versions {
+			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
+		}
 		return totalSize, nil
 	})
 
@@ -509,7 +512,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 		if os.IsNotExist(err) {
 			_, err = os.Stat(s.diskPath)
 			if err == nil {
-				// Disk is present by missing `format.json`
+				// Disk is present but missing `format.json`
 				return "", errUnformattedDisk
 			}
 			if os.IsNotExist(err) {
@@ -2112,7 +2115,7 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 		}
 		legacyDataPath := pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 		// legacy data dir means its old content, honor system umask.
-		if err = os.Mkdir(legacyDataPath, 0777); err != nil {
+		if err = os.MkdirAll(legacyDataPath, 0777); err != nil {
 			if isSysErrIO(err) {
 				return errFaultyDisk
 			}
@@ -2133,10 +2136,10 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 				}
 				return osErrToFileErr(err)
 			}
-
-			// Sync all the metadata operations once renames are done.
-			globalSync()
 		}
+
+		// Sync all the metadata operations once renames are done.
+		globalSync()
 	}
 
 	var oldDstDataPath string

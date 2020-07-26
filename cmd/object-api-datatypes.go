@@ -22,6 +22,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -181,6 +182,7 @@ type ObjectInfo struct {
 	// Specify object storage class
 	StorageClass string
 
+	ReplicationStatus replication.StatusType
 	// User-Defined metadata
 	UserDefined map[string]string
 

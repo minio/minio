@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,42 @@ import (
 	"testing"
 	"time"
 )
+
+// Test if tree walker go-routine is removed from the pool after timeout
+// and that is available in the pool before the timeout.
+func TestMergeWalkPoolVersionsBasic(t *testing.T) {
+	// Create a treeWalkPool
+	tw := NewMergeWalkVersionsPool(1 * time.Second)
+
+	// Create sample params
+	params := listParams{
+		bucket: "test-bucket",
+	}
+
+	endWalkCh := make(chan struct{})
+	// Add a treeWalk to the pool
+	tw.Set(params, []FileInfoVersionsCh{}, endWalkCh)
+
+	// Wait for treeWalkPool timeout to happen
+	<-time.After(2 * time.Second)
+	if c1, _ := tw.Release(params); c1 != nil {
+		t.Error("treeWalk go-routine must have been freed")
+	}
+
+	// Add the treeWalk back to the pool
+	endWalkCh = make(chan struct{})
+	tw.Set(params, []FileInfoVersionsCh{}, endWalkCh)
+
+	// Release the treeWalk before timeout
+	select {
+	case <-time.After(1 * time.Second):
+		break
+	default:
+		if c1, _ := tw.Release(params); c1 == nil {
+			t.Error("treeWalk go-routine got freed before timeout")
+		}
+	}
+}
 
 // Test if tree walker go-routine is removed from the pool after timeout
 // and that is available in the pool before the timeout.
