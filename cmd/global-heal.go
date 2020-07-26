@@ -29,8 +29,6 @@ const (
 	// sleep for an hour after a lock timeout
 	// before retrying to acquire lock again.
 	leaderLockTimeoutSleepInterval = time.Hour
-	// heal entire namespace once in 30 days
-	healInterval = 30 * 24 * time.Hour
 )
 
 var leaderLockTimeout = newDynamicTimeout(30*time.Second, time.Minute)
