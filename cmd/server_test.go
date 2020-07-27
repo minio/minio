@@ -32,6 +32,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/bucket/policy"
 )
@@ -73,6 +74,7 @@ func verifyError(c *check, response *http.Response, code, description string, st
 
 func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.SetUpSuite(c)
+	suite.TestCors(c)
 	suite.TestObjectDir(c)
 	suite.TestBucketPolicy(c)
 	suite.TestDeleteBucket(c)
@@ -185,6 +187,54 @@ func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *check) {
 
 	c.Assert(err, nil)
 	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
+}
+
+func (s *TestSuiteCommon) TestCors(c *check) {
+	expectedMap := http.Header{}
+	expectedMap.Add("Access-Control-Allow-Credentials", "true")
+	expectedMap.Add("Access-Control-Allow-Origin", "http://foobar.com")
+	expectedMap["Access-Control-Expose-Headers"] = []string{
+		"Date",
+		"Etag",
+		"Server",
+		"Connection",
+		"Accept-Ranges",
+		"Content-Range",
+		"Content-Encoding",
+		"Content-Length",
+		"Content-Type",
+		"Content-Disposition",
+		"Last-Modified",
+		"Content-Language",
+		"Cache-Control",
+		"Retry-After",
+		"X-Amz-Bucket-Region",
+		"Expires",
+		"X-Amz*",
+		"X-Amz*",
+		"*",
+	}
+	expectedMap.Add("Vary", "Origin")
+
+	req, _ := http.NewRequest(http.MethodOptions, s.endPoint, nil)
+	req.Header.Add("Origin", "http://foobar.com")
+	res, err := s.client.Do(req)
+	if err != nil {
+		c.Fatal(err)
+	}
+
+	for k := range expectedMap {
+		if v, ok := res.Header[k]; !ok {
+			c.Errorf("Expected key %s missing from %v", k, res.Header)
+		} else {
+			expectedSet := set.CreateStringSet(expectedMap[k]...)
+			gotSet := set.CreateStringSet(strings.Split(v[0], ", ")...)
+			if !expectedSet.Equals(gotSet) {
+				c.Errorf("Expected value %v, got %v", strings.Join(expectedMap[k], ", "), v)
+			}
+		}
+	}
+
 }
 
 func (s *TestSuiteCommon) TestObjectDir(c *check) {
