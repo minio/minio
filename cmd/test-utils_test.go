@@ -327,7 +327,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	// Run TestServer.
-	testServer.Server = httptest.NewUnstartedServer(httpHandler)
+	testServer.Server = httptest.NewUnstartedServer(criticalErrorHandler{corsHandler(httpHandler)})
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
