@@ -328,7 +328,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		policyName = globalIAMSys.currentPolicies(strings.Join(policySet.ToSlice(), ","))
 	}
 
-	if policyName == "" {
+	if policyName == "" && globalPolicyOPA == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
 		return
 	}

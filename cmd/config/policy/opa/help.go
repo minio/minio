@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2019,2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,12 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         URL,
-			Description: `OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"`,
+			Description: `[DEPRECATED] OPA HTTP(s) endpoint e.g. "http://localhost:8181/v1/data/httpapi/authz/allow"`,
 			Type:        "url",
 		},
 		config.HelpKV{
 			Key:         AuthToken,
-			Description: "authorization token for OPA endpoint",
+			Description: "[DEPRECATED] authorization token for OPA endpoint",
 			Optional:    true,
 			Type:        "string",
 		},
