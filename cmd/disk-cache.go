@@ -684,11 +684,13 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	c.cacheStats.GetDiskStats = func() []CacheDiskStats {
 		cacheDiskStats := make([]CacheDiskStats, len(c.cache))
 		for i := range c.cache {
-			cacheDiskStats[i] = CacheDiskStats{
-				Dir: c.cache[i].stats.Dir,
+			dcache := c.cache[i]
+			cacheDiskStats[i] = CacheDiskStats{}
+			if dcache != nil {
+				cacheDiskStats[i].Dir = dcache.stats.Dir
+				atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&dcache.stats.UsageState))
+				atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&dcache.stats.UsagePercent))
 			}
-			atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&c.cache[i].stats.UsageState))
-			atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&c.cache[i].stats.UsagePercent))
 		}
 		return cacheDiskStats
 	}
@@ -712,7 +714,9 @@ func (c *cacheObjects) gc(ctx context.Context) {
 				continue
 			}
 			for _, dcache := range c.cache {
-				dcache.triggerGC <- struct{}{}
+				if dcache != nil {
+					dcache.triggerGC <- struct{}{}
+				}
 			}
 		}
 	}
