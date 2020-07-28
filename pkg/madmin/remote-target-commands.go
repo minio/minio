@@ -20,11 +20,11 @@ package madmin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/minio/minio/pkg/auth"
 )
@@ -33,13 +33,53 @@ import (
 type ArnType string
 
 const (
-	// Replication specifies a ARN type of replication
-	Replication ArnType = "replication"
+	// ReplicationArn specifies a ARN type of replication
+	ReplicationArn ArnType = "replica"
 )
 
 // IsValid returns true if ARN type is replication
 func (t ArnType) IsValid() bool {
-	return t == Replication
+	return t == ReplicationArn
+}
+
+// ARN is a struct to define arn.
+type ARN struct {
+	Type   ArnType
+	ID     string
+	Region string
+	Bucket string
+}
+
+// Empty returns true if arn struct is empty
+func (a ARN) Empty() bool {
+	return !a.Type.IsValid()
+}
+func (a ARN) String() string {
+	return fmt.Sprintf("arn:minio:%s:%s:%s:%s", a.Type, a.Region, a.ID, a.Bucket)
+}
+
+// ParseARN return ARN struct from string in arn format.
+func ParseARN(s string) (*ARN, error) {
+	// ARN must be in the format of arn:minio:<Type>:<REGION>:<ID>:<remote-bucket>
+	if !strings.HasPrefix(s, "arn:minio:") {
+		return nil, fmt.Errorf("Invalid ARN %s", s)
+	}
+
+	tokens := strings.Split(s, ":")
+	if len(tokens) != 6 {
+		return nil, fmt.Errorf("Invalid ARN %s", s)
+	}
+
+	if tokens[4] == "" || tokens[5] == "" {
+		return nil, fmt.Errorf("Invalid ARN %s", s)
+	}
+
+	return &ARN{
+		Type:   ArnType(tokens[2]),
+		Region: tokens[3],
+		ID:     tokens[4],
+		Bucket: tokens[5],
+	}, nil
 }
 
 // BucketTarget represents the target bucket and site association.
@@ -52,9 +92,10 @@ type BucketTarget struct {
 	API          string            `json:"api,omitempty"`
 	Arn          string            `json:"arn,omitempty"`
 	Type         ArnType           `json:"type"`
+	Region       string            `json:"omitempty"`
 }
 
-// URL returns replication target url
+// URL returns target url
 func (t BucketTarget) URL() string {
 	scheme := "http"
 	if t.Secure {
@@ -72,50 +113,67 @@ func (t *BucketTarget) String() string {
 	return fmt.Sprintf("%s %s", t.Endpoint, t.TargetBucket)
 }
 
-// GetBucketTarget - gets target for this bucket
-func (adm *AdminClient) GetBucketTarget(ctx context.Context, bucket string) (target BucketTarget, err error) {
+// BucketTargets represents a slice of bucket targets by type and endpoint
+type BucketTargets struct {
+	Targets []BucketTarget
+}
+
+// Empty returns true if struct is empty.
+func (t BucketTargets) Empty() bool {
+	if len(t.Targets) == 0 {
+		return true
+	}
+	empty := true
+	for _, t := range t.Targets {
+		if !t.Empty() {
+			return false
+		}
+	}
+	return empty
+}
+
+// ListBucketTargets - gets target(s) for this bucket
+func (adm *AdminClient) ListBucketTargets(ctx context.Context, bucket, arnType string) (targets []BucketTarget, err error) {
 	queryValues := url.Values{}
 	queryValues.Set("bucket", bucket)
+	queryValues.Set("type", arnType)
 
 	reqData := requestData{
-		relPath:     adminAPIPrefix + "/get-bucket-target",
+		relPath:     adminAPIPrefix + "/list-bucket-targets",
 		queryValues: queryValues,
 	}
 
-	// Execute GET on /minio/admin/v3/get-bucket-target
+	// Execute GET on /minio/admin/v3/list-bucket-targets
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
-		return target, err
+		return targets, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return target, httpRespToErrorResponse(resp)
+		return targets, httpRespToErrorResponse(resp)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return target, err
+		return targets, err
 	}
-	if err = json.Unmarshal(b, &target); err != nil {
-		return target, err
+	if err = json.Unmarshal(b, &targets); err != nil {
+		return targets, err
 	}
-	if target.Empty() {
-		return target, errors.New("No bucket target configured")
-	}
-	return target, nil
+	return targets, nil
 }
 
 // SetBucketTarget sets up a remote target for this bucket
-func (adm *AdminClient) SetBucketTarget(ctx context.Context, bucket string, target *BucketTarget) error {
+func (adm *AdminClient) SetBucketTarget(ctx context.Context, bucket string, target *BucketTarget) (string, error) {
 	data, err := json.Marshal(target)
 	if err != nil {
-		return err
+		return "", err
 	}
 	encData, err := EncryptData(adm.getSecretKey(), data)
 	if err != nil {
-		return err
+		return "", err
 	}
 	queryValues := url.Values{}
 	queryValues.Set("bucket", bucket)
@@ -126,52 +184,49 @@ func (adm *AdminClient) SetBucketTarget(ctx context.Context, bucket string, targ
 		content:     encData,
 	}
 
-	// Execute PUT on /minio/admin/v3/set-bucket-replication-target to set a replication target for this bucket.
+	// Execute PUT on /minio/admin/v3/set-bucket-target to set a target for this bucket of specific arn type.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
+	defer closeResponse(resp)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", httpRespToErrorResponse(resp)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	var arn string
+	if err = json.Unmarshal(b, &arn); err != nil {
+		return "", err
+	}
+	return arn, nil
+}
+
+// RemoveBucketTarget removes a remote target associated with particular ARN for this bucket
+func (adm *AdminClient) RemoveBucketTarget(ctx context.Context, bucket, arn string) error {
+	queryValues := url.Values{}
+	queryValues.Set("bucket", bucket)
+	queryValues.Set("arn", arn)
+
+	reqData := requestData{
+		relPath:     adminAPIPrefix + "/remove-bucket-target",
+		queryValues: queryValues,
+	}
+
+	// Execute PUT on /minio/admin/v3/remove-bucket-target to remove a target for this bucket
+	// with specific ARN
+	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 	defer closeResponse(resp)
 	if err != nil {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusNoContent {
 		return httpRespToErrorResponse(resp)
 	}
-
 	return nil
-}
-
-// GetBucketTargetARN - gets Arn for this remote target
-func (adm *AdminClient) GetBucketTargetARN(ctx context.Context, rURL string) (arn string, err error) {
-	queryValues := url.Values{}
-	queryValues.Set("url", rURL)
-
-	reqData := requestData{
-		relPath:     adminAPIPrefix + "/get-bucket-target-arn",
-		queryValues: queryValues,
-	}
-
-	// Execute GET on /minio/admin/v3/list-bucket-target-arn
-	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return arn, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return arn, httpRespToErrorResponse(resp)
-	}
-
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return arn, err
-	}
-	if err = json.Unmarshal(b, &arn); err != nil {
-		return arn, err
-	}
-	if arn == "" {
-		return arn, fmt.Errorf("Missing target ARN")
-	}
-	return arn, nil
 }

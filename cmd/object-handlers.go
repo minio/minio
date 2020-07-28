@@ -1177,7 +1177,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if globalBucketReplicationSys.mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()) {
+	if mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()) {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
@@ -1258,7 +1258,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
-	if globalBucketReplicationSys.mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
+	if mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
 		defer replicateObject(ctx, dstBucket, dstObject, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedCopy,
 			BucketName:   dstBucket,
@@ -1511,7 +1511,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, metadata, "") {
+	if mustReplicate(ctx, r, bucket, object, metadata, "") {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
 	}
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
@@ -1574,7 +1574,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, metadata, "") {
+	if mustReplicate(ctx, r, bucket, object, metadata, "") {
 		defer replicateObject(ctx, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
@@ -1696,7 +1696,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, metadata, "") {
+	if mustReplicate(ctx, r, bucket, object, metadata, "") {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
 	}
 	// We need to preserve the encryption headers set in EncryptRequest,
@@ -2647,7 +2647,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-	if globalBucketReplicationSys.mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
+	if mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
 		defer replicateObject(ctx, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedCompleteMultipartUpload,
 			BucketName:   bucket,

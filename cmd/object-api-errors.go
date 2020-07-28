@@ -362,11 +362,39 @@ func (e BucketReplicationDestinationNotFound) Error() string {
 	return "Destination bucket does not exist: " + e.Bucket
 }
 
-// BucketReplicationTargetNotFound replication target does not exist.
-type BucketReplicationTargetNotFound GenericError
+// BucketRemoteTargetNotFound remote target does not exist.
+type BucketRemoteTargetNotFound GenericError
 
-func (e BucketReplicationTargetNotFound) Error() string {
-	return "Replication target not found: " + e.Bucket
+func (e BucketRemoteTargetNotFound) Error() string {
+	return "Remote target not found: " + e.Bucket
+}
+
+// BucketRemoteAlreadyExists remote already exists for this target type.
+type BucketRemoteAlreadyExists GenericError
+
+func (e BucketRemoteAlreadyExists) Error() string {
+	return "Remote already exists for this bucket: " + e.Bucket
+}
+
+// BucketRemoteArnTypeInvalid arn type for remote is not valid.
+type BucketRemoteArnTypeInvalid GenericError
+
+func (e BucketRemoteArnTypeInvalid) Error() string {
+	return "Remote ARN type not valid: " + e.Bucket
+}
+
+// BucketRemoteArnInvalid arn needs to be specified.
+type BucketRemoteArnInvalid GenericError
+
+func (e BucketRemoteArnInvalid) Error() string {
+	return "Remote ARN has invalid format: " + e.Bucket
+}
+
+// BucketRemoteRemoveDisallowed when replication configuration exists
+type BucketRemoteRemoveDisallowed GenericError
+
+func (e BucketRemoteRemoveDisallowed) Error() string {
+	return "Replication configuration exists with this ARN:" + e.Bucket
 }
 
 // BucketReplicationTargetNotVersioned replication target does not have versioning enabled.

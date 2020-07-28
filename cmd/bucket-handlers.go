@@ -1271,7 +1271,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
 		return
 	}
-	sameTarget, err := globalBucketReplicationSys.validateDestination(ctx, bucket, replicationConfig)
+	sameTarget, err := validateReplicationDestination(ctx, bucket, replicationConfig)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
