@@ -92,7 +92,7 @@ func initHelp() {
 		},
 		config.HelpKV{
 			Key:         config.PolicyOPASubSys,
-			Description: "enable external OPA for policy enforcement",
+			Description: "[DEPRECATED] enable external OPA for policy enforcement",
 		},
 		config.HelpKV{
 			Key:         config.KmsVaultSubSys,
