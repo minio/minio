@@ -156,8 +156,8 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		meta.QuotaConfigJSON = configData
 	case bucketReplicationConfig:
 		meta.ReplicationConfigXML = configData
-	case bucketReplicationTargetsFile:
-		meta.ReplicationTargetsConfigJSON = configData
+	case bucketTargetsFile:
+		meta.BucketTargetsConfigJSON = configData
 	default:
 		return fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
@@ -342,15 +342,15 @@ func (sys *BucketMetadataSys) GetReplicationConfig(ctx context.Context, bucket s
 
 // GetReplicationTargetConfig returns configured bucket replication target for this bucket
 // The returned object may not be modified.
-func (sys *BucketMetadataSys) GetReplicationTargetConfig(bucket string) (*madmin.BucketReplicationTarget, error) {
+func (sys *BucketMetadataSys) GetReplicationTargetConfig(bucket string) (*madmin.BucketTarget, error) {
 	meta, err := sys.GetConfig(bucket)
 	if err != nil {
 		return nil, err
 	}
-	if meta.replicationTargetConfig == nil {
+	if meta.bucketTargetConfig == nil {
 		return nil, BucketReplicationTargetNotFound{Bucket: bucket}
 	}
-	return meta.replicationTargetConfig, nil
+	return meta.bucketTargetConfig, nil
 }
 
 // GetConfig returns a specific configuration from the bucket metadata.
