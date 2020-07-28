@@ -378,6 +378,10 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	if globalIsGateway {
+		return
+	}
+
 	// Crawler disabled, nothing to do.
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) != config.EnableOn {
 		return
