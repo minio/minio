@@ -16,6 +16,8 @@
 
 package dsync
 
+import "context"
+
 // LockArgs is minimal required values for any dsync compatible lock operation.
 type LockArgs struct {
 	// Unique ID of lock/unlock request.
@@ -34,12 +36,12 @@ type NetLocker interface {
 	// Do read lock for given LockArgs.  It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of lock request operation.
-	RLock(args LockArgs) (bool, error)
+	RLock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Do write lock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
 	// * an error on failure of lock request operation.
-	Lock(args LockArgs) (bool, error)
+	Lock(ctx context.Context, args LockArgs) (bool, error)
 
 	// Do read unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
@@ -52,7 +54,7 @@ type NetLocker interface {
 	Unlock(args LockArgs) (bool, error)
 
 	// Expired returns if current lock args has expired.
-	Expired(args LockArgs) (bool, error)
+	Expired(ctx context.Context, args LockArgs) (bool, error)
 
 	// Returns underlying endpoint of this lock client instance.
 	String() string

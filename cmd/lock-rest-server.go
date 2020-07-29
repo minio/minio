@@ -96,7 +96,7 @@ func (l *lockRESTServer) LockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	success, err := l.ll.Lock(args)
+	success, err := l.ll.Lock(r.Context(), args)
 	if err == nil && !success {
 		err = errLockConflict
 	}
@@ -141,7 +141,7 @@ func (l *lockRESTServer) RLockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	success, err := l.ll.RLock(args)
+	success, err := l.ll.RLock(r.Context(), args)
 	if err == nil && !success {
 		err = errLockConflict
 	}
@@ -185,20 +185,14 @@ func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	l.ll.mutex.Lock()
-	defer l.ll.mutex.Unlock()
-
-	// Lock found, proceed to verify if belongs to given uid.
-	for _, resource := range args.Resources {
-		if lri, ok := l.ll.lockMap[resource]; ok {
-			// Check whether uid is still active
-			for _, entry := range lri {
-				if entry.UID == args.UID {
-					l.writeErrorResponse(w, errLockNotExpired)
-					return
-				}
-			}
-		}
+	expired, err := l.ll.Expired(r.Context(), args)
+	if err != nil {
+		l.writeErrorResponse(w, err)
+		return
+	}
+	if !expired {
+		l.writeErrorResponse(w, errLockNotExpired)
+		return
 	}
 }
 
@@ -219,7 +213,10 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 			for idx := range lriArray {
 				// Check whether enough time has gone by since last check
 				if time.Since(lriArray[idx].TimeLastCheck) >= interval {
-					rslt = append(rslt, nameLockRequesterInfoPair{name: name, lri: lriArray[idx]})
+					rslt = append(rslt, nameLockRequesterInfoPair{
+						name: name,
+						lri:  lriArray[idx],
+					})
 					lriArray[idx].TimeLastCheck = UTCNow()
 				}
 			}
@@ -254,12 +251,15 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 					continue
 				}
 
+				ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
+
 				// Call back to original server verify whether the lock is
 				// still active (based on name & uid)
-				expired, err := c.Expired(dsync.LockArgs{
+				expired, err := c.Expired(ctx, dsync.LockArgs{
 					UID:       nlrip.lri.UID,
 					Resources: []string{nlrip.name},
 				})
+				cancel()
 				if err != nil {
 					nlripsMap[nlrip.name]++
 					c.Close()
