@@ -38,6 +38,13 @@ func mustGetRequestID(t time.Time) string {
 	return fmt.Sprintf("%X", t.UnixNano())
 }
 
+// setEventStreamHeaders to allow proxies to avoid buffering proxy responses
+func setEventStreamHeaders(w http.ResponseWriter) {
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	w.Header().Set(xhttp.CacheControl, "no-cache") // nginx to turn off buffering
+	w.Header().Set("X-Accel-Buffering", "no")      // nginx to turn off buffering
+}
+
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	w.Header().Set(xhttp.ServerInfo, "MinIO/"+ReleaseTag)
