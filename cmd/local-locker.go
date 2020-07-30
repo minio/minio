@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -71,30 +72,35 @@ func (l *localLocker) canTakeLock(resources ...string) bool {
 	return noLkCnt == len(resources)
 }
 
-func (l *localLocker) Lock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
+		l.mutex.Lock()
+		defer l.mutex.Unlock()
 
-	if !l.canTakeLock(args.Resources...) {
-		// Not all locks can be taken on resources,
-		// reject it completely.
-		return false, nil
-	}
-
-	// No locks held on the all resources, so claim write
-	// lock on all resources at once.
-	for _, resource := range args.Resources {
-		l.lockMap[resource] = []lockRequesterInfo{
-			{
-				Writer:        true,
-				Source:        args.Source,
-				UID:           args.UID,
-				Timestamp:     UTCNow(),
-				TimeLastCheck: UTCNow(),
-			},
+		if !l.canTakeLock(args.Resources...) {
+			// Not all locks can be taken on resources,
+			// reject it completely.
+			return false, nil
 		}
+
+		// No locks held on the all resources, so claim write
+		// lock on all resources at once.
+		for _, resource := range args.Resources {
+			l.lockMap[resource] = []lockRequesterInfo{
+				{
+					Writer:        true,
+					Source:        args.Source,
+					UID:           args.UID,
+					Timestamp:     UTCNow(),
+					TimeLastCheck: UTCNow(),
+				},
+			}
+		}
+		return true, nil
 	}
-	return true, nil
 }
 
 func (l *localLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
@@ -138,28 +144,33 @@ func (l *localLocker) removeEntry(name, uid string, lri *[]lockRequesterInfo) bo
 	return false
 }
 
-func (l *localLocker) RLock(args dsync.LockArgs) (reply bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	lrInfo := lockRequesterInfo{
-		Writer:        false,
-		Source:        args.Source,
-		UID:           args.UID,
-		Timestamp:     UTCNow(),
-		TimeLastCheck: UTCNow(),
-	}
-	resource := args.Resources[0]
-	if lri, ok := l.lockMap[resource]; ok {
-		if reply = !isWriteLock(lri); reply {
-			// Unless there is a write lock
-			l.lockMap[resource] = append(l.lockMap[resource], lrInfo)
+func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
+		l.mutex.Lock()
+		defer l.mutex.Unlock()
+		lrInfo := lockRequesterInfo{
+			Writer:        false,
+			Source:        args.Source,
+			UID:           args.UID,
+			Timestamp:     UTCNow(),
+			TimeLastCheck: UTCNow(),
 		}
-	} else {
-		// No locks held on the given name, so claim (first) read lock
-		l.lockMap[resource] = []lockRequesterInfo{lrInfo}
-		reply = true
+		resource := args.Resources[0]
+		if lri, ok := l.lockMap[resource]; ok {
+			if reply = !isWriteLock(lri); reply {
+				// Unless there is a write lock
+				l.lockMap[resource] = append(l.lockMap[resource], lrInfo)
+			}
+		} else {
+			// No locks held on the given name, so claim (first) read lock
+			l.lockMap[resource] = []lockRequesterInfo{lrInfo}
+			reply = true
+		}
+		return reply, nil
 	}
-	return reply, nil
 }
 
 func (l *localLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
@@ -202,22 +213,27 @@ func (l *localLocker) IsOnline() bool {
 	return true
 }
 
-func (l *localLocker) Expired(args dsync.LockArgs) (expired bool, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
+func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	default:
+		l.mutex.Lock()
+		defer l.mutex.Unlock()
 
-	// Lock found, proceed to verify if belongs to given uid.
-	for _, resource := range args.Resources {
-		if lri, ok := l.lockMap[resource]; ok {
-			// Check whether uid is still active
-			for _, entry := range lri {
-				if entry.UID == args.UID {
-					return false, nil
+		// Lock found, proceed to verify if belongs to given uid.
+		for _, resource := range args.Resources {
+			if lri, ok := l.lockMap[resource]; ok {
+				// Check whether uid is still active
+				for _, entry := range lri {
+					if entry.UID == args.UID {
+						return false, nil
+					}
 				}
 			}
 		}
+		return true, nil
 	}
-	return true, nil
 }
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.

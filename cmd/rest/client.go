@@ -85,10 +85,20 @@ const (
 	querySep = "?"
 )
 
+type restError string
+
+func (e restError) Error() string {
+	return string(e)
+}
+
+func (e restError) Timeout() bool {
+	return true
+}
+
 // CallWithContext - make a REST call with context.
 func (c *Client) CallWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	if !c.IsOnline() {
-		return nil, &NetworkError{Err: errors.New("remote server offline")}
+		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server offline")}}
 	}
 	req, err := http.NewRequest(http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
 	if err != nil {

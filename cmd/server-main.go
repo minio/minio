@@ -229,7 +229,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 3*time.Second)); err != nil {
+		if err = txnLk.GetLock(newDynamicTimeout(3*time.Second, 3*time.Second)); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
