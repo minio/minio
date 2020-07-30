@@ -738,12 +738,22 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	srcSet := s.getHashedSet(srcObject)
 	dstSet := s.getHashedSet(dstObject)
 
+	cpSrcDstSame := srcSet == dstSet
+
 	// Check if this request is only metadata update.
-	if srcSet == dstSet && srcInfo.metadataOnly {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		// CopyObject optimization where we don't create an entire copy
+		// of the content, instead we add a reference, we disallow legacy
+		// objects to be self referenced in this manner so make sure
+		// that we actually create a new dataDir for legacy objects.
+		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
+			srcInfo.versionOnly = true
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
