@@ -2615,7 +2615,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		w.Write(encodedErrorResponse)
 		w.(http.Flusher).Flush()
 	}
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	setEventStreamHeaders(w)
+
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(w)
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)

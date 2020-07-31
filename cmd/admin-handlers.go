@@ -695,7 +695,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					// Start writing response to client
 					started = true
 					setCommonHeaders(w)
-					w.Header().Set(xhttp.ContentType, "text/event-stream")
+					setEventStreamHeaders(w)
 					// Set 200 OK status
 					w.WriteHeader(200)
 				}
@@ -995,7 +995,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
@@ -1064,7 +1064,8 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
 	w.Header().Add("Connection", "close")
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	setEventStreamHeaders(w)
 
 	logCh := make(chan interface{}, 4000)
 
@@ -1223,7 +1224,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	setCommonHeaders(w)
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	setEventStreamHeaders(w)
+
 	w.WriteHeader(http.StatusOK)
 
 	errResp := func(err error) {
