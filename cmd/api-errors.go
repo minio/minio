@@ -108,6 +108,11 @@ const (
 	ErrReplicationConfigurationNotFoundError
 	ErrReplicationDestinationNotFoundError
 	ErrReplicationTargetNotFoundError
+	ErrBucketRemoteIdenticalToSource
+	ErrBucketRemoteAlreadyExists
+	ErrBucketRemoteArnTypeInvalid
+	ErrBucketRemoteArnInvalid
+	ErrBucketRemoteRemoveDisallowed
 	ErrReplicationTargetNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
@@ -826,14 +831,39 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationTargetNotFoundError: {
-		Code:           "ReplicationTargetNotFoundError",
+		Code:           "XminioAdminReplicationTargetNotFoundError",
 		Description:    "The replication target does not exist",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrBucketRemoteIdenticalToSource: {
+		Code:           "XminioAdminRemoteIdenticalToSource",
+		Description:    "The remote target cannot be identical to source",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteAlreadyExists: {
+		Code:           "XminioAdminBucketRemoteAlreadyExists",
+		Description:    "The remote target already exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteRemoveDisallowed: {
+		Code:           "XMinioAdminRemoteRemoveDisallowed",
+		Description:    "Replication configuration exists with this ARN.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteArnTypeInvalid: {
+		Code:           "XMinioAdminRemoteARNTypeInvalid",
+		Description:    "The bucket remote ARN type is not valid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteArnInvalid: {
+		Code:           "XMinioAdminRemoteArnInvalid",
+		Description:    "The bucket remote ARN does not have correct format",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationTargetNotVersionedError: {
 		Code:           "ReplicationTargetNotVersionedError",
 		Description:    "The replication target does not have versioning enabled",
-		HTTPStatusCode: http.StatusNotFound,
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationNeedsVersioningError: {
 		Code:           "InvalidRequest",
@@ -1879,8 +1909,16 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrReplicationConfigurationNotFoundError
 	case BucketReplicationDestinationNotFound:
 		apiErr = ErrReplicationDestinationNotFoundError
-	case BucketReplicationTargetNotFound:
+	case BucketRemoteTargetNotFound:
 		apiErr = ErrReplicationTargetNotFoundError
+	case BucketRemoteAlreadyExists:
+		apiErr = ErrBucketRemoteAlreadyExists
+	case BucketRemoteArnTypeInvalid:
+		apiErr = ErrBucketRemoteArnTypeInvalid
+	case BucketRemoteArnInvalid:
+		apiErr = ErrBucketRemoteArnInvalid
+	case BucketRemoteRemoveDisallowed:
+		apiErr = ErrBucketRemoteRemoveDisallowed
 	case BucketReplicationTargetNotVersioned:
 		apiErr = ErrReplicationTargetNotVersionedError
 	case BucketQuotaExceeded:

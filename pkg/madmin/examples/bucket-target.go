@@ -42,19 +42,24 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	target := madmin.BucketTarget{Endpoint: "site2:9000", Credentials: creds, TargetBucket: "destbucket", IsSSL: false}
+	target := madmin.BucketTarget{Endpoint: "site2:9000", Credentials: creds, TargetBucket: "destbucket", IsSSL: false, Type: madmin.ReplicationArn}
 	// Set bucket target
 	if err := madmClnt.SetBucketTarget(ctx, "srcbucket", &target); err != nil {
 		log.Fatalln(err)
 	}
-	// Get bucket target
-	target, err = madmClnt.GetBucketTarget(ctx, "srcbucket")
+	// List all bucket target(s)
+	target, err = madmClnt.ListBucketTargets(ctx, "srcbucket", "")
 	if err != nil {
 		log.Fatalln(err)
 	}
-
+	// Get bucket target for arn type "replica"
+	target, err = madmClnt.ListBucketTargets(ctx, "srcbucket", "replica")
+	if err != nil {
+		log.Fatalln(err)
+	}
 	// Remove bucket target
-	if err := madmClnt.SetBucketTarget(ctx, "srcbucket", nil); err != nil {
+	arn := "arn:minio:replica::ac66b2cf-dd8f-4e7e-a882-9a64132f0d59:dest"
+	if err := madmClnt.RemoveBucketTarget(ctx, "srcbucket", arn); err != nil {
 		log.Fatalln(err)
 	}
 
