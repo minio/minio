@@ -1,10 +1,14 @@
 # Minio纠删码快速入门 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Minio使用纠删码`erasure code`和校验和`checksum`来保护数据免受硬件故障和无声数据损坏。 即便您丢失一半数量（N/2）的硬盘，您仍然可以恢复数据。
+Minio使用纠删码`erasure code`和`checksum`来保护数据免受硬件故障和无声数据损坏。 即便您丢失一半数量（N/2）的硬盘，您仍然可以恢复数据。
 
 ## 什么是纠删码`erasure code`?
 
-纠删码是一种恢复丢失和损坏数据的数学算法， Minio采用Reed-Solomon code将对象拆分成N/2数据和N/2 奇偶校验块。 这就意味着如果是12块盘，一个对象会被分成6个数据块、6个奇偶校验块，你可以丢失任意6块盘（不管其是存放的数据块还是奇偶校验块），你仍可以从剩下的盘中的数据进行恢复，是不是很NB，感兴趣的同学请翻墙google。
+纠删码是一种恢复丢失和损坏数据的数学算法， Minio采用里德-所罗门码将对象分片为数据和奇偶校验块。 这就意味着如果是12块盘，一个对象可被分片的范围是：6个数据块和6个奇偶校验块 到 10个数据块和2个奇偶校验块之间。
+
+默认情况下, MinIO 将对象拆分成N/2数据和N/2 奇偶校验盘. 虽然你可以通过 [存储类型](https://github.com/minio/minio/tree/master/docs/zh_CN/erasure/storage-class) 自定义配置, 但是我们还是推荐N/2个数据和奇偶校验块, 因为它可以确保对硬盘故障提供最佳保护。
+
+比如上面12个盘的例子，通过默认配置运行MinIO服务的话，你可以丢失任意6块盘（不管其是存放的数据块还是奇偶校验块），你仍可以从剩下的盘中的数据进行恢复，是不是很NB，感兴趣的同学请翻墙google。
 
 ## 为什么纠删码有用?
 
@@ -15,6 +19,14 @@ Minio使用纠删码`erasure code`和校验和`checksum`来保护数据免受硬
 ## 什么是位衰减`bit rot`保护?
 
 位衰减又被称为数据腐化`Data Rot`、无声数据损坏`Silent Data Corruption`,是目前硬盘数据的一种严重数据丢失问题。硬盘上的数据可能会神不知鬼不觉就损坏了，也没有什么错误日志。正所谓明枪易躲，暗箭难防，这种背地里犯的错比硬盘直接咔咔宕了还危险。 不过不用怕，Minio纠删码采用了高速 [HighwayHash](https://github.com/minio/highwayhash) 基于哈希的校验和来防范位衰减。
+
+## 驱动器（盘）如何使用纠删码?
+
+MinIO会把你提供的所有驱动器，按照*4 到 16*个一组划分为多个纠删码集合，因此，你提供的驱动器数量必须是以上这些数字(4到16)的倍数。每个对象都会被写入一个单独的纠删码集合中。
+
+Minio会尽可能使用最大的纠删码集合大小（EC set size）进行划分.比如 *18个盘*会被划分为2个纠删码集合，每个集合有9个盘；*24个盘*也会被划分为2个纠删码集合，每个集合有12个盘。对于将MinIO作为独立的纠删码部署运行的场景而言，这是正确的。然而，在 [分布式部署](https://docs.minio.io/cn/distributed-minio-quickstart-guide.html) 时，选择的是基于节点（亲和力）的纠删条带大小.
+
+驱动器的大小应当都差不多。
 
 ## Minio纠删码快速入门
 
@@ -27,7 +39,7 @@ Minio使用纠删码`erasure code`和校验和`checksum`来保护数据免受硬
 示例: 使用Minio，在12个盘中启动Minio服务。
 
 ```sh
-minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8 /data9 /data10 /data11 /data12
+minio server /data{1...12}
 ```
 
 示例: 使用Minio Docker镜像，在8块盘中启动Minio服务。
@@ -42,7 +54,7 @@ docker run -p 9000:9000 --name minio \
   -v /mnt/data6:/data6 \
   -v /mnt/data7:/data7 \
   -v /mnt/data8:/data8 \
-  minio/minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8
+  minio/minio server /data{1...8}
 ```
 
 ### 3. 验证是否设置成功
