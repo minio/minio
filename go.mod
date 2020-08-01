@@ -48,7 +48,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/minio-go/v7 v7.0.1
-	github.com/minio/selfupdate v0.3.0
+	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
 	github.com/minio/sio v0.2.0
