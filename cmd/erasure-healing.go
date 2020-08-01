@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -197,10 +198,10 @@ func listAllBuckets(storageDisks []StorageAPI, healBuckets map[string]VolInfo) (
 // Only heal on disks where we are sure that healing is needed. We can expand
 // this list as and when we figure out more errors can be added to this list safely.
 func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, quorumModTime time.Time) bool {
-	switch erErr {
-	case errFileNotFound, errFileVersionNotFound:
+	switch {
+	case errors.Is(erErr, errFileNotFound) || errors.Is(erErr, errFileVersionNotFound):
 		return true
-	case errCorruptedFormat:
+	case errors.Is(erErr, errCorruptedFormat):
 		return true
 	}
 	if erErr == nil {
@@ -686,9 +687,9 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	// or when er.meta is not readable in read quorum disks.
 	var notFoundErasureMeta, corruptedErasureMeta int
 	for _, readErr := range errs {
-		if readErr == errFileNotFound || readErr == errFileVersionNotFound {
+		if errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound) {
 			notFoundErasureMeta++
-		} else if readErr == errCorruptedFormat {
+		} else if errors.Is(readErr, errCorruptedFormat) {
 			corruptedErasureMeta++
 		}
 	}
@@ -699,7 +700,10 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		// double counting when both parts and er.meta
 		// are not available.
 		if errs[i] != dataErrs[i] {
-			if dataErrs[i] == errFileNotFound || dataErrs[i] == errFileVersionNotFound {
+			if IsErr(dataErrs[i], []error{
+				errFileNotFound,
+				errFileVersionNotFound,
+			}...) {
 				notFoundParts++
 			}
 		}
