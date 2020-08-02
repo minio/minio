@@ -331,7 +331,7 @@ func SetNotifyPostgres(s config.Config, psqName string, cfg target.PostgreSQLArg
 		},
 		config.KV{
 			Key:   target.PostgresUsername,
-			Value: cfg.User,
+			Value: cfg.Username,
 		},
 		config.KV{
 			Key:   target.PostgresPassword,
