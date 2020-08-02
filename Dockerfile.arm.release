@@ -23,7 +23,7 @@ RUN \
      chmod +x /usr/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/verify-minio.sh && \
-     curl -s -q -O https://raw.githubusercontent.com/minio/minio/release/CREDITS && \
+     curl -s -q -O https://raw.githubusercontent.com/minio/minio/master/CREDITS && \
      /usr/bin/verify-minio.sh
 
 EXPOSE 9000
