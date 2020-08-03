@@ -265,6 +265,12 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 		configData, err := readConfig(ctx, objectAPI, configFile)
 		if err != nil {
+			switch err.(type) {
+			case ObjectExistsAsDirectory:
+				// in FS mode it possible that we have actual
+				// files in this folder with `.minio.sys/buckets/bucket/configFile`
+				continue
+			}
 			if errors.Is(err, errConfigNotFound) {
 				// legacy file config not found, proceed to look for new metadata.
 				continue

@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 )
 
@@ -36,8 +35,6 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 			return nil, errConfigNotFound
 		}
 
-		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
-		logger.LogIf(ctx, err)
 		return nil, err
 	}
 
@@ -74,8 +71,6 @@ func checkConfig(ctx context.Context, objAPI ObjectLayer, configFile string) err
 			return errConfigNotFound
 		}
 
-		logger.GetReqInfo(ctx).AppendTags("configFile", configFile)
-		logger.LogIf(ctx, err)
 		return err
 	}
 	return nil
