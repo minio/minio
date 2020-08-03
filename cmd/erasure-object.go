@@ -670,7 +670,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
-	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, fi.Erasure.DataBlocks+1)
+	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
