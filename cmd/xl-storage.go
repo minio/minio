@@ -48,8 +48,7 @@ import (
 
 const (
 	nullVersionID     = "null"
-	diskMinFreeSpace  = 900 * humanize.MiByte // Min 900MiB free space.
-	diskMinTotalSpace = diskMinFreeSpace      // Min 900MiB total space.
+	diskMinTotalSpace = 900 * humanize.MiByte // Min 900MiB total space.
 	readBlockSize     = 4 * humanize.MiByte   // Default read block size 4MiB.
 
 	// On regular files bigger than this;
@@ -175,6 +174,7 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 	if err != nil {
 		return path, err
 	}
+
 	if err = checkDiskMinTotal(di); err != nil {
 		return path, err
 	}
@@ -276,13 +276,6 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 	return di, err
 }
 
-// List of operating systems where we ignore disk space
-// verification.
-var ignoreDiskFreeOS = []string{
-	globalWindowsOSName,
-	globalNetBSDOSName,
-}
-
 // check if disk total has minimum required size.
 func checkDiskMinTotal(di disk.Info) (err error) {
 	// Remove 5% from total space for cumulative disk space
@@ -291,46 +284,6 @@ func checkDiskMinTotal(di disk.Info) (err error) {
 	if int64(totalDiskSpace) <= diskMinTotalSpace {
 		return errMinDiskSize
 	}
-	return nil
-}
-
-// check if disk free has minimum required size.
-func checkDiskMinFree(di disk.Info) error {
-	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := float64(di.Free) * diskFillFraction
-	if int64(availableDiskSpace) <= diskMinFreeSpace {
-		return errDiskFull
-	}
-
-	// Success.
-	return nil
-}
-
-// checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
-func checkDiskFree(diskPath string, neededSpace int64) (err error) {
-	// We don't validate disk space or inode utilization on windows.
-	// Each windows call to 'GetVolumeInformationW' takes around
-	// 3-5seconds. And StatDISK is not supported by Go for solaris
-	// and netbsd.
-	if contains(ignoreDiskFreeOS, runtime.GOOS) {
-		return nil
-	}
-
-	var di disk.Info
-	di, err = getDiskInfo(diskPath)
-	if err != nil {
-		return err
-	}
-
-	if err = checkDiskMinFree(di); err != nil {
-		return err
-	}
-
-	// Check if we have enough space to store data
-	if neededSpace > int64(float64(di.Free)*diskFillFraction) {
-		return errDiskFull
-	}
-
 	return nil
 }
 
@@ -1643,14 +1596,6 @@ func (s *xlStorage) CreateFile(volume, path string, fileSize int64, r io.Reader)
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	// Validate if disk is indeed free.
-	if err = checkDiskFree(s.diskPath, fileSize); err != nil {
-		if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		return err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -1674,8 +1619,17 @@ func (s *xlStorage) CreateFile(volume, path string, fileSize int64, r io.Reader)
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
-		if errors.Is(err, &os.PathError{}) {
+		switch {
+		case os.IsPermission(err):
 			return errFileAccessDenied
+		case os.IsExist(err):
+			return errFileAccessDenied
+		case isSysErrIO(err):
+			return errFaultyDisk
+		case isSysErrInvalidArg(err):
+			return errUnsupportedDisk
+		case isSysErrNoSpace(err):
+			return errDiskFull
 		}
 		return err
 	}
@@ -1691,6 +1645,8 @@ func (s *xlStorage) CreateFile(volume, path string, fileSize int64, r io.Reader)
 			return errFaultyDisk
 		case isSysErrInvalidArg(err):
 			return errUnsupportedDisk
+		case isSysErrNoSpace(err):
+			return errDiskFull
 		default:
 			return err
 		}

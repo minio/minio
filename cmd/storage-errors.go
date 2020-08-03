@@ -142,5 +142,14 @@ func osErrToFileErr(err error) error {
 	if isSysErrHandleInvalid(err) {
 		return errFileNotFound
 	}
+	if isSysErrIO(err) {
+		return errFaultyDisk
+	}
+	if isSysErrInvalidArg(err) {
+		return errUnsupportedDisk
+	}
+	if isSysErrNoSpace(err) {
+		return errDiskFull
+	}
 	return err
 }

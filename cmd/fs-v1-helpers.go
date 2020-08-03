@@ -285,12 +285,18 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 	}
 
 	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
-		logger.LogIf(ctx, err)
-		return 0, err
-	}
-
-	if err := checkDiskFree(pathutil.Dir(filePath), fallocSize); err != nil {
-		logger.LogIf(ctx, err)
+		switch {
+		case os.IsPermission(err):
+			return 0, errFileAccessDenied
+		case os.IsExist(err):
+			return 0, errFileAccessDenied
+		case isSysErrIO(err):
+			return 0, errFaultyDisk
+		case isSysErrInvalidArg(err):
+			return 0, errUnsupportedDisk
+		case isSysErrNoSpace(err):
+			return 0, errDiskFull
+		}
 		return 0, err
 	}
 
