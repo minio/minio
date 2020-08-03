@@ -112,6 +112,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		DeleteMarker:    fi.Deleted,
 		Size:            fi.Size,
 		ModTime:         fi.ModTime,
+		Legacy:          fi.XLV1,
 		ContentType:     fi.Metadata["content-type"],
 		ContentEncoding: fi.Metadata["content-encoding"],
 	}

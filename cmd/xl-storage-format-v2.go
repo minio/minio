@@ -442,11 +442,6 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				return version.ObjectV1.DataDir, len(z.Versions) == 0, nil
 			}
-		case ObjectType:
-			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
-				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-				return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
-			}
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
@@ -454,6 +449,38 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			}
 		}
 	}
+
+	findDataDir := func(dataDir [16]byte, versions []xlMetaV2Version) int {
+		var sameDataDirCount int
+		for _, version := range versions {
+			switch version.Type {
+			case ObjectType:
+				if bytes.Equal(version.ObjectV2.DataDir[:], dataDir[:]) {
+					sameDataDirCount++
+				}
+			}
+		}
+		return sameDataDirCount
+	}
+
+	for i, version := range z.Versions {
+		if !version.Valid() {
+			return "", false, errFileCorrupt
+		}
+		switch version.Type {
+		case ObjectType:
+			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
+				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
+				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
+					// Found that another version references the same dataDir
+					// we shouldn't remove it, and only remove the version instead
+					return "", len(z.Versions) == 0, nil
+				}
+				return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
+			}
+		}
+	}
+
 	return "", false, errFileVersionNotFound
 }
 
