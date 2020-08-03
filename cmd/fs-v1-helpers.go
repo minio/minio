@@ -256,7 +256,6 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		logger.LogIf(ctx, errIsNotRegular)
 		return nil, 0, errIsNotRegular
 	}
 
