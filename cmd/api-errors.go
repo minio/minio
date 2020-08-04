@@ -107,6 +107,7 @@ const (
 	ErrNoSuchWebsiteConfiguration
 	ErrReplicationConfigurationNotFoundError
 	ErrReplicationDestinationNotFoundError
+	ErrReplicationDestinationMissingLock
 	ErrReplicationTargetNotFoundError
 	ErrBucketRemoteIdenticalToSource
 	ErrBucketRemoteAlreadyExists
@@ -829,6 +830,11 @@ var errorCodes = errorCodeMap{
 		Code:           "ReplicationDestinationNotFoundError",
 		Description:    "The replication destination bucket does not exist",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationDestinationMissingLock: {
+		Code:           "ReplicationDestinationMissingLockError",
+		Description:    "The replication destination bucket does not have object locking enabled",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationTargetNotFoundError: {
 		Code:           "XminioAdminReplicationTargetNotFoundError",
@@ -1909,6 +1915,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrReplicationConfigurationNotFoundError
 	case BucketReplicationDestinationNotFound:
 		apiErr = ErrReplicationDestinationNotFoundError
+	case BucketReplicationDestinationMissingLock:
+		apiErr = ErrReplicationDestinationMissingLock
 	case BucketRemoteTargetNotFound:
 		apiErr = ErrReplicationTargetNotFoundError
 	case BucketRemoteAlreadyExists:
