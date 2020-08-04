@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -89,18 +90,18 @@ func (d byDiskTotal) Less(i, j int) bool {
 
 func diskErrToDriveState(err error) (state string) {
 	state = madmin.DriveStateUnknown
-	switch err {
-	case errDiskNotFound:
+	switch {
+	case errors.Is(err, errDiskNotFound):
 		state = madmin.DriveStateOffline
-	case errCorruptedFormat:
+	case errors.Is(err, errCorruptedFormat):
 		state = madmin.DriveStateCorrupt
-	case errUnformattedDisk:
+	case errors.Is(err, errUnformattedDisk):
 		state = madmin.DriveStateUnformatted
-	case errDiskAccessDenied:
+	case errors.Is(err, errDiskAccessDenied):
 		state = madmin.DriveStatePermission
-	case errFaultyDisk:
+	case errors.Is(err, errFaultyDisk):
 		state = madmin.DriveStateFaulty
-	case nil:
+	case err == nil:
 		state = madmin.DriveStateOk
 	}
 	return

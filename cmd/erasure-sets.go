@@ -738,12 +738,22 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	srcSet := s.getHashedSet(srcObject)
 	dstSet := s.getHashedSet(dstObject)
 
+	cpSrcDstSame := srcSet == dstSet
+
 	// Check if this request is only metadata update.
-	if srcSet == dstSet && srcInfo.metadataOnly {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		// CopyObject optimization where we don't create an entire copy
+		// of the content, instead we add a reference, we disallow legacy
+		// objects to be self referenced in this manner so make sure
+		// that we actually create a new dataDir for legacy objects.
+		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
+			srcInfo.versionOnly = true
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
@@ -1189,19 +1199,9 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		}
 	}(storageDisks)
 
-	formats, sErrs := loadFormatErasureAll(storageDisks, false)
+	formats, _ := loadFormatErasureAll(storageDisks, false)
 	if err = checkFormatErasureValues(formats, s.drivesPerSet); err != nil {
 		return err
-	}
-
-	for index, sErr := range sErrs {
-		if sErr != nil {
-			// Look for acceptable heal errors, for any other
-			// errors we should simply quit and return.
-			if _, ok := formatHealErrors[sErr]; !ok {
-				return fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
-			}
-		}
 	}
 
 	refFormat, err := getFormatErasureInQuorum(formats)
@@ -1345,16 +1345,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	for k, v := range beforeDrives {
 		res.Before.Drives[k] = madmin.HealDriveInfo(v)
 		res.After.Drives[k] = madmin.HealDriveInfo(v)
-	}
-
-	for index, sErr := range sErrs {
-		if sErr != nil {
-			// Look for acceptable heal errors, for any other
-			// errors we should simply quit and return.
-			if _, ok := formatHealErrors[sErr]; !ok {
-				return res, fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
-			}
-		}
 	}
 
 	if countErrs(sErrs, errUnformattedDisk) == 0 {

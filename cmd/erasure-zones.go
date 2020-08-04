@@ -626,20 +626,22 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		defer lk.Unlock()
 	}
 
-	if z.SingleZone() {
-		return z.zones[0].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
-	}
-
 	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
 	}
 
-	if cpSrcDstSame && srcInfo.metadataOnly && srcOpts.VersionID == dstOpts.VersionID {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
+			// CopyObject optimization where we don't create an entire copy
+			// of the content, instead we add a reference.
+			srcInfo.versionOnly = true
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
