@@ -228,7 +228,7 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)

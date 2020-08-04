@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -212,7 +213,10 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	resp, err := httpClient.Do(req)
+	ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
+	defer cancel()
+
+	resp, err := httpClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return err
 	}

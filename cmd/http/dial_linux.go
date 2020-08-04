@@ -49,25 +49,44 @@ func setInternalTCPParameters(c syscall.RawConn) error {
 		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
 
 		// Wait time after successful probe in seconds.
-		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 2 secs)
+		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 3 secs)
 		// 75
-		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 2)
-
-		// Set TCP_USER_TIMEOUT to TCP_KEEPIDLE + TCP_KEEPINTVL * TCP_KEEPCNT.
-		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, 15)
+		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
 	})
 }
 
 // DialContext is a function to make custom Dial for internode communications
 type DialContext func(ctx context.Context, network, address string) (net.Conn, error)
 
-// NewCustomDialContext setups a custom dialer for internode communications
-func NewCustomDialContext(dialTimeout time.Duration) DialContext {
+// NewInternodeDialContext setups a custom dialer for internode communication
+func NewInternodeDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
 			Control: func(network, address string, c syscall.RawConn) error {
 				return setInternalTCPParameters(c)
+			},
+		}
+		return dialer.DialContext(ctx, network, addr)
+	}
+}
+
+// NewCustomDialContext setups a custom dialer for any external communication and proxies.
+func NewCustomDialContext(dialTimeout time.Duration) DialContext {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialer := &net.Dialer{
+			Timeout: dialTimeout,
+			Control: func(network, address string, c syscall.RawConn) error {
+				return c.Control(func(fdPtr uintptr) {
+					// got socket file descriptor to set parameters.
+					fd := int(fdPtr)
+
+					// Enable TCP fast connect
+					// TCPFastOpenConnect sets the underlying socket to use
+					// the TCP fast open connect. This feature is supported
+					// since Linux 4.11.
+					_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+				})
 			},
 		}
 		return dialer.DialContext(ctx, network, addr)
