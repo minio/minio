@@ -1199,19 +1199,9 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		}
 	}(storageDisks)
 
-	formats, sErrs := loadFormatErasureAll(storageDisks, false)
+	formats, _ := loadFormatErasureAll(storageDisks, false)
 	if err = checkFormatErasureValues(formats, s.drivesPerSet); err != nil {
 		return err
-	}
-
-	for index, sErr := range sErrs {
-		if sErr != nil {
-			// Look for acceptable heal errors, for any other
-			// errors we should simply quit and return.
-			if _, ok := formatHealErrors[sErr]; !ok {
-				return fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
-			}
-		}
 	}
 
 	refFormat, err := getFormatErasureInQuorum(formats)
@@ -1355,16 +1345,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	for k, v := range beforeDrives {
 		res.Before.Drives[k] = madmin.HealDriveInfo(v)
 		res.After.Drives[k] = madmin.HealDriveInfo(v)
-	}
-
-	for index, sErr := range sErrs {
-		if sErr != nil {
-			// Look for acceptable heal errors, for any other
-			// errors we should simply quit and return.
-			if _, ok := formatHealErrors[sErr]; !ok {
-				return res, fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
-			}
-		}
 	}
 
 	if countErrs(sErrs, errUnformattedDisk) == 0 {

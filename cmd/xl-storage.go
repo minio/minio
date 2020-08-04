@@ -505,6 +505,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 		// Somebody else got the lock first.
 		return diskID, nil
 	}
+
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	fi, err := os.Stat(formatFile)
 	if err != nil {
@@ -520,8 +521,12 @@ func (s *xlStorage) GetDiskID() (string, error) {
 			} else if os.IsPermission(err) {
 				return "", errDiskAccessDenied
 			}
-			return "", err
+			logger.LogIf(GlobalContext, err) // log unexpected errors
+			return "", errCorruptedFormat
+		} else if os.IsPermission(err) {
+			return "", errDiskAccessDenied
 		}
+		logger.LogIf(GlobalContext, err) // log unexpected errors
 		return "", errCorruptedFormat
 	}
 
@@ -533,13 +538,34 @@ func (s *xlStorage) GetDiskID() (string, error) {
 
 	b, err := ioutil.ReadFile(formatFile)
 	if err != nil {
+		// If the disk is still not initialized.
+		if os.IsNotExist(err) {
+			_, err = os.Stat(s.diskPath)
+			if err == nil {
+				// Disk is present but missing `format.json`
+				return "", errUnformattedDisk
+			}
+			if os.IsNotExist(err) {
+				return "", errDiskNotFound
+			} else if os.IsPermission(err) {
+				return "", errDiskAccessDenied
+			}
+			logger.LogIf(GlobalContext, err) // log unexpected errors
+			return "", errCorruptedFormat
+		} else if os.IsPermission(err) {
+			return "", errDiskAccessDenied
+		}
+		logger.LogIf(GlobalContext, err) // log unexpected errors
 		return "", errCorruptedFormat
 	}
+
 	format := &formatErasureV3{}
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(b, &format); err != nil {
+		logger.LogIf(GlobalContext, err) // log unexpected errors
 		return "", errCorruptedFormat
 	}
+
 	s.diskID = format.Erasure.This
 	s.formatFileInfo = fi
 	s.formatLastCheck = time.Now()

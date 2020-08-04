@@ -19,10 +19,10 @@ package cmd
 import "os"
 
 // errUnexpected - unexpected error, requires manual intervention.
-var errUnexpected = StorageErr("Unexpected error, please report this issue at https://github.com/minio/minio/issues")
+var errUnexpected = StorageErr("unexpected error, please report this issue at https://github.com/minio/minio/issues")
 
 // errCorruptedFormat - corrupted backend format.
-var errCorruptedFormat = StorageErr("corrupted backend format, please join https://slack.min.io for assistance")
+var errCorruptedFormat = StorageErr("corrupted backend format, specified disk mount has unexpected previous content")
 
 // errUnformattedDisk - unformatted disk found.
 var errUnformattedDisk = StorageErr("unformatted disk found")
