@@ -40,8 +40,10 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
+	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -92,6 +94,8 @@ type xlStorage struct {
 	hostname string
 
 	pool sync.Pool
+
+	globalSync bool
 
 	diskMount bool // indicates if the path is an actual mount.
 
@@ -245,7 +249,8 @@ func newXLStorage(path string, hostname string) (*xlStorage, error) {
 				return &b
 			},
 		},
-		diskMount: mountinfo.IsLikelyMountPoint(path),
+		globalSync: env.Get(config.EnvFSOSync, config.EnableOn) == config.EnableOn,
+		diskMount:  mountinfo.IsLikelyMountPoint(path),
 		// Allow disk usage crawler to run with up to 2 concurrent
 		// I/O ops, if and when activeIOCount reaches this
 		// value disk usage routine suspends the crawler
@@ -1216,8 +1221,10 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 	// Renaming xl.json to xl.meta should be fully synced to disk.
 	defer func() {
 		if err == nil {
-			// Sync to disk only upon success.
-			globalSync()
+			if s.globalSync {
+				// Sync to disk only upon success.
+				globalSync()
+			}
 		}
 	}()
 
@@ -2104,8 +2111,10 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 			return osErrToFileErr(err)
 		}
 
-		// Sync all the previous directory operations.
-		globalSync()
+		if s.globalSync {
+			// Sync all the previous directory operations.
+			globalSync()
+		}
 
 		for _, entry := range entries {
 			if entry == xlStorageFormatFile {
@@ -2121,7 +2130,9 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 		}
 
 		// Sync all the metadata operations once renames are done.
-		globalSync()
+		if s.globalSync {
+			globalSync()
+		}
 	}
 
 	var oldDstDataPath string

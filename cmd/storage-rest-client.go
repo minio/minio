@@ -667,7 +667,7 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckInterval = 500 * time.Millisecond
 	restClient.HealthCheckFn = func() bool {

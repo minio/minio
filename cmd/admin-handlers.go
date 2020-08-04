@@ -1631,9 +1631,6 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 
 // checkConnection - ping an endpoint , return err in case of no connection
 func checkConnection(endpointStr string, timeout time.Duration) error {
-	tr := newCustomHTTPTransport(&tls.Config{RootCAs: globalRootCAs}, timeout)()
-	defer tr.CloseIdleConnections()
-
 	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
 	defer cancel()
 
@@ -1642,7 +1639,20 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 		return err
 	}
 
-	client := &http.Client{Transport: tr}
+	client := &http.Client{Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           xhttp.NewCustomDialContext(timeout),
+		ResponseHeaderTimeout: 5 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 5 * time.Second,
+		TLSClientConfig:       &tls.Config{RootCAs: globalRootCAs},
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}}
+	defer client.CloseIdleConnections()
+
 	resp, err := client.Do(req.WithContext(ctx))
 	if err != nil {
 		return err
