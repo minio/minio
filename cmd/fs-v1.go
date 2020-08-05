@@ -191,6 +191,11 @@ func (fs *FSObjects) NewNSLock(ctx context.Context, bucket string, objects ...st
 	return fs.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
 }
 
+// SetDriveCount no-op
+func (fs *FSObjects) SetDriveCount() int {
+	return 0
+}
+
 // Shutdown - should be called when process shuts down.
 func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	fs.fsFormatRlk.Close()

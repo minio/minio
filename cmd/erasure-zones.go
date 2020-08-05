@@ -87,6 +87,10 @@ func (z *erasureZones) NewNSLock(ctx context.Context, bucket string, objects ...
 	return z.zones[0].NewNSLock(ctx, bucket, objects...)
 }
 
+func (z *erasureZones) SetDriveCount() int {
+	return z.zones[0].SetDriveCount()
+}
+
 type zonesAvailableSpace []zoneAvailableSpace
 
 type zoneAvailableSpace struct {

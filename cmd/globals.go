@@ -108,9 +108,6 @@ var globalCLIContext = struct {
 }{}
 
 var (
-	// Indicates set drive count.
-	globalErasureSetDriveCount int
-
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistErasure = false
 

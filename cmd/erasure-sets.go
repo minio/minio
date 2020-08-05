@@ -371,6 +371,11 @@ func (s *erasureSets) NewNSLock(ctx context.Context, bucket string, objects ...s
 	return s.getHashedSet("").NewNSLock(ctx, bucket, objects...)
 }
 
+// SetDriveCount returns the current drives per set.
+func (s *erasureSets) SetDriveCount() int {
+	return s.drivesPerSet
+}
+
 // StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
 // This only returns disk usage info for Zones to perform placement decision, this call
 // is not implemented in Object interface and is not meant to be used by other object
