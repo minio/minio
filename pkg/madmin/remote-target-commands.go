@@ -34,7 +34,7 @@ type ArnType string
 
 const (
 	// ReplicationArn specifies a ARN type of replication
-	ReplicationArn ArnType = "replica"
+	ReplicationArn ArnType = "replication"
 )
 
 // IsValid returns true if ARN type is replication
