@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -929,7 +930,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 		if err != nil {
 			return auth.Credentials{}, err
 		}
-		if len(policyBuf) > 16*1024 {
+		if len(policyBuf) > 16*humanize.KiByte {
 			return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
 		}
 	}
@@ -948,14 +949,6 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 
 	// Disallow service accounts to further create more service accounts.
 	if cr.IsServiceAccount() {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
-	// FIXME: Disallow temporary users with no parent, this is most
-	// probably with OpenID which we don't support to provide
-	// any parent user, LDAPUsersType and MinIOUsersType are
-	// currently supported.
-	if cr.ParentUser == "" && cr.IsTemp() {
 		return auth.Credentials{}, errIAMActionNotAllowed
 	}
 
