@@ -236,6 +236,11 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
 func lockMaintenance(ctx context.Context, interval time.Duration) error {
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		return nil
+	}
+
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
@@ -275,10 +280,10 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			}
 
 			// Read locks we assume quorum for be N/2 success
-			quorum := globalErasureSetDriveCount / 2
+			quorum := objAPI.SetDriveCount() / 2
 			if nlrip.lri.Writer {
 				// For write locks we need N/2+1 success
-				quorum = globalErasureSetDriveCount/2 + 1
+				quorum = objAPI.SetDriveCount()/2 + 1
 			}
 
 			// less than the quorum, we have locks expired.

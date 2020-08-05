@@ -46,6 +46,11 @@ func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, object
 	return nil
 }
 
+// SetDriveCount no-op
+func (a GatewayUnsupported) SetDriveCount() int {
+	return 0
+}
+
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
 	return lmi, NotImplemented{}

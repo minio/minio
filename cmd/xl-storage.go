@@ -249,7 +249,7 @@ func newXLStorage(path string, hostname string) (*xlStorage, error) {
 				return &b
 			},
 		},
-		globalSync: env.Get(config.EnvFSOSync, config.EnableOn) == config.EnableOn,
+		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
 		diskMount:  mountinfo.IsLikelyMountPoint(path),
 		// Allow disk usage crawler to run with up to 2 concurrent
 		// I/O ops, if and when activeIOCount reaches this
@@ -2082,10 +2082,7 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 			return osErrToFileErr(err)
 		}
 		for _, entry := range entries {
-			if entry == xlStorageFormatFile {
-				continue
-			}
-			if strings.HasSuffix(entry, slashSeparator) {
+			if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
 				continue
 			}
 			if strings.HasPrefix(entry, "part.") {
@@ -2102,6 +2099,7 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 		if err != nil {
 			return osErrToFileErr(err)
 		}
+
 		legacyDataPath := pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 		// legacy data dir means its old content, honor system umask.
 		if err = os.MkdirAll(legacyDataPath, 0777); err != nil {
@@ -2117,7 +2115,8 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 		}
 
 		for _, entry := range entries {
-			if entry == xlStorageFormatFile {
+			// Skip xl.meta renames further, also ignore any directories such as `legacyDataDir`
+			if entry == xlStorageFormatFile || strings.HasPrefix(entry, SlashSeparator) {
 				continue
 			}
 

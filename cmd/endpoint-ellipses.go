@@ -329,28 +329,28 @@ var (
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports
 // both ellipses and without ellipses transparently.
 func createServerEndpoints(serverAddr string, args ...string) (
-	endpointZones EndpointZones, setDriveCount int,
-	setupType SetupType, err error) {
+	endpointZones EndpointZones, setupType SetupType, err error) {
 
 	if len(args) == 0 {
-		return nil, -1, -1, errInvalidArgument
+		return nil, -1, errInvalidArgument
 	}
 
+	var setDriveCount int
 	if v := env.Get(EnvErasureSetDriveCount, ""); v != "" {
 		setDriveCount, err = strconv.Atoi(v)
 		if err != nil {
-			return nil, -1, -1, config.ErrInvalidErasureSetSize(err)
+			return nil, -1, config.ErrInvalidErasureSetSize(err)
 		}
 	}
 
 	if !ellipses.HasEllipses(args...) {
 		setArgs, err := GetAllSets(uint64(setDriveCount), args...)
 		if err != nil {
-			return nil, -1, -1, err
+			return nil, -1, err
 		}
 		endpointList, newSetupType, err := CreateEndpoints(serverAddr, false, setArgs...)
 		if err != nil {
-			return nil, -1, -1, err
+			return nil, -1, err
 		}
 		endpointZones = append(endpointZones, ZoneEndpoints{
 			SetCount:     len(setArgs),
@@ -358,7 +358,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			Endpoints:    endpointList,
 		})
 		setupType = newSetupType
-		return endpointZones, len(setArgs[0]), setupType, nil
+		return endpointZones, setupType, nil
 	}
 
 	var prevSetupType SetupType
@@ -366,25 +366,25 @@ func createServerEndpoints(serverAddr string, args ...string) (
 	for _, arg := range args {
 		setArgs, err := GetAllSets(uint64(setDriveCount), arg)
 		if err != nil {
-			return nil, -1, -1, err
+			return nil, -1, err
 		}
 		var endpointList Endpoints
 		endpointList, setupType, err = CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
 		if err != nil {
-			return nil, -1, -1, err
+			return nil, -1, err
 		}
 		if setDriveCount != 0 && setDriveCount != len(setArgs[0]) {
-			return nil, -1, -1, fmt.Errorf("All zones should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
+			return nil, -1, fmt.Errorf("All zones should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
 		}
 		if prevSetupType != UnknownSetupType && prevSetupType != setupType {
-			return nil, -1, -1, fmt.Errorf("All zones should be of the same setup-type to maintain the original SLA expectations - expected %s, got %s", prevSetupType, setupType)
+			return nil, -1, fmt.Errorf("All zones should be of the same setup-type to maintain the original SLA expectations - expected %s, got %s", prevSetupType, setupType)
 		}
 		if err = endpointZones.Add(ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 		}); err != nil {
-			return nil, -1, -1, err
+			return nil, -1, err
 		}
 		foundPrevLocal = endpointList.atleastOneEndpointLocal()
 		if setDriveCount == 0 {
@@ -393,5 +393,5 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		prevSetupType = setupType
 	}
 
-	return endpointZones, setDriveCount, setupType, nil
+	return endpointZones, setupType, nil
 }

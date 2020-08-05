@@ -72,6 +72,11 @@ func (er erasureObjects) NewNSLock(ctx context.Context, bucket string, objects .
 	return er.nsMutex.NewNSLock(ctx, er.getLockers, bucket, objects...)
 }
 
+// SetDriveCount returns the current drives per set.
+func (er erasureObjects) SetDriveCount() int {
+	return len(er.getDisks())
+}
+
 // Shutdown function for object storage interface.
 func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
