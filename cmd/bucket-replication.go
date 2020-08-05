@@ -56,6 +56,14 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	if found, _ := clnt.BucketExists(ctx, rCfg.GetDestination().Bucket); !found {
 		return false, BucketReplicationDestinationNotFound{Bucket: rCfg.GetDestination().Bucket}
 	}
+	if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
+		if ret.LockEnabled {
+			lock, _, _, _, err := clnt.GetObjectLockConfig(ctx, rCfg.GetDestination().Bucket)
+			if err != nil || lock != "Enabled" {
+				return false, BucketReplicationDestinationMissingLock{Bucket: rCfg.GetDestination().Bucket}
+			}
+		}
+	}
 	// validate replication ARN against target endpoint
 	c, ok := globalBucketTargetSys.arnRemotesMap[rCfg.ReplicationArn]
 	if ok {

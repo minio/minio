@@ -362,6 +362,13 @@ func (e BucketReplicationDestinationNotFound) Error() string {
 	return "Destination bucket does not exist: " + e.Bucket
 }
 
+// BucketReplicationDestinationMissingLock bucket does not have object lock enabled.
+type BucketReplicationDestinationMissingLock GenericError
+
+func (e BucketReplicationDestinationMissingLock) Error() string {
+	return "Destination bucket does not have object lock enabled: " + e.Bucket
+}
+
 // BucketRemoteTargetNotFound remote target does not exist.
 type BucketRemoteTargetNotFound GenericError
 
