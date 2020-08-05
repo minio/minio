@@ -145,11 +145,8 @@ func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {
 
 // GetDestination returns destination bucket and storage class.
 func (c Config) GetDestination() Destination {
-	for _, rule := range c.Rules {
-		if rule.Status == Disabled {
-			continue
-		}
-		return rule.Destination
+	if len(c.Rules) > 0 {
+		return c.Rules[0].Destination
 	}
 	return Destination{}
 }

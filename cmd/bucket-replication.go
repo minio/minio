@@ -117,12 +117,16 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 	if err != nil {
 		return
 	}
+	sc := dest.StorageClass
+	if sc == "" {
+		sc = objInfo.StorageClass
+	}
 	putOpts = miniogo.PutObjectOptions{
 		UserMetadata:         meta,
 		UserTags:             tag.ToMap(),
 		ContentType:          objInfo.ContentType,
 		ContentEncoding:      objInfo.ContentEncoding,
-		StorageClass:         dest.StorageClass,
+		StorageClass:         sc,
 		ReplicationVersionID: objInfo.VersionID,
 		ReplicationStatus:    miniogo.ReplicationStatusReplica,
 		ReplicationMTime:     objInfo.ModTime,
