@@ -215,10 +215,8 @@ func (target *WebhookTarget) Close() error {
 }
 
 // NewWebhookTarget - creates new Webhook target.
-func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), transport *http.Transport, test bool) (*WebhookTarget, error) {
-
+func NewWebhookTarget(ctx context.Context, id string, args WebhookArgs, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), transport *http.Transport, test bool) (*WebhookTarget, error) {
 	var store Store
-
 	target := &WebhookTarget{
 		id:         event.TargetID{ID: id, Name: "webhook"},
 		args:       args,
@@ -226,11 +224,11 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 	}
 
 	if target.args.ClientCert != "" && target.args.ClientKey != "" {
-		c, err := certs.New(target.args.ClientCert, target.args.ClientKey, tls.LoadX509KeyPair)
+		manager, err := certs.NewManager(ctx, target.args.ClientCert, target.args.ClientKey, tls.LoadX509KeyPair)
 		if err != nil {
 			return target, err
 		}
-		transport.TLSClientConfig.GetClientCertificate = c.GetClientCertificate
+		transport.TLSClientConfig.GetClientCertificate = manager.GetClientCertificate
 	}
 	target.httpClient = &http.Client{Transport: transport}
 
@@ -247,16 +245,16 @@ func NewWebhookTarget(id string, args WebhookArgs, doneCh <-chan struct{}, logge
 	_, err := target.IsActive()
 	if err != nil {
 		if target.store == nil || err != errNotConnected {
-			target.loggerOnce(context.Background(), err, target.ID())
+			target.loggerOnce(ctx, err, target.ID())
 			return target, err
 		}
 	}
 
 	if target.store != nil && !test {
 		// Replays the events from the store.
-		eventKeyCh := replayEvents(target.store, doneCh, target.loggerOnce, target.ID())
+		eventKeyCh := replayEvents(target.store, ctx.Done(), target.loggerOnce, target.ID())
 		// Start replaying events from the store.
-		go sendEvents(target, eventKeyCh, doneCh, target.loggerOnce)
+		go sendEvents(target, eventKeyCh, ctx.Done(), target.loggerOnce)
 	}
 
 	return target, nil

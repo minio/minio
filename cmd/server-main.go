@@ -510,9 +510,6 @@ func serverMain(ctx *cli.Context) {
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
 	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
-		// Stop watching for any certificate changes.
-		globalTLSCerts.Stop()
-
 		globalHTTPServer.Shutdown()
 		logger.Fatal(err, "Unable to initialize backend")
 	}
