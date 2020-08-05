@@ -115,6 +115,7 @@ const (
 	ErrBucketRemoteArnInvalid
 	ErrBucketRemoteRemoveDisallowed
 	ErrReplicationTargetNotVersionedError
+	ErrReplicationSourceNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrBucketReplicationDisabledError
@@ -869,6 +870,11 @@ var errorCodes = errorCodeMap{
 	ErrReplicationTargetNotVersionedError: {
 		Code:           "ReplicationTargetNotVersionedError",
 		Description:    "The replication target does not have versioning enabled",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationSourceNotVersionedError: {
+		Code:           "ReplicationSourceNotVersionedError",
+		Description:    "The replication source does not have versioning enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationNeedsVersioningError: {
@@ -1929,6 +1935,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketRemoteRemoveDisallowed
 	case BucketReplicationTargetNotVersioned:
 		apiErr = ErrReplicationTargetNotVersionedError
+	case BucketReplicationSourceNotVersioned:
+		apiErr = ErrReplicationSourceNotVersionedError
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:

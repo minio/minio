@@ -49,7 +49,7 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
 func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, error) {
-	clnt := globalBucketTargetSys.GetReplicationTargetClient(ctx, rCfg.ReplicationArn)
+	clnt := globalBucketTargetSys.GetReplicationTargetClient(ctx, rCfg.RoleArn)
 	if clnt == nil {
 		return false, BucketRemoteTargetNotFound{Bucket: bucket}
 	}
@@ -65,7 +65,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		}
 	}
 	// validate replication ARN against target endpoint
-	c, ok := globalBucketTargetSys.arnRemotesMap[rCfg.ReplicationArn]
+	c, ok := globalBucketTargetSys.arnRemotesMap[rCfg.RoleArn]
 	if ok {
 		if c.EndpointURL().String() == clnt.EndpointURL().String() {
 			sameTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
@@ -159,7 +159,7 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 		logger.LogIf(ctx, err)
 		return
 	}
-	tgt := globalBucketTargetSys.GetReplicationTargetClient(ctx, cfg.ReplicationArn)
+	tgt := globalBucketTargetSys.GetReplicationTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil {
 		return
 	}

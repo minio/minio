@@ -50,7 +50,7 @@ var (
 	errReplicationNoRule              = Errorf("Replication configuration should have at least one rule")
 	errReplicationUniquePriority      = Errorf("Replication configuration has duplicate priority")
 	errReplicationDestinationMismatch = Errorf("The destination bucket must be same for all rules")
-	errReplicationArnMissing          = Errorf("Replication Arn missing")
+	errRoleArnMissing                 = Errorf("Missing required parameter `Role` in ReplicationConfiguration")
 )
 
 // Config - replication configuration specified in
@@ -58,8 +58,8 @@ var (
 type Config struct {
 	XMLName xml.Name `xml:"ReplicationConfiguration" json:"-"`
 	Rules   []Rule   `xml:"Rule" json:"Rules"`
-	// ReplicationArn is a MinIO only extension and optional for AWS
-	ReplicationArn string `xml:"ReplicationArn,omitempty" json:"ReplicationArn,omitempty"`
+	// RoleArn is being reused for MinIO replication ARN
+	RoleArn string `xml:"Role" json:"Role"`
 }
 
 // Maximum 2MiB size per replication config.
@@ -84,8 +84,8 @@ func (c Config) Validate(bucket string, sameTarget bool) error {
 	if len(c.Rules) == 0 {
 		return errReplicationNoRule
 	}
-	if c.ReplicationArn == "" {
-		return errReplicationArnMissing
+	if c.RoleArn == "" {
+		return errRoleArnMissing
 	}
 	// Validate all the rules in the replication config
 	targetMap := make(map[string]struct{})

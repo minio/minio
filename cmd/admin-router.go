@@ -183,14 +183,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			}
 			// Bucket replication operations
 			// GetBucketTargetHandler
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-bucket-targets").HandlerFunc(
-				httpTraceHdrs(adminAPI.ListBucketTargetsHandler)).Queries("bucket", "{bucket:.*}", "type", "{type:.*}")
-			// SetBucketTargetHandler
-			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-bucket-target").HandlerFunc(
-				httpTraceHdrs(adminAPI.SetBucketTargetHandler)).Queries("bucket", "{bucket:.*}")
-			// SetBucketTargetHandler
-			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-bucket-target").HandlerFunc(
-				httpTraceHdrs(adminAPI.RemoveBucketTargetHandler)).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
+			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-remote-targets").HandlerFunc(
+				httpTraceHdrs(adminAPI.ListRemoteTargetsHandler)).Queries("bucket", "{bucket:.*}", "type", "{type:.*}")
+			// SetRemoteTargetHandler
+			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-remote-target").HandlerFunc(
+				httpTraceHdrs(adminAPI.SetRemoteTargetHandler)).Queries("bucket", "{bucket:.*}")
+			// SetRemoteTargetHandler
+			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-remote-target").HandlerFunc(
+				httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler)).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
 		}
 
 		// -- Top APIs --

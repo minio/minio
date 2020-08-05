@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -36,16 +35,42 @@ type BucketTargetSys struct {
 	clientsCache  map[string]*miniogo.Core
 }
 
-// ListTargets - gets list of bucket targets for this bucket.
-func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket string) (*madmin.BucketTargets, error) {
-	if globalIsGateway {
-		return nil, nil
+// ListTargets lists bucket targets across tenant or for individual bucket, and returns
+// results filtered by arnType
+func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType string) (targets []madmin.BucketTarget) {
+	if bucket != "" {
+		if ts, err := sys.ListBucketTargets(ctx, bucket); err == nil {
+			for _, t := range ts.Targets {
+				if string(t.Type) == arnType || arnType == "" {
+					targets = append(targets, t.Clone())
+				}
+			}
+		}
+		return targets
 	}
+	sys.RLock()
+	defer sys.RUnlock()
+	for _, tgts := range sys.targetsMap {
+		for _, t := range tgts {
+			if string(t.Type) == arnType || arnType == "" {
+				targets = append(targets, t.Clone())
+			}
+		}
+	}
+	return
+}
+
+// ListBucketTargets - gets list of bucket targets for this bucket.
+func (sys *BucketTargetSys) ListBucketTargets(ctx context.Context, bucket string) (*madmin.BucketTargets, error) {
+
+	sys.RLock()
+	defer sys.RUnlock()
+
 	tgts, ok := sys.targetsMap[bucket]
 	if ok {
 		return &madmin.BucketTargets{Targets: tgts}, nil
 	}
-	return nil, fmt.Errorf("No remote targets exist for bucket %s", bucket)
+	return nil, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
 // SetTarget - sets a new minio-go client target for this bucket.
@@ -60,8 +85,10 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	if err != nil {
 		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 	}
-
-	if tgt.Type == madmin.ReplicationArn {
+	if tgt.Type == madmin.ReplicationService {
+		if !globalBucketVersioningSys.Enabled(bucket) {
+			return BucketReplicationSourceNotVersioned{Bucket: bucket}
+		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
 		if err != nil || vcfg.Status != string(versioning.Enabled) {
 			if isErrBucketNotFound(err) {
@@ -112,10 +139,10 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	if err != nil {
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}
-	if arn.Type == madmin.ReplicationArn {
+	if arn.Type == madmin.ReplicationService {
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
-		if err == nil && rcfg.ReplicationArn == arnStr {
+		if err == nil && rcfg.RoleArn == arnStr {
 			if _, ok := sys.arnRemotesMap[arnStr]; ok {
 				return BucketRemoteRemoveDisallowed{Bucket: bucket}
 			}
@@ -125,11 +152,17 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	sys.Lock()
 	defer sys.Unlock()
 	targets := make([]madmin.BucketTarget, 0)
+	found := false
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
 		if tgt.Arn != arnStr {
 			targets = append(targets, tgt)
+			continue
 		}
+		found = true
+	}
+	if !found {
+		return BucketRemoteTargetNotFound{Bucket: bucket}
 	}
 	sys.targetsMap[bucket] = targets
 	delete(sys.arnRemotesMap, arnStr)
@@ -166,6 +199,40 @@ func (sys *BucketTargetSys) Init(ctx context.Context, buckets []BucketInfo, objA
 	// Load bucket targets once during boot.
 	sys.load(ctx, buckets, objAPI)
 	return nil
+}
+
+// UpdateTarget updates target to reflect metadata updates
+func (sys *BucketTargetSys) UpdateTarget(bucket string, cfg *madmin.BucketTargets) {
+	if sys == nil {
+		return
+	}
+	sys.Lock()
+	defer sys.Unlock()
+	if cfg == nil || cfg.Empty() {
+		// remove target and arn association
+		if tgts, ok := sys.targetsMap[bucket]; ok {
+			for _, t := range tgts {
+				delete(sys.arnRemotesMap, t.Arn)
+			}
+		}
+		delete(sys.targetsMap, bucket)
+		return
+	}
+
+	if len(cfg.Targets) > 0 {
+		sys.targetsMap[bucket] = cfg.Targets
+	}
+	for _, tgt := range cfg.Targets {
+		tgtClient, err := sys.getRemoteTargetClient(&tgt)
+		if err != nil {
+			continue
+		}
+		sys.arnRemotesMap[tgt.Arn] = tgtClient
+		if _, ok := sys.clientsCache[tgtClient.EndpointURL().String()]; !ok {
+			sys.clientsCache[tgtClient.EndpointURL().String()] = tgtClient
+		}
+	}
+	sys.targetsMap[bucket] = cfg.Targets
 }
 
 // create minio-go clients for buckets having remote targets
@@ -229,7 +296,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 			return tgt.Arn
 		}
 	}
-	if !madmin.ArnType(target.Type).IsValid() {
+	if !madmin.ServiceType(target.Type).IsValid() {
 		return ""
 	}
 	arn := madmin.ARN{
