@@ -59,7 +59,7 @@ The replication configuration can now be added to the source bucket by applying 
 ```
 
 ```
-mc replicate add myminio/srcbucket/Tax --priority 1 --arn "arn:minio:replication::c5be6b16-769d-432a-9ef1-4567081f3566:destbucket" --tags "Year=2019&Company=AcmeCorp" --storage-class "STANDARD"
+mc replicate add myminio/srcbucket/Tax --priority 1 --arn "arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket" --tags "Year=2019&Company=AcmeCorp" --storage-class "STANDARD"
 Replication configuration applied successfully to myminio/srcbucket.
 ```
 
