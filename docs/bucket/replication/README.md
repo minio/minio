@@ -2,7 +2,7 @@
 
 Bucket replication is designed to replicate selected objects in a bucket to a destination bucket.
 
-To replicate objects in a bucket to a destination bucket on a target site either in the same cluster or a different cluster, start by enabling [versioning](https://github.com/minio/minio/tree/master/docs/bucket/versioning) for both source and destination buckets. Finally, the target site and the destination bucket need to be configured on the source MinIO server.
+To replicate objects in a bucket to a destination bucket on a target site either in the same cluster or a different cluster, start by enabling [versioning](https://docs.minio.io/docs/minio-bucket-versioning-guide.html) for both source and destination buckets. Finally, the target site and the destination bucket need to be configured on the source MinIO server.
 
 ## Highlights
 - Supports source and destination buckets to have the same name unlike AWS S3, addresses variety of usecases such as *Splunk*, *Veeam* site to site DR.
