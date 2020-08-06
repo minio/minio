@@ -93,11 +93,16 @@ EXAMPLES:
 `,
 }
 
-// Checks if endpoints are either available through environment
-// or command line, returns false if both fails.
-func endpointsPresent(ctx *cli.Context) bool {
-	endpoints := env.Get(config.EnvEndpoints, strings.Join(ctx.Args(), config.ValueSeparator))
-	return len(endpoints) != 0
+func serverCmdArgs(ctx *cli.Context) []string {
+	v := env.Get(config.EnvArgs, "")
+	if v == "" {
+		// Fall back to older ENV MINIO_ENDPOINTS
+		v = env.Get(config.EnvEndpoints, "")
+	}
+	if v == "" {
+		return ctx.Args()
+	}
+	return strings.Fields(v)
 }
 
 func serverHandleCmdArgs(ctx *cli.Context) {
@@ -106,18 +111,24 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
 
-	var setupType SetupType
 	var err error
+	var setupType SetupType
+
+	// Check and load TLS certificates.
+	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	logger.FatalIf(err, "Unable to load the TLS configuration")
+
+	// Check and load Root CAs.
+	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
+	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	// Register root CAs for remote ENVs
+	env.RegisterGlobalCAs(globalRootCAs)
 
 	globalMinioAddr = globalCLIContext.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
-	if len(endpoints) > 0 {
-		globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
-	} else {
-		globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
-	}
+	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -370,9 +381,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
-		cli.ShowCommandHelpAndExit(ctx, "server", 1)
-	}
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
@@ -392,15 +400,7 @@ func serverMain(ctx *cli.Context) {
 	// Initialize all help
 	initHelp()
 
-	// Check and load TLS certificates.
 	var err error
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
-	logger.FatalIf(err, "Unable to load the TLS configuration")
-
-	// Check and load Root CAs.
-	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
-	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
-
 	globalProxyEndpoints, err = GetProxyEndpoints(globalEndpoints)
 	logger.FatalIf(err, "Invalid command line arguments")
 
