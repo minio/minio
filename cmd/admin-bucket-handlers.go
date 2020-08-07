@@ -26,7 +26,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -122,8 +121,8 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	writeSuccessResponseJSON(w, configData)
 }
 
-// SetBucketTargetHandler - sets a remote target for bucket
-func (a adminAPIHandlers) SetBucketTargetHandler(w http.ResponseWriter, r *http.Request) {
+// SetRemoteTargetHandler - sets a remote target for bucket
+func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "SetBucketTarget")
 
 	defer logger.AuditLog(w, r, "SetBucketTarget", mustGetClaimsFromToken(r))
@@ -174,6 +173,7 @@ func (a adminAPIHandlers) SetBucketTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketRemoteIdenticalToSource), r.URL)
 		return
 	}
+	target.SourceBucket = bucket
 	target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
 	if target.Arn == "" {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
@@ -183,7 +183,7 @@ func (a adminAPIHandlers) SetBucketTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	targets, err := globalBucketTargetSys.ListTargets(ctx, bucket)
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -209,9 +209,9 @@ func (a adminAPIHandlers) SetBucketTargetHandler(w http.ResponseWriter, r *http.
 	writeSuccessResponseJSON(w, data)
 }
 
-// ListBucketTargetsHandler - lists remote target(s) for a bucket or gets a target
+// ListRemoteTargetsHandler - lists remote target(s) for a bucket or gets a target
 // for a particular ARN type
-func (a adminAPIHandlers) ListBucketTargetsHandler(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListBucketTargets")
 
 	defer logger.AuditLog(w, r, "ListBucketTargets", mustGetClaimsFromToken(r))
@@ -225,28 +225,13 @@ func (a adminAPIHandlers) ListBucketTargetsHandler(w http.ResponseWriter, r *htt
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-
-	cfg, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	var (
-		targets []madmin.BucketTarget
-		tgt, ct madmin.BucketTarget
-		creds   auth.Credentials
-	)
-	if cfg != nil && !cfg.Empty() {
-		for idx, t := range cfg.Targets {
-			if string(t.Type) == arnType || arnType == "" {
-				ct = cfg.Targets[idx]
-				// remove secretKey from creds
-				creds.AccessKey = ct.Credentials.AccessKey
-				tgt = madmin.BucketTarget{Endpoint: ct.Endpoint, Secure: ct.Secure, TargetBucket: ct.TargetBucket, Credentials: &creds, Arn: ct.Arn, Type: ct.Type}
-				targets = append(targets, tgt)
-			}
+	if bucket != "" {
+		if _, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
 	}
+	targets := globalBucketTargetSys.ListTargets(ctx, bucket, arnType)
 	data, err := json.Marshal(targets)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -256,8 +241,8 @@ func (a adminAPIHandlers) ListBucketTargetsHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseJSON(w, data)
 }
 
-// RemoveBucketTargetHandler - removes a remote target for bucket with specified ARN
-func (a adminAPIHandlers) RemoveBucketTargetHandler(w http.ResponseWriter, r *http.Request) {
+// RemoveRemoteTargetHandler - removes a remote target for bucket with specified ARN
+func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "RemoveBucketTarget")
 
 	defer logger.AuditLog(w, r, "RemoveBucketTarget", mustGetClaimsFromToken(r))
@@ -275,11 +260,18 @@ func (a adminAPIHandlers) RemoveBucketTargetHandler(w http.ResponseWriter, r *ht
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
 	if err := globalBucketTargetSys.RemoveTarget(ctx, bucket, arn); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	targets, err := globalBucketTargetSys.ListTargets(ctx, bucket)
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

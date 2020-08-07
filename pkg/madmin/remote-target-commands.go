@@ -29,22 +29,22 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-// ArnType represents bucket ARN type
-type ArnType string
+// ServiceType represents service type
+type ServiceType string
 
 const (
-	// ReplicationArn specifies a ARN type of replication
-	ReplicationArn ArnType = "replication"
+	// ReplicationService specifies replication service
+	ReplicationService ServiceType = "replication"
 )
 
-// IsValid returns true if ARN type is replication
-func (t ArnType) IsValid() bool {
-	return t == ReplicationArn
+// IsValid returns true if ARN type represents replication
+func (t ServiceType) IsValid() bool {
+	return t == ReplicationService
 }
 
 // ARN is a struct to define arn.
 type ARN struct {
-	Type   ArnType
+	Type   ServiceType
 	ID     string
 	Region string
 	Bucket string
@@ -75,7 +75,7 @@ func ParseARN(s string) (*ARN, error) {
 	}
 
 	return &ARN{
-		Type:   ArnType(tokens[2]),
+		Type:   ServiceType(tokens[2]),
 		Region: tokens[3],
 		ID:     tokens[4],
 		Bucket: tokens[5],
@@ -84,6 +84,7 @@ func ParseARN(s string) (*ARN, error) {
 
 // BucketTarget represents the target bucket and site association.
 type BucketTarget struct {
+	SourceBucket string            `json:"sourcebucket"`
 	Endpoint     string            `json:"endpoint"`
 	Credentials  *auth.Credentials `json:"credentials"`
 	TargetBucket string            `json:"targetbucket"`
@@ -91,8 +92,24 @@ type BucketTarget struct {
 	Path         string            `json:"path,omitempty"`
 	API          string            `json:"api,omitempty"`
 	Arn          string            `json:"arn,omitempty"`
-	Type         ArnType           `json:"type"`
+	Type         ServiceType       `json:"type"`
 	Region       string            `json:"omitempty"`
+}
+
+// Clone returns shallow clone of BucketTarget without secret key in credentials
+func (t *BucketTarget) Clone() BucketTarget {
+	return BucketTarget{
+		SourceBucket: t.SourceBucket,
+		Endpoint:     t.Endpoint,
+		TargetBucket: t.TargetBucket,
+		Credentials:  &auth.Credentials{AccessKey: t.Credentials.AccessKey},
+		Secure:       t.Secure,
+		Path:         t.Path,
+		API:          t.Path,
+		Arn:          t.Arn,
+		Type:         t.Type,
+		Region:       t.Region,
+	}
 }
 
 // URL returns target url
@@ -132,18 +149,18 @@ func (t BucketTargets) Empty() bool {
 	return empty
 }
 
-// ListBucketTargets - gets target(s) for this bucket
-func (adm *AdminClient) ListBucketTargets(ctx context.Context, bucket, arnType string) (targets []BucketTarget, err error) {
+// ListRemoteTargets - gets target(s) for this bucket
+func (adm *AdminClient) ListRemoteTargets(ctx context.Context, bucket, arnType string) (targets []BucketTarget, err error) {
 	queryValues := url.Values{}
 	queryValues.Set("bucket", bucket)
 	queryValues.Set("type", arnType)
 
 	reqData := requestData{
-		relPath:     adminAPIPrefix + "/list-bucket-targets",
+		relPath:     adminAPIPrefix + "/list-remote-targets",
 		queryValues: queryValues,
 	}
 
-	// Execute GET on /minio/admin/v3/list-bucket-targets
+	// Execute GET on /minio/admin/v3/list-remote-targets
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 
 	defer closeResponse(resp)
@@ -165,8 +182,8 @@ func (adm *AdminClient) ListBucketTargets(ctx context.Context, bucket, arnType s
 	return targets, nil
 }
 
-// SetBucketTarget sets up a remote target for this bucket
-func (adm *AdminClient) SetBucketTarget(ctx context.Context, bucket string, target *BucketTarget) (string, error) {
+// SetRemoteTarget sets up a remote target for this bucket
+func (adm *AdminClient) SetRemoteTarget(ctx context.Context, bucket string, target *BucketTarget) (string, error) {
 	data, err := json.Marshal(target)
 	if err != nil {
 		return "", err
@@ -179,12 +196,12 @@ func (adm *AdminClient) SetBucketTarget(ctx context.Context, bucket string, targ
 	queryValues.Set("bucket", bucket)
 
 	reqData := requestData{
-		relPath:     adminAPIPrefix + "/set-bucket-target",
+		relPath:     adminAPIPrefix + "/set-remote-target",
 		queryValues: queryValues,
 		content:     encData,
 	}
 
-	// Execute PUT on /minio/admin/v3/set-bucket-target to set a target for this bucket of specific arn type.
+	// Execute PUT on /minio/admin/v3/set-remote-target to set a target for this bucket of specific arn type.
 	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
@@ -206,18 +223,18 @@ func (adm *AdminClient) SetBucketTarget(ctx context.Context, bucket string, targ
 	return arn, nil
 }
 
-// RemoveBucketTarget removes a remote target associated with particular ARN for this bucket
-func (adm *AdminClient) RemoveBucketTarget(ctx context.Context, bucket, arn string) error {
+// RemoveRemoteTarget removes a remote target associated with particular ARN for this bucket
+func (adm *AdminClient) RemoveRemoteTarget(ctx context.Context, bucket, arn string) error {
 	queryValues := url.Values{}
 	queryValues.Set("bucket", bucket)
 	queryValues.Set("arn", arn)
 
 	reqData := requestData{
-		relPath:     adminAPIPrefix + "/remove-bucket-target",
+		relPath:     adminAPIPrefix + "/remove-remote-target",
 		queryValues: queryValues,
 	}
 
-	// Execute PUT on /minio/admin/v3/remove-bucket-target to remove a target for this bucket
+	// Execute PUT on /minio/admin/v3/remove-remote-target to remove a target for this bucket
 	// with specific ARN
 	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
 	defer closeResponse(resp)

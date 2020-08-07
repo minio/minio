@@ -610,6 +610,10 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 	if meta.notificationConfig != nil {
 		globalNotificationSys.AddRulesMap(bucketName, meta.notificationConfig.ToRulesMap())
 	}
+
+	if meta.bucketTargetConfig != nil {
+		globalBucketTargetSys.UpdateTarget(bucketName, meta.bucketTargetConfig)
+	}
 }
 
 // ReloadFormatHandler - Reload Format.
