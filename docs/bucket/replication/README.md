@@ -1,8 +1,8 @@
 # Bucket Replication Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-Bucket replication is designed to replicate specific objects in buckets that are configured for replication.
+Bucket replication is designed to replicate selected objects in a bucket to a destination bucket.
 
-To replicate objects in a bucket to a destination bucket on a target site either on the same cluster or a different cluster, start by creating version enabled buckets on both `source` and `dest` buckets. Next, the target site and destination bucket need to be configured on MinIO server by setting
+To replicate objects in a bucket to a destination bucket on a target site either in the same cluster or a different cluster, start by enabling [versioning](https://docs.minio.io/docs/minio-bucket-versioning-guide.html) for both source and destination buckets. Finally, the target site and the destination bucket need to be configured on the source MinIO server.
 
 ## Highlights
 - Supports source and destination buckets to have the same name unlike AWS S3, addresses variety of usecases such as *Splunk*, *Veeam* site to site DR.
@@ -64,6 +64,7 @@ Replication configuration applied successfully to myminio/srcbucket.
 ```
 
 The replication configuration follows [AWS S3 Spec](https://docs.aws.amazon.com/AmazonS3/latest/dev/replication-add-config.html). Any objects uploaded to the source bucket that meet replication criteria will now be automatically replicated by the MinIO server to the remote destination bucket. Replication can be disabled at any time by disabling specific rules in the configuration or deleting the replication configuration entirely.
+
 
 When an object is deleted from the source bucket, the replica will not be deleted as per S3 spec.
 
