@@ -2103,9 +2103,6 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 		legacyDataPath := pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 		// legacy data dir means its old content, honor system umask.
 		if err = os.MkdirAll(legacyDataPath, 0777); err != nil {
-			if isSysErrIO(err) {
-				return errFaultyDisk
-			}
 			return osErrToFileErr(err)
 		}
 
@@ -2116,14 +2113,11 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 
 		for _, entry := range entries {
 			// Skip xl.meta renames further, also ignore any directories such as `legacyDataDir`
-			if entry == xlStorageFormatFile || strings.HasPrefix(entry, SlashSeparator) {
+			if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
 				continue
 			}
 
 			if err = os.Rename(pathJoin(currentDataPath, entry), pathJoin(legacyDataPath, entry)); err != nil {
-				if isSysErrIO(err) {
-					return errFaultyDisk
-				}
 				return osErrToFileErr(err)
 			}
 		}
@@ -2159,20 +2153,14 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 	}
 
 	if err = renameAll(srcFilePath, dstFilePath); err != nil {
-		if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		return err
+		return osErrToFileErr(err)
 	}
 
 	if srcDataPath != "" {
 		removeAll(oldDstDataPath)
 		removeAll(dstDataPath)
 		if err = renameAll(srcDataPath, dstDataPath); err != nil {
-			if isSysErrIO(err) {
-				return errFaultyDisk
-			}
-			return err
+			return osErrToFileErr(err)
 		}
 	}
 
@@ -2265,10 +2253,7 @@ func (s *xlStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (e
 	}
 
 	if err = renameAll(srcFilePath, dstFilePath); err != nil {
-		if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		return err
+		return osErrToFileErr(err)
 	}
 
 	// Remove parent dir of the source file if empty

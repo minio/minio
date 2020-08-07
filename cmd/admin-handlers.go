@@ -799,6 +799,52 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	keepConnLive(w, r, respCh)
 }
 
+func getAggregatedBackgroundHealState(ctx context.Context, failOnErr bool) (madmin.BgHealState, error) {
+	var bgHealStates []madmin.BgHealState
+
+	// Get local heal status first
+	bgHealStates = append(bgHealStates, getLocalBackgroundHealStatus())
+
+	if globalIsDistErasure {
+		// Get heal status from other peers
+		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus()
+		for _, nerr := range nerrs {
+			if nerr.Err != nil {
+				if failOnErr {
+					return madmin.BgHealState{}, nerr.Err
+				}
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+		bgHealStates = append(bgHealStates, peersHealStates...)
+	}
+
+	// Aggregate healing result
+	var aggregatedHealStateResult = madmin.BgHealState{
+		ScannedItemsCount: bgHealStates[0].ScannedItemsCount,
+		LastHealActivity:  bgHealStates[0].LastHealActivity,
+		NextHealRound:     bgHealStates[0].NextHealRound,
+		HealDisks:         bgHealStates[0].HealDisks,
+	}
+
+	bgHealStates = bgHealStates[1:]
+
+	for _, state := range bgHealStates {
+		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
+		aggregatedHealStateResult.HealDisks = append(aggregatedHealStateResult.HealDisks, state.HealDisks...)
+		if !state.LastHealActivity.IsZero() && aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
+			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
+			// The node which has the last heal activity means its
+			// is the node that is orchestrating self healing operations,
+			// which also means it is the same node which decides when
+			// the next self healing operation will be done.
+			aggregatedHealStateResult.NextHealRound = state.NextHealRound
+		}
+	}
+
+	return aggregatedHealStateResult, nil
+}
+
 func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HealBackgroundStatus")
 
@@ -815,39 +861,8 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	var bgHealStates []madmin.BgHealState
-
-	// Get local heal status first
-	bgHealStates = append(bgHealStates, getLocalBackgroundHealStatus())
-
-	if globalIsDistErasure {
-		// Get heal status from other peers
-		peersHealStates := globalNotificationSys.BackgroundHealStatus()
-		bgHealStates = append(bgHealStates, peersHealStates...)
-	}
-
-	// Aggregate healing result
-	var aggregatedHealStateResult = madmin.BgHealState{
-		ScannedItemsCount: bgHealStates[0].ScannedItemsCount,
-		LastHealActivity:  bgHealStates[0].LastHealActivity,
-		NextHealRound:     bgHealStates[0].NextHealRound,
-	}
-
-	bgHealStates = bgHealStates[1:]
-
-	for _, state := range bgHealStates {
-		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
-		if !state.LastHealActivity.IsZero() && aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
-			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
-			// The node which has the last heal activity means its
-			// is the node that is orchestrating self healing operations,
-			// which also means it is the same node which decides when
-			// the next self healing operation will be done.
-			aggregatedHealStateResult.NextHealRound = state.NextHealRound
-		}
-	}
-
-	if err := json.NewEncoder(w).Encode(aggregatedHealStateResult); err != nil {
+	aggregateHealStateResult, _ := getAggregatedBackgroundHealState(r.Context(), false)
+	if err := json.NewEncoder(w).Encode(aggregateHealStateResult); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
