@@ -172,6 +172,18 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
+	// Check and load TLS certificates.
+	var err error
+	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	logger.FatalIf(err, "Invalid TLS certificate file")
+
+	// Check and load Root CAs.
+	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
+	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	// Register root CAs for remote ENVs
+	env.RegisterGlobalCAs(globalRootCAs)
+
 	// Initialize all help
 	initHelp()
 
@@ -183,15 +195,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the gateway")
-
-	// Check and load TLS certificates.
-	var err error
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
-	logger.FatalIf(err, "Invalid TLS certificate file")
-
-	// Check and load Root CAs.
-	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
-	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	globalMinioEndpoint = func() string {
 		host := globalMinioHost
