@@ -480,6 +480,12 @@ func getHostName(r *http.Request) (hostName string) {
 func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
 	success = true
 
+	// Make sure we remove any existing headers before
+	// proxying the request to another node.
+	for k := range w.Header() {
+		w.Header().Del(k)
+	}
+
 	f := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
 		RoundTripper: ep.Transport,
