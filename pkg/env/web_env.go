@@ -152,7 +152,7 @@ func LookupEnv(key string) (string, bool) {
 	if ok {
 		u, err := url.Parse(v)
 		if err != nil {
-			return "", false
+			return v, true
 		}
 		if !isValidEnvScheme(u.Scheme) {
 			return v, true
