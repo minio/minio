@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -28,6 +29,46 @@ const defaultMonitorNewDiskInterval = time.Minute * 3
 
 func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 	go monitorLocalDisksAndHeal(ctx, objAPI)
+}
+
+func getLocalDisksToHeal(objAPI ObjectLayer) []Endpoints {
+	z, ok := objAPI.(*erasureZones)
+	if !ok {
+		return nil
+	}
+
+	// Attempt a heal as the server starts-up first.
+	localDisksInZoneHeal := make([]Endpoints, len(z.zones))
+	for i, ep := range globalEndpoints {
+		localDisksToHeal := Endpoints{}
+		for _, endpoint := range ep.Endpoints {
+			if !endpoint.IsLocal {
+				continue
+			}
+			// Try to connect to the current endpoint
+			// and reformat if the current disk is not formatted
+			_, _, err := connectEndpoint(endpoint)
+			if err == errUnformattedDisk {
+				localDisksToHeal = append(localDisksToHeal, endpoint)
+			}
+		}
+		if len(localDisksToHeal) == 0 {
+			continue
+		}
+		localDisksInZoneHeal[i] = localDisksToHeal
+	}
+	return localDisksInZoneHeal
+
+}
+
+func getDrivesToHealCount(localDisksInZoneHeal []Endpoints) int {
+	var drivesToHeal int
+	for _, eps := range localDisksInZoneHeal {
+		for range eps {
+			drivesToHeal++
+		}
+	}
+	return drivesToHeal
 }
 
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed
@@ -50,52 +91,42 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 		time.Sleep(time.Second)
 	}
 
+	localDisksInZoneHeal := globalBackgroundHealState.getHealLocalDisks()
+
+	drivesToHeal := getDrivesToHealCount(localDisksInZoneHeal)
+	if drivesToHeal != 0 {
+		logger.Info(fmt.Sprintf("Found drives to heal %d, waiting until %s to heal the content...",
+			drivesToHeal, defaultMonitorNewDiskInterval))
+	}
+
+	firstTime := true
+
 	// Perform automatic disk healing when a disk is replaced locally.
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(defaultMonitorNewDiskInterval):
-			// Attempt a heal as the server starts-up first.
-			localDisksInZoneHeal := make([]Endpoints, len(z.zones))
-			var healNewDisks bool
-			for i, ep := range globalEndpoints {
-				localDisksToHeal := Endpoints{}
-				for _, endpoint := range ep.Endpoints {
-					if !endpoint.IsLocal {
-						continue
-					}
-					// Try to connect to the current endpoint
-					// and reformat if the current disk is not formatted
-					_, _, err := connectEndpoint(endpoint)
-					if err == errUnformattedDisk {
-						localDisksToHeal = append(localDisksToHeal, endpoint)
-					}
-				}
-				if len(localDisksToHeal) == 0 {
+			// heal only if new disks found.
+			if drivesToHeal == 0 {
+				firstTime = false
+				localDisksInZoneHeal = getLocalDisksToHeal(z)
+				drivesToHeal = getDrivesToHealCount(localDisksInZoneHeal)
+				if drivesToHeal == 0 {
+					// No drives to heal.
+					globalBackgroundHealState.updateHealLocalDisks(nil)
 					continue
 				}
-				localDisksInZoneHeal[i] = localDisksToHeal
-				healNewDisks = true
+				globalBackgroundHealState.updateHealLocalDisks(localDisksInZoneHeal)
 			}
 
-			// Reformat disks only if needed.
-			if !healNewDisks {
-				continue
+			if !firstTime {
+				// Reformat disks
+				bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
+
+				// Ensure that reformatting disks is finished
+				bgSeq.sourceCh <- healSource{bucket: nopHeal}
 			}
-
-			logger.Info("New unformatted drives detected attempting to heal...")
-			for i, disks := range localDisksInZoneHeal {
-				for _, disk := range disks {
-					logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
-				}
-			}
-
-			// Reformat disks
-			bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
-
-			// Ensure that reformatting disks is finished
-			bgSeq.sourceCh <- healSource{bucket: nopHeal}
 
 			var erasureSetInZoneToHeal = make([][]int, len(localDisksInZoneHeal))
 			// Compute the list of erasure set to heal
@@ -108,6 +139,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 						printEndpointError(endpoint, err, true)
 						continue
 					}
+
 					// Calculate the set index where the current endpoint belongs
 					setIndex, _, err := findDiskIndex(z.zones[i].format, format)
 					if err != nil {
@@ -120,12 +152,24 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 				erasureSetInZoneToHeal[i] = erasureSetToHeal
 			}
 
+			logger.Info("New unformatted drives detected attempting to heal the content...")
+			for i, disks := range localDisksInZoneHeal {
+				for _, disk := range disks {
+					logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
+				}
+			}
+
 			// Heal all erasure sets that need
 			for i, erasureSetToHeal := range erasureSetInZoneToHeal {
 				for _, setIndex := range erasureSetToHeal {
 					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].drivesPerSet)
 					if err != nil {
 						logger.LogIf(ctx, err)
+					}
+
+					// Only upon success reduce the counter
+					if err == nil {
+						drivesToHeal--
 					}
 				}
 			}

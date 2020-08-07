@@ -2032,6 +2032,7 @@ type HealthOptions struct {
 // was queried
 type HealthResult struct {
 	Healthy       bool
+	HealingDrives int
 	ZoneID, SetID int
 	WriteQuorum   int
 }
@@ -2086,8 +2087,23 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 			}
 		}
 	}
+
+	// check if local disks are being healed, if they are being healed
+	// we need to tell healthy status as 'false' so that this server
+	// is not taken down for maintenance
+	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx, true)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to verify global heal status: %w", err))
+		return HealthResult{
+			Healthy: false,
+		}
+	}
+
+	healthy := len(aggHealStateResult.HealDisks) == 0
+
 	return HealthResult{
-		Healthy: true,
+		Healthy:       healthy,
+		HealingDrives: len(aggHealStateResult.HealDisks),
 	}
 }
 

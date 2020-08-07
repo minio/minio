@@ -1414,6 +1414,11 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			return madmin.HealResultItem{}, err
 		}
 
+		refFormat, err = getFormatErasureInQuorum(tmpNewFormats)
+		if err != nil {
+			return madmin.HealResultItem{}, err
+		}
+
 		// kill the monitoring loop such that we stop writing
 		// to indicate that we will re-initialize everything
 		// with new format.

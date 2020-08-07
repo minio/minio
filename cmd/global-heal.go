@@ -73,9 +73,17 @@ func getLocalBackgroundHealStatus() madmin.BgHealState {
 		return madmin.BgHealState{}
 	}
 
+	var healDisks []string
+	for _, eps := range globalBackgroundHealState.getHealLocalDisks() {
+		for _, ep := range eps {
+			healDisks = append(healDisks, ep.String())
+		}
+	}
+
 	return madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
+		HealDisks:         healDisks,
 		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
 	}
 }

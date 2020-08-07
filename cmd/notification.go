@@ -269,21 +269,25 @@ func (sys *NotificationSys) LoadServiceAccount(accessKey string) []NotificationP
 }
 
 // BackgroundHealStatus - returns background heal status of all peers
-func (sys *NotificationSys) BackgroundHealStatus() []madmin.BgHealState {
+func (sys *NotificationSys) BackgroundHealStatus() ([]madmin.BgHealState, []NotificationPeerErr) {
+	ng := WithNPeers(len(sys.peerClients))
 	states := make([]madmin.BgHealState, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
-		st, err := client.BackgroundHealStatus()
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
-		} else {
+		client := client
+		ng.Go(GlobalContext, func() error {
+			st, err := client.BackgroundHealStatus()
+			if err != nil {
+				return err
+			}
 			states[idx] = st
-		}
+			return nil
+		}, idx, *client.host)
 	}
 
-	return states
+	return states, ng.Wait()
 }
 
 // StartProfiling - start profiling on remote peers, by initiating a remote RPC.

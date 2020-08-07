@@ -294,6 +294,7 @@ type BgHealState struct {
 	ScannedItemsCount int64
 	LastHealActivity  time.Time
 	NextHealRound     time.Time
+	HealDisks         []string
 }
 
 // BackgroundHealStatus returns the background heal status of the

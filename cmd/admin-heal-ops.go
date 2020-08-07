@@ -88,7 +88,8 @@ type allHealState struct {
 	sync.Mutex
 
 	// map of heal path to heal sequence
-	healSeqMap map[string]*healSequence
+	healSeqMap     map[string]*healSequence
+	healLocalDisks []Endpoints
 }
 
 // newHealState - initialize global heal state management
@@ -100,6 +101,22 @@ func newHealState() *allHealState {
 	go healState.periodicHealSeqsClean(GlobalContext)
 
 	return healState
+}
+
+func (ahs *allHealState) getHealLocalDisks() []Endpoints {
+	ahs.Lock()
+	defer ahs.Unlock()
+
+	healLocalDisks := make([]Endpoints, len(ahs.healLocalDisks))
+	copy(healLocalDisks, ahs.healLocalDisks)
+	return healLocalDisks
+}
+
+func (ahs *allHealState) updateHealLocalDisks(eps []Endpoints) {
+	ahs.Lock()
+	defer ahs.Unlock()
+
+	ahs.healLocalDisks = eps
 }
 
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {

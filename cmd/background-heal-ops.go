@@ -90,6 +90,9 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			case task.bucket == nopHeal:
 				continue
 			case task.bucket == SlashSeparator:
+				// Quickly check if drives need healing upon start-up
+				globalBackgroundHealState.updateHealLocalDisks(getLocalDisksToHeal(objAPI))
+
 				res, err = healDiskFormat(ctx, objAPI, task.opts)
 			case task.bucket != "" && task.object == "":
 				res, err = objAPI.HealBucket(ctx, task.bucket, task.opts.DryRun, task.opts.Remove)
