@@ -221,8 +221,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 
 	// Enable healing to heal drives if possible
 	if globalIsErasure {
-		initBackgroundHealing(ctx, newObject)
-		initLocalDisksAutoHeal(ctx, newObject)
+		initAutoHeal(ctx, newObject)
 	}
 
 	// ****  WARNING ****

@@ -27,8 +27,46 @@ import (
 
 const defaultMonitorNewDiskInterval = time.Minute * 3
 
-func initLocalDisksAutoHeal(ctx context.Context, objAPI ObjectLayer) {
-	go monitorLocalDisksAndHeal(ctx, objAPI)
+func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
+	z, ok := objAPI.(*erasureZones)
+	if !ok {
+		return
+	}
+
+	initBackgroundHealing(ctx, objAPI) // start quick background healing
+
+	localDisksInZoneHeal := getLocalDisksToHeal(objAPI)
+	globalBackgroundHealState.updateHealLocalDisks(localDisksInZoneHeal)
+
+	drivesToHeal := getDrivesToHealCount(localDisksInZoneHeal)
+	if drivesToHeal != 0 {
+		logger.Info(fmt.Sprintf("Found drives to heal %d, waiting until %s to heal the content...",
+			drivesToHeal, defaultMonitorNewDiskInterval))
+	}
+
+	var bgSeq *healSequence
+	var found bool
+
+	for {
+		bgSeq, found = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if found {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	if drivesToHeal != 0 {
+		// Heal any disk format and metadata early, if possible.
+		if err := bgSeq.healDiskMeta(); err != nil {
+			if newObjectLayerFn() != nil {
+				// log only in situations, when object layer
+				// has fully initialized.
+				logger.LogIf(bgSeq.ctx, err)
+			}
+		}
+	}
+
+	go monitorLocalDisksAndHeal(ctx, z, drivesToHeal, localDisksInZoneHeal, bgSeq)
 }
 
 func getLocalDisksToHeal(objAPI ObjectLayer) []Endpoints {
@@ -71,36 +109,18 @@ func getDrivesToHealCount(localDisksInZoneHeal []Endpoints) int {
 	return drivesToHeal
 }
 
+func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
+	// Run the background healer
+	globalBackgroundHealRoutine = newHealRoutine()
+	go globalBackgroundHealRoutine.run(ctx, objAPI)
+
+	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence())
+}
+
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed
 //  1. Only the concerned erasure set will be listed and healed
 //  2. Only the node hosting the disk is responsible to perform the heal
-func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
-	z, ok := objAPI.(*erasureZones)
-	if !ok {
-		return
-	}
-
-	var bgSeq *healSequence
-	var found bool
-
-	for {
-		bgSeq, found = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if found {
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	localDisksInZoneHeal := globalBackgroundHealState.getHealLocalDisks()
-
-	drivesToHeal := getDrivesToHealCount(localDisksInZoneHeal)
-	if drivesToHeal != 0 {
-		logger.Info(fmt.Sprintf("Found drives to heal %d, waiting until %s to heal the content...",
-			drivesToHeal, defaultMonitorNewDiskInterval))
-	}
-
-	firstTime := true
-
+func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, drivesToHeal int, localDisksInZoneHeal []Endpoints, bgSeq *healSequence) {
 	// Perform automatic disk healing when a disk is replaced locally.
 	for {
 		select {
@@ -109,7 +129,6 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 		case <-time.After(defaultMonitorNewDiskInterval):
 			// heal only if new disks found.
 			if drivesToHeal == 0 {
-				firstTime = false
 				localDisksInZoneHeal = getLocalDisksToHeal(z)
 				drivesToHeal = getDrivesToHealCount(localDisksInZoneHeal)
 				if drivesToHeal == 0 {
@@ -118,9 +137,10 @@ func monitorLocalDisksAndHeal(ctx context.Context, objAPI ObjectLayer) {
 					continue
 				}
 				globalBackgroundHealState.updateHealLocalDisks(localDisksInZoneHeal)
-			}
 
-			if !firstTime {
+				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
+					drivesToHeal))
+
 				// Reformat disks
 				bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
 

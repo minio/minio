@@ -2099,6 +2099,10 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		}
 	}
 
+	if len(aggHealStateResult.HealDisks) > 0 {
+		logger.LogIf(ctx, fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+	}
+
 	healthy := len(aggHealStateResult.HealDisks) == 0
 
 	return HealthResult{

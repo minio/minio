@@ -276,6 +276,7 @@ func (sys *NotificationSys) BackgroundHealStatus() ([]madmin.BgHealState, []Noti
 		if client == nil {
 			continue
 		}
+		idx := idx
 		client := client
 		ng.Go(GlobalContext, func() error {
 			st, err := client.BackgroundHealStatus()
