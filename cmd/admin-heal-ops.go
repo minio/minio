@@ -112,11 +112,11 @@ func (ahs *allHealState) getHealLocalDisks() []Endpoints {
 	return healLocalDisks
 }
 
-func (ahs *allHealState) updateHealLocalDisks(eps []Endpoints) {
+func (ahs *allHealState) updateHealLocalDisks(healLocalDisks []Endpoints) {
 	ahs.Lock()
 	defer ahs.Unlock()
 
-	ahs.healLocalDisks = eps
+	ahs.healLocalDisks = healLocalDisks
 }
 
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
@@ -502,6 +502,10 @@ func (h *healSequence) isQuitting() bool {
 // check if the heal sequence has ended
 func (h *healSequence) hasEnded() bool {
 	h.mutex.RLock()
+	// background heal never ends
+	if h.clientToken == bgHealingUUID {
+		return false
+	}
 	ended := len(h.currentStatus.Items) == 0 || h.currentStatus.Summary == healStoppedStatus || h.currentStatus.Summary == healFinishedStatus
 	h.mutex.RUnlock()
 	return ended

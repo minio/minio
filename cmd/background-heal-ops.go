@@ -90,9 +90,6 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			case task.bucket == nopHeal:
 				continue
 			case task.bucket == SlashSeparator:
-				// Quickly check if drives need healing upon start-up
-				globalBackgroundHealState.updateHealLocalDisks(getLocalDisksToHeal(objAPI))
-
 				res, err = healDiskFormat(ctx, objAPI, task.opts)
 			case task.bucket != "" && task.object == "":
 				res, err = objAPI.HealBucket(ctx, task.bucket, task.opts.DryRun, task.opts.Remove)
@@ -117,24 +114,6 @@ func newHealRoutine() *healRoutine {
 		doneCh: make(chan struct{}),
 	}
 
-}
-
-func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
-	// Run the background healer
-	globalBackgroundHealRoutine = newHealRoutine()
-	go globalBackgroundHealRoutine.run(ctx, objAPI)
-
-	nh := newBgHealSequence()
-	// Heal any disk format and metadata early, if possible.
-	if err := nh.healDiskMeta(); err != nil {
-		if newObjectLayerFn() != nil {
-			// log only in situations, when object layer
-			// has fully initialized.
-			logger.LogIf(nh.ctx, err)
-		}
-	}
-
-	globalBackgroundHealState.LaunchNewHealSequence(nh)
 }
 
 // healDiskFormat - heals format.json, return value indicates if a
