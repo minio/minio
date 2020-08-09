@@ -185,7 +185,6 @@ func IsServerResolvable(endpoint Endpoint) error {
 		tlsConfig = &tls.Config{
 			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,
-			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 

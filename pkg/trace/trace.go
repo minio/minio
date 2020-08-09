@@ -42,6 +42,7 @@ type CallStats struct {
 // RequestInfo represents trace of http request
 type RequestInfo struct {
 	Time     time.Time   `json:"time"`
+	Proto    string      `json:"proto"`
 	Method   string      `json:"method"`
 	Path     string      `json:"path,omitempty"`
 	RawQuery string      `json:"rawquery,omitempty"`

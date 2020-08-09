@@ -39,13 +39,13 @@ import (
 	"sync"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
-
-	humanize "github.com/dustin/go-humanize"
-	"github.com/gorilla/mux"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -467,6 +467,11 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		// in raw stream.
 		DisableCompression: true,
 	}
+
+	if tlsConfig != nil {
+		http2.ConfigureTransport(tr)
+	}
+
 	return func() *http.Transport {
 		return tr
 	}
@@ -490,6 +495,11 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		// in raw stream.
 		DisableCompression: true,
 	}
+
+	if tlsConfig != nil {
+		http2.ConfigureTransport(tr)
+	}
+
 	return func() *http.Transport {
 		return tr
 	}

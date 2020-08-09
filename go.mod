@@ -50,7 +50,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.3
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
-	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
+	github.com/minio/simdjson-go v0.1.5
 	github.com/minio/sio v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mmcloughlin/avo v0.0.0-20200523190732-4439b6b2c061 // indirect

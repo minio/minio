@@ -16,12 +16,19 @@
 # limitations under the License.
 
 import os
-from sys import exit
+import sys
+from csv import (test_csv_input_custom_quote_char,
+                 test_csv_output_custom_quote_char)
+
 from minio import Minio
 
+from sql_ops import (test_sql_datatypes, test_sql_functions_agg_cond_conv,
+                     test_sql_functions_date, test_sql_functions_string,
+                     test_sql_operators, test_sql_operators_precedence,
+                     test_sql_select, test_sql_select_csv_no_header,
+                     test_sql_select_json)
 from utils import LogOutput
-from sql_ops import *
-from csv import *
+
 
 def main():
     """
@@ -39,48 +46,56 @@ def main():
             secret_key = 'zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG'
             secure = True
 
-        client = Minio(server_endpoint, access_key, secret_key, secure=False)
+        client = Minio(server_endpoint, access_key, secret_key, secure=secure)
 
-        log_output = LogOutput(client.select_object_content, 'test_csv_input_quote_char')
+        log_output = LogOutput(client.select_object_content,
+                               'test_csv_input_quote_char')
         test_csv_input_custom_quote_char(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_csv_output_quote_char')
+        log_output = LogOutput(client.select_object_content,
+                               'test_csv_output_quote_char')
         test_csv_output_custom_quote_char(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_operators')
+        log_output = LogOutput(
+            client.select_object_content, 'test_sql_operators')
         test_sql_operators(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_operators_precedence')
+        log_output = LogOutput(client.select_object_content,
+                               'test_sql_operators_precedence')
         test_sql_operators_precedence(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_functions_agg_cond_conv')
+        log_output = LogOutput(client.select_object_content,
+                               'test_sql_functions_agg_cond_conv')
         test_sql_functions_agg_cond_conv(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_functions_date')
+        log_output = LogOutput(
+            client.select_object_content, 'test_sql_functions_date')
         test_sql_functions_date(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_functions_string')
+        log_output = LogOutput(client.select_object_content,
+                               'test_sql_functions_string')
         test_sql_functions_string(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_datatypes')
+        log_output = LogOutput(
+            client.select_object_content, 'test_sql_datatypes')
         test_sql_datatypes(client, log_output)
 
         log_output = LogOutput(client.select_object_content, 'test_sql_select')
         test_sql_select(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_select_json')
+        log_output = LogOutput(
+            client.select_object_content, 'test_sql_select_json')
         test_sql_select_json(client, log_output)
 
-        log_output = LogOutput(client.select_object_content, 'test_sql_select_csv')
+        log_output = LogOutput(
+            client.select_object_content, 'test_sql_select_csv')
         test_sql_select_csv_no_header(client, log_output)
 
     except Exception as err:
         print(log_output.json_report(err))
-        exit(1)
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     # Execute only if run as a script
     main()
-
-
-
