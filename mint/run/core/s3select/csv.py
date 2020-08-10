@@ -20,7 +20,7 @@ import os
 
 from minio import Minio
 from minio.select.options import (CSVInput, CSVOutput, InputSerialization,
-                                  JsonOutput, OutputSerialization,
+                                  JSONOutput, OutputSerialization,
                                   RequestProgress, SelectObjectOptions)
 
 from utils import *
@@ -107,7 +107,7 @@ def test_csv_input_custom_quote_char(client, log_output):
                                  AllowQuotedRecordDelimiter="FALSE",),
                 ),
                 output_serialization=OutputSerialization(
-                    json=JsonOutput(
+                    json=JSONOutput(
                         RecordDelimiter="\n",
                     )
                 ),
