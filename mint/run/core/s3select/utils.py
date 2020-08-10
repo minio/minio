@@ -15,11 +15,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import uuid
 import inspect
 import json
 import time
 import traceback
+import uuid
+
 
 class LogOutput(object):
     """
@@ -100,7 +101,6 @@ class LogOutput(object):
 def generate_bucket_name():
     return "s3select-test-" + str(uuid.uuid4())
 
+
 def generate_object_name():
     return str(uuid.uuid4())
-
-

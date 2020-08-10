@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"strings"
 
@@ -73,7 +75,7 @@ func handleSignals() {
 			if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
 				objAPI.Shutdown(context.Background())
 			}
-			if err != nil {
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatal(err, "Unable to start MinIO server")
 			}
 			exit(true)
