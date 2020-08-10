@@ -22,7 +22,6 @@ from minio import Minio
 from minio.select.options import (CSVInput, CSVOutput, InputSerialization,
                                   JSONOutput, OutputSerialization,
                                   RequestProgress, SelectObjectOptions)
-
 from utils import *
 
 
@@ -98,17 +97,17 @@ def test_csv_input_custom_quote_char(client, log_output):
                 expression="select * from s3object",
                 input_serialization=InputSerialization(
                     compression_type="NONE",
-                    csv=CSVInput(FileHeaderInfo="NONE",
-                                 RecordDelimiter="\n",
-                                 FieldDelimiter=",",
-                                 QuoteCharacter=quote_char,
-                                 QuoteEscapeCharacter=escape_char,
-                                 Comments="#",
-                                 AllowQuotedRecordDelimiter="FALSE",),
+                    csv=CSVInput(file_header_info="NONE",
+                                 record_delimiter="\n",
+                                 field_delimiter=",",
+                                 quote_character=quote_char,
+                                 quote_escape_character=escape_char,
+                                 comments="#",
+                                 allow_quoted_record_delimiter="FALSE",),
                 ),
                 output_serialization=OutputSerialization(
                     json=JSONOutput(
-                        RecordDelimiter="\n",
+                        record_delimiter="\n",
                     )
                 ),
                 request_progress=RequestProgress(
@@ -155,20 +154,22 @@ def test_csv_output_custom_quote_char(client, log_output):
                 expression="select * from s3object",
                 input_serialization=InputSerialization(
                     compression_type="NONE",
-                    csv=CSVInput(FileHeaderInfo="NONE",
-                                 RecordDelimiter="\n",
-                                 FieldDelimiter=",",
-                                 QuoteCharacter='"',
-                                 QuoteEscapeCharacter='"',
-                                 Comments="#",
-                                 AllowQuotedRecordDelimiter="FALSE",),
+                    csv=CSVInput(file_header_info="NONE",
+                                 record_delimiter="\n",
+                                 field_delimiter=",",
+                                 quote_character='"',
+                                 quote_escape_character='"',
+                                 comments="#",
+                                 allow_quoted_record_delimiter="FALSE",
+                                 ),
                 ),
                 output_serialization=OutputSerialization(
-                    csv=CSVOutput(QuoteFields="ALWAYS",
-                                  RecordDelimiter="\n",
-                                  FieldDelimiter=",",
-                                  QuoteCharacter=quote_char,
-                                  QuoteEscapeCharacter=escape_char,)
+                    csv=CSVOutput(quote_fields="ALWAYS",
+                                  record_delimiter="\n",
+                                  field_delimiter=",",
+                                  quote_character=quote_char,
+                                  quote_escape_character=escape_char,
+                                  )
                 ),
                 request_progress=RequestProgress(
                     enabled="False"
