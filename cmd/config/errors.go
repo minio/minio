@@ -187,12 +187,6 @@ Example 1:
 		"",
 	)
 
-	ErrCorruptedBackend = newErrFn(
-		"Unable to use the specified backend, pre-existing content detected",
-		"Please ensure your disk mount does not have any pre-existing content",
-		"",
-	)
-
 	ErrUnableToWriteInBackend = newErrFn(
 		"Unable to write to the backend",
 		"Please ensure MinIO binary has write permissions for the backend",

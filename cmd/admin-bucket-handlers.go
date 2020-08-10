@@ -20,20 +20,20 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
-	bucketQuotaConfigFile        = "quota.json"
-	bucketReplicationTargetsFile = "replication-targets.json"
+	bucketQuotaConfigFile = "quota.json"
+	bucketTargetsFile     = "bucket-targets.json"
 )
 
 // PutBucketQuotaConfigHandler - PUT Bucket quota configuration.
@@ -121,27 +121,22 @@ func (a adminAPIHandlers) GetBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	writeSuccessResponseJSON(w, configData)
 }
 
-// SetBucketReplicationTargetHandler - sets a replication target for bucket
-func (a adminAPIHandlers) SetBucketReplicationTargetHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "SetBucketReplicationTarget")
+// SetRemoteTargetHandler - sets a remote target for bucket
+func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SetBucketTarget")
 
-	defer logger.AuditLog(w, r, "SetBucketReplicationTarget", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "SetBucketTarget", mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
 	// Get current object layer instance.
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.SetBucketReplicationTargetAction)
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.SetBucketTargetAction)
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	// Turn off replication if disk crawl is unavailable.
-	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOff {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketReplicationDisabledError), r.URL)
 		return
 	}
 
@@ -151,17 +146,11 @@ func (a adminAPIHandlers) SetBucketReplicationTargetHandler(w http.ResponseWrite
 		return
 	}
 
-	if versioned := globalBucketVersioningSys.Enabled(bucket); !versioned {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrReplicationBucketNeedsVersioningError), r.URL)
-		return
-	}
-
 	cred, _, _, s3Err := validateAdminSignature(ctx, r, "")
 	if s3Err != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
 	}
-
 	password := cred.SecretKey
 
 	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
@@ -169,84 +158,134 @@ func (a adminAPIHandlers) SetBucketReplicationTargetHandler(w http.ResponseWrite
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	var target madmin.BucketReplicationTarget
+	var target madmin.BucketTarget
 	if err = json.Unmarshal(reqBytes, &target); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	target.Arn = globalBucketReplicationSys.getReplicationARN(target.URL())
-	tgtBytes, err := json.Marshal(&target)
+	host, port, err := net.SplitHostPort(target.Endpoint)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	if err = globalBucketMetadataSys.Update(bucket, bucketReplicationTargetsFile, tgtBytes); err != nil {
+	sameTarget, _ := isLocalHost(host, port, globalMinioPort)
+	if sameTarget && bucket == target.TargetBucket {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketRemoteIdenticalToSource), r.URL)
+		return
+	}
+	target.SourceBucket = bucket
+	target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
+	if target.Arn == "" {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+
+	}
+	tgtBytes, err := json.Marshal(&targets)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
+		return
+	}
+
+	if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if err = globalBucketReplicationSys.SetTarget(ctx, bucket, &target); err != nil {
+
+	data, err := json.Marshal(target.Arn)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	// Write success response.
+	writeSuccessResponseJSON(w, data)
+}
+
+// ListRemoteTargetsHandler - lists remote target(s) for a bucket or gets a target
+// for a particular ARN type
+func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ListBucketTargets")
+
+	defer logger.AuditLog(w, r, "ListBucketTargets", mustGetClaimsFromToken(r))
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	arnType := vars["type"]
+
+	// Get current object layer instance.
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketTargetAction)
+	if objectAPI == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+	if bucket != "" {
+		if _, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+	targets := globalBucketTargetSys.ListTargets(ctx, bucket, arnType)
+	data, err := json.Marshal(targets)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	// Write success response.
+	writeSuccessResponseJSON(w, data)
+}
+
+// RemoveRemoteTargetHandler - removes a remote target for bucket with specified ARN
+func (a adminAPIHandlers) RemoveRemoteTargetHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "RemoveBucketTarget")
+
+	defer logger.AuditLog(w, r, "RemoveBucketTarget", mustGetClaimsFromToken(r))
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	arn := vars["arn"]
+
+	// Get current object layer instance.
+	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.SetBucketTargetAction)
+	if objectAPI == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
 
-	// Write success response.
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// GetBucketReplicationTargetsHandler - gets bucket replication targets for a particular bucket
-func (a adminAPIHandlers) GetBucketReplicationTargetsHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketReplicationTarget")
-
-	defer logger.AuditLog(w, r, "GetBucketReplicationTarget", mustGetClaimsFromToken(r))
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	// Get current object layer instance.
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketReplicationTargetAction)
-	if objectAPI == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+	if err := globalBucketTargetSys.RemoveTarget(ctx, bucket, arn); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-
-	target, err := globalBucketMetadataSys.GetReplicationTargetConfig(bucket)
+	targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	// remove secretKey from creds
-	var tgt madmin.BucketReplicationTarget
-	if !target.Empty() {
-		var creds auth.Credentials
-		creds.AccessKey = target.Credentials.AccessKey
-		tgt = madmin.BucketReplicationTarget{Endpoint: target.Endpoint, TargetBucket: target.TargetBucket, Credentials: &creds, Arn: target.Arn}
-	}
-	data, err := json.Marshal(tgt)
+	tgtBytes, err := json.Marshal(&targets)
 	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	// Write success response.
-	writeSuccessResponseJSON(w, data)
-}
+	if err = globalBucketMetadataSys.Update(bucket, bucketTargetsFile, tgtBytes); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
 
-// GetBucketReplicationARNHandler - gets replication ARN for a particular remote
-func (a adminAPIHandlers) GetBucketReplicationARNHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "GetBucketReplicationARN")
-
-	defer logger.AuditLog(w, r, "GetBucketReplicationARN", mustGetClaimsFromToken(r))
-	vars := mux.Vars(r)
-	rURL := vars["url"]
-	// Get current object layer instance.
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetBucketReplicationTargetAction)
-	if objectAPI == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-	data, err := json.Marshal(globalBucketReplicationSys.getARN(rURL))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
 	// Write success response.
-	writeSuccessResponseJSON(w, data)
+	writeSuccessNoContent(w)
 }

@@ -146,7 +146,7 @@ func (r Rule) Validate(bucket string, sameTarget bool) error {
 	if err := r.DeleteMarkerReplication.Validate(); err != nil {
 		return err
 	}
-	if r.Priority <= 0 {
+	if r.Priority < 0 {
 		return errPriorityMissing
 	}
 	if r.Destination.Bucket == bucket && sameTarget {

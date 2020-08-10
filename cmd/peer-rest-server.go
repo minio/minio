@@ -610,6 +610,10 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 	if meta.notificationConfig != nil {
 		globalNotificationSys.AddRulesMap(bucketName, meta.notificationConfig.ToRulesMap())
 	}
+
+	if meta.bucketTargetConfig != nil {
+		globalBucketTargetSys.UpdateTarget(bucketName, meta.bucketTargetConfig)
+	}
 }
 
 // ReloadFormatHandler - Reload Format.
@@ -972,7 +976,11 @@ func (s *peerRESTServer) BackgroundHealStatusHandler(w http.ResponseWriter, r *h
 
 	ctx := newContext(r, w, "BackgroundHealStatus")
 
-	state := getLocalBackgroundHealStatus()
+	state, ok := getLocalBackgroundHealStatus()
+	if !ok {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
 
 	defer w.(http.Flusher).Flush()
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(state))

@@ -58,7 +58,6 @@ const (
 	globalMinioDefaultOwnerID      = "02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
-	globalNetBSDOSName             = "netbsd"
 	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeErasure         = "mode-server-xl"
@@ -109,9 +108,6 @@ var globalCLIContext = struct {
 }{}
 
 var (
-	// Indicates set drive count.
-	globalErasureSetDriveCount int
-
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistErasure = false
 
@@ -154,9 +150,9 @@ var (
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
 
-	globalLifecycleSys         *LifecycleSys
-	globalBucketSSEConfigSys   *BucketSSEConfigSys
-	globalBucketReplicationSys *BucketReplicationSys
+	globalLifecycleSys       *LifecycleSys
+	globalBucketSSEConfigSys *BucketSSEConfigSys
+	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
 	globalAPIConfig apiConfig

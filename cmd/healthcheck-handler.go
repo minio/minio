@@ -23,7 +23,7 @@ import (
 
 // ClusterCheckHandler returns if the server is ready for requests.
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "ClusterCheckCheckHandler")
+	ctx := newContext(r, w, "ClusterCheckHandler")
 
 	objLayer := newObjectLayerFn()
 	// Service not initialized yet

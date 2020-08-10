@@ -92,7 +92,7 @@ func initHelp() {
 		},
 		config.HelpKV{
 			Key:         config.PolicyOPASubSys,
-			Description: "enable external OPA for policy enforcement",
+			Description: "[DEPRECATED] enable external OPA for policy enforcement",
 		},
 		config.HelpKV{
 			Key:         config.KmsVaultSubSys,
@@ -213,7 +213,7 @@ var (
 	globalServerConfigMu sync.RWMutex
 )
 
-func validateConfig(s config.Config) error {
+func validateConfig(s config.Config, setDriveCount int) error {
 	// Disable merging env values with config for validation.
 	env.SetEnvOff()
 
@@ -233,8 +233,7 @@ func validateConfig(s config.Config) error {
 	}
 
 	if globalIsErasure {
-		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
-			globalErasureSetDriveCount); err != nil {
+		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
 			return err
 		}
 	}
@@ -311,7 +310,7 @@ func validateConfig(s config.Config) error {
 		globalNotificationSys.ConfiguredTargetIDs())
 }
 
-func lookupConfigs(s config.Config) {
+func lookupConfigs(s config.Config, setDriveCount int) {
 	ctx := GlobalContext
 
 	var err error
@@ -382,8 +381,7 @@ func lookupConfigs(s config.Config) {
 	globalAPIConfig.init(apiConfig)
 
 	if globalIsErasure {
-		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default],
-			globalErasureSetDriveCount)
+		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 		}
@@ -601,7 +599,7 @@ func loadConfig(objAPI ObjectLayer) error {
 	}
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
+	lookupConfigs(srvCfg, objAPI.SetDriveCount())
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

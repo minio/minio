@@ -198,10 +198,13 @@ type ObjectInfo struct {
 	PutObjReader *PutObjReader  `json:"-"`
 
 	metadataOnly bool
+	versionOnly  bool // adds a new version, only used by CopyObject
 	keyRotation  bool
 
 	// Date and time when the object was last accessed.
 	AccTime time.Time
+
+	Legacy bool // indicates object on disk is in legacy data format
 
 	// backendType indicates which backend filled this structure
 	backendType BackendType

@@ -87,6 +87,10 @@ func (z *erasureZones) NewNSLock(ctx context.Context, bucket string, objects ...
 	return z.zones[0].NewNSLock(ctx, bucket, objects...)
 }
 
+func (z *erasureZones) SetDriveCount() int {
+	return z.zones[0].SetDriveCount()
+}
+
 type zonesAvailableSpace []zoneAvailableSpace
 
 type zoneAvailableSpace struct {
@@ -626,20 +630,22 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		defer lk.Unlock()
 	}
 
-	if z.SingleZone() {
-		return z.zones[0].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
-	}
-
 	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
 	}
 
-	if cpSrcDstSame && srcInfo.metadataOnly && srcOpts.VersionID == dstOpts.VersionID {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
+			// CopyObject optimization where we don't create an entire copy
+			// of the content, instead we add a reference.
+			srcInfo.versionOnly = true
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
@@ -2025,6 +2031,7 @@ type HealthOptions struct {
 // was queried
 type HealthResult struct {
 	Healthy       bool
+	HealingDrives int
 	ZoneID, SetID int
 	WriteQuorum   int
 }
@@ -2079,8 +2086,27 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 			}
 		}
 	}
+
+	// check if local disks are being healed, if they are being healed
+	// we need to tell healthy status as 'false' so that this server
+	// is not taken down for maintenance
+	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx, true)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to verify global heal status: %w", err))
+		return HealthResult{
+			Healthy: false,
+		}
+	}
+
+	if len(aggHealStateResult.HealDisks) > 0 {
+		logger.LogIf(ctx, fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+	}
+
+	healthy := len(aggHealStateResult.HealDisks) == 0
+
 	return HealthResult{
-		Healthy: true,
+		Healthy:       healthy,
+		HealingDrives: len(aggHealStateResult.HealDisks),
 	}
 }
 

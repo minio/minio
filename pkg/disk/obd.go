@@ -65,13 +65,6 @@ func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput,
 		os.Remove(fsPath)
 	}()
 
-	// going to leave this here incase we decide to go back to caching again
-	// if gl, ok := globalLatency[drive]; ok {
-	// 	if gt, ok := globalThroughput[drive]; ok {
-	// 		return gl, gt, nil
-	// 	}
-	// }
-
 	blockSize := 4 * humanize.MiByte
 	fileSize := 256 * humanize.MiByte
 
@@ -93,6 +86,9 @@ func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput,
 		latencyInSecs := time.Since(startTime).Seconds()
 		latencies[i] = float64(latencyInSecs)
 	}
+
+	// Sync every full writes fdatasync
+	Fdatasync(w)
 
 	for i := range latencies {
 		throughput := float64(blockSize) / latencies[i]

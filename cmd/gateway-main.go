@@ -59,29 +59,32 @@ func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ..
 // Walk - implements common gateway level Walker, to walk on all objects recursively at a prefix
 func (l *GatewayLocker) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	walk := func(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo) error {
-		var marker string
+		go func() {
+			// Make sure the results channel is ready to be read when we're done.
+			defer close(results)
 
-		// Make sure the results channel is ready to be read when we're done.
-		defer close(results)
+			var marker string
 
-		for {
-			// set maxKeys to '0' to list maximum possible objects in single call.
-			loi, err := l.ObjectLayer.ListObjects(ctx, bucket, prefix, marker, "", 0)
-			if err != nil {
-				return err
-			}
-			marker = loi.NextMarker
-			for _, obj := range loi.Objects {
-				select {
-				case results <- obj:
-				case <-ctx.Done():
-					return nil
+			for {
+				// set maxKeys to '0' to list maximum possible objects in single call.
+				loi, err := l.ObjectLayer.ListObjects(ctx, bucket, prefix, marker, "", 0)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					return
+				}
+				marker = loi.NextMarker
+				for _, obj := range loi.Objects {
+					select {
+					case results <- obj:
+					case <-ctx.Done():
+						return
+					}
+				}
+				if !loi.IsTruncated {
+					break
 				}
 			}
-			if !loi.IsTruncated {
-				break
-			}
-		}
+		}()
 		return nil
 	}
 
@@ -169,6 +172,18 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
+	// Check and load TLS certificates.
+	var err error
+	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	logger.FatalIf(err, "Invalid TLS certificate file")
+
+	// Check and load Root CAs.
+	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
+	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	// Register root CAs for remote ENVs
+	env.RegisterGlobalCAs(globalRootCAs)
+
 	// Initialize all help
 	initHelp()
 
@@ -180,15 +195,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(checkPortAvailability(globalMinioHost, globalMinioPort), "Unable to start the gateway")
-
-	// Check and load TLS certificates.
-	var err error
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
-	logger.FatalIf(err, "Invalid TLS certificate file")
-
-	// Check and load Root CAs.
-	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
-	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
 	globalMinioEndpoint = func() string {
 		host := globalMinioHost
@@ -217,7 +223,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg)
+	lookupConfigs(srvCfg, 0)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

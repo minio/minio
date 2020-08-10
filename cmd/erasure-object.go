@@ -65,7 +65,7 @@ func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string
 // if source object and destination object are same we only
 // update metadata.
 func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
-	// This call shouldn't be used for anything other than metadata updates.
+	// This call shouldn't be used for anything other than metadata updates or adding self referential versions.
 	if !srcInfo.metadataOnly {
 		return oi, NotImplemented{}
 	}
@@ -97,8 +97,23 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return fi.ToObjectInfo(srcBucket, srcObject), toObjectErr(errMethodNotAllowed, srcBucket, srcObject)
 	}
 
+	versionID := srcInfo.VersionID
+	if srcInfo.versionOnly {
+		versionID = dstOpts.VersionID
+		// preserve destination versionId if specified.
+		if versionID == "" {
+			versionID = mustGetUUID()
+		}
+		modTime = UTCNow()
+	}
+
+	fi.VersionID = versionID // set any new versionID we might have created
+	fi.ModTime = modTime     // set modTime for the new versionID
+
 	// Update `xl.meta` content on each disks.
 	for index := range metaArr {
+		metaArr[index].ModTime = modTime
+		metaArr[index].VersionID = versionID
 		metaArr[index].Metadata = srcInfo.UserDefined
 		metaArr[index].Metadata["etag"] = srcInfo.ETag
 	}
@@ -670,7 +685,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
-	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, fi.Erasure.DataBlocks+1)
+	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)

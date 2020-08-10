@@ -58,7 +58,7 @@ func (client *lockRESTClient) String() string {
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
-func (client *lockRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
+func (client *lockRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -83,7 +83,7 @@ func (client *lockRESTClient) Close() error {
 }
 
 // restCall makes a call to the lock REST server.
-func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply bool, err error) {
+func (client *lockRESTClient) restCall(ctx context.Context, call string, args dsync.LockArgs) (reply bool, err error) {
 	values := url.Values{}
 	values.Set(lockRESTUID, args.UID)
 	values.Set(lockRESTSource, args.Source)
@@ -92,7 +92,7 @@ func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply 
 		buffer.WriteString(resource)
 		buffer.WriteString("\n")
 	}
-	respBody, err := client.call(call, values, &buffer, -1)
+	respBody, err := client.callWithContext(ctx, call, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	switch err {
 	case nil:
@@ -105,28 +105,28 @@ func (client *lockRESTClient) restCall(call string, args dsync.LockArgs) (reply 
 }
 
 // RLock calls read lock REST API.
-func (client *lockRESTClient) RLock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(lockRESTMethodRLock, args)
+func (client *lockRESTClient) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodRLock, args)
 }
 
 // Lock calls lock REST API.
-func (client *lockRESTClient) Lock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(lockRESTMethodLock, args)
+func (client *lockRESTClient) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+	return client.restCall(ctx, lockRESTMethodLock, args)
 }
 
 // RUnlock calls read unlock REST API.
 func (client *lockRESTClient) RUnlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(lockRESTMethodRUnlock, args)
+	return client.restCall(context.Background(), lockRESTMethodRUnlock, args)
 }
 
 // Unlock calls write unlock RPC.
 func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error) {
-	return client.restCall(lockRESTMethodUnlock, args)
+	return client.restCall(context.Background(), lockRESTMethodUnlock, args)
 }
 
 // Expired calls expired handler to check if lock args have expired.
-func (client *lockRESTClient) Expired(args dsync.LockArgs) (expired bool, err error) {
-	return client.restCall(lockRESTMethodExpired, args)
+func (client *lockRESTClient) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
+	return client.restCall(ctx, lockRESTMethodExpired, args)
 }
 
 func newLockAPI(endpoint Endpoint) dsync.NetLocker {
@@ -153,7 +153,7 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)

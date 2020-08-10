@@ -23,7 +23,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/url"
 	"strconv"
@@ -122,18 +121,21 @@ type progressReader struct {
 
 func (p *progressReader) Read(b []byte) (int, error) {
 	n, err := p.r.Read(b)
-	if err != nil && err != io.EOF {
-		return n, err
+	if n >= 0 {
+		p.progressChan <- int64(n)
 	}
-	p.progressChan <- int64(n)
 	return n, err
+}
+
+type nullReader struct{}
+
+func (r *nullReader) Read(b []byte) (int, error) {
+	return len(b), nil
 }
 
 func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.NetOBDInfo, err error) {
 	latencies := []float64{}
 	throughputs := []float64{}
-
-	buf := make([]byte, dataSize)
 
 	buflimiter := make(chan struct{}, threadCount)
 	errChan := make(chan error, threadCount)
@@ -163,7 +165,7 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 		}
 	}
 
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 	finish := func() {
 		<-buflimiter
 		wg.Done()
@@ -183,27 +185,26 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 			}
 
 			go func(i int) {
-				bufReader := bytes.NewReader(buf)
-				bufReadCloser := ioutil.NopCloser(&progressReader{
-					r:            bufReader,
+				progress := &progressReader{
+					r:            io.LimitReader(&nullReader{}, dataSize),
 					progressChan: transferChan,
-				})
+				}
 				start := time.Now()
 				before := atomic.LoadInt64(&totalTransferred)
 
 				ctx, cancel := context.WithTimeout(innerCtx, 10*time.Second)
 				defer cancel()
-				respBody, err := client.callWithContext(ctx, peerRESTMethodNetOBDInfo, nil, bufReadCloser, dataSize)
-				if err != nil {
 
-					if netErr, ok := err.(*rest.NetworkError); ok {
-						if urlErr, ok := netErr.Err.(*url.Error); ok {
-							if urlErr.Err.Error() == context.DeadlineExceeded.Error() {
-								slowSample()
-								finish()
-								return
-							}
-						}
+				// Turn off healthCheckFn for OBD tests to cater for higher load on the peers.
+				clnt := newPeerRESTClient(client.host)
+				clnt.restClient.HealthCheckFn = nil
+
+				respBody, err := clnt.callWithContext(ctx, peerRESTMethodNetOBDInfo, nil, progress, dataSize)
+				if err != nil {
+					if errors.Is(err, context.DeadlineExceeded) {
+						slowSample()
+						finish()
+						return
 					}
 
 					errChan <- err
@@ -329,15 +330,8 @@ func (client *peerRESTClient) NetOBDInfo(ctx context.Context) (info madmin.NetOB
 				continue
 			}
 
-			if netErr, ok := err.(*rest.NetworkError); ok {
-				if urlErr, ok := netErr.Err.(*url.Error); ok {
-					if urlErr.Err.Error() == context.Canceled.Error() {
-						continue
-					}
-					if urlErr.Err.Error() == context.DeadlineExceeded.Error() {
-						continue
-					}
-				}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				continue
 			}
 		}
 		return info, err
@@ -880,7 +874,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 
 	// Construct a new health function.

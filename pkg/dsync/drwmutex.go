@@ -140,8 +140,8 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, timeout time.Duration, id,
 		locks := make([]string, len(restClnts))
 
 		// Try to acquire the lock.
-		success := lock(dm.clnt, &locks, id, source, isReadLock, dm.Names...)
-		if !success {
+		locked = lock(retryCtx, dm.clnt, &locks, id, source, isReadLock, dm.Names...)
+		if !locked {
 			continue
 		}
 
@@ -158,16 +158,16 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, timeout time.Duration, id,
 		}
 
 		dm.m.Unlock()
-		return true
+		return locked
 	}
 
 	// Failed to acquire the lock on this attempt, incrementally wait
 	// for a longer back-off time and try again afterwards.
-	return false
+	return locked
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNames ...string) bool {
+func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNames ...string) bool {
 
 	restClnts := ds.GetLockersFn()
 
@@ -199,11 +199,11 @@ func lock(ds *Dsync, locks *[]string, id, source string, isReadLock bool, lockNa
 			var locked bool
 			var err error
 			if isReadLock {
-				if locked, err = c.RLock(args); err != nil {
+				if locked, err = c.RLock(ctx, args); err != nil {
 					log("dsync: Unable to call RLock failed with %s for %#v at %s\n", err, args, c)
 				}
 			} else {
-				if locked, err = c.Lock(args); err != nil {
+				if locked, err = c.Lock(ctx, args); err != nil {
 					log("dsync: Unable to call Lock failed with %s for %#v at %s\n", err, args, c)
 				}
 			}

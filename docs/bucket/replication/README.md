@@ -1,8 +1,8 @@
 # Bucket Replication Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-Bucket replication is designed to replicate specific objects in buckets that are configured for replication.
+Bucket replication is designed to replicate selected objects in a bucket to a destination bucket.
 
-To replicate objects in a bucket to a destination bucket on a target site either on the same cluster or a different cluster, start by creating version enabled buckets on both `source` and `dest` buckets. Next, the target site and destination bucket need to be configured on MinIO server by setting
+To replicate objects in a bucket to a destination bucket on a target site either in the same cluster or a different cluster, start by enabling [versioning](https://docs.minio.io/docs/minio-bucket-versioning-guide.html) for both source and destination buckets. Finally, the target site and the destination bucket need to be configured on the source MinIO server.
 
 ## Highlights
 - Supports source and destination buckets to have the same name unlike AWS S3, addresses variety of usecases such as *Splunk*, *Veeam* site to site DR.
@@ -13,28 +13,42 @@ To replicate objects in a bucket to a destination bucket on a target site either
 Create a replication target on the source cluster as shown below:
 
 ```
-mc admin bucket replication set myminio/srcbucket https://accessKey:secretKey@replica-endpoint:9000/destbucket --path ON --api s3v4
-Replication ARN = 'arn:minio:s3::dadddae7-f1d7-440f-b5d6-651aa9a8c8a7:*'
+mc admin bucket remote add myminio/srcbucket https://accessKey:secretKey@replica-endpoint:9000/destbucket --service replication --region us-east-1
+Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
 ```
 
 Note that the admin needs *s3:GetReplicationConfigurationAction* permission on source cluster. The credential used at the destination requires *s3:ReplicateObject* permission. Once successfully created and authorized this generates a replication target ARN.  The command below lists all the currently authorized replication targets:
 
 ```
-mc admin bucket remote myminio/srcbucket https://replica-endpoint:9000
-Replication ARN = 'arn:minio:s3::dadddae7-f1d7-440f-b5d6-651aa9a8c8a7:*'
+mc admin bucket remote ls myminio/srcbucket --service "replication"
+Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
 ```
 
-The replication configuration can now be added to the source bucket by applying the json file with replication configuration. The ReplicationArn is passed in as a json element in the configuration.
+The replication configuration can now be added to the source bucket by applying the json file with replication configuration. The Role ARN above is passed in as a json element in the configuration.
 
 ```json
 {
-  "ReplicationArn" : "arn:minio:s3::dadddae7-f1d7-440f-b5d6-651aa9a8c8a7:*",
+  "Role" :"arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket",
   "Rules": [
     {
       "Status": "Enabled",
       "Priority": 1,
       "DeleteMarkerReplication": { "Status": "Disabled" },
-      "Filter" : { "Prefix": "Tax"},
+      "Filter" : {
+        "And": {
+            "Prefix": "Tax",
+            "Tags": [
+                {
+                "Key": "Year",
+                "Value": "2019"
+                },
+                {
+                "Key": "Company",
+                "Value": "AcmeCorp"
+                }
+            ]
+        }
+      },
       "Destination": {
         "Bucket": "arn:aws:s3:::destbucket",
         "StorageClass": "STANDARD"
@@ -45,11 +59,12 @@ The replication configuration can now be added to the source bucket by applying 
 ```
 
 ```
-mc bucket replicate myminio/srcbucket --config replicate-config.json
+mc replicate add myminio/srcbucket/Tax --priority 1 --arn "arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket" --tags "Year=2019&Company=AcmeCorp" --storage-class "STANDARD"
 Replication configuration applied successfully to myminio/srcbucket.
 ```
 
-Apart from *ReplicationArn* , rest of the configuration follows [AWS S3 Spec](https://docs.aws.amazon.com/AmazonS3/latest/dev/replication-add-config.html). Any objects uploaded to the source bucket that meet replication criteria will now be automatically replicated by the MinIO server to the remote destination bucket. Replication can be disabled at any time by disabling specific rules in the configuration or deleting the replication configuration entirely.
+The replication configuration follows [AWS S3 Spec](https://docs.aws.amazon.com/AmazonS3/latest/dev/replication-add-config.html). Any objects uploaded to the source bucket that meet replication criteria will now be automatically replicated by the MinIO server to the remote destination bucket. Replication can be disabled at any time by disabling specific rules in the configuration or deleting the replication configuration entirely.
+
 
 When an object is deleted from the source bucket, the replica will not be deleted as per S3 spec.
 

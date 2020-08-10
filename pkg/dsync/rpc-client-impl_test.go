@@ -17,6 +17,7 @@
 package dsync_test
 
 import (
+	"context"
 	"net/rpc"
 	"sync"
 
@@ -89,12 +90,12 @@ func (rpcClient *ReconnectRPCClient) Call(serviceMethod string, args interface{}
 	return err
 }
 
-func (rpcClient *ReconnectRPCClient) RLock(args LockArgs) (status bool, err error) {
+func (rpcClient *ReconnectRPCClient) RLock(ctx context.Context, args LockArgs) (status bool, err error) {
 	err = rpcClient.Call("Dsync.RLock", &args, &status)
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) Lock(args LockArgs) (status bool, err error) {
+func (rpcClient *ReconnectRPCClient) Lock(ctx context.Context, args LockArgs) (status bool, err error) {
 	err = rpcClient.Call("Dsync.Lock", &args, &status)
 	return status, err
 }
@@ -109,7 +110,7 @@ func (rpcClient *ReconnectRPCClient) Unlock(args LockArgs) (status bool, err err
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) Expired(args LockArgs) (expired bool, err error) {
+func (rpcClient *ReconnectRPCClient) Expired(ctx context.Context, args LockArgs) (expired bool, err error) {
 	err = rpcClient.Call("Dsync.Expired", &args, &expired)
 	return expired, err
 }

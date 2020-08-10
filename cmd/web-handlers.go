@@ -1994,6 +1994,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 func presignedGet(host, bucket, object string, expiry int64, creds auth.Credentials, region string) string {
 	accessKey := creds.AccessKey
 	secretKey := creds.SecretKey
+	sessionToken := creds.SessionToken
 
 	date := UTCNow()
 	dateStr := date.Format(iso8601Format)
@@ -2009,6 +2010,10 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	query.Set(xhttp.AmzCredential, credential)
 	query.Set(xhttp.AmzDate, dateStr)
 	query.Set(xhttp.AmzExpires, expiryStr)
+	// Set session token if available.
+	if sessionToken != "" {
+		query.Set(xhttp.AmzSecurityToken, sessionToken)
+	}
 	query.Set(xhttp.AmzSignedHeaders, "host")
 	queryStr := s3utils.QueryEncode(query)
 
@@ -2022,10 +2027,6 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	signingKey := getSigningKey(secretKey, date, region, serviceS3)
 	signature := getSignature(signingKey, stringToSign)
 
-	// Construct the final presigned URL.
-	if creds.SessionToken != "" {
-		return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + xhttp.AmzSignature + "=" + signature + "&" + xhttp.AmzSecurityToken + "=" + creds.SessionToken
-	}
 	return host + s3utils.EncodePath(path) + "?" + queryStr + "&" + xhttp.AmzSignature + "=" + signature
 }
 

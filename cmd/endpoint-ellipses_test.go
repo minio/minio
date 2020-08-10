@@ -56,7 +56,7 @@ func TestCreateServerEndpoints(t *testing.T) {
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			_, _, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
+			_, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
 			if err != nil && testCase.success {
 				t.Errorf("Expected success but failed instead %s", err)
 			}

@@ -117,24 +117,6 @@ func newHealRoutine() *healRoutine {
 
 }
 
-func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
-	// Run the background healer
-	globalBackgroundHealRoutine = newHealRoutine()
-	go globalBackgroundHealRoutine.run(ctx, objAPI)
-
-	nh := newBgHealSequence()
-	// Heal any disk format and metadata early, if possible.
-	if err := nh.healDiskMeta(); err != nil {
-		if newObjectLayerFn() != nil {
-			// log only in situations, when object layer
-			// has fully initialized.
-			logger.LogIf(nh.ctx, err)
-		}
-	}
-
-	globalBackgroundHealState.LaunchNewHealSequence(nh)
-}
-
 // healDiskFormat - heals format.json, return value indicates if a
 // failure error occurred.
 func healDiskFormat(ctx context.Context, objAPI ObjectLayer, opts madmin.HealOpts) (madmin.HealResultItem, error) {

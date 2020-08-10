@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -70,6 +71,11 @@ func (er erasureObjects) NewNSLock(ctx context.Context, bucket string, objects .
 	return er.nsMutex.NewNSLock(ctx, er.getLockers, bucket, objects...)
 }
 
+// SetDriveCount returns the current drives per set.
+func (er erasureObjects) SetDriveCount() int {
+	return len(er.getDisks())
+}
+
 // Shutdown function for object storage interface.
 func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
@@ -88,18 +94,18 @@ func (d byDiskTotal) Less(i, j int) bool {
 
 func diskErrToDriveState(err error) (state string) {
 	state = madmin.DriveStateUnknown
-	switch err {
-	case errDiskNotFound:
+	switch {
+	case errors.Is(err, errDiskNotFound):
 		state = madmin.DriveStateOffline
-	case errCorruptedFormat:
+	case errors.Is(err, errCorruptedFormat):
 		state = madmin.DriveStateCorrupt
-	case errUnformattedDisk:
+	case errors.Is(err, errUnformattedDisk):
 		state = madmin.DriveStateUnformatted
-	case errDiskAccessDenied:
+	case errors.Is(err, errDiskAccessDenied):
 		state = madmin.DriveStatePermission
-	case errFaultyDisk:
+	case errors.Is(err, errFaultyDisk):
 		state = madmin.DriveStateFaulty
-	case nil:
+	case err == nil:
 		state = madmin.DriveStateOk
 	}
 	return

@@ -191,6 +191,11 @@ func (fs *FSObjects) NewNSLock(ctx context.Context, bucket string, objects ...st
 	return fs.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
 }
 
+// SetDriveCount no-op
+func (fs *FSObjects) SetDriveCount() int {
+	return 0
+}
+
 // Shutdown - should be called when process shuts down.
 func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	fs.fsFormatRlk.Close()
@@ -298,6 +303,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		if intDataUpdateTracker.debug {
 			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving totals cache with %d entries", len(totalCache.Cache))
 		}
+		totalCache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, totalCache.save(ctx, fs, dataUsageCacheName))
 		cloned := totalCache.clone()
 		updates <- cloned.dui(dataUsageRoot, buckets)

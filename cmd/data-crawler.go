@@ -618,8 +618,7 @@ func (i *crawlItem) transformMetaDir() {
 // actionMeta contains information used to apply actions.
 type actionMeta struct {
 	oi          ObjectInfo
-	trustOI     bool // Set true if oi can be trusted and has been read with quorum.
-	numVersions int  // The number of versions of this object
+	numVersions int // The number of versions of this object
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -658,7 +657,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			NumVersions:  meta.numVersions,
 		})
 	if i.debug {
-		logger.Info(color.Green("applyActions:")+" lifecycle: %q, Initial scan: %v", i.objectPath(), action)
+		logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
 	}
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
@@ -667,63 +666,71 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		return size
 	}
 
-	// These (expensive) operations should only run on items we are likely to delete.
-	// Load to ensure that we have the correct version and not an unsynced version.
-	if !meta.trustOI {
-		obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{
-			VersionID: versionID,
-		})
-		if err != nil {
-			switch err.(type) {
-			case MethodNotAllowed: // This happens usually for a delete marker
-				if !obj.DeleteMarker { // if this is not a delete marker log and return
-					// Do nothing - heal in the future.
-					logger.LogIf(ctx, err)
-					return size
-				}
-			case ObjectNotFound:
-				// object not found return 0
-				return 0
-			default:
-				// All other errors proceed.
+	obj, err := o.GetObjectInfo(ctx, i.bucket, i.objectPath(), ObjectOptions{
+		VersionID: versionID,
+	})
+	if err != nil {
+		switch err.(type) {
+		case MethodNotAllowed: // This happens usually for a delete marker
+			if !obj.DeleteMarker { // if this is not a delete marker log and return
+				// Do nothing - heal in the future.
 				logger.LogIf(ctx, err)
 				return size
 			}
-		}
-		size = obj.Size
-
-		// Recalculate action.
-		action = i.lifeCycle.ComputeAction(
-			lifecycle.ObjectOpts{
-				Name:         i.objectPath(),
-				UserTags:     obj.UserTags,
-				ModTime:      obj.ModTime,
-				VersionID:    obj.VersionID,
-				DeleteMarker: obj.DeleteMarker,
-				IsLatest:     obj.IsLatest,
-				NumVersions:  meta.numVersions,
-			})
-		if i.debug {
-			logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
-		}
-		versionID = obj.VersionID
-		switch action {
-		case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
+		case ObjectNotFound:
+			// object not found return 0
+			return 0
 		default:
-			// No action.
+			// All other errors proceed.
+			logger.LogIf(ctx, err)
 			return size
 		}
+	}
+	size = obj.Size
+
+	// Recalculate action.
+	action = i.lifeCycle.ComputeAction(
+		lifecycle.ObjectOpts{
+			Name:         i.objectPath(),
+			UserTags:     obj.UserTags,
+			ModTime:      obj.ModTime,
+			VersionID:    obj.VersionID,
+			DeleteMarker: obj.DeleteMarker,
+			IsLatest:     obj.IsLatest,
+			NumVersions:  meta.numVersions,
+		})
+	if i.debug {
+		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
+	}
+	switch action {
+	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
+	default:
+		// No action.
+		return size
 	}
 
 	opts := ObjectOptions{}
 	switch action {
 	case lifecycle.DeleteVersionAction:
-		opts.VersionID = versionID
+		// Defensive code, should never happen
+		if obj.VersionID == "" {
+			return size
+		}
+		if rcfg, _ := globalBucketObjectLockSys.Get(i.bucket); rcfg.LockEnabled {
+			locked := enforceRetentionForDeletion(ctx, obj)
+			if locked {
+				if i.debug {
+					logger.Info(color.Green("applyActions:")+" lifecycle: %s is locked, not deleting", i.objectPath())
+				}
+				return size
+			}
+		}
+		opts.VersionID = obj.VersionID
 	case lifecycle.DeleteAction:
 		opts.Versioned = globalBucketVersioningSys.Enabled(i.bucket)
 	}
 
-	obj, err := o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
+	obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
 	if err != nil {
 		// Assume it is still there.
 		logger.LogIf(ctx, err)

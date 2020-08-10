@@ -413,6 +413,9 @@ func extractAPIVersion(r *http.Request) string {
 
 // If none of the http routes match respond with appropriate errors
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	version := extractAPIVersion(r)
 	switch {
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
@@ -476,6 +479,12 @@ func getHostName(r *http.Request) (hostName string) {
 // Proxy any request to an endpoint.
 func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
 	success = true
+
+	// Make sure we remove any existing headers before
+	// proxying the request to another node.
+	for k := range w.Header() {
+		w.Header().Del(k)
+	}
 
 	f := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,

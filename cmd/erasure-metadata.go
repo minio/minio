@@ -88,9 +88,10 @@ func (fi FileInfo) IsValid() bool {
 		// for erasure coding information
 		return true
 	}
-	data := fi.Erasure.DataBlocks
-	parity := fi.Erasure.ParityBlocks
-	return ((data >= parity) && (data != 0) && (parity != 0))
+	dataBlocks := fi.Erasure.DataBlocks
+	parityBlocks := fi.Erasure.ParityBlocks
+	return ((dataBlocks >= parityBlocks) &&
+		(dataBlocks != 0) && (parityBlocks != 0))
 }
 
 // ToObjectInfo - Converts metadata to object info.
@@ -111,6 +112,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		DeleteMarker:    fi.Deleted,
 		Size:            fi.Size,
 		ModTime:         fi.ModTime,
+		Legacy:          fi.XLV1,
 		ContentType:     fi.Metadata["content-type"],
 		ContentEncoding: fi.Metadata["content-encoding"],
 	}
@@ -323,7 +325,18 @@ func objectQuorumFromMeta(ctx context.Context, er erasureObjects, partsMetaData 
 		return 0, 0, err
 	}
 
+	dataBlocks := latestFileInfo.Erasure.DataBlocks
+	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
+	if parityBlocks == 0 {
+		parityBlocks = dataBlocks
+	}
+
+	writeQuorum := dataBlocks
+	if dataBlocks == parityBlocks {
+		writeQuorum = dataBlocks + 1
+	}
+
 	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
 	// from latestFileInfo to get the quorum
-	return latestFileInfo.Erasure.DataBlocks, latestFileInfo.Erasure.DataBlocks + 1, nil
+	return dataBlocks, writeQuorum, nil
 }

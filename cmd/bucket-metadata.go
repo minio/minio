@@ -61,31 +61,31 @@ var (
 // bucketMetadataFormat refers to the format.
 // bucketMetadataVersion can be used to track a rolling upgrade of a field.
 type BucketMetadata struct {
-	Name                         string
-	Created                      time.Time
-	LockEnabled                  bool // legacy not used anymore.
-	PolicyConfigJSON             []byte
-	NotificationConfigXML        []byte
-	LifecycleConfigXML           []byte
-	ObjectLockConfigXML          []byte
-	VersioningConfigXML          []byte
-	EncryptionConfigXML          []byte
-	TaggingConfigXML             []byte
-	QuotaConfigJSON              []byte
-	ReplicationConfigXML         []byte
-	ReplicationTargetsConfigJSON []byte
+	Name                    string
+	Created                 time.Time
+	LockEnabled             bool // legacy not used anymore.
+	PolicyConfigJSON        []byte
+	NotificationConfigXML   []byte
+	LifecycleConfigXML      []byte
+	ObjectLockConfigXML     []byte
+	VersioningConfigXML     []byte
+	EncryptionConfigXML     []byte
+	TaggingConfigXML        []byte
+	QuotaConfigJSON         []byte
+	ReplicationConfigXML    []byte
+	BucketTargetsConfigJSON []byte
 
 	// Unexported fields. Must be updated atomically.
-	policyConfig            *policy.Policy
-	notificationConfig      *event.Config
-	lifecycleConfig         *lifecycle.Lifecycle
-	objectLockConfig        *objectlock.Config
-	versioningConfig        *versioning.Versioning
-	sseConfig               *bucketsse.BucketSSEConfig
-	taggingConfig           *tags.Tags
-	quotaConfig             *madmin.BucketQuota
-	replicationConfig       *replication.Config
-	replicationTargetConfig *madmin.BucketReplicationTarget
+	policyConfig       *policy.Policy
+	notificationConfig *event.Config
+	lifecycleConfig    *lifecycle.Lifecycle
+	objectLockConfig   *objectlock.Config
+	versioningConfig   *versioning.Versioning
+	sseConfig          *bucketsse.BucketSSEConfig
+	taggingConfig      *tags.Tags
+	quotaConfig        *madmin.BucketQuota
+	replicationConfig  *replication.Config
+	bucketTargetConfig *madmin.BucketTargets
 }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.
@@ -100,7 +100,7 @@ func newBucketMetadata(name string) BucketMetadata {
 		versioningConfig: &versioning.Versioning{
 			XMLNS: "http://s3.amazonaws.com/doc/2006-03-01/",
 		},
-		replicationTargetConfig: &madmin.BucketReplicationTarget{},
+		bucketTargetConfig: &madmin.BucketTargets{},
 	}
 }
 
@@ -227,12 +227,12 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.replicationConfig = nil
 	}
 
-	if len(b.ReplicationTargetsConfigJSON) != 0 {
-		if err = json.Unmarshal(b.ReplicationTargetsConfigJSON, b.replicationTargetConfig); err != nil {
+	if len(b.BucketTargetsConfigJSON) != 0 {
+		if err = json.Unmarshal(b.BucketTargetsConfigJSON, b.bucketTargetConfig); err != nil {
 			return err
 		}
 	} else {
-		b.replicationTargetConfig = &madmin.BucketReplicationTarget{}
+		b.bucketTargetConfig = &madmin.BucketTargets{}
 	}
 	return nil
 }
@@ -247,7 +247,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 		bucketSSEConfig,
 		bucketTaggingConfig,
 		bucketReplicationConfig,
-		bucketReplicationTargetsFile,
+		bucketTargetsFile,
 		objectLockConfig,
 	}
 
@@ -265,6 +265,12 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 
 		configData, err := readConfig(ctx, objectAPI, configFile)
 		if err != nil {
+			switch err.(type) {
+			case ObjectExistsAsDirectory:
+				// in FS mode it possible that we have actual
+				// files in this folder with `.minio.sys/buckets/bucket/configFile`
+				continue
+			}
 			if errors.Is(err, errConfigNotFound) {
 				// legacy file config not found, proceed to look for new metadata.
 				continue
@@ -306,8 +312,8 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 			b.QuotaConfigJSON = configData
 		case bucketReplicationConfig:
 			b.ReplicationConfigXML = configData
-		case bucketReplicationTargetsFile:
-			b.ReplicationTargetsConfigJSON = configData
+		case bucketTargetsFile:
+			b.BucketTargetsConfigJSON = configData
 		}
 	}
 

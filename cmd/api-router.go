@@ -322,7 +322,7 @@ func corsHandler(handler http.Handler) http.Handler {
 		xhttp.ContentEncoding,
 		xhttp.ContentLength,
 		xhttp.ContentType,
-		xhttp.ContentEncoding,
+		xhttp.ContentDisposition,
 		xhttp.LastModified,
 		xhttp.ContentLanguage,
 		xhttp.CacheControl,

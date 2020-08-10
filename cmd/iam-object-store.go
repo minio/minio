@@ -304,6 +304,7 @@ func (iamOS *IAMObjectStore) loadUser(user string, userType IAMUserType, m map[s
 	if u.Credentials.AccessKey == "" {
 		u.Credentials.AccessKey = user
 	}
+
 	m[user] = u.Credentials
 	return nil
 }
@@ -474,11 +475,24 @@ func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	}
 
 	// purge any expired entries which became expired now.
+	var expiredEntries []string
 	for k, v := range sys.iamUsersMap {
 		if v.IsExpired() {
 			delete(sys.iamUsersMap, k)
 			delete(sys.iamUserPolicyMap, k)
+			expiredEntries = append(expiredEntries, k)
 			// Deleting on the disk is taken care of in the next cycle
+		}
+	}
+
+	for _, v := range sys.iamUsersMap {
+		if v.IsServiceAccount() {
+			for _, accessKey := range expiredEntries {
+				if v.ParentUser == accessKey {
+					_ = iamOS.deleteUserIdentity(v.AccessKey, srvAccUser)
+					delete(sys.iamUsersMap, v.AccessKey)
+				}
+			}
 		}
 	}
 
