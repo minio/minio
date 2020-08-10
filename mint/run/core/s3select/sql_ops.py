@@ -21,7 +21,6 @@ from datetime import datetime
 from minio.select.options import (CSVInput, CSVOutput, InputSerialization,
                                   JSONInput, JSONOutput, OutputSerialization,
                                   RequestProgress, SelectObjectOptions)
-
 from utils import generate_bucket_name, generate_object_name
 
 
@@ -82,11 +81,11 @@ def test_sql_expressions_custom_input_output(client, input_bytes, sql_input,
 def test_sql_expressions(client, input_json_bytes, tests, log_output):
     input_serialization = InputSerialization(
         compression_type="NONE",
-        json=JSONInput(Type="DOCUMENT"),
+        json=JSONInput(json_type="DOCUMENT"),
     )
 
     output_serialization = OutputSerialization(
-        csv=CSVOutput(QuoteFields="ASNEEDED")
+        csv=CSVOutput(quote_fields="ASNEEDED")
     )
 
     test_sql_expressions_custom_input_output(client, input_json_bytes,
@@ -393,7 +392,7 @@ def test_sql_select_json(client, log_output):
             "Select s.rules[1].expr from S3Object s", b'{"expr":"y > x"}\n{}\n'),
     ]
 
-    input_serialization = InputSerialization(json=JSONInput(Type="DOCUMENT"))
+    input_serialization = InputSerialization(json=JSONInput(json_type="DOCUMENT"))
     output_serialization = OutputSerialization(json=JSONOutput())
     try:
         test_sql_expressions_custom_input_output(client, json_testcontent,
@@ -417,8 +416,8 @@ val4,val5,val6
 
     input_serialization = InputSerialization(
         csv=CSVInput(
-            FileHeaderInfo="NONE",
-            AllowQuotedRecordDelimiter="FALSE",
+            file_header_info="NONE",
+            allow_quoted_record_delimiter="FALSE",
         ),
     )
 
