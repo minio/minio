@@ -19,7 +19,7 @@ import io
 from datetime import datetime
 
 from minio.select.options import (CSVInput, CSVOutput, InputSerialization,
-                                  JSONInput, OutputSerialization,
+                                  JSONInput, JSONOutput, OutputSerialization,
                                   RequestProgress, SelectObjectOptions)
 
 from utils import generate_bucket_name, generate_object_name
@@ -394,7 +394,7 @@ def test_sql_select_json(client, log_output):
     ]
 
     input_serialization = InputSerialization(json=JSONInput(Type="DOCUMENT"))
-    output_serialization = OutputSerialization(json=JsonOutput())
+    output_serialization = OutputSerialization(json=JSONOutput())
     try:
         test_sql_expressions_custom_input_output(client, json_testcontent,
                                                  input_serialization, output_serialization, tests, log_output)

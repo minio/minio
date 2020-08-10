@@ -19,7 +19,7 @@ export APT="apt --quiet --yes"
 export WGET="wget --quiet --no-check-certificate"
 
 # install nodejs source list
-if ! $WGET --output-document=- https://deb.nodesource.com/setup_13.x | bash -; then
+if ! $WGET --output-document=- https://deb.nodesource.com/setup_14.x | bash -; then
     echo "unable to set nodejs repository"
     exit 1
 fi
