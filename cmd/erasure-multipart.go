@@ -702,6 +702,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Save successfully calculated md5sum.
 	fi.Metadata["etag"] = s3MD5
+	if opts.UserDefined["etag"] != "" { // preserve ETag if set
+		fi.Metadata["etag"] = opts.UserDefined["etag"]
+	}
 
 	// Save the consolidated actual size.
 	fi.Metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)

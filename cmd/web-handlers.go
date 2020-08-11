@@ -48,6 +48,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
@@ -961,6 +962,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	retPerms := ErrAccessDenied
 	holdPerms := ErrAccessDenied
+	replPerms := ErrAccessDenied
 	if authErr != nil {
 		if authErr == errNoAuthToken {
 			// Check if anonymous (non-owner) has access to upload objects.
@@ -1015,6 +1017,17 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			Claims:          claims.Map(),
 		}) {
 			holdPerms = ErrNone
+		}
+		if globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     claims.AccessKey,
+			Action:          iampolicy.GetReplicationConfigurationAction,
+			BucketName:      bucket,
+			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+			IsOwner:         owner,
+			ObjectName:      object,
+			Claims:          claims.Map(),
+		}) {
+			replPerms = ErrNone
 		}
 	}
 
@@ -1082,6 +1095,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	mustReplicate := mustReplicateWeb(ctx, r, bucket, object, metadata, "", replPerms)
+	if mustReplicate {
+		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
+	}
 	pReader = NewPutObjReader(hashReader, nil, nil)
 	// get gateway encryption options
 	opts, err := putOpts(ctx, r, bucket, object, metadata)
@@ -1155,7 +1172,17 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
+	if mustReplicate {
+		defer replicateObject(context.Background(), bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+			EventName:    event.ObjectCreatedPut,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		}, false)
+	}
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,

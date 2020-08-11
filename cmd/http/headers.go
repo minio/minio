@@ -123,6 +123,9 @@ const (
 
 	// Header indicates if the mtime should be preserved by client
 	MinIOSourceMTime = "x-minio-source-mtime"
+
+	// Header indicates if the etag should be preserved by client
+	MinIOSourceETag = "x-minio-source-etag"
 )
 
 // Common http query params S3 API
