@@ -131,6 +131,13 @@ func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]
 		metadata[strings.ToLower(xhttp.ContentType)] = "application/octet-stream"
 	}
 
+	// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+	for k := range metadata {
+		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+			delete(metadata, k)
+		}
+	}
+
 	if contentEncoding, ok := metadata[strings.ToLower(xhttp.ContentEncoding)]; ok {
 		contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
 		if contentEncoding != "" {

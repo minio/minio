@@ -102,6 +102,9 @@ const (
 	AmzSecurityToken        = "X-Amz-Security-Token"
 	AmzDecodedContentLength = "X-Amz-Decoded-Content-Length"
 
+	AmzMetaUnencryptedContentLength = "X-Amz-Meta-X-Amz-Unencrypted-Content-Length"
+	AmzMetaUnencryptedContentMD5    = "X-Amz-Meta-X-Amz-Unencrypted-Content-Md5"
+
 	// Signature v2 related constants
 	AmzSignatureV2 = "Signature"
 	AmzAccessKeyID = "AWSAccessKeyId"

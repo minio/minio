@@ -457,6 +457,16 @@ var removeSensitiveHeadersTests = []struct {
 			"X-Amz-Meta-Test-1": []string{"Test-1"},
 		},
 	},
+	{ // https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+		Header: http.Header{
+			"X-Amz-Meta-X-Amz-Unencrypted-Content-Md5":    []string{"value"},
+			"X-Amz-Meta-X-Amz-Unencrypted-Content-Length": []string{"value"},
+			"X-Amz-Meta-Test-1":                           []string{"Test-1"},
+		},
+		ExpectedHeader: http.Header{
+			"X-Amz-Meta-Test-1": []string{"Test-1"},
+		},
+	},
 }
 
 func TestRemoveSensitiveHeaders(t *testing.T) {
