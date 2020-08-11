@@ -182,9 +182,10 @@ func (z *erasureZones) getZonesAvailableSpace(ctx context.Context, size int64) z
 
 // getZoneIdx returns the found previous object and its corresponding zone idx,
 // if none are found falls back to most available space zone.
-func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
+// fixed return whether the zone is fixed for this object and the next call would produce the same result.
+func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, fixed bool, err error) {
 	if z.SingleZone() {
-		return 0, nil
+		return 0, true, nil
 	}
 	for i, zone := range z.zones {
 		objInfo, err := zone.GetObjectInfo(ctx, bucket, object, opts)
@@ -196,7 +197,7 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 		default:
 			if err != nil {
 				// any other un-handled errors return right here.
-				return -1, err
+				return -1, false, err
 			}
 		}
 		// delete marker not specified means no versions
@@ -205,15 +206,15 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 			continue
 		}
 		// Success case and when DeleteMarker is true return.
-		return i, nil
+		return i, true, nil
 	}
 
 	// We multiply the size by 2 to account for erasure coding.
 	idx = z.getAvailableZoneIdx(ctx, size*2)
 	if idx < 0 {
-		return -1, toObjectErr(errDiskFull)
+		return -1, false, toObjectErr(errDiskFull)
 	}
-	return idx, nil
+	return idx, false, nil
 }
 
 func (z *erasureZones) Shutdown(ctx context.Context) error {
@@ -541,20 +542,31 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - writes an object to least used erasure zone.
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
-	// Lock the object.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalObjectTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.Unlock()
+	// Get lock for the object.
+	data.lock = z.NewNSLock(ctx, bucket, object)
 
 	if z.SingleZone() {
 		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts, data.Size())
-	if err != nil {
+	// Get a lock until we have determined a zone.
+	if err := data.lock.GetLock(globalObjectTimeout); err != nil {
 		return ObjectInfo{}, err
+	}
+
+	idx, fixed, err := z.getZoneIdx(ctx, bucket, object, opts, data.Size())
+	if err != nil {
+		data.lock.Unlock()
+		return ObjectInfo{}, err
+	}
+
+	if fixed {
+		// We don't need to keep the lock since zone is determined.
+		data.lock.Unlock()
+	} else {
+		// We must make sure that PutObject doesn't also try to grab the lock.
+		defer data.lock.Unlock()
+		data.lock = nil
 	}
 
 	// Overwrite the object at the right zone
@@ -630,7 +642,7 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		defer lk.Unlock()
 	}
 
-	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
+	zoneIdx, _, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
 	}
@@ -1386,7 +1398,7 @@ func (z *erasureZones) NewMultipartUpload(ctx context.Context, bucket, object st
 	}
 
 	// We don't know the exact size, so we ask for at least 1GiB file.
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts, 1<<30)
+	idx, _, err := z.getZoneIdx(ctx, bucket, object, opts, 1<<30)
 	if err != nil {
 		return "", err
 	}

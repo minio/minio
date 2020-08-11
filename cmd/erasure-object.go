@@ -735,7 +735,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-
+	if r.lock != nil {
+		if err := r.lock.GetLock(globalObjectTimeout); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		defer r.lock.Unlock()
+	}
 	// Rename the successfully written temporary object to final location.
 	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)

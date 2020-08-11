@@ -766,6 +766,8 @@ type PutObjReader struct {
 	*hash.Reader              // actual data stream
 	rawReader    *hash.Reader // original data stream
 	sealMD5Fn    SealMD5CurrFn
+
+	lock RWLocker // Used for grabbing the lock when moving data.
 }
 
 // Size returns the absolute number of bytes the Reader
