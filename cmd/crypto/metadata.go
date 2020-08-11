@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"errors"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -38,6 +39,8 @@ func IsMultiPart(metadata map[string]string) bool {
 func RemoveSensitiveEntries(metadata map[string]string) { // The functions is tested in TestRemoveSensitiveHeaders for compatibility reasons
 	delete(metadata, SSECKey)
 	delete(metadata, SSECopyKey)
+	delete(metadata, xhttp.AmzMetaUnencryptedContentLength)
+	delete(metadata, xhttp.AmzMetaUnencryptedContentMD5)
 }
 
 // RemoveSSEHeaders removes all crypto-specific SSE

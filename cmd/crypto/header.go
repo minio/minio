@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // SSEHeader is the general AWS SSE HTTP header key.
@@ -81,6 +83,8 @@ const (
 func RemoveSensitiveHeaders(h http.Header) {
 	h.Del(SSECKey)
 	h.Del(SSECopyKey)
+	h.Del(xhttp.AmzMetaUnencryptedContentLength)
+	h.Del(xhttp.AmzMetaUnencryptedContentMD5)
 }
 
 // IsRequested returns true if the HTTP headers indicates

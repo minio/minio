@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 )
 
@@ -397,6 +398,11 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	fi.Metadata = make(map[string]string, len(j.MetaUser)+len(j.MetaSys))
 	for k, v := range j.MetaUser {
+		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+			continue
+		}
+
 		fi.Metadata[k] = v
 	}
 	for k, v := range j.MetaSys {
