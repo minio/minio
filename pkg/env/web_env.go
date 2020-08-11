@@ -30,6 +30,8 @@ import (
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 const (
@@ -96,9 +98,19 @@ func fetchEnvHTTP(envKey string, u *url.URL) (string, error) {
 		return "", err
 	}
 
-	if username != "" && password != "" {
-		req.SetBasicAuth(username, password)
+	claims := &jwt.StandardClaims{
+		ExpiresAt: int64(15 * time.Minute),
+		Issuer:    username,
+		Subject:   envKey,
 	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	ss, err := token.SignedString([]byte(password))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+ss)
 
 	clnt := &http.Client{
 		Transport: &http.Transport{
