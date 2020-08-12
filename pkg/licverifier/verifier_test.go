@@ -19,7 +19,17 @@ package licverifier
 import (
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
+
+// at fixes the jwt.TimeFunc at t and calls f in that context.
+func at(t time.Time, f func()) {
+	jwt.TimeFunc = func() time.Time { return t }
+	f()
+	jwt.TimeFunc = time.Now
+}
 
 // TestLicenseVerify tests the license key verification process with a valid and
 // an invalid key.
@@ -48,18 +58,22 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 	}
 
 	for i, tc := range testCases {
-		licInfo, err := lv.Verify(tc.lic)
-		if err != nil && tc.shouldPass {
-			t.Fatalf("%d: Expected license to pass verification but failed with %s", i+1, err)
-		}
-		if err == nil {
-			if !tc.shouldPass {
-				t.Fatalf("%d: Expected license to fail verification but passed", i+1)
+		// Fixing the jwt.TimeFunc at 2020-08-05 22:17:43 +0000 UTC to
+		// ensure that the license JWT doesn't expire ever.
+		at(time.Unix(int64(1596665863), 0), func() {
+			licInfo, err := lv.Verify(tc.lic)
+			if err != nil && tc.shouldPass {
+				t.Fatalf("%d: Expected license to pass verification but failed with %s", i+1, err)
 			}
-			if tc.expectedLicInfo != licInfo {
-				t.Fatalf("%d: Expected license info %v but got %v", i+1, tc.expectedLicInfo, licInfo)
+			if err == nil {
+				if !tc.shouldPass {
+					t.Fatalf("%d: Expected license to fail verification but passed", i+1)
+				}
+				if tc.expectedLicInfo != licInfo {
+					t.Fatalf("%d: Expected license info %v but got %v", i+1, tc.expectedLicInfo, licInfo)
+				}
 			}
-		}
+		})
 	}
 }
 
