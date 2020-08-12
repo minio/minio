@@ -2088,6 +2088,14 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		}
 	}
 
+	// when maintenance is not specified we don't have
+	// to look at the healing side of the code.
+	if !opts.Maintenance {
+		return HealthResult{
+			Healthy: true,
+		}
+	}
+
 	// check if local disks are being healed, if they are being healed
 	// we need to tell healthy status as 'false' so that this server
 	// is not taken down for maintenance
