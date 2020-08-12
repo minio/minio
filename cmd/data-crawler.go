@@ -391,7 +391,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				cache.addChildString(entName)
 
 				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
-				delete(existing, entName)
+				delete(existing, h.Key())
 				cache.addChild(h)
 				if final {
 					if exists {
@@ -438,6 +438,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 		if f.healObjectSelect == 0 {
 			// If we are not scanning, return now.
+			f.newCache.replaceHashed(thisHash, folder.parent, cache)
 			continue
 		}
 
