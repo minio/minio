@@ -481,19 +481,16 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			if os.IsNotExist(err) {
 				// The 'HealObjects' above will not work if the folder only contains an object.
 				// So we do a single check on whether this is an object.
-				_, err = objAPI.HealObject(ctx, bucket, prefix, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
-				if isErrObjectNotFound(err) {
+				var objI ListObjectVersionsInfo
+				objI, err = objAPI.ListObjectVersions(ctx, bucket, prefix, "", "", "", 100000)
+				if err == nil {
+					for _, obj := range objI.Objects {
+						objAPI.HealObject(ctx, bucket, prefix, obj.VersionID, madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
+					}
+				} else if isErrObjectNotFound(err) {
 					// If not found it may be a dangling folder on other disks.
 					// In that case this will remove it on other hosts.
-					_, err = objAPI.HealObject(ctx, bucket, prefix+slashSeparator, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
-					if err == nil {
-						// If the folder was removed nil is returned.
-						// Make sure we don't re-add the folder.
-						err = ObjectNotFound{}
-					}
-				}
-				if f.dataUsageCrawlDebug && !isErrObjectNotFound(err) {
-					logger.LogIf(ctx, err)
+					objAPI.HealObject(ctx, bucket, prefix+slashSeparator, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
 				}
 			}
 
