@@ -478,7 +478,7 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			if gerr := decoder.Decode(&fi); gerr != nil {
 				// Upon error return
 				if gerr != io.EOF {
-					logger.LogIf(context.Background(), gerr)
+					logger.LogIf(GlobalContext, gerr)
 				}
 				return
 			}

@@ -326,7 +326,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
 				// use a new context to avoid locker prematurely timing out operation when the GetObjectNInfo returns.
-				dcache.Put(context.Background(), bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
+				dcache.Put(GlobalContext, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{
+					UserDefined: getMetadata(bReader.ObjInfo),
+				}, false)
 				return
 			}
 		}()
@@ -337,7 +339,11 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
 	go func() {
-		putErr := dcache.Put(ctx, bucket, object, io.LimitReader(pipeReader, bkReader.ObjInfo.Size), bkReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bkReader.ObjInfo)}, false)
+		putErr := dcache.Put(ctx, bucket, object,
+			io.LimitReader(pipeReader, bkReader.ObjInfo.Size),
+			bkReader.ObjInfo.Size, nil, ObjectOptions{
+				UserDefined: getMetadata(bkReader.ObjInfo),
+			}, false)
 		// close the write end of the pipe, so the error gets
 		// propagated to getObjReader
 		pipeWriter.CloseWithError(putErr)
