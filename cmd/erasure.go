@@ -167,7 +167,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 	errs = g.Wait()
 	// Wait for the routines.
 	for i, diskInfoErr := range errs {
-		ep := endpoints[i]
+		ep := disksInfo[i].Endpoint
 		if diskInfoErr != nil {
 			offlineDisks[ep]++
 			continue
