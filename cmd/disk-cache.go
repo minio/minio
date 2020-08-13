@@ -326,7 +326,7 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
 				// use a new context to avoid locker prematurely timing out operation when the GetObjectNInfo returns.
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{
+				dcache.Put(GlobalContext, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{
 					UserDefined: getMetadata(bReader.ObjInfo),
 				}, false)
 				return
