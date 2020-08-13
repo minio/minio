@@ -180,6 +180,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalRootCAs, err = certs.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	// Add the global public crts as part of global root CAs
+	for _, publicCrt := range globalPublicCerts {
+		globalRootCAs.AddCert(publicCrt)
+	}
+
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
