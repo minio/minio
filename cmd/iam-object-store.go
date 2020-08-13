@@ -151,7 +151,7 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 		cred.AccessKey = user
 		u := newUserIdentity(cred)
 		if err := iamOS.saveIAMConfig(u, identityPath); err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(ctx, err)
 			return err
 		}
 
@@ -216,7 +216,7 @@ func (iamOS *IAMObjectStore) saveIAMConfig(item interface{}, path string) error 
 			return err
 		}
 	}
-	return saveConfig(context.Background(), iamOS.objAPI, path, data)
+	return saveConfig(GlobalContext, iamOS.objAPI, path, data)
 }
 
 func (iamOS *IAMObjectStore) loadIAMConfig(item interface{}, path string) error {
@@ -586,7 +586,7 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 
 		marker := ""
 		for {
-			lo, err := objAPI.ListObjects(context.Background(),
+			lo, err := objAPI.ListObjects(ctx,
 				minioMetaBucket, pathPrefix, marker, SlashSeparator, maxObjectList)
 			if err != nil {
 				select {

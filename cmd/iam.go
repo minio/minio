@@ -1640,7 +1640,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 	if err != nil {
 		// Log any error in input session policy config.
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(GlobalContext, err)
 		return false
 	}
 
@@ -1783,7 +1783,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 		if err != nil {
 			// Log any error in input session policy config.
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			return false
 		}
 
@@ -1807,7 +1807,7 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	if globalPolicyOPA != nil {
 		ok, err := globalPolicyOPA.IsAllowed(args)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 		return ok
 	}
