@@ -31,7 +31,7 @@ func IsRootDisk(diskPath string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	rootInfo, err := os.Stat("/")
+	rootInfo, err := os.Stat("/etc/hosts")
 	if err != nil {
 		return false, err
 	}
