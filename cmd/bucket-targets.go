@@ -90,11 +90,14 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
 		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
-		if err != nil || vcfg.Status != string(versioning.Enabled) {
+		if err != nil {
 			if isErrBucketNotFound(err) {
 				return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 			}
-			return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
+			if vcfg.Status != string(versioning.Enabled) {
+				return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
+			}
+			return err
 		}
 	}
 
