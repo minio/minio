@@ -89,6 +89,10 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if proxyRequestByBucket(ctx, w, r, bucket) {
+		return
+	}
+
 	listObjectVersions := objectAPI.ListObjectVersions
 
 	// Inititate a list object versions operation based on the input params.
