@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2063,6 +2064,8 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		}
 	}
 
+	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
+
 	for zoneIdx := range erasureSetUpCount {
 		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 		diskCount := z.zones[zoneIdx].drivesPerSet
@@ -2076,8 +2079,9 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		}
 		for setIdx := range erasureSetUpCount[zoneIdx] {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
-				logger.LogIf(ctx, fmt.Errorf("Write quorum lost on zone: %d, set: %d, expected write quorum: %d",
-					zoneIdx, setIdx, writeQuorum))
+				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
+					fmt.Errorf("Write quorum may be lost on zone: %d, set: %d, expected write quorum: %d",
+						zoneIdx, setIdx, writeQuorum))
 				return HealthResult{
 					Healthy:     false,
 					ZoneID:      zoneIdx,
@@ -2101,14 +2105,14 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 	// is not taken down for maintenance
 	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx, true)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to verify global heal status: %w", err))
+		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
 		return HealthResult{
 			Healthy: false,
 		}
 	}
 
 	if len(aggHealStateResult.HealDisks) > 0 {
-		logger.LogIf(ctx, fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
 	}
 
 	healthy := len(aggHealStateResult.HealDisks) == 0
