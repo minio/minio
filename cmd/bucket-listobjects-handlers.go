@@ -24,11 +24,35 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
+
+func concurrentDecryptETag(ctx context.Context, objects []ObjectInfo) {
+	inParallel := func(objects []ObjectInfo) {
+		g := errgroup.WithNErrs(len(objects))
+		for index := range objects {
+			index := index
+			g.Go(func() error {
+				objects[index].ETag = objects[index].GetActualETag(nil)
+				objects[index].Size, _ = objects[index].GetActualSize()
+				return nil
+			}, index)
+		}
+		g.Wait()
+	}
+	const maxConcurrent = 500
+	for {
+		if len(objects) < maxConcurrent {
+			inParallel(objects)
+			return
+		}
+		inParallel(objects[:maxConcurrent])
+		objects = objects[maxConcurrent:]
+	}
+}
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode
 // if one of the args do not meet the required conditions.
@@ -104,16 +128,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	for i := range listObjectVersionsInfo.Objects {
-		if crypto.IsEncrypted(listObjectVersionsInfo.Objects[i].UserDefined) {
-			listObjectVersionsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectVersionsInfo.Objects[i], false)
-		}
-		listObjectVersionsInfo.Objects[i].Size, err = listObjectVersionsInfo.Objects[i].GetActualSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
+	concurrentDecryptETag(ctx, listObjectVersionsInfo.Objects)
 
 	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo)
 
@@ -182,16 +197,7 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	for i := range listObjectsV2Info.Objects {
-		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
-			listObjectsV2Info.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsV2Info.Objects[i], false)
-		}
-		listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].GetActualSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
+	concurrentDecryptETag(ctx, listObjectsV2Info.Objects)
 
 	// The next continuation token has id@node_index format to optimize paginated listing
 	nextContinuationToken := listObjectsV2Info.NextContinuationToken
@@ -268,16 +274,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	for i := range listObjectsV2Info.Objects {
-		if crypto.IsEncrypted(listObjectsV2Info.Objects[i].UserDefined) {
-			listObjectsV2Info.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsV2Info.Objects[i], false)
-		}
-		listObjectsV2Info.Objects[i].Size, err = listObjectsV2Info.Objects[i].GetActualSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
+	concurrentDecryptETag(ctx, listObjectsV2Info.Objects)
 
 	// The next continuation token has id@node_index format to optimize paginated listing
 	nextContinuationToken := listObjectsV2Info.NextContinuationToken
@@ -400,16 +397,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	for i := range listObjectsInfo.Objects {
-		if crypto.IsEncrypted(listObjectsInfo.Objects[i].UserDefined) {
-			listObjectsInfo.Objects[i].ETag = getDecryptedETag(r.Header, listObjectsInfo.Objects[i], false)
-		}
-		listObjectsInfo.Objects[i].Size, err = listObjectsInfo.Objects[i].GetActualSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-	}
+	concurrentDecryptETag(ctx, listObjectsInfo.Objects)
 
 	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType, maxKeys, listObjectsInfo)
 

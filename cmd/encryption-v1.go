@@ -605,12 +605,14 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 	if crypto.IsMultiPart(objInfo.UserDefined) {
 		return objInfo.ETag
 	}
+
 	if crypto.SSECopy.IsRequested(headers) {
 		key, err = crypto.SSECopy.ParseHTTP(headers)
 		if err != nil {
 			return objInfo.ETag
 		}
 	}
+
 	// As per AWS S3 Spec, ETag for SSE-C encrypted objects need not be MD5Sum of the data.
 	// Since server side copy with same source and dest just replaces the ETag, we save
 	// encrypted content MD5Sum as ETag for both SSE-C and SSE-S3, we standardize the ETag
