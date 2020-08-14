@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,9 +29,12 @@ import (
 	"strings"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/cmd/http"
 	xnet "github.com/minio/minio/pkg/net"
 )
+
+var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // ErrKESKeyExists is the error returned a KES server
 // when a master key does exist.
