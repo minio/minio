@@ -18,12 +18,16 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 )
 
 // Target implements logger.Target and sends the json
@@ -45,6 +49,47 @@ type Target struct {
 	client    http.Client
 }
 
+// Validate validate the http target
+func (h *Target) Validate() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.endpoint, strings.NewReader(`{}`))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set(xhttp.ContentType, "application/json")
+
+	// Set user-agent to indicate MinIO release
+	// version to the configured log endpoint
+	req.Header.Set("User-Agent", h.userAgent)
+
+	if h.authToken != "" {
+		req.Header.Set("Authorization", h.authToken)
+	}
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	// Drain any response.
+	xhttp.DrainBody(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		switch resp.StatusCode {
+		case http.StatusForbidden:
+			return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
+				h.endpoint, resp.Status)
+		}
+		return fmt.Errorf("%s returned '%s', please check your endpoint configuration",
+			h.endpoint, resp.Status)
+	}
+
+	return nil
+}
+
 func (h *Target) startHTTPLogger() {
 	// Create a routine which sends json logs received
 	// from an internal channel.
@@ -55,8 +100,11 @@ func (h *Target) startHTTPLogger() {
 				continue
 			}
 
-			req, err := http.NewRequest(http.MethodPost, h.endpoint, bytes.NewReader(logJSON))
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+				h.endpoint, bytes.NewReader(logJSON))
 			if err != nil {
+				cancel()
 				continue
 			}
 			req.Header.Set(xhttp.ContentType, "application/json")
@@ -70,13 +118,26 @@ func (h *Target) startHTTPLogger() {
 			}
 
 			resp, err := h.client.Do(req)
+			cancel()
 			if err != nil {
-				h.client.CloseIdleConnections()
+				logger.LogIf(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration\n",
+					h.endpoint, err))
 				continue
 			}
 
 			// Drain any response.
 			xhttp.DrainBody(resp.Body)
+
+			if resp.StatusCode != http.StatusOK {
+				switch resp.StatusCode {
+				case http.StatusForbidden:
+					logger.LogIf(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
+						h.endpoint, resp.Status))
+				default:
+					logger.LogIf(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration",
+						h.endpoint, resp.Status))
+				}
+			}
 		}
 	}()
 }

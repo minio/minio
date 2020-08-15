@@ -117,6 +117,11 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan interface{}, doneCh <-chan
 	sys.pubsub.Subscribe(subCh, doneCh, filter)
 }
 
+// Validate if HTTPConsoleLoggerSys is valid, always returns nil right now
+func (sys *HTTPConsoleLoggerSys) Validate() error {
+	return nil
+}
+
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {

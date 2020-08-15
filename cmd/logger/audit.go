@@ -125,15 +125,6 @@ func (lrw *ResponseWriter) Size() int {
 	return lrw.bytesWritten
 }
 
-// AuditTargets is the list of enabled audit loggers
-var AuditTargets = []Target{}
-
-// AddAuditTarget adds a new audit logger target to the
-// list of enabled loggers
-func AddAuditTarget(t Target) {
-	AuditTargets = append(AuditTargets, t)
-}
-
 // AuditLog - logs audit logs to all audit targets.
 func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}, filterKeys ...string) {
 	// Fast exit if there is not audit target configured
