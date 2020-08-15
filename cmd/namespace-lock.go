@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/lsync"
@@ -147,7 +148,18 @@ func (di *distLockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error)
 	lockSource := getSource(2)
 	start := UTCNow()
 
-	if !di.rwMutex.GetLock(di.ctx, di.opsID, lockSource, timeout.Timeout()) {
+	// Lockers default to standard storage class always, why because
+	// we always dictate storage tolerance in terms of standard
+	// storage class be it number of drives or a multiplicative
+	// of number of nodes, defaulting lockers to this value
+	// simply means that locking is always similar in behavior
+	// and effect with erasure coded drive tolerance.
+	tolerance := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+
+	if !di.rwMutex.GetLock(di.ctx, di.opsID, lockSource, dsync.Options{
+		Timeout:   timeout.Timeout(),
+		Tolerance: tolerance,
+	}) {
 		timeout.LogFailure()
 		return OperationTimedOut{}
 	}
@@ -164,7 +176,14 @@ func (di *distLockInstance) Unlock() {
 func (di *distLockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr error) {
 	lockSource := getSource(2)
 	start := UTCNow()
-	if !di.rwMutex.GetRLock(di.ctx, di.opsID, lockSource, timeout.Timeout()) {
+
+	// Lockers default to standard storage class always.
+	tolerance := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+
+	if !di.rwMutex.GetRLock(di.ctx, di.opsID, lockSource, dsync.Options{
+		Timeout:   timeout.Timeout(),
+		Tolerance: tolerance,
+	}) {
 		timeout.LogFailure()
 		return OperationTimedOut{}
 	}
