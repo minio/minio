@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -86,7 +87,7 @@ func getLocalDisksToHeal(objAPI ObjectLayer) []Endpoints {
 			// Try to connect to the current endpoint
 			// and reformat if the current disk is not formatted
 			_, _, err := connectEndpoint(endpoint)
-			if err == errUnformattedDisk {
+			if errors.Is(err, errUnformattedDisk) {
 				localDisksToHeal = append(localDisksToHeal, endpoint)
 			}
 		}
