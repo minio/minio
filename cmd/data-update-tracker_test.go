@@ -42,6 +42,10 @@ type testingLogger struct {
 	t  testLoggerI
 }
 
+func (t *testingLogger) Validate() error {
+	return nil
+}
+
 func (t *testingLogger) Send(entry interface{}, errKind string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

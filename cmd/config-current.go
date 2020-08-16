@@ -455,28 +455,32 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	for _, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			// Enable http logging
-			logger.AddTarget(
+			if err = logger.AddTarget(
 				http.New(http.WithEndpoint(l.Endpoint),
 					http.WithAuthToken(l.AuthToken),
 					http.WithUserAgent(loggerUserAgent),
 					http.WithLogKind(string(logger.All)),
 					http.WithTransport(NewGatewayHTTPTransport()),
 				),
-			)
+			); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize console HTTP target: %w", err))
+			}
 		}
 	}
 
 	for _, l := range loggerCfg.Audit {
 		if l.Enabled {
 			// Enable http audit logging
-			logger.AddAuditTarget(
+			if err = logger.AddAuditTarget(
 				http.New(http.WithEndpoint(l.Endpoint),
 					http.WithAuthToken(l.AuthToken),
 					http.WithUserAgent(loggerUserAgent),
 					http.WithLogKind(string(logger.All)),
 					http.WithTransport(NewGatewayHTTPTransport()),
 				),
-			)
+			); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit HTTP target: %w", err))
+			}
 		}
 	}
 
