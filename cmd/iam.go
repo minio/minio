@@ -449,10 +449,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
 
+	// allocate dynamic timeout once before the loop
+	iamLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
+
 	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err := txnLk.GetLock(newDynamicTimeout(3*time.Second, 5*time.Second)); err != nil {
+		if err := txnLk.GetLock(iamLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
 			continue
 		}
