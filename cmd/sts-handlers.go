@@ -61,7 +61,8 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser = "ldapUser"
+	ldapUser               = "ldapUser"
+	ldapUserPolicyVariable = "ldap:user"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
