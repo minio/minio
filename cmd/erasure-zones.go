@@ -458,12 +458,12 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 		lock := z.NewNSLock(ctx, bucket, object)
 		switch lockType {
 		case writeLock:
-			if err = lock.GetLock(globalObjectTimeout); err != nil {
+			if err = lock.GetLock(globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.Unlock
 		case readLock:
-			if err = lock.GetRLock(globalObjectTimeout); err != nil {
+			if err = lock.GetRLock(globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.RUnlock
@@ -492,7 +492,7 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalObjectTimeout); err != nil {
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer lk.RUnlock()
@@ -516,7 +516,7 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalObjectTimeout); err != nil {
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.RUnlock()
@@ -544,7 +544,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
 	// Lock the object.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalObjectTimeout); err != nil {
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.Unlock()
@@ -625,7 +625,7 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if !cpSrcDstSame {
 		lk := z.NewNSLock(ctx, dstBucket, dstObject)
-		if err := lk.GetLock(globalObjectTimeout); err != nil {
+		if err := lk.GetLock(globalOperationTimeout); err != nil {
 			return objInfo, err
 		}
 		defer lk.Unlock()
@@ -1732,7 +1732,7 @@ func (z *erasureZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, e
 func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetRLock(globalHealingTimeout); err != nil {
+	if err := formatLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer formatLock.RUnlock()
@@ -1748,7 +1748,7 @@ func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
 func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalHealingTimeout); err != nil {
+	if err := formatLock.GetLock(globalOperationTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 	defer formatLock.Unlock()
@@ -1951,14 +1951,14 @@ func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID
 	lk := z.NewNSLock(ctx, bucket, object)
 	if bucket == minioMetaBucket {
 		// For .minio.sys bucket heals we should hold write locks.
-		if err := lk.GetLock(globalHealingTimeout); err != nil {
+		if err := lk.GetLock(globalOperationTimeout); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 		defer lk.Unlock()
 	} else {
 		// Lock the object before healing. Use read lock since healing
 		// will only regenerate parts & xl.meta of outdated disks.
-		if err := lk.GetRLock(globalHealingTimeout); err != nil {
+		if err := lk.GetRLock(globalOperationTimeout); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 		defer lk.RUnlock()
