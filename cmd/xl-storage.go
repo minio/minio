@@ -873,6 +873,14 @@ func (s *xlStorage) WalkVersions(volume, dirPath, marker string, recursive bool,
 		return nil, err
 	}
 
+	// Fast exit track to check if we are listing an object with
+	// a trailing slash, this will avoid to list the object content.
+	if HasSuffix(dirPath, SlashSeparator) {
+		if st, err := os.Stat(pathJoin(volumeDir, dirPath, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
+			return nil, errFileNotFound
+		}
+	}
+
 	// buffer channel matches the S3 ListObjects implementation
 	ch = make(chan FileInfoVersions, maxObjectList)
 	go func() {
@@ -894,6 +902,8 @@ func (s *xlStorage) WalkVersions(volume, dirPath, marker string, recursive bool,
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) {
 				fiv = FileInfoVersions{
+					Volume: volume,
+					Name:   walkResult.entry,
 					Versions: []FileInfo{
 						{
 							Volume: volume,
