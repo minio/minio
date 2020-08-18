@@ -335,10 +335,12 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 	return formats, g.Wait()
 }
 
-func saveFormatErasure(disk StorageAPI, format interface{}, diskID string) error {
-	if format == nil || disk == nil {
+func saveFormatErasure(disk StorageAPI, format *formatErasureV3) error {
+	if disk == nil || format == nil {
 		return errDiskNotFound
 	}
+
+	diskID := format.Erasure.This
 
 	if err := makeFormatErasureMetaVolumes(disk); err != nil {
 		return err
@@ -549,7 +551,7 @@ func formatErasureFixLocalDeploymentID(endpoints Endpoints, storageDisks []Stora
 					return nil
 				}
 				format.ID = refFormat.ID
-				if err := saveFormatErasure(storageDisks[index], format, format.Erasure.This); err != nil {
+				if err := saveFormatErasure(storageDisks[index], format); err != nil {
 					logger.LogIf(GlobalContext, err)
 					return fmt.Errorf("Unable to save format.json, %w", err)
 				}
@@ -695,7 +697,7 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 			if formats[index] == nil {
 				return errDiskNotFound
 			}
-			return saveFormatErasure(storageDisks[index], formats[index], formats[index].Erasure.This)
+			return saveFormatErasure(storageDisks[index], formats[index])
 		}, index)
 	}
 
@@ -722,13 +724,9 @@ func initStorageDisksWithErrors(endpoints Endpoints) ([]StorageAPI, []error) {
 	g := errgroup.WithNErrs(len(endpoints))
 	for index := range endpoints {
 		index := index
-		g.Go(func() error {
-			storageDisk, err := newStorageAPI(endpoints[index])
-			if err != nil {
-				return err
-			}
-			storageDisks[index] = storageDisk
-			return nil
+		g.Go(func() (err error) {
+			storageDisks[index], err = newStorageAPI(endpoints[index])
+			return err
 		}, index)
 	}
 	return storageDisks, g.Wait()
@@ -773,7 +771,7 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 			}
 			if formats[i].Erasure.This == "" {
 				formats[i].Erasure.This = formats[i].Erasure.Sets[0][i]
-				if err := saveFormatErasure(storageDisks[i], formats[i], formats[i].Erasure.This); err != nil {
+				if err := saveFormatErasure(storageDisks[i], formats[i]); err != nil {
 					return err
 				}
 			}
@@ -790,7 +788,7 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
-func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string) (*formatErasureV3, error) {
+func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
 	format := newFormatErasureV3(setCount, drivesPerSet)
 	formats := make([]*formatErasureV3, len(storageDisks))
 	wantAtMost := ecDrivesNoConfig(drivesPerSet)
@@ -830,6 +828,9 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 			}
 		}
 	}
+
+	// Mark all root disks down
+	markRootDisksAsDown(storageDisks, sErrs)
 
 	// Save formats `format.json` across all disks.
 	if err := saveFormatErasureAll(ctx, storageDisks, formats); err != nil {
