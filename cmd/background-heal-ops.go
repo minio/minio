@@ -56,6 +56,10 @@ func (h *healRoutine) queueHealTask(task healTask) {
 }
 
 func waitForLowHTTPReq(tolerance int32) {
+	// Bucket notification and http trace are not costly, it is okay to ignore them
+	// while counting the number of concurrent connections
+	tolerance += int32(globalHTTPListen.NumSubscribers() + globalHTTPTrace.NumSubscribers())
+
 	if httpServer := newHTTPServerFn(); httpServer != nil {
 		// Wait at max 10 minute for an inprogress request before proceeding to heal
 		waitCount := 600
@@ -110,24 +114,6 @@ func newHealRoutine() *healRoutine {
 		doneCh: make(chan struct{}),
 	}
 
-}
-
-func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
-	// Run the background healer
-	globalBackgroundHealRoutine = newHealRoutine()
-	go globalBackgroundHealRoutine.run(ctx, objAPI)
-
-	nh := newBgHealSequence()
-	// Heal any disk format and metadata early, if possible.
-	if err := nh.healDiskMeta(); err != nil {
-		if newObjectLayerFn() != nil {
-			// log only in situations, when object layer
-			// has fully initialized.
-			logger.LogIf(nh.ctx, err)
-		}
-	}
-
-	globalBackgroundHealState.LaunchNewHealSequence(nh)
 }
 
 // healDiskFormat - heals format.json, return value indicates if a

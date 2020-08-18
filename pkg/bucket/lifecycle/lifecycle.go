@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	errLifecycleTooManyRules      = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
-	errLifecycleNoRule            = Errorf("Lifecycle configuration should have at least one rule")
-	errLifecycleOverlappingPrefix = Errorf("Lifecycle configuration has rules with overlapping prefix")
+	errLifecycleTooManyRules = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
+	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
+	errLifecycleDuplicateID  = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
 )
 
 // Action represents a delete action or other transition
@@ -62,14 +62,19 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.Status == Disabled {
 			continue
 		}
+
 		if len(prefix) > 0 && len(rule.Filter.Prefix) > 0 {
-			// incoming prefix must be in rule prefix
-			if !recursive && !strings.HasPrefix(prefix, rule.Filter.Prefix) {
-				continue
+			if !recursive {
+				// If not recursive, incoming prefix must be in rule prefix
+				if !strings.HasPrefix(prefix, rule.Filter.Prefix) {
+					continue
+				}
 			}
-			// If recursive, we can skip this rule if it doesn't match the tested prefix.
-			if recursive && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
-				continue
+			if recursive {
+				// If recursive, we can skip this rule if it doesn't match the tested prefix.
+				if !strings.HasPrefix(prefix, rule.Filter.Prefix) && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
+					continue
+				}
 			}
 		}
 
@@ -115,17 +120,15 @@ func (lc Lifecycle) Validate() error {
 			return err
 		}
 	}
-	// Compare every rule's prefix with every other rule's prefix
+	// Make sure Rule ID is unique
 	for i := range lc.Rules {
 		if i == len(lc.Rules)-1 {
 			break
 		}
-		// N B Empty prefixes overlap with all prefixes
 		otherRules := lc.Rules[i+1:]
 		for _, otherRule := range otherRules {
-			if strings.HasPrefix(lc.Rules[i].Prefix(), otherRule.Prefix()) ||
-				strings.HasPrefix(otherRule.Prefix(), lc.Rules[i].Prefix()) {
-				return errLifecycleOverlappingPrefix
+			if lc.Rules[i].ID == otherRule.ID {
+				return errLifecycleDuplicateID
 			}
 		}
 	}
@@ -207,9 +210,8 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 		}
 
-		// All other expiration only applies to latest versions
-		// (except if this is a delete marker)
-		if obj.IsLatest && !obj.DeleteMarker {
+		// Remove the object or simply add a delete marker (once) in a versioned bucket
+		if obj.VersionID == "" || obj.IsLatest && !obj.DeleteMarker {
 			switch {
 			case !rule.Expiration.IsDateNull():
 				if time.Now().UTC().After(rule.Expiration.Date.Time) {
@@ -222,6 +224,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			}
 		}
 	}
+
 	return action
 }
 

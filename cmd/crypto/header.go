@@ -18,9 +18,11 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"strings"
+
+	jsoniter "github.com/json-iterator/go"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // SSEHeader is the general AWS SSE HTTP header key.
@@ -81,6 +83,8 @@ const (
 func RemoveSensitiveHeaders(h http.Header) {
 	h.Del(SSECKey)
 	h.Del(SSECopyKey)
+	h.Del(xhttp.AmzMetaUnencryptedContentLength)
+	h.Del(xhttp.AmzMetaUnencryptedContentMD5)
 }
 
 // IsRequested returns true if the HTTP headers indicates
@@ -144,6 +148,7 @@ func (s3KMS) ParseHTTP(h http.Header) (string, interface{}, error) {
 	contextStr, ok := h[SSEKmsContext]
 	if ok {
 		var context map[string]interface{}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		if err := json.Unmarshal([]byte(contextStr[0]), &context); err != nil {
 			return "", nil, err
 		}

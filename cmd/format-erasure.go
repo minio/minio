@@ -27,7 +27,6 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
@@ -57,18 +56,6 @@ const (
 
 // Offline disk UUID represents an offline disk.
 const offlineDiskUUID = "ffffffff-ffff-ffff-ffff-ffffffffffff"
-
-// Healing is only supported for the list of errors mentioned here.
-var formatHealErrors = map[error]struct{}{
-	errUnformattedDisk: {},
-	errDiskNotFound:    {},
-}
-
-// List of errors considered critical for disk formatting.
-var formatCriticalErrors = map[error]struct{}{
-	errCorruptedFormat: {},
-	errFaultyDisk:      {},
-}
 
 // Used to detect the version of "xl" format.
 type formatErasureVersionDetect struct {
@@ -415,7 +402,8 @@ func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
 			}
 			if !isHiddenDirectories(vols...) {
 				// 'format.json' not found, but we found user data, reject such disks.
-				return nil, errCorruptedFormat
+				return nil, fmt.Errorf("some unexpected files '%v' found on %s: %w",
+					vols, disk, errCorruptedFormat)
 			}
 			// No other data found, its a fresh disk.
 			return nil, errUnformattedDisk
@@ -490,7 +478,8 @@ func formatErasureGetDeploymentID(refFormat *formatErasureV3, formats []*formatE
 			} else if deploymentID != format.ID {
 				// DeploymentID found earlier doesn't match with the
 				// current format.json's ID.
-				return "", errCorruptedFormat
+				return "", fmt.Errorf("Deployment IDs do not match expected %s, got %s: %w",
+					deploymentID, format.ID, errCorruptedFormat)
 			}
 		}
 	}
@@ -500,14 +489,7 @@ func formatErasureGetDeploymentID(refFormat *formatErasureV3, formats []*formatE
 // formatErasureFixDeploymentID - Add deployment id if it is not present.
 func formatErasureFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, refFormat *formatErasureV3) (err error) {
 	// Attempt to load all `format.json` from all disks.
-	var sErrs []error
-	formats, sErrs := loadFormatErasureAll(storageDisks, false)
-	for i, sErr := range sErrs {
-		if _, ok := formatCriticalErrors[sErr]; ok {
-			return config.ErrCorruptedBackend(err).Hint(fmt.Sprintf("Clear any pre-existing content on %s", endpoints[i]))
-		}
-	}
-
+	formats, _ := loadFormatErasureAll(storageDisks, false)
 	for index := range formats {
 		// If the Erasure sets do not match, set those formats to nil,
 		// We do not have to update the ID on those format.json file.
@@ -515,6 +497,7 @@ func formatErasureFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI
 			formats[index] = nil
 		}
 	}
+
 	refFormat.ID, err = formatErasureGetDeploymentID(refFormat, formats)
 	if err != nil {
 		return err
@@ -709,6 +692,9 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
+			if formats[index] == nil {
+				return errDiskNotFound
+			}
 			return saveFormatErasure(storageDisks[index], formats[index], formats[index].Erasure.This)
 		}, index)
 	}

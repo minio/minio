@@ -38,6 +38,13 @@ func mustGetRequestID(t time.Time) string {
 	return fmt.Sprintf("%X", t.UnixNano())
 }
 
+// setEventStreamHeaders to allow proxies to avoid buffering proxy responses
+func setEventStreamHeaders(w http.ResponseWriter) {
+	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	w.Header().Set(xhttp.CacheControl, "no-cache") // nginx to turn off buffering
+	w.Header().Set("X-Accel-Buffering", "no")      // nginx to turn off buffering
+}
+
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	w.Header().Set(xhttp.ServerInfo, "MinIO/"+ReleaseTag)
@@ -121,6 +128,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 			// values to client.
 			continue
 		}
+
+		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+			continue
+		}
 		var isSet bool
 		for _, userMetadataPrefix := range userMetadataKeyPrefixes {
 			if !strings.HasPrefix(k, userMetadataPrefix) {
@@ -157,7 +169,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if objInfo.VersionID != "" {
 		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
-
+	if objInfo.ReplicationStatus.String() != "" {
+		w.Header()[xhttp.AmzBucketReplicationStatus] = []string{objInfo.ReplicationStatus.String()}
+	}
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
 		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
 			Name:         objInfo.Name,

@@ -22,6 +22,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +86,10 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 
 func (z *erasureZones) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
 	return z.zones[0].NewNSLock(ctx, bucket, objects...)
+}
+
+func (z *erasureZones) SetDriveCount() int {
+	return z.zones[0].SetDriveCount()
 }
 
 type zonesAvailableSpace []zoneAvailableSpace
@@ -340,12 +345,13 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 
 		// We need to merge since we will get the same buckets from each zone.
 		// Therefore to get the exact bucket sizes we must merge before we can convert.
-		allMerged := dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
+		var allMerged dataUsageCache
 
 		update := func() {
 			mu.Lock()
 			defer mu.Unlock()
 
+			allMerged = dataUsageCache{Info: dataUsageCacheInfo{Name: dataUsageRoot}}
 			for _, info := range results {
 				if info.Info.LastUpdate.IsZero() {
 					// Not filled yet.
@@ -452,12 +458,12 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 		lock := z.NewNSLock(ctx, bucket, object)
 		switch lockType {
 		case writeLock:
-			if err = lock.GetLock(globalObjectTimeout); err != nil {
+			if err = lock.GetLock(globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.Unlock
 		case readLock:
-			if err = lock.GetRLock(globalObjectTimeout); err != nil {
+			if err = lock.GetRLock(globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.RUnlock
@@ -486,7 +492,7 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	// Lock the object before reading.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalObjectTimeout); err != nil {
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer lk.RUnlock()
@@ -510,7 +516,7 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Lock the object before reading.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalObjectTimeout); err != nil {
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.RUnlock()
@@ -538,7 +544,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
 	// Lock the object.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalObjectTimeout); err != nil {
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.Unlock()
@@ -619,14 +625,10 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if !cpSrcDstSame {
 		lk := z.NewNSLock(ctx, dstBucket, dstObject)
-		if err := lk.GetLock(globalObjectTimeout); err != nil {
+		if err := lk.GetLock(globalOperationTimeout); err != nil {
 			return objInfo, err
 		}
 		defer lk.Unlock()
-	}
-
-	if z.SingleZone() {
-		return z.zones[0].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 	}
 
 	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
@@ -634,11 +636,17 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		return objInfo, err
 	}
 
-	if cpSrcDstSame && srcInfo.metadataOnly && srcOpts.VersionID == dstOpts.VersionID {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
+			// CopyObject optimization where we don't create an entire copy
+			// of the content, instead we add a reference.
+			srcInfo.versionOnly = true
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
@@ -677,14 +685,15 @@ func (z *erasureZones) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 
 	var zonesEntryChs [][]FileInfoCh
+	var zonesDrivesPerSet []int
 
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
-	const ndisks = 3
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, ndisks))
+			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.drivesPerSet))
+		zonesDrivesPerSet = append(zonesDrivesPerSet, zone.drivesPerSet)
 	}
 
 	var objInfos []ObjectInfo
@@ -703,14 +712,14 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 			break
 		}
 
-		result, quorumCount, _, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		result, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
 			eof = true
 			break
 		}
 
-		if quorumCount < ndisks-1 {
-			// Skip entries which are not found on upto ndisks.
+		if quorumCount < zonesDrivesPerSet[zoneIndex]/2 {
+			// Skip entries which are not found on upto ndisks/2.
 			continue
 		}
 
@@ -796,19 +805,20 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 
 	var zonesEntryChs [][]FileInfoCh
 	var zonesEndWalkCh []chan struct{}
+	var drivesPerSets []int
 
-	const ndisks = 3
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startSplunkMergeWalksN(ctx, bucket, prefix, marker, endWalkCh, ndisks)
+			entryChs = zone.startSplunkMergeWalksN(ctx, bucket, prefix, marker, endWalkCh, zone.drivesPerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+		drivesPerSets = append(drivesPerSets, zone.drivesPerSet)
 	}
 
-	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, ndisks)
+	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, drivesPerSets)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -887,19 +897,20 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 
 	var zonesEntryChs [][]FileInfoCh
 	var zonesEndWalkCh []chan struct{}
+	var drivesPerSets []int
 
-	const ndisks = 3
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, ndisks)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.drivesPerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+		drivesPerSets = append(drivesPerSets, zone.drivesPerSet)
 	}
 
-	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, ndisks)
+	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, drivesPerSets)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -1103,7 +1114,7 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 }
 
 // mergeZonesEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
-func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, ndisks int) (entries FilesInfoVersions) {
+func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, drivesPerSets []int) (entries FilesInfoVersions) {
 	var i = 0
 	var zonesEntriesInfos [][]FileInfoVersions
 	var zonesEntriesValid [][]bool
@@ -1112,14 +1123,14 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 	for {
-		fi, quorumCount, _, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
 
-		if quorumCount < ndisks-1 {
-			// Skip entries which are not found on upto ndisks.
+		if quorumCount < drivesPerSets[zoneIndex]/2 {
+			// Skip entries which are not found on upto ndisks/2.
 			continue
 		}
 
@@ -1134,7 +1145,7 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 }
 
 // mergeZonesEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, ndisks int) (entries FilesInfo) {
+func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, drivesPerSets []int) (entries FilesInfo) {
 	var i = 0
 	var zonesEntriesInfos [][]FileInfo
 	var zonesEntriesValid [][]bool
@@ -1143,14 +1154,14 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, ndisks int) 
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 	for {
-		fi, quorumCount, _, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
 
-		if quorumCount < ndisks-1 {
-			// Skip entries which are not found on upto ndisks.
+		if quorumCount < drivesPerSets[zoneIndex]/2 {
+			// Skip entries which are not found on upto ndisks/2.
 			continue
 		}
 
@@ -1291,19 +1302,19 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 
 	var zonesEntryChs [][]FileInfoVersionsCh
 	var zonesEndWalkCh []chan struct{}
-
-	const ndisks = 3
+	var drivesPerSets []int
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, ndisks)
+			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.drivesPerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+		drivesPerSets = append(drivesPerSets, zone.drivesPerSet)
 	}
 
-	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, ndisks)
+	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, drivesPerSets)
 	if len(entries.FilesVersions) == 0 {
 		return loi, nil
 	}
@@ -1618,8 +1629,8 @@ func (z *erasureZones) IsNotificationSupported() bool {
 	return true
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (z *erasureZones) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (z *erasureZones) IsListenSupported() bool {
 	return true
 }
 
@@ -1721,7 +1732,7 @@ func (z *erasureZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, e
 func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetRLock(globalHealingTimeout); err != nil {
+	if err := formatLock.GetRLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer formatLock.RUnlock()
@@ -1737,7 +1748,7 @@ func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
 func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalHealingTimeout); err != nil {
+	if err := formatLock.GetLock(globalOperationTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 	defer formatLock.Unlock()
@@ -1937,13 +1948,21 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 }
 
 func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
-	// Lock the object before healing. Use read lock since healing
-	// will only regenerate parts & xl.meta of outdated disks.
 	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalHealingTimeout); err != nil {
-		return madmin.HealResultItem{}, err
+	if bucket == minioMetaBucket {
+		// For .minio.sys bucket heals we should hold write locks.
+		if err := lk.GetLock(globalOperationTimeout); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+		defer lk.Unlock()
+	} else {
+		// Lock the object before healing. Use read lock since healing
+		// will only regenerate parts & xl.meta of outdated disks.
+		if err := lk.GetRLock(globalOperationTimeout); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+		defer lk.RUnlock()
 	}
-	defer lk.RUnlock()
 
 	if z.SingleZone() {
 		return z.zones[0].HealObject(ctx, bucket, object, versionID, opts)
@@ -2004,29 +2023,52 @@ func (z *erasureZones) getZoneAndSet(id string) (int, int, error) {
 	return 0, 0, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
 }
 
-// IsReady - Returns true, when all the erasure sets are writable.
-func (z *erasureZones) IsReady(ctx context.Context) bool {
+// HealthOptions takes input options to return sepcific information
+type HealthOptions struct {
+	Maintenance bool
+}
+
+// HealthResult returns the current state of the system, also
+// additionally with any specific heuristic information which
+// was queried
+type HealthResult struct {
+	Healthy       bool
+	HealingDrives int
+	ZoneID, SetID int
+	WriteQuorum   int
+}
+
+// Health - returns current status of the object layer health,
+// provides if write access exists across sets, additionally
+// can be used to query scenarios if health may be lost
+// if this node is taken down by an external orchestrator.
+func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthResult {
 	erasureSetUpCount := make([][]int, len(z.zones))
 	for i := range z.zones {
 		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
 	}
 
 	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
-
-	diskIDs = append(diskIDs, getLocalDiskIDs(z)...)
-
-	for _, id := range diskIDs {
-		zoneIdx, setIdx, err := z.getZoneAndSet(id)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		erasureSetUpCount[zoneIdx][setIdx]++
+	if !opts.Maintenance {
+		diskIDs = append(diskIDs, getLocalDiskIDs(z))
 	}
+
+	for _, localDiskIDs := range diskIDs {
+		for _, id := range localDiskIDs {
+			zoneIdx, setIdx, err := z.getZoneAndSet(id)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+			erasureSetUpCount[zoneIdx][setIdx]++
+		}
+	}
+
+	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	for zoneIdx := range erasureSetUpCount {
 		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-		diskCount := len(z.zones[zoneIdx].format.Erasure.Sets[0])
+		diskCount := z.zones[zoneIdx].drivesPerSet
 		if parityDrives == 0 {
 			parityDrives = getDefaultParityBlocks(diskCount)
 		}
@@ -2037,13 +2079,48 @@ func (z *erasureZones) IsReady(ctx context.Context) bool {
 		}
 		for setIdx := range erasureSetUpCount[zoneIdx] {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
-				logger.LogIf(ctx, fmt.Errorf("Write quorum lost on zone: %d, set: %d, expected write quorum: %d",
-					zoneIdx, setIdx, writeQuorum))
-				return false
+				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
+					fmt.Errorf("Write quorum may be lost on zone: %d, set: %d, expected write quorum: %d",
+						zoneIdx, setIdx, writeQuorum))
+				return HealthResult{
+					Healthy:     false,
+					ZoneID:      zoneIdx,
+					SetID:       setIdx,
+					WriteQuorum: writeQuorum,
+				}
 			}
 		}
 	}
-	return true
+
+	// when maintenance is not specified we don't have
+	// to look at the healing side of the code.
+	if !opts.Maintenance {
+		return HealthResult{
+			Healthy: true,
+		}
+	}
+
+	// check if local disks are being healed, if they are being healed
+	// we need to tell healthy status as 'false' so that this server
+	// is not taken down for maintenance
+	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx, true)
+	if err != nil {
+		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
+		return HealthResult{
+			Healthy: false,
+		}
+	}
+
+	if len(aggHealStateResult.HealDisks) > 0 {
+		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+	}
+
+	healthy := len(aggHealStateResult.HealDisks) == 0
+
+	return HealthResult{
+		Healthy:       healthy,
+		HealingDrives: len(aggHealStateResult.HealDisks),
+	}
 }
 
 // PutObjectTags - replace or add tags to an existing object

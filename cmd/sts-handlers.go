@@ -61,7 +61,8 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser = "ldapUser"
+	ldapUser               = "ldapUser"
+	ldapUserPolicyVariable = "ldap:user"
 )
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
@@ -318,6 +319,22 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// JWT has requested a custom claim with policy value set.
+	// This is a MinIO STS API specific value, this value should
+	// be set and configured on your identity provider as part of
+	// JWT custom claims.
+	var policyName string
+	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
+	if ok {
+		policyName = globalIAMSys.currentPolicies(strings.Join(policySet.ToSlice(), ","))
+	}
+
+	if policyName == "" && globalPolicyOPA == nil {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
+		return
+	}
+	m[iamPolicyClaimNameOpenID()] = policyName
+
 	sessionPolicyStr := r.Form.Get(stsPolicy)
 	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html
 	// The plain text that you use for both inline and managed session
@@ -339,9 +356,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 			writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("Invalid session policy version"))
 			return
 		}
-	}
 
-	if len(sessionPolicyStr) > 0 {
 		m[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
@@ -350,16 +365,6 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInternalError, err)
 		return
-	}
-
-	// JWT has requested a custom claim with policy value set.
-	// This is a MinIO STS API specific value, this value should
-	// be set and configured on your identity provider as part of
-	// JWT custom claims.
-	var policyName string
-	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
-	if ok {
-		policyName = strings.Join(policySet.ToSlice(), ",")
 	}
 
 	var subFromToken string

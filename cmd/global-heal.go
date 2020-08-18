@@ -53,7 +53,9 @@ func newBgHealSequence() *healSequence {
 		respCh:      make(chan healResult),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
-		settings:    hs,
+		// run-background heal with reserved bucket
+		bucket:   minioReservedBucket,
+		settings: hs,
 		currentStatus: healSequenceStatus{
 			Summary:      healNotStartedStatus,
 			HealSettings: hs,
@@ -67,17 +69,25 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
-func getLocalBackgroundHealStatus() madmin.BgHealState {
+func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if !ok {
-		return madmin.BgHealState{}
+		return madmin.BgHealState{}, false
+	}
+
+	var healDisks []string
+	for _, eps := range globalBackgroundHealState.getHealLocalDisks() {
+		for _, ep := range eps {
+			healDisks = append(healDisks, ep.String())
+		}
 	}
 
 	return madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
+		HealDisks:         healDisks,
 		NextHealRound:     UTCNow().Add(durationToNextHealRound(bgSeq.lastHealActivity)),
-	}
+	}, true
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
@@ -102,6 +112,12 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, dr
 			continue
 		}
 	}
+
+	buckets = append(buckets, BucketInfo{
+		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
+	}, BucketInfo{
+		Name: pathJoin(minioMetaBucket, bucketConfigPrefix),
+	}) // add metadata .minio.sys/ bucket prefixes to heal
 
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
@@ -158,13 +174,14 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, dr
 // deepHealObject heals given object path in deep to fix bitrot.
 func deepHealObject(bucket, object, versionID string) {
 	// Get background heal sequence to send elements to heal
-	bgSeq, _ := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-
-	bgSeq.sourceCh <- healSource{
-		bucket:    bucket,
-		object:    object,
-		versionID: versionID,
-		opts:      &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+	if ok {
+		bgSeq.sourceCh <- healSource{
+			bucket:    bucket,
+			object:    object,
+			versionID: versionID,
+			opts:      &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+		}
 	}
 }
 

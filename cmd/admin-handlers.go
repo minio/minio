@@ -66,31 +66,13 @@ const (
 	mgmtForceStop                = "forceStop"
 )
 
-func updateServer(updateURL, sha256Hex string, latestReleaseTime time.Time) (us madmin.ServerUpdateStatus, err error) {
-	minioMode := getMinioMode()
-	// No inputs provided we should try to update using the default URL.
-	if updateURL == "" && sha256Hex == "" && latestReleaseTime.IsZero() {
-		var updateMsg string
-		updateMsg, sha256Hex, _, latestReleaseTime, err = getUpdateInfo(updateTimeout, minioMode)
-		if err != nil {
-			return us, err
-		}
-		if updateMsg == "" {
-			us.CurrentVersion = Version
-			us.UpdatedVersion = Version
-			return us, nil
-		}
-		if runtime.GOOS == "windows" {
-			updateURL = minioReleaseURL + "minio.exe"
-		} else {
-			updateURL = minioReleaseURL + "minio"
-		}
-	}
-	if err = doUpdate(updateURL, sha256Hex, minioMode); err != nil {
+func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (us madmin.ServerUpdateStatus, err error) {
+	if err = doUpdate(u, lrTime, sha256Sum, mode); err != nil {
 		return us, err
 	}
+
 	us.CurrentVersion = Version
-	us.UpdatedVersion = latestReleaseTime.Format(minioReleaseTagTimeLayout)
+	us.UpdatedVersion = lrTime.Format(minioReleaseTagTimeLayout)
 	return us, nil
 }
 
@@ -115,47 +97,71 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	vars := mux.Vars(r)
-	updateURL := vars[peerRESTUpdateURL]
+	updateURL := vars["updateURL"]
 	mode := getMinioMode()
-	var sha256Hex string
-	var latestReleaseTime time.Time
-	if updateURL != "" {
-		u, err := url.Parse(updateURL)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
+	if updateURL == "" {
+		updateURL = minioReleaseInfoURL
+		if runtime.GOOS == globalWindowsOSName {
+			updateURL = minioReleaseWindowsInfoURL
 		}
-
-		content, err := downloadReleaseURL(updateURL, updateTimeout, mode)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		sha256Hex, latestReleaseTime, err = parseReleaseData(content)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-
-		if runtime.GOOS == "windows" {
-			u.Path = path.Dir(u.Path) + SlashSeparator + "minio.exe"
-		} else {
-			u.Path = path.Dir(u.Path) + SlashSeparator + "minio"
-		}
-
-		updateURL = u.String()
 	}
 
-	for _, nerr := range globalNotificationSys.ServerUpdate(updateURL, sha256Hex, latestReleaseTime) {
+	u, err := url.Parse(updateURL)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	content, err := downloadReleaseURL(u, updateTimeout, mode)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	sha256Sum, lrTime, err := parseReleaseData(content)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	u.Path = path.Dir(u.Path) + SlashSeparator + "minio.RELEASE." + lrTime.Format(minioReleaseTagTimeLayout)
+
+	crTime, err := GetCurrentReleaseTime()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if lrTime.Sub(crTime) < 0 {
+		updateStatus := madmin.ServerUpdateStatus{
+			CurrentVersion: Version,
+			UpdatedVersion: Version,
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(updateStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+		return
+	}
+
+	for _, nerr := range globalNotificationSys.ServerUpdate(ctx, u, sha256Sum, lrTime) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
 			logger.LogIf(ctx, nerr.Err)
+			err = fmt.Errorf("Server update failed, please do not restart the servers yet: failed with %w", nerr.Err)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
 	}
 
-	updateStatus, err := updateServer(updateURL, sha256Hex, latestReleaseTime)
+	updateStatus, err := updateServer(u, sha256Sum, lrTime, mode)
 	if err != nil {
+		err = fmt.Errorf("Server update failed, please do not restart the servers yet: failed with %w", err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -169,10 +175,15 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	writeSuccessResponseJSON(w, jsonBytes)
 
-	if updateStatus.CurrentVersion != updateStatus.UpdatedVersion {
-		// We did upgrade - restart all services.
-		globalServiceSignalCh <- serviceRestart
+	// Notify all other MinIO peers signal service.
+	for _, nerr := range globalNotificationSys.SignalService(serviceRestart) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
 	}
+
+	globalServiceSignalCh <- serviceRestart
 }
 
 // ServiceHandler - POST /minio/admin/v3/service?action={action}
@@ -684,7 +695,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					// Start writing response to client
 					started = true
 					setCommonHeaders(w)
-					w.Header().Set(xhttp.ContentType, "text/event-stream")
+					setEventStreamHeaders(w)
 					// Set 200 OK status
 					w.WriteHeader(200)
 				}
@@ -788,6 +799,59 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	keepConnLive(w, r, respCh)
 }
 
+func getAggregatedBackgroundHealState(ctx context.Context, failOnErr bool) (madmin.BgHealState, error) {
+	var bgHealStates []madmin.BgHealState
+
+	localHealState, ok := getLocalBackgroundHealStatus()
+	if !ok {
+		if failOnErr {
+			return madmin.BgHealState{}, errServerNotInitialized
+		}
+	}
+
+	// Get local heal status first
+	bgHealStates = append(bgHealStates, localHealState)
+
+	if globalIsDistErasure {
+		// Get heal status from other peers
+		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus()
+		for _, nerr := range nerrs {
+			if nerr.Err != nil {
+				if failOnErr {
+					return madmin.BgHealState{}, nerr.Err
+				}
+				logger.LogIf(ctx, nerr.Err)
+			}
+		}
+		bgHealStates = append(bgHealStates, peersHealStates...)
+	}
+
+	// Aggregate healing result
+	var aggregatedHealStateResult = madmin.BgHealState{
+		ScannedItemsCount: bgHealStates[0].ScannedItemsCount,
+		LastHealActivity:  bgHealStates[0].LastHealActivity,
+		NextHealRound:     bgHealStates[0].NextHealRound,
+		HealDisks:         bgHealStates[0].HealDisks,
+	}
+
+	bgHealStates = bgHealStates[1:]
+
+	for _, state := range bgHealStates {
+		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
+		aggregatedHealStateResult.HealDisks = append(aggregatedHealStateResult.HealDisks, state.HealDisks...)
+		if !state.LastHealActivity.IsZero() && aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
+			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
+			// The node which has the last heal activity means its
+			// is the node that is orchestrating self healing operations,
+			// which also means it is the same node which decides when
+			// the next self healing operation will be done.
+			aggregatedHealStateResult.NextHealRound = state.NextHealRound
+		}
+	}
+
+	return aggregatedHealStateResult, nil
+}
+
 func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HealBackgroundStatus")
 
@@ -804,39 +868,8 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	var bgHealStates []madmin.BgHealState
-
-	// Get local heal status first
-	bgHealStates = append(bgHealStates, getLocalBackgroundHealStatus())
-
-	if globalIsDistErasure {
-		// Get heal status from other peers
-		peersHealStates := globalNotificationSys.BackgroundHealStatus()
-		bgHealStates = append(bgHealStates, peersHealStates...)
-	}
-
-	// Aggregate healing result
-	var aggregatedHealStateResult = madmin.BgHealState{
-		ScannedItemsCount: bgHealStates[0].ScannedItemsCount,
-		LastHealActivity:  bgHealStates[0].LastHealActivity,
-		NextHealRound:     bgHealStates[0].NextHealRound,
-	}
-
-	bgHealStates = bgHealStates[1:]
-
-	for _, state := range bgHealStates {
-		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
-		if !state.LastHealActivity.IsZero() && aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
-			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
-			// The node which has the last heal activity means its
-			// is the node that is orchestrating self healing operations,
-			// which also means it is the same node which decides when
-			// the next self healing operation will be done.
-			aggregatedHealStateResult.NextHealRound = state.NextHealRound
-		}
-	}
-
-	if err := json.NewEncoder(w).Encode(aggregatedHealStateResult); err != nil {
+	aggregateHealStateResult, _ := getAggregatedBackgroundHealState(r.Context(), false)
+	if err := json.NewEncoder(w).Encode(aggregateHealStateResult); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -984,7 +1017,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
@@ -1053,7 +1086,8 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
 	w.Header().Add("Connection", "close")
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	setEventStreamHeaders(w)
 
 	logCh := make(chan interface{}, 4000)
 
@@ -1212,7 +1246,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	setCommonHeaders(w)
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+
+	setEventStreamHeaders(w)
+
 	w.WriteHeader(http.StatusOK)
 
 	errResp := func(err error) {
@@ -1234,10 +1270,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
-
 	defer cancel()
 
-	nsLock := objectAPI.NewNSLock(deadlinedCtx, minioMetaBucket, "obd-in-progress")
+	nsLock := objectAPI.NewNSLock(ctx, minioMetaBucket, "obd-in-progress")
 	if err := nsLock.GetLock(newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return
@@ -1617,9 +1652,6 @@ func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
 
 // checkConnection - ping an endpoint , return err in case of no connection
 func checkConnection(endpointStr string, timeout time.Duration) error {
-	tr := newCustomHTTPTransport(&tls.Config{RootCAs: globalRootCAs}, timeout)()
-	defer tr.CloseIdleConnections()
-
 	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
 	defer cancel()
 
@@ -1628,7 +1660,20 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 		return err
 	}
 
-	client := &http.Client{Transport: tr}
+	client := &http.Client{Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           xhttp.NewCustomDialContext(timeout),
+		ResponseHeaderTimeout: 5 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 5 * time.Second,
+		TLSClientConfig:       &tls.Config{RootCAs: globalRootCAs},
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}}
+	defer client.CloseIdleConnections()
+
 	resp, err := client.Do(req.WithContext(ctx))
 	if err != nil {
 		return err

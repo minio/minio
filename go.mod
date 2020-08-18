@@ -7,7 +7,7 @@ require (
 	git.apache.org/thrift.git v0.13.0
 	github.com/Azure/azure-pipeline-go v0.2.1
 	github.com/Azure/azure-storage-blob-go v0.8.0
-	github.com/Azure/go-autorest/autorest/adal v0.9.0 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.9.1 // indirect
 	github.com/Shopify/sarama v1.24.1
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
@@ -34,7 +34,6 @@ require (
 	github.com/gorilla/mux v1.7.5-0.20200711200521-98cb6bf42e08
 	github.com/gorilla/rpc v1.2.0
 	github.com/hashicorp/vault/api v1.0.4
-	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.10.3
 	github.com/klauspost/cpuid v1.3.1
@@ -48,12 +47,13 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/minio-go/v7 v7.0.0-20200714085548-47e386e2cde8
+	github.com/minio/minio-go/v7 v7.0.5-0.20200811211821-14ed05478889
+	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
-	github.com/minio/simdjson-go v0.1.5-0.20200303142138-b17fe061ea37
+	github.com/minio/simdjson-go v0.1.5
 	github.com/minio/sio v0.2.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/mmcloughlin/avo v0.0.0-20200523190732-4439b6b2c061 // indirect
+	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
 	github.com/montanaflynn/stats v0.5.0
 	github.com/nats-io/nats-server/v2 v2.1.7
 	github.com/nats-io/nats-streaming-server v0.18.0 // indirect
@@ -76,14 +76,14 @@ require (
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.2
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
-	github.com/willf/bitset v1.1.10 // indirect
+	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e
 	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
-	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/tools v0.0.0-20200814172026-c4923e618c08 // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015-2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -448,7 +448,9 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				{Name: "temporary/0/"},
 			},
 		},
-		// ListObjectsResult-34 Listing with marker > last object should return empty
+		// ListObjectsResult-34:
+		//    * Listing with marker > last object should return empty
+		//    * Listing an object with a trailing slash and '/' delimiter
 		{
 			IsTruncated: false,
 			Objects:     []ObjectInfo{},
@@ -569,6 +571,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{"test-bucket-empty-dir", "", "temporary/", "", 10, resultCases[33], nil, true},
 		// Test listing with marker > last object such that response should be empty (65)
 		{"test-bucket-single-object", "", "A/C", "", 1000, resultCases[34], nil, true},
+		// Test listing an object with a trailing slash and a slash delimiter (66)
+		{"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, resultCases[34], nil, true},
 	}
 
 	for i, testCase := range testCases {

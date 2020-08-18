@@ -204,14 +204,14 @@ func (s *erasureSets) connectDisks() {
 			defer wg.Done()
 			disk, format, err := connectEndpoint(endpoint)
 			if err != nil {
-				printEndpointError(endpoint, err)
+				printEndpointError(endpoint, err, true)
 				return
 			}
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
 			if err != nil {
 				// Close the internal connection to avoid connection leaks.
 				disk.Close()
-				printEndpointError(endpoint, err)
+				printEndpointError(endpoint, err, false)
 				return
 			}
 			disk.SetDiskID(format.Erasure.This)
@@ -369,6 +369,11 @@ func (s *erasureSets) NewNSLock(ctx context.Context, bucket string, objects ...s
 		return s.getHashedSet(objects[0]).NewNSLock(ctx, bucket, objects...)
 	}
 	return s.getHashedSet("").NewNSLock(ctx, bucket, objects...)
+}
+
+// SetDriveCount returns the current drives per set.
+func (s *erasureSets) SetDriveCount() int {
+	return s.drivesPerSet
 }
 
 // StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
@@ -576,8 +581,8 @@ func (s *erasureSets) IsNotificationSupported() bool {
 	return s.getHashedSet("").IsNotificationSupported()
 }
 
-// IsListenBucketSupported returns whether listen bucket notification is applicable for this layer.
-func (s *erasureSets) IsListenBucketSupported() bool {
+// IsListenSupported returns whether listen bucket notification is applicable for this layer.
+func (s *erasureSets) IsListenSupported() bool {
 	return true
 }
 
@@ -738,12 +743,22 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	srcSet := s.getHashedSet(srcObject)
 	dstSet := s.getHashedSet(dstObject)
 
+	cpSrcDstSame := srcSet == dstSet
+
 	// Check if this request is only metadata update.
-	if srcSet == dstSet && srcInfo.metadataOnly {
+	if cpSrcDstSame && srcInfo.metadataOnly {
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
+			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+		}
+		// CopyObject optimization where we don't create an entire copy
+		// of the content, instead we add a reference, we disallow legacy
+		// objects to be self referenced in this manner so make sure
+		// that we actually create a new dataDir for legacy objects.
+		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
+			srcInfo.versionOnly = true
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
@@ -1189,19 +1204,9 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		}
 	}(storageDisks)
 
-	formats, sErrs := loadFormatErasureAll(storageDisks, false)
+	formats, _ := loadFormatErasureAll(storageDisks, false)
 	if err = checkFormatErasureValues(formats, s.drivesPerSet); err != nil {
 		return err
-	}
-
-	for index, sErr := range sErrs {
-		if sErr != nil {
-			// Look for acceptable heal errors, for any other
-			// errors we should simply quit and return.
-			if _, ok := formatHealErrors[sErr]; !ok {
-				return fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
-			}
-		}
 	}
 
 	refFormat, err := getFormatErasureInQuorum(formats)
@@ -1256,8 +1261,9 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 func isTestSetup(infos []DiskInfo, errs []error) bool {
 	rootDiskCount := 0
 	for i := range errs {
-		if errs[i] != nil {
-			// On error it is safer to assume that this is not a test setup.
+		if errs[i] != nil && errs[i] != errUnformattedDisk {
+			// On any error which is not unformatted disk
+			// it is safer to reject healing.
 			return false
 		}
 		if infos[i].RootDisk {
@@ -1268,7 +1274,7 @@ func isTestSetup(infos []DiskInfo, errs []error) bool {
 	return rootDiskCount == len(infos)
 }
 
-func getAllDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
+func getHealDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
 	infos := make([]DiskInfo, len(storageDisks))
 	g := errgroup.WithNErrs(len(storageDisks))
 	for index := range storageDisks {
@@ -1289,16 +1295,12 @@ func getAllDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
 
 // Mark root disks as down so as not to heal them.
 func markRootDisksAsDown(storageDisks []StorageAPI) {
-	infos, errs := getAllDiskInfos(storageDisks)
+	infos, errs := getHealDiskInfos(storageDisks)
 	if isTestSetup(infos, errs) {
 		// Allow healing of disks for test setups to help with testing.
 		return
 	}
 	for i := range storageDisks {
-		if errs[i] != nil {
-			storageDisks[i] = nil
-			continue
-		}
 		if infos[i].RootDisk {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
@@ -1348,16 +1350,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	for k, v := range beforeDrives {
 		res.Before.Drives[k] = madmin.HealDriveInfo(v)
 		res.After.Drives[k] = madmin.HealDriveInfo(v)
-	}
-
-	for index, sErr := range sErrs {
-		if sErr != nil {
-			// Look for acceptable heal errors, for any other
-			// errors we should simply quit and return.
-			if _, ok := formatHealErrors[sErr]; !ok {
-				return res, fmt.Errorf("Disk %s: %w", s.endpoints[index], sErr)
-			}
-		}
 	}
 
 	if countErrs(sErrs, errUnformattedDisk) == 0 {
@@ -1419,6 +1411,11 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 		// Save formats `format.json` across all disks.
 		if err = saveFormatErasureAll(ctx, storageDisks, tmpNewFormats); err != nil {
+			return madmin.HealResultItem{}, err
+		}
+
+		refFormat, err = getFormatErasureInQuorum(tmpNewFormats)
+		if err != nil {
 			return madmin.HealResultItem{}, err
 		}
 
@@ -1636,9 +1633,10 @@ func (s *erasureSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	return &Metrics{}, NotImplemented{}
 }
 
-// IsReady - Returns true if atleast n/2 disks (read quorum) are online
-func (s *erasureSets) IsReady(_ context.Context) bool {
-	return false
+// Health shouldn't be called directly - will panic
+func (s *erasureSets) Health(ctx context.Context, _ HealthOptions) HealthResult {
+	logger.CriticalIf(ctx, NotImplemented{})
+	return HealthResult{}
 }
 
 // maintainMRFList gathers the list of successful partial uploads

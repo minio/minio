@@ -108,6 +108,13 @@ const (
 	// GetBucketQuotaAdminAction - allow getting bucket quota
 	GetBucketQuotaAdminAction = "admin:GetBucketQuota"
 
+	// Bucket Target admin Actions
+
+	// SetBucketTargetAction - allow setting bucket target
+	SetBucketTargetAction = "admin:SetBucketTarget"
+	// GetBucketTargetAction - allow getting bucket targets
+	GetBucketTargetAction = "admin:GetBucketTarget"
+
 	// AllAdminActions - provides all admin permissions
 	AllAdminActions = "admin:*"
 )
@@ -147,6 +154,8 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	ListUserPoliciesAdminAction:    {},
 	SetBucketQuotaAdminAction:      {},
 	GetBucketQuotaAdminAction:      {},
+	SetBucketTargetAction:          {},
+	GetBucketTargetAction:          {},
 	AllAdminActions:                {},
 }
 
@@ -191,4 +200,6 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	ListUserPoliciesAdminAction:    condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	SetBucketQuotaAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	GetBucketQuotaAdminAction:      condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	SetBucketTargetAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	GetBucketTargetAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 }

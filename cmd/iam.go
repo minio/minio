@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
@@ -448,10 +449,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
 
+	// allocate dynamic timeout once before the loop
+	iamLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
+
 	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err := txnLk.GetLock(newDynamicTimeout(1*time.Second, 5*time.Second)); err != nil {
+		if err := txnLk.GetLock(iamLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -675,6 +679,24 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	return err
 }
 
+// returns comma separated policy string, from an input policy
+// after validating if there are any current policies which exist
+// on MinIO corresponding to the input.
+func (sys *IAMSys) currentPolicies(policyName string) string {
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	var policies []string
+	mp := newMappedPolicy(policyName)
+	for _, policy := range mp.toSlice() {
+		_, found := sys.iamPolicyDocsMap[policy]
+		if found {
+			policies = append(policies, policy)
+		}
+	}
+	return strings.Join(policies, ",")
+}
+
 // SetTempUser - set temporary user credentials, these credentials have an expiry.
 func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyName string) error {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
@@ -693,10 +715,9 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 		mp := newMappedPolicy(policyName)
 		for _, policy := range mp.toSlice() {
 			p, found := sys.iamPolicyDocsMap[policy]
-			if !found {
-				return fmt.Errorf("%w: (%s)", errNoSuchPolicy, policy)
+			if found {
+				availablePolicies = append(availablePolicies, p)
 			}
-			availablePolicies = append(availablePolicies, p)
 		}
 
 		combinedPolicy := availablePolicies[0]
@@ -912,7 +933,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 		if err != nil {
 			return auth.Credentials{}, err
 		}
-		if len(policyBuf) > 16*1024 {
+		if len(policyBuf) > 16*humanize.KiByte {
 			return auth.Credentials{}, fmt.Errorf("Session policy should not exceed 16 KiB characters")
 		}
 	}
@@ -931,14 +952,6 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 
 	// Disallow service accounts to further create more service accounts.
 	if cr.IsServiceAccount() {
-		return auth.Credentials{}, errIAMActionNotAllowed
-	}
-
-	// FIXME: Disallow temporary users with no parent, this is most
-	// probably with OpenID which we don't support to provide
-	// any parent user, LDAPUsersType and MinIOUsersType are
-	// currently supported.
-	if cr.ParentUser == "" && cr.IsTemp() {
 		return auth.Credentials{}, errIAMActionNotAllowed
 	}
 
@@ -1630,7 +1643,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 	if err != nil {
 		// Log any error in input session policy config.
-		logger.LogIf(context.Background(), err)
+		logger.LogIf(GlobalContext, err)
 		return false
 	}
 
@@ -1671,6 +1684,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args) bool {
 		for _, pname := range mp.toSlice() {
 			p, found := sys.iamPolicyDocsMap[pname]
 			if !found {
+				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing for the LDAPUser %s, rejecting the request", pname, user))
 				return false
 			}
 			policies = append(policies, p)
@@ -1684,6 +1698,7 @@ func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args) bool {
 		for _, pname := range mp.toSlice() {
 			p, found := sys.iamPolicyDocsMap[pname]
 			if !found {
+				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing for the LDAPGroup %s, rejecting the request", pname, group))
 				return false
 			}
 			policies = append(policies, p)
@@ -1744,7 +1759,8 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	for pname := range policies {
 		p, found := sys.iamPolicyDocsMap[pname]
 		if !found {
-			logger.LogIf(GlobalContext, fmt.Errorf("%w: (%s)", errNoSuchPolicy, pname))
+			// all policies presented in the claim should exist
+			logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
 			return false
 		}
 		availablePolicies = append(availablePolicies, p)
@@ -1770,7 +1786,7 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 		subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
 		if err != nil {
 			// Log any error in input session policy config.
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 			return false
 		}
 
@@ -1794,7 +1810,7 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	if globalPolicyOPA != nil {
 		ok, err := globalPolicyOPA.IsAllowed(args)
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			logger.LogIf(GlobalContext, err)
 		}
 		return ok
 	}

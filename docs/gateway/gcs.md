@@ -53,7 +53,7 @@ MinIO Client is a command-line tool called `mc` that provides UNIX-like commands
 Use the following command to configure the gateway:
 
 ```sh
-mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
+mc alias set mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
 ```
 
 ### 3.2 List Containers on GCS

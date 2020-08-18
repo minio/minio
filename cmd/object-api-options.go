@@ -164,7 +164,13 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	} else {
 		opts.MTime = UTCNow()
 	}
-
+	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
+	if etag != "" {
+		if metadata == nil {
+			metadata = make(map[string]string)
+		}
+		metadata["etag"] = etag
+	}
 	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
 	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
 	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {

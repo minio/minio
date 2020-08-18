@@ -226,7 +226,7 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 	cfg.RRS.Parity = defaultRRSParity
 
 	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
-		return cfg, err
+		return Config{}, err
 	}
 
 	ssc := env.Get(StandardEnv, kvs.Get(ClassStandard))
@@ -235,7 +235,7 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 	if ssc != "" {
 		cfg.Standard, err = parseStorageClass(ssc)
 		if err != nil {
-			return cfg, err
+			return Config{}, err
 		}
 	}
 	if cfg.Standard.Parity == 0 {
@@ -245,7 +245,7 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 	if rrsc != "" {
 		cfg.RRS, err = parseStorageClass(rrsc)
 		if err != nil {
-			return cfg, err
+			return Config{}, err
 		}
 	}
 	if cfg.RRS.Parity == 0 {
@@ -255,7 +255,7 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.
 	if err = validateParity(cfg.Standard.Parity, cfg.RRS.Parity, drivesPerSet); err != nil {
-		return cfg, err
+		return Config{}, err
 	}
 
 	return cfg, nil

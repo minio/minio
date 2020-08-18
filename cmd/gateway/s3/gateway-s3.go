@@ -165,7 +165,7 @@ var defaultAWSCredProviders = []credentials.Provider{
 }
 
 // newS3 - Initializes a new client by auto probing S3 server signature.
-func newS3(urlStr string) (*miniogo.Core, error) {
+func newS3(urlStr string, tripper http.RoundTripper) (*miniogo.Core, error) {
 	if urlStr == "" {
 		urlStr = "https://s3.amazonaws.com"
 	}
@@ -191,14 +191,15 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 		creds = credentials.NewChainCredentials(defaultProviders)
 	}
 
-	options := miniogo.Options{
+	options := &miniogo.Options{
 		Creds:        creds,
 		Secure:       secure,
 		Region:       s3utils.GetRegionFromURL(*u),
 		BucketLookup: miniogo.BucketLookupAuto,
+		Transport:    tripper,
 	}
 
-	clnt, err := miniogo.NewWithOptions(endpoint, &options)
+	clnt, err := miniogo.New(endpoint, options)
 	if err != nil {
 		return nil, err
 	}
@@ -208,13 +209,6 @@ func newS3(urlStr string) (*miniogo.Core, error) {
 
 // NewGatewayLayer returns s3 ObjectLayer.
 func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
-	// creds are ignored here, since S3 gateway implements chaining
-	// all credentials.
-	clnt, err := newS3(g.host)
-	if err != nil {
-		return nil, err
-	}
-
 	metrics := minio.NewMetrics()
 
 	t := &minio.MetricsTransport{
@@ -222,8 +216,12 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 		Metrics:   metrics,
 	}
 
-	// Set custom transport
-	clnt.SetCustomTransport(t)
+	// creds are ignored here, since S3 gateway implements chaining
+	// all credentials.
+	clnt, err := newS3(g.host, t)
+	if err != nil {
+		return nil, err
+	}
 
 	probeBucketName := randString(60, rand.NewSource(time.Now().UnixNano()), "probe-bucket-sign-")
 
@@ -473,12 +471,10 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 		ServerSideEncryption: opts.ServerSideEncryption,
 		UserTags:             tagMap,
 	}
-
 	ui, err := l.Client.PutObject(ctx, bucket, object, data, data.Size(), data.MD5Base64String(), data.SHA256HexString(), putOpts)
 	if err != nil {
 		return objInfo, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-
 	// On success, populate the key & metadata so they are present in the notification
 	oi := miniogo.ObjectInfo{
 		ETag:     ui.ETag,
@@ -492,7 +488,7 @@ func (l *s3Objects) PutObject(ctx context.Context, bucket string, object string,
 
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *s3Objects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
 	}
 	// Set this header such that following CopyObject() always sets the right metadata on the destination.
@@ -596,7 +592,7 @@ func (l *s3Objects) PutObjectPart(ctx context.Context, bucket string, object str
 // existing object or a part of it.
 func (l *s3Objects) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject, uploadID string,
 	partID int, startOffset, length int64, srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (p minio.PartInfo, err error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.PartInfo{}, minio.PreConditionFailed{}
 	}
 	srcInfo.UserDefined = map[string]string{
@@ -714,22 +710,16 @@ func (l *s3Objects) DeleteBucketPolicy(ctx context.Context, bucket string) error
 // GetObjectTags gets the tags set on the object
 func (l *s3Objects) GetObjectTags(ctx context.Context, bucket string, object string, opts minio.ObjectOptions) (*tags.Tags, error) {
 	var err error
-
 	if _, err = l.GetObjectInfo(ctx, bucket, object, opts); err != nil {
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	tagsMap, err := l.Client.GetObjectTagging(ctx, bucket, object, miniogo.GetObjectTaggingOptions{})
+	t, err := l.Client.GetObjectTagging(ctx, bucket, object, miniogo.GetObjectTaggingOptions{})
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	tagObj := tags.Tags{}
-	for k, v := range tagsMap {
-		tagObj.Set(k, v)
-	}
-
-	return &tagObj, err
+	return t, nil
 }
 
 // PutObjectTags attaches the tags to the object
@@ -738,7 +728,7 @@ func (l *s3Objects) PutObjectTags(ctx context.Context, bucket, object string, ta
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	if err = l.Client.PutObjectTagging(ctx, bucket, object, tagObj.ToMap(), miniogo.PutObjectTaggingOptions{}); err != nil {
+	if err = l.Client.PutObjectTagging(ctx, bucket, object, tagObj, miniogo.PutObjectTaggingOptions{}); err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	return nil
@@ -760,11 +750,6 @@ func (l *s3Objects) IsCompressionSupported() bool {
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (l *s3Objects) IsEncryptionSupported() bool {
 	return minio.GlobalKMS != nil || len(minio.GlobalGatewaySSE) > 0
-}
-
-// IsReady returns whether the layer is ready to take requests.
-func (l *s3Objects) IsReady(ctx context.Context) bool {
-	return minio.IsBackendOnline(ctx, l.HTTPClient, l.Client.EndpointURL().String())
 }
 
 func (l *s3Objects) IsTaggingSupported() bool {

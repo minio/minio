@@ -28,6 +28,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
@@ -153,6 +154,10 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		meta.VersioningConfigXML = configData
 	case bucketQuotaConfigFile:
 		meta.QuotaConfigJSON = configData
+	case bucketReplicationConfig:
+		meta.ReplicationConfigXML = configData
+	case bucketTargetsFile:
+		meta.BucketTargetsConfigJSON = configData
 	default:
 		return fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
@@ -318,7 +323,37 @@ func (sys *BucketMetadataSys) GetQuotaConfig(bucket string) (*madmin.BucketQuota
 	return meta.quotaConfig, nil
 }
 
-// GetConfig returns the current bucket metadata
+// GetReplicationConfig returns configured bucket replication config
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetReplicationConfig(ctx context.Context, bucket string) (*replication.Config, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, BucketReplicationConfigNotFound{Bucket: bucket}
+		}
+		return nil, err
+	}
+
+	if meta.replicationConfig == nil {
+		return nil, BucketReplicationConfigNotFound{Bucket: bucket}
+	}
+	return meta.replicationConfig, nil
+}
+
+// GetBucketTargetsConfig returns configured bucket targets for this bucket
+// The returned object may not be modified.
+func (sys *BucketMetadataSys) GetBucketTargetsConfig(bucket string) (*madmin.BucketTargets, error) {
+	meta, err := sys.GetConfig(bucket)
+	if err != nil {
+		return nil, err
+	}
+	if meta.bucketTargetConfig == nil {
+		return nil, BucketRemoteTargetNotFound{Bucket: bucket}
+	}
+	return meta.bucketTargetConfig, nil
+}
+
+// GetConfig returns a specific configuration from the bucket metadata.
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
 	objAPI := newObjectLayerWithoutSafeModeFn()

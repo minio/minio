@@ -24,8 +24,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
-	"os"
-	"path"
 
 	"github.com/minio/minio/pkg/env"
 )
@@ -67,38 +65,6 @@ func ParsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 	}
 
 	return x509Certs, nil
-}
-
-// GetRootCAs - returns all the root CAs into certPool
-// at the input certsCADir
-func GetRootCAs(certsCAsDir string) (*x509.CertPool, error) {
-	rootCAs, _ := x509.SystemCertPool()
-	if rootCAs == nil {
-		// In some systems (like Windows) system cert pool is
-		// not supported or no certificates are present on the
-		// system - so we create a new cert pool.
-		rootCAs = x509.NewCertPool()
-	}
-
-	fis, err := ioutil.ReadDir(certsCAsDir)
-	if err != nil {
-		if os.IsNotExist(err) || os.IsPermission(err) {
-			// Return success if CA's directory is missing or permission denied.
-			err = nil
-		}
-		return rootCAs, err
-	}
-
-	// Load all custom CA files.
-	for _, fi := range fis {
-		caCert, err := ioutil.ReadFile(path.Join(certsCAsDir, fi.Name()))
-		if err != nil {
-			// ignore files which are not readable.
-			continue
-		}
-		rootCAs.AppendCertsFromPEM(caCert)
-	}
-	return rootCAs, nil
 }
 
 // LoadX509KeyPair - load an X509 key pair (private key , certificate)

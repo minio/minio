@@ -33,7 +33,7 @@ import (
 )
 
 // list all errors which can be ignored in object operations.
-var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
+var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
 // putObjectDir hints the bottom layer to create a new directory.
 func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string, writeQuorum int) error {
@@ -65,16 +65,14 @@ func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string
 // if source object and destination object are same we only
 // update metadata.
 func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, e error) {
-	// This call shouldn't be used for anything other than metadata updates.
+	// This call shouldn't be used for anything other than metadata updates or adding self referential versions.
 	if !srcInfo.metadataOnly {
 		return oi, NotImplemented{}
 	}
-
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
-
 	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID)
 
 	// get Quorum for this object
@@ -99,8 +97,23 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return fi.ToObjectInfo(srcBucket, srcObject), toObjectErr(errMethodNotAllowed, srcBucket, srcObject)
 	}
 
+	versionID := srcInfo.VersionID
+	if srcInfo.versionOnly {
+		versionID = dstOpts.VersionID
+		// preserve destination versionId if specified.
+		if versionID == "" {
+			versionID = mustGetUUID()
+		}
+		modTime = UTCNow()
+	}
+
+	fi.VersionID = versionID // set any new versionID we might have created
+	fi.ModTime = modTime     // set modTime for the new versionID
+
 	// Update `xl.meta` content on each disks.
 	for index := range metaArr {
+		metaArr[index].ModTime = modTime
+		metaArr[index].VersionID = versionID
 		metaArr[index].Metadata = srcInfo.UserDefined
 		metaArr[index].Metadata["etag"] = srcInfo.ETag
 	}
@@ -173,7 +186,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
 
-	return fn(pr, h, opts.CheckCopyPrecondFn, pipeCloser)
+	return fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 }
 
 // GetObject - reads an object erasured coded across multiple
@@ -672,7 +685,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, erasure.ShardFileSize(data.Size()), DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
-	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, fi.Erasure.DataBlocks+1)
+	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
@@ -697,8 +710,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			Hash:       bitrotWriterSum(w),
 		})
 	}
-
-	opts.UserDefined["etag"] = r.MD5CurrentHexString()
+	if opts.UserDefined["etag"] == "" {
+		opts.UserDefined["etag"] = r.MD5CurrentHexString()
+	}
 
 	// Guess content-type from the extension if possible.
 	if opts.UserDefined["content-type"] == "" {

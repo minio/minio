@@ -58,7 +58,6 @@ const (
 	globalMinioDefaultOwnerID      = "02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
-	globalNetBSDOSName             = "netbsd"
 	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
 	globalMinioModeErasure         = "mode-server-xl"
@@ -109,9 +108,6 @@ var globalCLIContext = struct {
 }{}
 
 var (
-	// Indicates set drive count.
-	globalErasureSetDriveCount int
-
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistErasure = false
 
@@ -156,7 +152,7 @@ var (
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
-
+	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
 	globalAPIConfig apiConfig
@@ -212,9 +208,7 @@ var (
 	globalDomainNames []string      // Root domains for virtual host style requests
 	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
 
-	globalObjectTimeout    = newDynamicTimeout( /*1*/ 10*time.Minute /*10*/, 600*time.Second) // timeout for Object API related ops
-	globalOperationTimeout = newDynamicTimeout(10*time.Minute /*30*/, 600*time.Second)        // default timeout for general ops
-	globalHealingTimeout   = newDynamicTimeout(30*time.Minute /*1*/, 30*time.Minute)          // timeout for healing related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute, 5*time.Minute) // default timeout for general ops
 
 	globalBucketObjectLockSys *BucketObjectLockSys
 	globalBucketQuotaSys      *BucketQuotaSys
@@ -234,7 +228,7 @@ var (
 	globalBucketFederation bool
 
 	// Allocated DNS config wrapper over etcd client.
-	globalDNSConfig *dns.CoreDNS
+	globalDNSConfig dns.Store
 
 	// GlobalKMS initialized KMS configuration
 	GlobalKMS crypto.KMS

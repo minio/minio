@@ -129,6 +129,7 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	rq := trace.RequestInfo{
 		Time:     time.Now().UTC(),
+		Proto:    r.Proto,
 		Method:   r.Method,
 		Path:     r.URL.Path,
 		RawQuery: r.URL.RawQuery,

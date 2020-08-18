@@ -90,6 +90,18 @@ func (z *BucketMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "QuotaConfigJSON")
 				return
 			}
+		case "ReplicationConfigXML":
+			z.ReplicationConfigXML, err = dc.ReadBytes(z.ReplicationConfigXML)
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicationConfigXML")
+				return
+			}
+		case "BucketTargetsConfigJSON":
+			z.BucketTargetsConfigJSON, err = dc.ReadBytes(z.BucketTargetsConfigJSON)
+			if err != nil {
+				err = msgp.WrapError(err, "BucketTargetsConfigJSON")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -103,9 +115,9 @@ func (z *BucketMetadata) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketMetadata) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 11
+	// map header, size 13
 	// write "Name"
-	err = en.Append(0x8b, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	err = en.Append(0x8d, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -214,15 +226,35 @@ func (z *BucketMetadata) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "QuotaConfigJSON")
 		return
 	}
+	// write "ReplicationConfigXML"
+	err = en.Append(0xb4, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x58, 0x4d, 0x4c)
+	if err != nil {
+		return
+	}
+	err = en.WriteBytes(z.ReplicationConfigXML)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationConfigXML")
+		return
+	}
+	// write "BucketTargetsConfigJSON"
+	err = en.Append(0xb7, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x4a, 0x53, 0x4f, 0x4e)
+	if err != nil {
+		return
+	}
+	err = en.WriteBytes(z.BucketTargetsConfigJSON)
+	if err != nil {
+		err = msgp.WrapError(err, "BucketTargetsConfigJSON")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 11
+	// map header, size 13
 	// string "Name"
-	o = append(o, 0x8b, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0x8d, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "Created"
 	o = append(o, 0xa7, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64)
@@ -254,6 +286,12 @@ func (z *BucketMetadata) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "QuotaConfigJSON"
 	o = append(o, 0xaf, 0x51, 0x75, 0x6f, 0x74, 0x61, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x4a, 0x53, 0x4f, 0x4e)
 	o = msgp.AppendBytes(o, z.QuotaConfigJSON)
+	// string "ReplicationConfigXML"
+	o = append(o, 0xb4, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x58, 0x4d, 0x4c)
+	o = msgp.AppendBytes(o, z.ReplicationConfigXML)
+	// string "BucketTargetsConfigJSON"
+	o = append(o, 0xb7, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x73, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x4a, 0x53, 0x4f, 0x4e)
+	o = msgp.AppendBytes(o, z.BucketTargetsConfigJSON)
 	return
 }
 
@@ -341,6 +379,18 @@ func (z *BucketMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "QuotaConfigJSON")
 				return
 			}
+		case "ReplicationConfigXML":
+			z.ReplicationConfigXML, bts, err = msgp.ReadBytesBytes(bts, z.ReplicationConfigXML)
+			if err != nil {
+				err = msgp.WrapError(err, "ReplicationConfigXML")
+				return
+			}
+		case "BucketTargetsConfigJSON":
+			z.BucketTargetsConfigJSON, bts, err = msgp.ReadBytesBytes(bts, z.BucketTargetsConfigJSON)
+			if err != nil {
+				err = msgp.WrapError(err, "BucketTargetsConfigJSON")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -355,6 +405,6 @@ func (z *BucketMetadata) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BucketMetadata) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 8 + msgp.TimeSize + 12 + msgp.BoolSize + 17 + msgp.BytesPrefixSize + len(z.PolicyConfigJSON) + 22 + msgp.BytesPrefixSize + len(z.NotificationConfigXML) + 19 + msgp.BytesPrefixSize + len(z.LifecycleConfigXML) + 20 + msgp.BytesPrefixSize + len(z.ObjectLockConfigXML) + 20 + msgp.BytesPrefixSize + len(z.VersioningConfigXML) + 20 + msgp.BytesPrefixSize + len(z.EncryptionConfigXML) + 17 + msgp.BytesPrefixSize + len(z.TaggingConfigXML) + 16 + msgp.BytesPrefixSize + len(z.QuotaConfigJSON)
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 8 + msgp.TimeSize + 12 + msgp.BoolSize + 17 + msgp.BytesPrefixSize + len(z.PolicyConfigJSON) + 22 + msgp.BytesPrefixSize + len(z.NotificationConfigXML) + 19 + msgp.BytesPrefixSize + len(z.LifecycleConfigXML) + 20 + msgp.BytesPrefixSize + len(z.ObjectLockConfigXML) + 20 + msgp.BytesPrefixSize + len(z.VersioningConfigXML) + 20 + msgp.BytesPrefixSize + len(z.EncryptionConfigXML) + 17 + msgp.BytesPrefixSize + len(z.TaggingConfigXML) + 16 + msgp.BytesPrefixSize + len(z.QuotaConfigJSON) + 21 + msgp.BytesPrefixSize + len(z.ReplicationConfigXML) + 24 + msgp.BytesPrefixSize + len(z.BucketTargetsConfigJSON)
 	return
 }

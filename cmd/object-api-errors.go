@@ -348,6 +348,76 @@ func (e BucketQuotaExceeded) Error() string {
 	return "Bucket quota exceeded for bucket: " + e.Bucket
 }
 
+// BucketReplicationConfigNotFound - no bucket replication config found
+type BucketReplicationConfigNotFound GenericError
+
+func (e BucketReplicationConfigNotFound) Error() string {
+	return "The replication configuration was not found: " + e.Bucket
+}
+
+// BucketReplicationDestinationNotFound bucket does not exist.
+type BucketReplicationDestinationNotFound GenericError
+
+func (e BucketReplicationDestinationNotFound) Error() string {
+	return "Destination bucket does not exist: " + e.Bucket
+}
+
+// BucketReplicationDestinationMissingLock bucket does not have object lock enabled.
+type BucketReplicationDestinationMissingLock GenericError
+
+func (e BucketReplicationDestinationMissingLock) Error() string {
+	return "Destination bucket does not have object lock enabled: " + e.Bucket
+}
+
+// BucketRemoteTargetNotFound remote target does not exist.
+type BucketRemoteTargetNotFound GenericError
+
+func (e BucketRemoteTargetNotFound) Error() string {
+	return "Remote target not found: " + e.Bucket
+}
+
+// BucketRemoteAlreadyExists remote already exists for this target type.
+type BucketRemoteAlreadyExists GenericError
+
+func (e BucketRemoteAlreadyExists) Error() string {
+	return "Remote already exists for this bucket: " + e.Bucket
+}
+
+// BucketRemoteArnTypeInvalid arn type for remote is not valid.
+type BucketRemoteArnTypeInvalid GenericError
+
+func (e BucketRemoteArnTypeInvalid) Error() string {
+	return "Remote ARN type not valid: " + e.Bucket
+}
+
+// BucketRemoteArnInvalid arn needs to be specified.
+type BucketRemoteArnInvalid GenericError
+
+func (e BucketRemoteArnInvalid) Error() string {
+	return "Remote ARN has invalid format: " + e.Bucket
+}
+
+// BucketRemoteRemoveDisallowed when replication configuration exists
+type BucketRemoteRemoveDisallowed GenericError
+
+func (e BucketRemoteRemoveDisallowed) Error() string {
+	return "Replication configuration exists with this ARN:" + e.Bucket
+}
+
+// BucketReplicationTargetNotVersioned replication target does not have versioning enabled.
+type BucketReplicationTargetNotVersioned GenericError
+
+func (e BucketReplicationTargetNotVersioned) Error() string {
+	return "Replication target does not have versioning enabled: " + e.Bucket
+}
+
+// BucketReplicationSourceNotVersioned replication source does not have versioning enabled.
+type BucketReplicationSourceNotVersioned GenericError
+
+func (e BucketReplicationSourceNotVersioned) Error() string {
+	return "Replication source does not have versioning enabled: " + e.Bucket
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

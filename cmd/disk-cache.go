@@ -326,7 +326,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
 				// use a new context to avoid locker prematurely timing out operation when the GetObjectNInfo returns.
-				dcache.Put(context.Background(), bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
+				dcache.Put(GlobalContext, bucket, object, bReader, bReader.ObjInfo.Size, rs, ObjectOptions{
+					UserDefined: getMetadata(bReader.ObjInfo),
+				}, false)
 				return
 			}
 		}()
@@ -337,7 +339,11 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
 	go func() {
-		putErr := dcache.Put(ctx, bucket, object, io.LimitReader(pipeReader, bkReader.ObjInfo.Size), bkReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bkReader.ObjInfo)}, false)
+		putErr := dcache.Put(ctx, bucket, object,
+			io.LimitReader(pipeReader, bkReader.ObjInfo.Size),
+			bkReader.ObjInfo.Size, nil, ObjectOptions{
+				UserDefined: getMetadata(bkReader.ObjInfo),
+			}, false)
 		// close the write end of the pipe, so the error gets
 		// propagated to getObjReader
 		pipeWriter.CloseWithError(putErr)
@@ -684,11 +690,13 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 	c.cacheStats.GetDiskStats = func() []CacheDiskStats {
 		cacheDiskStats := make([]CacheDiskStats, len(c.cache))
 		for i := range c.cache {
-			cacheDiskStats[i] = CacheDiskStats{
-				Dir: c.cache[i].stats.Dir,
+			dcache := c.cache[i]
+			cacheDiskStats[i] = CacheDiskStats{}
+			if dcache != nil {
+				cacheDiskStats[i].Dir = dcache.stats.Dir
+				atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&dcache.stats.UsageState))
+				atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&dcache.stats.UsagePercent))
 			}
-			atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&c.cache[i].stats.UsageState))
-			atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&c.cache[i].stats.UsagePercent))
 		}
 		return cacheDiskStats
 	}
@@ -712,7 +720,9 @@ func (c *cacheObjects) gc(ctx context.Context) {
 				continue
 			}
 			for _, dcache := range c.cache {
-				dcache.triggerGC <- struct{}{}
+				if dcache != nil {
+					dcache.triggerGC <- struct{}{}
+				}
 			}
 		}
 	}

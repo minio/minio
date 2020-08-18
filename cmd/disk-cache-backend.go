@@ -417,7 +417,7 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (meta *cacheMeta, partial bool, numHits int, err error) {
 
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err = cLock.GetRLock(globalObjectTimeout); err != nil {
+	if err = cLock.GetRLock(globalOperationTimeout); err != nil {
 		return
 	}
 
@@ -499,7 +499,7 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cachedPath)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
@@ -665,7 +665,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cachePath)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
@@ -871,7 +871,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err := cLock.GetRLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetRLock(globalOperationTimeout); err != nil {
 		return nil, numHits, err
 	}
 
@@ -916,7 +916,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	// case of incomplete read.
 	pipeCloser := func() { pr.Close() }
 
-	gr, gerr := fn(pr, h, opts.CheckCopyPrecondFn, pipeCloser)
+	gr, gerr := fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 	if gerr != nil {
 		return gr, numHits, gerr
 	}
@@ -935,7 +935,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 // Deletes the cached object
 func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()

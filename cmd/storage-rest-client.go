@@ -103,6 +103,8 @@ func toStorageErr(err error) error {
 		return io.ErrUnexpectedEOF
 	case errDiskStale.Error():
 		return errDiskNotFound
+	case errDiskNotFound.Error():
+		return errDiskNotFound
 	}
 	return err
 }
@@ -335,7 +337,7 @@ func (client *storageRESTClient) CheckParts(volume, path string, fi FileInfo) er
 		return err
 	}
 
-	respBody, err := client.call(storageRESTMethodWriteMetadata, values, &reader, -1)
+	respBody, err := client.call(storageRESTMethodCheckParts, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
@@ -476,7 +478,7 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			if gerr := decoder.Decode(&fi); gerr != nil {
 				// Upon error return
 				if gerr != io.EOF {
-					logger.LogIf(context.Background(), gerr)
+					logger.LogIf(GlobalContext, gerr)
 				}
 				return
 			}
@@ -661,11 +663,10 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		tlsConfig = &tls.Config{
 			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,
-			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 
-	trFn := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckInterval = 500 * time.Millisecond
 	restClient.HealthCheckFn = func() bool {

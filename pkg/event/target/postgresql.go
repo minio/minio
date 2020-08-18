@@ -116,7 +116,7 @@ type PostgreSQLArgs struct {
 	Table            string    `json:"table"`
 	Host             xnet.Host `json:"host"`     // default: localhost
 	Port             string    `json:"port"`     // default: 5432
-	User             string    `json:"user"`     // default: user running minio
+	Username         string    `json:"username"` // default: user running minio
 	Password         string    `json:"password"` // default: no password
 	Database         string    `json:"database"` // default: same as user
 	QueueDir         string    `json:"queueDir"`
@@ -357,20 +357,23 @@ func (target *PostgreSQLTarget) executeStmts() error {
 // NewPostgreSQLTarget - creates new PostgreSQL target.
 func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{}, loggerOnce func(ctx context.Context, err error, id interface{}, kind ...interface{}), test bool) (*PostgreSQLTarget, error) {
 	params := []string{args.ConnectionString}
-	if !args.Host.IsEmpty() {
-		params = append(params, "host="+args.Host.String())
-	}
-	if args.Port != "" {
-		params = append(params, "port="+args.Port)
-	}
-	if args.User != "" {
-		params = append(params, "user="+args.User)
-	}
-	if args.Password != "" {
-		params = append(params, "password="+args.Password)
-	}
-	if args.Database != "" {
-		params = append(params, "dbname="+args.Database)
+	if args.ConnectionString == "" {
+		params = []string{}
+		if !args.Host.IsEmpty() {
+			params = append(params, "host="+args.Host.String())
+		}
+		if args.Port != "" {
+			params = append(params, "port="+args.Port)
+		}
+		if args.Username != "" {
+			params = append(params, "username="+args.Username)
+		}
+		if args.Password != "" {
+			params = append(params, "password="+args.Password)
+		}
+		if args.Database != "" {
+			params = append(params, "dbname="+args.Database)
+		}
 	}
 	connStr := strings.Join(params, " ")
 

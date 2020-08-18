@@ -72,7 +72,7 @@ func TestSkipContentSha256Cksum(t *testing.T) {
 	for i, testCase := range testCases {
 		// creating an input HTTP request.
 		// Only the headers are relevant for this particular test.
-		inputReq, err := http.NewRequest("GET", "http://example.com", nil)
+		inputReq, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		if err != nil {
 			t.Fatalf("Error initializing input HTTP request: %v", err)
 		}
@@ -135,7 +135,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	expectedTransferEncoding := "gzip"
 	expectedExpect := "100-continue"
 
-	r, err := http.NewRequest("GET", "http://play.min.io:9000", nil)
+	r, err := http.NewRequest(http.MethodGet, "http://play.min.io:9000", nil)
 	if err != nil {
 		t.Fatal("Unable to create http.Request :", err)
 	}
@@ -259,7 +259,7 @@ func TestGetContentSha256Cksum(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		r, err := http.NewRequest("GET", "http://localhost/?"+testCase.q, nil)
+		r, err := http.NewRequest(http.MethodGet, "http://localhost/?"+testCase.q, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -73,7 +73,6 @@ DIR:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
      {{.Prompt}} {{.HelpName}} /home/shared
@@ -91,15 +90,19 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
             http://node{17...64}.example.com/mnt/export{1...64}
-
 `,
 }
 
-// Checks if endpoints are either available through environment
-// or command line, returns false if both fails.
-func endpointsPresent(ctx *cli.Context) bool {
-	endpoints := env.Get(config.EnvEndpoints, strings.Join(ctx.Args(), config.ValueSeparator))
-	return len(endpoints) != 0
+func serverCmdArgs(ctx *cli.Context) []string {
+	v := env.Get(config.EnvArgs, "")
+	if v == "" {
+		// Fall back to older ENV MINIO_ENDPOINTS
+		v = env.Get(config.EnvEndpoints, "")
+	}
+	if v == "" {
+		return ctx.Args()
+	}
+	return strings.Fields(v)
 }
 
 func serverHandleCmdArgs(ctx *cli.Context) {
@@ -108,18 +111,29 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
 
-	var setupType SetupType
 	var err error
+	var setupType SetupType
+
+	// Check and load TLS certificates.
+	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	logger.FatalIf(err, "Unable to load the TLS configuration")
+
+	// Check and load Root CAs.
+	globalRootCAs, err = certs.GetRootCAs(globalCertsCADir.Get())
+	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
+
+	// Add the global public crts as part of global root CAs
+	for _, publicCrt := range globalPublicCerts {
+		globalRootCAs.AddCert(publicCrt)
+	}
+
+	// Register root CAs for remote ENVs
+	env.RegisterGlobalCAs(globalRootCAs)
 
 	globalMinioAddr = globalCLIContext.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	endpoints := strings.Fields(env.Get(config.EnvEndpoints, ""))
-	if len(endpoints) > 0 {
-		globalEndpoints, globalErasureSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, endpoints...)
-	} else {
-		globalEndpoints, globalErasureSetDriveCount, setupType, err = createServerEndpoints(globalCLIContext.Addr, ctx.Args()...)
-	}
+	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -170,6 +184,9 @@ func newAllSubsystems() {
 
 	// Create new bucket versioning subsystem
 	globalBucketVersioningSys = NewBucketVersioningSys()
+
+	// Create new bucket replication subsytem
+	globalBucketTargetSys = NewBucketTargetSys()
 }
 
 func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
@@ -209,9 +226,11 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 
 	// Enable healing to heal drives if possible
 	if globalIsErasure {
-		initBackgroundHealing(ctx, newObject)
-		initLocalDisksAutoHeal(ctx, newObject)
+		initAutoHeal(ctx, newObject)
 	}
+
+	// allocate dynamic timeout once before the loop
+	configLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
@@ -228,7 +247,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(newDynamicTimeout(1*time.Second, 3*time.Second)); err != nil {
+		if err = txnLk.GetLock(configLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -339,6 +358,11 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
+	// Initialize bucket targets sub-system.
+	if err = globalBucketTargetSys.Init(GlobalContext, buckets, newObject); err != nil {
+		return fmt.Errorf("Unable to initialize bucket target sub-system: %w", err)
+	}
+
 	return nil
 }
 
@@ -364,9 +388,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	if ctx.Args().First() == "help" || !endpointsPresent(ctx) {
-		cli.ShowCommandHelpAndExit(ctx, "server", 1)
-	}
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
@@ -386,15 +407,7 @@ func serverMain(ctx *cli.Context) {
 	// Initialize all help
 	initHelp()
 
-	// Check and load TLS certificates.
 	var err error
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
-	logger.FatalIf(err, "Unable to load the TLS configuration")
-
-	// Check and load Root CAs.
-	globalRootCAs, err = config.GetRootCAs(globalCertsCADir.Get())
-	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
-
 	globalProxyEndpoints, err = GetProxyEndpoints(globalEndpoints)
 	logger.FatalIf(err, "Invalid command line arguments")
 

@@ -18,7 +18,6 @@
 package env
 
 import (
-	"os"
 	"strings"
 	"sync"
 )
@@ -46,7 +45,7 @@ func SetEnvOn() {
 
 // IsSet returns if the given env key is set.
 func IsSet(key string) bool {
-	_, ok := os.LookupEnv(key)
+	_, ok := LookupEnv(key)
 	return ok
 }
 
@@ -61,7 +60,7 @@ func Get(key, defaultValue string) string {
 	if ok {
 		return defaultValue
 	}
-	if v, ok := os.LookupEnv(key); ok {
+	if v, ok := LookupEnv(key); ok {
 		return v
 	}
 	return defaultValue
@@ -69,7 +68,7 @@ func Get(key, defaultValue string) string {
 
 // List all envs with a given prefix.
 func List(prefix string) (envs []string) {
-	for _, env := range os.Environ() {
+	for _, env := range Environ() {
 		if strings.HasPrefix(env, prefix) {
 			values := strings.SplitN(env, "=", 2)
 			if len(values) == 2 {

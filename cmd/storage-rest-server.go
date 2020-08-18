@@ -114,12 +114,18 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		return true
 	}
 	storedDiskID, err := s.storage.GetDiskID()
-	if err == nil && diskID == storedDiskID {
-		// If format.json is available and request sent the right disk-id, we allow the request
-		return true
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return false
 	}
-	s.writeErrorResponse(w, errDiskStale)
-	return false
+
+	if diskID != storedDiskID {
+		s.writeErrorResponse(w, errDiskStale)
+		return false
+	}
+
+	// If format.json is available and request sent the right disk-id, we allow the request
+	return true
 }
 
 // HealthHandler handler checks if disk is stale
@@ -145,7 +151,8 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 		return
 	}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
+
 	var cache dataUsageCache
 	err := cache.deserialize(r.Body)
 	if err != nil {
@@ -514,7 +521,7 @@ func (s *storageRESTServer) WalkSplunkHandler(w http.ResponseWriter, r *http.Req
 	dirPath := vars[storageRESTDirPath]
 	markerPath := vars[storageRESTMarkerPath]
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 
 	fch, err := s.storage.WalkSplunk(volume, dirPath, markerPath, r.Context().Done())
@@ -542,7 +549,7 @@ func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 
 	fch, err := s.storage.WalkVersions(volume, dirPath, markerPath, recursive, r.Context().Done())
@@ -570,7 +577,7 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 
 	fch, err := s.storage.Walk(volume, dirPath, markerPath, recursive, r.Context().Done())
@@ -653,7 +660,7 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 
 	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]error, totalVersions)}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	errs := s.storage.DeleteVersions(volume, versions)
@@ -799,7 +806,7 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	w.Header().Set(xhttp.ContentType, "text/event-stream")
+	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	err = s.storage.VerifyFile(volume, filePath, fi)

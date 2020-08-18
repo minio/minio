@@ -21,8 +21,10 @@ import (
 	"encoding/gob"
 	"errors"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -68,16 +70,43 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 
 // Check for updates and print a notification message
 func checkUpdate(mode string) {
+	updateURL := minioReleaseInfoURL
+	if runtime.GOOS == globalWindowsOSName {
+		updateURL = minioReleaseWindowsInfoURL
+	}
+
+	u, err := url.Parse(updateURL)
+	if err != nil {
+		return
+	}
+
 	// Its OK to ignore any errors during doUpdate() here.
-	if updateMsg, _, currentReleaseTime, latestReleaseTime, err := getUpdateInfo(2*time.Second, mode); err == nil {
-		if updateMsg == "" {
-			return
-		}
-		if globalInplaceUpdateDisabled {
-			logStartupMessage(updateMsg)
-		} else {
-			logStartupMessage(prepareUpdateMessage("Run `mc admin update`", latestReleaseTime.Sub(currentReleaseTime)))
-		}
+	crTime, err := GetCurrentReleaseTime()
+	if err != nil {
+		return
+	}
+
+	_, lrTime, err := getLatestReleaseTime(u, 2*time.Second, mode)
+	if err != nil {
+		return
+	}
+
+	var older time.Duration
+	var downloadURL string
+	if lrTime.After(crTime) {
+		older = lrTime.Sub(crTime)
+		downloadURL = getDownloadURL(releaseTimeToReleaseTag(lrTime))
+	}
+
+	updateMsg := prepareUpdateMessage(downloadURL, older)
+	if updateMsg == "" {
+		return
+	}
+
+	if globalInplaceUpdateDisabled {
+		logStartupMessage(updateMsg)
+	} else {
+		logStartupMessage(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
 	}
 }
 
@@ -223,7 +252,11 @@ func handleCommonEnvVars() {
 	} else {
 		// Add found interfaces IP address to global domain IPS,
 		// loopback addresses will be naturally dropped.
-		updateDomainIPs(mustGetLocalIP4())
+		domainIPs := mustGetLocalIP4()
+		for _, host := range globalEndpoints.Hostnames() {
+			domainIPs.Add(host)
+		}
+		updateDomainIPs(domainIPs)
 	}
 
 	// In place update is true by default if the MINIO_UPDATE is not set

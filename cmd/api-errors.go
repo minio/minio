@@ -34,6 +34,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/bucket/replication"
+
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/versioning"
@@ -104,6 +106,19 @@ const (
 	ErrNoSuchCORSConfiguration
 	ErrNoSuchWebsiteConfiguration
 	ErrReplicationConfigurationNotFoundError
+	ErrReplicationDestinationNotFoundError
+	ErrReplicationDestinationMissingLock
+	ErrReplicationTargetNotFoundError
+	ErrBucketRemoteIdenticalToSource
+	ErrBucketRemoteAlreadyExists
+	ErrBucketRemoteArnTypeInvalid
+	ErrBucketRemoteArnInvalid
+	ErrBucketRemoteRemoveDisallowed
+	ErrReplicationTargetNotVersionedError
+	ErrReplicationSourceNotVersionedError
+	ErrReplicationNeedsVersioningError
+	ErrReplicationBucketNeedsVersioningError
+	ErrBucketReplicationDisabledError
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -811,6 +826,71 @@ var errorCodes = errorCodeMap{
 		Code:           "ReplicationConfigurationNotFoundError",
 		Description:    "The replication configuration was not found",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationDestinationNotFoundError: {
+		Code:           "ReplicationDestinationNotFoundError",
+		Description:    "The replication destination bucket does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationDestinationMissingLock: {
+		Code:           "ReplicationDestinationMissingLockError",
+		Description:    "The replication destination bucket does not have object locking enabled",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationTargetNotFoundError: {
+		Code:           "XminioAdminReplicationTargetNotFoundError",
+		Description:    "The replication target does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrBucketRemoteIdenticalToSource: {
+		Code:           "XminioAdminRemoteIdenticalToSource",
+		Description:    "The remote target cannot be identical to source",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteAlreadyExists: {
+		Code:           "XminioAdminBucketRemoteAlreadyExists",
+		Description:    "The remote target already exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteRemoveDisallowed: {
+		Code:           "XMinioAdminRemoteRemoveDisallowed",
+		Description:    "Replication configuration exists with this ARN.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteArnTypeInvalid: {
+		Code:           "XMinioAdminRemoteARNTypeInvalid",
+		Description:    "The bucket remote ARN type is not valid",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketRemoteArnInvalid: {
+		Code:           "XMinioAdminRemoteArnInvalid",
+		Description:    "The bucket remote ARN does not have correct format",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationTargetNotVersionedError: {
+		Code:           "ReplicationTargetNotVersionedError",
+		Description:    "The replication target does not have versioning enabled",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationSourceNotVersionedError: {
+		Code:           "ReplicationSourceNotVersionedError",
+		Description:    "The replication source does not have versioning enabled",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationNeedsVersioningError: {
+		Code:           "InvalidRequest",
+		Description:    "Versioning must be 'Enabled' on the bucket to apply a replication configuration",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrReplicationBucketNeedsVersioningError: {
+		Code:           "InvalidRequest",
+		Description:    "Versioning must be 'Enabled' on the bucket to add a replication target",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrBucketReplicationDisabledError: {
+		Code:           "XMinioAdminBucketReplicationDisabled",
+		Description:    "Replication specified but disk usage crawl is disabled on MinIO server",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrNoSuchObjectLockConfiguration: {
 		Code:           "NoSuchObjectLockConfiguration",
@@ -1837,6 +1917,26 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrObjectLockConfigurationNotFound
 	case BucketQuotaConfigNotFound:
 		apiErr = ErrAdminNoSuchQuotaConfiguration
+	case BucketReplicationConfigNotFound:
+		apiErr = ErrReplicationConfigurationNotFoundError
+	case BucketReplicationDestinationNotFound:
+		apiErr = ErrReplicationDestinationNotFoundError
+	case BucketReplicationDestinationMissingLock:
+		apiErr = ErrReplicationDestinationMissingLock
+	case BucketRemoteTargetNotFound:
+		apiErr = ErrReplicationTargetNotFoundError
+	case BucketRemoteAlreadyExists:
+		apiErr = ErrBucketRemoteAlreadyExists
+	case BucketRemoteArnTypeInvalid:
+		apiErr = ErrBucketRemoteArnTypeInvalid
+	case BucketRemoteArnInvalid:
+		apiErr = ErrBucketRemoteArnInvalid
+	case BucketRemoteRemoveDisallowed:
+		apiErr = ErrBucketRemoteRemoveDisallowed
+	case BucketReplicationTargetNotVersioned:
+		apiErr = ErrReplicationTargetNotVersionedError
+	case BucketReplicationSourceNotVersioned:
+		apiErr = ErrReplicationSourceNotVersionedError
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:
@@ -1938,6 +2038,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 		case lifecycle.Error:
 			apiErr = APIError{
 				Code:           "InvalidRequest",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
+		case replication.Error:
+			apiErr = APIError{
+				Code:           "MalformedXML",
 				Description:    e.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -120,7 +121,7 @@ func (ies *IAMEtcdStore) loadIAMConfig(item interface{}, path string) error {
 		return err
 	}
 
-	if globalConfigEncrypted {
+	if globalConfigEncrypted && !utf8.Valid(pdata) {
 		pdata, err = madmin.DecryptData(globalActiveCred.String(), bytes.NewReader(pdata))
 		if err != nil {
 			return err
@@ -513,6 +514,28 @@ func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
 
 	for k, v := range iamUserPolicyMap {
 		sys.iamUserPolicyMap[k] = v
+	}
+
+	// purge any expired entries which became expired now.
+	var expiredEntries []string
+	for k, v := range sys.iamUsersMap {
+		if v.IsExpired() {
+			delete(sys.iamUsersMap, k)
+			delete(sys.iamUserPolicyMap, k)
+			expiredEntries = append(expiredEntries, k)
+			// Deleting on the disk is taken care of in the next cycle
+		}
+	}
+
+	for _, v := range sys.iamUsersMap {
+		if v.IsServiceAccount() {
+			for _, accessKey := range expiredEntries {
+				if v.ParentUser == accessKey {
+					_ = ies.deleteUserIdentity(v.AccessKey, srvAccUser)
+					delete(sys.iamUsersMap, v.AccessKey)
+				}
+			}
+		}
 	}
 
 	// purge any expired entries which became expired now.

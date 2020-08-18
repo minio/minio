@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -436,8 +437,8 @@ func TestGetErasureID(t *testing.T) {
 	}
 
 	formats[2].ID = "bad-id"
-	if _, err = formatErasureGetDeploymentID(quorumFormat, formats); err != errCorruptedFormat {
-		t.Fatal("Unexpected Success")
+	if _, err = formatErasureGetDeploymentID(quorumFormat, formats); !errors.Is(err, errCorruptedFormat) {
+		t.Fatalf("Unexpect error %s", err)
 	}
 }
 

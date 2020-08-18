@@ -28,8 +28,8 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-// CheckCopyPreconditionFn returns true if copy precondition check failed.
-type CheckCopyPreconditionFn func(o ObjectInfo, encETag string) bool
+// CheckPreconditionFn returns true if precondition check failed.
+type CheckPreconditionFn func(o ObjectInfo) bool
 
 // GetObjectInfoFn is the signature of GetObjectInfo function.
 type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
@@ -37,13 +37,13 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 // ObjectOptions represents object options for ObjectLayer object operations
 type ObjectOptions struct {
 	ServerSideEncryption encrypt.ServerSide
-	Versioned            bool                    // indicates if the bucket is versioned
-	WalkVersions         bool                    // indicates if the we are interested in walking versions
-	VersionID            string                  // Specifies the versionID which needs to be overwritten or read
-	MTime                time.Time               // Is only set in POST/PUT operations
-	UserDefined          map[string]string       // only set in case of POST/PUT operations
-	PartNumber           int                     // only useful in case of GetObject/HeadObject
-	CheckCopyPrecondFn   CheckCopyPreconditionFn // only set during CopyObject preconditional valuation
+	Versioned            bool                // indicates if the bucket is versioned
+	WalkVersions         bool                // indicates if the we are interested in walking versions
+	VersionID            string              // Specifies the versionID which needs to be overwritten or read
+	MTime                time.Time           // Is only set in POST/PUT operations
+	UserDefined          map[string]string   // only set in case of POST/PUT operations
+	PartNumber           int                 // only useful in case of GetObject/HeadObject
+	CheckPrecondFn       CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -64,6 +64,8 @@ const (
 
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
+	SetDriveCount() int // Only implemented by erasure layer
+
 	// Locking operations on object.
 	NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker
 
@@ -125,7 +127,7 @@ type ObjectLayer interface {
 
 	// Supported operations check
 	IsNotificationSupported() bool
-	IsListenBucketSupported() bool
+	IsListenSupported() bool
 	IsEncryptionSupported() bool
 	IsTaggingSupported() bool
 	IsCompressionSupported() bool
@@ -133,8 +135,8 @@ type ObjectLayer interface {
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*Metrics, error)
 
-	// Check Readiness
-	IsReady(ctx context.Context) bool
+	// Returns health of the backend
+	Health(ctx context.Context, opts HealthOptions) HealthResult
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) error

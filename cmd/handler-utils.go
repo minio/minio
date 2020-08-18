@@ -77,6 +77,7 @@ var supportedHeaders = []string{
 	xhttp.AmzStorageClass,
 	xhttp.AmzObjectTagging,
 	"expires",
+	xhttp.AmzBucketReplicationStatus,
 	// Add more supported headers here.
 }
 
@@ -128,6 +129,13 @@ func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]
 	// Set content-type to default value if it is not set.
 	if _, ok := metadata[strings.ToLower(xhttp.ContentType)]; !ok {
 		metadata[strings.ToLower(xhttp.ContentType)] = "application/octet-stream"
+	}
+
+	// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+	for k := range metadata {
+		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+			delete(metadata, k)
+		}
 	}
 
 	if contentEncoding, ok := metadata[strings.ToLower(xhttp.ContentEncoding)]; ok {
@@ -412,6 +420,9 @@ func extractAPIVersion(r *http.Request) string {
 
 // If none of the http routes match respond with appropriate errors
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	version := extractAPIVersion(r)
 	switch {
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
@@ -475,6 +486,12 @@ func getHostName(r *http.Request) (hostName string) {
 // Proxy any request to an endpoint.
 func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
 	success = true
+
+	// Make sure we remove any existing headers before
+	// proxying the request to another node.
+	for k := range w.Header() {
+		w.Header().Del(k)
+	}
 
 	f := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,

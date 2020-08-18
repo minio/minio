@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -27,34 +28,46 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
-var printEndpointError = func() func(Endpoint, error) {
+var printEndpointError = func() func(Endpoint, error, bool) {
 	var mutex sync.Mutex
-	printOnce := make(map[Endpoint]map[string]bool)
+	printOnce := make(map[Endpoint]map[string]int)
 
-	return func(endpoint Endpoint, err error) {
+	return func(endpoint Endpoint, err error, once bool) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("endpoint", endpoint.String())
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		mutex.Lock()
 		defer mutex.Unlock()
+
 		m, ok := printOnce[endpoint]
 		if !ok {
-			m = make(map[string]bool)
-			m[err.Error()] = true
+			m = make(map[string]int)
+			m[err.Error()]++
 			printOnce[endpoint] = m
-			logger.LogAlwaysIf(ctx, err)
+			if once {
+				logger.LogAlwaysIf(ctx, err)
+				return
+			}
+		}
+		// Once is set and we are here means error was already
+		// printed once.
+		if once {
 			return
 		}
-		if m[err.Error()] {
-			return
+		// once not set, check if same error occurred 3 times in
+		// a row, then make sure we print it to call attention.
+		if m[err.Error()] > 2 {
+			logger.LogAlwaysIf(ctx, fmt.Errorf("Following error has been printed %d times.. %w", m[err.Error()], err))
+			// Reduce the count to introduce further delay in printing
+			// but let it again print after the 2th attempt
+			m[err.Error()]--
+			m[err.Error()]--
 		}
-		m[err.Error()] = true
-		logger.LogAlwaysIf(ctx, err)
+		m[err.Error()]++
 	}
 }()
 
@@ -172,7 +185,6 @@ func IsServerResolvable(endpoint Endpoint) error {
 		tlsConfig = &tls.Config{
 			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,
-			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 
@@ -200,7 +212,10 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	resp, err := httpClient.Do(req)
+	ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
+	defer cancel()
+
+	resp, err := httpClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return err
 	}
@@ -240,10 +255,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	formatConfigs, sErrs := loadFormatErasureAll(storageDisks, false)
 	// Check if we have
 	for i, sErr := range sErrs {
-		if _, ok := formatCriticalErrors[sErr]; ok {
-			return nil, nil, config.ErrCorruptedBackend(err).Hint(fmt.Sprintf("Clear any pre-existing content on %s", endpoints[i]))
-		}
-		// not critical error but still print the error, nonetheless, which is perhaps unhandled
+		// print the error, nonetheless, which is perhaps unhandled
 		if sErr != errUnformattedDisk && sErr != errDiskNotFound && retryCount >= 5 {
 			if sErr != nil {
 				logger.Info("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)

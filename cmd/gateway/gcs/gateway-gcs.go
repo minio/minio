@@ -940,7 +940,7 @@ func (l *gcsGateway) PutObject(ctx context.Context, bucket string, key string, r
 // CopyObject - Copies a blob from source container to destination container.
 func (l *gcsGateway) CopyObject(ctx context.Context, srcBucket string, srcObject string, destBucket string, destObject string,
 	srcInfo minio.ObjectInfo, srcOpts, dstOpts minio.ObjectOptions) (minio.ObjectInfo, error) {
-	if srcOpts.CheckCopyPrecondFn != nil && srcOpts.CheckCopyPrecondFn(srcInfo, "") {
+	if srcOpts.CheckPrecondFn != nil && srcOpts.CheckPrecondFn(srcInfo) {
 		return minio.ObjectInfo{}, minio.PreConditionFailed{}
 	}
 	src := l.client.Bucket(srcBucket).Object(srcObject)
@@ -1507,9 +1507,4 @@ func (l *gcsGateway) DeleteBucketPolicy(ctx context.Context, bucket string) erro
 // IsCompressionSupported returns whether compression is applicable for this layer.
 func (l *gcsGateway) IsCompressionSupported() bool {
 	return false
-}
-
-// IsReady returns whether the layer is ready to take requests.
-func (l *gcsGateway) IsReady(ctx context.Context) bool {
-	return minio.IsBackendOnline(ctx, l.httpClient, "https://storage.googleapis.com")
 }
