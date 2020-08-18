@@ -26,7 +26,7 @@ MinIO Gateway配有嵌入式网络对象浏览器。 将您的Web浏览器指向
 
 ### 配置 `mc`
 ```
-mc config host add myazure http://gateway-ip:9000 azureaccountname azureaccountkey
+mc alias set myazure http://gateway-ip:9000 azureaccountname azureaccountkey
 ```
 
 ### 列出微软Azure上的容器

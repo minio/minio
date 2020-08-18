@@ -62,7 +62,7 @@ This admin user will then be allowed to perform create/delete user operations vi
 
 ### 3. Configure `mc` and create another user user1 with attached policy user1policy
 ```
-mc config host add myminio-admin1 http://localhost:9000 admin1 admin123 --api s3v4
+mc alias set myminio-admin1 http://localhost:9000 admin1 admin123 --api s3v4
 
 mc admin user add myminio-admin1 user1 user123
 mc admin policy add myminio-admin1 user1policy ~/user1policy.json
