@@ -118,7 +118,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		return nil, err
 	}
 
-	esTargets, err := GetNotifyES(cfg[config.NotifyESSubSys])
+	esTargets, err := GetNotifyES(cfg[config.NotifyESSubSys], transport)
 	if err != nil {
 		return nil, err
 	}
@@ -1532,11 +1532,19 @@ var (
 			Key:   target.ElasticQueueLimit,
 			Value: "0",
 		},
+		config.KV{
+			Key:   target.ElasticUsername,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.ElasticPassword,
+			Value: "",
+		},
 	}
 )
 
 // GetNotifyES - returns a map of registered notification 'elasticsearch' targets
-func GetNotifyES(esKVS map[string]config.KVS) (map[string]target.ElasticsearchArgs, error) {
+func GetNotifyES(esKVS map[string]config.KVS, transport *http.Transport) (map[string]target.ElasticsearchArgs, error) {
 	esTargets := make(map[string]target.ElasticsearchArgs)
 	for k, kv := range mergeTargets(esKVS, target.EnvElasticEnable, DefaultESKVS) {
 		enableEnv := target.EnvElasticEnable
@@ -1586,6 +1594,16 @@ func GetNotifyES(esKVS map[string]config.KVS) (map[string]target.ElasticsearchAr
 			queueDirEnv = queueDirEnv + config.Default + k
 		}
 
+		usernameEnv := target.EnvElasticUsername
+		if k != config.Default {
+			usernameEnv = usernameEnv + config.Default + k
+		}
+
+		passwordEnv := target.EnvElasticPassword
+		if k != config.Default {
+			passwordEnv = passwordEnv + config.Default + k
+		}
+
 		esArgs := target.ElasticsearchArgs{
 			Enable:     enabled,
 			Format:     env.Get(formatEnv, kv.Get(target.ElasticFormat)),
@@ -1593,6 +1611,9 @@ func GetNotifyES(esKVS map[string]config.KVS) (map[string]target.ElasticsearchAr
 			Index:      env.Get(indexEnv, kv.Get(target.ElasticIndex)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.ElasticQueueDir)),
 			QueueLimit: uint64(queueLimit),
+			Transport:  transport,
+			Username:   env.Get(usernameEnv, kv.Get(target.ElasticUsername)),
+			Password:   env.Get(passwordEnv, kv.Get(target.ElasticPassword)),
 		}
 		if err = esArgs.Validate(); err != nil {
 			return nil, err
