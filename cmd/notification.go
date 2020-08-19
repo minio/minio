@@ -1188,7 +1188,7 @@ func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) (localDiskIDs [
 
 // NewNotificationSys - creates new notification system object.
 func NewNotificationSys(endpoints EndpointZones) *NotificationSys {
-	// bucketRulesMap/bucketRemoteTargetRulesMap are initialized by NotificationSys.Init()
+	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
 	return &NotificationSys{
 		targetList:                 event.NewTargetList(),
 		targetResCh:                make(chan event.TargetIDResult),
