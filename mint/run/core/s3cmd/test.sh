@@ -57,7 +57,7 @@ declare FILE_1_MB_MD5SUM
 declare FILE_65_MB_MD5SUM
 
 BUCKET_NAME="s3cmd-test-bucket-$RANDOM"
-S3CMD=$(which s3cmd)
+S3CMD=$(command -v s3cmd)
 declare -a S3CMD_CMD
 
 function get_md5sum()
