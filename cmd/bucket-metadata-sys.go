@@ -97,6 +97,14 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 				meta.LifecycleConfigXML = configData
 				return meta.Save(GlobalContext, objAPI)
 			}
+			if configData == nil {
+				return objAPI.DeleteBucketLifecycle(GlobalContext, bucket)
+			}
+			bucketLifecycle, err := lifecycle.ParseLifecycleConfig(bytes.NewReader(configData))
+			if err != nil {
+				return err
+			}
+			return objAPI.SetBucketLifecycle(GlobalContext, bucket, bucketLifecycle)
 		case bucketTaggingConfig:
 			if globalGatewayName == "nas" {
 				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
@@ -237,6 +245,13 @@ func (sys *BucketMetadataSys) GetObjectLockConfig(bucket string) (*objectlock.Co
 // GetLifecycleConfig returns configured lifecycle config
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Lifecycle, error) {
+	if globalIsGateway && globalGatewayName != "nas" {
+		objAPI := newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			return nil, errServerNotInitialized
+		}
+		return objAPI.GetBucketLifecycle(GlobalContext, bucket)
+	}
 	meta, err := sys.GetConfig(bucket)
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) {

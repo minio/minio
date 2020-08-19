@@ -24,6 +24,7 @@ import (
 
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -124,6 +125,11 @@ type ObjectLayer interface {
 	SetBucketPolicy(context.Context, string, *policy.Policy) error
 	GetBucketPolicy(context.Context, string) (*policy.Policy, error)
 	DeleteBucketPolicy(context.Context, string) error
+
+	// Lifecycle operations
+	SetBucketLifecycle(ctx context.Context, bucket string, lifecycle *lifecycle.Lifecycle) error
+	GetBucketLifecycle(ctx context.Context, bucket string) (*lifecycle.Lifecycle, error)
+	DeleteBucketLifecycle(ctx context.Context, bucket string) error
 
 	// Supported operations check
 	IsNotificationSupported() bool
