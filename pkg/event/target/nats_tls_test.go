@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +17,17 @@
 package target
 
 import (
+	"path"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	xnet "github.com/minio/minio/pkg/net"
 	natsserver "github.com/nats-io/nats-server/v2/test"
 )
 
-func TestNatsConnPlain(t *testing.T) {
-	opts := natsserver.DefaultTestOptions
-	opts.Port = 14222
-	s := natsserver.RunServer(&opts)
+func TestNatsConnTLSCustomCA(t *testing.T) {
+	s, opts := natsserver.RunServerWithConfig(filepath.Join("testdata", "nats_tls.conf"))
 	defer s.Shutdown()
 
 	clientConfig := &NATSArgs{
@@ -34,21 +35,23 @@ func TestNatsConnPlain(t *testing.T) {
 		Address: xnet.Host{Name: "localhost",
 			Port:      (xnet.Port(opts.Port)),
 			IsPortSet: true},
-		Subject: "test",
+		Subject:       "test",
+		Secure:        true,
+		CertAuthority: path.Join("testdata", "certs", "root_ca_cert.pem"),
 	}
+
 	con, err := clientConfig.connectNats()
 	if err != nil {
+		if runtime.Version() == "go1.15" {
+			t.Skip()
+		}
 		t.Errorf("Could not connect to nats: %v", err)
 	}
 	defer con.Close()
 }
 
-func TestNatsConnUserPass(t *testing.T) {
-	opts := natsserver.DefaultTestOptions
-	opts.Port = 14223
-	opts.Username = "testminio"
-	opts.Password = "miniotest"
-	s := natsserver.RunServer(&opts)
+func TestNatsConnTLSClientAuthorization(t *testing.T) {
+	s, opts := natsserver.RunServerWithConfig(filepath.Join("testdata", "nats_tls_client_cert.conf"))
 	defer s.Shutdown()
 
 	clientConfig := &NATSArgs{
@@ -56,36 +59,18 @@ func TestNatsConnUserPass(t *testing.T) {
 		Address: xnet.Host{Name: "localhost",
 			Port:      (xnet.Port(opts.Port)),
 			IsPortSet: true},
-		Subject:  "test",
-		Username: opts.Username,
-		Password: opts.Password,
+		Subject:       "test",
+		Secure:        true,
+		CertAuthority: path.Join("testdata", "certs", "root_ca_cert.pem"),
+		ClientCert:    path.Join("testdata", "certs", "nats_client_cert.pem"),
+		ClientKey:     path.Join("testdata", "certs", "nats_client_key.pem"),
 	}
 
 	con, err := clientConfig.connectNats()
 	if err != nil {
-		t.Errorf("Could not connect to nats: %v", err)
-	}
-	defer con.Close()
-}
-
-func TestNatsConnToken(t *testing.T) {
-	opts := natsserver.DefaultTestOptions
-	opts.Port = 14223
-	opts.Authorization = "s3cr3t"
-	s := natsserver.RunServer(&opts)
-	defer s.Shutdown()
-
-	clientConfig := &NATSArgs{
-		Enable: true,
-		Address: xnet.Host{Name: "localhost",
-			Port:      (xnet.Port(opts.Port)),
-			IsPortSet: true},
-		Subject: "test",
-		Token:   opts.Authorization,
-	}
-
-	con, err := clientConfig.connectNats()
-	if err != nil {
+		if runtime.Version() == "go1.15" {
+			t.Skip()
+		}
 		t.Errorf("Could not connect to nats: %v", err)
 	}
 	defer con.Close()

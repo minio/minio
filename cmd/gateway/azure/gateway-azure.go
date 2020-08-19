@@ -530,7 +530,7 @@ func checkAzureUploadID(ctx context.Context, uploadID string) (err error) {
 func parseAzurePart(metaPartFileName, prefix string) (partID int, err error) {
 	partStr := strings.TrimPrefix(metaPartFileName, prefix+minio.SlashSeparator)
 	if partID, err = strconv.Atoi(partStr); err != nil || partID <= 0 {
-		err = fmt.Errorf("invalid part number in block id '%s'", string(partID))
+		err = fmt.Errorf("invalid part number in block id '%d'", partID)
 		return
 	}
 	return
