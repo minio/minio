@@ -118,7 +118,7 @@ func hashOrder(key string, cardinality int) []int {
 func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string, readData bool) ([]FileInfo, []error) {
 	metadataArray := make([]FileInfo, len(disks))
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: len(disks)/2 + 1, ValidErrs: []error{errFileNotFound}})
 	// Read `xl.meta` in parallel across disks.
 	for index := range disks {
 		index := index

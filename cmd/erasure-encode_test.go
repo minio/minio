@@ -111,7 +111,7 @@ func TestErasureEncode(t *testing.T) {
 			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(int64(len(data[test.offset:]))), test.algorithm, erasure.ShardSize())
 		}
 		n, err := erasure.Encode(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, erasure.dataBlocks+1)
-		closeBitrotWriters(writers)
+		closeBitrotWriters(writers, true)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
@@ -146,7 +146,7 @@ func TestErasureEncode(t *testing.T) {
 				writers[0] = nil
 			}
 			n, err = erasure.Encode(context.Background(), bytes.NewReader(data[test.offset:]), writers, buffer, erasure.dataBlocks+1)
-			closeBitrotWriters(writers)
+			closeBitrotWriters(writers, true)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
 			}
@@ -199,7 +199,7 @@ func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, 
 			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		_, err := erasure.Encode(context.Background(), bytes.NewReader(content), writers, buffer, erasure.dataBlocks+1)
-		closeBitrotWriters(writers)
+		closeBitrotWriters(writers, true)
 		if err != nil {
 			panic(err)
 		}

@@ -41,8 +41,9 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 	}
 
 	storageDisks := er.getDisks()
+	writeQuorum := getWriteQuorum(len(storageDisks))
 
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.New(errgroup.Opts{Total: len(storageDisks), FailFactor: 10, Quorum: writeQuorum})
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range storageDisks {
@@ -61,7 +62,6 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 		}, index)
 	}
 
-	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
 	return toObjectErr(err, bucket)
 }
@@ -88,7 +88,7 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (bucketInfo BucketInfo, err error) {
 	storageDisks := er.getDisks()
 
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.New(errgroup.Opts{Total: len(storageDisks), Quorum: 1})
 	var bucketsInfo = make([]BucketInfo, len(storageDisks))
 	// Undo previous make bucket entry on all underlying storage disks.
 	for index := range storageDisks {
@@ -160,8 +160,8 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 	// Collect if all disks report volume not found.
 	defer ObjectPathUpdated(bucket + slashSeparator)
 	storageDisks := er.getDisks()
-
-	g := errgroup.WithNErrs(len(storageDisks))
+	writeQuorum := getWriteQuorum(len(storageDisks))
+	g := errgroup.New(errgroup.Opts{Total: len(storageDisks), FailFactor: 10, Quorum: writeQuorum})
 
 	for index := range storageDisks {
 		index := index
@@ -194,7 +194,6 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 		return nil
 	}
 
-	writeQuorum := getWriteQuorum(len(storageDisks))
 	err := reduceWriteQuorumErrs(ctx, dErrs, bucketOpIgnoredErrs, writeQuorum)
 	if err == errErasureWriteQuorum {
 		undoDeleteBucket(storageDisks, bucket)

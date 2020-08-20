@@ -172,7 +172,7 @@ func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDi
 func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error) {
 	disksInfo = make([]madmin.Disk, len(disks))
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, MinWaitTime: 10 * time.Second})
 	for index := range disks {
 		index := index
 		g.Go(func() error {

@@ -161,7 +161,7 @@ func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 func (er erasureObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
 	storageDisks := er.getDisks()
 
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.New(errgroup.Opts{Total: len(storageDisks), FailFactor: 10, Quorum: len(storageDisks)/2 + 1, ValidErrs: []error{errFileNotFound}})
 
 	for index := range storageDisks {
 		index := index
