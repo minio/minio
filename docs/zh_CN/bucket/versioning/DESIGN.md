@@ -1,12 +1,12 @@
-# Bucket Versioning Design Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# 存储桶版本控制设计指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-## Description of `xl.meta`
+## `xl.meta` 文件描述
 
-`xl.meta` is a new self describing backend format used by MinIO to support AWS S3 compatible versioning. This file is the source of truth for each `version` at rest. `xl.meta` is a msgpack file serialized from a well defined data structure. To understand `xl.meta` here are the few things to start with
+`xl.meta`是MinIO用于支持AWS S3兼容版本控制的一种新的自描述后端格式文件. 该文件记录了每个静态`version`的真实描述信息。`xl.meta`是一个定义好的数据结构序列化的`msgpack`文件。可以通过以下几部分内容更好的了解`xl.meta`文件。
 
-`xl.meta` carries first 8 bytes an XL header which describes the current format and the format version, allowing the unmarshaller's to automatically use the right data structures to parse the subsequent content in the stream.
+`xl.meta`文件的前8个字节是XL文件头，该头信息描述了当前文件的格式和相应的格式版本，从而使解析器能够自动使用正确的数据结构来解析流中的后续内容。
 
-These are the current entries
+当前文件头信息
 ```go
 var (
         // XL header specifies the format
@@ -20,13 +20,13 @@ var (
 )
 ```
 
-Once the header is validated, we proceed to the actual data structure of the `xl.meta` format. `xl.meta` carries three types of object entries which designate the type of version object stored.
+了解文件头后，我们接着看`xl.meta`文件的实际数据结构。`xl.meta`带有三种类型的对象条目，用于指定存储的版本对象的类型。
 
-- ObjectType (default)
-- LegacyObjectType (preserves existing deployments and older xl.json format)
-- DeleteMarker (a versionId to capture the DELETE sequences implemented primarily for AWS spec compatibility)
+- ObjectType (默认)
+- LegacyObjectType (遗留的现有部署和较旧的xl.json格式)
+- DeleteMarker (一个versionId，主要是为了实现AWS规范兼容的DELETE序列)
 
-A sample msgpack-JSON `xl.meta`, you can debug the content inside `xl.meta` using [xl-meta-to-json.go](https://github.com/minio/minio/blob/master/docs/bucket/versioning/xl-meta-to-json.go) program.
+以下是个msgpack格式的`xl.meta`转为JSON后的样例,你可以通过 [xl-meta-to-json.go](https://github.com/minio/minio/blob/master/docs/zh_CN/bucket/versioning/xl-meta-to-json.go) 这个小程序把`xl.meta`转成JSON，查看里面的内容。
 ```json
 {
   "Versions": [
