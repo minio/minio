@@ -179,7 +179,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry)
-	go intDataUpdateTracker.start(GlobalContext, fsPath)
+	go intDataUpdateTracker.start(ctx, fsPath)
 
 	// Return successfully initialized object layer.
 	return fs, nil

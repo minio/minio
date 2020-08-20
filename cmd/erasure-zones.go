@@ -80,7 +80,7 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 		}
 	}
 
-	go intDataUpdateTracker.start(GlobalContext, localDrives...)
+	go intDataUpdateTracker.start(ctx, localDrives...)
 	return z, nil
 }
 
