@@ -84,6 +84,25 @@ func isValidVolname(volname string) bool {
 	return true
 }
 
+type latency struct {
+	mu      sync.Mutex
+	value   int64
+	updated time.Time
+}
+
+func (l *latency) store(val int64, t time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.value = val
+	l.updated = t
+}
+
+func (l *latency) load() (int64, time.Time) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.value, l.updated
+}
+
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
 	activeIOCount int32
@@ -106,6 +125,8 @@ type xlStorage struct {
 
 	ctx context.Context
 	sync.RWMutex
+
+	latency latency
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -329,6 +350,44 @@ func (s *xlStorage) Healing() bool {
 		bucketMetaPrefix, healingTrackerFilename)
 	_, err := os.Stat(healingFile)
 	return err == nil
+}
+
+func (s *xlStorage) Latency() int64 {
+	now := time.Now()
+	val, timestamp := s.latency.load()
+	if now.Sub(timestamp) < time.Minute {
+		return val
+	}
+
+	errCh := make(chan error)
+	go func() {
+		// context.Background() is used because ReadAll()
+		// does not support context properly yet
+		_, err := s.ReadAll(context.Background(), minioMetaTmpBucket, formatConfigFile)
+		errCh <- err
+		close(errCh)
+	}()
+
+	var (
+		latency    int64
+		updateTime time.Time
+	)
+
+	select {
+	case err := <-errCh:
+		updateTime = time.Now()
+		if err == nil {
+			latency = int64(updateTime.Sub(now))
+		} else {
+			latency = -1
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		updateTime = time.Now()
+		latency = -1
+	}
+
+	s.latency.store(latency, updateTime)
+	return latency
 }
 
 func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {

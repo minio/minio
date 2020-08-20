@@ -90,7 +90,7 @@ func TestErasureHeal(t *testing.T) {
 			writers[i] = newBitrotWriter(disk, "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
 		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
-		closeBitrotWriters(writers)
+		closeBitrotWriters(writers, true)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
@@ -136,7 +136,7 @@ func TestErasureHeal(t *testing.T) {
 		// test case setup is complete - now call Heal()
 		err = erasure.Heal(context.Background(), readers, staleWriters, test.size)
 		closeBitrotReaders(readers)
-		closeBitrotWriters(staleWriters)
+		closeBitrotWriters(staleWriters, true)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}

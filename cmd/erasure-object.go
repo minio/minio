@@ -467,7 +467,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, da
 	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: writeQuorum})
 
 	// Rename file on all underlying storage disks.
 	for index := range disks {
@@ -521,7 +521,7 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: writeQuorum})
 
 	// Rename file on all underlying storage disks.
 	for index := range disks {
@@ -663,7 +663,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
-	closeBitrotWriters(writers)
+	closeBitrotWriters(writers, false)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 	}
@@ -749,7 +749,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo) error {
 	defer ObjectPathUpdated(pathJoin(bucket, object))
 	disks := er.getDisks()
-	g := errgroup.WithNErrs(len(disks))
+
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: writeQuorum, ValidErrs: []error{errFileNotFound}})
+
 	for index := range disks {
 		index := index
 		g.Go(func() error {
@@ -785,7 +787,8 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: writeQuorum})
+
 	for index := range disks {
 		index := index
 		g.Go(func() error {
@@ -856,24 +859,30 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	// Initialize list of errors.
 	var delObjErrs = make([][]error, len(storageDisks))
 
-	var wg sync.WaitGroup
+	g := errgroup.New(errgroup.Opts{Total: len(storageDisks), FailFactor: 10, Quorum: getWriteQuorum(len(storageDisks))})
 	// Remove versions in bulk for each disk
-	for index, disk := range storageDisks {
-		wg.Add(1)
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
+	for i, d := range storageDisks {
+		index := i
+		disk := d
+		g.Go(func() error {
 			if disk == nil {
 				delObjErrs[index] = make([]error, len(versions))
 				for i := range versions {
 					delObjErrs[index][i] = errDiskNotFound
 				}
-				return
+				return errDiskNotFound
 			}
 			delObjErrs[index] = disk.DeleteVersions(ctx, bucket, versions)
-		}(index, disk)
+			for _, e := range delObjErrs[index] {
+				if e != nil {
+					return e
+				}
+			}
+			return nil
+		}, index)
 	}
 
-	wg.Wait()
+	g.Wait()
 
 	// Reduce errors for each object
 	for objIndex := range objects {

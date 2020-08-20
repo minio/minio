@@ -74,12 +74,12 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 // Migrates backend format of local disks.
 func formatErasureMigrateLocalEndpoints(endpoints Endpoints) error {
 	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
+	for index := range endpoints {
 		index := index
 		g.Go(func() error {
+			if !endpoints[index].IsLocal {
+				return nil
+			}
 			epPath := endpoints[index].Path
 			err := formatErasureMigrate(epPath)
 			if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -99,12 +99,12 @@ func formatErasureMigrateLocalEndpoints(endpoints Endpoints) error {
 // Cleans up tmp directory of local disks.
 func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 	g := errgroup.WithNErrs(len(endpoints))
-	for index, endpoint := range endpoints {
-		if !endpoint.IsLocal {
-			continue
-		}
+	for index := range endpoints {
 		index := index
 		g.Go(func() error {
+			if !endpoints[index].IsLocal {
+				return nil
+			}
 			epPath := endpoints[index].Path
 			// Need to move temporary objects left behind from previous run of minio
 			// server to a unique directory under `minioMetaTmpBucket-old` to clean

@@ -407,7 +407,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			}
 			err = erasure.Heal(ctx, readers, writers, partSize)
 			closeBitrotReaders(readers)
-			closeBitrotWriters(writers)
+			closeBitrotWriters(writers, true)
 			if err != nil {
 				return result, toObjectErr(err, bucket, object)
 			}

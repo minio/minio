@@ -55,6 +55,10 @@ func (p *xlStorageDiskIDCheck) Healing() bool {
 	return p.storage.Healing()
 }
 
+func (p *xlStorageDiskIDCheck) Latency() int64 {
+	return p.storage.Latency()
+}
+
 func (p *xlStorageDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err

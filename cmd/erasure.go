@@ -124,7 +124,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		}
 	}
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, MinWaitTime: 10 * time.Second})
 	for index := range disks {
 		index := index
 		g.Go(func() error {

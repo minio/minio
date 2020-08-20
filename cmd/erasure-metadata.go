@@ -280,7 +280,7 @@ func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Tim
 func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) ([]StorageAPI, error) {
 	ignoredErr := []error{errFileNotFound}
 
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: quorum})
 
 	// Rename file on all underlying storage disks.
 	for index := range disks {
@@ -309,7 +309,7 @@ func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry
 
 // writeUniqueFileInfo - writes unique `xl.meta` content for each disk concurrently.
 func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix string, files []FileInfo, quorum int) ([]StorageAPI, error) {
-	g := errgroup.WithNErrs(len(disks))
+	g := errgroup.New(errgroup.Opts{Total: len(disks), FailFactor: 10, Quorum: quorum})
 
 	// Start writing `xl.meta` to all disks in parallel.
 	for index := range disks {

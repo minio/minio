@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"path"
+	"sort"
 	"sync"
 
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -88,7 +89,7 @@ func (er erasureObjects) getLoadBalancedNDisks(ndisks int) (newDisks []StorageAP
 	return
 }
 
-// getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
+// getLoadBalancedDisks - fetches load balanced (by latency) disk slice.
 // ensures to skip disks if they are not healing and online.
 func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 	disks := er.getDisks()
@@ -139,8 +140,19 @@ func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 		}
 	}
 
-	// Return disks which have maximum disk usage common.
-	return newDisks[max]
+	// Having disks which have maximum disk usage common
+	// resort them by their latencies
+	disks = newDisks[max]
+	sort.Slice(disks, func(i, j int) bool {
+		switch {
+		case disks[i] == nil || disks[i].Latency() < 0:
+			return false
+		case disks[j] == nil || disks[j].Latency() < 0:
+			return true
+		}
+		return disks[i].Latency() < disks[j].Latency()
+	})
+	return disks
 }
 
 // This function does the following check, suppose
@@ -167,7 +179,7 @@ func (er erasureObjects) parentDirIsObject(ctx context.Context, bucket, parent s
 func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (ok bool) {
 	storageDisks := er.getDisks()
 
-	g := errgroup.WithNErrs(len(storageDisks))
+	g := errgroup.New(errgroup.Opts{Total: len(storageDisks), FailFactor: 10, Quorum: len(storageDisks)/2 + 1, ValidErrs: []error{errFileNotFound}})
 
 	for index := range storageDisks {
 		index := index

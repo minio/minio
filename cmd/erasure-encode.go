@@ -20,53 +20,51 @@ import (
 	"context"
 	"io"
 
-	"sync"
-
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // Writes in parallel to writers
 type parallelWriter struct {
 	writers     []io.Writer
 	writeQuorum int
-	errs        []error
 }
 
 // Write writes data to writers in parallel.
 func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
-	var wg sync.WaitGroup
-
+	g := errgroup.New(errgroup.Opts{Total: len(p.writers), FailFactor: 20, Quorum: p.writeQuorum})
 	for i := range p.writers {
-		if p.writers[i] == nil {
-			p.errs[i] = errDiskNotFound
-			continue
-		}
-
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			_, p.errs[i] = p.writers[i].Write(blocks[i])
-			if p.errs[i] != nil {
-				p.writers[i] = nil
+		i := i
+		g.Go(func() error {
+			if p.writers[i] == nil {
+				return errDiskNotFound
 			}
-		}(i)
+
+			_, err := p.writers[i].Write(blocks[i])
+			return err
+		}, i)
 	}
-	wg.Wait()
+
+	errs := g.Wait()
 
 	// If nilCount >= p.writeQuorum, we return nil. This is because HealFile() uses
 	// CreateFile with p.writeQuorum=1 to accommodate healing of single disk.
 	// i.e if we do no return here in such a case, reduceWriteQuorumErrs() would
 	// return a quorum error to HealFile().
 	nilCount := 0
-	for _, err := range p.errs {
+	for i, err := range errs {
 		if err == nil {
 			nilCount++
+		} else {
+			p.writers[i] = nil
 		}
+
 	}
 	if nilCount >= p.writeQuorum {
 		return nil
 	}
-	return reduceWriteQuorumErrs(ctx, p.errs, objectOpIgnoredErrs, p.writeQuorum)
+
+	return reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, p.writeQuorum)
 }
 
 // Encode reads from the reader, erasure-encodes the data and writes to the writers.
@@ -74,7 +72,6 @@ func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer
 	writer := &parallelWriter{
 		writers:     writers,
 		writeQuorum: quorum,
-		errs:        make([]error, len(writers)),
 	}
 
 	for {

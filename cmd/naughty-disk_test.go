@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,6 +68,10 @@ func (d *naughtyDisk) Hostname() string {
 
 func (d *naughtyDisk) Healing() bool {
 	return d.disk.Healing()
+}
+
+func (d *naughtyDisk) Latency() int64 {
+	return d.disk.Latency()
 }
 
 func (d *naughtyDisk) Close() (err error) {

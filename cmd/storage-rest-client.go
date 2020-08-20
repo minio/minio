@@ -119,6 +119,8 @@ type storageRESTClient struct {
 	diskID     string
 
 	diskInfoCache timedValue
+
+	latency latency
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -211,6 +213,42 @@ func (client *storageRESTClient) GetDiskID() (string, error) {
 
 func (client *storageRESTClient) SetDiskID(id string) {
 	client.diskID = id
+}
+
+func (client *storageRESTClient) Latency() (ret int64) {
+	now := time.Now()
+	val, timestamp := client.latency.load()
+	if now.Sub(timestamp) < time.Minute {
+		return val
+	}
+
+	errCh := make(chan error)
+	go func() {
+		_, err := client.ReadAll(context.TODO(), minioMetaTmpBucket, formatConfigFile)
+		errCh <- err
+		close(errCh)
+	}()
+
+	var (
+		latency    int64
+		updateTime time.Time
+	)
+
+	select {
+	case err := <-errCh:
+		updateTime = time.Now()
+		if err == nil {
+			latency = int64(updateTime.Sub(now))
+		} else {
+			latency = -1
+		}
+	case <-time.NewTimer(5 * time.Second).C:
+		updateTime = time.Now()
+		latency = -1
+	}
+
+	client.latency.store(latency, updateTime)
+	return latency
 }
 
 // DiskInfo - fetch disk information for a remote disk.

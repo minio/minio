@@ -39,6 +39,10 @@ type StorageAPI interface {
 	Healing() bool // Returns if disk is healing.
 
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
+
+	// Lower is better
+	Latency() int64
+
 	CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)
 
 	// Volume operations.
