@@ -588,31 +588,6 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	}
 }
 
-// AddRemoteTarget - adds event rules map, HTTP/PeerRPC client target to bucket name.
-func (sys *NotificationSys) AddRemoteTarget(bucketName string, target event.Target, rulesMap event.RulesMap) error {
-	if err := sys.targetList.Add(target); err != nil {
-		return err
-	}
-
-	sys.Lock()
-	targetMap := sys.bucketRemoteTargetRulesMap[bucketName]
-	if targetMap == nil {
-		targetMap = make(map[event.TargetID]event.RulesMap)
-	}
-
-	rulesMap = rulesMap.Clone()
-	targetMap[target.ID()] = rulesMap
-	sys.bucketRemoteTargetRulesMap[bucketName] = targetMap
-
-	rulesMap = rulesMap.Clone()
-	rulesMap.Add(sys.bucketRulesMap[bucketName])
-	sys.bucketRulesMap[bucketName] = rulesMap
-
-	sys.Unlock()
-
-	return nil
-}
-
 // Loads notification policies for all buckets into NotificationSys.
 func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
 	for _, bucket := range buckets {
@@ -634,7 +609,7 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 }
 
 // Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
-func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
@@ -657,13 +632,13 @@ func (sys *NotificationSys) Init(buckets []BucketInfo, objAPI ObjectLayer) error
 			if res.Err != nil {
 				reqInfo := &logger.ReqInfo{}
 				reqInfo.AppendTags("targetID", res.ID.Name)
-				ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-				logger.LogOnceIf(ctx, res.Err, res.ID)
+				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID)
 			}
 		}
 	}()
 
-	return sys.load(buckets, objAPI)
+	go logger.LogIf(ctx, sys.load(buckets, objAPI))
+	return nil
 }
 
 // AddRulesMap - adds rules map for bucket name.

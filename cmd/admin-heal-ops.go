@@ -502,13 +502,12 @@ func (h *healSequence) isQuitting() bool {
 // check if the heal sequence has ended
 func (h *healSequence) hasEnded() bool {
 	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	// background heal never ends
 	if h.clientToken == bgHealingUUID {
 		return false
 	}
-	ended := len(h.currentStatus.Items) == 0 || h.currentStatus.Summary == healStoppedStatus || h.currentStatus.Summary == healFinishedStatus
-	h.mutex.RUnlock()
-	return ended
+	return len(h.currentStatus.Items) == 0 || h.currentStatus.Summary == healStoppedStatus || h.currentStatus.Summary == healFinishedStatus
 }
 
 // stops the heal sequence - safe to call multiple times.
