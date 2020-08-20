@@ -315,7 +315,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}
-		logger.FatalIf(globalNotificationSys.Init(buckets, newObject), "Unable to initialize notification system")
+		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
 	if globalEtcdClient != nil {
