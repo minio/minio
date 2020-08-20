@@ -149,15 +149,27 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		meta.EncryptionConfigXML = configData
 	case bucketTaggingConfig:
 		meta.TaggingConfigXML = configData
-	case objectLockConfig:
-		meta.ObjectLockConfigXML = configData
-	case bucketVersioningConfig:
-		meta.VersioningConfigXML = configData
 	case bucketQuotaConfigFile:
 		meta.QuotaConfigJSON = configData
+	case objectLockConfig:
+		if !globalIsErasure && !globalIsDistErasure {
+			return NotImplemented{}
+		}
+		meta.ObjectLockConfigXML = configData
+	case bucketVersioningConfig:
+		if !globalIsErasure && !globalIsDistErasure {
+			return NotImplemented{}
+		}
+		meta.VersioningConfigXML = configData
 	case bucketReplicationConfig:
+		if !globalIsErasure && !globalIsDistErasure {
+			return NotImplemented{}
+		}
 		meta.ReplicationConfigXML = configData
 	case bucketTargetsFile:
+		if !globalIsErasure && !globalIsDistErasure {
+			return NotImplemented{}
+		}
 		meta.BucketTargetsConfigJSON = configData
 	default:
 		return fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
