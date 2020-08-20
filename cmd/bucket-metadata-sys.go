@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
@@ -176,6 +177,13 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 // If no metadata exists errConfigNotFound is returned and a new metadata is returned.
 // Only a shallow copy is returned, so referenced data should not be modified,
 // but can be replaced atomically.
+//
+// This function should only be used with
+// - GetBucketInfo
+// - ListBuckets
+// - ListBucketsHeal (only in case of erasure coding mode)
+// For all other bucket specific metadata, use the relevant
+// calls implemented specifically for each of those features.
 func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
 	if globalIsGateway || bucket == minioMetaBucket {
 		return newBucketMetadata(bucket), errConfigNotFound
@@ -397,8 +405,9 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 		return nil
 	}
 
-	// Load PolicySys once during boot.
-	return sys.load(ctx, buckets, objAPI)
+	// Load bucket metadata sys in background
+	go logger.LogIf(ctx, sys.load(ctx, buckets, objAPI))
+	return nil
 }
 
 // concurrently load bucket metadata to speed up loading bucket metadata.
