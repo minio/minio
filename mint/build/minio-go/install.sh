@@ -22,6 +22,5 @@ if [ -z "$MINIO_GO_VERSION" ]; then
 fi
 
 test_run_dir="$MINT_RUN_CORE_DIR/minio-go"
-(git clone https://github.com/minio/minio-go && cd minio-go && git checkout --quiet "tags/$MINIO_GO_VERSION")
-GO111MODULE=on CGO_ENABLED=0 go build -o "$test_run_dir/minio-go" "minio-go/functional_tests.go"
-rm -rf minio-go
+curl -sL -o "${test_run_dir}/main.go" "https://raw.githubusercontent.com/minio/minio-go/${MINIO_GO_VERSION}/functional_tests.go"
+(cd "$test_run_dir" && GO111MODULE=on CGO_ENABLED=0 go build -o minio-go main.go)

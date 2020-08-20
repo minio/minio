@@ -16,4 +16,4 @@
 #
 
 test_run_dir="$MINT_RUN_CORE_DIR/healthcheck"
-GO111MODULE=on go build -o "$test_run_dir/healthcheck" "$test_run_dir/healthcheck.go"
+(cd "$test_run_dir" && GO111MODULE=on CGO_ENABLED=0 go build)

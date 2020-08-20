@@ -97,7 +97,7 @@ function run_test()
         fi
         ## Show error.log when status is empty or not "FAIL".
         ## This may happen when test run failed without providing logs.
-        if [ "$jq_rv" -ne 0 ] || [ -z "$status" ] || ([ "$status" != "FAIL" ] && [ "$status" != "fail" ]); then
+        if [ "$jq_rv" -ne 0 ] || [ -z "$status" ] || { [ "$status" != "FAIL" ] && [ "$status" != "fail" ]; }; then
             cat "$BASE_LOG_DIR/$sdk_name/$ERROR_FILE"
         else
             jq . <<<"$entry"
@@ -157,10 +157,13 @@ function main()
     sdks=( "$@" )
 
     if [ "$#" -eq 0 ]; then
-        sdks=( $(ls "$TESTS_DIR") )
+        cd "$TESTS_DIR" || exit
+        sdks=(*)
+        cd .. || exit
     fi
 
     for sdk in "${sdks[@]}"; do
+        sdk=$(basename "$sdk")
         run_list=( "${run_list[@]}" "$TESTS_DIR/$sdk" )
     done
 
