@@ -11,7 +11,7 @@ require (
 	github.com/Shopify/sarama v1.24.1
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
-	github.com/aws/aws-sdk-go v1.20.21
+	github.com/aws/aws-sdk-go v1.33.0
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/beevik/ntp v0.2.0
 	github.com/cespare/xxhash/v2 v2.1.1
@@ -33,6 +33,7 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.5-0.20200711200521-98cb6bf42e08
 	github.com/gorilla/rpc v1.2.0
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.10.3
@@ -63,7 +64,7 @@ require (
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.4.0+incompatible
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
