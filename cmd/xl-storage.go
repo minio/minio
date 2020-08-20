@@ -45,7 +45,6 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/mountinfo"
 )
 
 const (
@@ -97,7 +96,7 @@ type xlStorage struct {
 
 	globalSync bool
 
-	diskMount bool // indicates if the path is an actual mount.
+	rootDisk bool
 
 	diskID string
 
@@ -240,6 +239,11 @@ func newXLStorage(path string, hostname string) (*xlStorage, error) {
 		return nil, err
 	}
 
+	rootDisk, err := disk.IsRootDisk(path)
+	if err != nil {
+		return nil, err
+	}
+
 	p := &xlStorage{
 		diskPath: path,
 		hostname: hostname,
@@ -250,13 +254,13 @@ func newXLStorage(path string, hostname string) (*xlStorage, error) {
 			},
 		},
 		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
-		diskMount:  mountinfo.IsLikelyMountPoint(path),
 		// Allow disk usage crawler to run with up to 2 concurrent
 		// I/O ops, if and when activeIOCount reaches this
 		// value disk usage routine suspends the crawler
 		// and waits until activeIOCount reaches below this threshold.
 		maxActiveIOCount: 3,
 		ctx:              GlobalContext,
+		rootDisk:         rootDisk,
 	}
 
 	// Success.
@@ -412,16 +416,11 @@ func (s *xlStorage) DiskInfo() (info DiskInfo, err error) {
 		return info, err
 	}
 
-	rootDisk, err := disk.IsRootDisk(s.diskPath)
-	if err != nil {
-		return info, err
-	}
-
 	info = DiskInfo{
 		Total:     di.Total,
 		Free:      di.Free,
 		Used:      di.Total - di.Free,
-		RootDisk:  rootDisk,
+		RootDisk:  s.rootDisk,
 		MountPath: s.diskPath,
 	}
 
@@ -873,6 +872,14 @@ func (s *xlStorage) WalkVersions(volume, dirPath, marker string, recursive bool,
 		return nil, err
 	}
 
+	// Fast exit track to check if we are listing an object with
+	// a trailing slash, this will avoid to list the object content.
+	if HasSuffix(dirPath, SlashSeparator) {
+		if st, err := os.Stat(pathJoin(volumeDir, dirPath, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
+			return nil, errFileNotFound
+		}
+	}
+
 	// buffer channel matches the S3 ListObjects implementation
 	ch = make(chan FileInfoVersions, maxObjectList)
 	go func() {
@@ -894,6 +901,8 @@ func (s *xlStorage) WalkVersions(volume, dirPath, marker string, recursive bool,
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) {
 				fiv = FileInfoVersions{
+					Volume: volume,
+					Name:   walkResult.entry,
 					Versions: []FileInfo{
 						{
 							Volume: volume,
@@ -947,6 +956,14 @@ func (s *xlStorage) Walk(volume, dirPath, marker string, recursive bool, endWalk
 			return nil, errFaultyDisk
 		}
 		return nil, err
+	}
+
+	// Fast exit track to check if we are listing an object with
+	// a trailing slash, this will avoid to list the object content.
+	if HasSuffix(dirPath, SlashSeparator) {
+		if st, err := os.Stat(pathJoin(volumeDir, dirPath, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
+			return nil, errFileNotFound
+		}
 	}
 
 	// buffer channel matches the S3 ListObjects implementation

@@ -37,7 +37,7 @@ MinIO Gateway comes with an embedded web based object browser. Point your web br
 ### Configure `mc`
 
 ```
-mc config host add mynas http://gateway-ip:9000 access_key secret_key
+mc alias set mynas http://gateway-ip:9000 access_key secret_key
 ```
 
 ### List buckets on nas

@@ -191,14 +191,7 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			// TLS hardening
 			PreferServerCipherSuites: true,
 			MinVersion:               tls.VersionTLS12,
-			// Do not edit the next line, protos priority is kept
-			// on purpose in this manner for HTTP 2.0, we would
-			// still like HTTP 2.0 clients to negotiate connection
-			// to server if needed but by default HTTP 1.1 is
-			// expected. We need to change this in future
-			// when we wish to go back to HTTP 2.0 as default
-			// priority for HTTP protocol negotiation.
-			NextProtos: []string{"http/1.1", "h2"},
+			NextProtos:               []string{"h2", "http/1.1"},
 		}
 		tlsConfig.GetCertificate = getCert
 	}

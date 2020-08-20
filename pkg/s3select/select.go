@@ -26,6 +26,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
@@ -334,6 +335,9 @@ func (s3Select *S3Select) Open(getReader func(offset, length int64) (io.ReadClos
 		}
 		return nil
 	case parquetFormat:
+		if !strings.EqualFold(os.Getenv("MINIO_API_SELECT_PARQUET"), "on") {
+			return errors.New("parquet format parsing not enabled on server")
+		}
 		var err error
 		s3Select.recordReader, err = parquet.NewReader(getReader, &s3Select.Input.ParquetArgs)
 		return err

@@ -29,7 +29,10 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 const (
@@ -46,40 +49,16 @@ func RegisterGlobalCAs(CAs *x509.CertPool) {
 	globalRootCAs = CAs
 }
 
-func isValidEnvScheme(scheme string) bool {
-	switch scheme {
-	case webEnvScheme:
-		fallthrough
-	case webEnvSchemeSecure:
-		return true
-	}
-	return false
-}
-
 var (
 	hostKeys = regexp.MustCompile("^(https?://)(.*?):(.*?)@(.*?)$")
 )
 
-func fetchEnvHTTP(envKey string, u *url.URL) (string, error) {
-	switch u.Scheme {
-	case webEnvScheme:
-		u.Scheme = "http"
-	case webEnvSchemeSecure:
-		u.Scheme = "https"
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	var (
-		username, password string
-	)
-
-	envURL := u.String()
+func fetchHTTPConstituentParts(u *url.URL) (username string, password string, envURL string, err error) {
+	envURL = u.String()
 	if hostKeys.MatchString(envURL) {
 		parts := hostKeys.FindStringSubmatch(envURL)
 		if len(parts) != 5 {
-			return "", errors.New("invalid arguments")
+			return "", "", "", errors.New("invalid arguments")
 		}
 		username = parts[2]
 		password = parts[3]
@@ -90,15 +69,50 @@ func fetchEnvHTTP(envKey string, u *url.URL) (string, error) {
 		username = u.User.Username()
 		password, _ = u.User.Password()
 	}
+	return username, password, envURL, nil
+}
+
+func getEnvValueFromHTTP(urlStr, envKey string) (string, error) {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return "", err
+	}
+
+	switch u.Scheme {
+	case webEnvScheme:
+		u.Scheme = "http"
+	case webEnvSchemeSecure:
+		u.Scheme = "https"
+	default:
+		return "", errors.New("invalid arguments")
+	}
+
+	username, password, envURL, err := fetchHTTPConstituentParts(u)
+	if err != nil {
+		return "", err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, envURL+"?key="+envKey, nil)
 	if err != nil {
 		return "", err
 	}
 
-	if username != "" && password != "" {
-		req.SetBasicAuth(username, password)
+	claims := &jwt.StandardClaims{
+		ExpiresAt: int64(15 * time.Minute),
+		Issuer:    username,
+		Subject:   envKey,
 	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
+	ss, err := token.SignedString([]byte(password))
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+ss)
 
 	clnt := &http.Client{
 		Transport: &http.Transport{
@@ -149,19 +163,21 @@ func Environ() []string {
 // to fetch ENV values for the env value from a remote server.
 func LookupEnv(key string) (string, bool) {
 	v, ok := os.LookupEnv(key)
-	if ok {
-		u, err := url.Parse(v)
+	if ok && strings.HasPrefix(v, webEnvScheme) {
+		// If env value starts with `env*://`
+		// continue to parse and fetch from remote
+		var err error
+		v, err = getEnvValueFromHTTP(strings.TrimSpace(v), key)
 		if err != nil {
-			return v, true
+			// fallback to cached value if-any.
+			return os.LookupEnv("_" + key)
 		}
-		if !isValidEnvScheme(u.Scheme) {
-			return v, true
-		}
-		v, err = fetchEnvHTTP(key, u)
-		if err != nil {
-			return "", false
-		}
+		// Set the ENV value to _env value,
+		// this value is a fallback in-case of
+		// server restarts when webhook server
+		// is down.
+		os.Setenv("_"+key, v)
 		return v, true
 	}
-	return "", false
+	return v, ok
 }

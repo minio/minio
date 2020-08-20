@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	nodes := make([]string, 4) // list of node IP addrs or hostname with ports.
+	nodes := make([]string, 5) // list of node IP addrs or hostname with ports.
 	for i := range nodes {
 		nodes[i] = fmt.Sprintf("127.0.0.1:%d", i+12345)
 	}

@@ -479,7 +479,7 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 			if gerr := decoder.Decode(&fi); gerr != nil {
 				// Upon error return
 				if gerr != io.EOF {
-					logger.LogIf(context.Background(), gerr)
+					logger.LogIf(GlobalContext, gerr)
 				}
 				return
 			}
@@ -664,7 +664,6 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		tlsConfig = &tls.Config{
 			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,
-			NextProtos: []string{"http/1.1"}, // Force http1.1
 		}
 	}
 

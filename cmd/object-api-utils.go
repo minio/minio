@@ -400,6 +400,15 @@ func (o ObjectInfo) IsCompressedOK() (bool, error) {
 	return true, fmt.Errorf("unknown compression scheme: %s", scheme)
 }
 
+// GetActualETag - returns the actual etag of the stored object
+// decrypts SSE objects.
+func (o ObjectInfo) GetActualETag(h http.Header) string {
+	if !crypto.IsEncrypted(o.UserDefined) {
+		return o.ETag
+	}
+	return getDecryptedETag(h, o, false)
+}
+
 // GetActualSize - returns the actual size of the stored object
 func (o ObjectInfo) GetActualSize() (int64, error) {
 	if crypto.IsEncrypted(o.UserDefined) {

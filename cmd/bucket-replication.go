@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	miniogo "github.com/minio/minio-go/v7"
@@ -75,8 +76,23 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	return false, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
+func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, permErr APIErrorCode) bool {
+	if permErr != ErrNone {
+		return false
+	}
+	return mustReplicater(ctx, r, bucket, object, meta, replStatus)
+}
+
 // mustReplicate returns true if object meets replication criteria.
 func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) bool {
+	if s3Err := isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
+		return false
+	}
+	return mustReplicater(ctx, r, bucket, object, meta, replStatus)
+}
+
+// mustReplicater returns true if object meets replication criteria.
+func mustReplicater(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) bool {
 	if globalIsGateway {
 		return false
 	}
@@ -84,9 +100,6 @@ func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, 
 		replStatus = rs
 	}
 	if replication.StatusType(replStatus) == replication.Replica {
-		return false
-	}
-	if s3Err := isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
 		return false
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
@@ -110,9 +123,11 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 		if k == xhttp.AmzBucketReplicationStatus {
 			continue
 		}
+		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			continue
+		}
 		meta[k] = v
 	}
-
 	tag, err := tags.ParseObjectTags(objInfo.UserTags)
 	if err != nil {
 		return
@@ -130,6 +145,7 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 		ReplicationVersionID: objInfo.VersionID,
 		ReplicationStatus:    miniogo.ReplicationStatusReplica,
 		ReplicationMTime:     objInfo.ModTime,
+		ReplicationETag:      objInfo.ETag,
 	}
 	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
 		rmode := miniogo.RetentionMode(mode)
@@ -218,4 +234,27 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 	}, ObjectOptions{VersionID: objInfo.VersionID}); err != nil {
 		logger.LogIf(ctx, err)
 	}
+}
+
+// filterReplicationStatusMetadata filters replication status metadata for COPY
+func filterReplicationStatusMetadata(metadata map[string]string) map[string]string {
+	// Copy on write
+	dst := metadata
+	var copied bool
+	delKey := func(key string) {
+		if _, ok := metadata[key]; !ok {
+			return
+		}
+		if !copied {
+			dst = make(map[string]string, len(metadata))
+			for k, v := range metadata {
+				dst[k] = v
+			}
+			copied = true
+		}
+		delete(dst, key)
+	}
+
+	delKey(xhttp.AmzBucketReplicationStatus)
+	return dst
 }

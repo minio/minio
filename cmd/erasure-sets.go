@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -137,7 +138,14 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 	if err != nil {
 		// Close the internal connection to avoid connection leaks.
 		disk.Close()
-		return nil, nil, err
+		if errors.Is(err, errUnformattedDisk) {
+			info, derr := disk.DiskInfo()
+			if derr != nil && info.RootDisk {
+				return nil, nil, fmt.Errorf("Disk: %s returned %w but its a root disk refusing to use it",
+					disk, derr) // make sure to '%w' to wrap the error
+			}
+		}
+		return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
 
 	return disk, format, nil
@@ -1274,19 +1282,20 @@ func isTestSetup(infos []DiskInfo, errs []error) bool {
 	return rootDiskCount == len(infos)
 }
 
-func getHealDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
+func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []error) {
 	infos := make([]DiskInfo, len(storageDisks))
 	g := errgroup.WithNErrs(len(storageDisks))
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
-			var err error
-			if storageDisks[index] != nil {
-				infos[index], err = storageDisks[index].DiskInfo()
-			} else {
-				// Disk not found.
-				err = errDiskNotFound
+			if errs[index] != nil && errs[index] != errUnformattedDisk {
+				return errs[index]
 			}
+			if storageDisks[index] == nil {
+				return errDiskNotFound
+			}
+			var err error
+			infos[index], err = storageDisks[index].DiskInfo()
 			return err
 		}, index)
 	}
@@ -1294,19 +1303,18 @@ func getHealDiskInfos(storageDisks []StorageAPI) ([]DiskInfo, []error) {
 }
 
 // Mark root disks as down so as not to heal them.
-func markRootDisksAsDown(storageDisks []StorageAPI) {
-	infos, errs := getHealDiskInfos(storageDisks)
-	if isTestSetup(infos, errs) {
-		// Allow healing of disks for test setups to help with testing.
-		return
-	}
-	for i := range storageDisks {
-		if infos[i].RootDisk {
-			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
-			// defective drive we should not heal a path on the root disk.
-			logger.Info("Disk `%s` is a root disk. Please ensure the disk is mounted properly, refusing to use root disk.",
-				storageDisks[i].String())
-			storageDisks[i] = nil
+func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
+	var infos []DiskInfo
+	infos, errs = getHealDiskInfos(storageDisks, errs)
+	if !isTestSetup(infos, errs) {
+		for i := range storageDisks {
+			if storageDisks[i] != nil && infos[i].RootDisk {
+				// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
+				// defective drive we should not heal a path on the root disk.
+				logger.Info("Disk `%s` is a root disk. Please ensure the disk is mounted properly, refusing to use root disk.",
+					storageDisks[i].String())
+				storageDisks[i] = nil
+			}
 		}
 	}
 }
@@ -1326,12 +1334,13 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		}
 	}(storageDisks)
 
-	markRootDisksAsDown(storageDisks)
-
 	formats, sErrs := loadFormatErasureAll(storageDisks, true)
 	if err = checkFormatErasureValues(formats, s.drivesPerSet); err != nil {
 		return madmin.HealResultItem{}, err
 	}
+
+	// Mark all root disks down
+	markRootDisksAsDown(storageDisks, sErrs)
 
 	// Prepare heal-result
 	res = madmin.HealResultItem{
