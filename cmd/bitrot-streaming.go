@@ -139,7 +139,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 	b.h.Write(buf)
 
 	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
-		err := &errHashMismatch{fmt.Sprintf("Disk: %s returned - hashes do not match expected %s, got %s",
+		err := &errHashMismatch{fmt.Sprintf("Disk: %s - content hash does not match - expected %s, got %s",
 			b.disk, hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil)))}
 		logger.LogIf(GlobalContext, err)
 		return 0, err

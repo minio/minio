@@ -70,7 +70,7 @@ func (b *wholeBitrotReader) ReadAt(buf []byte, offset int64) (n int, err error) 
 	if b.buf == nil {
 		b.buf = make([]byte, b.tillOffset-offset)
 		if _, err := b.disk.ReadFile(b.volume, b.filePath, offset, b.buf, b.verifier); err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("Disk: %s return %w", b.disk, err))
+			logger.LogIf(GlobalContext, fmt.Errorf("Disk: %s returned %w", b.disk, err))
 			return 0, err
 		}
 	}
