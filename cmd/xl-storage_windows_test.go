@@ -55,20 +55,20 @@ func TestUNCPaths(t *testing.T) {
 	}
 
 	// Create volume to use in conjunction with other StorageAPI's file API(s)
-	err = fs.MakeVol(context.TODO(), "voldir")
+	err = fs.MakeVol(context.Background(), "voldir")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for i, test := range testCases {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			err = fs.AppendFile(context.TODO(), "voldir", test.objName, []byte("hello"))
+			err = fs.AppendFile(context.Background(), "voldir", test.objName, []byte("hello"))
 			if err != nil && test.pass {
 				t.Error(err)
 			} else if err == nil && !test.pass {
 				t.Error(err)
 			}
-			fs.DeleteFile(context.TODO(), "voldir", test.objName)
+			fs.DeleteFile(context.Background(), "voldir", test.objName)
 		})
 	}
 }
@@ -90,19 +90,19 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	}
 
 	// Create volume to use in conjunction with other StorageAPI's file API(s)
-	err = fs.MakeVol(context.TODO(), "voldir")
+	err = fs.MakeVol(context.Background(), "voldir")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = fs.AppendFile(context.TODO(), "voldir", "/file", []byte("hello"))
+	err = fs.AppendFile(context.Background(), "voldir", "/file", []byte("hello"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Try to create a file that includes a file in its path components.
 	// In *nix, this returns syscall.ENOTDIR while in windows we receive the following error.
-	err = fs.AppendFile(context.TODO(), "voldir", "/file/obj1", []byte("hello"))
+	err = fs.AppendFile(context.Background(), "voldir", "/file/obj1", []byte("hello"))
 	if err != errFileAccessDenied {
 		t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 	}

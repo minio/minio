@@ -134,7 +134,7 @@ func newErasureTestSetup(dataBlocks int, parityBlocks int, blockSize int64) (*er
 		if err != nil {
 			return nil, err
 		}
-		err = disks[i].MakeVol(context.TODO(), "testbucket")
+		err = disks[i].MakeVol(context.Background(), "testbucket")
 		if err != nil {
 			return nil, err
 		}

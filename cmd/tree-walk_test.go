@@ -68,14 +68,14 @@ func TestFilterMatchingPrefix(t *testing.T) {
 // Helper function that creates a volume and files in it.
 func createNamespace(disk StorageAPI, volume string, files []string) error {
 	// Make a volume.
-	err := disk.MakeVol(context.TODO(), volume)
+	err := disk.MakeVol(context.Background(), volume)
 	if err != nil {
 		return err
 	}
 
 	// Create files.
 	for _, file := range files {
-		err = disk.AppendFile(context.TODO(), volume, file, []byte{})
+		err = disk.AppendFile(context.Background(), volume, file, []byte{})
 		if err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func createNamespace(disk StorageAPI, volume string, files []string) error {
 // disks - used for doing disk.ListDir()
 func listDirFactory(ctx context.Context, disk StorageAPI) ListDirFunc {
 	return func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
-		entries, err := disk.ListDir(context.TODO(), volume, dirPath, -1)
+		entries, err := disk.ListDir(context.Background(), volume, dirPath, -1)
 		if err != nil {
 			return false, nil
 		}
