@@ -317,12 +317,12 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 				rs = nil
 			}
 			// fill cache in the background for range GET requests
-			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
+			bReader, bErr := c.GetObjectNInfoFn(GlobalContext, bucket, object, rs, h, lockType, opts)
 			if bErr != nil {
 				return
 			}
 			defer bReader.Close()
-			oi, _, _, err := dcache.statRange(ctx, bucket, object, rs)
+			oi, _, _, err := dcache.statRange(GlobalContext, bucket, object, rs)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
 				// use a new context to avoid locker prematurely timing out operation when the GetObjectNInfo returns.
@@ -640,15 +640,15 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	if err == nil {
 		go func() {
 			// fill cache in the background
-			bReader, bErr := c.GetObjectNInfoFn(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+			bReader, bErr := c.GetObjectNInfoFn(GlobalContext, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
 			if bErr != nil {
 				return
 			}
 			defer bReader.Close()
-			oi, _, err := dcache.Stat(ctx, bucket, object)
+			oi, _, err := dcache.Stat(GlobalContext, bucket, object)
 			// avoid cache overwrite if another background routine filled cache
 			if err != nil || oi.ETag != bReader.ObjInfo.ETag {
-				dcache.Put(ctx, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
+				dcache.Put(GlobalContext, bucket, object, bReader, bReader.ObjInfo.Size, nil, ObjectOptions{UserDefined: getMetadata(bReader.ObjInfo)}, false)
 			}
 		}()
 	}
