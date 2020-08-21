@@ -87,7 +87,7 @@ func createNamespace(disk StorageAPI, volume string, files []string) error {
 // disks - used for doing disk.ListDir()
 func listDirFactory(ctx context.Context, disk StorageAPI) ListDirFunc {
 	return func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
-		entries, err := disk.ListDir(context.Background(), volume, dirPath, -1)
+		entries, err := disk.ListDir(ctx, volume, dirPath, -1)
 		if err != nil {
 			return false, nil
 		}

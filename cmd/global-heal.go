@@ -133,7 +133,7 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, dr
 				continue
 			}
 
-			entryCh, err := disk.WalkVersions(context.TODO(), bucket.Name, "", "", true, ctx.Done())
+			entryCh, err := disk.WalkVersions(ctx, bucket.Name, "", "", true, ctx.Done())
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
