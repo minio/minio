@@ -32,11 +32,11 @@ func (a badDisk) String() string {
 	return "bad-disk"
 }
 
-func (a badDisk) AppendFile(volume string, path string, buf []byte) error {
+func (a badDisk) AppendFile(ctx context.Context, volume string, path string, buf []byte) error {
 	return errFaultyDisk
 }
 
-func (a badDisk) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (a badDisk) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	return nil, errFaultyDisk
 }
 
@@ -44,7 +44,7 @@ func (a badDisk) UpdateBloomFilter(ctx context.Context, oldest, current uint64) 
 	return nil, errFaultyDisk
 }
 
-func (a badDisk) CreateFile(volume, path string, size int64, reader io.Reader) error {
+func (a badDisk) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
 	return errFaultyDisk
 }
 
@@ -195,7 +195,7 @@ func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, 
 			if disk == OfflineDisk {
 				continue
 			}
-			disk.DeleteFile("testbucket", "object")
+			disk.DeleteFile(context.TODO(), "testbucket", "object")
 			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		_, err := erasure.Encode(context.Background(), bytes.NewReader(content), writers, buffer, erasure.dataBlocks+1)

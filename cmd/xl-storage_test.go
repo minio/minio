@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io"
@@ -126,12 +127,12 @@ func newXLStorageTestSetup() (*xlStorageDiskIDCheck, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	err = storage.MakeVol(minioMetaBucket)
+	err = storage.MakeVol(context.Background(), minioMetaBucket)
 	if err != nil {
 		return nil, "", err
 	}
 	// Create a sample format.json file
-	err = storage.WriteAll(minioMetaBucket, formatConfigFile, bytes.NewBufferString(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"da017d62-70e3-45f1-8a1a-587707e69ad1","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","da017d62-70e3-45f1-8a1a-587707e69ad1","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`))
+	err = storage.WriteAll(context.Background(), minioMetaBucket, formatConfigFile, bytes.NewBufferString(`{"version":"1","format":"xl","id":"592a41c2-b7cc-4130-b883-c4b5cb15965b","xl":{"version":"3","this":"da017d62-70e3-45f1-8a1a-587707e69ad1","sets":[["e07285a6-8c73-4962-89c6-047fb939f803","33b8d431-482d-4376-b63c-626d229f0a29","cff6513a-4439-4dc1-bcaa-56c9e880c352","da017d62-70e3-45f1-8a1a-587707e69ad1","9c9f21d5-1f15-4737-bce6-835faa0d9626","0a59b346-1424-4fc2-9fa2-a2e80541d0c1","7924a3dc-b69a-4971-9a2e-014966d6aebb","4d2b8dd9-4e48-444b-bdca-c89194b26042"]],"distributionAlgo":"CRCMOD"}}`))
 	if err != nil {
 		return nil, "", err
 	}
@@ -262,16 +263,16 @@ func TestXLStorageReadAll(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Create files for the test cases.
-	if err = xlStorage.MakeVol("exists"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "exists"); err != nil {
 		t.Fatalf("Unable to create a volume \"exists\", %s", err)
 	}
-	if err = xlStorage.AppendFile("exists", "as-directory/as-file", []byte("Hello, World")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "exists", "as-directory/as-file", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-directory/as-file\", %s", err)
 	}
-	if err = xlStorage.AppendFile("exists", "as-file", []byte("Hello, World")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "exists", "as-file", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-file\", %s", err)
 	}
-	if err = xlStorage.AppendFile("exists", "as-file-parent", []byte("Hello, World")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "exists", "as-file-parent", []byte("Hello, World")); err != nil {
 		t.Fatalf("Unable to create a file \"as-file-parent\", %s", err)
 	}
 
@@ -328,7 +329,7 @@ func TestXLStorageReadAll(t *testing.T) {
 	var dataRead []byte
 	// Run through all the test cases and validate for ReadAll.
 	for i, testCase := range testCases {
-		dataRead, err = xlStorage.ReadAll(testCase.volume, testCase.path)
+		dataRead, err = xlStorage.ReadAll(context.Background(), testCase.volume, testCase.path)
 		if err != testCase.err {
 			t.Fatalf("TestXLStorage %d: Expected err \"%s\", got err \"%s\"", i+1, testCase.err, err)
 		}
@@ -434,7 +435,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err := xlStorage.MakeVol(testCase.volName); err != testCase.expectedErr {
+		if err := xlStorage.MakeVol(context.Background(), testCase.volName); err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -470,7 +471,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		if err := xlStorageNew.MakeVol("test-vol"); err != errDiskAccessDenied {
+		if err := xlStorageNew.MakeVol(context.Background(), "test-vol"); err != errDiskAccessDenied {
 			t.Fatalf("expected: %s, got: %s", errDiskAccessDenied, err)
 		}
 	}
@@ -486,7 +487,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = xlStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -530,7 +531,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = xlStorage.DeleteVol(testCase.volName, false); err != testCase.expectedErr {
+		if err = xlStorage.DeleteVol(context.Background(), testCase.volName, false); err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -569,7 +570,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		if err = xlStorageNew.DeleteVol("mybucket", false); err != errDiskAccessDenied {
+		if err = xlStorageNew.DeleteVol(context.Background(), "mybucket", false); err != errDiskAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
@@ -583,7 +584,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.DeleteVol("Del-Vol", false)
+	err = xlStorageDeletedStorage.DeleteVol(context.Background(), "Del-Vol", false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -599,7 +600,7 @@ func TestXLStorageStatVol(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = xlStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -626,7 +627,7 @@ func TestXLStorageStatVol(t *testing.T) {
 
 	for i, testCase := range testCases {
 		var volInfo VolInfo
-		volInfo, err = xlStorage.StatVol(testCase.volName)
+		volInfo, err = xlStorage.StatVol(context.Background(), testCase.volName)
 		if err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage case : %d, Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
@@ -648,7 +649,7 @@ func TestXLStorageStatVol(t *testing.T) {
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	_, err = xlStorageDeletedStorage.StatVol("Stat vol")
+	_, err = xlStorageDeletedStorage.StatVol(context.Background(), "Stat vol")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -664,18 +665,18 @@ func TestXLStorageListVols(t *testing.T) {
 
 	var volInfos []VolInfo
 	// TestXLStorage empty list vols.
-	if volInfos, err = xlStorage.ListVols(); err != nil {
+	if volInfos, err = xlStorage.ListVols(context.Background()); err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
 	} else if len(volInfos) != 1 {
 		t.Fatalf("expected: one entry, got: %s", volInfos)
 	}
 
 	// TestXLStorage non-empty list vols.
-	if err = xlStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	volInfos, err = xlStorage.ListVols()
+	volInfos, err = xlStorage.ListVols(context.Background())
 	if err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
 	}
@@ -696,7 +697,7 @@ func TestXLStorageListVols(t *testing.T) {
 	// removing the path and simulating disk failure
 	os.RemoveAll(path)
 	// should fail with errDiskNotFound.
-	if _, err = xlStorage.ListVols(); err != errDiskNotFound {
+	if _, err = xlStorage.ListVols(context.Background()); err != errDiskNotFound {
 		t.Errorf("Expected to fail with \"%s\", but instead failed with \"%s\"", errDiskNotFound, err)
 	}
 }
@@ -718,13 +719,13 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 	// removing the disk, used to recreate disk not found error.
 	os.RemoveAll(diskPath)
 	// Setup test environment.
-	if err = xlStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
-	if err = xlStorage.AppendFile("success-vol", "abc/def/ghi/success-file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "success-vol", "abc/def/ghi/success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err = xlStorage.AppendFile("success-vol", "abc/xyz/ghi/success-file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "success-vol", "abc/xyz/ghi/success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -783,7 +784,7 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 
 	for i, testCase := range testCases {
 		var dirList []string
-		dirList, err = xlStorage.ListDir(testCase.srcVol, testCase.srcPath, -1)
+		dirList, err = xlStorage.ListDir(context.Background(), testCase.srcVol, testCase.srcPath, -1)
 		if err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
@@ -816,14 +817,14 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
+		if err = xlStorageNew.DeleteFile(context.Background(), "mybucket", "myobject"); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.DeleteFile("del-vol", "my-file")
+	err = xlStorageDeletedStorage.DeleteFile(context.Background(), "del-vol", "my-file")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -846,17 +847,17 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	// removing the disk, used to recreate disk not found error.
 	os.RemoveAll(diskPath)
 	// Setup test environment.
-	if err = xlStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
-	if err = xlStorage.AppendFile("success-vol", "success-file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "success-vol", "success-file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err = xlStorage.MakeVol("no-permissions"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "no-permissions"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err.Error())
 	}
-	if err = xlStorage.AppendFile("no-permissions", "dir/file", []byte("Hello, world")); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), "no-permissions", "dir/file", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err.Error())
 	}
 	// Parent directory must have write permissions, this is read + execute.
@@ -915,7 +916,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = xlStorage.DeleteFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
+		if err = xlStorage.DeleteFile(context.Background(), testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
 			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -940,14 +941,14 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.DeleteFile("mybucket", "myobject"); err != errFileAccessDenied {
+		if err = xlStorageNew.DeleteFile(context.Background(), "mybucket", "myobject"); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.DeleteFile("del-vol", "my-file")
+	err = xlStorageDeletedStorage.DeleteFile(context.Background(), "del-vol", "my-file")
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -964,7 +965,7 @@ func TestXLStorageReadFile(t *testing.T) {
 
 	volume := "success-vol"
 	// Setup test environment.
-	if err = xlStorage.MakeVol(volume); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), volume); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -1048,7 +1049,7 @@ func TestXLStorageReadFile(t *testing.T) {
 	v := NewBitrotVerifier(SHA256, getSHA256Sum([]byte("hello, world")))
 	// Create test files for further reading.
 	for i, appendFile := range appendFiles {
-		err = xlStorage.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
+		err = xlStorage.AppendFile(context.Background(), volume, appendFile.fileName, []byte("hello, world"))
 		if err != appendFile.expectedErr {
 			t.Fatalf("Creating file failed: %d %#v, expected: %s, got: %s", i+1, appendFile, appendFile.expectedErr, err)
 		}
@@ -1057,7 +1058,7 @@ func TestXLStorageReadFile(t *testing.T) {
 	{
 		buf := make([]byte, 5)
 		// Test for negative offset.
-		if _, err = xlStorage.ReadFile(volume, "myobject", -1, buf, v); err == nil {
+		if _, err = xlStorage.ReadFile(context.Background(), volume, "myobject", -1, buf, v); err == nil {
 			t.Fatalf("expected: error, got: <nil>")
 		}
 	}
@@ -1067,7 +1068,7 @@ func TestXLStorageReadFile(t *testing.T) {
 		var n int64
 		// Common read buffer.
 		var buf = make([]byte, testCase.bufSize)
-		n, err = xlStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, v)
+		n, err = xlStorage.ReadFile(context.Background(), testCase.volume, testCase.fileName, testCase.offset, buf, v)
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -1140,7 +1141,7 @@ func TestXLStorageReadFile(t *testing.T) {
 
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		if _, err = xlStoragePermStorage.ReadFile("mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
+		if _, err = xlStoragePermStorage.ReadFile(context.Background(), "mybucket", "myobject", 0, buf, v); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
@@ -1182,7 +1183,7 @@ func TestXLStorageReadFileWithVerify(t *testing.T) {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	if err = xlStorage.MakeVol(volume); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), volume); err != nil {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create volume %s: %v", volume, err)
 	}
@@ -1191,7 +1192,7 @@ func TestXLStorageReadFileWithVerify(t *testing.T) {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create generate random data: %v", err)
 	}
-	if err = xlStorage.AppendFile(volume, object, data); err != nil {
+	if err = xlStorage.AppendFile(context.Background(), volume, object, data); err != nil {
 		os.RemoveAll(path)
 		t.Fatalf("Unable to create object: %v", err)
 	}
@@ -1204,7 +1205,7 @@ func TestXLStorageReadFileWithVerify(t *testing.T) {
 		}
 
 		buffer := make([]byte, test.length)
-		n, err := xlStorage.ReadFile(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
+		n, err := xlStorage.ReadFile(context.Background(), volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
 
 		switch {
 		case err == nil && test.expError != nil:
@@ -1227,7 +1228,7 @@ func TestXLStorageFormatFileChange(t *testing.T) {
 	}
 	defer os.RemoveAll(path)
 
-	if err = xlStorage.MakeVol(volume); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), volume); err != nil {
 		t.Fatalf("MakeVol failed with %s", err)
 	}
 
@@ -1236,7 +1237,7 @@ func TestXLStorageFormatFileChange(t *testing.T) {
 		t.Fatalf("ioutil.WriteFile failed with %s", err)
 	}
 
-	err = xlStorage.MakeVol(volume)
+	err = xlStorage.MakeVol(context.Background(), volume)
 	if err != errVolumeExists {
 		t.Fatalf("MakeVol expected to fail with errDiskNotFound but failed with %s", err)
 	}
@@ -1252,7 +1253,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = xlStorage.MakeVol("success-vol"); err != nil {
+	if err = xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
@@ -1282,7 +1283,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = xlStorage.AppendFile("success-vol", testCase.fileName, []byte("hello, world")); err != testCase.expectedErr {
+		if err = xlStorage.AppendFile(context.Background(), "success-vol", testCase.fileName, []byte("hello, world")); err != testCase.expectedErr {
 			t.Errorf("Case: %d, expected: %s, got: %s", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -1308,14 +1309,14 @@ func TestXLStorageAppendFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStoragePermStorage.AppendFile("mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
+		if err = xlStoragePermStorage.AppendFile(context.Background(), "mybucket", "myobject", []byte("hello, world")); err != errFileAccessDenied {
 			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
 
 	// TestXLStorage case with invalid volume name.
 	// A valid volume name should be atleast of size 3.
-	err = xlStorage.AppendFile("bn", "yes", []byte("hello, world"))
+	err = xlStorage.AppendFile(context.Background(), "bn", "yes", []byte("hello, world"))
 	if err != errVolumeNotFound {
 		t.Fatalf("expected: \"Invalid argument error\", got: \"%s\"", err)
 	}
@@ -1331,32 +1332,32 @@ func TestXLStorageRenameFile(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err := xlStorage.MakeVol("src-vol"); err != nil {
+	if err := xlStorage.MakeVol(context.Background(), "src-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	if err := xlStorage.MakeVol("dest-vol"); err != nil {
+	if err := xlStorage.MakeVol(context.Background(), "dest-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	if err := xlStorage.AppendFile("src-vol", "file1", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "src-vol", "file1", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err := xlStorage.AppendFile("src-vol", "file2", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "src-vol", "file2", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err := xlStorage.AppendFile("src-vol", "file3", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "src-vol", "file3", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err := xlStorage.AppendFile("src-vol", "file4", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "src-vol", "file4", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err := xlStorage.AppendFile("src-vol", "file5", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "src-vol", "file5", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
-	if err := xlStorage.AppendFile("src-vol", "path/to/file1", []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "src-vol", "path/to/file1", []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -1533,7 +1534,7 @@ func TestXLStorageRenameFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err := xlStorage.RenameFile(testCase.srcVol, testCase.srcPath, testCase.destVol, testCase.destPath); err != testCase.expectedErr {
+		if err := xlStorage.RenameFile(context.Background(), testCase.srcVol, testCase.srcPath, testCase.destVol, testCase.destPath); err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage %d:  Expected the error to be : \"%v\", got: \"%v\".", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -1549,15 +1550,15 @@ func TestXLStorageCheckFile(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err := xlStorage.MakeVol("success-vol"); err != nil {
+	if err := xlStorage.MakeVol(context.Background(), "success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	if err := xlStorage.AppendFile("success-vol", pathJoin("success-file", xlStorageFormatFile), []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "success-vol", pathJoin("success-file", xlStorageFormatFile), []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
-	if err := xlStorage.AppendFile("success-vol", pathJoin("path/to/success-file", xlStorageFormatFile), []byte("Hello, world")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), "success-vol", pathJoin("path/to/success-file", xlStorageFormatFile), []byte("Hello, world")); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -1611,7 +1612,7 @@ func TestXLStorageCheckFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err := xlStorage.CheckFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
+		if err := xlStorage.CheckFile(context.Background(), testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
 			t.Fatalf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -1634,7 +1635,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 
 	volName := "testvol"
 	fileName := "testfile"
-	if err := xlStorage.MakeVol(volName); err != nil {
+	if err := xlStorage.MakeVol(context.Background(), volName); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1648,7 +1649,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	h := algo.New()
 	h.Write(data)
 	hashBytes := h.Sum(nil)
-	if err := xlStorage.WriteAll(volName, fileName, bytes.NewBuffer(data)); err != nil {
+	if err := xlStorage.WriteAll(context.Background(), volName, fileName, bytes.NewBuffer(data)); err != nil {
 		t.Fatal(err)
 	}
 	if err := xlStorage.storage.bitrotVerify(pathJoin(path, volName, fileName), size, algo, hashBytes, 0); err != nil {
@@ -1656,7 +1657,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	}
 
 	// 2) Whole-file bitrot check on corrupted file
-	if err := xlStorage.AppendFile(volName, fileName, []byte("a")); err != nil {
+	if err := xlStorage.AppendFile(context.Background(), volName, fileName, []byte("a")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1670,7 +1671,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 		t.Fatal("expected to fail bitrot check")
 	}
 
-	if err := xlStorage.DeleteFile(volName, fileName); err != nil {
+	if err := xlStorage.DeleteFile(context.Background(), volName, fileName); err != nil {
 		t.Fatal(err)
 	}
 

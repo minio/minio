@@ -99,7 +99,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 	delFunc = func(entryPath string) error {
 		if !HasSuffix(entryPath, SlashSeparator) {
 			// Delete the file entry.
-			err := storage.DeleteFile(volume, entryPath)
+			err := storage.DeleteFile(context.TODO(), volume, entryPath)
 			if err != errDiskNotFound && err != errUnformattedDisk {
 				logger.LogIf(ctx, err)
 			}
@@ -107,7 +107,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
-		entries, err := storage.ListDir(volume, entryPath, -1)
+		entries, err := storage.ListDir(context.TODO(), volume, entryPath, -1)
 		// If entryPath prefix never existed, safe to ignore.
 		if err == errFileNotFound {
 			return nil
@@ -120,7 +120,7 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 
 		// Entry path is empty, just delete it.
 		if len(entries) == 0 {
-			err = storage.DeleteFile(volume, entryPath)
+			err = storage.DeleteFile(context.TODO(), volume, entryPath)
 			if err != errDiskNotFound && err != errUnformattedDisk {
 				logger.LogIf(ctx, err)
 			}

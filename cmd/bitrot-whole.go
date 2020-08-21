@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"hash"
 	"io"
 
@@ -33,7 +34,7 @@ type wholeBitrotWriter struct {
 }
 
 func (b *wholeBitrotWriter) Write(p []byte) (int, error) {
-	err := b.disk.AppendFile(b.volume, b.filePath, p)
+	err := b.disk.AppendFile(context.TODO(), b.volume, b.filePath, p)
 	if err != nil {
 		logger.LogIf(GlobalContext, err)
 		return 0, err
@@ -68,7 +69,7 @@ type wholeBitrotReader struct {
 func (b *wholeBitrotReader) ReadAt(buf []byte, offset int64) (n int, err error) {
 	if b.buf == nil {
 		b.buf = make([]byte, b.tillOffset-offset)
-		if _, err := b.disk.ReadFile(b.volume, b.filePath, offset, b.buf, b.verifier); err != nil {
+		if _, err := b.disk.ReadFile(context.TODO(), b.volume, b.filePath, offset, b.buf, b.verifier); err != nil {
 			ctx := GlobalContext
 			logger.GetReqInfo(ctx).AppendTags("disk", b.disk.String())
 			logger.LogIf(ctx, err)

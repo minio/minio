@@ -48,7 +48,7 @@ func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string
 		}
 		index := index
 		g.Go(func() error {
-			err := storageDisks[index].MakeVol(pathJoin(bucket, object))
+			err := storageDisks[index].MakeVol(ctx, pathJoin(bucket, object))
 			if err != nil && err != errVolumeExists {
 				return err
 			}
@@ -361,7 +361,7 @@ func (er erasureObjects) getObjectInfoDir(ctx context.Context, bucket, object st
 		index := index
 		g.Go(func() error {
 			// Check if 'prefix' is an object on this 'disk'.
-			entries, err := storageDisks[index].ListDir(bucket, object, 1)
+			entries, err := storageDisks[index].ListDir(ctx, bucket, object, 1)
 			if err != nil {
 				return err
 			}
@@ -458,7 +458,7 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				_ = disks[index].RenameFile(dstBucket, dstEntry, srcBucket, srcEntry)
+				_ = disks[index].RenameFile(context.TODO(), dstBucket, dstEntry, srcBucket, srcEntry)
 			}
 			return nil
 		}, index)
@@ -478,7 +478,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, da
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			if err := disks[index].RenameData(srcBucket, srcEntry, dataDir, dstBucket, dstEntry); err != nil {
+			if err := disks[index].RenameData(ctx, srcBucket, srcEntry, dataDir, dstBucket, dstEntry); err != nil {
 				if !IsErrIgnored(err, ignoredErr...) {
 					return err
 				}
@@ -503,7 +503,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, da
 			ug.Go(func() error {
 				// Undo all the partial rename operations.
 				if errs[index] == nil {
-					_ = disks[index].RenameData(dstBucket, dstEntry, dataDir, srcBucket, srcEntry)
+					_ = disks[index].RenameData(context.Background(), dstBucket, dstEntry, dataDir, srcBucket, srcEntry)
 				}
 				return nil
 			}, index)
@@ -531,7 +531,7 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			if err := disks[index].RenameFile(srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
+			if err := disks[index].RenameFile(ctx, srcBucket, srcEntry, dstBucket, dstEntry); err != nil {
 				if !IsErrIgnored(err, ignoredErr...) {
 					return err
 				}
@@ -775,7 +775,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			err := disks[index].DeleteVersion(bucket, object, fi)
+			err := disks[index].DeleteVersion(ctx, bucket, object, fi)
 			if err != nil && err != errVolumeNotFound {
 				return err
 			}
@@ -890,7 +890,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			delObjErrs[index] = disk.DeleteVersions(bucket, versions)
+			delObjErrs[index] = disk.DeleteVersions(ctx, bucket, versions)
 		}(index, disk)
 	}
 

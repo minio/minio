@@ -119,7 +119,7 @@ type storageRESTClient struct {
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
-func (client *storageRESTClient) call(method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
+func (client *storageRESTClient) call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
 	if !client.IsOnline() {
 		return nil, errDiskNotFound
 	}
@@ -127,7 +127,7 @@ func (client *storageRESTClient) call(method string, values url.Values, body io.
 		values = make(url.Values)
 	}
 	values.Set(storageRESTDiskID, client.diskID)
-	respBody, err := client.restClient.Call(method, values, body, length)
+	respBody, err := client.restClient.Call(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
@@ -157,9 +157,7 @@ func (client *storageRESTClient) Hostname() string {
 
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	b := cache.serialize()
-	respBody, err := client.call(storageRESTMethodCrawlAndGetDataUsage,
-		url.Values{},
-		bytes.NewBuffer(b), int64(len(b)))
+	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, bytes.NewBuffer(b), int64(len(b)))
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return cache, err
@@ -185,8 +183,8 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 // DiskInfo - fetch disk information for a remote disk.
-func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
-	respBody, err := client.call(storageRESTMethodDiskInfo, nil, nil, -1)
+func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+	respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -202,81 +200,81 @@ func (client *storageRESTClient) DiskInfo() (info DiskInfo, err error) {
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
-func (client *storageRESTClient) MakeVolBulk(volumes ...string) (err error) {
+func (client *storageRESTClient) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolumes, strings.Join(volumes, ","))
-	respBody, err := client.call(storageRESTMethodMakeVolBulk, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodMakeVolBulk, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // MakeVol - create a volume on a remote disk.
-func (client *storageRESTClient) MakeVol(volume string) (err error) {
+func (client *storageRESTClient) MakeVol(ctx context.Context, volume string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
-	respBody, err := client.call(storageRESTMethodMakeVol, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodMakeVol, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // ListVols - List all volumes on a remote disk.
-func (client *storageRESTClient) ListVols() (volinfo []VolInfo, err error) {
-	respBody, err := client.call(storageRESTMethodListVols, nil, nil, -1)
+func (client *storageRESTClient) ListVols(ctx context.Context) (vols []VolInfo, err error) {
+	respBody, err := client.call(ctx, storageRESTMethodListVols, nil, nil, -1)
 	if err != nil {
 		return
 	}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&volinfo)
-	return volinfo, err
+	err = gob.NewDecoder(respBody).Decode(&vols)
+	return vols, err
 }
 
 // StatVol - get volume info over the network.
-func (client *storageRESTClient) StatVol(volume string) (volInfo VolInfo, err error) {
+func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vol VolInfo, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
-	respBody, err := client.call(storageRESTMethodStatVol, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodStatVol, values, nil, -1)
 	if err != nil {
 		return
 	}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&volInfo)
-	return volInfo, err
+	err = gob.NewDecoder(respBody).Decode(&vol)
+	return vol, err
 }
 
 // DeleteVol - Deletes a volume over the network.
-func (client *storageRESTClient) DeleteVol(volume string, forceDelete bool) (err error) {
+func (client *storageRESTClient) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	if forceDelete {
 		values.Set(storageRESTForceDelete, "true")
 	}
-	respBody, err := client.call(storageRESTMethodDeleteVol, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodDeleteVol, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // AppendFile - append to a file.
-func (client *storageRESTClient) AppendFile(volume, path string, buffer []byte) error {
+func (client *storageRESTClient) AppendFile(ctx context.Context, volume string, path string, buf []byte) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	reader := bytes.NewReader(buffer)
-	respBody, err := client.call(storageRESTMethodAppendFile, values, reader, -1)
+	reader := bytes.NewReader(buf)
+	respBody, err := client.call(ctx, storageRESTMethodAppendFile, values, reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
-func (client *storageRESTClient) CreateFile(volume, path string, length int64, r io.Reader) error {
+func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(storageRESTMethodCreateFile, values, ioutil.NopCloser(r), length)
+	values.Set(storageRESTLength, strconv.Itoa(int(size)))
+	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, ioutil.NopCloser(reader), size)
 	defer http.DrainBody(respBody)
 	return err
 }
 
-func (client *storageRESTClient) WriteMetadata(volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -286,12 +284,12 @@ func (client *storageRESTClient) WriteMetadata(volume, path string, fi FileInfo)
 		return err
 	}
 
-	respBody, err := client.call(storageRESTMethodWriteMetadata, values, &reader, -1)
+	respBody, err := client.call(ctx, storageRESTMethodWriteMetadata, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
-func (client *storageRESTClient) DeleteVersion(volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -301,33 +299,33 @@ func (client *storageRESTClient) DeleteVersion(volume, path string, fi FileInfo)
 		return err
 	}
 
-	respBody, err := client.call(storageRESTMethodDeleteVersion, values, &buffer, -1)
+	respBody, err := client.call(ctx, storageRESTMethodDeleteVersion, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // WriteAll - write all data to a file.
-func (client *storageRESTClient) WriteAll(volume, path string, reader io.Reader) error {
+func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(storageRESTMethodWriteAll, values, reader, -1)
+	respBody, err := client.call(ctx, storageRESTMethodWriteAll, values, reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // CheckFile - stat a file metadata.
-func (client *storageRESTClient) CheckFile(volume, path string) error {
+func (client *storageRESTClient) CheckFile(ctx context.Context, volume string, path string) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(storageRESTMethodCheckFile, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodCheckFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // CheckParts - stat all file parts.
-func (client *storageRESTClient) CheckParts(volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -337,32 +335,32 @@ func (client *storageRESTClient) CheckParts(volume, path string, fi FileInfo) er
 		return err
 	}
 
-	respBody, err := client.call(storageRESTMethodCheckParts, values, &reader, -1)
+	respBody, err := client.call(ctx, storageRESTMethodCheckParts, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
-func (client *storageRESTClient) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
+func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTSrcVolume, srcVolume)
 	values.Set(storageRESTSrcPath, srcPath)
 	values.Set(storageRESTDataDir, dataDir)
 	values.Set(storageRESTDstVolume, dstVolume)
 	values.Set(storageRESTDstPath, dstPath)
-	respBody, err := client.call(storageRESTMethodRenameData, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodRenameData, values, nil, -1)
 	defer http.DrainBody(respBody)
 
 	return err
 }
 
-func (client *storageRESTClient) ReadVersion(volume, path, versionID string) (fi FileInfo, err error) {
+func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
 
-	respBody, err := client.call(storageRESTMethodReadVersion, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {
 		return fi, err
 	}
@@ -373,11 +371,11 @@ func (client *storageRESTClient) ReadVersion(volume, path, versionID string) (fi
 }
 
 // ReadAll - reads all contents of a file.
-func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
+func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, path string) ([]byte, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(storageRESTMethodReadAll, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodReadAll, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -386,13 +384,13 @@ func (client *storageRESTClient) ReadAll(volume, path string) ([]byte, error) {
 }
 
 // ReadFileStream - returns a reader for the requested file.
-func (client *storageRESTClient) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (client *storageRESTClient) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(storageRESTMethodReadFileStream, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodReadFileStream, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -400,12 +398,12 @@ func (client *storageRESTClient) ReadFileStream(volume, path string, offset, len
 }
 
 // ReadFile - reads section of a file.
-func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (int64, error) {
+func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (int64, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
-	values.Set(storageRESTLength, strconv.Itoa(len(buffer)))
+	values.Set(storageRESTLength, strconv.Itoa(len(buf)))
 	if verifier != nil {
 		values.Set(storageRESTBitrotAlgo, verifier.algorithm.String())
 		values.Set(storageRESTBitrotHash, hex.EncodeToString(verifier.sum))
@@ -413,21 +411,21 @@ func (client *storageRESTClient) ReadFile(volume, path string, offset int64, buf
 		values.Set(storageRESTBitrotAlgo, "")
 		values.Set(storageRESTBitrotHash, "")
 	}
-	respBody, err := client.call(storageRESTMethodReadFile, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodReadFile, values, nil, -1)
 	if err != nil {
 		return 0, err
 	}
 	defer http.DrainBody(respBody)
-	n, err := io.ReadFull(respBody, buffer)
+	n, err := io.ReadFull(respBody, buf)
 	return int64(n), err
 }
 
-func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (client *storageRESTClient) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
-	respBody, err := client.call(storageRESTMethodWalkSplunk, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodWalkSplunk, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -456,13 +454,13 @@ func (client *storageRESTClient) WalkSplunk(volume, dirPath, marker string, endW
 	return ch, nil
 }
 
-func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
+func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(storageRESTMethodWalkVersions, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodWalkVersions, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -493,13 +491,13 @@ func (client *storageRESTClient) WalkVersions(volume, dirPath, marker string, re
 	return ch, nil
 }
 
-func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (client *storageRESTClient) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTMarkerPath, marker)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(storageRESTMethodWalk, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodWalk, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -529,12 +527,12 @@ func (client *storageRESTClient) Walk(volume, dirPath, marker string, recursive 
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
-	respBody, err := client.call(storageRESTMethodListDir, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -544,17 +542,17 @@ func (client *storageRESTClient) ListDir(volume, dirPath string, count int) (ent
 }
 
 // DeleteFile - deletes a file.
-func (client *storageRESTClient) DeleteFile(volume, path string) error {
+func (client *storageRESTClient) DeleteFile(ctx context.Context, volume string, path string) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(storageRESTMethodDeleteFile, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodDeleteFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
 // DeleteVersions - deletes list of specified versions if present
-func (client *storageRESTClient) DeleteVersions(volume string, versions []FileInfo) (errs []error) {
+func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
 	if len(versions) == 0 {
 		return errs
 	}
@@ -571,7 +569,7 @@ func (client *storageRESTClient) DeleteVersions(volume string, versions []FileIn
 
 	errs = make([]error, len(versions))
 
-	respBody, err := client.call(storageRESTMethodDeleteVersions, values, &buffer, -1)
+	respBody, err := client.call(ctx, storageRESTMethodDeleteVersions, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		for i := range errs {
@@ -604,18 +602,18 @@ func (client *storageRESTClient) DeleteVersions(volume string, versions []FileIn
 }
 
 // RenameFile - renames a file.
-func (client *storageRESTClient) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	values := make(url.Values)
 	values.Set(storageRESTSrcVolume, srcVolume)
 	values.Set(storageRESTSrcPath, srcPath)
 	values.Set(storageRESTDstVolume, dstVolume)
 	values.Set(storageRESTDstPath, dstPath)
-	respBody, err := client.call(storageRESTMethodRenameFile, values, nil, -1)
+	respBody, err := client.call(ctx, storageRESTMethodRenameFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
 
-func (client *storageRESTClient) VerifyFile(volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
@@ -625,7 +623,7 @@ func (client *storageRESTClient) VerifyFile(volume, path string, fi FileInfo) er
 		return err
 	}
 
-	respBody, err := client.call(storageRESTMethodVerifyFile, values, &reader, -1)
+	respBody, err := client.call(ctx, storageRESTMethodVerifyFile, values, &reader, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return err
@@ -673,7 +671,7 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
 		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, storageRESTMethodHealth, nil, nil, -1)
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound

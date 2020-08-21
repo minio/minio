@@ -139,7 +139,7 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 		// Close the internal connection to avoid connection leaks.
 		disk.Close()
 		if errors.Is(err, errUnformattedDisk) {
-			info, derr := disk.DiskInfo()
+			info, derr := disk.DiskInfo(context.TODO())
 			if derr != nil && info.RootDisk {
 				return nil, nil, fmt.Errorf("Disk: %s returned %w but its a root disk refusing to use it",
 					disk, derr) // make sure to '%w' to wrap the error
@@ -976,7 +976,7 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.WalkVersions(bucket, prefix, marker, recursive, endWalkCh)
+			entryCh, err := disk.WalkVersions(ctx, bucket, prefix, marker, recursive, endWalkCh)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				// Disk walk returned error, ignore it.
@@ -1007,7 +1007,7 @@ func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, mark
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, endWalkCh)
+			entryCh, err := disk.Walk(ctx, bucket, prefix, marker, recursive, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -1037,7 +1037,7 @@ func (s *erasureSets) startSplunkMergeWalksN(ctx context.Context, bucket, prefix
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.WalkSplunk(bucket, prefix, marker, endWalkCh)
+			entryCh, err := disk.WalkSplunk(ctx, bucket, prefix, marker, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -1295,7 +1295,7 @@ func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []er
 				return errDiskNotFound
 			}
 			var err error
-			infos[index], err = storageDisks[index].DiskInfo()
+			infos[index], err = storageDisks[index].DiskInfo(context.TODO())
 			return err
 		}, index)
 	}
