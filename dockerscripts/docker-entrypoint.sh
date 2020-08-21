@@ -39,6 +39,23 @@ docker_secrets_env() {
     fi
 }
 
+## Look for hashicorp vault secrets in default location.
+vault_secrets_env() {
+    ACCESS_KEY_FILE="/vault/secrets/$MINIO_ACCESS_KEY_FILE"
+    SECRET_KEY_FILE="/vault/secrets/$MINIO_SECRET_KEY_FILE"
+
+    if [ -f "$ACCESS_KEY_FILE" ] && [ -f "$SECRET_KEY_FILE" ]; then
+        if [ -f "$ACCESS_KEY_FILE" ]; then
+            MINIO_ACCESS_KEY="$(cat "$ACCESS_KEY_FILE")"
+            export MINIO_ACCESS_KEY
+        fi
+        if [ -f "$SECRET_KEY_FILE" ]; then
+            MINIO_SECRET_KEY="$(cat "$SECRET_KEY_FILE")"
+            export MINIO_SECRET_KEY
+        fi
+    fi
+}
+
 ## Set KMS_MASTER_KEY from docker secrets if provided
 docker_kms_encryption_env() {
     KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
@@ -46,7 +63,6 @@ docker_kms_encryption_env() {
     if [ -f "$KMS_MASTER_KEY_FILE" ]; then
         MINIO_KMS_MASTER_KEY="$(cat "$KMS_MASTER_KEY_FILE")"
         export MINIO_KMS_MASTER_KEY
-
     fi
 }
 
@@ -58,7 +74,6 @@ docker_sse_encryption_env() {
     if [ -f "$SSE_MASTER_KEY_FILE" ]; then
         MINIO_SSE_MASTER_KEY="$(cat "$SSE_MASTER_KEY_FILE")"
         export MINIO_SSE_MASTER_KEY
-
     fi
 }
 
@@ -83,6 +98,7 @@ docker_switch_user() {
 
 ## Set access env from secrets if necessary.
 docker_secrets_env
+vault_secrets_env
 
 ## Set kms encryption from secrets if necessary.
 docker_kms_encryption_env

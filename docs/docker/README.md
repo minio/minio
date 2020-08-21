@@ -122,6 +122,41 @@ docker service create --name="minio-service" \
   minio/minio server /data
 ```
 
+### MinIO Custom Access and Secret Keys using HashiCorp Vault secrets with Kubernetes and Helm
+To override MinIO's auto-generated keys in Kubernetes, you may pass secret and access keys explicitly by injecting access and secret keys with [HashiCorp Vault](https://learn.hashicorp.com/collections/vault/kubernetes). MinIO server also allows regular strings as access and secret keys.
+
+Setup and create the secrets in HashiCorp Vault, e.g. by following the [official guide](https://learn.hashicorp.com/tutorials/vault/kubernetes-sidecar?in=vault/kubernetes).
+
+Add the Vault annotations to the official [MinIO Helm chart](https://helm.min.io/) to inject the secrets into the MinIO pods.
+```yaml
+podAnnotations:
+  vault.hashicorp.com/agent-inject: "true"
+  vault.hashicorp.com/agent-status: "update"
+  vault.hashicorp.com/role: "minio-app"
+  vault.hashicorp.com/agent-inject-secret-minio-access-key: "/path/to/vault/minio/keys"
+  vault.hashicorp.com/agent-inject-template-minio-access-key: |
+    {{- with secret "/path/to/vault/minio/keys" -}}
+    {{ .Data.data.access_key }}
+    {{- end -}}
+  vault.hashicorp.com/agent-inject-secret-minio-secret-key: "/path/to/vault/minio/keys"
+  vault.hashicorp.com/agent-inject-template-minio-secret-key: |
+    {{- with secret "/path/to/vault/minio/keys" -}}
+    {{ .Data.data.secret_key }}
+    {{- end -}}
+```
+
+Here, the Access Key (named `access_key` in Vault) gets injected to `/vault/secrets/minio-access-key` and the Secret Key (named `secret_key` in Vault) gets injected to `/vault/secrets/minio-secret-key` in the MinIO pods.
+
+Add the environment variables for the key files to the Helm chart and install the Helm chart as described [here](https://helm.min.io/).
+```yaml
+environment:
+  MINIO_ACCESS_KEY_FILE: "minio-access-key"
+  MINIO_SECRET_KEY_FILE: "minio-secret-key"
+```
+
+Read more about `HashiCorp Vault with Kubernetes` [here](https://learn.hashicorp.com/collections/vault/kubernetes)
+Read more about the `MinIO Helm chart` [here](https://helm.min.io/)
+
 ### Retrieving Container ID
 To use Docker commands on a specific container, you need to know the `Container ID` for that container. To get the `Container ID`, run
 
