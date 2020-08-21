@@ -26,7 +26,7 @@ minio gateway nas /shared/nasvol
 
 ### 设置`mc`
 ```
-mc config host add mynas http://gateway-ip:9000 access_key secret_key
+mc alias set mynas http://gateway-ip:9000 access_key secret_key
 ```
 
 ### 列举nas上的存储桶

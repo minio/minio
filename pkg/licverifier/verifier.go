@@ -21,6 +21,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 )
@@ -32,17 +33,19 @@ type LicenseVerifier struct {
 
 // LicenseInfo holds customer metadata present in the license key.
 type LicenseInfo struct {
-	Email           string // Email of the license key requestor
-	TeamName        string // Subnet team name
-	AccountID       int64  // Subnet account id
-	StorageCapacity int64  // Storage capacity used in TB
-	ServiceType     string // Subnet service type
+	Email           string    // Email of the license key requestor
+	TeamName        string    // Subnet team name
+	AccountID       int64     // Subnet account id
+	StorageCapacity int64     // Storage capacity used in TB
+	ServiceType     string    // Subnet service type
+	ExpiresAt       time.Time // Time of license expiry
 }
 
 // license key JSON field names
 const (
 	accountID   = "accountId"
 	sub         = "sub"
+	expiresAt   = "exp"
 	teamName    = "teamName"
 	capacity    = "capacity"
 	serviceType = "serviceType"
@@ -64,13 +67,18 @@ func NewLicenseVerifier(pemBytes []byte) (*LicenseVerifier, error) {
 // the claim values are invalid.
 func toLicenseInfo(claims jwt.MapClaims) (LicenseInfo, error) {
 	accID, ok := claims[accountID].(float64)
-	if ok && accID <= 0 {
+	if !ok || ok && accID <= 0 {
 		return LicenseInfo{}, errors.New("Invalid accountId in claims")
 	}
 	email, ok := claims[sub].(string)
 	if !ok {
 		return LicenseInfo{}, errors.New("Invalid email in claims")
 	}
+	expiryTS, ok := claims[expiresAt].(float64)
+	if !ok {
+		return LicenseInfo{}, errors.New("Invalid time of expiry in claims")
+	}
+	expiresAt := time.Unix(int64(expiryTS), 0)
 	tName, ok := claims[teamName].(string)
 	if !ok {
 		return LicenseInfo{}, errors.New("Invalid team name in claims")
@@ -89,6 +97,7 @@ func toLicenseInfo(claims jwt.MapClaims) (LicenseInfo, error) {
 		AccountID:       int64(accID),
 		StorageCapacity: int64(storageCap),
 		ServiceType:     sType,
+		ExpiresAt:       expiresAt,
 	}, nil
 
 }

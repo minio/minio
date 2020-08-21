@@ -153,8 +153,8 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	for {
 		select {
 		case evI := <-listenCh:
-			ev := evI.(event.Event)
-			if len(string(ev.EventName)) > 0 {
+			ev, ok := evI.(event.Event)
+			if ok {
 				if err := enc.Encode(struct{ Records []event.Event }{[]event.Event{ev}}); err != nil {
 					return
 				}

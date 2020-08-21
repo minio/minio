@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 )
 
@@ -48,7 +49,7 @@ func (c credentialHeader) getScope() string {
 }
 
 func getReqAccessKeyV4(r *http.Request, region string, stype serviceType) (auth.Credentials, bool, APIErrorCode) {
-	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get("X-Amz-Credential"), region, stype)
+	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get(xhttp.AmzCredential), region, stype)
 	if err != ErrNone {
 		// Strip off the Algorithm prefix.
 		v4Auth := strings.TrimPrefix(r.Header.Get("Authorization"), signV4Algorithm)
@@ -179,7 +180,7 @@ type preSignValues struct {
 //
 // verifies if any of the necessary query params are missing in the presigned request.
 func doesV4PresignParamsExist(query url.Values) APIErrorCode {
-	v4PresignQueryParams := []string{"X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Date", "X-Amz-SignedHeaders", "X-Amz-Expires"}
+	v4PresignQueryParams := []string{xhttp.AmzAlgorithm, xhttp.AmzCredential, xhttp.AmzSignature, xhttp.AmzDate, xhttp.AmzSignedHeaders, xhttp.AmzExpires}
 	for _, v4PresignQueryParam := range v4PresignQueryParams {
 		if _, ok := query[v4PresignQueryParam]; !ok {
 			return ErrInvalidQueryParams
@@ -197,7 +198,7 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 	}
 
 	// Verify if the query algorithm is supported or not.
-	if query.Get("X-Amz-Algorithm") != signV4Algorithm {
+	if query.Get(xhttp.AmzAlgorithm) != signV4Algorithm {
 		return psv, ErrInvalidQuerySignatureAlgo
 	}
 
@@ -205,20 +206,20 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 	preSignV4Values := preSignValues{}
 
 	// Save credential.
-	preSignV4Values.Credential, err = parseCredentialHeader("Credential="+query.Get("X-Amz-Credential"), region, stype)
+	preSignV4Values.Credential, err = parseCredentialHeader("Credential="+query.Get(xhttp.AmzCredential), region, stype)
 	if err != ErrNone {
 		return psv, err
 	}
 
 	var e error
 	// Save date in native time.Time.
-	preSignV4Values.Date, e = time.Parse(iso8601Format, query.Get("X-Amz-Date"))
+	preSignV4Values.Date, e = time.Parse(iso8601Format, query.Get(xhttp.AmzDate))
 	if e != nil {
 		return psv, ErrMalformedPresignedDate
 	}
 
 	// Save expires in native time.Duration.
-	preSignV4Values.Expires, e = time.ParseDuration(query.Get("X-Amz-Expires") + "s")
+	preSignV4Values.Expires, e = time.ParseDuration(query.Get(xhttp.AmzExpires) + "s")
 	if e != nil {
 		return psv, ErrMalformedExpires
 	}
@@ -233,13 +234,13 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 	}
 
 	// Save signed headers.
-	preSignV4Values.SignedHeaders, err = parseSignedHeader("SignedHeaders=" + query.Get("X-Amz-SignedHeaders"))
+	preSignV4Values.SignedHeaders, err = parseSignedHeader("SignedHeaders=" + query.Get(xhttp.AmzSignedHeaders))
 	if err != ErrNone {
 		return psv, err
 	}
 
 	// Save signature.
-	preSignV4Values.Signature, err = parseSignature("Signature=" + query.Get("X-Amz-Signature"))
+	preSignV4Values.Signature, err = parseSignature("Signature=" + query.Get(xhttp.AmzSignature))
 	if err != ErrNone {
 		return psv, err
 	}

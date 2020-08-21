@@ -181,6 +181,8 @@ func (d *dataUpdateTracker) start(ctx context.Context, drives ...string) {
 	}
 	d.load(ctx, drives...)
 	go d.startCollector(ctx)
+	// startSaver will unlock.
+	d.mu.Lock()
 	go d.startSaver(ctx, dataUpdateTrackerSaveInterval, drives)
 }
 
@@ -214,17 +216,17 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 }
 
 // startSaver will start a saver that will write d to all supplied drives at specific intervals.
+// 'd' must be write locked when started and will be unlocked.
 // The saver will save and exit when supplied context is closed.
 func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Duration, drives []string) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	var buf bytes.Buffer
-	d.mu.Lock()
 	saveNow := d.save
 	exited := make(chan struct{})
 	d.saveExited = exited
 	d.mu.Unlock()
+	t := time.NewTicker(interval)
+	defer t.Stop()
 	defer close(exited)
+	var buf bytes.Buffer
 	for {
 		var exit bool
 		select {

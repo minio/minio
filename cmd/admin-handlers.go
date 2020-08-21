@@ -1270,10 +1270,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
-
 	defer cancel()
 
-	nsLock := objectAPI.NewNSLock(deadlinedCtx, minioMetaBucket, "obd-in-progress")
+	nsLock := objectAPI.NewNSLock(ctx, minioMetaBucket, "obd-in-progress")
 	if err := nsLock.GetLock(newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return

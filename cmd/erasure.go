@@ -154,6 +154,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				UsedSpace:      info.Used,
 				AvailableSpace: info.Free,
 				UUID:           info.ID,
+				RootDisk:       info.RootDisk,
 				State:          diskErrToDriveState(err),
 			}
 			if info.Total > 0 {
@@ -175,7 +176,27 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		onlineDisks[ep]++
 	}
 
-	// Success.
+	rootDiskCount := 0
+	for _, di := range disksInfo {
+		if di.RootDisk {
+			rootDiskCount++
+		}
+	}
+
+	if len(disksInfo) == rootDiskCount {
+		// Success.
+		return disksInfo, errs, onlineDisks, offlineDisks
+	}
+
+	// Root disk should be considered offline
+	for i := range disksInfo {
+		ep := disksInfo[i].Endpoint
+		if disksInfo[i].RootDisk {
+			offlineDisks[ep]++
+			onlineDisks[ep]--
+		}
+	}
+
 	return disksInfo, errs, onlineDisks, offlineDisks
 }
 

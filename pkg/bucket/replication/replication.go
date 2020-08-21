@@ -20,6 +20,7 @@ import (
 	"encoding/xml"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -100,10 +101,10 @@ func (c Config) Validate(bucket string, sameTarget bool) error {
 		if err := r.Validate(bucket, sameTarget); err != nil {
 			return err
 		}
-		if _, ok := priorityMap[string(r.Priority)]; ok {
+		if _, ok := priorityMap[strconv.Itoa(r.Priority)]; ok {
 			return errReplicationUniquePriority
 		}
-		priorityMap[string(r.Priority)] = struct{}{}
+		priorityMap[strconv.Itoa(r.Priority)] = struct{}{}
 	}
 	return nil
 }

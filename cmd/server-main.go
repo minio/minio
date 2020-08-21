@@ -122,6 +122,11 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalRootCAs, err = certs.GetRootCAs(globalCertsCADir.Get())
 	logger.FatalIf(err, "Failed to read root CAs (%v)", err)
 
+	// Add the global public crts as part of global root CAs
+	for _, publicCrt := range globalPublicCerts {
+		globalRootCAs.AddCert(publicCrt)
+	}
+
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
@@ -224,6 +229,9 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		initAutoHeal(ctx, newObject)
 	}
 
+	// allocate dynamic timeout once before the loop
+	configLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
+
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
 	// sub-systems, make sure that we do not move the above codeblock elsewhere.
@@ -239,7 +247,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(newDynamicTimeout(3*time.Second, 3*time.Second)); err != nil {
+		if err = txnLk.GetLock(configLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -346,12 +354,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
+	if err = globalNotificationSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
 	// Initialize bucket targets sub-system.
-	if err = globalBucketTargetSys.Init(GlobalContext, buckets, newObject); err != nil {
+	if err = globalBucketTargetSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket target sub-system: %w", err)
 	}
 

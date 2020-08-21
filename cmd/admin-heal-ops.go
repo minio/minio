@@ -502,13 +502,12 @@ func (h *healSequence) isQuitting() bool {
 // check if the heal sequence has ended
 func (h *healSequence) hasEnded() bool {
 	h.mutex.RLock()
+	defer h.mutex.RUnlock()
 	// background heal never ends
 	if h.clientToken == bgHealingUUID {
 		return false
 	}
-	ended := len(h.currentStatus.Items) == 0 || h.currentStatus.Summary == healStoppedStatus || h.currentStatus.Summary == healFinishedStatus
-	h.mutex.RUnlock()
-	return ended
+	return len(h.currentStatus.Items) == 0 || h.currentStatus.Summary == healStoppedStatus || h.currentStatus.Summary == healFinishedStatus
 }
 
 // stops the heal sequence - safe to call multiple times.
@@ -876,9 +875,9 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 		if h.object != "" {
 			// Check if an object named as the objPrefix exists,
 			// and if so heal it.
-			_, err := objectAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
+			oi, err := objectAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
 			if err == nil {
-				if err = h.healObject(bucket, h.object, ""); err != nil {
+				if err = h.healObject(bucket, h.object, oi.VersionID); err != nil {
 					return err
 				}
 			}

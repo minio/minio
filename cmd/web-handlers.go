@@ -1130,9 +1130,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
 
-	retentionRequested := objectlock.IsObjectLockRetentionRequested(r.Header)
-	legalHoldRequested := objectlock.IsObjectLockLegalHoldRequested(r.Header)
-
 	putObject := objectAPI.PutObject
 	getObjectInfo := objectAPI.GetObjectInfo
 	if web.CacheAPI() != nil {
@@ -1140,20 +1137,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		getObjectInfo = web.CacheAPI().GetObjectInfo
 	}
 
-	if retentionRequested || legalHoldRequested {
-		// enforce object retention rules
-		retentionMode, retentionDate, legalHold, s3Err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
-		if s3Err == ErrNone && retentionMode != "" {
-			opts.UserDefined[xhttp.AmzObjectLockMode] = string(retentionMode)
-			opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(iso8601TimeFormat)
-		}
-		if s3Err == ErrNone && legalHold.Status != "" {
-			opts.UserDefined[xhttp.AmzObjectLockLegalHold] = string(legalHold.Status)
-		}
-		if s3Err != ErrNone {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
-			return
-		}
+	// enforce object retention rules
+	retentionMode, retentionDate, _, s3Err := checkPutObjectLockAllowed(ctx, r, bucket, object, getObjectInfo, retPerms, holdPerms)
+	if s3Err != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if retentionMode != "" {
+		opts.UserDefined[xhttp.AmzObjectLockMode] = string(retentionMode)
+		opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(iso8601TimeFormat)
 	}
 
 	objInfo, err := putObject(GlobalContext, bucket, object, pReader, opts)
@@ -1173,7 +1165,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mustReplicate {
-		defer replicateObject(context.Background(), bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+		defer replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
 			Object:       objInfo,

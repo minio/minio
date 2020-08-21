@@ -27,7 +27,7 @@ MinIO Gateway comes with an embedded web based object browser. Point your web br
 
 ### Configure `mc`
 ```
-mc config host add myazure http://gateway-ip:9000 azureaccountname azureaccountkey
+mc alias set myazure http://gateway-ip:9000 azureaccountname azureaccountkey
 ```
 
 ### List containers on Microsoft Azure

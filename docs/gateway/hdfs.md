@@ -42,7 +42,7 @@ docker run -p 9000:9000 \
 ### Configure `mc`
 
 ```
-mc config host add myhdfs http://gateway-ip:9000 access_key secret_key
+mc alias set myhdfs http://gateway-ip:9000 access_key secret_key
 ```
 
 ### List buckets on hdfs
