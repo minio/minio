@@ -46,10 +46,9 @@ type Rule struct {
 }
 
 var (
-	errInvalidRuleID           = Errorf("ID length is limited to 255 characters")
-	errEmptyRuleStatus         = Errorf("Status should not be empty")
-	errInvalidRuleStatus       = Errorf("Status must be set to either Enabled or Disabled")
-	errMissingExpirationAction = Errorf("No expiration action found")
+	errInvalidRuleID     = Errorf("ID length is limited to 255 characters")
+	errEmptyRuleStatus   = Errorf("Status should not be empty")
+	errInvalidRuleStatus = Errorf("Status must be set to either Enabled or Disabled")
 )
 
 // generates random UUID
@@ -94,10 +93,7 @@ func (r Rule) validateStatus() error {
 }
 
 func (r Rule) validateAction() error {
-	if r.Expiration == (Expiration{}) {
-		return errMissingExpirationAction
-	}
-	return nil
+	return r.Expiration.Validate()
 }
 
 func (r Rule) validateFilter() error {

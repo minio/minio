@@ -24,7 +24,7 @@ import (
 var (
 	errLifecycleInvalidDate         = Errorf("Date must be provided in ISO 8601 format")
 	errLifecycleInvalidDays         = Errorf("Days must be positive integer when used with Expiration")
-	errLifecycleInvalidExpiration   = Errorf("At least one of Days or Date should be present inside Expiration")
+	errLifecycleInvalidExpiration   = Errorf("Exactly one of Days (positive integer) or Date (positive ISO 8601 format) should be present inside Expiration.")
 	errLifecycleInvalidDeleteMarker = Errorf("Delete marker cannot be specified with Days or Date in a Lifecycle Expiration Policy")
 	errLifecycleDateNotMidnight     = Errorf("'Date' must be at midnight GMT")
 )
