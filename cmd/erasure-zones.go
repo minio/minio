@@ -1926,7 +1926,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 	for {
 		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
-			break
+			return toObjectErr(errFileNotFound, bucket, prefix)
 		}
 
 		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {

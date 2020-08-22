@@ -79,12 +79,12 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 			healDisks = append(healDisks, ep.String())
 		}
 	}
-	// FIXME:
+
 	return madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
 		HealDisks:         healDisks,
-		NextHealRound:     UTCNow(),
+		NextHealRound:     UTCNow().Add(dataCrawlStartDelay),
 	}, true
 }
 

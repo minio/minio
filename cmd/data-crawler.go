@@ -23,7 +23,6 @@ import (
 	"errors"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -422,7 +421,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			size, err := f.getSize(item)
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-			if err == errSkipFile || err == errFileNotFound {
+			if err == errSkipFile {
 				return nil
 			}
 			logger.LogIf(ctx, err)
@@ -442,6 +441,16 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
+		objAPI := newObjectLayerWithoutSafeModeFn()
+		if objAPI == nil {
+			continue
+		}
+
+		bgSeq, found := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
+		if !found {
+			continue
+		}
+
 		// Whatever remains in 'existing' are folders at this level
 		// that existed in the previous run but wasn't found now.
 		//
@@ -453,46 +462,24 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// We therefore perform a heal check.
 		// If that doesn't bring it back we remove the folder and assume it was deleted.
 		// This means that the next run will not look for it.
-		objAPI := newObjectLayerWithoutSafeModeFn()
 		for k := range existing {
 			f.waitForLowActiveIO()
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
 				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
 			}
-			// Try as a folder first.
-			//
-			// A folder on the disk can either be a prefix level or an object.
-			// There is no way to tell, and since it is missing on this disk we cannot cheaply check.
-			// If it is a prefix folder the call below will restore any objects in it.
-			// However, if the path is an object itself this will not be restored.
-			err := objAPI.HealObjects(ctx, bucket, prefix+slashSeparator, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
-				func(bucket, object, versionID string) error {
-					_, err := objAPI.HealObject(ctx, bucket, object, versionID, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling})
-					return err
-				})
-			if err != nil {
-				// If path is an object nil is still returned.
-				logger.LogIf(ctx, err)
-				continue
-			}
 
-			// If it still doesn't exist it may be an object.
-			_, err = os.Stat(filepath.Join(f.root, k))
-			if os.IsNotExist(err) {
-				// The 'HealObjects' above will not work if the folder only contains an object.
-				// So we do a single check on whether this is an object.
-				var objI ListObjectVersionsInfo
-				objI, err = objAPI.ListObjectVersions(ctx, bucket, prefix, "", "", "", 100000)
-				if err == nil {
-					for _, obj := range objI.Objects {
-						objAPI.HealObject(ctx, bucket, prefix, obj.VersionID, madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
-					}
-				} else if isErrObjectNotFound(err) {
-					// If not found it may be a dangling folder on other disks.
-					// In that case this will remove it on other hosts.
-					objAPI.HealObject(ctx, bucket, prefix+slashSeparator, "", madmin.HealOpts{Recursive: false, Remove: healDeleteDangling})
-				}
+			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
+				func(bucket, object, versionID string) error {
+					return bgSeq.queueHealTask(healSource{
+						bucket:    bucket,
+						object:    object,
+						versionID: versionID,
+					}, madmin.HealItemObject)
+				})
+
+			if f.dataUsageCrawlDebug && err != nil {
+				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
 			}
 
 			// Add unless healing returned an error.
@@ -633,6 +620,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
 		}
 		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling})
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			return 0
+		}
 		if !errors.Is(err, NotImplemented{}) {
 			logger.LogIf(ctx, err)
 			return 0
