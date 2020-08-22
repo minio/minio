@@ -361,6 +361,9 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			bp:           bp,
 			mrfOpCh:      make(chan partialOperation, 10000),
 		}
+
+		go s.sets[i].cleanupStaleMultipartUploads(ctx,
+			GlobalMultipartCleanupInterval, GlobalMultipartExpiry)
 	}
 
 	// Start the disk monitoring and connect routine.
