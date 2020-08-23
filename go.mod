@@ -62,7 +62,7 @@ require (
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.4.0+incompatible
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
@@ -85,6 +85,6 @@ require (
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3
-	gopkg.in/olivere/elastic.v5 v5.0.80
+	gopkg.in/olivere/elastic.v5 v5.0.86
 	gopkg.in/yaml.v2 v2.2.8
 )
