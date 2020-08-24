@@ -2041,7 +2041,6 @@ type HealthResult struct {
 	HealingDrives    int
 	ZoneID, SetID    int
 	WriteQuorum      int
-	HealingInProgess bool
 }
 
 // Health - returns current status of the object layer health,
@@ -2114,7 +2113,6 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
 		return HealthResult{
 			Healthy:          false,
-			HealingInProgess: true,
 		}
 	}
 
@@ -2127,7 +2125,6 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 	return HealthResult{
 		Healthy:          healthy,
 		HealingDrives:    len(aggHealStateResult.HealDisks),
-		HealingInProgess: true,
 	}
 }
 

@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"strconv"
 )
 
 // ClusterCheckHandler returns if the server is ready for requests.
@@ -38,12 +39,11 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
 	result := objLayer.Health(ctx, opts)
 	if !result.Healthy {
+		// return how many drives are being healed if any
+		w.Header().Set("X-Minio-Healing-Disks", strconv.Itoa(result.HealingDrives))
 		// As a maintenance call we are purposefully asked to be taken
 		// down, this is for orchestrators to know if we can safely
 		// take this server down, return appropriate error.
-		if result.HealingInProgess {
-			w.Header().Set("X-Minio-Healing-Disks", strconv.Itoa(result.HealingDrives))
-		}
 		if opts.Maintenance {
 			writeResponse(w, http.StatusPreconditionFailed, nil, mimeNone)
 		} else {
