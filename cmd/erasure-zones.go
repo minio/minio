@@ -2037,10 +2037,10 @@ type HealthOptions struct {
 // additionally with any specific heuristic information which
 // was queried
 type HealthResult struct {
-	Healthy          bool
-	HealingDrives    int
-	ZoneID, SetID    int
-	WriteQuorum      int
+	Healthy       bool
+	HealingDrives int
+	ZoneID, SetID int
+	WriteQuorum   int
 }
 
 // Health - returns current status of the object layer health,
@@ -2112,7 +2112,7 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 	if err != nil {
 		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
 		return HealthResult{
-			Healthy:          false,
+			Healthy: false,
 		}
 	}
 
@@ -2123,8 +2123,8 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 	healthy := len(aggHealStateResult.HealDisks) == 0
 
 	return HealthResult{
-		Healthy:          healthy,
-		HealingDrives:    len(aggHealStateResult.HealDisks),
+		Healthy:       healthy,
+		HealingDrives: len(aggHealStateResult.HealDisks),
 	}
 }
 
