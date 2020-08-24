@@ -41,6 +41,9 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 		// As a maintenance call we are purposefully asked to be taken
 		// down, this is for orchestrators to know if we can safely
 		// take this server down, return appropriate error.
+		if result.HealingInProgess {
+			w.Header().Set("X-Minio-Health-Healing-In-Progress","true")
+		}
 		if opts.Maintenance {
 			writeResponse(w, http.StatusPreconditionFailed, nil, mimeNone)
 		} else {
