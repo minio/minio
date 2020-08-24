@@ -40,6 +40,8 @@ const (
 	ElasticIndex      = "index"
 	ElasticQueueDir   = "queue_dir"
 	ElasticQueueLimit = "queue_limit"
+	ElasticUsername   = "username"
+	ElasticPassword   = "password"
 
 	EnvElasticEnable     = "MINIO_NOTIFY_ELASTICSEARCH_ENABLE"
 	EnvElasticFormat     = "MINIO_NOTIFY_ELASTICSEARCH_FORMAT"
@@ -47,16 +49,21 @@ const (
 	EnvElasticIndex      = "MINIO_NOTIFY_ELASTICSEARCH_INDEX"
 	EnvElasticQueueDir   = "MINIO_NOTIFY_ELASTICSEARCH_QUEUE_DIR"
 	EnvElasticQueueLimit = "MINIO_NOTIFY_ELASTICSEARCH_QUEUE_LIMIT"
+	EnvElasticUsername   = "MINIO_NOTIFY_ELASTICSEARCH_USERNAME"
+	EnvElasticPassword   = "MINIO_NOTIFY_ELASTICSEARCH_PASSWORD"
 )
 
 // ElasticsearchArgs - Elasticsearch target arguments.
 type ElasticsearchArgs struct {
-	Enable     bool     `json:"enable"`
-	Format     string   `json:"format"`
-	URL        xnet.URL `json:"url"`
-	Index      string   `json:"index"`
-	QueueDir   string   `json:"queueDir"`
-	QueueLimit uint64   `json:"queueLimit"`
+	Enable     bool            `json:"enable"`
+	Format     string          `json:"format"`
+	URL        xnet.URL        `json:"url"`
+	Index      string          `json:"index"`
+	QueueDir   string          `json:"queueDir"`
+	QueueLimit uint64          `json:"queueLimit"`
+	Transport  *http.Transport `json:"-"`
+	Username   string          `json:"username"`
+	Password   string          `json:"password"`
 }
 
 // Validate ElasticsearchArgs fields
@@ -76,6 +83,11 @@ func (a ElasticsearchArgs) Validate() error {
 	if a.Index == "" {
 		return errors.New("empty index value")
 	}
+
+	if (a.Username == "" && a.Password != "") || (a.Username != "" && a.Password == "") {
+		return errors.New("username and password should be set in pairs")
+	}
+
 	return nil
 }
 
@@ -242,7 +254,17 @@ func createIndex(client *elastic.Client, args ElasticsearchArgs) error {
 
 // newClient - creates a new elastic client with args provided.
 func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
-	client, err := elastic.NewClient(elastic.SetURL(args.URL.String()), elastic.SetMaxRetries(10))
+	// Client options
+	options := []elastic.ClientOptionFunc{elastic.SetURL(args.URL.String()),
+		elastic.SetMaxRetries(10),
+		elastic.SetSniff(false),
+		elastic.SetHttpClient(&http.Client{Transport: args.Transport})}
+	// Set basic auth
+	if args.Username != "" && args.Password != "" {
+		options = append(options, elastic.SetBasicAuth(args.Username, args.Password))
+	}
+	// Create a client
+	client, err := elastic.NewClient(options...)
 	if err != nil {
 		// https://github.com/olivere/elastic/wiki/Connection-Errors
 		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {

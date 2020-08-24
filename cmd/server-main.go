@@ -354,12 +354,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
+	if err = globalNotificationSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
 	// Initialize bucket targets sub-system.
-	if err = globalBucketTargetSys.Init(GlobalContext, buckets, newObject); err != nil {
+	if err = globalBucketTargetSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket target sub-system: %w", err)
 	}
 
