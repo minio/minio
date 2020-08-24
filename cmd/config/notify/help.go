@@ -560,6 +560,18 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
+			Key:         target.ElasticUsername,
+			Description: "username for Elasticsearch basic-auth",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         target.ElasticPassword,
+			Description: "password for Elasticsearch basic-auth",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
