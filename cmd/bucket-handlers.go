@@ -762,7 +762,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 		// Make sure formValues adhere to policy restrictions.
 		if err = checkPostPolicy(formValues, postPolicyForm); err != nil {
-			writeCustomErrorResponseXML(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), err.Error(), r.URL, guessIsBrowserReq(r))
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErrWithErr(ErrAccessDenied, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
 
