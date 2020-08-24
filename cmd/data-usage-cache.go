@@ -328,7 +328,7 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		flat := d.flatten(*e)
 		dst[bucket.Name] = BucketUsageInfo{
 			Size:                 uint64(flat.Size),
-			ObjectsCount:         uint64(flat.Objects),
+			ObjectsCount:         flat.Objects,
 			ObjectSizesHistogram: flat.ObjSizes.toMap(),
 		}
 	}
@@ -345,7 +345,7 @@ func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
 	flat := d.flatten(*e)
 	return BucketUsageInfo{
 		Size:                 uint64(flat.Size),
-		ObjectsCount:         uint64(flat.Objects),
+		ObjectsCount:         flat.Objects,
 		ObjectSizesHistogram: flat.ObjSizes.toMap(),
 	}
 }

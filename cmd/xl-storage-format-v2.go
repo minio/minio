@@ -380,10 +380,10 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	fi.Parts = make([]ObjectPartInfo, len(j.PartNumbers))
 	for i := range fi.Parts {
-		fi.Parts[i].Number = int(j.PartNumbers[i])
-		fi.Parts[i].Size = int64(j.PartSizes[i])
+		fi.Parts[i].Number = j.PartNumbers[i]
+		fi.Parts[i].Size = j.PartSizes[i]
 		fi.Parts[i].ETag = j.PartETags[i]
-		fi.Parts[i].ActualSize = int64(j.PartActualSizes[i])
+		fi.Parts[i].ActualSize = j.PartActualSizes[i]
 	}
 	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
 	for i := range fi.Parts {

@@ -373,7 +373,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			sum := int64(0)
 			for i, s := range sizes {
 				r[i].Number = i
-				r[i].Size = int64(getEncSize(s))
+				r[i].Size = getEncSize(s)
 				sum += r[i].Size
 			}
 			return ObjectInfo{

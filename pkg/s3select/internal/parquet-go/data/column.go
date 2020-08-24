@@ -186,11 +186,11 @@ func populate(columnDataMap map[string]*Column, input *jsonValue, tree *schema.T
 				}
 
 				var jsonData []byte
-				if jsonData, rerr = sjson.SetBytes([]byte{}, "key", key.Value()); err != nil {
+				if jsonData, rerr = sjson.SetBytes([]byte{}, "key", key.Value()); rerr != nil {
 					return false
 				}
 
-				if jsonData, rerr = sjson.SetBytes(jsonData, "value", value.Value()); err != nil {
+				if jsonData, rerr = sjson.SetBytes(jsonData, "value", value.Value()); rerr != nil {
 					return false
 				}
 
@@ -199,7 +199,7 @@ func populate(columnDataMap map[string]*Column, input *jsonValue, tree *schema.T
 					return false
 				}
 
-				if columnDataMap, rerr = populate(columnDataMap, jv, keyValueElement.Children, firstValueRL); err != nil {
+				if columnDataMap, rerr = populate(columnDataMap, jv, keyValueElement.Children, firstValueRL); rerr != nil {
 					return false
 				}
 

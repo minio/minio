@@ -64,7 +64,7 @@ func (r *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 		case parquetgen.Type_INT32:
 			value = int64(v.Value.(int32))
 		case parquetgen.Type_INT64:
-			value = int64(v.Value.(int64))
+			value = v.Value.(int64)
 		case parquetgen.Type_FLOAT:
 			value = float64(v.Value.(float32))
 		case parquetgen.Type_DOUBLE:

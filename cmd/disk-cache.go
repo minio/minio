@@ -172,7 +172,7 @@ func getMetadata(objInfo ObjectInfo) map[string]string {
 	if objInfo.ContentEncoding != "" {
 		metadata["content-encoding"] = objInfo.ContentEncoding
 	}
-	if objInfo.Expires != timeSentinel {
+	if !objInfo.Expires.Equal(timeSentinel) {
 		metadata["expires"] = objInfo.Expires.Format(http.TimeFormat)
 	}
 	for k, v := range objInfo.UserDefined {

@@ -26,7 +26,7 @@ const (
 	dynamicTimeoutIncreaseThresholdPct = 0.33 // Upper threshold for failures in order to increase timeout
 	dynamicTimeoutDecreaseThresholdPct = 0.10 // Lower threshold for failures in order to decrease timeout
 	dynamicTimeoutLogSize              = 16
-	maxDuration                        = time.Duration(1<<63 - 1)
+	maxDuration                        = 1<<63 - 1
 )
 
 // timeouts that are dynamically adapted based on actual usage results
@@ -110,7 +110,7 @@ func (dt *dynamicTimeout) adjust(entries [dynamicTimeoutLogSize]time.Duration) {
 		// We are hitting the timeout relatively few times, so decrease the timeout
 		average = average * 125 / 100 // Add buffer of 25% on top of average
 
-		timeout := (atomic.LoadInt64(&dt.timeout) + int64(average)) / 2 // Middle between current timeout and average success
+		timeout := (atomic.LoadInt64(&dt.timeout) + average) / 2 // Middle between current timeout and average success
 		if timeout < dt.minimum {
 			timeout = dt.minimum
 		}
