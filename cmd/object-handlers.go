@@ -451,6 +451,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	// Set Parts Count Header
 	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 {
 		setPartsCountHeaders(w, objInfo)
+		setPartsContentHeaders(w, objInfo, opts.PartNumber)
 	}
 
 	setHeadGetRespHeaders(w, r.URL.Query())
@@ -638,6 +639,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	// Set Parts Count Header
 	if opts.PartNumber > 0 && len(objInfo.Parts) > 0 {
 		setPartsCountHeaders(w, objInfo)
+		setPartsContentHeaders(w, objInfo, opts.PartNumber)
 	}
 
 	// Set any additional requested response headers.

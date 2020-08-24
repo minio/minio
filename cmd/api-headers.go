@@ -83,6 +83,12 @@ func setPartsCountHeaders(w http.ResponseWriter, objInfo ObjectInfo) {
 	}
 }
 
+// setPartsContentHeaders will set the part count and content length based on the part number.
+func setPartsContentHeaders(w http.ResponseWriter, objInfo ObjectInfo, partNumber int) {
+	part := objInfo.Parts[partNumber - 1]
+	w.Header()[xhttp.ContentLength] = []string{strconv.FormatInt(part.ActualSize, 10)}
+}
+
 // Write object header
 func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec) (err error) {
 	// set common headers
