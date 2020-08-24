@@ -371,8 +371,10 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 			case v := <-updateCloser:
 				update()
 				// Enforce quotas when all is done.
-				for _, b := range allBuckets {
-					enforceFIFOQuotaBucket(ctx, z, b.Name, allMerged.bucketUsageInfo(b.Name))
+				if firstErr == nil {
+					for _, b := range allBuckets {
+						enforceFIFOQuotaBucket(ctx, z, b.Name, allMerged.bucketUsageInfo(b.Name))
+					}
 				}
 				close(v)
 				return
@@ -388,6 +390,9 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 	case updateCloser <- ch:
 		<-ch
 	case <-ctx.Done():
+		if firstErr == nil {
+			firstErr = ctx.Err()
+		}
 	}
 	return firstErr
 }
