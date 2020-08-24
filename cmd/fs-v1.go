@@ -352,6 +352,8 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		if fiErr != nil {
 			return 0, errSkipFile
 		}
+		// We cannot heal in FS mode.
+		item.heal = false
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
 		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
