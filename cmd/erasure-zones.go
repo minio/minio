@@ -1923,12 +1923,22 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
 
+	// If listing did not return any entries upon first attempt, we
+	// return `ObjectNotFound`, to indicate the caller for any
+	// actions they may want to take as if `prefix` is missing.
+	err := toObjectErr(errFileNotFound, bucket, prefix)
 	for {
 		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
-			return toObjectErr(errFileNotFound, bucket, prefix)
+			break
 		}
+		// Indicate that first attempt was a success and subsequent loop
+		// knows that its not our first attempt at 'prefix'
+		err = nil
 
+		if zoneIndex >= len(zoneDrivesPerSet) || zoneIndex < 0 {
+			return fmt.Errorf("invalid zone index returned: %d", zoneIndex)
+		}
 		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {
 			// Skip good entries.
 			continue
@@ -1943,7 +1953,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
