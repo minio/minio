@@ -80,7 +80,7 @@ func TestInvalidExpiration(t *testing.T) {
                                     </Expiration>`,
 			expectedErr: errLifecycleInvalidExpiration,
 		},
-		{ // Expiration with both number of days nor a date
+		{ // Expiration with both number of days and a date
 			inputXML: `<Expiration>
                                     <Days>3</Days>
                                     <Date>2019-04-20T00:00:00Z</Date>
