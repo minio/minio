@@ -76,11 +76,11 @@ func NewTimerWithJitter(ctx context.Context, unit time.Duration, cap time.Durati
 			attempt = maxAttempt
 		}
 		//sleep = random_between(0, min(cap, base * 2 ** attempt))
-		sleep := unit * time.Duration(1<<uint(attempt))
+		sleep := unit * 1 << uint(attempt)
 		if sleep > cap {
 			sleep = cap
 		}
-		if jitter != NoJitter {
+		if jitter > NoJitter {
 			sleep -= time.Duration(rand.Float64() * float64(sleep) * jitter)
 		}
 		return sleep

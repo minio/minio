@@ -83,7 +83,7 @@ func TestCommonTime(t *testing.T) {
 	for i, testCase := range testCases {
 		// Obtain a common mod time from modTimes slice.
 		ctime, _ := commonTime(testCase.times)
-		if testCase.time != ctime {
+		if !testCase.time.Equal(ctime) {
 			t.Fatalf("Test case %d, expect to pass but failed. Wanted modTime: %s, got modTime: %s\n", i+1, testCase.time, ctime)
 		}
 	}

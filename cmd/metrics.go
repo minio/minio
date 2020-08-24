@@ -106,7 +106,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 	healMetricsNamespace := "self_heal"
 
-	dur := time.Duration(-1)
+	var dur time.Duration
 	if !bgSeq.lastHealActivity.IsZero() {
 		dur = time.Since(bgSeq.lastHealActivity)
 	}

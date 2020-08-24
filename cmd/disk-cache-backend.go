@@ -46,7 +46,7 @@ const (
 	cacheMetaJSONFile = "cache.json"
 	cacheDataFile     = "part.1"
 	cacheMetaVersion  = "1.0.0"
-	cacheExpiryDays   = time.Duration(90 * time.Hour * 24) // defaults to 90 days
+	cacheExpiryDays   = 90 * time.Hour * 24 // defaults to 90 days
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
 	SSECacheEncrypted = "X-Minio-Internal-Encrypted-Cache"

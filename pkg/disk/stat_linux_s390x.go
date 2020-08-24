@@ -1,7 +1,7 @@
-// +build linux,!s390x,!arm,!386
+// +build linux,s390x
 
 /*
- * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,11 @@
 
 package disk
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+	"syscall"
+)
 
 // fsType2StringMap - list of filesystems supported on linux
 var fsType2StringMap = map[string]string{
@@ -41,11 +45,36 @@ var fsType2StringMap = map[string]string{
 }
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(ftype int64) string {
-	fsTypeHex := strconv.FormatInt(ftype, 16)
+func getFSType(ftype uint32) string {
+	fsTypeHex := strconv.FormatUint(uint64(ftype), 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
 	if !ok {
 		return "UNKNOWN"
 	}
 	return fsTypeString
+}
+
+// GetInfo returns total and free bytes available in a directory, e.g. `/`.
+func GetInfo(path string) (info Info, err error) {
+	s := syscall.Statfs_t{}
+	err = syscall.Statfs(path, &s)
+	if err != nil {
+		return Info{}, err
+	}
+	reservedBlocks := s.Bfree - s.Bavail
+	info = Info{
+		Total:  uint64(s.Frsize) * (s.Blocks - reservedBlocks),
+		Free:   uint64(s.Frsize) * s.Bavail,
+		Files:  s.Files,
+		Ffree:  s.Ffree,
+		FSType: getFSType(s.Type),
+	}
+	// Check for overflows.
+	// https://github.com/minio/minio/issues/8035
+	// XFS can show wrong values at times error out
+	// in such scenarios.
+	if info.Free > info.Total {
+		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
+	}
+	return info, nil
 }

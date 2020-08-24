@@ -1,7 +1,7 @@
-// +build linux,!arm,!386
+// +build linux,arm linux,386
 
 /*
- * MinIO Cloud Storage, (C) 2016,2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ func getSysinfoMemoryLimit() (limit uint64, err error) {
 
 	// Total RAM is always the multiplicative value
 	// of unit size and total ram.
-	return uint64(unit) * totalRAM, nil
+	return uint64(unit) * uint64(totalRAM), nil
 }
 
 // GetStats - return system statistics, currently only
