@@ -348,9 +348,17 @@ func (n *hdfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketIn
 	return buckets, nil
 }
 
+func (n *hdfsObjects) isLeafDir(bucket, leafPath string) bool {
+	return n.isObjectDir(context.Background(), bucket, leafPath)
+}
+
+func (n *hdfsObjects) isLeaf(bucket, leafPath string) bool {
+	return !strings.HasSuffix(leafPath, hdfsSeparator)
+}
+
 func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 		f, err := n.clnt.Open(n.hdfsPathJoin(bucket, prefixDir))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -366,7 +374,7 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 			return
 		}
 		if len(fis) == 0 {
-			return true, nil
+			return true, nil, false
 		}
 		for _, fi := range fis {
 			if fi.IsDir() {
@@ -375,7 +383,8 @@ func (n *hdfsObjects) listDirFactory() minio.ListDirFunc {
 				entries = append(entries, fi.Name())
 			}
 		}
-		return false, minio.FilterMatchingPrefix(entries, prefixEntry)
+		entries, delayIsLeaf = minio.FilterListEntries(bucket, prefixDir, entries, prefixEntry, n.isLeaf)
+		return false, entries, delayIsLeaf
 	}
 
 	// Return list factory instance.
@@ -426,7 +435,7 @@ func (n *hdfsObjects) ListObjects(ctx context.Context, bucket, prefix, marker, d
 		return objectInfo, nil
 	}
 
-	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), getObjectInfo, getObjectInfo)
+	return minio.ListObjects(ctx, n, bucket, prefix, marker, delimiter, maxKeys, n.listPool, n.listDirFactory(), n.isLeaf, n.isLeafDir, getObjectInfo, getObjectInfo)
 }
 
 // Lists a path's direct, first-level entries and populates them in the `fileInfos` cache which maps
