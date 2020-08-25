@@ -48,8 +48,8 @@ var (
 	// ListObjects function alias.
 	ListObjects = listObjects
 
-	// FilterMatchingPrefix function alias.
-	FilterMatchingPrefix = filterMatchingPrefix
+	// FilterListEntries function alias.
+	FilterListEntries = filterListEntries
 
 	// IsStringEqual is string equal.
 	IsStringEqual = isStringEqual

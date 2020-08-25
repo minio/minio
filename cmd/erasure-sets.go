@@ -838,9 +838,17 @@ func (f *FileInfoCh) Push(fi FileInfo) {
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
 func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
-	for i := range entryChs {
-		entries[i], entriesValid[i] = entryChs[i].Pop()
+	var wg sync.WaitGroup
+	for j := range entryChs {
+		j := j
+		wg.Add(1)
+		// Pop() entries in parallel for large drive setups.
+		go func() {
+			defer wg.Done()
+			entries[j], entriesValid[j] = entryChs[j].Pop()
+		}()
 	}
+	wg.Wait()
 
 	var isTruncated = false
 	for _, valid := range entriesValid {
@@ -902,9 +910,17 @@ func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesVali
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
 func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileInfoVersions, entriesValid []bool) (FileInfoVersions, int, bool) {
-	for i := range entryChs {
-		entries[i], entriesValid[i] = entryChs[i].Pop()
+	var wg sync.WaitGroup
+	for j := range entryChs {
+		j := j
+		wg.Add(1)
+		// Pop() entries in parallel for large drive setups.
+		go func() {
+			defer wg.Done()
+			entries[j], entriesValid[j] = entryChs[j].Pop()
+		}()
 	}
+	wg.Wait()
 
 	var isTruncated = false
 	for _, valid := range entriesValid {
