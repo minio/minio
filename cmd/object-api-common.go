@@ -82,7 +82,7 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
-		storage, err := newXLStorage(endpoint.Path, endpoint.Host)
+		storage, err := newXLStorage(endpoint)
 		if err != nil {
 			return nil, err
 		}
