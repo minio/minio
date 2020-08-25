@@ -1181,8 +1181,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	replicate := false
 	if mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()) {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
+		replicate = true
 	}
 
 	// Store the preserved compression metadata.
@@ -1262,7 +1264,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
-	if mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
+	if replicate {
 		defer replicateObject(GlobalContext, dstBucket, dstObject, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedCopy,
 			BucketName:   dstBucket,
@@ -1515,8 +1517,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	replicate := false
 	if mustReplicate(ctx, r, bucket, object, metadata, "") {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
+		replicate = true
 	}
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 		if s3Err = isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.ReplicateObjectAction); s3Err != ErrNone {
@@ -1578,7 +1582,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-	if mustReplicate(ctx, r, bucket, object, metadata, "") {
+	if replicate {
 		defer replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
