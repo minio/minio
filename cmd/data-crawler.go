@@ -451,6 +451,16 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
+		healState, err := getAggregatedBackgroundHealState(ctx, false)
+		if err != nil {
+			continue
+		}
+
+		if len(healState.HealDisks) > 0 {
+			// Disks are healing do not need to proceed to healing the objects.
+			continue
+		}
+
 		// Whatever remains in 'existing' are folders at this level
 		// that existed in the previous run but wasn't found now.
 		//
