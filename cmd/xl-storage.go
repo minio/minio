@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	slashpath "path"
 	"path/filepath"
@@ -91,6 +92,7 @@ type xlStorage struct {
 
 	diskPath string
 	hostname string
+	endpoint string
 
 	pool sync.Pool
 
@@ -233,7 +235,18 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newXLStorage(path string, hostname string) (*xlStorage, error) {
+func newLocalXLStorage(path string) (*xlStorage, error) {
+	u := url.URL{Path: path}
+	return newXLStorage(Endpoint{
+		URL:     &u,
+		IsLocal: true,
+	})
+}
+
+// Initialize a new storage disk.
+func newXLStorage(ep Endpoint) (*xlStorage, error) {
+	path := ep.Path
+	hostname := ep.Host
 	var err error
 	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
@@ -247,6 +260,7 @@ func newXLStorage(path string, hostname string) (*xlStorage, error) {
 	p := &xlStorage{
 		diskPath: path,
 		hostname: hostname,
+		endpoint: ep.String(),
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -422,6 +436,7 @@ func (s *xlStorage) DiskInfo() (info DiskInfo, err error) {
 		Used:      di.Total - di.Free,
 		RootDisk:  s.rootDisk,
 		MountPath: s.diskPath,
+		Endpoint:  s.endpoint,
 	}
 
 	diskID, err := s.GetDiskID()

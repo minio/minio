@@ -122,7 +122,7 @@ func newXLStorageTestSetup() (*xlStorageDiskIDCheck, string, error) {
 	}
 
 	// Initialize a new xlStorage layer.
-	storage, err := newXLStorage(diskPath, "")
+	storage, err := newLocalXLStorage(diskPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -377,7 +377,7 @@ func TestNewXLStorage(t *testing.T) {
 	// Validate all test cases.
 	for i, testCase := range testCases {
 		// Initialize a new xlStorage layer.
-		_, err := newXLStorage(testCase.name, "")
+		_, err := newLocalXLStorage(testCase.name)
 		if err != testCase.err {
 			t.Fatalf("TestXLStorage %d failed wanted: %s, got: %s", i+1, err, testCase.err)
 		}
@@ -451,7 +451,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 		}
 
 		// Initialize xlStorage storage layer for permission denied error.
-		_, err = newXLStorage(permDeniedDir, "")
+		_, err = newLocalXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -460,7 +460,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		xlStorageNew, err := newXLStorage(permDeniedDir, "")
+		xlStorageNew, err := newLocalXLStorage(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -550,7 +550,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 		}
 
 		// Initialize xlStorage storage layer for permission denied error.
-		_, err = newXLStorage(permDeniedDir, "")
+		_, err = newLocalXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -559,7 +559,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		xlStorageNew, err := newXLStorage(permDeniedDir, "")
+		xlStorageNew, err := newLocalXLStorage(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -802,7 +802,7 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 		defer removePermDeniedFile(permDeniedDir)
 
 		// Initialize xlStorage storage layer for permission denied error.
-		_, err = newXLStorage(permDeniedDir, "")
+		_, err = newLocalXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -811,7 +811,7 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		xlStorageNew, err := newXLStorage(permDeniedDir, "")
+		xlStorageNew, err := newLocalXLStorage(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -926,7 +926,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 		defer removePermDeniedFile(permDeniedDir)
 
 		// Initialize xlStorage storage layer for permission denied error.
-		_, err = newXLStorage(permDeniedDir, "")
+		_, err = newLocalXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -935,7 +935,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		xlStorageNew, err := newXLStorage(permDeniedDir, "")
+		xlStorageNew, err := newLocalXLStorage(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -1124,7 +1124,7 @@ func TestXLStorageReadFile(t *testing.T) {
 		defer removePermDeniedFile(permDeniedDir)
 
 		// Initialize xlStorage storage layer for permission denied error.
-		_, err = newXLStorage(permDeniedDir, "")
+		_, err = newLocalXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -1133,7 +1133,7 @@ func TestXLStorageReadFile(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		xlStoragePermStorage, err := newXLStorage(permDeniedDir, "")
+		xlStoragePermStorage, err := newLocalXLStorage(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -1294,7 +1294,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 
 		var xlStoragePermStorage StorageAPI
 		// Initialize xlStorage storage layer for permission denied error.
-		_, err = newXLStorage(permDeniedDir, "")
+		_, err = newLocalXLStorage(permDeniedDir)
 		if err != nil && !os.IsPermission(err) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
@@ -1303,7 +1303,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 		}
 
-		xlStoragePermStorage, err = newXLStorage(permDeniedDir, "")
+		xlStoragePermStorage, err = newLocalXLStorage(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}

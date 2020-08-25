@@ -26,6 +26,7 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -255,21 +256,45 @@ func (er erasureObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilt
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
-	var disks []StorageAPI
+	if len(buckets) == 0 {
+		return nil
+	}
 
+	// Collect any disk healing.
+	healing, err := getAggregatedBackgroundHealState(ctx, true)
+	if err != nil {
+		return err
+	}
+	healDisks := make(map[string]struct{}, len(healing.HealDisks))
+	for _, disk := range healing.HealDisks {
+		healDisks[disk] = struct{}{}
+	}
+
+	// Collect disks we can use.
+	var disks []StorageAPI
 	for _, d := range er.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
 			continue
 		}
+		di, err := d.DiskInfo()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+		if _, ok := healDisks[di.Endpoint]; ok {
+			logger.Info(color.Green("data-crawl:")+" Disk %q is Healing, skipping disk.", di.Endpoint)
+			continue
+		}
 		disks = append(disks, d)
 	}
-	if len(disks) == 0 || len(buckets) == 0 {
+	if len(disks) == 0 {
+		logger.Info(color.Green("data-crawl:") + " No disks found, skipping crawl")
 		return nil
 	}
 
 	// Load bucket totals
 	oldCache := dataUsageCache{}
-	err := oldCache.load(ctx, er, dataUsageCacheName)
+	err = oldCache.load(ctx, er, dataUsageCacheName)
 	if err != nil {
 		return err
 	}
