@@ -83,7 +83,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 		if !l.canTakeLock(args.Resources...) {
 			// Not all locks can be taken on resources,
 			// reject it completely.
-			return false, nil
+			return false, errLockConflict
 		}
 
 		// No locks held on the all resources, so claim write
@@ -169,6 +169,9 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 			l.lockMap[resource] = []lockRequesterInfo{lrInfo}
 			reply = true
 		}
+		if !reply {
+			return reply, errLockConflict
+		}
 		return reply, nil
 	}
 }
@@ -216,7 +219,8 @@ func (l *localLocker) IsOnline() bool {
 func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
 	select {
 	case <-ctx.Done():
-		return false, ctx.Err()
+		// We couldn't verify, so it is not expired yet.
+		return false, errLockNotExpired
 	default:
 		l.mutex.Lock()
 		defer l.mutex.Unlock()
@@ -227,7 +231,7 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 				// Check whether uid is still active
 				for _, entry := range lri {
 					if entry.UID == args.UID {
-						return false, nil
+						return false, errLockNotExpired
 					}
 				}
 			}

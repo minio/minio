@@ -95,6 +95,47 @@ func (e restError) Timeout() bool {
 	return true
 }
 
+// CallWithContextAndTrailers - similar to CallWithContext, only useful with
+// handlers which rely on trailers to communicate errors, response body is
+// always consumed and never returned.
+func (c *Client) CallWithContextAndTrailers(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (err error) {
+	if !c.IsOnline() {
+		return &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server offline")}}
+	}
+	req, err := http.NewRequest(http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
+	if err != nil {
+		return &NetworkError{err}
+	}
+	req = req.WithContext(ctx)
+	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.Query().Encode()))
+	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+	if length > 0 {
+		req.ContentLength = length
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		// A canceled context doesn't always mean a network problem.
+		if !errors.Is(err, context.Canceled) {
+			// We are safe from recursion
+			c.MarkOffline()
+		}
+		return &NetworkError{err}
+	}
+	// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
+	b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
+	if err != nil {
+		return err
+	}
+	if len(b) > 0 {
+		return errors.New(string(b))
+	}
+	if final := resp.Trailer.Get("FinalStatus"); final != "Success" {
+		return errors.New(final)
+	}
+	return nil
+}
+
 // CallWithContext - make a REST call with context.
 func (c *Client) CallWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	if !c.IsOnline() {
@@ -110,6 +151,7 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 	if length > 0 {
 		req.ContentLength = length
 	}
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		// A canceled context doesn't always mean a network problem.
@@ -118,12 +160,6 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
-	}
-
-	final := resp.Trailer.Get("FinalStatus")
-	if final != "" && final != "Success" {
-		defer xhttp.DrainBody(resp.Body)
-		return nil, errors.New(final)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -150,6 +186,7 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 		}
 		return nil, errors.New(resp.Status)
 	}
+
 	return resp.Body, nil
 }
 

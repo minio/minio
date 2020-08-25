@@ -403,36 +403,25 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *peerRESTServer) NetOBDInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "NetOBDInfo")
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
 		return
 	}
 
-	// Use this trailer to send additional headers after sending body
-	w.Header().Set("Trailer", "FinalStatus")
-
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.WriteHeader(http.StatusOK)
-
 	n, err := io.Copy(ioutil.Discard, r.Body)
 	if err == io.ErrUnexpectedEOF {
-		w.Header().Set("FinalStatus", err.Error())
+		s.writeErrorResponse(w, err)
 		return
 	}
 	if err != nil && err != io.EOF {
-		logger.LogIf(ctx, err)
-		w.Header().Set("FinalStatus", err.Error())
+		s.writeErrorResponse(w, err)
 		return
 	}
 	if n != r.ContentLength {
 		err := fmt.Errorf("OBD: short read: expected %d found %d", r.ContentLength, n)
-
-		logger.LogIf(ctx, err)
-		w.Header().Set("FinalStatus", err.Error())
+		s.writeErrorResponse(w, err)
 		return
 	}
-	w.Header().Set("FinalStatus", "Success")
 	w.(http.Flusher).Flush()
 }
 

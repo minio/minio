@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/dsync"
 )
 
@@ -90,20 +91,22 @@ func (l *lockRESTServer) LockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Trailer", "FinalStatus")
+	w.WriteHeader(http.StatusOK)
+
 	args, err := getLockArgs(r)
 	if err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
 
-	success, err := l.ll.Lock(r.Context(), args)
-	if err == nil && !success {
-		err = errLockConflict
-	}
-	if err != nil {
-		l.writeErrorResponse(w, err)
+	if _, err = l.ll.Lock(r.Context(), args); err != nil {
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
+
+	w.Header().Set("FinalStatus", "Success")
+	w.(http.Flusher).Flush()
 }
 
 // UnlockHandler - releases the acquired lock.
@@ -113,9 +116,12 @@ func (l *lockRESTServer) UnlockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Trailer", "FinalStatus")
+	w.WriteHeader(http.StatusOK)
+
 	args, err := getLockArgs(r)
 	if err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
 
@@ -123,9 +129,12 @@ func (l *lockRESTServer) UnlockHandler(w http.ResponseWriter, r *http.Request) {
 	// Ignore the Unlock() "reply" return value because if err == nil, "reply" is always true
 	// Consequently, if err != nil, reply is always false
 	if err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
+
+	w.Header().Set("FinalStatus", "Success")
+	w.(http.Flusher).Flush()
 }
 
 // LockHandler - Acquires an RLock.
@@ -135,20 +144,22 @@ func (l *lockRESTServer) RLockHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Trailer", "FinalStatus")
+	w.WriteHeader(http.StatusOK)
+
 	args, err := getLockArgs(r)
 	if err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
 
-	success, err := l.ll.RLock(r.Context(), args)
-	if err == nil && !success {
-		err = errLockConflict
-	}
-	if err != nil {
-		l.writeErrorResponse(w, err)
+	if _, err = l.ll.RLock(r.Context(), args); err != nil {
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
+
+	w.Header().Set("FinalStatus", "Success")
+	w.(http.Flusher).Flush()
 }
 
 // RUnlockHandler - releases the acquired read lock.
@@ -158,18 +169,24 @@ func (l *lockRESTServer) RUnlockHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	w.Header().Set("Trailer", "FinalStatus")
+	w.WriteHeader(http.StatusOK)
+
 	args, err := getLockArgs(r)
 	if err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
 
 	// Ignore the RUnlock() "reply" return value because if err == nil, "reply" is always true.
 	// Consequently, if err != nil, reply is always false
 	if _, err = l.ll.RUnlock(args); err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
+
+	w.Header().Set("FinalStatus", "Success")
+	w.(http.Flusher).Flush()
 }
 
 // ExpiredHandler - query expired lock status.
@@ -179,21 +196,22 @@ func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	w.Header().Set("Trailer", "FinalStatus")
+	w.WriteHeader(http.StatusOK)
+
 	args, err := getLockArgs(r)
 	if err != nil {
-		l.writeErrorResponse(w, err)
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
 
-	expired, err := l.ll.Expired(r.Context(), args)
-	if err != nil {
-		l.writeErrorResponse(w, err)
+	if _, err = l.ll.Expired(r.Context(), args); err != nil {
+		w.Header().Set("FinalStatus", err.Error())
 		return
 	}
-	if !expired {
-		l.writeErrorResponse(w, errLockNotExpired)
-		return
-	}
+
+	w.Header().Set("FinalStatus", "Success")
+	w.(http.Flusher).Flush()
 }
 
 // nameLockRequesterInfoPair is a helper type for lock maintenance
@@ -260,36 +278,36 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 
 				// Call back to original server verify whether the lock is
 				// still active (based on name & uid)
-				expired, err := c.Expired(ctx, dsync.LockArgs{
+				_, err := c.Expired(ctx, dsync.LockArgs{
 					UID:       nlrip.lri.UID,
 					Resources: []string{nlrip.name},
 				})
 				cancel()
-				if err != nil {
-					nlripsMap[nlrip.name]++
-					c.Close()
-					continue
-				}
-
-				if !expired {
-					nlripsMap[nlrip.name]++
-				}
-
 				// Close the connection regardless of the call response.
 				c.Close()
+				if err != nil {
+					nlripsMap[nlrip.name]++
+					continue
+				}
 			}
 
-			// Read locks we assume quorum for be N/2 success
-			quorum := objAPI.SetDriveCount() / 2
-			if nlrip.lri.Writer {
-				// For write locks we need N/2+1 success
-				quorum = objAPI.SetDriveCount()/2 + 1
+			tolerance := globalStorageClass.GetParityForSC(xhttp.AmzStorageClass)
+			if tolerance == 0 {
+				// Read locks we assume quorum to be N/2 success
+				tolerance = objAPI.SetDriveCount() / 2
+			}
+
+			quorum := objAPI.SetDriveCount() - tolerance
+			if nlrip.lri.Writer && quorum == objAPI.SetDriveCount()/2 {
+				// For write locks with N/2 tolerance
+				// we need quorum+1
+				quorum++
 			}
 
 			// less than the quorum, we have locks expired.
 			if nlripsMap[nlrip.name] < quorum {
-				// The lock is no longer active at server that originated
-				// the lock, attempt to remove the lock.
+				// The lock is no longer active at server that
+				// originated the lock, attempt to remove the lock.
 				globalLockServers[lendpoint].mutex.Lock()
 				// Purge the stale entry if it exists.
 				globalLockServers[lendpoint].removeEntryIfExists(nlrip)

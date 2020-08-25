@@ -21,10 +21,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"io"
 	"net/url"
 
-	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/dsync"
@@ -55,22 +53,6 @@ func (client *lockRESTClient) String() string {
 	return client.endpoint.String()
 }
 
-// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
-// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
-// after verifying format.json
-func (client *lockRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if values == nil {
-		values = make(url.Values)
-	}
-
-	respBody, err = client.restClient.Call(method, values, body, length)
-	if err == nil {
-		return respBody, nil
-	}
-
-	return nil, toLockError(err)
-}
-
 // IsOnline - returns whether REST client failed to connect or not.
 func (client *lockRESTClient) IsOnline() bool {
 	return client.restClient.IsOnline()
@@ -92,16 +74,9 @@ func (client *lockRESTClient) restCall(ctx context.Context, call string, args ds
 		buffer.WriteString(resource)
 		buffer.WriteString("\n")
 	}
-	respBody, err := client.callWithContext(ctx, call, values, &buffer, -1)
-	defer http.DrainBody(respBody)
-	switch err {
-	case nil:
-		return true, nil
-	case errLockConflict, errLockNotExpired:
-		return false, nil
-	default:
-		return false, err
-	}
+	err = client.restClient.CallWithContextAndTrailers(ctx, call, values, &buffer, -1)
+	err = toLockError(err)
+	return err == nil, err
 }
 
 // RLock calls read lock REST API.
