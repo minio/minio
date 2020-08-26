@@ -883,6 +883,7 @@ func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesVali
 
 	lexicallySortedEntryCount := 0
 	for i, valid := range entriesValid {
+		i := i
 		if !valid {
 			continue
 		}
@@ -894,10 +895,15 @@ func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesVali
 			continue
 		}
 
-		// Push all entries which are lexically higher
-		// and will be returned later in Pop()
-		entryChs[i].Push(entries[i])
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Push all entries which are lexically higher
+			// and will be returned later in Pop()
+			entryChs[i].Push(entries[i])
+		}()
 	}
+	wg.Wait()
 
 	return lentry, lexicallySortedEntryCount, isTruncated
 }
@@ -955,6 +961,7 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 
 	lexicallySortedEntryCount := 0
 	for i, valid := range entriesValid {
+		i := i
 		if !valid {
 			continue
 		}
@@ -966,10 +973,15 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 			continue
 		}
 
-		// Push all entries which are lexically higher
-		// and will be returned later in Pop()
-		entryChs[i].Push(entries[i])
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Push all entries which are lexically higher
+			// and will be returned later in Pop()
+			entryChs[i].Push(entries[i])
+		}()
 	}
+	wg.Wait()
 
 	return lentry, lexicallySortedEntryCount, isTruncated
 }
