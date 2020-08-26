@@ -21,7 +21,14 @@ import (
 )
 
 // GatewayMinioSysTmp prefix is used in Azure/GCS gateway for save metadata sent by Initialize Multipart Upload API.
-const GatewayMinioSysTmp = "minio.sys.tmp/"
+const (
+	GatewayMinioSysTmp  = "minio.sys.tmp/"
+	AzureBackendGateway = "azure"
+	GCSBackendGateway   = "gcs"
+	HDFSBackendGateway  = "hdfs"
+	NASBackendGateway   = "nas"
+	S3BackendGateway    = "s3"
+)
 
 // Gateway represents a gateway backend.
 type Gateway interface {

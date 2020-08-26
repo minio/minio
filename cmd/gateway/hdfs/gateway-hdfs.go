@@ -47,8 +47,6 @@ import (
 )
 
 const (
-	hdfsBackend = "hdfs"
-
 	hdfsSeparator = minio.SlashSeparator
 )
 
@@ -84,7 +82,7 @@ EXAMPLES:
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
-		Name:               hdfsBackend,
+		Name:               minio.HDFSBackendGateway,
 		Usage:              "Hadoop Distributed File System (HDFS)",
 		Action:             hdfsGatewayMain,
 		CustomHelpTemplate: hdfsGatewayTemplate,
@@ -96,7 +94,7 @@ EXAMPLES:
 func hdfsGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	if ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, hdfsBackend, 1)
+		cli.ShowCommandHelpAndExit(ctx, minio.HDFSBackendGateway, 1)
 	}
 
 	minio.StartGateway(ctx, &HDFS{args: ctx.Args()})
@@ -109,7 +107,7 @@ type HDFS struct {
 
 // Name implements Gateway interface.
 func (g *HDFS) Name() string {
-	return hdfsBackend
+	return minio.HDFSBackendGateway
 }
 
 func getKerberosClient() (*krb.Client, error) {

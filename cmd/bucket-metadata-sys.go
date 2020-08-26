@@ -81,7 +81,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		// This code is needed only for gateway implementations.
 		switch configFile {
 		case bucketSSEConfig:
-			if globalGatewayName == "nas" {
+			if globalGatewayName == NASBackendGateway {
 				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
 				if err != nil {
 					return err
@@ -90,7 +90,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 				return meta.Save(GlobalContext, objAPI)
 			}
 		case bucketLifecycleConfig:
-			if globalGatewayName == "nas" {
+			if globalGatewayName == NASBackendGateway {
 				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
 				if err != nil {
 					return err
@@ -99,7 +99,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 				return meta.Save(GlobalContext, objAPI)
 			}
 		case bucketTaggingConfig:
-			if globalGatewayName == "nas" {
+			if globalGatewayName == NASBackendGateway {
 				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
 				if err != nil {
 					return err
@@ -108,7 +108,7 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 				return meta.Save(GlobalContext, objAPI)
 			}
 		case bucketNotificationConfig:
-			if globalGatewayName == "nas" {
+			if globalGatewayName == NASBackendGateway {
 				meta, err := loadBucketMetadata(GlobalContext, objAPI, bucket)
 				if err != nil {
 					return err
@@ -273,7 +273,7 @@ func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Life
 // GetNotificationConfig returns configured notification config
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetNotificationConfig(bucket string) (*event.Config, error) {
-	if globalIsGateway && globalGatewayName == "nas" {
+	if globalIsGateway && globalGatewayName == NASBackendGateway {
 		// Only needed in case of NAS gateway.
 		objAPI := newObjectLayerWithoutSafeModeFn()
 		if objAPI == nil {
