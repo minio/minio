@@ -40,10 +40,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/policy"
 )
 
-const (
-	s3Backend = "s3"
-)
-
 func init() {
 	const s3GatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
@@ -76,7 +72,7 @@ EXAMPLES:
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
-		Name:               s3Backend,
+		Name:               minio.S3BackendGateway,
 		Usage:              "Amazon Simple Storage Service (S3)",
 		Action:             s3GatewayMain,
 		CustomHelpTemplate: s3GatewayTemplate,
@@ -109,7 +105,7 @@ type S3 struct {
 
 // Name implements Gateway interface.
 func (g *S3) Name() string {
-	return s3Backend
+	return minio.S3BackendGateway
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
