@@ -84,7 +84,7 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		LastHealActivity:  bgSeq.lastHealActivity,
 		HealDisks:         healDisks,
-		NextHealRound:     UTCNow().Add(dataCrawlStartDelay),
+		NextHealRound:     UTCNow(),
 	}, true
 }
 

@@ -647,6 +647,12 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	if source.opts != nil {
 		task.opts = *source.opts
 	}
+
+	h.mutex.Lock()
+	h.scannedItemsMap[healType]++
+	h.lastHealActivity = UTCNow()
+	h.mutex.Unlock()
+
 	globalBackgroundHealRoutine.queueHealTask(task)
 
 	select {
@@ -729,9 +735,6 @@ func (h *healSequence) healItemsFromSourceCh() error {
 						pathJoin(source.bucket, source.object), err))
 				}
 			}
-
-			h.scannedItemsMap[itemType]++
-			h.lastHealActivity = UTCNow()
 		case <-h.ctx.Done():
 			return nil
 		}
@@ -868,7 +871,9 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 	}
 
 	if err := h.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket); err != nil {
-		return err
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			return err
+		}
 	}
 
 	if bucketsOnly {
@@ -882,6 +887,9 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 			oi, err := objectAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
 			if err == nil {
 				if err = h.healObject(bucket, h.object, oi.VersionID); err != nil {
+					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+						return nil
+					}
 					return err
 				}
 			}
@@ -891,7 +899,11 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 	}
 
 	if err := objectAPI.HealObjects(h.ctx, bucket, h.object, h.settings, h.healObject); err != nil {
-		return errFnHealFromAPIErr(h.ctx, err)
+		// Object might have been deleted, by the time heal
+		// was attempted we ignore this object an move on.
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			return errFnHealFromAPIErr(h.ctx, err)
+		}
 	}
 	return nil
 }
@@ -913,10 +925,5 @@ func (h *healSequence) healObject(bucket, object, versionID string) error {
 		object:    object,
 		versionID: versionID,
 	}, madmin.HealItemObject)
-	// Object might have been deleted, by the time heal
-	// was attempted we ignore this object an move on.
-	if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-		return nil
-	}
 	return err
 }
