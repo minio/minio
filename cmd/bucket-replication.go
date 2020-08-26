@@ -209,6 +209,7 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 	putOpts := putReplicationOpts(dest, objInfo)
 
 	replicationStatus := replication.Complete
+	startTime := time.Now()
 	_, err = tgt.PutObject(ctx, dest.Bucket, object, gr, size, "", "", putOpts)
 	if err != nil {
 		replicationStatus = replication.Failed
@@ -223,6 +224,9 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 		eventArg.EventName = event.OperationReplicationFailed
 		eventArg.Object.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 		sendEvent(*eventArg)
+	} else {
+		globalConnStats.incReplicationOutputBytes(int(size))
+		httpReplicationDuration.Observe(time.Since(startTime).Seconds())
 	}
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 	if objInfo.UserTags != "" {

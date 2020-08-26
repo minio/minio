@@ -246,11 +246,12 @@ type ServerProperties struct {
 
 // ServerConnStats holds transferred bytes from/to the server
 type ServerConnStats struct {
-	TotalInputBytes  uint64 `json:"transferred"`
-	TotalOutputBytes uint64 `json:"received"`
-	Throughput       uint64 `json:"throughput,omitempty"`
-	S3InputBytes     uint64 `json:"transferredS3"`
-	S3OutputBytes    uint64 `json:"receivedS3"`
+	TotalInputBytes        uint64 `json:"transferred"`
+	TotalOutputBytes       uint64 `json:"received"`
+	Throughput             uint64 `json:"throughput,omitempty"`
+	S3InputBytes           uint64 `json:"transferredS3"`
+	S3OutputBytes          uint64 `json:"receivedS3"`
+	ReplicationOutputBytes uint64 `json:"replicationOut"`
 }
 
 // ServerHTTPAPIStats holds total number of HTTP operations from/to the server,

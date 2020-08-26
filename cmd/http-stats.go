@@ -30,10 +30,11 @@ import (
 // Count total input/output transferred bytes during
 // the server's life.
 type ConnStats struct {
-	totalInputBytes  uint64
-	totalOutputBytes uint64
-	s3InputBytes     uint64
-	s3OutputBytes    uint64
+	totalInputBytes        uint64
+	totalOutputBytes       uint64
+	s3InputBytes           uint64
+	s3OutputBytes          uint64
+	ReplicationOutputBytes uint64
 }
 
 // Increase total input bytes
@@ -66,6 +67,11 @@ func (s *ConnStats) incS3OutputBytes(n int) {
 	atomic.AddUint64(&s.s3OutputBytes, uint64(n))
 }
 
+// Increase outbound output bytes
+func (s *ConnStats) incReplicationOutputBytes(n int) {
+	atomic.AddUint64(&s.ReplicationOutputBytes, uint64(n))
+}
+
 // Return outbound input bytes
 func (s *ConnStats) getS3InputBytes() uint64 {
 	return atomic.LoadUint64(&s.s3InputBytes)
@@ -76,13 +82,18 @@ func (s *ConnStats) getS3OutputBytes() uint64 {
 	return atomic.LoadUint64(&s.s3OutputBytes)
 }
 
+func (s *ConnStats) getReplicationOutputBytes() uint64 {
+	return atomic.LoadUint64(&s.ReplicationOutputBytes)
+}
+
 // Return connection stats (total input/output bytes and total s3 input/output bytes)
 func (s *ConnStats) toServerConnStats() ServerConnStats {
 	return ServerConnStats{
-		TotalInputBytes:  s.getTotalInputBytes(),
-		TotalOutputBytes: s.getTotalOutputBytes(),
-		S3InputBytes:     s.getS3InputBytes(),
-		S3OutputBytes:    s.getS3OutputBytes(),
+		TotalInputBytes:        s.getTotalInputBytes(),
+		TotalOutputBytes:       s.getTotalOutputBytes(),
+		S3InputBytes:           s.getS3InputBytes(),
+		S3OutputBytes:          s.getS3OutputBytes(),
+		ReplicationOutputBytes: s.getReplicationOutputBytes(),
 	}
 }
 

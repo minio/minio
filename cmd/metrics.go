@@ -29,6 +29,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+var floatSecondsPerMin = time.Minute.Seconds()
+
 var (
 	httpRequestsDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -37,6 +39,13 @@ var (
 			Buckets: []float64{.05, .1, .25, .5, 1, 2.5, 5, 10},
 		},
 		[]string{"api"},
+	)
+	httpReplicationDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "replication_duration_seconds",
+			Help:    "Time taken by requests served by current MinIO server instance",
+			Buckets: []float64{floatSecondsPerMin, 2 * floatSecondsPerMin, 4 * floatSecondsPerMin, 8 * floatSecondsPerMin, 16 * floatSecondsPerMin, 32 * floatSecondsPerMin},
+		},
 	)
 	minioVersionInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -366,6 +375,15 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 			nil, nil),
 		prometheus.CounterValue,
 		float64(connStats.S3InputBytes),
+	)
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName("replication", "tx", "bytes_total"),
+			"Total number of bytes transferred due to bucket replication by current MinIO server instance",
+			nil, nil),
+		prometheus.CounterValue,
+		float64(connStats.ReplicationOutputBytes),
 	)
 }
 
