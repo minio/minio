@@ -101,6 +101,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 				ObjectPathUpdated(path.Join(task.bucket, task.object))
 			}
 			task.responseCh <- healResult{result: res, err: err}
+
 		case <-h.doneCh:
 			return
 		case <-ctx.Done():
