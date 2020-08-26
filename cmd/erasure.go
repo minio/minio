@@ -146,6 +146,11 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 					logger.LogIf(ctx, err)
 				}
+				disksInfo[index] = madmin.Disk{
+					State:    diskErrToDriveState(err),
+					Endpoint: endpoints[index],
+				}
+				return err
 			}
 			di := madmin.Disk{
 				Endpoint:       endpoints[index],
