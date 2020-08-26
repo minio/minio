@@ -193,7 +193,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 }
 
 // ZoneEndpoints represent endpoints in a given zone
-// along with its setCount and drivesPerSet.
+// along with its setCount and setDriveCount.
 type ZoneEndpoints struct {
 	SetCount     int
 	DrivesPerSet int

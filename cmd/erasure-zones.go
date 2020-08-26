@@ -690,15 +690,15 @@ func (z *erasureZones) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 
 	var zonesEntryChs [][]FileInfoCh
-	var zonesDrivesPerSet []int
+	var zonesListTolerancePerSet []int
 
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.drivesPerSet))
-		zonesDrivesPerSet = append(zonesDrivesPerSet, zone.drivesPerSet)
+			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet))
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
 	}
 
 	var objInfos []ObjectInfo
@@ -723,7 +723,7 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 			break
 		}
 
-		if quorumCount < zonesDrivesPerSet[zoneIndex]/2 {
+		if quorumCount < zonesListTolerancePerSet[zoneIndex] {
 			// Skip entries which are not found on upto ndisks/2.
 			continue
 		}
@@ -810,20 +810,20 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 
 	var zonesEntryChs [][]FileInfoCh
 	var zonesEndWalkCh []chan struct{}
-	var drivesPerSets []int
+	var zonesListTolerancePerSet []int
 
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startSplunkMergeWalksN(ctx, bucket, prefix, marker, endWalkCh, zone.drivesPerSet)
+			entryChs = zone.startSplunkMergeWalksN(ctx, bucket, prefix, marker, endWalkCh, zone.listTolerancePerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		drivesPerSets = append(drivesPerSets, zone.drivesPerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
 	}
 
-	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, drivesPerSets)
+	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -902,20 +902,20 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 
 	var zonesEntryChs [][]FileInfoCh
 	var zonesEndWalkCh []chan struct{}
-	var drivesPerSets []int
+	var zonesListTolerancePerSet []int
 
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.drivesPerSet)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		drivesPerSets = append(drivesPerSets, zone.drivesPerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
 	}
 
-	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, drivesPerSets)
+	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -951,18 +951,9 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 // N times until this boolean is 'false'.
 func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
-		i := i
-		var wg sync.WaitGroup
 		for j := range entryChs {
-			j := j
-			wg.Add(1)
-			// Pop() entries in parallel for large drive setups.
-			go func() {
-				defer wg.Done()
-				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-			}()
+			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
 		}
-		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1040,18 +1031,9 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 // N times until this boolean is 'false'.
 func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
-		i := i
-		var wg sync.WaitGroup
 		for j := range entryChs {
-			j := j
-			wg.Add(1)
-			// Pop() entries in parallel for large drive setups.
-			go func() {
-				defer wg.Done()
-				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-			}()
+			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
 		}
-		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1119,7 +1101,7 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 }
 
 // mergeZonesEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
-func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, drivesPerSets []int) (entries FilesInfoVersions) {
+func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfoVersions) {
 	var i = 0
 	var zonesEntriesInfos [][]FileInfoVersions
 	var zonesEntriesValid [][]bool
@@ -1134,8 +1116,8 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 			break
 		}
 
-		if quorumCount < drivesPerSets[zoneIndex]/2 {
-			// Skip entries which are not found on upto ndisks/2.
+		if quorumCount < zonesListTolerancePerSet[zoneIndex] {
+			// Skip entries which are not found upto the expected tolerance
 			continue
 		}
 
@@ -1150,7 +1132,7 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 }
 
 // mergeZonesEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, drivesPerSets []int) (entries FilesInfo) {
+func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfo) {
 	var i = 0
 	var zonesEntriesInfos [][]FileInfo
 	var zonesEntriesValid [][]bool
@@ -1165,8 +1147,8 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, drivesPerSet
 			break
 		}
 
-		if quorumCount < drivesPerSets[zoneIndex]/2 {
-			// Skip entries which are not found on upto ndisks/2.
+		if quorumCount < zonesListTolerancePerSet[zoneIndex] {
+			// Skip entries which are not found upto configured tolerance.
 			continue
 		}
 
@@ -1182,18 +1164,9 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, drivesPerSet
 
 func isTruncatedZones(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) bool {
 	for i, entryChs := range zoneEntryChs {
-		i := i
-		var wg sync.WaitGroup
 		for j := range entryChs {
-			j := j
-			wg.Add(1)
-			// Pop() entries in parallel for large drive setups.
-			go func() {
-				defer wg.Done()
-				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-			}()
+			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
 		}
-		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1214,24 +1187,16 @@ func isTruncatedZones(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zon
 				zoneEntryChs[i][j].Push(zoneEntries[i][j])
 			}
 		}
+
 	}
 	return isTruncated
 }
 
 func isTruncatedZonesVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) bool {
 	for i, entryChs := range zoneEntryChs {
-		i := i
-		var wg sync.WaitGroup
 		for j := range entryChs {
-			j := j
-			wg.Add(1)
-			// Pop() entries in parallel for large drive setups.
-			go func() {
-				defer wg.Done()
-				zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-			}()
+			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
 		}
-		wg.Wait()
 	}
 
 	var isTruncated = false
@@ -1307,19 +1272,19 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 
 	var zonesEntryChs [][]FileInfoVersionsCh
 	var zonesEndWalkCh []chan struct{}
-	var drivesPerSets []int
+	var zonesListTolerancePerSet []int
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.drivesPerSet)
+			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		drivesPerSets = append(drivesPerSets, zone.drivesPerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
 	}
 
-	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, drivesPerSets)
+	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
 	if len(entries.FilesVersions) == 0 {
 		return loi, nil
 	}
@@ -1830,7 +1795,7 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 
 		var zoneDrivesPerSet []int
 		for _, zone := range z.zones {
-			zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+			zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 		}
 
 		var zonesEntriesInfos [][]FileInfoVersions
@@ -1871,7 +1836,7 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 
 	var zoneDrivesPerSet []int
 	for _, zone := range z.zones {
-		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
 	var zonesEntriesInfos [][]FileInfo
@@ -1918,7 +1883,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 
 	var zoneDrivesPerSet []int
 	for _, zone := range z.zones {
-		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.drivesPerSet)
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
 	var zonesEntriesInfos [][]FileInfoVersions
@@ -2082,7 +2047,7 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 
 	for zoneIdx := range erasureSetUpCount {
 		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-		diskCount := z.zones[zoneIdx].drivesPerSet
+		diskCount := z.zones[zoneIdx].setDriveCount
 		if parityDrives == 0 {
 			parityDrives = getDefaultParityBlocks(diskCount)
 		}
