@@ -106,7 +106,11 @@ func getReadQuorum(drive int) int {
 }
 
 func getWriteQuorum(drive int) int {
-	return getDefaultDataBlocks(drive)
+        quorum := getDefaultDataBlocks(drive)
+	if getDefaultParityBlocks(drive) == quorum {
+	            quorum++
+	} 
+	return quorum     
 }
 
 // URI scheme constants.
