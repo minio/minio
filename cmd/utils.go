@@ -98,7 +98,7 @@ func getDefaultParityBlocks(drive int) int {
 }
 
 func getDefaultDataBlocks(drive int) int {
-	return int(math.Ceil(float64(drive) / 2))
+        return drive - getDefaultParityBlocks(drive)
 }
 
 func getReadQuorum(drive int) int {
