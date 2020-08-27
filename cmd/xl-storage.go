@@ -351,6 +351,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if err == nil && lc.HasActiveRules("", true) {
 		cache.Info.lifeCycle = lc
 	}
+	cache.Info.BloomFilter = nil
 
 	// Get object api
 	objAPI := newObjectLayerWithoutSafeModeFn()
@@ -370,9 +371,12 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		if err != nil {
 			return 0, errSkipFile
 		}
-
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
+
+		if item.writeMeta != nil {
+			item.writeMeta.writeMeta(item.objectPath(), buf)
+		}
 
 		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {

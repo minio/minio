@@ -75,6 +75,11 @@ type dataUsageCacheInfo struct {
 	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
 }
 
+func (d dataUsageHash) parent() string {
+	s := strings.Split(string(d), "/")
+	return strings.Join(s[:len(s)-1], "/")
+}
+
 // merge other data usage entry into this, excluding children.
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects

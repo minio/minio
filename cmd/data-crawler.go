@@ -27,6 +27,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/klauspost/compress/s2"
+	"github.com/tinylib/msgp/msgp"
+
 	"github.com/minio/minio/pkg/madmin"
 
 	"github.com/minio/minio/cmd/config"
@@ -43,7 +46,7 @@ import (
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
 	dataCrawlSleepDefMult    = 10.0             // Default multiplier for waits between operations.
-	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
+	dataCrawlStartDelay      = 5 * time.Second  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
 	healDeleteDangling = true
@@ -257,36 +260,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		default:
 		}
 		h := hashPath(folder.name)
-		if !h.mod(s.oldCache.Info.NextCycle, dataUsageUpdateDirCycles) {
-			if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
-				s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-				continue
-			} else {
-				folder.objectHealProbDiv = s.healFolderInclude
-			}
-			folder.objectHealProbDiv = dataUsageUpdateDirCycles
-		}
-		if s.withFilter != nil {
-			_, prefix := path2BucketObjectWithBasePath(basePath, folder.name)
-			if s.oldCache.Info.lifeCycle == nil || !s.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
-				// If folder isn't in filter, skip it completely.
-				if !s.withFilter.containsDir(folder.name) {
-					if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
-						if s.dataUsageCrawlDebug {
-							logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
-						}
-						s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
-						continue
-					} else {
-						if s.dataUsageCrawlDebug {
-							logger.Info(logPrefix+"Adding non-updated folder to heal check: %v"+logSuffix, folder.name)
-						}
-						// Update probability of including objects
-						folder.objectHealProbDiv = s.healFolderInclude
-					}
-				}
-			}
-		}
 
 		// Update on this cycle...
 		du, err := s.deepScanFolder(ctx, folder)
@@ -315,6 +288,10 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFolder, final bool) ([]cachedFolder, error) {
 	var nextFolders []cachedFolder
 	done := ctx.Done()
+	var mdw *metaDataWriter
+	mdwPrefix := ".unset."
+	defer mdw.Close()
+
 	for _, folder := range folders {
 		select {
 		case <-done:
@@ -323,6 +300,14 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		}
 		thisHash := hashPath(folder.name)
 		existing := f.oldCache.findChildrenCopy(thisHash)
+
+		// This assumes that folders are in order.
+		parent := thisHash.parent()
+		if parent != mdwPrefix {
+			mdw.Close()
+			mdw = newMetaDataWriter(ctx, path.Join(f.root, parent, ".prefix.meta"))
+			mdwPrefix = parent
+		}
 
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
@@ -417,6 +402,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
 				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
+				writeMeta:  mdw,
 			}
 			size, err := f.getSize(item)
 
@@ -506,6 +492,8 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 
 	var addDir func(entName string, typ os.FileMode) error
 	var dirStack = []string{f.root, folder.name}
+	mdw := newMetaDataWriter(ctx, path.Join(f.root, folder.name, ".prefix.meta"))
+	defer mdw.Close()
 
 	addDir = func(entName string, typ os.FileMode) error {
 		select {
@@ -552,6 +540,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
 				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
+				writeMeta:  mdw,
 			})
 
 		// Don't sleep for really small amount of time
@@ -575,8 +564,9 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 
 // crawlItem represents each file while walking.
 type crawlItem struct {
-	Path string
-	Typ  os.FileMode
+	Path      string
+	Typ       os.FileMode
+	writeMeta *metaDataWriter
 
 	bucket     string // Bucket.
 	prefix     string // Only the prefix if any, does not have final object name.
@@ -598,6 +588,64 @@ func (i *crawlItem) transformMetaDir() {
 	}
 	// Object name is last element
 	i.objectName = split[len(split)-1]
+}
+
+type metaDataWriter struct {
+	mw      *msgp.Writer
+	creater func()
+	closer  func()
+	ctx     context.Context
+}
+
+func newMetaDataWriter(ctx context.Context, fName string) *metaDataWriter {
+	w := metaDataWriter{
+		mw:  nil,
+		ctx: ctx,
+	}
+	w.creater = func() {
+		wr, err := os.Create(fName)
+		if err != nil {
+			logger.LogIf(ctx, err)
+		}
+		//logger.Info("created %q", fName)
+		s2w := s2.NewWriter(wr)
+		w.mw = msgp.NewWriter(s2w)
+		w.creater = nil
+		w.closer = func() {
+			w.mw.Flush()
+			s2w.Close()
+			wr.Close()
+		}
+	}
+	return &w
+}
+
+func (w *metaDataWriter) writeMeta(objName string, meta []byte) {
+	if w == nil {
+		return
+	}
+	if len(objName) == 0 {
+		panic(objName)
+	}
+	if w.creater != nil {
+		w.creater()
+		if w.mw == nil {
+			return
+		}
+		//logger.Info("want to write about %q", objName)
+	}
+	err := w.mw.WriteString(objName)
+	logger.LogIf(w.ctx, err)
+	err = w.mw.WriteBytes(meta)
+	logger.LogIf(w.ctx, err)
+}
+
+func (w *metaDataWriter) Close() {
+	if w == nil || w.closer == nil {
+		return
+	}
+	w.closer()
+	w.closer = nil
 }
 
 // actionMeta contains information used to apply actions.
