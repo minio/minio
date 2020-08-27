@@ -380,7 +380,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName("replication", "tx", "bytes_total"),
-			"Total number of bytes transferred due to bucket replication by current MinIO server instance",
+			"Total number of bytes transferred in bucket replication by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
 		float64(connStats.ReplicationOutputBytes),
