@@ -324,16 +324,16 @@ func TestCheckFormatErasureValue(t *testing.T) {
 // Tests getFormatErasureInQuorum()
 func TestGetFormatErasureInQuorumCheck(t *testing.T) {
 	setCount := 2
-	drivesPerSet := 16
+	setDriveCount := 16
 
-	format := newFormatErasureV3(setCount, drivesPerSet)
+	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, 32)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < drivesPerSet; j++ {
+		for j := 0; j < setDriveCount; j++ {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
-			formats[i*drivesPerSet+j] = newFormat
+			formats[i*setDriveCount+j] = newFormat
 		}
 	}
 
@@ -390,16 +390,16 @@ func TestGetFormatErasureInQuorumCheck(t *testing.T) {
 // Tests formatErasureGetDeploymentID()
 func TestGetErasureID(t *testing.T) {
 	setCount := 2
-	drivesPerSet := 8
+	setDriveCount := 8
 
-	format := newFormatErasureV3(setCount, drivesPerSet)
+	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, 16)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < drivesPerSet; j++ {
+		for j := 0; j < setDriveCount; j++ {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
-			formats[i*drivesPerSet+j] = newFormat
+			formats[i*setDriveCount+j] = newFormat
 		}
 	}
 
@@ -445,17 +445,17 @@ func TestGetErasureID(t *testing.T) {
 // Initialize new format sets.
 func TestNewFormatSets(t *testing.T) {
 	setCount := 2
-	drivesPerSet := 16
+	setDriveCount := 16
 
-	format := newFormatErasureV3(setCount, drivesPerSet)
+	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, 32)
 	errs := make([]error, 32)
 
 	for i := 0; i < setCount; i++ {
-		for j := 0; j < drivesPerSet; j++ {
+		for j := 0; j < setDriveCount; j++ {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
-			formats[i*drivesPerSet+j] = newFormat
+			formats[i*setDriveCount+j] = newFormat
 		}
 	}
 
@@ -467,7 +467,7 @@ func TestNewFormatSets(t *testing.T) {
 	// 16th disk is unformatted.
 	errs[15] = errUnformattedDisk
 
-	newFormats := newHealFormatSets(quorumFormat, setCount, drivesPerSet, formats, errs)
+	newFormats := newHealFormatSets(quorumFormat, setCount, setDriveCount, formats, errs)
 	if newFormats == nil {
 		t.Fatal("Unexpected failure")
 	}

@@ -69,10 +69,10 @@ func TestParseStorageClass(t *testing.T) {
 
 func TestValidateParity(t *testing.T) {
 	tests := []struct {
-		rrsParity    int
-		ssParity     int
-		success      bool
-		drivesPerSet int
+		rrsParity     int
+		ssParity      int
+		success       bool
+		setDriveCount int
 	}{
 		{2, 4, true, 16},
 		{3, 3, true, 16},
@@ -85,7 +85,7 @@ func TestValidateParity(t *testing.T) {
 		{9, 2, false, 16},
 	}
 	for i, tt := range tests {
-		err := validateParity(tt.ssParity, tt.rrsParity, tt.drivesPerSet)
+		err := validateParity(tt.ssParity, tt.rrsParity, tt.setDriveCount)
 		if err != nil && tt.success {
 			t.Errorf("Test %d, Expected success, got %s", i+1, err)
 		}
