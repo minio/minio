@@ -396,6 +396,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
+	logger.AddTarget(globalConsoleSys)
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)

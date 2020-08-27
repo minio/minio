@@ -212,18 +212,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 		if !globalIsGateway {
 			// -- OBD API --
-			adminRouter.Methods(http.MethodGet).Path(adminVersion+"/obdinfo").
-				HandlerFunc(httpTraceHdrs(adminAPI.OBDInfoHandler)).
-				Queries("perfdrive", "{perfdrive:true|false}",
-					"perfnet", "{perfnet:true|false}",
-					"minioinfo", "{minioinfo:true|false}",
-					"minioconfig", "{minioconfig:true|false}",
-					"syscpu", "{syscpu:true|false}",
-					"sysdiskhw", "{sysdiskhw:true|false}",
-					"sysosinfo", "{sysosinfo:true|false}",
-					"sysmem", "{sysmem:true|false}",
-					"sysprocess", "{sysprocess:true|false}",
-				)
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
+				HandlerFunc(httpTraceHdrs(adminAPI.OBDInfoHandler))
 		}
 	}
 

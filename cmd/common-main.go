@@ -44,10 +44,6 @@ func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
-	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddTarget(globalConsoleSys)
-
 	gob.Register(StorageErr(""))
 }
 
