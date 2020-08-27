@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -93,11 +94,11 @@ func path2BucketObject(s string) (bucket, prefix string) {
 }
 
 func getDefaultParityBlocks(drive int) int {
-	return drive / 2
+	return int(math.Floor(float64(drive) / 2))
 }
 
 func getDefaultDataBlocks(drive int) int {
-	return drive - getDefaultParityBlocks(drive)
+	return int(math.Ceil(float64(drive) / 2))
 }
 
 func getReadQuorum(drive int) int {
@@ -105,7 +106,7 @@ func getReadQuorum(drive int) int {
 }
 
 func getWriteQuorum(drive int) int {
-	return getDefaultDataBlocks(drive) + 1
+	return getDefaultDataBlocks(drive)
 }
 
 // URI scheme constants.
