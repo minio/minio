@@ -43,7 +43,7 @@ var (
 	httpReplicationDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "replication_duration_seconds",
-			Help:    "Time taken by requests served by current MinIO server instance",
+			Help:    "Time taken by replication requests served by current MinIO server instance",
 			Buckets: []float64{floatSecondsPerMin, 2 * floatSecondsPerMin, 4 * floatSecondsPerMin, 8 * floatSecondsPerMin, 16 * floatSecondsPerMin, 32 * floatSecondsPerMin},
 		},
 	)
