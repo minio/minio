@@ -20,6 +20,7 @@ import (
 	"crypto"
 	"encoding/json"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -89,6 +90,7 @@ func TestJWTAzureFail(t *testing.T) {
 	}
 
 	cfg := Config{}
+	cfg.mutex = &sync.Mutex{}
 	cfg.JWKS.URL = u1
 	cfg.publicKeys = keys
 	jwt := NewJWT(cfg)
@@ -136,6 +138,7 @@ func TestJWT(t *testing.T) {
 	}
 
 	cfg := Config{}
+	cfg.mutex = &sync.Mutex{}
 	cfg.JWKS.URL = u1
 	cfg.publicKeys = keys
 	jwt := NewJWT(cfg)
