@@ -17,11 +17,11 @@
 package hdfs
 
 import (
-	"github.com/minio/minio/pkg/env"
 	"strings"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
+	"github.com/minio/minio/pkg/env"
 )
 
 var (
