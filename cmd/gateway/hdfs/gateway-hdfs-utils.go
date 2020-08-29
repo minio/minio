@@ -17,22 +17,29 @@
 package hdfs
 
 import (
+	"github.com/minio/minio/pkg/env"
 	"strings"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
 )
 
-const (
+var (
 	// Minio meta bucket.
-	minioMetaBucket = ".minio.sys"
+	minioMetaBucket string
 
 	// Minio Tmp meta prefix.
-	minioMetaTmpBucket = minioMetaBucket + "/tmp"
+	minioMetaTmpBucket string
 
 	// Minio reserved bucket name.
-	minioReservedBucket = "minio"
+	minioReservedBucket string
 )
+
+func init() {
+	minioMetaBucket = env.Get("MINIO_HDFS_META_BUCKET", ".minio.sys")
+	minioMetaTmpBucket = env.Get("MINIO_HDFS_META_TMP_BUCKET", minioMetaBucket+"/tmp")
+	minioReservedBucket = env.Get("MINIO_HDFS_RESERVED_BUCKET", "minio")
+}
 
 // Ignores all reserved bucket names or invalid bucket names.
 func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {

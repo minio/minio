@@ -79,6 +79,12 @@ EXAMPLES:
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_LOW{{.AssignmentOperator}}75
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_WATERMARK_HIGH{{.AssignmentOperator}}85
      {{.Prompt}} {{.HelpName}} hdfs://namenode:8200
+  
+  3. Start minio gateway server for HDFS with custom meta bucket
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_HDFS_META_BUCKET{{.AssignmentOperator}}/.minio.sys
+     {{.Prompt}} {{.HelpName}} hdfs://namenode:8200
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
