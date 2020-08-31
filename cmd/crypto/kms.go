@@ -109,9 +109,9 @@ type masterKeyKMS struct {
 // KMSInfo contains some describing information about
 // the KMS.
 type KMSInfo struct {
-	Endpoint string
-	Name     string
-	AuthType string
+	Endpoints []string
+	Name      string
+	AuthType  string
 }
 
 // NewMasterKey returns a basic KMS implementation from a single 256 bit master key.
@@ -147,9 +147,9 @@ func (kms *masterKeyKMS) GenerateKey(keyID string, ctx Context) (key [32]byte, s
 // KMS is configured directly using master key
 func (kms *masterKeyKMS) Info() (info KMSInfo) {
 	return KMSInfo{
-		Endpoint: "",
-		Name:     "",
-		AuthType: "master-key",
+		Endpoints: []string{},
+		Name:      "",
+		AuthType:  "master-key",
 	}
 }
 

@@ -199,13 +199,13 @@ func (v *vaultService) DefaultKeyID() string {
 }
 
 // Info returns some information about the Vault,
-// configuration - like the endpoint or authentication
+// configuration - like the endpoints or authentication
 // method.
 func (v *vaultService) Info() KMSInfo {
 	return KMSInfo{
-		Endpoint: v.config.Endpoint,
-		Name:     v.DefaultKeyID(),
-		AuthType: v.config.Auth.Type,
+		Endpoints: []string{v.config.Endpoint},
+		Name:      v.DefaultKeyID(),
+		AuthType:  v.config.Auth.Type,
 	}
 }
 
