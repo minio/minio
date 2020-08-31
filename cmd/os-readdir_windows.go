@@ -19,6 +19,7 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"syscall"
 )
@@ -79,10 +80,19 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	}
 	defer f.Close()
 
+	// Check if file or dir. This is the quickest way.
+	_, err = f.Seek(0, io.SeekStart)
+	if err == nil {
+		return nil, errFileNotFound
+	}
 	data := &syscall.Win32finddata{}
+	if count == 0 {
+		return entries, nil
+	}
+	handle := syscall.Handle(f.Fd())
 
 	for count != 0 {
-		e := syscall.FindNextFile(syscall.Handle(f.Fd()), data)
+		e := syscall.FindNextFile(handle, data)
 		if e != nil {
 			if e == syscall.ERROR_NO_MORE_FILES {
 				break
