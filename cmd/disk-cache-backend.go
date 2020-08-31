@@ -46,7 +46,7 @@ const (
 	cacheMetaJSONFile = "cache.json"
 	cacheDataFile     = "part.1"
 	cacheMetaVersion  = "1.0.0"
-	cacheExpiryDays   = time.Duration(90 * time.Hour * 24) // defaults to 90 days
+	cacheExpiryDays   = 90 * time.Hour * 24 // defaults to 90 days
 	// SSECacheEncrypted is the metadata key indicating that the object
 	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
 	SSECacheEncrypted = "X-Minio-Internal-Encrypted-Cache"
@@ -417,7 +417,7 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (meta *cacheMeta, partial bool, numHits int, err error) {
 
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err = cLock.GetRLock(globalObjectTimeout); err != nil {
+	if err = cLock.GetRLock(globalOperationTimeout); err != nil {
 		return
 	}
 
@@ -499,7 +499,7 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cachedPath)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
@@ -665,7 +665,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cachePath)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
@@ -871,7 +871,7 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err := cLock.GetRLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetRLock(globalOperationTimeout); err != nil {
 		return nil, numHits, err
 	}
 
@@ -935,7 +935,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 // Deletes the cached object
 func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
 	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err := cLock.GetLock(globalObjectTimeout); err != nil {
+	if err := cLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()

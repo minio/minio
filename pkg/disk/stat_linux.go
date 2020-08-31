@@ -1,4 +1,4 @@
-// +build linux
+// +build linux,!s390x,!arm,!386
 
 /*
  * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
@@ -30,13 +30,13 @@ func GetInfo(path string) (info Info, err error) {
 	if err != nil {
 		return Info{}, err
 	}
-	reservedBlocks := uint64(s.Bfree) - uint64(s.Bavail)
+	reservedBlocks := s.Bfree - s.Bavail
 	info = Info{
-		Total:  uint64(s.Frsize) * (uint64(s.Blocks) - reservedBlocks),
-		Free:   uint64(s.Frsize) * uint64(s.Bavail),
-		Files:  uint64(s.Files),
-		Ffree:  uint64(s.Ffree),
-		FSType: getFSType(int64(s.Type)),
+		Total:  uint64(s.Frsize) * (s.Blocks - reservedBlocks),
+		Free:   uint64(s.Frsize) * s.Bavail,
+		Files:  s.Files,
+		Ffree:  s.Ffree,
+		FSType: getFSType(s.Type),
 	}
 	// Check for overflows.
 	// https://github.com/minio/minio/issues/8035

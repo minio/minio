@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -67,6 +68,57 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 		}, index)
 	}
 	g.Wait()
+}
+
+// Clean-up the old multipart uploads. Should be run in a Go routine.
+func (er erasureObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			var disk StorageAPI
+			// run multiple cleanup's local to this server.
+			for _, d := range er.getLoadBalancedLocalDisks() {
+				if d != nil {
+					disk = d
+					break
+				}
+			}
+			if disk == nil {
+				continue
+			}
+			er.cleanupStaleMultipartUploadsOnDisk(ctx, disk, expiry)
+		}
+	}
+}
+
+// Remove the old multipart uploads on the given disk.
+func (er erasureObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
+	now := time.Now()
+	shaDirs, err := disk.ListDir(minioMetaMultipartBucket, "", -1)
+	if err != nil {
+		return
+	}
+	for _, shaDir := range shaDirs {
+		uploadIDDirs, err := disk.ListDir(minioMetaMultipartBucket, shaDir, -1)
+		if err != nil {
+			continue
+		}
+		for _, uploadIDDir := range uploadIDDirs {
+			uploadIDPath := pathJoin(shaDir, uploadIDDir)
+			fi, err := disk.ReadVersion(minioMetaMultipartBucket, uploadIDPath, "")
+			if err != nil {
+				continue
+			}
+			if now.Sub(fi.ModTime) > expiry {
+				er.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, fi.Erasure.DataBlocks+1)
+			}
+		}
+	}
 }
 
 // ListMultipartUploads - lists all the pending multipart

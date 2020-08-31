@@ -229,7 +229,8 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		initAutoHeal(ctx, newObject)
 	}
 
-	timeout := newDynamicTimeout(3*time.Second, 3*time.Second)
+	// allocate dynamic timeout once before the loop
+	configLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
@@ -246,7 +247,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimer(retryCtx) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(timeout); err != nil {
+		if err = txnLk.GetLock(configLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -353,12 +354,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// Initialize notification system.
-	if err = globalNotificationSys.Init(buckets, newObject); err != nil {
+	if err = globalNotificationSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize notification system: %w", err)
 	}
 
 	// Initialize bucket targets sub-system.
-	if err = globalBucketTargetSys.Init(GlobalContext, buckets, newObject); err != nil {
+	if err = globalBucketTargetSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket target sub-system: %w", err)
 	}
 
@@ -376,10 +377,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 		}
 		break
 		// No unlock for "leader" lock.
-	}
-
-	if globalIsErasure {
-		initGlobalHeal(ctx, objAPI)
 	}
 
 	initDataCrawler(ctx, objAPI)

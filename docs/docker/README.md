@@ -121,6 +121,11 @@ docker service create --name="minio-service" \
   --env="MINIO_SECRET_KEY_FILE=my_secret_key" \
   minio/minio server /data
 ```
+`MINIO_ACCESS_KEY_FILE` and `MINIO_SECRET_KEY_FILE` also support custom absolute paths, in case Docker secrets are mounted to custom locations or other tools are used to mount secrets into the container. For example, HashiCorp Vault injects secrets to `/vault/secrets`. With the custom names above, set the environment variables to
+```
+MINIO_ACCESS_KEY_FILE=/vault/secrets/my_access_key
+MINIO_SECRET_KEY_FILE=/vault/secrets/my_secret_key
+```
 
 ### Retrieving Container ID
 To use Docker commands on a specific container, you need to know the `Container ID` for that container. To get the `Container ID`, run

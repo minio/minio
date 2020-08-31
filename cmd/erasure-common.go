@@ -23,6 +23,17 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
+func (er erasureObjects) getLoadBalancedLocalDisks() (newDisks []StorageAPI) {
+	disks := er.getDisks()
+	// Based on the random shuffling return back randomized disks.
+	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
+		if disks[i-1] != nil && disks[i-1].IsLocal() {
+			newDisks = append(newDisks, disks[i-1])
+		}
+	}
+	return newDisks
+}
+
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
 func (er erasureObjects) getLoadBalancedDisks() (newDisks []StorageAPI) {
 	disks := er.getDisks()

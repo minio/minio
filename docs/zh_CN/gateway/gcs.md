@@ -41,7 +41,7 @@ MinIO Gateway配有嵌入式网络对象浏览器。 将您的Web浏览器指向
 
 ### 配置  `mc`
 ```
-mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
+mc alias set mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
 ```
 
 ### 列出GCS上的容器

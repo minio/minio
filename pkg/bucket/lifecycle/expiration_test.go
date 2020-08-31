@@ -78,14 +78,21 @@ func TestInvalidExpiration(t *testing.T) {
 		{ // Expiration with neither number of days nor a date
 			inputXML: `<Expiration>
                                     </Expiration>`,
-			expectedErr: errLifecycleInvalidExpiration,
+			expectedErr: errXMLNotWellFormed,
 		},
-		{ // Expiration with both number of days nor a date
+		{ // Expiration with both number of days and a date
 			inputXML: `<Expiration>
                                     <Days>3</Days>
                                     <Date>2019-04-20T00:00:00Z</Date>
                                     </Expiration>`,
 			expectedErr: errLifecycleInvalidExpiration,
+		},
+		{ // Expiration with both ExpiredObjectDeleteMarker and days
+			inputXML: `<Expiration>
+                                    <Days>3</Days>
+			            <ExpiredObjectDeleteMarker>false</ExpiredObjectDeleteMarker>
+                                    </Expiration>`,
+			expectedErr: errLifecycleInvalidDeleteMarker,
 		},
 	}
 	for i, tc := range validationTestCases {
@@ -98,7 +105,7 @@ func TestInvalidExpiration(t *testing.T) {
 
 			err = expiration.Validate()
 			if err != tc.expectedErr {
-				t.Fatalf("%d: %v", i+1, err)
+				t.Fatalf("%d: got: %v, expected: %v", i+1, err, tc.expectedErr)
 			}
 		})
 	}

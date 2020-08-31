@@ -30,10 +30,10 @@ import (
 // refer https://github.com/golang/go/issues/24015
 const blockSize = 8 << 10 // 8192
 
-// By default atleast 1000 entries in single getdents call
+// By default atleast 20 entries in single getdents call
 var direntPool = sync.Pool{
 	New: func() interface{} {
-		buf := make([]byte, blockSize*1000)
+		buf := make([]byte, blockSize*20)
 		return &buf
 	},
 }

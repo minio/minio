@@ -173,9 +173,9 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	region := globalServerRegion
 
 	// Parse credential tag.
-	credHeader, err := parseCredentialHeader("Credential="+formValues.Get(xhttp.AmzCredential), region, serviceS3)
-	if err != ErrNone {
-		return ErrMissingFields
+	credHeader, s3Err := parseCredentialHeader("Credential="+formValues.Get(xhttp.AmzCredential), region, serviceS3)
+	if s3Err != ErrNone {
+		return s3Err
 	}
 
 	cred, _, s3Err := checkKeyValid(credHeader.accessKey)

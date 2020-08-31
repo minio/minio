@@ -16,4 +16,4 @@
 #
 
 test_run_dir="$MINT_RUN_CORE_DIR/aws-sdk-go"
-GO111MODULE=on go build -o "$test_run_dir/aws-sdk-go" "$test_run_dir/quick-tests.go"
+(cd "$test_run_dir" && GO111MODULE=on CGO_ENABLED=0 go build)

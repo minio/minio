@@ -73,7 +73,6 @@ const (
 	azureBlockSize             = 100 * humanize.MiByte
 	azureS3MinPartSize         = 5 * humanize.MiByte
 	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
-	azureBackend               = "azure"
 	azureMarkerPrefix          = "{minio}"
 	metadataPartNamePrefix     = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x"
 	maxPartsCount              = 10000
@@ -113,7 +112,7 @@ EXAMPLES:
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
-		Name:               azureBackend,
+		Name:               minio.AzureBackendGateway,
 		Usage:              "Microsoft Azure Blob Storage",
 		Action:             azureGatewayMain,
 		CustomHelpTemplate: azureGatewayTemplate,
@@ -170,7 +169,7 @@ type Azure struct {
 
 // Name implements Gateway interface.
 func (g *Azure) Name() string {
-	return azureBackend
+	return minio.AzureBackendGateway
 }
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
@@ -530,7 +529,7 @@ func checkAzureUploadID(ctx context.Context, uploadID string) (err error) {
 func parseAzurePart(metaPartFileName, prefix string) (partID int, err error) {
 	partStr := strings.TrimPrefix(metaPartFileName, prefix+minio.SlashSeparator)
 	if partID, err = strconv.Atoi(partStr); err != nil || partID <= 0 {
-		err = fmt.Errorf("invalid part number in block id '%s'", string(partID))
+		err = fmt.Errorf("invalid part number in block id '%d'", partID)
 		return
 	}
 	return

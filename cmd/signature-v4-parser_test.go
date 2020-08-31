@@ -62,7 +62,7 @@ func validateCredentialfields(t *testing.T, testNum int, expectedCredentials cre
 	if expectedCredentials.accessKey != actualCredential.accessKey {
 		t.Errorf("Test %d: AccessKey mismatch: Expected \"%s\", got \"%s\"", testNum, expectedCredentials.accessKey, actualCredential.accessKey)
 	}
-	if expectedCredentials.scope.date != actualCredential.scope.date {
+	if !expectedCredentials.scope.date.Equal(actualCredential.scope.date) {
 		t.Errorf("Test %d: Date mismatch:Expected \"%s\", got \"%s\"", testNum, expectedCredentials.scope.date, actualCredential.scope.date)
 	}
 	if expectedCredentials.scope.region != actualCredential.scope.region {

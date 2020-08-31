@@ -146,6 +146,11 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 					logger.LogIf(ctx, err)
 				}
+				disksInfo[index] = madmin.Disk{
+					State:    diskErrToDriveState(err),
+					Endpoint: endpoints[index],
+				}
+				return err
 			}
 			di := madmin.Disk{
 				Endpoint:       endpoints[index],
@@ -154,6 +159,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				UsedSpace:      info.Used,
 				AvailableSpace: info.Free,
 				UUID:           info.ID,
+				RootDisk:       info.RootDisk,
 				State:          diskErrToDriveState(err),
 			}
 			if info.Total > 0 {
@@ -175,7 +181,27 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		onlineDisks[ep]++
 	}
 
-	// Success.
+	rootDiskCount := 0
+	for _, di := range disksInfo {
+		if di.RootDisk {
+			rootDiskCount++
+		}
+	}
+
+	if len(disksInfo) == rootDiskCount {
+		// Success.
+		return disksInfo, errs, onlineDisks, offlineDisks
+	}
+
+	// Root disk should be considered offline
+	for i := range disksInfo {
+		ep := disksInfo[i].Endpoint
+		if disksInfo[i].RootDisk {
+			offlineDisks[ep]++
+			onlineDisks[ep]--
+		}
+	}
+
 	return disksInfo, errs, onlineDisks, offlineDisks
 }
 
@@ -235,21 +261,45 @@ func (er erasureObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilt
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
-	var disks []StorageAPI
+	if len(buckets) == 0 {
+		return nil
+	}
 
+	// Collect any disk healing.
+	healing, err := getAggregatedBackgroundHealState(ctx, true)
+	if err != nil {
+		return err
+	}
+	healDisks := make(map[string]struct{}, len(healing.HealDisks))
+	for _, disk := range healing.HealDisks {
+		healDisks[disk] = struct{}{}
+	}
+
+	// Collect disks we can use.
+	var disks []StorageAPI
 	for _, d := range er.getLoadBalancedDisks() {
 		if d == nil || !d.IsOnline() {
 			continue
 		}
+		di, err := d.DiskInfo()
+		if err != nil {
+			logger.LogIf(ctx, err)
+			continue
+		}
+		if _, ok := healDisks[di.Endpoint]; ok {
+			logger.Info(color.Green("data-crawl:")+" Disk %q is Healing, skipping disk.", di.Endpoint)
+			continue
+		}
 		disks = append(disks, d)
 	}
-	if len(disks) == 0 || len(buckets) == 0 {
+	if len(disks) == 0 {
+		logger.Info(color.Green("data-crawl:") + " No disks found, skipping crawl")
 		return nil
 	}
 
 	// Load bucket totals
 	oldCache := dataUsageCache{}
-	err := oldCache.load(ctx, er, dataUsageCacheName)
+	err = oldCache.load(ctx, er, dataUsageCacheName)
 	if err != nil {
 		return err
 	}
@@ -273,20 +323,12 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		}
 	}
 
-	// Add existing buckets if changes or lifecycles.
+	// Add existing buckets.
 	for _, b := range buckets {
 		e := oldCache.find(b.Name)
 		if e != nil {
 			cache.replace(b.Name, dataUsageRoot, *e)
-			lc, err := globalLifecycleSys.Get(b.Name)
-			activeLC := err == nil && lc.HasActiveRules("", true)
-			if activeLC || bf == nil || bf.containsDir(b.Name) {
-				bucketCh <- b
-			} else {
-				if intDataUpdateTracker.debug {
-					logger.Info(color.Green("crawlAndGetDataUsage:")+" Skipping bucket %v, not updated", b.Name)
-				}
-			}
+			bucketCh <- b
 		}
 	}
 

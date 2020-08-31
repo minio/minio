@@ -22,10 +22,18 @@ if [ "${1}" != "minio" ]; then
     fi
 fi
 
-## Look for docker secrets in default documented location.
+## Look for docker secrets at given absolute path or in default documented location.
 docker_secrets_env() {
-    ACCESS_KEY_FILE="/run/secrets/$MINIO_ACCESS_KEY_FILE"
-    SECRET_KEY_FILE="/run/secrets/$MINIO_SECRET_KEY_FILE"
+    if [ -f "$MINIO_ACCESS_KEY_FILE" ]; then
+        ACCESS_KEY_FILE="$MINIO_ACCESS_KEY_FILE"
+    else
+        ACCESS_KEY_FILE="/run/secrets/$MINIO_ACCESS_KEY_FILE"
+    fi
+    if [ -f "$MINIO_SECRET_KEY_FILE" ]; then
+        SECRET_KEY_FILE="$MINIO_SECRET_KEY_FILE"
+    else
+        SECRET_KEY_FILE="/run/secrets/$MINIO_SECRET_KEY_FILE"
+    fi
 
     if [ -f "$ACCESS_KEY_FILE" ] && [ -f "$SECRET_KEY_FILE" ]; then
         if [ -f "$ACCESS_KEY_FILE" ]; then
@@ -41,12 +49,15 @@ docker_secrets_env() {
 
 ## Set KMS_MASTER_KEY from docker secrets if provided
 docker_kms_encryption_env() {
-    KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
+    if [ -f "$MINIO_KMS_MASTER_KEY_FILE" ]; then
+        KMS_MASTER_KEY_FILE="$MINIO_KMS_MASTER_KEY_FILE"
+    else
+        KMS_MASTER_KEY_FILE="/run/secrets/$MINIO_KMS_MASTER_KEY_FILE"
+    fi
 
     if [ -f "$KMS_MASTER_KEY_FILE" ]; then
         MINIO_KMS_MASTER_KEY="$(cat "$KMS_MASTER_KEY_FILE")"
         export MINIO_KMS_MASTER_KEY
-
     fi
 }
 
@@ -58,7 +69,6 @@ docker_sse_encryption_env() {
     if [ -f "$SSE_MASTER_KEY_FILE" ]; then
         MINIO_SSE_MASTER_KEY="$(cat "$SSE_MASTER_KEY_FILE")"
         export MINIO_SSE_MASTER_KEY
-
     fi
 }
 

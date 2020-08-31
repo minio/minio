@@ -137,6 +137,7 @@ var AllSupportedKeys = append([]Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
+	LDAPUser,
 	// Add new supported condition keys.
 }, JWTKeys...)
 
@@ -152,6 +153,7 @@ var CommonKeys = append([]Key{
 	AWSUserID,
 	AWSUsername,
 	S3XAmzContentSha256,
+	LDAPUser,
 }, JWTKeys...)
 
 func substFuncFromValues(values map[string][]string) func(string) string {
@@ -199,6 +201,8 @@ func (key Key) Name() string {
 		return strings.TrimPrefix(keyString, "aws:")
 	} else if strings.HasPrefix(keyString, "jwt:") {
 		return strings.TrimPrefix(keyString, "jwt:")
+	} else if strings.HasPrefix(keyString, "ldap:") {
+		return strings.TrimPrefix(keyString, "ldap:")
 	}
 	return strings.TrimPrefix(keyString, "s3:")
 }

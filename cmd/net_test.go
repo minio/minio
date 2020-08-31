@@ -280,22 +280,21 @@ func TestExtractHostPort(t *testing.T) {
 
 	for i, testCase := range testCases {
 		host, port, err := extractHostPort(testCase.addr)
-		if testCase.expectedErr == nil {
-			if err != nil {
-				t.Fatalf("Test %d: should succeed but failed with err: %v", i+1, err)
-			}
+		if testCase.expectedErr == nil && err != nil {
+			t.Fatalf("Test %d: should succeed but failed with err: %v", i+1, err)
+		}
+		if testCase.expectedErr != nil && err == nil {
+			t.Fatalf("Test %d:, should fail but succeeded.", i+1)
+		}
+		if err == nil {
 			if host != testCase.host {
 				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.host, host)
 			}
 			if port != testCase.port {
 				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.port, port)
 			}
-
 		}
-		if testCase.expectedErr != nil {
-			if err == nil {
-				t.Fatalf("Test %d:, should fail but succeeded.", i+1)
-			}
+		if testCase.expectedErr != nil && err != nil {
 			if testCase.expectedErr.Error() != err.Error() {
 				t.Fatalf("Test %d: failed with different error, expected: '%v', found:'%v'.", i+1, testCase.expectedErr, err)
 			}

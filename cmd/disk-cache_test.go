@@ -27,7 +27,7 @@ func TestCacheMetadataObjInfo(t *testing.T) {
 	if objInfo.Size != 0 {
 		t.Fatal("Unexpected object info value for Size", objInfo.Size)
 	}
-	if objInfo.ModTime != timeSentinel {
+	if !objInfo.ModTime.Equal(timeSentinel) {
 		t.Fatal("Unexpected object info value for ModTime ", objInfo.ModTime)
 	}
 	if objInfo.IsDir {

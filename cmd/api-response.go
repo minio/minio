@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -35,7 +36,7 @@ import (
 const (
 	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
 	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
-	maxObjectList     = 10000                      // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
 	maxDeleteList     = 10000                      // Limit number of objects deleted in a delete call.
 	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
 	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
@@ -763,6 +764,10 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 		w.Header().Set(xhttp.RetryAfter, "120")
+	case "InvalidRegion":
+		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalServerRegion)
+	case "AuthorizationHeaderMalformed":
+		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalServerRegion)
 	case "AccessDenied":
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
@@ -820,39 +825,4 @@ func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, er
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
-}
-
-// writeCustomErrorResponseXML - similar to writeErrorResponse,
-// but accepts the error message directly (this allows messages to be
-// dynamically generated.)
-func writeCustomErrorResponseXML(ctx context.Context, w http.ResponseWriter, err APIError, errBody string, reqURL *url.URL, browser bool) {
-
-	switch err.Code {
-	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
-		// Set retry-after header to indicate user-agents to retry request after 120secs.
-		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
-		w.Header().Set(xhttp.RetryAfter, "120")
-	case "AccessDenied":
-		// The request is from browser and also if browser
-		// is enabled we need to redirect.
-		if browser && globalBrowserEnabled {
-			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
-			w.WriteHeader(http.StatusTemporaryRedirect)
-			return
-		}
-	}
-
-	reqInfo := logger.GetReqInfo(ctx)
-	errorResponse := APIErrorResponse{
-		Code:       err.Code,
-		Message:    errBody,
-		Resource:   reqURL.Path,
-		BucketName: reqInfo.BucketName,
-		Key:        reqInfo.ObjectName,
-		RequestID:  w.Header().Get(xhttp.AmzRequestID),
-		HostID:     globalDeploymentID,
-	}
-
-	encodedErrorResponse := encodeResponse(errorResponse)
-	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeXML)
 }

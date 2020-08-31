@@ -199,8 +199,8 @@ func (sys *BucketTargetSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		return nil
 	}
 
-	// Load bucket targets once during boot.
-	sys.load(ctx, buckets, objAPI)
+	// Load bucket targets once during boot in background.
+	go sys.load(ctx, buckets, objAPI)
 	return nil
 }
 

@@ -17,6 +17,7 @@
 package parquet
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/bcicen/jstream"
@@ -34,6 +35,12 @@ type Reader struct {
 
 // Read - reads single record.
 func (r *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			rerr = fmt.Errorf("panic reading parquet record: %v", rec)
+		}
+	}()
+
 	parquetRecord, err := r.reader.Read()
 	if err != nil {
 		if err != io.EOF {
@@ -57,7 +64,7 @@ func (r *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 		case parquetgen.Type_INT32:
 			value = int64(v.Value.(int32))
 		case parquetgen.Type_INT64:
-			value = int64(v.Value.(int64))
+			value = v.Value.(int64)
 		case parquetgen.Type_FLOAT:
 			value = float64(v.Value.(float32))
 		case parquetgen.Type_DOUBLE:
@@ -92,7 +99,12 @@ func (r *Reader) Close() error {
 }
 
 // NewReader - creates new Parquet reader using readerFunc callback.
-func NewReader(getReaderFunc func(offset, length int64) (io.ReadCloser, error), args *ReaderArgs) (*Reader, error) {
+func NewReader(getReaderFunc func(offset, length int64) (io.ReadCloser, error), args *ReaderArgs) (r *Reader, err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("panic reading parquet header: %v", rec)
+		}
+	}()
 	reader, err := parquetgo.NewReader(getReaderFunc, nil)
 	if err != nil {
 		if err != io.EOF {

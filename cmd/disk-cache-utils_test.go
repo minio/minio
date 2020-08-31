@@ -45,7 +45,7 @@ func TestGetCacheControlOpts(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			m := make(map[string]string)
 			m["cache-control"] = testCase.cacheControlHeaderVal
-			if testCase.expiryHeaderVal != timeSentinel {
+			if !testCase.expiryHeaderVal.Equal(timeSentinel) {
 				m["expires"] = testCase.expiryHeaderVal.String()
 			}
 			c := cacheControlOpts(ObjectInfo{UserDefined: m, Expires: testCase.expiryHeaderVal})

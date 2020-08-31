@@ -179,7 +179,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry)
-	go intDataUpdateTracker.start(GlobalContext, fsPath)
+	go intDataUpdateTracker.start(ctx, fsPath)
 
 	// Return successfully initialized object layer.
 	return fs, nil
@@ -352,6 +352,8 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		if fiErr != nil {
 			return 0, errSkipFile
 		}
+		// We cannot heal in FS mode.
+		item.heal = false
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
 		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
@@ -601,7 +603,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 
 	if !cpSrcDstSame {
 		objectDWLock := fs.NewNSLock(ctx, dstBucket, dstObject)
-		if err := objectDWLock.GetLock(globalObjectTimeout); err != nil {
+		if err := objectDWLock.GetLock(globalOperationTimeout); err != nil {
 			return oi, err
 		}
 		defer objectDWLock.Unlock()
@@ -691,12 +693,12 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		lock := fs.NewNSLock(ctx, bucket, object)
 		switch lockType {
 		case writeLock:
-			if err = lock.GetLock(globalObjectTimeout); err != nil {
+			if err = lock.GetLock(globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.Unlock
 		case readLock:
-			if err = lock.GetRLock(globalObjectTimeout); err != nil {
+			if err = lock.GetRLock(globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.RUnlock
@@ -709,7 +711,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
-	// For a directory, we need to send an reader that returns no bytes.
+	// For a directory, we need to return a reader that returns no bytes.
 	if HasSuffix(object, SlashSeparator) {
 		// The lock taken above is released when
 		// objReader.Close() is called by the caller.
@@ -782,7 +784,7 @@ func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offse
 
 	// Lock the object before reading.
 	lk := fs.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalObjectTimeout); err != nil {
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
@@ -958,6 +960,10 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
+	if strings.HasSuffix(object, SlashSeparator) && !fs.isObjectDir(bucket, object) {
+		return oi, errFileNotFound
+	}
+
 	fsMeta := fsMetaV1{}
 	if HasSuffix(object, SlashSeparator) {
 		fi, err := fsStatDir(ctx, pathJoin(fs.fsPath, bucket, object))
@@ -1006,7 +1012,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
 	lk := fs.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalObjectTimeout); err != nil {
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		return oi, err
 	}
 	defer lk.RUnlock()
@@ -1044,7 +1050,7 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
 		lk := fs.NewNSLock(ctx, bucket, object)
-		if err = lk.GetLock(globalObjectTimeout); err != nil {
+		if err = lk.GetLock(globalOperationTimeout); err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
@@ -1095,7 +1101,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 
 	// Lock the object.
 	lk := fs.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalObjectTimeout); err != nil {
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
 	}
@@ -1328,23 +1334,31 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	return ObjectInfo{Bucket: bucket, Name: object}, nil
 }
 
+func (fs *FSObjects) isLeafDir(bucket string, leafPath string) bool {
+	return fs.isObjectDir(bucket, leafPath)
+}
+
+func (fs *FSObjects) isLeaf(bucket string, leafPath string) bool {
+	return !strings.HasSuffix(leafPath, slashSeparator)
+}
+
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
 func (fs *FSObjects) listDirFactory() ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 		var err error
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(GlobalContext, err)
-			return false, nil
+			return false, nil, false
 		}
 		if len(entries) == 0 {
-			return true, nil
+			return true, nil, false
 		}
-		sort.Strings(entries)
-		return false, filterMatchingPrefix(entries, prefixEntry)
+		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, fs.isLeaf)
+		return false, entries, delayIsLeaf
 	}
 
 	// Return list factory instance.
@@ -1447,7 +1461,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	}()
 
 	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
-		fs.listDirFactory(), fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
+		fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
 }
 
 // GetObjectTags - get object tags from an existing object
@@ -1544,7 +1558,7 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
 func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
-	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), results, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
+	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, results, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
 }
 
 // HealObjects - no-op for fs. Valid only for Erasure.

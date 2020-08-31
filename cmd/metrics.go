@@ -106,7 +106,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 	healMetricsNamespace := "self_heal"
 
-	dur := time.Duration(-1)
+	var dur time.Duration
 	if !bgSeq.lastHealActivity.IsZero() {
 		dur = time.Since(bgSeq.lastHealActivity)
 	}
@@ -157,7 +157,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects gateway specific metrics for MinIO instance in Prometheus specific format
 // and sends to given channel
 func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
-	if !globalIsGateway || (globalGatewayName != "s3" && globalGatewayName != "azure" && globalGatewayName != "gcs") {
+	if !globalIsGateway || (globalGatewayName != S3BackendGateway && globalGatewayName != AzureBackendGateway && globalGatewayName != GCSBackendGateway) {
 		return
 	}
 

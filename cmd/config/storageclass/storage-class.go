@@ -156,7 +156,7 @@ func parseStorageClass(storageClassEnv string) (sc StorageClass, err error) {
 }
 
 // Validates the parity disks.
-func validateParity(ssParity, rrsParity, drivesPerSet int) (err error) {
+func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 	if ssParity == 0 && rrsParity == 0 {
 		return nil
 	}
@@ -174,12 +174,12 @@ func validateParity(ssParity, rrsParity, drivesPerSet int) (err error) {
 		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minParityDisks)
 	}
 
-	if ssParity > drivesPerSet/2 {
-		return fmt.Errorf("Standard storage class parity %d should be less than or equal to %d", ssParity, drivesPerSet/2)
+	if ssParity > setDriveCount/2 {
+		return fmt.Errorf("Standard storage class parity %d should be less than or equal to %d", ssParity, setDriveCount/2)
 	}
 
-	if rrsParity > drivesPerSet/2 {
-		return fmt.Errorf("Reduced redundancy storage class parity %d should be less than  or equal to %d", rrsParity, drivesPerSet/2)
+	if rrsParity > setDriveCount/2 {
+		return fmt.Errorf("Reduced redundancy storage class parity %d should be less than  or equal to %d", rrsParity, setDriveCount/2)
 	}
 
 	if ssParity > 0 && rrsParity > 0 {
@@ -220,9 +220,9 @@ func Enabled(kvs config.KVS) bool {
 }
 
 // LookupConfig - lookup storage class config and override with valid environment settings if any.
-func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
+func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	cfg = Config{}
-	cfg.Standard.Parity = drivesPerSet / 2
+	cfg.Standard.Parity = setDriveCount / 2
 	cfg.RRS.Parity = defaultRRSParity
 
 	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
@@ -239,7 +239,7 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 		}
 	}
 	if cfg.Standard.Parity == 0 {
-		cfg.Standard.Parity = drivesPerSet / 2
+		cfg.Standard.Parity = setDriveCount / 2
 	}
 
 	if rrsc != "" {
@@ -254,7 +254,7 @@ func LookupConfig(kvs config.KVS, drivesPerSet int) (cfg Config, err error) {
 
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.
-	if err = validateParity(cfg.Standard.Parity, cfg.RRS.Parity, drivesPerSet); err != nil {
+	if err = validateParity(cfg.Standard.Parity, cfg.RRS.Parity, setDriveCount); err != nil {
 		return Config{}, err
 	}
 

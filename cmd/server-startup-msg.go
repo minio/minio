@@ -94,13 +94,13 @@ func printStartupSafeModeMessage(apiEndpoints []string, err error) {
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logStartupMessage(color.RedBold("\nCommand-line Access: ") + mcAdminQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
-			mcMessage := fmt.Sprintf("> mc.exe config host add %s %s %s %s --api s3v4", alias,
+			mcMessage := fmt.Sprintf("> mc.exe alias set %s %s %s %s --api s3v4", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 			mcMessage = "> mc.exe admin config --help"
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		} else {
-			mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s --api s3v4", alias,
+			mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s --api s3v4", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 			mcMessage = "$ mc admin config --help"
@@ -233,11 +233,11 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logStartupMessage(color.Blue("\nCommand-line Access: ") + mcQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
-			mcMessage := fmt.Sprintf("$ mc.exe config host add %s %s %s %s", alias,
+			mcMessage := fmt.Sprintf("$ mc.exe alias set %s %s %s %s", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		} else {
-			mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s", alias,
+			mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s", alias,
 				endPoint, cred.AccessKey, cred.SecretKey)
 			logStartupMessage(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 		}
@@ -301,8 +301,8 @@ func printStorageInfo(storageInfo StorageInfo) {
 
 func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
-		humanize.IBytes(uint64(storageInfo.Free)),
-		humanize.IBytes(uint64(storageInfo.Total)))
+		humanize.IBytes(storageInfo.Free),
+		humanize.IBytes(storageInfo.Total))
 	logStartupMessage(msg)
 }
 

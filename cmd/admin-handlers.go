@@ -1270,10 +1270,9 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
-
 	defer cancel()
 
-	nsLock := objectAPI.NewNSLock(deadlinedCtx, minioMetaBucket, "obd-in-progress")
+	nsLock := objectAPI.NewNSLock(ctx, minioMetaBucket, "obd-in-progress")
 	if err := nsLock.GetLock(newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return
@@ -1500,6 +1499,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 	// add all the disks local to this server.
 	for _, disk := range storageInfo.Disks {
+		if disk.DrivePath == "" && disk.Endpoint == "" {
+			continue
+		}
 		if disk.Endpoint == disk.DrivePath {
 			servers[len(servers)-1].Disks = append(servers[len(servers)-1].Disks, disk)
 		}

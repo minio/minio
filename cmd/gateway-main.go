@@ -262,8 +262,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	// Currently only NAS and S3 gateway support encryption headers.
-	encryptionEnabled := gatewayName == "s3" || gatewayName == "nas"
-	allowSSEKMS := gatewayName == "s3" // Only S3 can support SSE-KMS (as pass-through)
+	encryptionEnabled := gatewayName == S3BackendGateway || gatewayName == NASBackendGateway
+	allowSSEKMS := gatewayName == S3BackendGateway // Only S3 can support SSE-KMS (as pass-through)
 
 	// Add API router.
 	registerAPIRouter(router, encryptionEnabled, allowSSEKMS)
@@ -310,12 +310,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// Calls all New() for all sub-systems.
 	newAllSubsystems()
 
-	if gatewayName == "nas" {
+	if gatewayName == NASBackendGateway {
 		buckets, err := newObject.ListBuckets(GlobalContext)
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
 		}
-		logger.FatalIf(globalNotificationSys.Init(buckets, newObject), "Unable to initialize notification system")
+		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
 	if globalEtcdClient != nil {

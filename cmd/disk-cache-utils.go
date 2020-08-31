@@ -102,7 +102,7 @@ func (c *cacheControl) isStale(modTime time.Time) bool {
 func cacheControlOpts(o ObjectInfo) *cacheControl {
 	c := cacheControl{}
 	m := o.UserDefined
-	if o.Expires != timeSentinel {
+	if !o.Expires.Equal(timeSentinel) {
 		c.expiry = o.Expires
 	}
 

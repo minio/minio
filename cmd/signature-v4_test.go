@@ -46,7 +46,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 		// (0) It should fail if 'X-Amz-Credential' is missing.
 		{
 			form:     http.Header{},
-			expected: ErrMissingFields,
+			expected: ErrCredMalformed,
 		},
 		// (1) It should fail if the access key is incorrect.
 		{

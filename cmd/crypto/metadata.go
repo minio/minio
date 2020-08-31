@@ -65,6 +65,17 @@ func RemoveInternalEntries(metadata map[string]string) {
 	delete(metadata, S3KMSSealedKey)
 }
 
+// IsSourceEncrypted returns true if the source is encrypted
+func IsSourceEncrypted(metadata map[string]string) bool {
+	if _, ok := metadata[SSECAlgorithm]; ok {
+		return true
+	}
+	if _, ok := metadata[SSEHeader]; ok {
+		return true
+	}
+	return false
+}
+
 // IsEncrypted returns true if the object metadata indicates
 // that it was uploaded using some form of server-side-encryption.
 //

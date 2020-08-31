@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -86,7 +87,7 @@ func getLocalDisksToHeal(objAPI ObjectLayer) []Endpoints {
 			// Try to connect to the current endpoint
 			// and reformat if the current disk is not formatted
 			_, _, err := connectEndpoint(endpoint)
-			if err == errUnformattedDisk {
+			if errors.Is(err, errUnformattedDisk) {
 				localDisksToHeal = append(localDisksToHeal, endpoint)
 			}
 		}
@@ -182,7 +183,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, drivesToHeal
 			// Heal all erasure sets that need
 			for i, erasureSetToHeal := range erasureSetInZoneToHeal {
 				for _, setIndex := range erasureSetToHeal {
-					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].drivesPerSet)
+					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].setDriveCount)
 					if err != nil {
 						logger.LogIf(ctx, err)
 					}

@@ -31,6 +31,13 @@ func at(t time.Time, f func()) {
 	jwt.TimeFunc = time.Now
 }
 
+func areEqLicenseInfo(a, b LicenseInfo) bool {
+	if a.Email == b.Email && a.TeamName == b.TeamName && a.AccountID == b.AccountID && a.ServiceType == b.ServiceType && a.StorageCapacity == b.StorageCapacity && a.ExpiresAt.Equal(b.ExpiresAt) {
+		return true
+	}
+	return false
+}
+
 // TestLicenseVerify tests the license key verification process with a valid and
 // an invalid key.
 func TestLicenseVerify(t *testing.T) {
@@ -54,6 +61,7 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 			AccountID:       1,
 			StorageCapacity: 50,
 			ServiceType:     "STANDARD",
+			ExpiresAt:       time.Date(2021, time.August, 5, 15, 17, 42, 0, time.FixedZone("PDT", -7*60*60)),
 		}, true},
 	}
 
@@ -69,7 +77,7 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 				if !tc.shouldPass {
 					t.Fatalf("%d: Expected license to fail verification but passed", i+1)
 				}
-				if tc.expectedLicInfo != licInfo {
+				if !areEqLicenseInfo(tc.expectedLicInfo, licInfo) {
 					t.Fatalf("%d: Expected license info %v but got %v", i+1, tc.expectedLicInfo, licInfo)
 				}
 			}
