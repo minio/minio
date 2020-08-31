@@ -1085,7 +1085,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 	// Avoid reusing tcp connection if read timeout is hit
 	// This is needed to make r.Context().Done() work as
 	// expected in case of read timeout
-	w.Header().Add("Connection", "close")
+	w.Header().Set("Connection", "close")
 
 	setEventStreamHeaders(w)
 

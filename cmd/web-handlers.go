@@ -1040,7 +1040,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
 	// Require Content-Length to be set in the request

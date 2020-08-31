@@ -1127,7 +1127,7 @@ func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.
 	}
 
 	for k, v := range headers {
-		req.Header.Add(k, v)
+		req.Header.Set(k, v)
 	}
 
 	err = signRequestV2(req, accessKey, secretKey)
@@ -1151,7 +1151,7 @@ func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.
 	}
 
 	for k, v := range headers {
-		req.Header.Add(k, v)
+		req.Header.Set(k, v)
 	}
 
 	err = signRequestV4(req, accessKey, secretKey)
