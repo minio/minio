@@ -1200,8 +1200,13 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
 	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
+
+	// Delete the temporary object in the case of a
+	// failure. If PutObject succeeds, then there would be
+	// nothing to delete.
+	defer fsRemoveFile(ctx, fsTmpObjPath)
+
 	if err != nil {
-		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	fsMeta.Meta["etag"] = r.MD5CurrentHexString()
@@ -1209,14 +1214,8 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, IncompleteBody{}
 	}
-
-	// Delete the temporary object in the case of a
-	// failure. If PutObject succeeds, then there would be
-	// nothing to delete.
-	defer fsRemoveFile(ctx, fsTmpObjPath)
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)

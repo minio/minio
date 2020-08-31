@@ -41,9 +41,8 @@ func fsRemoveFile(ctx context.Context, filePath string) (err error) {
 		return err
 	}
 
-	if err = os.Remove((filePath)); err != nil {
-		err = osErrToFileErr(err)
-		if err != errFileNotFound {
+	if err = os.Remove(filePath); err != nil {
+		if err = osErrToFileErr(err); err != errFileNotFound {
 			logger.LogIf(ctx, err)
 		}
 	}
