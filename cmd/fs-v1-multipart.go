@@ -319,22 +319,22 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 
 	tmpPartPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
 	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, buf, data.Size())
+
+	// Delete temporary part in case of failure. If
+	// PutObjectPart succeeds then there would be nothing to
+	// delete in which case we just ignore the error.
+	defer fsRemoveFile(ctx, tmpPartPath)
+
 	if err != nil {
-		fsRemoveFile(ctx, tmpPartPath)
 		return pi, toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		fsRemoveFile(ctx, tmpPartPath)
 		return pi, IncompleteBody{}
 	}
 
-	// Delete temporary part in case of failure. If
-	// PutObjectPart succeeds then there would be nothing to
-	// delete in which case we just ignore the error.
-	defer fsRemoveFile(ctx, tmpPartPath)
 	etag := r.MD5CurrentHexString()
 
 	if etag == "" {
@@ -863,8 +863,7 @@ func (fs *FSObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupIn
 						fs.appendFileMapMu.Lock()
 						bgAppend, ok := fs.appendFileMap[uploadID]
 						if ok {
-							err := fsRemoveFile(ctx, bgAppend.filePath)
-							logger.LogIf(ctx, err)
+							_ = fsRemoveFile(ctx, bgAppend.filePath)
 							delete(fs.appendFileMap, uploadID)
 						}
 						fs.appendFileMapMu.Unlock()
