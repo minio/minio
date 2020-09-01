@@ -449,14 +449,15 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		Versioned: globalBucketVersioningSys.Enabled(bucket),
+		Versioned:        globalBucketVersioningSys.Enabled(bucket),
+		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
 	})
 
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
 		dindex := objectsToDelete[deleteList[i]]
 		apiErr := toAPIError(ctx, errs[i])
-		if apiErr.Code == "" || apiErr.Code == "NoSuchKey" {
+		if apiErr.Code == "" || apiErr.Code == "NoSuchKey" || apiErr.Code == "InvalidArgument" {
 			deletedObjects[dindex] = dObjects[i]
 			continue
 		}

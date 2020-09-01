@@ -227,29 +227,10 @@ func (z *xlMetaV2) Load(buf []byte) error {
 
 // AddVersion adds a new version
 func (z *xlMetaV2) AddVersion(fi FileInfo) error {
-	if fi.Deleted {
-		uv, err := uuid.Parse(fi.VersionID)
-		if err != nil {
-			return err
-		}
-		v := xlMetaV2Version{
-			Type: DeleteType,
-			DeleteMarker: &xlMetaV2DeleteMarker{
-				VersionID: uv,
-				ModTime:   fi.ModTime.UnixNano(),
-			},
-		}
-		if !v.Valid() {
-			return errors.New("internal error: invalid version entry generated")
-		}
-		z.Versions = append(z.Versions, v)
-		return nil
-	}
-
 	if fi.VersionID == "" {
 		// this means versioning is not yet
-		// enabled i.e all versions are basically
-		// default value i.e "null"
+		// enabled or suspend i.e all versions
+		// are basically default value i.e "null"
 		fi.VersionID = nullVersionID
 	}
 
@@ -354,11 +335,17 @@ func newXLMetaV2(fi FileInfo) (xlMetaV2, error) {
 }
 
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
+	versionID := ""
+	var uv uuid.UUID
+	// check if the version is not "null"
+	if !bytes.Equal(j.VersionID[:], uv[:]) {
+		versionID = uuid.UUID(j.VersionID).String()
+	}
 	fi := FileInfo{
 		Volume:    volume,
 		Name:      path,
 		ModTime:   time.Unix(0, j.ModTime).UTC(),
-		VersionID: uuid.UUID(j.VersionID).String(),
+		VersionID: versionID,
 		Deleted:   true,
 	}
 	return fi, nil
@@ -434,10 +421,26 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 	if fi.VersionID == nullVersionID {
 		fi.VersionID = ""
 	}
+
 	var uv uuid.UUID
 	if fi.VersionID != "" {
 		uv, _ = uuid.Parse(fi.VersionID)
 	}
+
+	var ventry xlMetaV2Version
+	if fi.Deleted {
+		ventry = xlMetaV2Version{
+			Type: DeleteType,
+			DeleteMarker: &xlMetaV2DeleteMarker{
+				VersionID: uv,
+				ModTime:   fi.ModTime.UnixNano(),
+			},
+		}
+		if !ventry.Valid() {
+			return "", false, errors.New("internal error: invalid version entry generated")
+		}
+	}
+
 	for i, version := range z.Versions {
 		if !version.Valid() {
 			return "", false, errFileCorrupt
@@ -446,11 +449,17 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		case LegacyType:
 			if version.ObjectV1.VersionID == fi.VersionID {
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
+				if fi.Deleted {
+					z.Versions = append(z.Versions, ventry)
+				}
 				return version.ObjectV1.DataDir, len(z.Versions) == 0, nil
 			}
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
+				if fi.Deleted {
+					z.Versions = append(z.Versions, ventry)
+				}
 				return "", len(z.Versions) == 0, nil
 			}
 		}
@@ -478,13 +487,24 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
+					if fi.Deleted {
+						z.Versions = append(z.Versions, ventry)
+					}
 					// Found that another version references the same dataDir
 					// we shouldn't remove it, and only remove the version instead
 					return "", len(z.Versions) == 0, nil
 				}
+				if fi.Deleted {
+					z.Versions = append(z.Versions, ventry)
+				}
 				return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
 			}
 		}
+	}
+
+	if fi.Deleted {
+		z.Versions = append(z.Versions, ventry)
+		return "", false, nil
 	}
 
 	return "", false, errFileVersionNotFound
