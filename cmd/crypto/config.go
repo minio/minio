@@ -222,6 +222,9 @@ func LookupKesConfig(kvs config.KVS) (KesConfig, error) {
 	endpointStr := env.Get(EnvKMSKesEndpoint, kvs.Get(KMSKesEndpoint))
 	var endpoints []string
 	for _, endpoint := range strings.Split(endpointStr, ",") {
+		if strings.TrimSpace(endpoint) == "" {
+			continue
+		}
 		if !ellipses.HasEllipses(endpoint) {
 			endpoints = append(endpoints, endpoint)
 			continue
@@ -233,6 +236,9 @@ func LookupKesConfig(kvs config.KVS) (KesConfig, error) {
 		for _, p := range pattern {
 			endpoints = append(endpoints, p.Expand()...)
 		}
+	}
+	if len(endpoints) == 0 {
+		return kesCfg, nil
 	}
 
 	randNum := rand.Intn(len(endpoints) + 1) // We add 1 b/c len(endpoints) may be 0: See: rand.Intn docs
