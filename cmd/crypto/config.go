@@ -16,11 +16,14 @@ package crypto
 
 import (
 	"errors"
+	"math/rand"
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/ellipses"
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -167,7 +170,8 @@ const (
 
 const (
 	// EnvKMSKesEndpoint is the environment variable used to specify
-	// the kes server HTTPS endpoint.
+	// one or multiple KES server HTTPS endpoints. The individual
+	// endpoints should be separated by ','.
 	EnvKMSKesEndpoint = "MINIO_KMS_KES_ENDPOINT"
 
 	// EnvKMSKesKeyFile is the environment variable used to specify
@@ -216,16 +220,30 @@ func LookupKesConfig(kvs config.KVS) (KesConfig, error) {
 	kesCfg := KesConfig{}
 
 	endpointStr := env.Get(EnvKMSKesEndpoint, kvs.Get(KMSKesEndpoint))
-	if endpointStr != "" {
-		// Lookup kes configuration & overwrite config entry if ENV var is present
-		endpoint, err := xnet.ParseHTTPURL(endpointStr)
+	var endpoints []string
+	for _, endpoint := range strings.Split(endpointStr, ",") {
+		if !ellipses.HasEllipses(endpoint) {
+			endpoints = append(endpoints, endpoint)
+			continue
+		}
+		pattern, err := ellipses.FindEllipsesPatterns(endpoint)
 		if err != nil {
 			return kesCfg, err
 		}
-		endpointStr = endpoint.String()
+		for _, p := range pattern {
+			endpoints = append(endpoints, p.Expand()...)
+		}
 	}
 
-	kesCfg.Endpoint = endpointStr
+	randNum := rand.Intn(len(endpoints) + 1) // We add 1 b/c len(endpoints) may be 0: See: rand.Intn docs
+	kesCfg.Endpoint = make([]string, len(endpoints))
+	for i, endpoint := range endpoints {
+		endpoint, err := xnet.ParseHTTPURL(endpoint)
+		if err != nil {
+			return kesCfg, err
+		}
+		kesCfg.Endpoint[(randNum+i)%len(endpoints)] = endpoint.String()
+	}
 	kesCfg.KeyFile = env.Get(EnvKMSKesKeyFile, kvs.Get(KMSKesKeyFile))
 	kesCfg.CertFile = env.Get(EnvKMSKesCertFile, kvs.Get(KMSKesCertFile))
 	kesCfg.CAPath = env.Get(EnvKMSKesCAPath, kvs.Get(KMSKesCAPath))
