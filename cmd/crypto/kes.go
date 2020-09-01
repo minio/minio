@@ -16,6 +16,7 @@ package crypto
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -45,8 +46,8 @@ var ErrKESKeyExists = NewKESError(http.StatusBadRequest, "key does already exist
 type KesConfig struct {
 	Enabled bool
 
-	// The kes server endpoint.
-	Endpoint string
+	// The KES server endpoints.
+	Endpoint []string
 
 	// The path to the TLS private key used
 	// by MinIO to authenticate to the kes
@@ -85,7 +86,7 @@ type KesConfig struct {
 // Verify verifies if the kes configuration is correct
 func (k KesConfig) Verify() (err error) {
 	switch {
-	case k.Endpoint == "":
+	case len(k.Endpoint) == 0:
 		err = Errorf("crypto: missing kes endpoint")
 	case k.CertFile == "":
 		err = Errorf("crypto: missing cert file")
@@ -100,7 +101,7 @@ func (k KesConfig) Verify() (err error) {
 type kesService struct {
 	client *kesClient
 
-	endpoint     string
+	endpoints    []string
 	defaultKeyID string
 }
 
@@ -115,23 +116,37 @@ func NewKes(cfg KesConfig) (KMS, error) {
 	if err != nil {
 		return nil, err
 	}
-	certPool, err := loadCACertificates(cfg.CAPath)
-	if err != nil {
-		return nil, err
+	if cfg.Transport.TLSClientConfig != nil {
+		if err = loadCACertificates(cfg.CAPath,
+			cfg.Transport.TLSClientConfig.RootCAs); err != nil {
+			return nil, err
+		}
+	} else {
+		rootCAs, _ := x509.SystemCertPool()
+		if rootCAs == nil {
+			// In some systems (like Windows) system cert pool is
+			// not supported or no certificates are present on the
+			// system - so we create a new cert pool.
+			rootCAs = x509.NewCertPool()
+		}
+		if err = loadCACertificates(cfg.CAPath, rootCAs); err != nil {
+			return nil, err
+		}
+		cfg.Transport.TLSClientConfig = &tls.Config{
+			RootCAs: rootCAs,
+		}
 	}
-	cfg.Transport.TLSClientConfig = &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      certPool,
-	}
-	cfg.Transport.ForceAttemptHTTP2 = true
+	cfg.Transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
+	cfg.Transport.TLSClientConfig.NextProtos = []string{"h2"}
+
 	return &kesService{
 		client: &kesClient{
-			addr: cfg.Endpoint,
+			endpoints: cfg.Endpoint,
 			httpClient: http.Client{
 				Transport: cfg.Transport,
 			},
 		},
-		endpoint:     cfg.Endpoint,
+		endpoints:    cfg.Endpoint,
 		defaultKeyID: cfg.DefaultKeyID,
 	}, nil
 }
@@ -148,9 +163,9 @@ func (kes *kesService) DefaultKeyID() string {
 // method.
 func (kes *kesService) Info() KMSInfo {
 	return KMSInfo{
-		Endpoint: kes.endpoint,
-		Name:     kes.DefaultKeyID(),
-		AuthType: "TLS",
+		Endpoints: kes.endpoints,
+		Name:      kes.DefaultKeyID(),
+		AuthType:  "TLS",
 	}
 }
 
@@ -206,7 +221,7 @@ func (kes *kesService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 //   • GenerateDataKey (API: /v1/key/generate/)
 //   • DecryptDataKey  (API: /v1/key/decrypt/)
 type kesClient struct {
-	addr       string
+	endpoints  []string
 	httpClient http.Client
 }
 
@@ -217,8 +232,8 @@ type kesClient struct {
 // application does not have the cryptographic key at
 // any point in time.
 func (c *kesClient) CreateKey(name string) error {
-	url := fmt.Sprintf("%s/v1/key/create/%s", c.addr, url.PathEscape(name))
-	_, err := c.postRetry(url, nil, 0) // No request body and no response expected
+	path := fmt.Sprintf("/v1/key/create/%s", url.PathEscape(name))
+	_, err := c.postRetry(path, nil, 0) // No request body and no response expected
 	if err != nil {
 		return err
 	}
@@ -250,8 +265,8 @@ func (c *kesClient) GenerateDataKey(name string, context []byte) ([]byte, []byte
 	}
 
 	const limit = 1 << 20 // A plaintext/ciphertext key pair will never be larger than 1 MB
-	url := fmt.Sprintf("%s/v1/key/generate/%s", c.addr, url.PathEscape(name))
-	resp, err := c.postRetry(url, bytes.NewReader(body), limit)
+	path := fmt.Sprintf("/v1/key/generate/%s", url.PathEscape(name))
+	resp, err := c.postRetry(path, bytes.NewReader(body), limit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -287,8 +302,8 @@ func (c *kesClient) DecryptDataKey(name string, ciphertext, context []byte) ([]b
 	}
 
 	const limit = 1 << 20 // A data key will never be larger than 1 MiB
-	url := fmt.Sprintf("%s/v1/key/decrypt/%s", c.addr, url.PathEscape(name))
-	resp, err := c.postRetry(url, bytes.NewReader(body), limit)
+	path := fmt.Sprintf("/v1/key/decrypt/%s", url.PathEscape(name))
+	resp, err := c.postRetry(path, bytes.NewReader(body), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +374,16 @@ func parseErrorResponse(resp *http.Response) error {
 }
 
 func (c *kesClient) post(url string, body io.Reader, limit int64) (io.Reader, error) {
-	resp, err := c.httpClient.Post(url, "application/json", body)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -378,17 +402,22 @@ func (c *kesClient) post(url string, body io.Reader, limit int64) (io.Reader, er
 	return &respBody, nil
 }
 
-func (c *kesClient) postRetry(url string, body io.ReadSeeker, limit int64) (io.Reader, error) {
+func (c *kesClient) postRetry(path string, body io.ReadSeeker, limit int64) (io.Reader, error) {
+	retryMax := 1 + len(c.endpoints)
 	for i := 0; ; i++ {
 		if body != nil {
 			body.Seek(0, io.SeekStart) // seek to the beginning of the body.
 		}
-		response, err := c.post(url, body, limit)
+
+		response, err := c.post(c.endpoints[i%len(c.endpoints)]+path, body, limit)
 		if err == nil {
 			return response, nil
 		}
 
-		if !xnet.IsNetworkOrHostDown(err) && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		if !xnet.IsNetworkOrHostDown(err) &&
+			!errors.Is(err, io.EOF) &&
+			!errors.Is(err, io.ErrUnexpectedEOF) &&
+			!errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
 
@@ -415,24 +444,17 @@ func (c *kesClient) postRetry(url string, body io.ReadSeeker, limit int64) (io.R
 // file as PEM-encoded certificate and add it to
 // the CertPool. If a file is not a PEM certificate
 // it will be ignored.
-func loadCACertificates(path string) (*x509.CertPool, error) {
-	rootCAs, _ := x509.SystemCertPool()
-	if rootCAs == nil {
-		// In some systems (like Windows) system cert pool is
-		// not supported or no certificates are present on the
-		// system - so we create a new cert pool.
-		rootCAs = x509.NewCertPool()
-	}
+func loadCACertificates(path string, rootCAs *x509.CertPool) error {
 	if path == "" {
-		return rootCAs, nil
+		return nil
 	}
 
 	stat, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) || os.IsPermission(err) {
-			return rootCAs, nil
+			return nil
 		}
-		return nil, Errorf("crypto: cannot open '%s': %v", path, err)
+		return Errorf("crypto: cannot open '%s': %v", path, err)
 	}
 
 	// If path is a file, parse as PEM-encoded certifcate
@@ -441,12 +463,12 @@ func loadCACertificates(path string) (*x509.CertPool, error) {
 	if !stat.IsDir() {
 		cert, err := ioutil.ReadFile(path)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !rootCAs.AppendCertsFromPEM(cert) {
-			return nil, Errorf("crypto: '%s' is not a valid PEM-encoded certificate", path)
+			return Errorf("crypto: '%s' is not a valid PEM-encoded certificate", path)
 		}
-		return rootCAs, nil
+		return nil
 	}
 
 	// If path is a directory then try
@@ -456,7 +478,7 @@ func loadCACertificates(path string) (*x509.CertPool, error) {
 	// we ignore it.
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, file := range files {
 		cert, err := ioutil.ReadFile(filepath.Join(path, file.Name()))
@@ -465,6 +487,6 @@ func loadCACertificates(path string) (*x509.CertPool, error) {
 		}
 		rootCAs.AppendCertsFromPEM(cert) // ignore files which are not PEM certtificates
 	}
-	return rootCAs, nil
+	return nil
 
 }

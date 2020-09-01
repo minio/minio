@@ -84,7 +84,7 @@ func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput,
 			return Latency{}, Throughput{}, fmt.Errorf("Expected to write %d, but only wrote %d", blockSize, n)
 		}
 		latencyInSecs := time.Since(startTime).Seconds()
-		latencies[i] = float64(latencyInSecs)
+		latencies[i] = latencyInSecs
 	}
 
 	// Sync every full writes fdatasync

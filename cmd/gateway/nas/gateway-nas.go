@@ -24,10 +24,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 )
 
-const (
-	nasBackend = "nas"
-)
-
 func init() {
 	const nasGatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
@@ -61,7 +57,7 @@ EXAMPLES:
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
-		Name:               nasBackend,
+		Name:               minio.NASBackendGateway,
 		Usage:              "Network-attached storage (NAS)",
 		Action:             nasGatewayMain,
 		CustomHelpTemplate: nasGatewayTemplate,
@@ -73,7 +69,7 @@ EXAMPLES:
 func nasGatewayMain(ctx *cli.Context) {
 	// Validate gateway arguments.
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, nasBackend, 1)
+		cli.ShowCommandHelpAndExit(ctx, minio.NASBackendGateway, 1)
 	}
 
 	minio.StartGateway(ctx, &NAS{ctx.Args().First()})
@@ -86,7 +82,7 @@ type NAS struct {
 
 // Name implements Gateway interface.
 func (g *NAS) Name() string {
-	return nasBackend
+	return minio.NASBackendGateway
 }
 
 // NewGatewayLayer returns nas gatewaylayer.

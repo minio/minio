@@ -35,7 +35,7 @@ func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 	volume := "testvol"
 	filePath := "testfile"
 
-	disk, err := newXLStorage(tmpDir, "")
+	disk, err := newLocalXLStorage(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}

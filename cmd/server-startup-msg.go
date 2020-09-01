@@ -301,8 +301,8 @@ func printStorageInfo(storageInfo StorageInfo) {
 
 func printCacheStorageInfo(storageInfo CacheStorageInfo) {
 	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
-		humanize.IBytes(uint64(storageInfo.Free)),
-		humanize.IBytes(uint64(storageInfo.Total)))
+		humanize.IBytes(storageInfo.Free),
+		humanize.IBytes(storageInfo.Total))
 	logStartupMessage(msg)
 }
 

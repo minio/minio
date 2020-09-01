@@ -158,8 +158,8 @@ func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
 	if dataLen <= 0 {
 		return 0
 	}
-	chunksCount := int64(dataLen / chunkSize)
-	remainingBytes := int64(dataLen % chunkSize)
+	chunksCount := dataLen / chunkSize
+	remainingBytes := dataLen % chunkSize
 	var streamLen int64
 	streamLen += chunksCount * calculateSignedChunkLength(chunkSize)
 	if remainingBytes > 0 {

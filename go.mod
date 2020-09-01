@@ -5,13 +5,12 @@ go 1.13
 require (
 	cloud.google.com/go v0.39.0
 	git.apache.org/thrift.git v0.13.0
-	github.com/Azure/azure-pipeline-go v0.2.1
-	github.com/Azure/azure-storage-blob-go v0.8.0
+	github.com/Azure/azure-pipeline-go v0.2.2
+	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-autorest/autorest/adal v0.9.1 // indirect
 	github.com/Shopify/sarama v1.24.1
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
-	github.com/aws/aws-sdk-go v1.20.21
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/beevik/ntp v0.2.0
 	github.com/cespare/xxhash/v2 v2.1.1
@@ -31,8 +30,9 @@ require (
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/handlers v1.4.2
-	github.com/gorilla/mux v1.7.5-0.20200711200521-98cb6bf42e08
+	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/rpc v1.2.0
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.10.3
@@ -63,13 +63,12 @@ require (
 	github.com/nsqio/go-nsq v1.0.7
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pierrec/lz4 v2.4.0+incompatible
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.0.0
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.0
 	github.com/shirou/gopsutil v2.20.3-0.20200314133625-53cec6b37e6a+incompatible
-	github.com/sirupsen/logrus v1.6.0
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/tidwall/gjson v1.3.5
@@ -87,6 +86,6 @@ require (
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3
-	gopkg.in/olivere/elastic.v5 v5.0.80
+	gopkg.in/olivere/elastic.v5 v5.0.86
 	gopkg.in/yaml.v2 v2.2.8
 )

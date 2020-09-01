@@ -46,7 +46,7 @@ func NewLRWMutex() *LRWMutex {
 func (lm *LRWMutex) Lock() {
 
 	const isWriteLock = true
-	lm.lockLoop(context.Background(), lm.id, lm.source, time.Duration(math.MaxInt64), isWriteLock)
+	lm.lockLoop(context.Background(), lm.id, lm.source, math.MaxInt64, isWriteLock)
 }
 
 // GetLock tries to get a write lock on lm before the timeout occurs.
@@ -63,7 +63,7 @@ func (lm *LRWMutex) GetLock(ctx context.Context, id string, source string, timeo
 func (lm *LRWMutex) RLock() {
 
 	const isWriteLock = false
-	lm.lockLoop(context.Background(), lm.id, lm.source, time.Duration(1<<63-1), isWriteLock)
+	lm.lockLoop(context.Background(), lm.id, lm.source, 1<<63-1, isWriteLock)
 }
 
 // GetRLock tries to get a read lock on lm before the timeout occurs.

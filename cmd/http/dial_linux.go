@@ -36,22 +36,22 @@ func setInternalTCPParameters(c syscall.RawConn) error {
 		// TCPFastOpenConnect sets the underlying socket to use
 		// the TCP fast open connect. This feature is supported
 		// since Linux 4.11.
-		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
 
 		// The time (in seconds) the connection needs to remain idle before
 		// TCP starts sending keepalive probes, set this to 5 secs
 		// system defaults to 7200 secs!!!
-		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 5)
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 5)
 
 		// Number of probes.
 		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_probes (defaults to 9, we reduce it to 5)
 		// 9
-		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
 
 		// Wait time after successful probe in seconds.
 		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 3 secs)
 		// 75
-		_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
 	})
 }
 
@@ -85,7 +85,7 @@ func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 					// TCPFastOpenConnect sets the underlying socket to use
 					// the TCP fast open connect. This feature is supported
 					// since Linux 4.11.
-					_ = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+					_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
 				})
 			},
 		}

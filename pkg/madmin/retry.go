@@ -81,11 +81,11 @@ func (adm AdminClient) newRetryTimer(ctx context.Context, maxRetry int, unit tim
 		}
 
 		//sleep = random_between(0, min(cap, base * 2 ** attempt))
-		sleep := unit * time.Duration(1<<uint(attempt))
+		sleep := unit * 1 << uint(attempt)
 		if sleep > cap {
 			sleep = cap
 		}
-		if jitter != NoJitter {
+		if jitter > NoJitter {
 			sleep -= time.Duration(adm.random.Float64() * float64(sleep) * jitter)
 		}
 		return sleep

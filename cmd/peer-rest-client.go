@@ -217,14 +217,14 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 				finish()
 				end := time.Now()
 
-				latency := float64(end.Sub(start).Seconds())
+				latency := end.Sub(start).Seconds()
 
 				if latency > maxLatencyForSizeThreads(dataSize, threadCount) {
 					slowSample()
 				}
 
 				/* Throughput = (total data transferred across all threads / time taken) */
-				throughput := float64(float64((after - before)) / latency)
+				throughput := float64((after - before)) / latency
 
 				latencies = append(latencies, latency)
 				throughputs = append(throughputs, throughput)
@@ -272,7 +272,7 @@ func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
 	//    10 Gbit  |  2s
 	//     1 Gbit  |  inf
 
-	throughput := float64(int64(size) * int64(threadCount))
+	throughput := float64(size * int64(threadCount))
 	if throughput >= Gbit100 {
 		return 2.0
 	} else if throughput >= Gbit40 {

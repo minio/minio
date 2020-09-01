@@ -75,7 +75,7 @@ func TestReleaseTagToNFromTimeConversion(t *testing.T) {
 		if err != nil && err.Error() != testCase.errStr {
 			t.Errorf("Test %d: Expected %v but got %v", i+1, testCase.errStr, err.Error())
 		}
-		if err == nil && tagTime != testCase.t {
+		if err == nil && !tagTime.Equal(testCase.t) {
 			t.Errorf("Test %d: Expected %v but got %v", i+1, testCase.t, tagTime)
 		}
 	}

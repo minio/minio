@@ -83,7 +83,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			}
 			return nil, osErrToFileErr(err)
 		}
-		if count > 0 {
+		if count > -1 {
 			if remaining <= len(fis) {
 				fis = fis[:remaining]
 				done = true

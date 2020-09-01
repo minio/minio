@@ -62,13 +62,6 @@ func TestInvalidRules(t *testing.T) {
 		inputXML    string
 		expectedErr error
 	}{
-		{ // Rule without expiration action
-			inputXML: ` <Rule>
-			                <ID>rule without expiration</ID>
-                            <Status>Enabled</Status>
-	                    </Rule>`,
-			expectedErr: errMissingExpirationAction,
-		},
 		{ // Rule with ID longer than 255 characters
 			inputXML: ` <Rule>
 	                    <ID> babababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab </ID>

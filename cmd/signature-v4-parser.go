@@ -49,17 +49,17 @@ func (c credentialHeader) getScope() string {
 }
 
 func getReqAccessKeyV4(r *http.Request, region string, stype serviceType) (auth.Credentials, bool, APIErrorCode) {
-	ch, err := parseCredentialHeader("Credential="+r.URL.Query().Get(xhttp.AmzCredential), region, stype)
-	if err != ErrNone {
+	ch, s3Err := parseCredentialHeader("Credential="+r.URL.Query().Get(xhttp.AmzCredential), region, stype)
+	if s3Err != ErrNone {
 		// Strip off the Algorithm prefix.
 		v4Auth := strings.TrimPrefix(r.Header.Get("Authorization"), signV4Algorithm)
 		authFields := strings.Split(strings.TrimSpace(v4Auth), ",")
 		if len(authFields) != 3 {
 			return auth.Credentials{}, false, ErrMissingFields
 		}
-		ch, err = parseCredentialHeader(authFields[0], region, stype)
-		if err != ErrNone {
-			return auth.Credentials{}, false, err
+		ch, s3Err = parseCredentialHeader(authFields[0], region, stype)
+		if s3Err != ErrNone {
+			return auth.Credentials{}, false, s3Err
 		}
 	}
 	return checkKeyValid(ch.accessKey)
@@ -192,9 +192,9 @@ func doesV4PresignParamsExist(query url.Values) APIErrorCode {
 // Parses all the presigned signature values into separate elements.
 func parsePreSignV4(query url.Values, region string, stype serviceType) (psv preSignValues, aec APIErrorCode) {
 	// verify whether the required query params exist.
-	err := doesV4PresignParamsExist(query)
-	if err != ErrNone {
-		return psv, err
+	aec = doesV4PresignParamsExist(query)
+	if aec != ErrNone {
+		return psv, aec
 	}
 
 	// Verify if the query algorithm is supported or not.
@@ -206,9 +206,9 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 	preSignV4Values := preSignValues{}
 
 	// Save credential.
-	preSignV4Values.Credential, err = parseCredentialHeader("Credential="+query.Get(xhttp.AmzCredential), region, stype)
-	if err != ErrNone {
-		return psv, err
+	preSignV4Values.Credential, aec = parseCredentialHeader("Credential="+query.Get(xhttp.AmzCredential), region, stype)
+	if aec != ErrNone {
+		return psv, aec
 	}
 
 	var e error
@@ -234,15 +234,15 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 	}
 
 	// Save signed headers.
-	preSignV4Values.SignedHeaders, err = parseSignedHeader("SignedHeaders=" + query.Get(xhttp.AmzSignedHeaders))
-	if err != ErrNone {
-		return psv, err
+	preSignV4Values.SignedHeaders, aec = parseSignedHeader("SignedHeaders=" + query.Get(xhttp.AmzSignedHeaders))
+	if aec != ErrNone {
+		return psv, aec
 	}
 
 	// Save signature.
-	preSignV4Values.Signature, err = parseSignature("Signature=" + query.Get(xhttp.AmzSignature))
-	if err != ErrNone {
-		return psv, err
+	preSignV4Values.Signature, aec = parseSignature("Signature=" + query.Get(xhttp.AmzSignature))
+	if aec != ErrNone {
+		return psv, aec
 	}
 
 	// Return structed form of signature query string.
@@ -280,23 +280,23 @@ func parseSignV4(v4Auth string, region string, stype serviceType) (sv signValues
 	// Initialize signature version '4' structured header.
 	signV4Values := signValues{}
 
-	var err APIErrorCode
+	var s3Err APIErrorCode
 	// Save credentail values.
-	signV4Values.Credential, err = parseCredentialHeader(strings.TrimSpace(credElement), region, stype)
-	if err != ErrNone {
-		return sv, err
+	signV4Values.Credential, s3Err = parseCredentialHeader(strings.TrimSpace(credElement), region, stype)
+	if s3Err != ErrNone {
+		return sv, s3Err
 	}
 
 	// Save signed headers.
-	signV4Values.SignedHeaders, err = parseSignedHeader(authFields[1])
-	if err != ErrNone {
-		return sv, err
+	signV4Values.SignedHeaders, s3Err = parseSignedHeader(authFields[1])
+	if s3Err != ErrNone {
+		return sv, s3Err
 	}
 
 	// Save signature.
-	signV4Values.Signature, err = parseSignature(authFields[2])
-	if err != ErrNone {
-		return sv, err
+	signV4Values.Signature, s3Err = parseSignature(authFields[2])
+	if s3Err != ErrNone {
+		return sv, s3Err
 	}
 
 	// Return the structure here.

@@ -1499,6 +1499,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 	// add all the disks local to this server.
 	for _, disk := range storageInfo.Disks {
+		if disk.DrivePath == "" && disk.Endpoint == "" {
+			continue
+		}
 		if disk.Endpoint == disk.DrivePath {
 			servers[len(servers)-1].Disks = append(servers[len(servers)-1].Disks, disk)
 		}
@@ -1579,12 +1582,12 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 	keyID := GlobalKMS.DefaultKeyID()
 	kmsInfo := GlobalKMS.Info()
 
-	if kmsInfo.Endpoint == "" {
+	if len(kmsInfo.Endpoints) == 0 {
 		vault.Status = "KMS configured using master key"
 		return vault
 	}
 
-	if err := checkConnection(kmsInfo.Endpoint, 15*time.Second); err != nil {
+	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
 		vault.Status = "offline"
 	} else {
 		vault.Status = "online"

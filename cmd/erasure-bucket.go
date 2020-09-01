@@ -133,8 +133,7 @@ func (er erasureObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketI
 		if err == nil {
 			// NOTE: The assumption here is that volumes across all disks in
 			// readQuorum have consistent view i.e they all have same number
-			// of buckets. This is essentially not verified since healing
-			// should take care of this.
+			// of buckets.
 			var bucketsInfo []BucketInfo
 			for _, volInfo := range volsInfo {
 				if isReservedOrInvalidBucket(volInfo.Name, true) {

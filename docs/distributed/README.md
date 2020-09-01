@@ -69,10 +69,15 @@ MinIO supports expanding distributed erasure coded clusters by specifying new se
 ```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server http://host{1...n}/export{1...m} http://host{1...o}/export{1...m}
+minio server http://host{1...n}/export{1...m} http://host{o...z}/export{1...m}
 ```
 
-Now the server has expanded total storage by _(o\*m)_ more disks, taking the total count to _(n\*m)+(o\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 zones in this example. New objects are placed in zones in proportion to the amount of free space in each zone. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
+For example:
+```
+minio server http://host{1...4}/export{1...16} http://host{5...12}/export{1...16}
+```
+
+Now the server has expanded total storage by _(newly_added_servers\*m)_ more disks, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 zones in this example. New objects are placed in zones in proportion to the amount of free space in each zone. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
 
 > __NOTE:__ __Each zone you add must have the same erasure coding set size as the original zone, so the same data redundancy SLA is maintained.__
 > For example, if your first zone was 8 drives, you could add further zones of 16, 32 or 1024 drives each. All you have to make sure is deployment SLA is multiples of original data redundancy SLA i.e 8.

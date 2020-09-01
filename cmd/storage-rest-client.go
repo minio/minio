@@ -332,6 +332,7 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 
 	var reader bytes.Buffer
 	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+		logger.LogIf(context.Background(), err)
 		return err
 	}
 

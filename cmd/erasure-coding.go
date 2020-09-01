@@ -125,7 +125,7 @@ func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 		return -1
 	}
 	numShards := totalLength / e.blockSize
-	lastBlockSize := totalLength % int64(e.blockSize)
+	lastBlockSize := totalLength % e.blockSize
 	lastShardSize := ceilFrac(lastBlockSize, int64(e.dataBlocks))
 	return numShards*e.ShardSize() + lastShardSize
 }
@@ -134,7 +134,7 @@ func (e *Erasure) ShardFileSize(totalLength int64) int64 {
 func (e *Erasure) ShardFileOffset(startOffset, length, totalLength int64) int64 {
 	shardSize := e.ShardSize()
 	shardFileSize := e.ShardFileSize(totalLength)
-	endShard := (startOffset + int64(length)) / e.blockSize
+	endShard := (startOffset + length) / e.blockSize
 	tillOffset := endShard*shardSize + shardSize
 	if tillOffset > shardFileSize {
 		tillOffset = shardFileSize
