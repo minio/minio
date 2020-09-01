@@ -234,14 +234,14 @@ func testPresignedPutInvalidHash(s3Client *s3.S3) {
 		return
 	}
 
-	rreq, err := http.NewRequest("PUT", url, bytes.NewReader([]byte("")))
+	rreq, err := http.NewRequest(http.MethodPut, url, bytes.NewReader([]byte("")))
 	if err != nil {
 		failureLog(function, args, startTime, "", "AWS SDK Go presigned PUT request failed", err).Fatal()
 		return
 	}
 
-	rreq.Header.Add("X-Amz-Content-Sha256", "invalid-sha256")
-	rreq.Header.Add("Content-Type", "application/octet-stream")
+	rreq.Header.Set("X-Amz-Content-Sha256", "invalid-sha256")
+	rreq.Header.Set("Content-Type", "application/octet-stream")
 
 	resp, err := http.DefaultClient.Do(rreq)
 	if err != nil {

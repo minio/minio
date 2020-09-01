@@ -804,7 +804,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || globalAutoEncryption {
 		// This request header needs to be set prior to setting ObjectOptions
 		if !crypto.SSEC.IsRequested(r.Header) {
-			r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 		}
 	}
 
