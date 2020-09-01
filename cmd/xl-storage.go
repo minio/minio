@@ -1812,6 +1812,10 @@ func (s *xlStorage) CheckParts(volume, path string, fi FileInfo) error {
 		if st.Mode().IsDir() {
 			return errFileNotFound
 		}
+		// Check if shard is truncated.
+		if st.Size() < fi.Erasure.ShardFileSize(part.Size) {
+			return errFileCorrupt
+		}
 	}
 
 	return nil
@@ -1860,7 +1864,7 @@ func (s *xlStorage) CheckFile(volume, path string) error {
 	}
 
 	// If its a directory its not a regular file.
-	if st.Mode().IsDir() {
+	if st.Mode().IsDir() || st.Size() == 0 {
 		return errFileNotFound
 	}
 
