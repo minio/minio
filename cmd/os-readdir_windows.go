@@ -86,9 +86,6 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		return nil, errFileNotFound
 	}
 	data := &syscall.Win32finddata{}
-	if count == 0 {
-		return entries, nil
-	}
 	handle := syscall.Handle(f.Fd())
 
 	for count != 0 {
