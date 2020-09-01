@@ -46,8 +46,8 @@ var ErrKESKeyExists = NewKESError(http.StatusBadRequest, "key does already exist
 type KesConfig struct {
 	Enabled bool
 
-	// The kes server endpoint.
-	Endpoint string
+	// The KES server endpoints.
+	Endpoint []string
 
 	// The path to the TLS private key used
 	// by MinIO to authenticate to the kes
@@ -86,7 +86,7 @@ type KesConfig struct {
 // Verify verifies if the kes configuration is correct
 func (k KesConfig) Verify() (err error) {
 	switch {
-	case k.Endpoint == "":
+	case len(k.Endpoint) == 0:
 		err = Errorf("crypto: missing kes endpoint")
 	case k.CertFile == "":
 		err = Errorf("crypto: missing cert file")
@@ -101,7 +101,7 @@ func (k KesConfig) Verify() (err error) {
 type kesService struct {
 	client *kesClient
 
-	endpoint     string
+	endpoints    []string
 	defaultKeyID string
 }
 
@@ -141,12 +141,12 @@ func NewKes(cfg KesConfig) (KMS, error) {
 
 	return &kesService{
 		client: &kesClient{
-			addr: cfg.Endpoint,
+			endpoints: cfg.Endpoint,
 			httpClient: http.Client{
 				Transport: cfg.Transport,
 			},
 		},
-		endpoint:     cfg.Endpoint,
+		endpoints:    cfg.Endpoint,
 		defaultKeyID: cfg.DefaultKeyID,
 	}, nil
 }
@@ -163,9 +163,9 @@ func (kes *kesService) DefaultKeyID() string {
 // method.
 func (kes *kesService) Info() KMSInfo {
 	return KMSInfo{
-		Endpoint: kes.endpoint,
-		Name:     kes.DefaultKeyID(),
-		AuthType: "TLS",
+		Endpoints: kes.endpoints,
+		Name:      kes.DefaultKeyID(),
+		AuthType:  "TLS",
 	}
 }
 
@@ -221,7 +221,7 @@ func (kes *kesService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (k
 //   • GenerateDataKey (API: /v1/key/generate/)
 //   • DecryptDataKey  (API: /v1/key/decrypt/)
 type kesClient struct {
-	addr       string
+	endpoints  []string
 	httpClient http.Client
 }
 
@@ -232,8 +232,8 @@ type kesClient struct {
 // application does not have the cryptographic key at
 // any point in time.
 func (c *kesClient) CreateKey(name string) error {
-	url := fmt.Sprintf("%s/v1/key/create/%s", c.addr, url.PathEscape(name))
-	_, err := c.postRetry(url, nil, 0) // No request body and no response expected
+	path := fmt.Sprintf("/v1/key/create/%s", url.PathEscape(name))
+	_, err := c.postRetry(path, nil, 0) // No request body and no response expected
 	if err != nil {
 		return err
 	}
@@ -265,8 +265,8 @@ func (c *kesClient) GenerateDataKey(name string, context []byte) ([]byte, []byte
 	}
 
 	const limit = 1 << 20 // A plaintext/ciphertext key pair will never be larger than 1 MB
-	url := fmt.Sprintf("%s/v1/key/generate/%s", c.addr, url.PathEscape(name))
-	resp, err := c.postRetry(url, bytes.NewReader(body), limit)
+	path := fmt.Sprintf("/v1/key/generate/%s", url.PathEscape(name))
+	resp, err := c.postRetry(path, bytes.NewReader(body), limit)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,8 +302,8 @@ func (c *kesClient) DecryptDataKey(name string, ciphertext, context []byte) ([]b
 	}
 
 	const limit = 1 << 20 // A data key will never be larger than 1 MiB
-	url := fmt.Sprintf("%s/v1/key/decrypt/%s", c.addr, url.PathEscape(name))
-	resp, err := c.postRetry(url, bytes.NewReader(body), limit)
+	path := fmt.Sprintf("/v1/key/decrypt/%s", url.PathEscape(name))
+	resp, err := c.postRetry(path, bytes.NewReader(body), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -402,12 +402,14 @@ func (c *kesClient) post(url string, body io.Reader, limit int64) (io.Reader, er
 	return &respBody, nil
 }
 
-func (c *kesClient) postRetry(url string, body io.ReadSeeker, limit int64) (io.Reader, error) {
+func (c *kesClient) postRetry(path string, body io.ReadSeeker, limit int64) (io.Reader, error) {
+	retryMax := 1 + len(c.endpoints)
 	for i := 0; ; i++ {
 		if body != nil {
 			body.Seek(0, io.SeekStart) // seek to the beginning of the body.
 		}
-		response, err := c.post(url, body, limit)
+
+		response, err := c.post(c.endpoints[i%len(c.endpoints)]+path, body, limit)
 		if err == nil {
 			return response, nil
 		}

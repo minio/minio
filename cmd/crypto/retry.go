@@ -23,7 +23,6 @@ import (
 const (
 	retryWaitMin = 500 * time.Millisecond // minimum retry limit.
 	retryWaitMax = 3 * time.Second        // 3 secs worth of max retry.
-	retryMax     = 2
 )
 
 // LinearJitterBackoff provides the time.Duration for a caller to

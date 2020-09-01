@@ -18,12 +18,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/url"
 
-	miniogo "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 )
 
@@ -53,39 +54,34 @@ func main() {
 	// LDAP STS API.
 
 	// Initialize LDAP credentials
-	li, err := cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
-	if err != nil {
-		log.Fatalf("INIT Err: %v", err)
-	}
+	li, _ := cr.NewLDAPIdentity(stsEndpoint, ldapUsername, ldapPassword)
 
-	// Generate temporary STS credentials
-	v, err := li.Get()
-	if err != nil {
-		log.Fatalf("GET Err: %v", err)
-	}
-	fmt.Printf("%#v\n", v)
-
-	stsEndpointUrl, err := url.Parse(stsEndpoint)
+	stsEndpointURL, err := url.Parse(stsEndpoint)
 	if err != nil {
 		log.Fatalf("Err: %v", err)
 	}
 
-	secure := false
-	if stsEndpointUrl.Scheme == "https" {
-		secure = true
+	opts := &minio.Options{
+		Creds:  li,
+		Secure: stsEndpointURL.Scheme == "https",
 	}
 
+	fmt.Println(li.Get())
 	// Use generated credentials to authenticate with MinIO server
-	minioClient, err := miniogo.NewWithCredentials(stsEndpointUrl.Host, li, secure, "")
+	minioClient, err := minio.New(stsEndpointURL.Host, opts)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Use minIO Client object normally like the regular client.
-	fmt.Println("Calling list buckets with temp creds:")
-	b, err := minioClient.ListBuckets()
-	if err != nil {
-		log.Fatalln(err)
+	fmt.Println("Calling list objects with temp creds: ")
+	objCh := minioClient.ListObjects(context.Background(), ldapUsername, minio.ListObjectsOptions{})
+	for obj := range objCh {
+		if obj.Err != nil {
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
+		fmt.Println(obj)
 	}
-	fmt.Println(b)
 }
