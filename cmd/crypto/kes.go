@@ -414,19 +414,22 @@ func (c *kesClient) postRetry(path string, body io.ReadSeeker, limit int64) (io.
 			return response, nil
 		}
 
+		// If the error is not temp. / retryable => fail the request immediately.
 		if !xnet.IsNetworkOrHostDown(err) &&
 			!errors.Is(err, io.EOF) &&
 			!errors.Is(err, io.ErrUnexpectedEOF) &&
 			!errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
-
-		// retriable network errors.
-		remain := retryMax - i
-		if remain <= 0 {
+		if remain := retryMax - i; remain <= 0 { // Fail if we exceeded our retry limit.
 			return response, err
 		}
 
+		// If there are more KES instances then skip waiting and
+		// try the next endpoint directly.
+		if i < len(c.endpoints) {
+			continue
+		}
 		<-time.After(LinearJitterBackoff(retryWaitMin, retryWaitMax, i))
 	}
 }
