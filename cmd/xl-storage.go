@@ -381,17 +381,15 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 
 		var totalSize int64
 		for _, version := range fivs.Versions {
+			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			size := item.applyActions(ctx, objAPI, actionMeta{
 				numVersions: len(fivs.Versions),
-				oi:          version.ToObjectInfo(item.bucket, item.objectPath()),
+				oi:          oi,
 			})
 			if !version.Deleted {
 				totalSize += size
 			}
-		}
-
-		for _, version := range fivs.Versions {
-			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
+			item.healReplication(ctx, objAPI, actionMeta{oi: oi})
 		}
 		return totalSize, nil
 	})
@@ -1129,17 +1127,6 @@ func (s *xlStorage) DeleteVersion(volume, path string, fi FileInfo) error {
 	var xlMeta xlMetaV2
 	if err = xlMeta.Load(buf); err != nil {
 		return err
-	}
-
-	if fi.Deleted {
-		if err = xlMeta.AddVersion(fi); err != nil {
-			return err
-		}
-		buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
-		if err != nil {
-			return err
-		}
-		return s.WriteAll(volume, pathJoin(path, xlStorageFormatFile), bytes.NewReader(buf))
 	}
 
 	dataDir, lastVersion, err := xlMeta.DeleteVersion(fi)
@@ -2167,7 +2154,7 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 	if fi.VersionID == "" {
 		// return the latest "null" versionId info
 		ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, nullVersionID)
-		if err == nil {
+		if err == nil && !ofi.Deleted {
 			// Purge the destination path as we are not preserving anything
 			// versioned object was not requested.
 			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)
