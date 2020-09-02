@@ -418,3 +418,32 @@ func mailaddress(m fluent.Matcher) {
 		Suggest("(&mail.Address{Name:$NAME, Address:$EMAIL}).String()")
 
 }
+
+func errnetclosed(m fluent.Matcher) {
+	m.Match(
+		`strings.Contains($err.Error(), $text)`,
+	).
+		Where(m["text"].Text.Matches("\".*closed network connection.*\"")).
+		Report(`String matching against error texts is fragile; use net.ErrClosed instead`).
+		Suggest(`errors.Is($err, net.ErrClosed)`)
+
+}
+
+func httpheaderadd(m fluent.Matcher) {
+	m.Match(
+		`$H.Add($KEY, $VALUE)`,
+	).
+		Where(m["H"].Type.Is("http.Header")).
+		Report("use http.Header.Set method instead of Add to overwrite all existing header values").
+		Suggest(`$H.Set($KEY, $VALUE)`)
+}
+
+
+func hmacnew(m fluent.Matcher) {
+	m.Match("hmac.New(func() hash.Hash { return $x }, $_)",
+		`$f := func() hash.Hash { return $x }
+	$*_
+	hmac.New($f, $_)`,
+	).Where(m["x"].Pure).
+		Report("invalid hash passed to hmac.New()")
+}

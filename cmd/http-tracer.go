@@ -104,9 +104,8 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 	reqHeaders.Set("Host", r.Host)
 	if len(r.TransferEncoding) == 0 {
 		reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
-	}
-	for _, enc := range r.TransferEncoding {
-		reqHeaders.Add("Transfer-Encoding", enc)
+	} else {
+		reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
 	}
 
 	var reqBodyRecorder *recordRequest
