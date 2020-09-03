@@ -981,7 +981,7 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.WalkVersions(ctx, bucket, prefix, marker, recursive, endWalkCh)
+			entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				// Disk walk returned error, ignore it.
@@ -1012,7 +1012,7 @@ func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, mark
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.Walk(ctx, bucket, prefix, marker, recursive, endWalkCh)
+			entryCh, err := disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
@@ -1042,7 +1042,7 @@ func (s *erasureSets) startSplunkMergeWalksN(ctx context.Context, bucket, prefix
 				// Disk can be offline
 				continue
 			}
-			entryCh, err := disk.WalkSplunk(ctx, bucket, prefix, marker, endWalkCh)
+			entryCh, err := disk.WalkSplunk(GlobalContext, bucket, prefix, marker, endWalkCh)
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue
