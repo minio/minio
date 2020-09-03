@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -860,14 +861,22 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	versions := make([]FileInfo, len(objects))
 	for i := range objects {
 		if objects[i].VersionID == "" {
-			if opts.Versioned && !HasSuffix(objects[i].ObjectName, SlashSeparator) {
-				versions[i] = FileInfo{
-					Name:      objects[i].ObjectName,
-					VersionID: mustGetUUID(),
-					ModTime:   UTCNow(),
-					Deleted:   true, // delete marker
+			if opts.Versioned || opts.VersionSuspended {
+				if !HasSuffix(objects[i].ObjectName, SlashSeparator) {
+					fi := FileInfo{
+						Name:    objects[i].ObjectName,
+						ModTime: UTCNow(),
+						Deleted: true, // delete marker
+					}
+					if opts.Versioned {
+						fi.VersionID = mustGetUUID()
+					}
+					// versioning suspended means we add `null`
+					// version as delete marker
+
+					versions[i] = fi
+					continue
 				}
-				continue
 			}
 		}
 		versions[i] = FileInfo{
@@ -907,9 +916,11 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		for i := range delObjErrs {
 			// delObjErrs[i] is not nil when disks[i] is also not nil
 			if delObjErrs[i] != nil {
-				if delObjErrs[i][objIndex] != errFileNotFound {
-					diskErrs[i] = delObjErrs[i][objIndex]
+				if errors.Is(delObjErrs[i][objIndex], errFileNotFound) ||
+					errors.Is(delObjErrs[i][objIndex], errFileVersionNotFound) {
+					continue
 				}
+				diskErrs[i] = delObjErrs[i][objIndex]
 			}
 		}
 		errs[objIndex] = reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
@@ -961,18 +972,27 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	writeQuorum := len(storageDisks)/2 + 1
 
 	if opts.VersionID == "" {
-		if opts.Versioned && !HasSuffix(object, SlashSeparator) {
-			fi := FileInfo{
-				Name:      object,
-				VersionID: mustGetUUID(),
-				Deleted:   true,
-				ModTime:   UTCNow(),
+		if opts.Versioned || opts.VersionSuspended {
+			if !HasSuffix(object, SlashSeparator) {
+				fi := FileInfo{
+					Name:    object,
+					Deleted: true,
+					ModTime: UTCNow(),
+				}
+
+				if opts.Versioned {
+					fi.VersionID = mustGetUUID()
+				}
+
+				// versioning suspended means we add `null`
+				// version as delete marker
+
+				// Add delete marker, since we don't have any version specified explicitly.
+				if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
+					return objInfo, toObjectErr(err, bucket, object)
+				}
+				return fi.ToObjectInfo(bucket, object), nil
 			}
-			// Add delete marker, since we don't have any version specified explicitly.
-			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
-				return objInfo, toObjectErr(err, bucket, object)
-			}
-			return fi.ToObjectInfo(bucket, object), nil
 		}
 	}
 

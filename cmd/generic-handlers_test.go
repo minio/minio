@@ -155,12 +155,12 @@ var isHTTPHeaderSizeTooLargeTests = []struct {
 func generateHeader(size, usersize int) http.Header {
 	header := http.Header{}
 	for i := 0; i < size; i++ {
-		header.Add(strconv.Itoa(i), "")
+		header.Set(strconv.Itoa(i), "")
 	}
 	userlength := 0
 	for i := 0; userlength < usersize; i++ {
 		userlength += len(userMetadataKeyPrefixes[0] + strconv.Itoa(i))
-		header.Add(userMetadataKeyPrefixes[0]+strconv.Itoa(i), "")
+		header.Set(userMetadataKeyPrefixes[0]+strconv.Itoa(i), "")
 	}
 	return header
 }

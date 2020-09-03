@@ -1705,7 +1705,8 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.WriteString("a"); err != nil {
+	// Replace first 256 with 'a'.
+	if _, err := f.WriteString(strings.Repeat("a", 256)); err != nil {
 		t.Fatal(err)
 	}
 	f.Close()

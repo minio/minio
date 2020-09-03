@@ -133,6 +133,7 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 		return opts, err
 	}
 	opts.Versioned = versioned
+	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
 	return opts, nil
 }
 
