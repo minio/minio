@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/cmd/config/crawler"
+
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
@@ -55,6 +57,7 @@ func initHelp() {
 		config.KmsKesSubSys:         crypto.DefaultKesKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+		config.CrawlerSubSys:        crawler.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -105,6 +108,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
+		},
+		config.HelpKV{
+			Key:         config.CrawlerSubSys,
+			Description: "manage continuous disk crawling for bucket disk usage, lifecycle, quota and data integrity checks",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
