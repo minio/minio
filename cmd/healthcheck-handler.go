@@ -38,6 +38,9 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
 	result := objLayer.Health(ctx, opts)
+	if result.WriteQuorum > 0 {
+		w.Header().Set("X-Minio-Write-Quorum", strconv.Itoa(result.WriteQuorum))
+	}
 	if !result.Healthy {
 		// return how many drives are being healed if any
 		w.Header().Set("X-Minio-Healing-Drives", strconv.Itoa(result.HealingDrives))
@@ -51,7 +54,6 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
