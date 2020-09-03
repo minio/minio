@@ -157,7 +157,7 @@ func newDiskCache(ctx context.Context, dir string, config cache.Config) (*diskCa
 	}
 	cache := diskCache{
 		dir:           dir,
-		triggerGC:     make(chan struct{}),
+		triggerGC:     make(chan struct{}, 1),
 		stats:         CacheDiskStats{Dir: dir},
 		quotaPct:      quotaPct,
 		after:         config.After,
@@ -174,7 +174,7 @@ func newDiskCache(ctx context.Context, dir string, config cache.Config) (*diskCa
 		nsMutex: newNSLock(false),
 	}
 	go cache.purgeWait(ctx)
-	cache.diskUsageHigh() // update if cache usage is already high.
+	cache.diskSpaceAvailable(0) // update if cache usage is already high.
 	cache.NewNSLockFn = func(ctx context.Context, cachePath string) RWLocker {
 		return cache.nsMutex.NewNSLock(ctx, nil, cachePath, "")
 	}
@@ -203,9 +203,9 @@ func (c *diskCache) diskUsageLow() bool {
 	return low
 }
 
-// Returns if the disk usage reaches high water mark w.r.t the configured cache quota.
-// gc starts if high water mark reached.
-func (c *diskCache) diskUsageHigh() bool {
+// Returns if the disk usage reaches  or exceeds configured cache quota when size is added.
+// If current usage without size exceeds high watermark a GC is automatically queued.
+func (c *diskCache) diskSpaceAvailable(size int64) bool {
 	gcTriggerPct := c.quotaPct * c.highWatermark / 100
 	di, err := disk.GetInfo(c.dir)
 	if err != nil {
@@ -214,27 +214,30 @@ func (c *diskCache) diskUsageHigh() bool {
 		logger.LogIf(ctx, err)
 		return false
 	}
-	usedPercent := (di.Total - di.Free) * 100 / di.Total
-	high := int(usedPercent) >= gcTriggerPct
-	atomic.StoreUint64(&c.stats.UsagePercent, usedPercent)
-	if high {
-		atomic.StoreInt32(&c.stats.UsageState, 1)
-	}
-	return high
-}
-
-// Returns if size space can be allocated without exceeding
-// max disk usable for caching
-func (c *diskCache) diskAvailable(size int64) bool {
-	di, err := disk.GetInfo(c.dir)
-	if err != nil {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("cachePath", c.dir)
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogIf(ctx, err)
+	if di.Total == 0 {
+		logger.Info("diskCache: Received 0 total disk size")
 		return false
 	}
-	usedPercent := (di.Total - (di.Free - uint64(size))) * 100 / di.Total
-	return int(usedPercent) < c.quotaPct
+	usedPercent := float64(di.Total-di.Free) * 100 / float64(di.Total)
+	if usedPercent >= float64(gcTriggerPct) {
+		atomic.StoreInt32(&c.stats.UsageState, 1)
+		c.queueGC()
+	}
+	atomic.StoreUint64(&c.stats.UsagePercent, uint64(usedPercent))
+
+	// Recalculate percentage with provided size added.
+	usedPercent = float64(di.Total-di.Free+uint64(size)) * 100 / float64(di.Total)
+
+	return usedPercent < float64(c.quotaPct)
+}
+
+// queueGC will queue a GC.
+// Calling this function is always non-blocking.
+func (c *diskCache) queueGC() {
+	select {
+	case c.triggerGC <- struct{}{}:
+	default:
+	}
 }
 
 // toClear returns how many bytes should be cleared to reach the low watermark quota.
@@ -247,7 +250,7 @@ func (c *diskCache) toClear() uint64 {
 		logger.LogIf(ctx, err)
 		return 0
 	}
-	return bytesToClear(int64(di.Total), int64(di.Free), uint64(c.quotaPct), uint64(c.lowWatermark))
+	return bytesToClear(int64(di.Total), int64(di.Free), uint64(c.quotaPct), uint64(c.lowWatermark), uint64(c.highWatermark))
 }
 
 var (
@@ -658,8 +661,7 @@ func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) 
 
 // Caches the object to disk
 func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Reader, size int64, rs *HTTPRangeSpec, opts ObjectOptions, incHitsOnly bool) error {
-	if c.diskUsageHigh() {
-		c.triggerGC <- struct{}{}
+	if !c.diskSpaceAvailable(size) {
 		io.Copy(ioutil.Discard, data)
 		return errDiskFull
 	}
@@ -688,7 +690,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	if rs != nil {
 		return c.putRange(ctx, bucket, object, data, size, rs, opts)
 	}
-	if !c.diskAvailable(size) {
+	if !c.diskSpaceAvailable(size) {
 		return errDiskFull
 	}
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
@@ -730,7 +732,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	if err != nil {
 		return err
 	}
-	if !c.diskAvailable(rlen) {
+	if !c.diskSpaceAvailable(rlen) {
 		return errDiskFull
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
