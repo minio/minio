@@ -38,7 +38,7 @@ import (
 	"syscall"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/config"
@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -357,6 +358,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if objAPI == nil {
 		return cache, errServerNotInitialized
 	}
+	opts := globalCrawlerConfig
 
 	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item crawlItem) (int64, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
@@ -381,11 +383,31 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 
 		var totalSize int64
 		for _, version := range fivs.Versions {
+			fi := version.ToObjectInfo(item.bucket, item.objectPath())
 			size := item.applyActions(ctx, objAPI, actionMeta{
 				numVersions: len(fivs.Versions),
-				oi:          version.ToObjectInfo(item.bucket, item.objectPath()),
+				oi:          fi,
 			})
 			if !version.Deleted {
+				// Bitrot check local data
+				if size > 0 && item.heal && opts.Bitrot {
+					s.waitForLowActiveIO()
+					err := s.VerifyFile(item.bucket, item.objectPath(), version)
+					switch err {
+					case errFileCorrupt:
+						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), fi.VersionID, madmin.HealOpts{Remove: healDeleteDangling, ScanMode: madmin.HealDeepScan})
+						if err != nil {
+							if !errors.Is(err, NotImplemented{}) {
+								logger.LogIf(ctx, err)
+							}
+							size = 0
+						} else {
+							size = res.ObjectSize
+						}
+					default:
+						// VerifyFile already logs errors
+					}
+				}
 				totalSize += size
 			}
 		}

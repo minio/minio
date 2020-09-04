@@ -46,7 +46,10 @@ const (
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
-	healDeleteDangling = true
+	healDeleteDangling    = true
+	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
+	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
+
 )
 
 var (
@@ -178,9 +181,9 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	// Enable healing in XL mode.
 	if globalIsErasure {
 		// Include a clean folder one in n cycles.
-		s.healFolderInclude = 32
+		s.healFolderInclude = healFolderIncludeProb
 		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
-		s.healObjectSelect = 512
+		s.healObjectSelect = healObjectSelectProb
 	}
 	if len(cache.Info.BloomFilter) > 0 {
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
@@ -627,7 +630,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return 0
 		}
-		if !errors.Is(err, NotImplemented{}) {
+		if err != nil && !errors.Is(err, NotImplemented{}) {
 			logger.LogIf(ctx, err)
 			return 0
 		}
