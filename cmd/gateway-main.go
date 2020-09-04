@@ -293,9 +293,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	newObject, err := gw.NewGatewayLayer(globalActiveCred)
 	if err != nil {
-		// Stop watching for any certificate changes.
-		globalTLSCerts.Stop()
-
 		globalHTTPServer.Shutdown()
 		logger.FatalIf(err, "Unable to initialize gateway backend")
 	}

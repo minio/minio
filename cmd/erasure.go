@@ -266,10 +266,11 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	}
 
 	// Collect any disk healing.
-	healing, err := getAggregatedBackgroundHealState(ctx, true)
+	healing, err := getAggregatedBackgroundHealState(ctx)
 	if err != nil {
 		return err
 	}
+
 	healDisks := make(map[string]struct{}, len(healing.HealDisks))
 	for _, disk := range healing.HealDisks {
 		healDisks[disk] = struct{}{}

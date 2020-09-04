@@ -2045,17 +2045,18 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
+	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	diskCount := z.SetDriveCount()
+	if parityDrives == 0 {
+		parityDrives = getDefaultParityBlocks(diskCount)
+	}
+	dataDrives := diskCount - parityDrives
+	writeQuorum := dataDrives
+	if dataDrives == parityDrives {
+		writeQuorum++
+	}
+
 	for zoneIdx := range erasureSetUpCount {
-		parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-		diskCount := z.zones[zoneIdx].setDriveCount
-		if parityDrives == 0 {
-			parityDrives = getDefaultParityBlocks(diskCount)
-		}
-		dataDrives := diskCount - parityDrives
-		writeQuorum := dataDrives
-		if dataDrives == parityDrives {
-			writeQuorum++
-		}
 		for setIdx := range erasureSetUpCount[zoneIdx] {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
@@ -2075,14 +2076,15 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 	// to look at the healing side of the code.
 	if !opts.Maintenance {
 		return HealthResult{
-			Healthy: true,
+			Healthy:     true,
+			WriteQuorum: writeQuorum,
 		}
 	}
 
 	// check if local disks are being healed, if they are being healed
 	// we need to tell healthy status as 'false' so that this server
 	// is not taken down for maintenance
-	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx, true)
+	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx)
 	if err != nil {
 		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
 		return HealthResult{
@@ -2094,11 +2096,10 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
 	}
 
-	healthy := len(aggHealStateResult.HealDisks) == 0
-
 	return HealthResult{
-		Healthy:       healthy,
+		Healthy:       len(aggHealStateResult.HealDisks) == 0,
 		HealingDrives: len(aggHealStateResult.HealDisks),
+		WriteQuorum:   writeQuorum,
 	}
 }
 
