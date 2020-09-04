@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -50,7 +51,7 @@ func init() {
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
-	if (globalAutoEncryption || GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
+	if (GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Encryption support is requested but '%s' does not support encryption", name)
 	}
@@ -293,7 +294,7 @@ func logStartupMessage(msg string) {
 	logger.StartupMessage(msg)
 }
 
-func getTLSConfig() (x509Certs []*x509.Certificate, c *certs.Certs, secureConn bool, err error) {
+func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
 	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
 		return nil, nil, false, nil
 	}
@@ -302,11 +303,62 @@ func getTLSConfig() (x509Certs []*x509.Certificate, c *certs.Certs, secureConn b
 		return nil, nil, false, err
 	}
 
-	c, err = certs.New(getPublicCertFile(), getPrivateKeyFile(), config.LoadX509KeyPair)
+	manager, err = certs.NewManager(GlobalContext, getPublicCertFile(), getPrivateKeyFile(), config.LoadX509KeyPair)
 	if err != nil {
 		return nil, nil, false, err
 	}
 
+	// MinIO has support for multiple certificates. It expects the following structure:
+	//  certs/
+	//   │
+	//   ├─ public.crt
+	//   ├─ private.key
+	//   │
+	//   ├─ example.com/
+	//   │   │
+	//   │   ├─ public.crt
+	//   │   └─ private.key
+	//   └─ foobar.org/
+	//      │
+	//      ├─ public.crt
+	//      └─ private.key
+	//   ...
+	//
+	// Therefore, we read all filenames in the cert directory and check
+	// for each directory whether it contains a public.crt and private.key.
+	// If so, we try to add it to certificate manager.
+	root, err := os.Open(globalCertsDir.Get())
+	if err != nil {
+		return nil, nil, false, err
+	}
+	defer root.Close()
+
+	files, err := root.Readdir(-1)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	for _, file := range files {
+		// We exclude any regular file and the "CAs/" directory.
+		// The "CAs/" directory contains (root) CA certificates
+		// that MinIO adds to its list of trusted roots (tls.Config.RootCAs).
+		// Therefore, "CAs/" does not contain X.509 certificates that
+		// are meant to be served by MinIO.
+		if !file.IsDir() || file.Name() == "CAs" {
+			continue
+		}
+
+		var (
+			certFile = filepath.Join(root.Name(), file.Name(), publicCertFile)
+			keyFile  = filepath.Join(root.Name(), file.Name(), privateKeyFile)
+		)
+		if !isFile(certFile) || !isFile(keyFile) {
+			continue
+		}
+		if err := manager.AddCertificate(certFile, keyFile); err != nil {
+			err = fmt.Errorf("Failed to load TLS certificate '%s': %v", certFile, err)
+			logger.LogIf(GlobalContext, err, logger.Minio)
+		}
+	}
 	secureConn = true
-	return x509Certs, c, secureConn, nil
+	return x509Certs, manager, secureConn, nil
 }

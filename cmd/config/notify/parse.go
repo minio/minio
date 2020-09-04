@@ -43,11 +43,10 @@ var ErrTargetsOffline = errors.New("one or more targets are offline. Please use 
 
 // TestNotificationTargets is similar to GetNotificationTargets()
 // avoids explicit registration.
-func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport,
-	targetIDs []event.TargetID) error {
+func TestNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, targetIDs []event.TargetID) error {
 	test := true
 	returnOnTargetError := true
-	targets, err := RegisterNotificationTargets(cfg, doneCh, transport, targetIDs, test, returnOnTargetError)
+	targets, err := RegisterNotificationTargets(ctx, cfg, transport, targetIDs, test, returnOnTargetError)
 	if err == nil {
 		// Close all targets since we are only testing connections.
 		for _, t := range targets.TargetMap() {
@@ -60,9 +59,9 @@ func TestNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transpor
 
 // GetNotificationTargets registers and initializes all notification
 // targets, returns error if any.
-func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool) (*event.TargetList, error) {
+func GetNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, test bool) (*event.TargetList, error) {
 	returnOnTargetError := false
-	return RegisterNotificationTargets(cfg, doneCh, transport, nil, test, returnOnTargetError)
+	return RegisterNotificationTargets(ctx, cfg, transport, nil, test, returnOnTargetError)
 }
 
 // RegisterNotificationTargets - returns TargetList which contains enabled targets in serverConfig.
@@ -70,8 +69,8 @@ func GetNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport
 // * Add a new target in pkg/event/target package.
 // * Add newly added target configuration to serverConfig.Notify.<TARGET_NAME>.
 // * Handle the configuration in this function to create/add into TargetList.
-func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
-	targetList, err := FetchRegisteredTargets(cfg, doneCh, transport, test, returnOnTargetError)
+func RegisterNotificationTargets(ctx context.Context, cfg config.Config, transport *http.Transport, targetIDs []event.TargetID, test bool, returnOnTargetError bool) (*event.TargetList, error) {
+	targetList, err := FetchRegisteredTargets(ctx, cfg, transport, test, returnOnTargetError)
 	if err != nil {
 		return targetList, err
 	}
@@ -94,7 +93,7 @@ func RegisterNotificationTargets(cfg config.Config, doneCh <-chan struct{}, tran
 // FetchRegisteredTargets - Returns a set of configured TargetList
 // If `returnOnTargetError` is set to true, The function returns when a target initialization fails
 // Else, the function will return a complete TargetList irrespective of errors
-func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport *http.Transport, test bool, returnOnTargetError bool) (_ *event.TargetList, err error) {
+func FetchRegisteredTargets(ctx context.Context, cfg config.Config, transport *http.Transport, test bool, returnOnTargetError bool) (_ *event.TargetList, err error) {
 	targetList := event.NewTargetList()
 	var targetsOffline bool
 
@@ -167,7 +166,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewAMQPTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewAMQPTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -188,7 +187,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewElasticsearchTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewElasticsearchTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -209,7 +208,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
-		newTarget, err := target.NewKafkaTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewKafkaTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -230,7 +229,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 			continue
 		}
 		args.RootCAs = transport.TLSClientConfig.RootCAs
-		newTarget, err := target.NewMQTTTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewMQTTTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -250,7 +249,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewMySQLTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewMySQLTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -270,7 +269,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewNATSTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewNATSTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -290,7 +289,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewNSQTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewNSQTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -310,7 +309,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewPostgreSQLTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewPostgreSQLTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -330,7 +329,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewRedisTarget(id, args, doneCh, logger.LogOnceIf, test)
+		newTarget, err := target.NewRedisTarget(id, args, ctx.Done(), logger.LogOnceIf, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {
@@ -350,7 +349,7 @@ func FetchRegisteredTargets(cfg config.Config, doneCh <-chan struct{}, transport
 		if !args.Enable {
 			continue
 		}
-		newTarget, err := target.NewWebhookTarget(id, args, doneCh, logger.LogOnceIf, transport, test)
+		newTarget, err := target.NewWebhookTarget(ctx, id, args, logger.LogOnceIf, transport, test)
 		if err != nil {
 			targetsOffline = true
 			if returnOnTargetError {

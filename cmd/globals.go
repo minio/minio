@@ -167,7 +167,7 @@ var (
 	// IsSSL indicates if the server is configured with SSL.
 	globalIsSSL bool
 
-	globalTLSCerts *certs.Certs
+	globalTLSCerts *certs.Manager
 
 	globalHTTPServer        *xhttp.Server
 	globalHTTPServerErrorCh = make(chan error)

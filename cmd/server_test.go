@@ -191,8 +191,8 @@ func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *check) {
 
 func (s *TestSuiteCommon) TestCors(c *check) {
 	expectedMap := http.Header{}
-	expectedMap.Add("Access-Control-Allow-Credentials", "true")
-	expectedMap.Add("Access-Control-Allow-Origin", "http://foobar.com")
+	expectedMap.Set("Access-Control-Allow-Credentials", "true")
+	expectedMap.Set("Access-Control-Allow-Origin", "http://foobar.com")
 	expectedMap["Access-Control-Expose-Headers"] = []string{
 		"Date",
 		"Etag",
@@ -214,10 +214,10 @@ func (s *TestSuiteCommon) TestCors(c *check) {
 		"X-Amz*",
 		"*",
 	}
-	expectedMap.Add("Vary", "Origin")
+	expectedMap.Set("Vary", "Origin")
 
 	req, _ := http.NewRequest(http.MethodOptions, s.endPoint, nil)
-	req.Header.Add("Origin", "http://foobar.com")
+	req.Header.Set("Origin", "http://foobar.com")
 	res, err := s.client.Do(req)
 	if err != nil {
 		c.Fatal(err)
@@ -1561,7 +1561,7 @@ func (s *TestSuiteCommon) TestPartialContent(c *check) {
 	request, err = newTestSignedRequest(http.MethodGet, getGetObjectURL(s.endPoint, bucketName, "bar"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
-	request.Header.Add("Range", "bytes=6-7")
+	request.Header.Set("Range", "bytes=6-7")
 
 	response, err = s.client.Do(request)
 	c.Assert(err, nil)
@@ -1906,7 +1906,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *check) {
 			0, nil, s.accessKey, s.secretKey, s.signer)
 		c.Assert(err, nil)
 		// Get partial content based on the byte range set.
-		request.Header.Add("Range", "bytes="+t.byteRange)
+		request.Header.Set("Range", "bytes="+t.byteRange)
 
 		// execute the HTTP request.
 		response, err = s.client.Do(request)
@@ -1972,7 +1972,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *check) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	// This range spans into first two blocks.
-	request.Header.Add("Range", "bytes=10485750-10485769")
+	request.Header.Set("Range", "bytes=10485750-10485769")
 
 	// execute the HTTP request.
 	response, err = s.client.Do(request)
@@ -2039,7 +2039,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *check) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	// Get partial content based on the byte range set.
-	request.Header.Add("Range", "bytes=2048-2058")
+	request.Header.Set("Range", "bytes=2048-2058")
 
 	// execute the HTTP request to download the partial content.
 	response, err = s.client.Do(request)
@@ -2126,7 +2126,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *check) {
 	request, err = newTestSignedRequest(http.MethodGet, getGetObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	// Invalid byte range set.
-	request.Header.Add("Range", "bytes=-0")
+	request.Header.Set("Range", "bytes=-0")
 	c.Assert(err, nil)
 
 	// execute the HTTP request.

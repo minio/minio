@@ -318,8 +318,7 @@ func validateConfig(s config.Config, setDriveCount int) error {
 		return err
 	}
 
-	return notify.TestNotificationTargets(s, GlobalContext.Done(), NewGatewayHTTPTransport(),
-		globalNotificationSys.ConfiguredTargetIDs())
+	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
 }
 
 func lookupConfigs(s config.Config, setDriveCount int) {
@@ -433,6 +432,9 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	// Enable auto-encryption if enabled
 	globalAutoEncryption = kmsCfg.AutoEncryption
+	if globalAutoEncryption {
+		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
+	}
 
 	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {
@@ -500,12 +502,12 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(s, GlobalContext.Done(), NewGatewayHTTPTransport(), false)
+	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), false)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalEnvTargetList, err = notify.GetNotificationTargets(newServerConfig(), GlobalContext.Done(), NewGatewayHTTPTransport(), true)
+	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), NewGatewayHTTPTransport(), true)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}

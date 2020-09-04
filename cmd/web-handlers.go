@@ -679,7 +679,8 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	}
 
 	opts := ObjectOptions{
-		Versioned: globalBucketVersioningSys.Enabled(args.BucketName),
+		Versioned:        globalBucketVersioningSys.Enabled(args.BucketName),
+		VersionSuspended: globalBucketVersioningSys.Suspended(args.BucketName),
 	}
 	var err error
 next:
@@ -1040,7 +1041,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
 	// Require Content-Length to be set in the request

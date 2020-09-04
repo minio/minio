@@ -67,6 +67,9 @@ const (
 	// ListBucketAction - ListBucket Rest API action.
 	ListBucketAction = "s3:ListBucket"
 
+	// ListBucketVersionsAction - ListBucketVersions Rest API action.
+	ListBucketVersionsAction = "s3:ListBucketVersions"
+
 	// ListBucketMultipartUploadsAction - ListMultipartUploads Rest API action.
 	ListBucketMultipartUploadsAction = "s3:ListBucketMultipartUploads"
 
@@ -194,6 +197,7 @@ var supportedActions = map[Action]struct{}{
 	HeadBucketAction:                       {},
 	ListAllMyBucketsAction:                 {},
 	ListBucketAction:                       {},
+	ListBucketVersionsAction:               {},
 	ListBucketMultipartUploadsAction:       {},
 	ListenNotificationAction:               {},
 	ListenBucketNotificationAction:         {},
@@ -306,6 +310,13 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	ListAllMyBucketsAction: condition.NewKeySet(condition.CommonKeys...),
 
 	ListBucketAction: condition.NewKeySet(
+		append([]condition.Key{
+			condition.S3Prefix,
+			condition.S3Delimiter,
+			condition.S3MaxKeys,
+		}, condition.CommonKeys...)...),
+
+	ListBucketVersionsAction: condition.NewKeySet(
 		append([]condition.Key{
 			condition.S3Prefix,
 			condition.S3Delimiter,
