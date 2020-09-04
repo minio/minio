@@ -395,7 +395,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 					err := s.VerifyFile(item.bucket, item.objectPath(), version)
 					switch err {
 					case errFileCorrupt:
-						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), fi.VersionID, madmin.HealOpts{Remove: healDeleteDangling, ScanMode: madmin.HealDeepScan})
+						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling, ScanMode: madmin.HealDeepScan})
 						if err != nil {
 							if !errors.Is(err, NotImplemented{}) {
 								logger.LogIf(ctx, err)

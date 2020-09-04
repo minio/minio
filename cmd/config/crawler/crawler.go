@@ -26,6 +26,7 @@ var (
 		},
 	}
 
+	// Help provides help for config values
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         BitrotScan,
