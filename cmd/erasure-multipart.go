@@ -63,7 +63,7 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
 			// requests. xl.meta is the authoritative source of truth on which parts constitute
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-			_ = storageDisks[index].DeleteFile(minioMetaMultipartBucket, curpartPath)
+			_ = storageDisks[index].DeleteFile(context.TODO(), minioMetaMultipartBucket, curpartPath)
 			return nil
 		}, index)
 	}
@@ -99,18 +99,18 @@ func (er erasureObjects) cleanupStaleMultipartUploads(ctx context.Context, clean
 // Remove the old multipart uploads on the given disk.
 func (er erasureObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
 	now := time.Now()
-	shaDirs, err := disk.ListDir(minioMetaMultipartBucket, "", -1)
+	shaDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, "", -1)
 	if err != nil {
 		return
 	}
 	for _, shaDir := range shaDirs {
-		uploadIDDirs, err := disk.ListDir(minioMetaMultipartBucket, shaDir, -1)
+		uploadIDDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, shaDir, -1)
 		if err != nil {
 			continue
 		}
 		for _, uploadIDDir := range uploadIDDirs {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
-			fi, err := disk.ReadVersion(minioMetaMultipartBucket, uploadIDPath, "")
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "")
 			if err != nil {
 				continue
 			}
@@ -139,7 +139,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		if disk == nil {
 			continue
 		}
-		uploadIDs, err = disk.ListDir(minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
+		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
 			if err == errDiskNotFound {
 				continue
@@ -172,7 +172,7 @@ retry:
 			if populatedUploadIds.Contains(uploadID) {
 				continue
 			}
-			fi, err := disk.ReadVersion(minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
 			if err != nil {
 				if err == errDiskNotFound || err == errFileNotFound {
 					goto retry

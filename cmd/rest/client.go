@@ -95,8 +95,8 @@ func (e restError) Timeout() bool {
 	return true
 }
 
-// CallWithContext - make a REST call with context.
-func (c *Client) CallWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+// Call - make a REST call with context.
+func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	if !c.IsOnline() {
 		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server offline")}}
 	}
@@ -151,12 +151,6 @@ func (c *Client) CallWithContext(ctx context.Context, method string, values url.
 		return nil, errors.New(resp.Status)
 	}
 	return resp.Body, nil
-}
-
-// Call - make a REST call.
-func (c *Client) Call(method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
-	ctx := context.Background()
-	return c.CallWithContext(ctx, method, values, body, length)
 }
 
 // Close closes all idle connections of the underlying http client

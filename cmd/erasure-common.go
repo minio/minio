@@ -77,7 +77,7 @@ func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (o
 				return errDiskNotFound
 			}
 			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			return storageDisks[index].CheckFile(bucket, prefix)
+			return storageDisks[index].CheckFile(ctx, bucket, prefix)
 		}, index)
 	}
 
