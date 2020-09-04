@@ -109,6 +109,7 @@ const (
 	ErrReplicationDestinationNotFoundError
 	ErrReplicationDestinationMissingLock
 	ErrReplicationTargetNotFoundError
+	ErrReplicationRemoteConnectionError
 	ErrBucketRemoteIdenticalToSource
 	ErrBucketRemoteAlreadyExists
 	ErrBucketRemoteArnTypeInvalid
@@ -821,6 +822,11 @@ var errorCodes = errorCodeMap{
 	ErrReplicationTargetNotFoundError: {
 		Code:           "XminioAdminReplicationTargetNotFoundError",
 		Description:    "The replication target does not exist",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrReplicationRemoteConnectionError: {
+		Code:           "XminioAdminReplicationRemoteConnectionError",
+		Description:    "Remote service endpoint or target bucket not available",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrBucketRemoteIdenticalToSource: {
@@ -1906,6 +1912,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrReplicationDestinationMissingLock
 	case BucketRemoteTargetNotFound:
 		apiErr = ErrReplicationTargetNotFoundError
+	case BucketRemoteConnectionErr:
+		apiErr = ErrReplicationRemoteConnectionError
 	case BucketRemoteAlreadyExists:
 		apiErr = ErrBucketRemoteAlreadyExists
 	case BucketRemoteArnTypeInvalid:
