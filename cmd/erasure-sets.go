@@ -137,13 +137,10 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 
 	format, err := loadFormatErasure(disk)
 	if err != nil {
-		// Close the internal connection to avoid connection leaks.
-		disk.Close()
 		if errors.Is(err, errUnformattedDisk) {
 			info, derr := disk.DiskInfo(context.TODO())
 			if derr != nil && info.RootDisk {
-				return nil, nil, fmt.Errorf("Disk: %s returned %w but its a root disk refusing to use it",
-					disk, derr) // make sure to '%w' to wrap the error
+				return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, derr) // make sure to '%w' to wrap the error
 			}
 		}
 		return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, err) // make sure to '%w' to wrap the error
@@ -213,14 +210,22 @@ func (s *erasureSets) connectDisks() {
 			defer wg.Done()
 			disk, format, err := connectEndpoint(endpoint)
 			if err != nil {
-				printEndpointError(endpoint, err, true)
+				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
+					logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
+					globalBackgroundHealState.pushHealLocalDisks(endpoint)
+				} else {
+					printEndpointError(endpoint, err, true)
+				}
 				return
 			}
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
 			if err != nil {
-				// Close the internal connection to avoid connection leaks.
-				disk.Close()
-				printEndpointError(endpoint, err, false)
+				if endpoint.IsLocal {
+					globalBackgroundHealState.pushHealLocalDisks(endpoint)
+					logger.Info(fmt.Sprintf("Found inconsistent drive %s with format.json, attempting to heal...", endpoint))
+				} else {
+					printEndpointError(endpoint, err, false)
+				}
 				return
 			}
 			disk.SetDiskID(format.Erasure.This)
@@ -291,7 +296,9 @@ func (s *erasureSets) GetDisks(setIndex int) func() []StorageAPI {
 	}
 }
 
-const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
+// defaultMonitorConnectEndpointInterval is the interval to monitor endpoint connections.
+// Must be bigger than defaultMonitorNewDiskInterval.
+const defaultMonitorConnectEndpointInterval = defaultMonitorNewDiskInterval + time.Second*5
 
 // Initialize new set of erasure coded sets.
 func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatErasureV3) (*erasureSets, error) {
@@ -342,12 +349,10 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			}
 			diskID, derr := disk.GetDiskID()
 			if derr != nil {
-				disk.Close()
 				continue
 			}
 			m, n, err := findDiskIndexByDiskID(format, diskID)
 			if err != nil {
-				disk.Close()
 				continue
 			}
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
@@ -1244,13 +1249,11 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 
 		diskID, err := disk.GetDiskID()
 		if err != nil {
-			disk.Close()
 			continue
 		}
 
 		m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 		if err != nil {
-			disk.Close()
 			continue
 		}
 
@@ -1274,17 +1277,14 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 func isTestSetup(infos []DiskInfo, errs []error) bool {
 	rootDiskCount := 0
 	for i := range errs {
-		if errs[i] != nil && errs[i] != errUnformattedDisk {
-			// On any error which is not unformatted disk
-			// it is safer to reject healing.
-			return false
-		}
-		if infos[i].RootDisk {
-			rootDiskCount++
+		if errs[i] == nil || errs[i] == errUnformattedDisk {
+			if infos[i].RootDisk {
+				rootDiskCount++
+			}
 		}
 	}
-	// It is a test setup if all disks are root disks.
-	return rootDiskCount == len(infos)
+	// It is a test setup if all disks are root disks in quorum.
+	return rootDiskCount >= len(infos)/2+1
 }
 
 func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []error) {
@@ -1347,6 +1347,19 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	// Mark all root disks down
 	markRootDisksAsDown(storageDisks, sErrs)
 
+	refFormat, err := getFormatErasureInQuorum(formats)
+	if err != nil {
+		return res, err
+	}
+
+	for i, format := range formats {
+		if format != nil {
+			if ferr := formatErasureV3Check(refFormat, format); ferr != nil {
+				sErrs[i] = errUnformattedDisk
+			}
+		}
+	}
+
 	// Prepare heal-result
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
@@ -1370,11 +1383,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		// No unformatted disks found disks are either offline
 		// or online, no healing is required.
 		return res, errNoHealRequired
-	}
-
-	refFormat, err := getFormatErasureInQuorum(formats)
-	if err != nil {
-		return res, err
 	}
 
 	// Mark all UUIDs which might be offline, use list
@@ -1450,13 +1458,11 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 			diskID, err := disk.GetDiskID()
 			if err != nil {
-				disk.Close()
 				continue
 			}
 
 			m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 			if err != nil {
-				disk.Close()
 				continue
 			}
 

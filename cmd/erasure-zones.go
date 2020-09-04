@@ -2056,6 +2056,25 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		writeQuorum++
 	}
 
+	var aggHealStateResult madmin.BgHealState
+	if opts.Maintenance {
+		// check if local disks are being healed, if they are being healed
+		// we need to tell healthy status as 'false' so that this server
+		// is not taken down for maintenance
+		var err error
+		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx)
+		if err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
+			return HealthResult{
+				Healthy: false,
+			}
+		}
+
+		if len(aggHealStateResult.HealDisks) > 0 {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+		}
+	}
+
 	for zoneIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[zoneIdx] {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
@@ -2063,10 +2082,11 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 					fmt.Errorf("Write quorum may be lost on zone: %d, set: %d, expected write quorum: %d",
 						zoneIdx, setIdx, writeQuorum))
 				return HealthResult{
-					Healthy:     false,
-					ZoneID:      zoneIdx,
-					SetID:       setIdx,
-					WriteQuorum: writeQuorum,
+					Healthy:       false,
+					HealingDrives: len(aggHealStateResult.HealDisks),
+					ZoneID:        zoneIdx,
+					SetID:         setIdx,
+					WriteQuorum:   writeQuorum,
 				}
 			}
 		}
@@ -2079,21 +2099,6 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 			Healthy:     true,
 			WriteQuorum: writeQuorum,
 		}
-	}
-
-	// check if local disks are being healed, if they are being healed
-	// we need to tell healthy status as 'false' so that this server
-	// is not taken down for maintenance
-	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx)
-	if err != nil {
-		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
-		return HealthResult{
-			Healthy: false,
-		}
-	}
-
-	if len(aggHealStateResult.HealDisks) > 0 {
-		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
 	}
 
 	return HealthResult{
