@@ -961,7 +961,7 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 }
 
 func (s *erasureSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoCh {
-	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
+	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1, false)
 }
 
 func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
@@ -972,90 +972,64 @@ func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefi
 // FileInfoCh which can be read from.
 func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoVersionsCh {
 	var entryChs []FileInfoVersionsCh
-	var success int
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
 	for _, set := range s.sets {
 		// Reset for the next erasure set.
-		success = ndisks
-		for _, disk := range set.getLoadBalancedDisks() {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
-			entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				// Disk walk returned error, ignore it.
-				continue
-			}
-			entryChs = append(entryChs, FileInfoVersionsCh{
-				Ch: entryCh,
-			})
-			success--
-			if success == 0 {
-				break
-			}
+		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
+				if err != nil {
+					return
+				}
+
+				mutex.Lock()
+				entryChs = append(entryChs, FileInfoVersionsCh{
+					Ch: entryCh,
+				})
+				mutex.Unlock()
+			}(disk)
 		}
 	}
+	wg.Wait()
 	return entryChs
 }
 
 // Starts a walk channel across n number of disks and returns a slice of
 // FileInfoCh which can be read from.
-func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
+func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int, splunk bool) []FileInfoCh {
 	var entryChs []FileInfoCh
-	var success int
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
 	for _, set := range s.sets {
 		// Reset for the next erasure set.
-		success = ndisks
-		for _, disk := range set.getLoadBalancedDisks() {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
-			entryCh, err := disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
-			if err != nil {
-				// Disk walk returned error, ignore it.
-				continue
-			}
-			entryChs = append(entryChs, FileInfoCh{
-				Ch: entryCh,
-			})
-			success--
-			if success == 0 {
-				break
-			}
-		}
-	}
-	return entryChs
-}
+		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
 
-// Starts a walk channel across n number of disks and returns a slice of
-// FileInfo channels which can be read from.
-func (s *erasureSets) startSplunkMergeWalksN(ctx context.Context, bucket, prefix, marker string, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
-	var entryChs []FileInfoCh
-	var success int
-	for _, set := range s.sets {
-		// Reset for the next erasure set.
-		success = ndisks
-		for _, disk := range set.getLoadBalancedDisks() {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
-			entryCh, err := disk.WalkSplunk(GlobalContext, bucket, prefix, marker, endWalkCh)
-			if err != nil {
-				// Disk walk returned error, ignore it.
-				continue
-			}
-			entryChs = append(entryChs, FileInfoCh{
-				Ch: entryCh,
-			})
-			success--
-			if success == 0 {
-				break
-			}
+				var entryCh chan FileInfo
+				var err error
+				if splunk {
+					entryCh, err = disk.WalkSplunk(GlobalContext, bucket, prefix, marker, endWalkCh)
+				} else {
+					entryCh, err = disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
+				}
+				if err != nil {
+					// Disk walk returned error, ignore it.
+					return
+				}
+				mutex.Lock()
+				entryChs = append(entryChs, FileInfoCh{
+					Ch: entryCh,
+				})
+				mutex.Unlock()
+			}(disk)
 		}
 	}
+	wg.Wait()
 	return entryChs
 }
 
