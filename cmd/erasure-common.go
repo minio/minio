@@ -34,6 +34,22 @@ func (er erasureObjects) getLoadBalancedLocalDisks() (newDisks []StorageAPI) {
 	return newDisks
 }
 
+// getLoadBalancedNDisks - fetches load balanced (sufficiently randomized) disk slice with N disks online
+func (er erasureObjects) getLoadBalancedNDisks(ndisks int) (newDisks []StorageAPI) {
+	disks := er.getLoadBalancedDisks()
+	for _, disk := range disks {
+		if disk == nil {
+			continue
+		}
+		newDisks = append(newDisks, disk)
+		ndisks--
+		if ndisks == 0 {
+			break
+		}
+	}
+	return
+}
+
 // getLoadBalancedDisks - fetches load balanced (sufficiently randomized) disk slice.
 func (er erasureObjects) getLoadBalancedDisks() (newDisks []StorageAPI) {
 	disks := er.getDisks()
