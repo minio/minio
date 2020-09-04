@@ -27,9 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/madmin"
-
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -37,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/willf/bloom"
 )
 
@@ -47,6 +47,10 @@ const (
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
 	healDeleteDangling = true
+)
+
+var (
+	globalCrawlerConfig crawler.Config
 )
 
 // initDataCrawler will start the crawler unless disabled.

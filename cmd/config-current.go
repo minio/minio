@@ -192,6 +192,7 @@ func initHelp() {
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
+		config.CrawlerSubSys:        crawler.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -250,6 +251,10 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	}
 
 	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+		return err
+	}
+
+	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -410,6 +415,10 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 				logger.LogIf(ctx, fmt.Errorf("Unable to setup encryption cache: %w", err))
 			}
 		}
+	}
+	globalCrawlerConfig, err = crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to read crawler config: %w", err))
 	}
 
 	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
