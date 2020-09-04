@@ -163,9 +163,7 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 			val, ok = reqQueries[header]
 		}
 		if ok {
-			for _, enc := range val {
-				extractedSignedHeaders.Add(header, enc)
-			}
+			extractedSignedHeaders[http.CanonicalHeaderKey(header)] = val
 			continue
 		}
 		switch header {
@@ -192,9 +190,7 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 			extractedSignedHeaders.Set(header, r.Host)
 		case "transfer-encoding":
 			// Go http server removes "host" from Request.Header
-			for _, enc := range r.TransferEncoding {
-				extractedSignedHeaders.Add(header, enc)
-			}
+			extractedSignedHeaders[http.CanonicalHeaderKey(header)] = r.TransferEncoding
 		case "content-length":
 			// Signature-V4 spec excludes Content-Length from signed headers list for signature calculation.
 			// But some clients deviate from this rule. Hence we consider Content-Length for signature

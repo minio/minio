@@ -26,11 +26,12 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
+	"path"
 	slashpath "path"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -91,6 +92,7 @@ type xlStorage struct {
 
 	diskPath string
 	hostname string
+	endpoint string
 
 	pool sync.Pool
 
@@ -233,7 +235,18 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newXLStorage(path string, hostname string) (*xlStorage, error) {
+func newLocalXLStorage(path string) (*xlStorage, error) {
+	u := url.URL{Path: path}
+	return newXLStorage(Endpoint{
+		URL:     &u,
+		IsLocal: true,
+	})
+}
+
+// Initialize a new storage disk.
+func newXLStorage(ep Endpoint) (*xlStorage, error) {
+	path := ep.Path
+	hostname := ep.Host
 	var err error
 	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
@@ -247,6 +260,7 @@ func newXLStorage(path string, hostname string) (*xlStorage, error) {
 	p := &xlStorage{
 		diskPath: path,
 		hostname: hostname,
+		endpoint: ep.String(),
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -367,17 +381,15 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 
 		var totalSize int64
 		for _, version := range fivs.Versions {
+			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			size := item.applyActions(ctx, objAPI, actionMeta{
 				numVersions: len(fivs.Versions),
-				oi:          version.ToObjectInfo(item.bucket, item.objectPath()),
+				oi:          oi,
 			})
 			if !version.Deleted {
 				totalSize += size
 			}
-		}
-
-		for _, version := range fivs.Versions {
-			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
+			item.healReplication(ctx, objAPI, actionMeta{oi: oi})
 		}
 		return totalSize, nil
 	})
@@ -422,6 +434,7 @@ func (s *xlStorage) DiskInfo() (info DiskInfo, err error) {
 		Used:      di.Total - di.Free,
 		RootDisk:  s.rootDisk,
 		MountPath: s.diskPath,
+		Endpoint:  s.endpoint,
 	}
 
 	diskID, err := s.GetDiskID()
@@ -718,8 +731,6 @@ func (s *xlStorage) ListDirSplunk(volume, dirPath string, count int) (entries []
 		return nil, nil
 	}
 
-	const receiptJSON = "receipt.json"
-
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -750,24 +761,45 @@ func (s *xlStorage) ListDirSplunk(volume, dirPath string, count int) (entries []
 		return nil, err
 	}
 
-	for i, entry := range entries {
-		if entry != receiptJSON {
-			continue
-		}
-		_, err = os.Stat(pathJoin(dirPathAbs, entry, xlStorageFormatFile))
-		if err == nil {
-			entries[i] = strings.TrimSuffix(entry, SlashSeparator)
-			continue
-		}
-		if os.IsNotExist(err) {
-			if err = s.renameLegacyMetadata(volume, pathJoin(dirPath, entry)); err == nil {
-				// Rename was successful means we found old `xl.json`
-				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
-			}
-		}
+	return entries, nil
+}
+
+func (s *xlStorage) isLeafSplunk(volume string, leafPath string) bool {
+	const receiptJSON = "receipt.json"
+
+	if path.Base(leafPath) != receiptJSON {
+		return false
+	}
+	return s.isLeaf(volume, leafPath)
+}
+
+func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return false
 	}
 
-	return entries, nil
+	_, err = os.Stat(pathJoin(volumeDir, leafPath, xlStorageFormatFile))
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		// We need a fallback code where directory might contain
+		// legacy `xl.json`, in such situation we just rename
+		// and proceed if rename is successful we know that it
+		// is the leaf since `xl.json` was present.
+		return s.renameLegacyMetadata(volume, leafPath) == nil
+	}
+	return false
+}
+
+func (s *xlStorage) isLeafDir(volume, leafPath string) bool {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return false
+	}
+
+	return isDirEmpty(pathJoin(volumeDir, leafPath))
 }
 
 // WalkSplunk - is a sorted walker which returns file entries in lexically
@@ -795,24 +827,20 @@ func (s *xlStorage) WalkSplunk(volume, dirPath, marker string, endWalkCh <-chan 
 	ch = make(chan FileInfo)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (bool, []string) {
+		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 			entries, err := s.ListDirSplunk(volume, dirPath, -1)
 			if err != nil {
-				return false, nil
+				return false, nil, false
 			}
 			if len(entries) == 0 {
-				return true, nil
+				return true, nil, false
 			}
-			sort.Strings(entries)
-			return false, filterMatchingPrefix(entries, dirEntry)
+			entries, delayIsLeaf = filterListEntries(volume, dirPath, entries, dirEntry, s.isLeafSplunk)
+			return false, entries, delayIsLeaf
 		}
 
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, true, listDir, endWalkCh)
-		for {
-			walkResult, ok := <-walkResultCh
-			if !ok {
-				return
-			}
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, true, listDir, s.isLeafSplunk, s.isLeafDir, endWalkCh)
+		for walkResult := range walkResultCh {
 			var fi FileInfo
 			if HasSuffix(walkResult.entry, SlashSeparator) {
 				fi = FileInfo{
@@ -880,23 +908,22 @@ func (s *xlStorage) WalkVersions(volume, dirPath, marker string, recursive bool,
 		}
 	}
 
-	// buffer channel matches the S3 ListObjects implementation
-	ch = make(chan FileInfoVersions, maxObjectList)
+	ch = make(chan FileInfoVersions)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
+		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 			entries, err := s.ListDir(volume, dirPath, -1)
 			if err != nil {
-				return false, nil
+				return false, nil, false
 			}
 			if len(entries) == 0 {
-				return true, nil
+				return true, nil, false
 			}
-			sort.Strings(entries)
-			return false, filterMatchingPrefix(entries, dirEntry)
+			entries, delayIsLeaf = filterListEntries(volume, dirPath, entries, dirEntry, s.isLeaf)
+			return false, entries, delayIsLeaf
 		}
 
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, s.isLeaf, s.isLeafDir, endWalkCh)
 		for walkResult := range walkResultCh {
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) {
@@ -966,23 +993,22 @@ func (s *xlStorage) Walk(volume, dirPath, marker string, recursive bool, endWalk
 		}
 	}
 
-	// buffer channel matches the S3 ListObjects implementation
-	ch = make(chan FileInfo, maxObjectList)
+	ch = make(chan FileInfo)
 	go func() {
 		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string) {
+		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 			entries, err := s.ListDir(volume, dirPath, -1)
 			if err != nil {
-				return false, nil
+				return false, nil, false
 			}
 			if len(entries) == 0 {
-				return true, nil
+				return true, nil, false
 			}
-			sort.Strings(entries)
-			return false, filterMatchingPrefix(entries, dirEntry)
+			entries, delayIsLeaf = filterListEntries(volume, dirPath, entries, dirEntry, s.isLeaf)
+			return false, entries, delayIsLeaf
 		}
 
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, endWalkCh)
+		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, s.isLeaf, s.isLeafDir, endWalkCh)
 		for walkResult := range walkResultCh {
 			var fi FileInfo
 			if HasSuffix(walkResult.entry, SlashSeparator) {
@@ -1051,20 +1077,6 @@ func (s *xlStorage) ListDir(volume, dirPath string, count int) (entries []string
 		return nil, err
 	}
 
-	for i, entry := range entries {
-		_, err = os.Stat(pathJoin(dirPathAbs, entry, xlStorageFormatFile))
-		if err == nil {
-			entries[i] = strings.TrimSuffix(entry, SlashSeparator)
-			continue
-		}
-		if os.IsNotExist(err) {
-			if err = s.renameLegacyMetadata(volume, pathJoin(dirPath, entry)); err == nil {
-				// if rename was successful, means we did find old `xl.json`
-				entries[i] = strings.TrimSuffix(entry, SlashSeparator)
-			}
-		}
-	}
-
 	return entries, nil
 }
 
@@ -1115,17 +1127,6 @@ func (s *xlStorage) DeleteVersion(volume, path string, fi FileInfo) error {
 	var xlMeta xlMetaV2
 	if err = xlMeta.Load(buf); err != nil {
 		return err
-	}
-
-	if fi.Deleted {
-		if err = xlMeta.AddVersion(fi); err != nil {
-			return err
-		}
-		buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
-		if err != nil {
-			return err
-		}
-		return s.WriteAll(volume, pathJoin(path, xlStorageFormatFile), bytes.NewReader(buf))
 	}
 
 	dataDir, lastVersion, err := xlMeta.DeleteVersion(fi)
@@ -1798,6 +1799,10 @@ func (s *xlStorage) CheckParts(volume, path string, fi FileInfo) error {
 		if st.Mode().IsDir() {
 			return errFileNotFound
 		}
+		// Check if shard is truncated.
+		if st.Size() < fi.Erasure.ShardFileSize(part.Size) {
+			return errFileCorrupt
+		}
 	}
 
 	return nil
@@ -1846,7 +1851,7 @@ func (s *xlStorage) CheckFile(volume, path string) error {
 	}
 
 	// If its a directory its not a regular file.
-	if st.Mode().IsDir() {
+	if st.Mode().IsDir() || st.Size() == 0 {
 		return errFileNotFound
 	}
 
@@ -2149,7 +2154,7 @@ func (s *xlStorage) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath s
 	if fi.VersionID == "" {
 		// return the latest "null" versionId info
 		ofi, err := xlMeta.ToFileInfo(dstVolume, dstPath, nullVersionID)
-		if err == nil {
+		if err == nil && !ofi.Deleted {
 			// Purge the destination path as we are not preserving anything
 			// versioned object was not requested.
 			oldDstDataPath = pathJoin(dstVolumeDir, dstPath, ofi.DataDir)

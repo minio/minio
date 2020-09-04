@@ -352,6 +352,8 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		if fiErr != nil {
 			return 0, errSkipFile
 		}
+		// We cannot heal in FS mode.
+		item.heal = false
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
 		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
@@ -1198,8 +1200,13 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
 	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
+
+	// Delete the temporary object in the case of a
+	// failure. If PutObject succeeds, then there would be
+	// nothing to delete.
+	defer fsRemoveFile(ctx, fsTmpObjPath)
+
 	if err != nil {
-		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	fsMeta.Meta["etag"] = r.MD5CurrentHexString()
@@ -1207,14 +1214,8 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		fsRemoveFile(ctx, fsTmpObjPath)
 		return ObjectInfo{}, IncompleteBody{}
 	}
-
-	// Delete the temporary object in the case of a
-	// failure. If PutObject succeeds, then there would be
-	// nothing to delete.
-	defer fsRemoveFile(ctx, fsTmpObjPath)
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
@@ -1332,23 +1333,31 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	return ObjectInfo{Bucket: bucket, Name: object}, nil
 }
 
+func (fs *FSObjects) isLeafDir(bucket string, leafPath string) bool {
+	return fs.isObjectDir(bucket, leafPath)
+}
+
+func (fs *FSObjects) isLeaf(bucket string, leafPath string) bool {
+	return !strings.HasSuffix(leafPath, slashSeparator)
+}
+
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry
 // is a leaf or non-leaf entry.
 func (fs *FSObjects) listDirFactory() ListDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
 		var err error
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
 		if err != nil && err != errFileNotFound {
 			logger.LogIf(GlobalContext, err)
-			return false, nil
+			return false, nil, false
 		}
 		if len(entries) == 0 {
-			return true, nil
+			return true, nil, false
 		}
-		sort.Strings(entries)
-		return false, filterMatchingPrefix(entries, prefixEntry)
+		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, fs.isLeaf)
+		return false, entries, delayIsLeaf
 	}
 
 	// Return list factory instance.
@@ -1451,7 +1460,7 @@ func (fs *FSObjects) ListObjects(ctx context.Context, bucket, prefix, marker, de
 	}()
 
 	return listObjects(ctx, fs, bucket, prefix, marker, delimiter, maxKeys, fs.listPool,
-		fs.listDirFactory(), fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
+		fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
 }
 
 // GetObjectTags - get object tags from an existing object
@@ -1548,7 +1557,7 @@ func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remo
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
 func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
-	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), results, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
+	return fsWalk(ctx, fs, bucket, prefix, fs.listDirFactory(), fs.isLeaf, fs.isLeafDir, results, fs.getObjectInfoNoFSLock, fs.getObjectInfoNoFSLock)
 }
 
 // HealObjects - no-op for fs. Valid only for Erasure.

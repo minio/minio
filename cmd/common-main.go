@@ -51,7 +51,7 @@ func init() {
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
-	if (globalAutoEncryption || GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
+	if (GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Encryption support is requested but '%s' does not support encryption", name)
 	}

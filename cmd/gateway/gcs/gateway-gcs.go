@@ -91,8 +91,6 @@ const (
 
 	// Project ID key in credentials.json
 	gcsProjectIDKey = "project_id"
-
-	gcsBackend = "gcs"
 )
 
 func init() {
@@ -132,7 +130,7 @@ EXAMPLES:
 `
 
 	minio.RegisterGatewayCommand(cli.Command{
-		Name:               gcsBackend,
+		Name:               minio.GCSBackendGateway,
 		Usage:              "Google Cloud Storage",
 		Action:             gcsGatewayMain,
 		CustomHelpTemplate: gcsGatewayTemplate,
@@ -145,13 +143,13 @@ func gcsGatewayMain(ctx *cli.Context) {
 	projectID := ctx.Args().First()
 	if projectID == "" && os.Getenv("GOOGLE_APPLICATION_CREDENTIALS") == "" {
 		logger.LogIf(minio.GlobalContext, errGCSProjectIDNotFound, logger.Application)
-		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+		cli.ShowCommandHelpAndExit(ctx, minio.GCSBackendGateway, 1)
 	}
 	if projectID != "" && !isValidGCSProjectIDFormat(projectID) {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("projectID", ctx.Args().First())
 		contxt := logger.SetReqInfo(minio.GlobalContext, reqInfo)
 		logger.LogIf(contxt, errGCSInvalidProjectID, logger.Application)
-		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+		cli.ShowCommandHelpAndExit(ctx, minio.GCSBackendGateway, 1)
 	}
 
 	minio.StartGateway(ctx, &GCS{projectID})
@@ -164,7 +162,7 @@ type GCS struct {
 
 // Name returns the name of gcs ObjectLayer.
 func (g *GCS) Name() string {
-	return gcsBackend
+	return minio.GCSBackendGateway
 }
 
 // NewGatewayLayer returns gcs ObjectLayer.

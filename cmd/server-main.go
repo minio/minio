@@ -379,10 +379,6 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 		// No unlock for "leader" lock.
 	}
 
-	if globalIsErasure {
-		initGlobalHeal(ctx, objAPI)
-	}
-
 	initDataCrawler(ctx, objAPI)
 }
 

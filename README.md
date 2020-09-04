@@ -193,4 +193,4 @@ mc admin update <minio alias, e.g., myminio>
 Please follow MinIO [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
 
 ## License
-Use of MinIO is governed by the Apache 2.0 License found at [LICENSE](./LICENSE).
+Use of MinIO is governed by the Apache 2.0 License found at [LICENSE](https://github.com/minio/minio/blob/master/LICENSE).

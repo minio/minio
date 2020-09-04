@@ -102,7 +102,7 @@ func (c *cacheControl) isStale(modTime time.Time) bool {
 func cacheControlOpts(o ObjectInfo) *cacheControl {
 	c := cacheControl{}
 	m := o.UserDefined
-	if o.Expires != timeSentinel {
+	if !o.Expires.Equal(timeSentinel) {
 		c.expiry = o.Expires
 	}
 
@@ -489,9 +489,15 @@ func (f *fileScorer) queueString() string {
 // bytesToClear() returns the number of bytes to clear to reach low watermark
 // w.r.t quota given disk total and free space, quota in % allocated to cache
 // and low watermark % w.r.t allowed quota.
-func bytesToClear(total, free int64, quotaPct, lowWatermark uint64) uint64 {
-	used := (total - free)
+// If the high watermark hasn't been reached 0 will be returned.
+func bytesToClear(total, free int64, quotaPct, lowWatermark, highWatermark uint64) uint64 {
+	used := total - free
 	quotaAllowed := total * (int64)(quotaPct) / 100
-	lowWMUsage := (total * (int64)(lowWatermark*quotaPct) / (100 * 100))
+	highWMUsage := total * (int64)(highWatermark*quotaPct) / (100 * 100)
+	if used < highWMUsage {
+		return 0
+	}
+	// Return bytes needed to reach low watermark.
+	lowWMUsage := total * (int64)(lowWatermark*quotaPct) / (100 * 100)
 	return (uint64)(math.Min(float64(quotaAllowed), math.Max(0.0, float64(used-lowWMUsage))))
 }

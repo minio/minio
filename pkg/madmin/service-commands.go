@@ -95,6 +95,7 @@ func (adm AdminClient) ServiceTrace(ctx context.Context, allTrace, errTrace bool
 			resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
 			if err != nil {
 				closeResponse(resp)
+				traceInfoCh <- ServiceTraceInfo{Err: err}
 				return
 			}
 

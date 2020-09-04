@@ -45,7 +45,7 @@ func TestGetCacheControlOpts(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			m := make(map[string]string)
 			m["cache-control"] = testCase.cacheControlHeaderVal
-			if testCase.expiryHeaderVal != timeSentinel {
+			if !testCase.expiryHeaderVal.Equal(timeSentinel) {
 				m["expires"] = testCase.expiryHeaderVal.String()
 			}
 			c := cacheControlOpts(ObjectInfo{UserDefined: m, Expires: testCase.expiryHeaderVal})
@@ -149,22 +149,26 @@ func TestNewFileScorer(t *testing.T) {
 }
 func TestBytesToClear(t *testing.T) {
 	testCases := []struct {
-		total        int64
-		free         int64
-		quotaPct     uint64
-		watermarkLow uint64
-		expected     uint64
+		total         int64
+		free          int64
+		quotaPct      uint64
+		watermarkLow  uint64
+		watermarkHigh uint64
+		expected      uint64
 	}{
-		{1000, 800, 40, 90, 0},
-		{1000, 200, 40, 90, 400},
-		{1000, 400, 40, 90, 240},
-		{1000, 600, 40, 90, 40},
-		{1000, 600, 40, 70, 120},
-		{1000, 1000, 90, 70, 0},
-		{1000, 0, 90, 70, 370},
+		{total: 1000, free: 800, quotaPct: 40, watermarkLow: 90, watermarkHigh: 90, expected: 0},
+		{total: 1000, free: 200, quotaPct: 40, watermarkLow: 90, watermarkHigh: 90, expected: 400},
+		{total: 1000, free: 400, quotaPct: 40, watermarkLow: 90, watermarkHigh: 90, expected: 240},
+		{total: 1000, free: 600, quotaPct: 40, watermarkLow: 90, watermarkHigh: 90, expected: 40},
+		{total: 1000, free: 600, quotaPct: 40, watermarkLow: 70, watermarkHigh: 70, expected: 120},
+		{total: 1000, free: 1000, quotaPct: 90, watermarkLow: 70, watermarkHigh: 70, expected: 0},
+
+		// High not yet reached..
+		{total: 1000, free: 250, quotaPct: 100, watermarkLow: 50, watermarkHigh: 90, expected: 0},
+		{total: 1000, free: 250, quotaPct: 100, watermarkLow: 50, watermarkHigh: 90, expected: 0},
 	}
 	for i, tc := range testCases {
-		toClear := bytesToClear(tc.total, tc.free, tc.quotaPct, tc.watermarkLow)
+		toClear := bytesToClear(tc.total, tc.free, tc.quotaPct, tc.watermarkLow, tc.watermarkHigh)
 		if tc.expected != toClear {
 			t.Errorf("test %d expected %v, got %v", i, tc.expected, toClear)
 		}

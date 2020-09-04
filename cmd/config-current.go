@@ -416,6 +416,9 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	// Enable auto-encryption if enabled
 	globalAutoEncryption = kmsCfg.AutoEncryption
+	if globalAutoEncryption {
+		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
+	}
 
 	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {

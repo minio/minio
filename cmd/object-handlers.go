@@ -881,7 +881,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	_, err = globalBucketSSEConfigSys.Get(dstBucket)
 	// This request header needs to be set prior to setting ObjectOptions
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
 	var srcOpts, dstOpts ObjectOptions
@@ -1449,7 +1449,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
-		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
 	actualSize := size
@@ -1648,7 +1648,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
-		r.Header.Add(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
 	// Validate storage class metadata if present

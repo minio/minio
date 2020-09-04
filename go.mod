@@ -5,8 +5,8 @@ go 1.13
 require (
 	cloud.google.com/go v0.39.0
 	git.apache.org/thrift.git v0.13.0
-	github.com/Azure/azure-pipeline-go v0.2.1
-	github.com/Azure/azure-storage-blob-go v0.8.0
+	github.com/Azure/azure-pipeline-go v0.2.2
+	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-autorest/autorest/adal v0.9.1 // indirect
 	github.com/Shopify/sarama v1.24.1
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
@@ -32,6 +32,7 @@ require (
 	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/rpc v1.2.0
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.10.3

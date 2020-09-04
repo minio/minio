@@ -81,7 +81,8 @@ func (er erasureObjects) cleanupStaleMultipartUploads(ctx context.Context, clean
 			return
 		case <-ticker.C:
 			var disk StorageAPI
-			for _, d := range er.getLoadBalancedDisks() {
+			// run multiple cleanup's local to this server.
+			for _, d := range er.getLoadBalancedLocalDisks() {
 				if d != nil {
 					disk = d
 					break

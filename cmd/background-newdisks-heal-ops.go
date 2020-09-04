@@ -183,7 +183,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, drivesToHeal
 			// Heal all erasure sets that need
 			for i, erasureSetToHeal := range erasureSetInZoneToHeal {
 				for _, setIndex := range erasureSetToHeal {
-					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].drivesPerSet)
+					err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].setDriveCount)
 					if err != nil {
 						logger.LogIf(ctx, err)
 					}

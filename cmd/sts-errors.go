@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"encoding/xml"
-	"fmt"
 	"net/http"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -46,7 +45,7 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, isErrCode
 	stsErrorResponse.RequestID = w.Header().Get(xhttp.AmzRequestID)
 	stsErrorResponse.Error.Message = err.Description
 	if errCtxt != nil {
-		stsErrorResponse.Error.Message = fmt.Sprintf("%v", errCtxt)
+		stsErrorResponse.Error.Message = errCtxt.Error()
 	}
 	var logKind logger.Kind
 	switch errCode {

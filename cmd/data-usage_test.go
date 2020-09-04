@@ -360,6 +360,13 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got.root() == nil {
+		t.Log("cached folders:")
+		for folder := range got.Cache {
+			t.Log("folder:", folder)
+		}
+		t.Fatal("got nil root.")
+	}
 
 	// Test dirs
 	var want = []struct {

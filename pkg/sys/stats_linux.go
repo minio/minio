@@ -1,4 +1,4 @@
-// +build linux
+// +build linux,!arm,!386
 
 /*
  * MinIO Cloud Storage, (C) 2016,2017 MinIO, Inc.
@@ -64,13 +64,12 @@ func getSysinfoMemoryLimit() (limit uint64, err error) {
 
 	// Some fields in syscall.Sysinfo_t have different  integer sizes
 	// in different platform architectures. Cast all fields to uint64.
-	totalRAM := uint64(si.Totalram)
-	unit := uint64(si.Unit)
+	unit := si.Unit
+	totalRAM := si.Totalram
 
 	// Total RAM is always the multiplicative value
 	// of unit size and total ram.
-	limit = unit * totalRAM
-	return limit, nil
+	return uint64(unit) * totalRAM, nil
 }
 
 // GetStats - return system statistics, currently only

@@ -8,58 +8,54 @@ fs.file-max = 4194303
 vm.swappiness = 1
 
 # prioritize application RAM against disk/swap cache
-vm.vfs_cache_pressure = 10
+vm.vfs_cache_pressure = 50
 
 # minimum free memory
 vm.min_free_kbytes = 1000000
 
-# maximum receive socket buffer (bytes)
-net.core.rmem_max = 268435456
+# follow mellanox best practices https://community.mellanox.com/s/article/linux-sysctl-tuning
+# the following changes are recommended for improving IPv4 traffic performance by Mellanox
 
-# maximum send buffer socket buffer (bytes)
-net.core.wmem_max = 268435456
+# disable the TCP timestamps option for better CPU utilization
+net.ipv4.tcp_timestamps = 0
 
-# default receive buffer socket size (bytes)
-net.core.rmem_default = 67108864
+# enable the TCP selective acks option for better throughput
+net.ipv4.tcp_sack = 1
 
-# default send buffer socket size (bytes)
-net.core.wmem_default = 67108864
+# increase the maximum length of processor input queues
+net.core.netdev_max_backlog = 250000
 
-# maximum number of packets in one poll cycle
-net.core.netdev_budget = 1200
+# increase the TCP maximum and default buffer sizes using setsockopt()
+net.core.rmem_max = 4194304
+net.core.wmem_max = 4194304
+net.core.rmem_default = 4194304
+net.core.wmem_default = 4194304
+net.core.optmem_max = 4194304
 
-# maximum ancillary buffer size per socket
-net.core.optmem_max = 134217728
+# increase memory thresholds to prevent packet dropping:
+net.ipv4.tcp_rmem = "4096 87380 4194304"
+net.ipv4.tcp_wmem = "4096 65536 4194304"
+
+# enable low latency mode for TCP:
+net.ipv4.tcp_low_latency = 1
+
+# the following variable is used to tell the kernel how much of the socket buffer
+# space should be used for TCP window size, and how much to save for an application
+# buffer. A value of 1 means the socket buffer will be divided evenly between.
+# TCP windows size and application.
+net.ipv4.tcp_adv_win_scale = 1
 
 # maximum number of incoming connections
 net.core.somaxconn = 65535
 
 # maximum number of packets queued
-net.core.netdev_max_backlog = 250000
-
-# maximum read buffer space
-net.ipv4.tcp_rmem = 67108864 134217728 268435456
-
-# maximum write buffer space
-net.ipv4.tcp_wmem = 67108864 134217728 268435456
-
-# enable low latency mode
-net.ipv4.tcp_low_latency = 1
-
-# socket buffer portion used for TCP window
-net.ipv4.tcp_adv_win_scale = 1
+net.core.netdev_max_backlog = 10000
 
 # queue length of completely established sockets waiting for accept
-net.ipv4.tcp_max_syn_backlog = 30000
-
-# maximum number of sockets in TIME_WAIT state
-net.ipv4.tcp_max_tw_buckets = 2000000
-
-# reuse sockets in TIME_WAIT state when safe
-net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_max_syn_backlog = 4096
 
 # time to wait (seconds) for FIN packet
-net.ipv4.tcp_fin_timeout = 5
+net.ipv4.tcp_fin_timeout = 15
 
 # disable icmp send redirects
 net.ipv4.conf.all.send_redirects = 0

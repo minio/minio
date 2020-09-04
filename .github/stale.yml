@@ -14,6 +14,7 @@ onlyLabels: []
 exemptLabels:
   - "security"
   - "pending discussion"
+  - "do not close"
 
 # Set to true to ignore issues in a project (defaults to false)
 exemptProjects: false

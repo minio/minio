@@ -49,7 +49,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 	testCase := testCases[0]
 
 	// Initialize a new xlStorage layer.
-	disk, err := newXLStorage(tmpPath, "")
+	disk, err := newLocalXLStorage(tmpPath)
 	if err != nil {
 		t.Fatalf("Initializing xlStorage failed with %s.", err)
 	}
@@ -91,7 +91,7 @@ func TestIsValidUmaskFile(t *testing.T) {
 	testCase := testCases[0]
 
 	// Initialize a new xlStorage layer.
-	disk, err := newXLStorage(tmpPath, "")
+	disk, err := newLocalXLStorage(tmpPath)
 	if err != nil {
 		t.Fatalf("Initializing xlStorage failed with %s.", err)
 	}

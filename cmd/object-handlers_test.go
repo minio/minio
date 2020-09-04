@@ -529,7 +529,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			t.Fatalf("Test %d: Failed to create HTTP request for Get Object: <ERROR> %v", i+1, err)
 		}
 		if testCase.byteRange != "" {
-			req.Header.Add("Range", testCase.byteRange)
+			req.Header.Set("Range", testCase.byteRange)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
@@ -577,7 +577,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 
 		if testCase.byteRange != "" {
-			reqV2.Header.Add("Range", testCase.byteRange)
+			reqV2.Header.Set("Range", testCase.byteRange)
 		}
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
@@ -741,7 +741,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		}
 
 		if byteRange != "" {
-			req.Header.Add("Range", byteRange)
+			req.Header.Set("Range", byteRange)
 		}
 
 		apiRouter.ServeHTTP(rec, req)

@@ -439,7 +439,7 @@ func checkFormatErasureValue(formatErasure *formatErasureV3) error {
 }
 
 // Check all format values.
-func checkFormatErasureValues(formats []*formatErasureV3, drivesPerSet int) error {
+func checkFormatErasureValues(formats []*formatErasureV3, setDriveCount int) error {
 	for i, formatErasure := range formats {
 		if formatErasure == nil {
 			continue
@@ -454,8 +454,8 @@ func checkFormatErasureValues(formats []*formatErasureV3, drivesPerSet int) erro
 		// Only if custom erasure drive count is set,
 		// we should fail here other proceed to honor what
 		// is present on the disk.
-		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != drivesPerSet {
-			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets[0]), drivesPerSet)
+		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != setDriveCount {
+			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets[0]), setDriveCount)
 		}
 	}
 	return nil
@@ -788,22 +788,22 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
-func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, drivesPerSet int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
-	format := newFormatErasureV3(setCount, drivesPerSet)
+func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
+	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, len(storageDisks))
-	wantAtMost := ecDrivesNoConfig(drivesPerSet)
+	wantAtMost := ecDrivesNoConfig(setDriveCount)
 
 	for i := 0; i < setCount; i++ {
-		hostCount := make(map[string]int, drivesPerSet)
-		for j := 0; j < drivesPerSet; j++ {
-			disk := storageDisks[i*drivesPerSet+j]
+		hostCount := make(map[string]int, setDriveCount)
+		for j := 0; j < setDriveCount; j++ {
+			disk := storageDisks[i*setDriveCount+j]
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
 			hostCount[disk.Hostname()]++
-			formats[i*drivesPerSet+j] = newFormat
+			formats[i*setDriveCount+j] = newFormat
 		}
 		if len(hostCount) > 0 {
 			var once sync.Once
@@ -817,8 +817,8 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 							return
 						}
 						logger.Info(" * Set %v:", i+1)
-						for j := 0; j < drivesPerSet; j++ {
-							disk := storageDisks[i*drivesPerSet+j]
+						for j := 0; j < setDriveCount; j++ {
+							disk := storageDisks[i*setDriveCount+j]
 							logger.Info("   - Drive: %s", disk.String())
 						}
 					})
@@ -842,15 +842,15 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 
 // ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
 // It will attempt to read it from env variable and fall back to drives/2.
-func ecDrivesNoConfig(drivesPerSet int) int {
+func ecDrivesNoConfig(setDriveCount int) int {
 	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if ecDrives == 0 {
-		cfg, err := storageclass.LookupConfig(nil, drivesPerSet)
+		cfg, err := storageclass.LookupConfig(nil, setDriveCount)
 		if err == nil {
 			ecDrives = cfg.Standard.Parity
 		}
 		if ecDrives == 0 {
-			ecDrives = drivesPerSet / 2
+			ecDrives = setDriveCount / 2
 		}
 	}
 	return ecDrives
@@ -920,14 +920,14 @@ func markUUIDsOffline(refFormat *formatErasureV3, formats []*formatErasureV3) {
 }
 
 // Initialize a new set of set formats which will be written to all disks.
-func newHealFormatSets(refFormat *formatErasureV3, setCount, drivesPerSet int, formats []*formatErasureV3, errs []error) [][]*formatErasureV3 {
+func newHealFormatSets(refFormat *formatErasureV3, setCount, setDriveCount int, formats []*formatErasureV3, errs []error) [][]*formatErasureV3 {
 	newFormats := make([][]*formatErasureV3, setCount)
 	for i := range refFormat.Erasure.Sets {
-		newFormats[i] = make([]*formatErasureV3, drivesPerSet)
+		newFormats[i] = make([]*formatErasureV3, setDriveCount)
 	}
 	for i := range refFormat.Erasure.Sets {
 		for j := range refFormat.Erasure.Sets[i] {
-			if errs[i*drivesPerSet+j] == errUnformattedDisk || errs[i*drivesPerSet+j] == nil {
+			if errs[i*setDriveCount+j] == errUnformattedDisk || errs[i*setDriveCount+j] == nil {
 				newFormats[i][j] = &formatErasureV3{}
 				newFormats[i][j].Version = refFormat.Version
 				newFormats[i][j].ID = refFormat.ID
@@ -935,13 +935,13 @@ func newHealFormatSets(refFormat *formatErasureV3, setCount, drivesPerSet int, f
 				newFormats[i][j].Erasure.Version = refFormat.Erasure.Version
 				newFormats[i][j].Erasure.DistributionAlgo = refFormat.Erasure.DistributionAlgo
 			}
-			if errs[i*drivesPerSet+j] == errUnformattedDisk {
+			if errs[i*setDriveCount+j] == errUnformattedDisk {
 				newFormats[i][j].Erasure.This = ""
 				newFormats[i][j].Erasure.Sets = nil
 				continue
 			}
-			if errs[i*drivesPerSet+j] == nil {
-				newFormats[i][j].Erasure.This = formats[i*drivesPerSet+j].Erasure.This
+			if errs[i*setDriveCount+j] == nil {
+				newFormats[i][j].Erasure.This = formats[i*setDriveCount+j].Erasure.This
 				newFormats[i][j].Erasure.Sets = nil
 			}
 		}

@@ -53,7 +53,7 @@ A typical MinIO deployment that uses a KMS for SSE-S3 looks like this:
         └─┤   MinIO    ├─────╯        └────────────┘            ┌────┴────┐
           └────────────┘                                        │   KMS   │
                                                                 └─────────┘
-``` 
+```
 
 In a given setup, there are `n` MinIO instances talking to `m` KES servers but only `1` central KMS. The most simple
 setup consists of `1` MinIO server or cluster talking to `1` KMS via `1` KES server.
@@ -61,45 +61,50 @@ setup consists of `1` MinIO server or cluster talking to `1` KMS via `1` KES ser
 The main difference between various MinIO-KMS deployments is the KMS implementation. The following table
 helps you select the right option for your use case:
 
-|                                        KMS                                       | Purpose                                                           |
+| KMS                                                                              | Purpose                                                           |
 |:---------------------------------------------------------------------------------|:------------------------------------------------------------------|
 | [Hashicorp Vault](https://github.com/minio/kes/wiki/Hashicorp-Vault-Keystore)    | Local KMS. MinIO and KMS on-prem (**Recommended**)                |
-| [AWS-KMS + SecretsManager](https://github.com/minio/kes/wiki/AWS-SecretsManager) | Cloud KMS. MinIO in combination with a managed KMS installation   |  
+| [AWS-KMS + SecretsManager](https://github.com/minio/kes/wiki/AWS-SecretsManager) | Cloud KMS. MinIO in combination with a managed KMS installation   |
 | [FS](https://github.com/minio/kes/wiki/Filesystem-Keystore)                      | Local testing or development (**Not recommended for production**) |
- 
+
 The MinIO-KES configuration is always the same - regardless of the underlying KMS implementation.
 Checkout the MinIO-KES [configuration example](https://github.com/minio/kes/wiki/MinIO-Object-Storage).
 
 ### Further references
 
- - [Run MinIO with TLS / HTTPS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls.html)
- - [Tweak the KES server configuration](https://github.com/minio/kes/wiki/Configuration)
- - [Run a load balancer infront of KES](https://github.com/minio/kes/wiki/TLS-Proxy)
- - [Understand the KES server concepts](https://github.com/minio/kes/wiki/Concepts) 
+- [Run MinIO with TLS / HTTPS](https://docs.min.io/docs/how-to-secure-access-to-minio-server-with-tls.html)
+- [Tweak the KES server configuration](https://github.com/minio/kes/wiki/Configuration)
+- [Run a load balancer infront of KES](https://github.com/minio/kes/wiki/TLS-Proxy)
+- [Understand the KES server concepts](https://github.com/minio/kes/wiki/Concepts)
 
 ## Auto Encryption
 
-Optionally, you can instruct the MinIO server to automatically encrypt all objects with keys from the KES
-server - even if the client does not specify any encryption headers during the S3 PUT operation.
+Auto-Encryption is useful when MinIO administrator wants to ensure that all data stored on MinIO is encrypted at rest. 
 
-Auto-Encryption is especially useful when the MinIO operator wants to ensure that all data stored on MinIO
-gets encrypted before it's written to the storage backend.
+MinIO automatically encrypts all objects on buckets if KMS is successfully configured and bucket encryption configuration is enabled for each bucket as shown below:
+```
+mc encrypt sse-s3 myminio/bucket/
+```
 
-To enable auto-encryption set the environment variable to `on`:
+Verify if MinIO has `sse-s3` enabled
 ```
-export MINIO_KMS_AUTO_ENCRYPTION=on
+mc encrypt info myminio/bucket/
+Auto encryption 'sse-s3' is enabled
 ```
+
 
 > Note that auto-encryption only affects requests without S3 encryption headers. So, if a S3 client sends
 > e.g. SSE-C headers, MinIO will encrypt the object with the key sent by the client and won't reach out to
-> the KMS.
+> the configured KMS.
 
-To verify auto-encryption, use the `mc` command:
+To verify auto-encryption, use the following `mc` command:
 
 ```
 mc cp test.file myminio/bucket/
 test.file:              5 B / 5 B  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  100.00% 337 B/s 0s
+```
 
+```
 mc stat myminio/bucket/test.file
 Name      : test.file
 ...

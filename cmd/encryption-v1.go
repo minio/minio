@@ -666,7 +666,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 
 	if rs == nil {
 		// No range, so offsets refer to the whole object.
-		return 0, int64(o.Size), 0, 0, 0, nil
+		return 0, o.Size, 0, 0, 0, nil
 	}
 
 	// Assemble slice of (decrypted) part sizes in `sizes`

@@ -158,8 +158,8 @@ func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
 	if dataLen <= 0 {
 		return 0
 	}
-	chunksCount := int64(dataLen / chunkSize)
-	remainingBytes := int64(dataLen % chunkSize)
+	chunksCount := dataLen / chunkSize
+	remainingBytes := dataLen % chunkSize
 	var streamLen int64
 	streamLen += chunksCount * calculateSignedChunkLength(chunkSize)
 	if remainingBytes > 0 {
@@ -1127,7 +1127,7 @@ func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.
 	}
 
 	for k, v := range headers {
-		req.Header.Add(k, v)
+		req.Header.Set(k, v)
 	}
 
 	err = signRequestV2(req, accessKey, secretKey)
@@ -1151,7 +1151,7 @@ func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.
 	}
 
 	for k, v := range headers {
-		req.Header.Add(k, v)
+		req.Header.Set(k, v)
 	}
 
 	err = signRequestV4(req, accessKey, secretKey)

@@ -172,7 +172,7 @@ func getMetadata(objInfo ObjectInfo) map[string]string {
 	if objInfo.ContentEncoding != "" {
 		metadata["content-encoding"] = objInfo.ContentEncoding
 	}
-	if objInfo.Expires != timeSentinel {
+	if !objInfo.Expires.Equal(timeSentinel) {
 		metadata["expires"] = objInfo.Expires.Format(http.TimeFormat)
 	}
 	for k, v := range objInfo.UserDefined {
@@ -284,12 +284,6 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Reaching here implies cache miss
 	c.cacheStats.incMiss()
 
-	// Since we got here, we are serving the request from backend,
-	// and also adding the object to the cache.
-	if dcache.diskUsageHigh() {
-		dcache.triggerGC <- struct{}{} // this is non-blocking
-	}
-
 	bkReader, bkErr := c.GetObjectNInfoFn(ctx, bucket, object, rs, h, lockType, opts)
 
 	if bkErr != nil {
@@ -306,7 +300,9 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if cacheErr == nil {
 		bkReader.ObjInfo.CacheLookupStatus = CacheHit
 	}
-	if !dcache.diskAvailable(objInfo.Size) {
+
+	// Check if we can add it without exceeding total cache size.
+	if !dcache.diskSpaceAvailable(objInfo.Size) {
 		return bkReader, bkErr
 	}
 
@@ -612,9 +608,10 @@ func (c *cacheObjects) PutObject(ctx context.Context, bucket, object string, r *
 	}
 
 	// fetch from backend if there is no space on cache drive
-	if !dcache.diskAvailable(size) {
+	if !dcache.diskSpaceAvailable(size) {
 		return putObjectFn(ctx, bucket, object, r, opts)
 	}
+
 	if opts.ServerSideEncryption != nil {
 		dcache.Delete(ctx, bucket, object)
 		return putObjectFn(ctx, bucket, object, r, opts)
@@ -721,7 +718,9 @@ func (c *cacheObjects) gc(ctx context.Context) {
 			}
 			for _, dcache := range c.cache {
 				if dcache != nil {
-					dcache.triggerGC <- struct{}{}
+					// Check if there is disk.
+					// Will queue a GC scan if at high watermark.
+					dcache.diskSpaceAvailable(0)
 				}
 			}
 		}

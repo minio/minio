@@ -246,6 +246,8 @@ func (e *ListExpr) evalNode(r Record) (*Value, error) {
 	return FromArray(res), nil
 }
 
+const floatCmpTolerance = 0.000001
+
 func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
 	// Compare two values in terms of in-ness.
 	var cmp func(a, b Value) bool
@@ -275,7 +277,8 @@ func (e *In) evalInNode(r Record, lhs *Value) (*Value, error) {
 		aF, aOK := a.ToFloat()
 		bF, bOK := b.ToFloat()
 
-		return aOK && bOK && aF == bF
+		diff := math.Abs(aF - bF)
+		return aOK && bOK && diff < floatCmpTolerance
 	}
 
 	var rhs Value
