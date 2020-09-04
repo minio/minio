@@ -1557,7 +1557,7 @@ func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 	// Fetch the configured targets
 	tr := NewGatewayHTTPTransport()
 	defer tr.CloseIdleConnections()
-	targetList, err := notify.FetchRegisteredTargets(cfg, GlobalContext.Done(), tr, true, false)
+	targetList, err := notify.FetchRegisteredTargets(GlobalContext, cfg, tr, true, false)
 	if err != nil && err != notify.ErrTargetsOffline {
 		logger.LogIf(GlobalContext, err)
 		return nil
