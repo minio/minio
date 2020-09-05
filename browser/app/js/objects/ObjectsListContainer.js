@@ -18,6 +18,7 @@ import React from "react"
 import { connect } from "react-redux"
 import InfiniteScroll from "react-infinite-scroller"
 import ObjectsList from "./ObjectsList"
+import { getFilteredObjects } from "./selectors"
 
 export class ObjectsListContainer extends React.Component {
   constructor(props) {
@@ -39,22 +40,29 @@ export class ObjectsListContainer extends React.Component {
       })
     }
   }
+  componentDidUpdate(prevProps) {
+    if (this.props.filter !== prevProps.filter) {
+      this.setState({
+        page: 1
+      })
+    }
+  }
   loadNextPage() {
     this.setState(state => {
       return { page: state.page + 1 }
     })
   }
   render() {
-    const { objects, listLoading } = this.props
+    const { filteredObjects, listLoading } = this.props
 
-    const visibleObjects = objects.slice(0, this.state.page * 100)
+    const visibleObjects = filteredObjects.slice(0, this.state.page * 100)
 
     return (
       <div style={{ position: "relative" }}>
         <InfiniteScroll
           pageStart={0}
           loadMore={this.loadNextPage}
-          hasMore={objects.length > visibleObjects.length}
+          hasMore={filteredObjects.length > visibleObjects.length}
           useWindow={true}
           initialLoad={false}
         >
@@ -70,7 +78,8 @@ const mapStateToProps = state => {
   return {
     currentBucket: state.buckets.currentBucket,
     currentPrefix: state.objects.currentPrefix,
-    objects: state.objects.list,
+    filteredObjects: getFilteredObjects(state),
+    filter: state.objects.filter,
     sortBy: state.objects.sortBy,
     sortOrder: state.objects.sortOrder,
     listLoading: state.objects.listLoading

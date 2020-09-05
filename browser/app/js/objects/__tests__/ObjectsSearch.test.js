@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-import { createSelector } from "reselect"
+import React from "react"
+import { mount, shallow } from "enzyme"
+import { ObjectsSearch } from "../ObjectsSearch"
 
-export const getCurrentPrefix = state => state.objects.currentPrefix
+describe("ObjectsSearch", () => {
+  it("should render without crashing", () => {
+    shallow(<ObjectsSearch />)
+  })
 
-export const getCheckedList = state => state.objects.checkedList
-
-export const getPrefixWritable = state => state.objects.prefixWritable
-
-const objectsSelector = state => state.objects.list
-const objectsFilterSelector = state => state.objects.filter
-
-export const getFilteredObjects = createSelector(
-  objectsSelector,
-  objectsFilterSelector,
-  (objects, filter) => objects.filter(object => object.name.startsWith(filter))
-)
+  it("should call onChange with search text", () => {
+    const onChange = jest.fn()
+    const wrapper = mount(<ObjectsSearch onChange={onChange} />)
+    console.log(wrapper.html())
+    wrapper.find("input").simulate("change", { target: { value: "a" } })
+    expect(onChange).toHaveBeenCalledWith("a")
+  })
+})
