@@ -29,6 +29,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -405,7 +406,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 
 	if fi.Deleted {
 		objInfo = fi.ToObjectInfo(bucket, object)
-		if opts.VersionID == "" {
+		if opts.VersionID == "" || opts.DeleteMarker {
 			return objInfo, toObjectErr(errFileNotFound, bucket, object)
 		}
 		// Make sure to return object info to provide extra information.
@@ -738,7 +739,6 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			return disks[index].DeleteVersion(ctx, bucket, object, fi)
 		}, index)
 	}
-
 	// return errors if any during deletion
 	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
@@ -810,26 +810,35 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 	versions := make([]FileInfo, len(objects))
 	for i := range objects {
+		modTime := opts.MTime
+		if opts.MTime.IsZero() {
+			modTime = UTCNow()
+		}
+		uuid := opts.VersionID
+		if uuid == "" {
+			uuid = mustGetUUID()
+		}
+
 		if objects[i].VersionID == "" {
-			if opts.Versioned || opts.VersionSuspended {
-				fi := FileInfo{
-					Name:    objects[i].ObjectName,
-					ModTime: UTCNow(),
-					Deleted: true, // delete marker
+			if (opts.Versioned || opts.VersionSuspended) && !HasSuffix(objects[i].ObjectName, SlashSeparator) {
+				versions[i] = FileInfo{
+					Name:                          objects[i].ObjectName,
+					ModTime:                       modTime,
+					Deleted:                       true, // delete marker
+					DeleteMarkerReplicationStatus: objects[i].DeleteMarkerReplicationStatus,
+					VersionPurgeStatus:            objects[i].VersionPurgeStatus,
 				}
 				if opts.Versioned {
-					fi.VersionID = mustGetUUID()
+					versions[i].VersionID = uuid
 				}
-				// versioning suspended means we add `null`
-				// version as delete marker
-
-				versions[i] = fi
 				continue
 			}
 		}
 		versions[i] = FileInfo{
-			Name:      objects[i].ObjectName,
-			VersionID: objects[i].VersionID,
+			Name:                          objects[i].ObjectName,
+			VersionID:                     objects[i].VersionID,
+			DeleteMarkerReplicationStatus: objects[i].DeleteMarkerReplicationStatus,
+			VersionPurgeStatus:            objects[i].VersionPurgeStatus,
 		}
 	}
 
@@ -876,14 +885,19 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			ObjectPathUpdated(pathJoin(bucket, objects[objIndex].ObjectName))
 			if versions[objIndex].Deleted {
 				dobjects[objIndex] = DeletedObject{
-					DeleteMarker:          versions[objIndex].Deleted,
-					DeleteMarkerVersionID: versions[objIndex].VersionID,
-					ObjectName:            decodeDirObject(versions[objIndex].Name),
+					DeleteMarker:                  versions[objIndex].Deleted,
+					DeleteMarkerVersionID:         versions[objIndex].VersionID,
+					DeleteMarkerMTime:             versions[objIndex].ModTime,
+					DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
+					ObjectName:                    versions[objIndex].Name,
+					VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
 				}
 			} else {
 				dobjects[objIndex] = DeletedObject{
-					ObjectName: decodeDirObject(versions[objIndex].Name),
-					VersionID:  versions[objIndex].VersionID,
+					ObjectName:                    versions[objIndex].Name,
+					VersionID:                     versions[objIndex].VersionID,
+					VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
+					DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
 				}
 			}
 		}
@@ -913,16 +927,20 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer ObjectPathUpdated(path.Join(bucket, object))
+	versionFound := true
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
 		case InsufficientReadQuorum:
 			return objInfo, InsufficientWriteQuorum{}
 		}
-		return objInfo, gerr
+		// For delete marker replication, versionID being replicated will not exist on disk
+		if opts.DeleteMarker {
+			versionFound = false
+		} else {
+			return objInfo, gerr
+		}
 	}
-
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(bucket, object)
 	if err = lk.GetLock(ctx, globalDeleteOperationTimeout); err != nil {
@@ -932,23 +950,58 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	storageDisks := er.getDisks()
 	writeQuorum := len(storageDisks)/2 + 1
+	var markDelete bool
+	// Determine whether to mark object deleted for replication
+	if goi.VersionID != "" {
+		markDelete = true
+	}
+	// Default deleteMarker to true if object is under versioning
+	deleteMarker := true
+	if gerr == nil {
+		deleteMarker = goi.VersionID != ""
+	}
+	if opts.VersionID != "" {
+		// case where replica version needs to be deleted on target cluster
+		if versionFound && opts.DeleteMarkerReplicationStatus == replication.Replica.String() {
+			markDelete = false
+		}
+		if opts.VersionPurgeStatus.Empty() && opts.DeleteMarkerReplicationStatus == "" {
+			markDelete = false
+		}
+		if opts.DeleteMarker && opts.VersionPurgeStatus == Complete {
+			markDelete = false
+		}
+		// determine if the version represents an object delete
+		// deleteMarker = true
+		if versionFound && !goi.DeleteMarker { // implies a versioned delete of object
+			deleteMarker = false
+		}
+	}
 
-	if opts.VersionID == "" {
-		if opts.Versioned || opts.VersionSuspended {
+	modTime := opts.MTime
+	if opts.MTime.IsZero() {
+		modTime = UTCNow()
+	}
+	if markDelete {
+		if (opts.Versioned || opts.VersionSuspended) && !HasSuffix(object, SlashSeparator) {
 			fi := FileInfo{
-				Name:    object,
-				Deleted: true,
-				ModTime: UTCNow(),
+				Name:                          object,
+				Deleted:                       deleteMarker,
+				MarkDeleted:                   markDelete,
+				ModTime:                       modTime,
+				DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
+				VersionPurgeStatus:            opts.VersionPurgeStatus,
 			}
-
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
+				if opts.VersionID != "" {
+					fi.VersionID = opts.VersionID
+				}
 			}
-
 			// versioning suspended means we add `null`
 			// version as delete marker
-
 			// Add delete marker, since we don't have any version specified explicitly.
+			// Or if a particular version id needs to be replicated.
 			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
@@ -958,8 +1011,13 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	// Delete the object version on all disks.
 	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, FileInfo{
-		Name:      object,
-		VersionID: opts.VersionID,
+		Name:                          object,
+		VersionID:                     opts.VersionID,
+		MarkDeleted:                   markDelete,
+		Deleted:                       deleteMarker,
+		ModTime:                       modTime,
+		DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
+		VersionPurgeStatus:            opts.VersionPurgeStatus,
 	}); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
@@ -971,7 +1029,13 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	return ObjectInfo{Bucket: bucket, Name: decodeDirObject(object), VersionID: opts.VersionID}, nil
+	return ObjectInfo{
+		Bucket:             bucket,
+		Name:               object,
+		VersionID:          opts.VersionID,
+		VersionPurgeStatus: opts.VersionPurgeStatus,
+		ReplicationStatus:  replication.StatusType(opts.DeleteMarkerReplicationStatus),
+	}, nil
 }
 
 // Send the successful but partial upload/delete, however ignore

@@ -342,8 +342,8 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 13 {
-		err = msgp.ArrayError{Wanted: 13, Got: zb0001}
+	if zb0001 != 16 {
+		err = msgp.ArrayError{Wanted: 16, Got: zb0001}
 		return
 	}
 	z.Volume, err = dc.ReadString()
@@ -448,13 +448,32 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "Erasure")
 		return
 	}
+	z.MarkDeleted, err = dc.ReadBool()
+	if err != nil {
+		err = msgp.WrapError(err, "MarkDeleted")
+		return
+	}
+	z.DeleteMarkerReplicationStatus, err = dc.ReadString()
+	if err != nil {
+		err = msgp.WrapError(err, "DeleteMarkerReplicationStatus")
+		return
+	}
+	{
+		var zb0004 string
+		zb0004, err = dc.ReadString()
+		if err != nil {
+			err = msgp.WrapError(err, "VersionPurgeStatus")
+			return
+		}
+		z.VersionPurgeStatus = VersionPurgeStatusType(zb0004)
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 13
-	err = en.Append(0x9d)
+	// array header, size 16
+	err = en.Append(0xdc, 0x0, 0x10)
 	if err != nil {
 		return
 	}
@@ -542,14 +561,29 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Erasure")
 		return
 	}
+	err = en.WriteBool(z.MarkDeleted)
+	if err != nil {
+		err = msgp.WrapError(err, "MarkDeleted")
+		return
+	}
+	err = en.WriteString(z.DeleteMarkerReplicationStatus)
+	if err != nil {
+		err = msgp.WrapError(err, "DeleteMarkerReplicationStatus")
+		return
+	}
+	err = en.WriteString(string(z.VersionPurgeStatus))
+	if err != nil {
+		err = msgp.WrapError(err, "VersionPurgeStatus")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 13
-	o = append(o, 0x9d)
+	// array header, size 16
+	o = append(o, 0xdc, 0x0, 0x10)
 	o = msgp.AppendString(o, z.Volume)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendString(o, z.VersionID)
@@ -578,6 +612,9 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Erasure")
 		return
 	}
+	o = msgp.AppendBool(o, z.MarkDeleted)
+	o = msgp.AppendString(o, z.DeleteMarkerReplicationStatus)
+	o = msgp.AppendString(o, string(z.VersionPurgeStatus))
 	return
 }
 
@@ -589,8 +626,8 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 13 {
-		err = msgp.ArrayError{Wanted: 13, Got: zb0001}
+	if zb0001 != 16 {
+		err = msgp.ArrayError{Wanted: 16, Got: zb0001}
 		return
 	}
 	z.Volume, bts, err = msgp.ReadStringBytes(bts)
@@ -695,13 +732,32 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Erasure")
 		return
 	}
+	z.MarkDeleted, bts, err = msgp.ReadBoolBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "MarkDeleted")
+		return
+	}
+	z.DeleteMarkerReplicationStatus, bts, err = msgp.ReadStringBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "DeleteMarkerReplicationStatus")
+		return
+	}
+	{
+		var zb0004 string
+		zb0004, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "VersionPurgeStatus")
+			return
+		}
+		z.VersionPurgeStatus = VersionPurgeStatusType(zb0004)
+	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FileInfo) Msgsize() (s int) {
-	s = 1 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
+	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
 	if z.Metadata != nil {
 		for za0001, za0002 := range z.Metadata {
 			_ = za0002
@@ -712,7 +768,7 @@ func (z *FileInfo) Msgsize() (s int) {
 	for za0003 := range z.Parts {
 		s += z.Parts[za0003].Msgsize()
 	}
-	s += z.Erasure.Msgsize()
+	s += z.Erasure.Msgsize() + msgp.BoolSize + msgp.StringPrefixSize + len(z.DeleteMarkerReplicationStatus) + msgp.StringPrefixSize + len(string(z.VersionPurgeStatus))
 	return
 }
 
@@ -1278,6 +1334,58 @@ func (z *FilesInfoVersions) Msgsize() (s int) {
 		s += z.FilesVersions[za0001].Msgsize()
 	}
 	s += 12 + msgp.BoolSize
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *VersionPurgeStatusType) DecodeMsg(dc *msgp.Reader) (err error) {
+	{
+		var zb0001 string
+		zb0001, err = dc.ReadString()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = VersionPurgeStatusType(zb0001)
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z VersionPurgeStatusType) EncodeMsg(en *msgp.Writer) (err error) {
+	err = en.WriteString(string(z))
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z VersionPurgeStatusType) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *VersionPurgeStatusType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 string
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = VersionPurgeStatusType(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z VersionPurgeStatusType) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
 	return
 }
 

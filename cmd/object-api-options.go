@@ -123,6 +123,20 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	}
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
+	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
+	if delMarker != "" {
+		if delMarker != "true" && delMarker != "false" {
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false")),
+			}
+		}
+		if delMarker == "true" {
+			opts.DeleteMarker = true
+		}
+	}
 	return opts, nil
 }
 
@@ -134,6 +148,49 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	}
 	opts.Versioned = versioned
 	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
+	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
+	if delMarker != "" {
+		if delMarker != "true" && delMarker != "false" {
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false")),
+			}
+		}
+		if delMarker == "true" {
+			opts.DeleteMarker = true
+		}
+	}
+
+	purgeVersion := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarkerDelete))
+	if purgeVersion != "" {
+		if purgeVersion != "true" && purgeVersion != "false" {
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarkerDelete, fmt.Errorf("DeleteMarkerPurge should be true or false")),
+			}
+		}
+		if purgeVersion == "true" {
+			opts.VersionPurgeStatus = Complete
+		}
+	}
+
+	mtime := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	if mtime != "" {
+		opts.MTime, err = time.Parse(time.RFC3339, mtime)
+		if err != nil {
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
+			}
+		}
+	} else {
+		opts.MTime = UTCNow()
+	}
 	return opts, nil
 }
 
@@ -160,7 +217,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		}
 	}
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
-	var mtime time.Time
+	mtime := UTCNow()
 	if mtimeStr != "" {
 		mtime, err = time.Parse(time.RFC3339, mtimeStr)
 		if err != nil {
@@ -170,8 +227,6 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
 			}
 		}
-	} else {
-		mtime = UTCNow()
 	}
 	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
 	if etag != "" {
