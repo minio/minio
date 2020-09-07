@@ -450,7 +450,7 @@ func (c Config) Merge() Config {
 			}
 			if _, ok := cp[subSys]; !ok {
 				// A config subsystem was removed or server was downgraded.
-				fmt.Printf("config: removing unknown subsystem config %q\n", subSys)
+				Logger.Info("config: ignoring unknown subsystem config %q\n", subSys)
 				continue
 			}
 			cp[subSys][tgt] = ckvs
