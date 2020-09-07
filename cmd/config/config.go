@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
@@ -451,7 +450,7 @@ func (c Config) Merge() Config {
 			}
 			if _, ok := cp[subSys]; !ok {
 				// A config subsystem was removed or server was downgraded.
-				logger.Info("config: removing unknown subsystem config %q", subSys)
+				fmt.Printf("config: removing unknown subsystem config %q\n", subSys)
 				continue
 			}
 			cp[subSys][tgt] = ckvs
