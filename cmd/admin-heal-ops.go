@@ -108,7 +108,6 @@ func (ahs *allHealState) healDriveCount() int {
 	ahs.Lock()
 	defer ahs.Unlock()
 
-	fmt.Println(ahs.healLocalDisks)
 	return len(ahs.healLocalDisks)
 }
 
@@ -130,7 +129,6 @@ func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {
 	for _, ep := range healLocalDisks {
 		delete(ahs.healLocalDisks, ep)
 	}
-	fmt.Println(ahs.healLocalDisks)
 }
 
 func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
@@ -140,7 +138,6 @@ func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
 	for _, ep := range healLocalDisks {
 		ahs.healLocalDisks[ep] = struct{}{}
 	}
-	fmt.Println(ahs.healLocalDisks)
 }
 
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
