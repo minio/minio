@@ -392,7 +392,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 				// Bitrot check local data
 				if size > 0 && item.heal && opts.Bitrot {
 					s.waitForLowActiveIO()
-					err := s.VerifyFile(item.bucket, item.objectPath(), version)
+					err := s.VerifyFile(ctx, item.bucket, item.objectPath(), version)
 					switch err {
 					case errFileCorrupt:
 						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling, ScanMode: madmin.HealDeepScan})
