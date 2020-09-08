@@ -355,15 +355,15 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3) error {
 	tmpFormat := mustGetUUID()
 
 	// Purge any existing temporary file, okay to ignore errors here.
-	defer disk.DeleteFile(minioMetaBucket, tmpFormat)
+	defer disk.DeleteFile(context.TODO(), minioMetaBucket, tmpFormat)
 
 	// write to unique file.
-	if err = disk.WriteAll(minioMetaBucket, tmpFormat, bytes.NewReader(formatBytes)); err != nil {
+	if err = disk.WriteAll(context.TODO(), minioMetaBucket, tmpFormat, bytes.NewReader(formatBytes)); err != nil {
 		return err
 	}
 
 	// Rename file `uuid.json` --> `format.json`.
-	if err = disk.RenameFile(minioMetaBucket, tmpFormat, minioMetaBucket, formatConfigFile); err != nil {
+	if err = disk.RenameFile(context.TODO(), minioMetaBucket, tmpFormat, minioMetaBucket, formatConfigFile); err != nil {
 		return err
 	}
 
@@ -392,13 +392,13 @@ func isHiddenDirectories(vols ...VolInfo) bool {
 
 // loadFormatErasure - loads format.json from disk.
 func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
-	buf, err := disk.ReadAll(minioMetaBucket, formatConfigFile)
+	buf, err := disk.ReadAll(context.TODO(), minioMetaBucket, formatConfigFile)
 	if err != nil {
 		// 'file not found' and 'volume not found' as
 		// same. 'volume not found' usually means its a fresh disk.
 		if err == errFileNotFound || err == errVolumeNotFound {
 			var vols []VolInfo
-			vols, err = disk.ListVols()
+			vols, err = disk.ListVols(context.TODO())
 			if err != nil {
 				return nil, err
 			}
@@ -862,7 +862,7 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 		return errDiskNotFound
 	}
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
+	return disk.MakeVolBulk(context.TODO(), minioMetaBucket, minioMetaTmpBucket, minioMetaMultipartBucket, dataUsageBucket)
 }
 
 // Get all UUIDs which are present in reference format should

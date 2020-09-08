@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"sync"
 
+	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/pkg/bucket/versioning"
@@ -91,13 +92,13 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
 		if err != nil {
-			if isErrBucketNotFound(err) {
+			if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 				return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 			}
-			if vcfg.Status != string(versioning.Enabled) {
-				return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
-			}
-			return err
+			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+		}
+		if vcfg.Status != string(versioning.Enabled) {
+			return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
 

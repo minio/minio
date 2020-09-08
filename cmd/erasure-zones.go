@@ -697,7 +697,7 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet))
+			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet, false))
 		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
 	}
 
@@ -816,7 +816,7 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startSplunkMergeWalksN(ctx, bucket, prefix, marker, endWalkCh, zone.listTolerancePerSet)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, true)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -908,7 +908,7 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, false)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -2056,6 +2056,25 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 		writeQuorum++
 	}
 
+	var aggHealStateResult madmin.BgHealState
+	if opts.Maintenance {
+		// check if local disks are being healed, if they are being healed
+		// we need to tell healthy status as 'false' so that this server
+		// is not taken down for maintenance
+		var err error
+		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx)
+		if err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
+			return HealthResult{
+				Healthy: false,
+			}
+		}
+
+		if len(aggHealStateResult.HealDisks) > 0 {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+		}
+	}
+
 	for zoneIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[zoneIdx] {
 			if erasureSetUpCount[zoneIdx][setIdx] < writeQuorum {
@@ -2063,10 +2082,11 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 					fmt.Errorf("Write quorum may be lost on zone: %d, set: %d, expected write quorum: %d",
 						zoneIdx, setIdx, writeQuorum))
 				return HealthResult{
-					Healthy:     false,
-					ZoneID:      zoneIdx,
-					SetID:       setIdx,
-					WriteQuorum: writeQuorum,
+					Healthy:       false,
+					HealingDrives: len(aggHealStateResult.HealDisks),
+					ZoneID:        zoneIdx,
+					SetID:         setIdx,
+					WriteQuorum:   writeQuorum,
 				}
 			}
 		}
@@ -2079,21 +2099,6 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 			Healthy:     true,
 			WriteQuorum: writeQuorum,
 		}
-	}
-
-	// check if local disks are being healed, if they are being healed
-	// we need to tell healthy status as 'false' so that this server
-	// is not taken down for maintenance
-	aggHealStateResult, err := getAggregatedBackgroundHealState(ctx)
-	if err != nil {
-		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
-		return HealthResult{
-			Healthy: false,
-		}
-	}
-
-	if len(aggHealStateResult.HealDisks) > 0 {
-		logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
 	}
 
 	return HealthResult{

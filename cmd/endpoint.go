@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -202,6 +203,21 @@ type ZoneEndpoints struct {
 
 // EndpointZones - list of list of endpoints
 type EndpointZones []ZoneEndpoints
+
+// GetLocalZoneIdx returns the zone which endpoint belongs to locally.
+// if ep is remote this code will return -1 zoneIndex
+func (l EndpointZones) GetLocalZoneIdx(ep Endpoint) int {
+	for i, zep := range l {
+		for _, cep := range zep.Endpoints {
+			if cep.IsLocal && ep.IsLocal {
+				if reflect.DeepEqual(cep, ep) {
+					return i
+				}
+			}
+		}
+	}
+	return -1
+}
 
 // Add add zone endpoints
 func (l *EndpointZones) Add(zeps ZoneEndpoints) error {
@@ -753,9 +769,17 @@ func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
 					RootCAs:    globalRootCAs,
 				}
 			}
+
+			tr := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)()
+			// Allow more requests to be in flight with higher response header timeout.
+			tr.ResponseHeaderTimeout = 30 * time.Minute
+			tr.MaxConnsPerHost = 256
+			tr.MaxIdleConnsPerHost = 16
+			tr.MaxIdleConns = 256
+
 			proxyEps = append(proxyEps, ProxyEndpoint{
 				Endpoint:  endpoint,
-				Transport: newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)(),
+				Transport: tr,
 			})
 		}
 	}

@@ -89,13 +89,14 @@ type allHealState struct {
 
 	// map of heal path to heal sequence
 	healSeqMap     map[string]*healSequence
-	healLocalDisks []Endpoints
+	healLocalDisks map[Endpoint]struct{}
 }
 
 // newHealState - initialize global heal state management
 func newHealState() *allHealState {
 	healState := &allHealState{
-		healSeqMap: make(map[string]*healSequence),
+		healSeqMap:     make(map[string]*healSequence),
+		healLocalDisks: map[Endpoint]struct{}{},
 	}
 
 	go healState.periodicHealSeqsClean(GlobalContext)
@@ -103,20 +104,43 @@ func newHealState() *allHealState {
 	return healState
 }
 
-func (ahs *allHealState) getHealLocalDisks() []Endpoints {
+func (ahs *allHealState) healDriveCount() int {
 	ahs.Lock()
 	defer ahs.Unlock()
 
-	healLocalDisks := make([]Endpoints, len(ahs.healLocalDisks))
-	copy(healLocalDisks, ahs.healLocalDisks)
+	fmt.Println(ahs.healLocalDisks)
+	return len(ahs.healLocalDisks)
+}
+
+func (ahs *allHealState) getHealLocalDisks() Endpoints {
+	ahs.Lock()
+	defer ahs.Unlock()
+
+	var healLocalDisks Endpoints
+	for ep := range ahs.healLocalDisks {
+		healLocalDisks = append(healLocalDisks, ep)
+	}
 	return healLocalDisks
 }
 
-func (ahs *allHealState) updateHealLocalDisks(healLocalDisks []Endpoints) {
+func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {
 	ahs.Lock()
 	defer ahs.Unlock()
 
-	ahs.healLocalDisks = healLocalDisks
+	for _, ep := range healLocalDisks {
+		delete(ahs.healLocalDisks, ep)
+	}
+	fmt.Println(ahs.healLocalDisks)
+}
+
+func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
+	ahs.Lock()
+	defer ahs.Unlock()
+
+	for _, ep := range healLocalDisks {
+		ahs.healLocalDisks[ep] = struct{}{}
+	}
+	fmt.Println(ahs.healLocalDisks)
 }
 
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {

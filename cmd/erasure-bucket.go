@@ -49,7 +49,7 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 		index := index
 		g.Go(func() error {
 			if storageDisks[index] != nil {
-				if err := storageDisks[index].MakeVol(bucket); err != nil {
+				if err := storageDisks[index].MakeVol(ctx, bucket); err != nil {
 					if err != errVolumeExists {
 						logger.LogIf(ctx, err)
 					}
@@ -75,7 +75,7 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 		}
 		index := index
 		g.Go(func() error {
-			_ = storageDisks[index].MakeVol(bucket)
+			_ = storageDisks[index].MakeVol(context.Background(), bucket)
 			return nil
 		}, index)
 	}
@@ -92,7 +92,7 @@ func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (
 			bucketErrs = append(bucketErrs, errDiskNotFound)
 			continue
 		}
-		volInfo, serr := disk.StatVol(bucketName)
+		volInfo, serr := disk.StatVol(ctx, bucketName)
 		if serr == nil {
 			return BucketInfo(volInfo), nil
 		}
@@ -129,7 +129,7 @@ func (er erasureObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketI
 			continue
 		}
 		var volsInfo []VolInfo
-		volsInfo, err = disk.ListVols()
+		volsInfo, err = disk.ListVols(ctx)
 		if err == nil {
 			// NOTE: The assumption here is that volumes across all disks in
 			// readQuorum have consistent view i.e they all have same number
@@ -181,10 +181,10 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 	for index, err := range dErrs {
 		if err == errVolumeNotEmpty {
 			// Attempt to delete bucket again.
-			if derr := storageDisks[index].DeleteVol(bucket, false); derr == errVolumeNotEmpty {
+			if derr := storageDisks[index].DeleteVol(ctx, bucket, false); derr == errVolumeNotEmpty {
 				_ = cleanupDir(ctx, storageDisks[index], bucket, "")
 
-				_ = storageDisks[index].DeleteVol(bucket, false)
+				_ = storageDisks[index].DeleteVol(ctx, bucket, false)
 
 				// Cleanup all the previously incomplete multiparts.
 				_ = cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
@@ -204,7 +204,7 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 		index := index
 		g.Go(func() error {
 			if storageDisks[index] != nil {
-				if err := storageDisks[index].DeleteVol(bucket, forceDelete); err != nil {
+				if err := storageDisks[index].DeleteVol(ctx, bucket, forceDelete); err != nil {
 					return err
 				}
 				err := cleanupDir(ctx, storageDisks[index], minioMetaMultipartBucket, bucket)
