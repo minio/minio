@@ -473,6 +473,11 @@ func azureCodesToObjectError(err error, serviceCode string, statusCode int, buck
 		err = minio.UnsupportedMetadata{}
 	case "BlobAccessTierNotSupportedForAccountType":
 		err = minio.NotImplemented{}
+	case "OutOfRangeInput":
+		err = minio.ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		}
 	default:
 		switch statusCode {
 		case http.StatusNotFound:

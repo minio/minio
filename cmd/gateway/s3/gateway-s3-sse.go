@@ -701,13 +701,13 @@ func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, clea
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			l.cleanupStaleEncMultipartUploadsOnGW(ctx, expiry)
+			l.cleanupStaleUploads(ctx, expiry)
 		}
 	}
 }
 
-// cleanupStaleMultipartUploads removes old custom encryption multipart uploads on backend
-func (l *s3EncObjects) cleanupStaleEncMultipartUploadsOnGW(ctx context.Context, expiry time.Duration) {
+// cleanupStaleUploads removes old custom encryption multipart uploads on backend
+func (l *s3EncObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
 	for {
 		buckets, err := l.s3Objects.ListBuckets(ctx)
 		if err != nil {
