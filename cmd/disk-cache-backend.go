@@ -721,7 +721,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 
 	if actualSize != uint64(n) {
 		removeAll(cachePath)
-		return IncompleteBody{}
+		return IncompleteBody{Bucket: bucket, Object: object}
 	}
 	return c.saveMetadata(ctx, bucket, object, metadata, n, nil, "", incHitsOnly)
 }
@@ -768,7 +768,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	}
 	if actualSize != uint64(n) {
 		removeAll(cachePath)
-		return IncompleteBody{}
+		return IncompleteBody{Bucket: bucket, Object: object}
 	}
 	return c.saveMetadata(ctx, bucket, object, metadata, int64(objSize), rs, cacheFile, false)
 }

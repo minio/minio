@@ -1,71 +1,96 @@
 # Linux服务器上MinIO生产环境的内核调优 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
-## 调优网络参数
+这儿有一份针对MinIO服务器内核调优的建议， 你可以拷贝这个[脚本](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh)到你的服务器上使用。
 
-以下网络参数设置可帮助确保Minio服务器在生产环境负载上的最佳性能。
+> 注意: 这是Linux服务器上的通用建议，不过在使用前也要非常小心。这些设置不是强制性的，而且也不能解决硬件的问题，所以不要使用它们提高
+> 性能掩盖硬件本身的问题。在任何情况下，都应该先进行硬件基准测试，达到预期结果后才真正的执行优化。
 
-- *`tcp_fin_timeout`* : 一个socket连接大约需要1.5KB的内存，关闭未使用的socket连接可以减少内存占用，避免出现内存泄露。即使另一方由于某种原因没有关闭socket连接，系统本身也会在到达超时时间时断开连接。 `tcp_fin_timeout`参数定义了内核保持sockets在FIN-WAIT-2状态的超时时间。我们建议设成20，你可以按下面的示例进行设置。
-
-```sh
-sysctl -w net.ipv4.tcp_fin_timeout=30
 ```
+#!/bin/bash
 
-- *`tcp_keepalive_probes`* : 这个参数定义了经过几次无回应的探测之后，认为连接断开了。你可以按下面的示例进行设置。
+cat > sysctl.conf <<EOF
+# maximum number of open files/file descriptors
+fs.file-max = 4194303
 
-```sh
-sysctl -w net.ipv4.tcp_keepalive_probes=5
+# use as little swap space as possible
+vm.swappiness = 1
+
+# prioritize application RAM against disk/swap cache
+vm.vfs_cache_pressure = 50
+
+# minimum free memory
+vm.min_free_kbytes = 1000000
+
+# follow mellanox best practices https://community.mellanox.com/s/article/linux-sysctl-tuning
+# the following changes are recommended for improving IPv4 traffic performance by Mellanox
+
+# disable the TCP timestamps option for better CPU utilization
+net.ipv4.tcp_timestamps = 0
+
+# enable the TCP selective acks option for better throughput
+net.ipv4.tcp_sack = 1
+
+# increase the maximum length of processor input queues
+net.core.netdev_max_backlog = 250000
+
+# increase the TCP maximum and default buffer sizes using setsockopt()
+net.core.rmem_max = 4194304
+net.core.wmem_max = 4194304
+net.core.rmem_default = 4194304
+net.core.wmem_default = 4194304
+net.core.optmem_max = 4194304
+
+# increase memory thresholds to prevent packet dropping:
+net.ipv4.tcp_rmem = "4096 87380 4194304"
+net.ipv4.tcp_wmem = "4096 65536 4194304"
+
+# enable low latency mode for TCP:
+net.ipv4.tcp_low_latency = 1
+
+# the following variable is used to tell the kernel how much of the socket buffer
+# space should be used for TCP window size, and how much to save for an application
+# buffer. A value of 1 means the socket buffer will be divided evenly between.
+# TCP windows size and application.
+net.ipv4.tcp_adv_win_scale = 1
+
+# maximum number of incoming connections
+net.core.somaxconn = 65535
+
+# maximum number of packets queued
+net.core.netdev_max_backlog = 10000
+
+# queue length of completely established sockets waiting for accept
+net.ipv4.tcp_max_syn_backlog = 4096
+
+# time to wait (seconds) for FIN packet
+net.ipv4.tcp_fin_timeout = 15
+
+# disable icmp send redirects
+net.ipv4.conf.all.send_redirects = 0
+
+# disable icmp accept redirect
+net.ipv4.conf.all.accept_redirects = 0
+
+# drop packets with LSR or SSR
+net.ipv4.conf.all.accept_source_route = 0
+
+# MTU discovery, only enable when ICMP blackhole detected
+net.ipv4.tcp_mtu_probing = 1
+
+EOF
+
+echo "Enabling system level tuning params"
+sysctl --quiet --load sysctl.conf && rm -f sysctl.conf
+
+# `Transparent Hugepage Support`*: This is a Linux kernel feature intended to improve
+# performance by making more efficient use of processor’s memory-mapping hardware.
+# But this may cause https://blogs.oracle.com/linux/performance-issues-with-transparent-huge-pages-thp
+# for non-optimized applications. As most Linux distributions set it to `enabled=always` by default,
+# we recommend changing this to `enabled=madvise`. This will allow applications optimized
+# for transparent hugepages to obtain the performance benefits, while preventing the
+# associated problems otherwise. Also, set `transparent_hugepage=madvise` on your kernel
+# command line (e.g. in /etc/default/grub) to persistently set this value.
+
+echo "Enabling THP madvise"
+echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled
 ```
-
-- *`wmem_max`*: 这个参数定义了针对所有类型的连接，操作系统的最大发送buffer大小。
-
-```sh
-sysctl -w net.core.wmem_max=540000
-```
-
-- *`rmem_max`*: 这个参数定义了针对所有类型的连接，操作系统最大接收buffer大小。
-
-```sh
-sysctl -w net.core.rmem_max=540000
-```
-
-## 调优虚拟内存
-
-下面是推荐的虚拟内存设置。
-
-- *`swappiness`* : 此参数控制了交换运行时内存的相对权重，而不是从page缓存中删除page。取值范围是[0,100],我们建议设成10。
-
-```sh
-sysctl -w vm.swappiness=10
-```
-
-- *`dirty_background_ratio`*: 这个是`脏`页可以占系统内存的百分比，内存页仍需要写到磁盘上。我们建议要尽早将数据写到磁盘上，越早越好。为了达到这个目的，将 `dirty_background_ratio` 设成1。
-
-```sh
-sysctl -w vm.dirty_background_ratio=1
-```
-
-- *`dirty_ratio`*: 这定义了在所有事务必须提交到磁盘之前，可以用脏页填充的系统内存的绝对最大数量。
-
-```sh
-sysctl -w vm.dirty_ratio=5
-```
-
-## 调优调度程序
-
-正确的调度程序配置确保Minio进程获得足够的CPU时间。 以下是推荐的调度程序设置。
-
-- *`sched_min_granularity_ns`*: 此参数定义了一个任务在被其它任务抢占时，可在CPU一次运行的最短时间，我们建议设成10ms。
-
-```sh
-sysctl -w kernel.sched_min_granularity_ns=10000000
-```
-
-- *`sched_wakeup_granularity_ns`*: 降低该参数值可以减少唤醒延迟，提高吞吐量。
-
-```sh
-sysctl -w kernel.sched_wakeup_granularity_ns=15000000
-```
-
-## 调优磁盘
-
-我们将磁盘调优的建议整合到了注释完备的 [shell script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/disk-tuning.sh)，敬请查看。

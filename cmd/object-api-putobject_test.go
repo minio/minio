@@ -153,7 +153,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Test case 27-29.
 		// data with size different from the actual number of bytes available in the reader
 		{bucket, object, data, nil, "", int64(len(data) - 1), getMD5Hash(data[:len(data)-1]), nil},
-		{bucket, object, nilBytes, nil, "", int64(len(nilBytes) + 1), getMD5Hash(nilBytes), IncompleteBody{}},
+		{bucket, object, nilBytes, nil, "", int64(len(nilBytes) + 1), getMD5Hash(nilBytes), IncompleteBody{Bucket: bucket, Object: object}},
 		{bucket, object, fiveMBBytes, nil, "", 0, getMD5Hash(fiveMBBytes), nil},
 
 		// Test case 30

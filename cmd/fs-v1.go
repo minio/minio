@@ -635,7 +635,10 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 			fsMeta = fs.defaultFsJSON(srcObject)
 		}
 
-		fsMeta.Meta = srcInfo.UserDefined
+		fsMeta.Meta = map[string]string{}
+		for k, v := range srcInfo.UserDefined {
+			fsMeta.Meta[k] = v
+		}
 		fsMeta.Meta["etag"] = srcInfo.ETag
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
@@ -885,10 +888,10 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 // Create a new fs.json file, if the existing one is corrupt. Should happen very rarely.
 func (fs *FSObjects) createFsJSON(object, fsMetaPath string) error {
 	fsMeta := newFSMetaV1()
-	fsMeta.Meta = make(map[string]string)
-	fsMeta.Meta["etag"] = GenETag()
-	contentType := mimedb.TypeByExtension(path.Ext(object))
-	fsMeta.Meta["content-type"] = contentType
+	fsMeta.Meta = map[string]string{
+		"etag":         GenETag(),
+		"content-type": mimedb.TypeByExtension(path.Ext(object)),
+	}
 	wlk, werr := fs.rwPool.Create(fsMetaPath)
 	if werr == nil {
 		_, err := fsMeta.WriteTo(wlk)
@@ -901,10 +904,10 @@ func (fs *FSObjects) createFsJSON(object, fsMetaPath string) error {
 // Used to return default etag values when a pre-existing object's meta data is queried.
 func (fs *FSObjects) defaultFsJSON(object string) fsMetaV1 {
 	fsMeta := newFSMetaV1()
-	fsMeta.Meta = make(map[string]string)
-	fsMeta.Meta["etag"] = defaultEtag
-	contentType := mimedb.TypeByExtension(path.Ext(object))
-	fsMeta.Meta["content-type"] = contentType
+	fsMeta.Meta = map[string]string{
+		"etag":         defaultEtag,
+		"content-type": mimedb.TypeByExtension(path.Ext(object)),
+	}
 	return fsMeta
 }
 
@@ -1214,7 +1217,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		return ObjectInfo{}, IncompleteBody{}
+		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.

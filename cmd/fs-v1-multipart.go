@@ -306,7 +306,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
-			return pi, InvalidUploadID{UploadID: uploadID}
+			return pi, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -332,7 +332,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		return pi, IncompleteBody{}
+		return pi, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
 	etag := r.MD5CurrentHexString()
@@ -346,7 +346,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	// Make sure not to create parent directories if they don't exist - the upload might have been aborted.
 	if err = fsSimpleRenameFile(ctx, tmpPartPath, partPath); err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
-			return pi, InvalidUploadID{UploadID: uploadID}
+			return pi, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
@@ -389,7 +389,7 @@ func (fs *FSObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploa
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 	if _, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile)); err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
-			return minfo, InvalidUploadID{UploadID: uploadID}
+			return minfo, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
 		return minfo, toObjectErr(err, bucket, object)
 	}
@@ -435,7 +435,7 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 	uploadIDDir := fs.getUploadIDDir(bucket, object, uploadID)
 	if _, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile)); err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
-			return result, InvalidUploadID{UploadID: uploadID}
+			return result, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
 		return result, toObjectErr(err, bucket, object)
 	}
@@ -571,7 +571,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
-			return oi, InvalidUploadID{UploadID: uploadID}
+			return oi, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -802,7 +802,7 @@ func (fs *FSObjects) AbortMultipartUpload(ctx context.Context, bucket, object, u
 	_, err := fsStatFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		if err == errFileNotFound || err == errFileAccessDenied {
-			return InvalidUploadID{UploadID: uploadID}
+			return InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
 		}
 		return toObjectErr(err, bucket, object)
 	}
