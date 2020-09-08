@@ -448,6 +448,11 @@ func (c Config) Merge() Config {
 					ckvs.Set(kv.Key, kv.Value)
 				}
 			}
+			if _, ok := cp[subSys]; !ok {
+				// A config subsystem was removed or server was downgraded.
+				Logger.Info("config: ignoring unknown subsystem config %q\n", subSys)
+				continue
+			}
 			cp[subSys][tgt] = ckvs
 		}
 	}

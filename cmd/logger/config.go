@@ -56,6 +56,12 @@ const (
 	EnvAuditWebhookAuthToken = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
 )
 
+// Inject into config package.
+func init() {
+	config.Logger.Info = Info
+	config.Logger.LogIf = LogIf
+}
+
 // Default KVS for loggerHTTP and loggerAuditHTTP
 var (
 	DefaultKVS = config.KVS{
