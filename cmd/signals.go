@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
-	"net/http"
 	"os"
 	"strings"
 
@@ -46,6 +44,9 @@ func handleSignals() {
 	stopProcess := func() bool {
 		var err, oerr error
 
+		// send signal to various go-routines that they need to quit.
+		cancelGlobalContext()
+
 		if globalNotificationSys != nil {
 			globalNotificationSys.RemoveAllRemoteTargets()
 		}
@@ -54,9 +55,6 @@ func handleSignals() {
 			err = httpServer.Shutdown()
 			logger.LogIf(context.Background(), err)
 		}
-
-		// send signal to various go-routines that they need to quit.
-		cancelGlobalContext()
 
 		if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
@@ -68,14 +66,8 @@ func handleSignals() {
 
 	for {
 		select {
-		case err := <-globalHTTPServerErrorCh:
-			if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
-				objAPI.Shutdown(context.Background())
-			}
-			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Fatal(err, "Unable to start MinIO server")
-			}
-			exit(true)
+		case <-globalHTTPServerErrorCh:
+			exit(stopProcess())
 		case osSignal := <-globalOSSignalCh:
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
 			exit(stopProcess())
