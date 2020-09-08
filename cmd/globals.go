@@ -79,10 +79,10 @@ const (
 	// date and server date during signature verification.
 	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
 
-	// GlobalMultipartExpiry - Expiry duration after which the multipart uploads are deemed stale.
-	GlobalMultipartExpiry = time.Hour * 24 * 3 // 3 days.
-	// GlobalMultipartCleanupInterval - Cleanup interval when the stale multipart cleanup is initiated.
-	GlobalMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
+	// GlobalStaleUploadsExpiry - Expiry duration after which the uploads in multipart, tmp directory are deemed stale.
+	GlobalStaleUploadsExpiry = time.Hour * 24 // 24 hrs.
+	// GlobalStaleUploadsCleanupInterval - Cleanup interval when the stale uploads cleanup is initiated.
+	GlobalStaleUploadsCleanupInterval = time.Hour * 24 // 24 hrs.
 
 	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
 	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.

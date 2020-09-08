@@ -71,7 +71,7 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 }
 
 // Clean-up the old multipart uploads. Should be run in a Go routine.
-func (er erasureObjects) cleanupStaleMultipartUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
+func (er erasureObjects) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -91,13 +91,13 @@ func (er erasureObjects) cleanupStaleMultipartUploads(ctx context.Context, clean
 			if disk == nil {
 				continue
 			}
-			er.cleanupStaleMultipartUploadsOnDisk(ctx, disk, expiry)
+			er.cleanupStaleUploadsOnDisk(ctx, disk, expiry)
 		}
 	}
 }
 
 // Remove the old multipart uploads on the given disk.
-func (er erasureObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
+func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
 	now := time.Now()
 	shaDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, "", -1)
 	if err != nil {
@@ -117,6 +117,19 @@ func (er erasureObjects) cleanupStaleMultipartUploadsOnDisk(ctx context.Context,
 			if now.Sub(fi.ModTime) > expiry {
 				er.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, fi.Erasure.DataBlocks+1)
 			}
+		}
+	}
+	tmpDirs, err := disk.ListDir(ctx, minioMetaTmpBucket, "", -1)
+	if err != nil {
+		return
+	}
+	for _, tmpDir := range tmpDirs {
+		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "")
+		if err != nil {
+			continue
+		}
+		if now.Sub(fi.ModTime) > expiry {
+			er.deleteObject(ctx, minioMetaTmpBucket, tmpDir, fi.Erasure.DataBlocks+1)
 		}
 	}
 }
