@@ -213,14 +213,17 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 				return
 			}
 
+			// If context was canceled
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+
 			// Prints the formatted startup message in safe mode operation.
 			// Drops-into safe mode where users need to now manually recover
 			// the server.
 			printStartupSafeModeMessage(getAPIEndpoints(), err)
 
-			// Initialization returned error reaching safe mode and
-			// not proceeding waiting for admin action.
-			handleSignals()
+			<-globalOSSignalCh
 		}
 	}(txnLk)
 
@@ -276,7 +279,6 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		// One of these retriable errors shall be retried.
 		if errors.Is(err, errDiskNotFound) ||
 			errors.Is(err, errConfigNotFound) ||
-			errors.Is(err, context.Canceled) ||
 			errors.Is(err, context.DeadlineExceeded) ||
 			errors.As(err, &rquorum) ||
 			errors.As(err, &wquorum) ||
@@ -384,12 +386,14 @@ func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+
+	go handleSignals()
+
 	setDefaultProfilerRates()
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-
-	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
@@ -444,6 +448,9 @@ func serverMain(ctx *cli.Context) {
 		globalBackgroundHealState = newHealState()
 	}
 
+	// Initialize all sub-systems
+	newAllSubsystems()
+
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {
@@ -491,14 +498,14 @@ func serverMain(ctx *cli.Context) {
 		for {
 			// Additionally in distributed setup, validate the setup and configuration.
 			err := verifyServerSystemConfig(GlobalContext, globalEndpoints)
-			if err == nil {
+			if err == nil || errors.Is(err, context.Canceled) {
 				break
 			}
 			logger.LogIf(GlobalContext, err, "Unable to initialize distributed setup, retrying.. after 5 seconds")
 			select {
 			case <-GlobalContext.Done():
 				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 			}
 		}
 	}
@@ -515,8 +522,6 @@ func serverMain(ctx *cli.Context) {
 	globalSafeMode = true
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
-
-	newAllSubsystems()
 
 	go startBackgroundOps(GlobalContext, newObject)
 
@@ -549,7 +554,7 @@ func serverMain(ctx *cli.Context) {
 		logger.StartupMessage(color.RedBold(msg))
 	}
 
-	handleSignals()
+	<-globalOSSignalCh
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
