@@ -18,6 +18,7 @@ package s3select
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -93,6 +94,20 @@ func TestJSONQueries(t *testing.T) {
 			query:      `SELECT * from s3object s WHERE 'bar' in s.synonyms[*]`,
 			wantResult: `{"id":0,"title":"Test Record","desc":"Some text","synonyms":["foo","bar","whatever"]}`,
 		},
+		{
+			name:  "bignum-1",
+			query: `SELECT id from s3object s WHERE s.id <= 9223372036854775807`,
+			wantResult: `{"id":0}
+{"id":1}
+{"id":2}
+{"id":3}`},
+		{
+			name:  "bignum-2",
+			query: `SELECT id from s3object s WHERE s.id >= -9223372036854775808`,
+			wantResult: `{"id":0}
+{"id":1}
+{"id":2}
+{"id":3}`},
 		{
 			name:       "donatello-3",
 			query:      `SELECT * from s3object s WHERE 'value' IN s.synonyms[*]`,
@@ -355,7 +370,9 @@ func TestJSONQueries(t *testing.T) {
 
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
-				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+				var escaped bytes.Buffer
+				xml.EscapeText(&escaped, []byte(testCase.query))
+				testReq = []byte(fmt.Sprintf(defRequest, escaped.String()))
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {
@@ -401,7 +418,9 @@ func TestJSONQueries(t *testing.T) {
 			}
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
-				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+				var escaped bytes.Buffer
+				xml.EscapeText(&escaped, []byte(testCase.query))
+				testReq = []byte(fmt.Sprintf(defRequest, escaped.String()))
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {
