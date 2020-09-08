@@ -524,9 +524,8 @@ func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 
 	// Allow more requests to be in flight.
 	tr.ResponseHeaderTimeout = timeout
-	tr.MaxConnsPerHost = 256
-	tr.MaxIdleConnsPerHost = 16
 	tr.MaxIdleConns = 256
+	tr.MaxIdleConnsPerHost = 16
 	return tr
 }
 
