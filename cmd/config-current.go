@@ -388,7 +388,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	globalAPIConfig.init(apiConfig)
+	globalAPIConfig.init(apiConfig, setDriveCount)
 
 	if globalIsErasure {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)

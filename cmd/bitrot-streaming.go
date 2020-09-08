@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -80,7 +81,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 			totalFileSize = bitrotSumsTotalSize + length
 		}
-		err := disk.CreateFile(volume, filePath, totalFileSize, r)
+		err := disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r)
 		r.CloseWithError(err)
 		close(bw.canClose)
 	}()
@@ -118,7 +119,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		// For the first ReadAt() call we need to open the stream for reading.
 		b.currOffset = offset
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
-		b.rc, err = b.disk.ReadFileStream(b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
+		b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
 		if err != nil {
 			return 0, err
 		}

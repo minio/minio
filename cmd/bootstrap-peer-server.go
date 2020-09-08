@@ -131,7 +131,7 @@ func (client *bootstrapRESTClient) callWithContext(ctx context.Context, method s
 		values = make(url.Values)
 	}
 
-	respBody, err = client.restClient.CallWithContext(ctx, method, values, body, length)
+	respBody, err = client.restClient.Call(ctx, method, values, body, length)
 	if err == nil {
 		return respBody, nil
 	}
@@ -234,7 +234,7 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
 		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).CallWithContext(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
+		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError

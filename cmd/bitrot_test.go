@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"io/ioutil"
 	"log"
@@ -39,7 +40,7 @@ func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 		t.Fatal(err)
 	}
 
-	disk.MakeVol(volume)
+	disk.MakeVol(context.Background(), volume)
 
 	writer := newBitrotWriter(disk, volume, filePath, 35, bitrotAlgo, 10)
 

@@ -73,11 +73,14 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 		return madmin.BgHealState{}, false
 	}
 
+	objAPI := newObjectLayerWithoutSafeModeFn()
+	if objAPI == nil {
+		return madmin.BgHealState{}, false
+	}
+
 	var healDisks []string
-	for _, eps := range globalBackgroundHealState.getHealLocalDisks() {
-		for _, ep := range eps {
-			healDisks = append(healDisks, ep.String())
-		}
+	for _, ep := range getLocalDisksToHeal() {
+		healDisks = append(healDisks, ep.String())
 	}
 
 	return madmin.BgHealState{
@@ -131,7 +134,7 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, se
 				continue
 			}
 
-			entryCh, err := disk.WalkVersions(bucket.Name, "", "", true, ctx.Done())
+			entryCh, err := disk.WalkVersions(ctx, bucket.Name, "", "", true, ctx.Done())
 			if err != nil {
 				// Disk walk returned error, ignore it.
 				continue

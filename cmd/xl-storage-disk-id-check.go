@@ -84,8 +84,8 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 	return errDiskNotFound
 }
 
-func (p *xlStorageDiskIDCheck) DiskInfo() (info DiskInfo, err error) {
-	info, err = p.storage.DiskInfo()
+func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
+	info, err = p.storage.DiskInfo(ctx)
 	if err != nil {
 		return info, err
 	}
@@ -99,145 +99,145 @@ func (p *xlStorageDiskIDCheck) DiskInfo() (info DiskInfo, err error) {
 	return info, nil
 }
 
-func (p *xlStorageDiskIDCheck) MakeVolBulk(volumes ...string) (err error) {
+func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
-	return p.storage.MakeVolBulk(volumes...)
+	return p.storage.MakeVolBulk(ctx, volumes...)
 }
 
-func (p *xlStorageDiskIDCheck) MakeVol(volume string) (err error) {
+func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
-	return p.storage.MakeVol(volume)
+	return p.storage.MakeVol(ctx, volume)
 }
 
-func (p *xlStorageDiskIDCheck) ListVols() ([]VolInfo, error) {
+func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
-	return p.storage.ListVols()
+	return p.storage.ListVols(ctx)
 }
 
-func (p *xlStorageDiskIDCheck) StatVol(volume string) (vol VolInfo, err error) {
+func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol VolInfo, err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return vol, err
 	}
-	return p.storage.StatVol(volume)
+	return p.storage.StatVol(ctx, volume)
 }
 
-func (p *xlStorageDiskIDCheck) DeleteVol(volume string, forceDelete bool) (err error) {
+func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
-	return p.storage.DeleteVol(volume, forceDelete)
+	return p.storage.DeleteVol(ctx, volume, forceDelete)
 }
 
-func (p *xlStorageDiskIDCheck) WalkVersions(volume, dirPath string, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
+func (p *xlStorageDiskIDCheck) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
-	return p.storage.WalkVersions(volume, dirPath, marker, recursive, endWalkCh)
+	return p.storage.WalkVersions(ctx, volume, dirPath, marker, recursive, endWalkCh)
 }
 
-func (p *xlStorageDiskIDCheck) Walk(volume, dirPath string, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	if err := p.checkDiskStale(); err != nil {
-		return nil, err
-	}
-
-	return p.storage.Walk(volume, dirPath, marker, recursive, endWalkCh)
-}
-
-func (p *xlStorageDiskIDCheck) WalkSplunk(volume, dirPath string, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
+func (p *xlStorageDiskIDCheck) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
 
-	return p.storage.WalkSplunk(volume, dirPath, marker, endWalkCh)
+	return p.storage.Walk(ctx, volume, dirPath, marker, recursive, endWalkCh)
 }
 
-func (p *xlStorageDiskIDCheck) ListDir(volume, dirPath string, count int) ([]string, error) {
+func (p *xlStorageDiskIDCheck) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
 
-	return p.storage.ListDir(volume, dirPath, count)
+	return p.storage.WalkSplunk(ctx, volume, dirPath, marker, endWalkCh)
 }
 
-func (p *xlStorageDiskIDCheck) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
+func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error) {
+	if err := p.checkDiskStale(); err != nil {
+		return nil, err
+	}
+
+	return p.storage.ListDir(ctx, volume, dirPath, count)
+}
+
+func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
 	if err := p.checkDiskStale(); err != nil {
 		return 0, err
 	}
 
-	return p.storage.ReadFile(volume, path, offset, buf, verifier)
+	return p.storage.ReadFile(ctx, volume, path, offset, buf, verifier)
 }
 
-func (p *xlStorageDiskIDCheck) AppendFile(volume string, path string, buf []byte) (err error) {
+func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.AppendFile(volume, path, buf)
+	return p.storage.AppendFile(ctx, volume, path, buf)
 }
 
-func (p *xlStorageDiskIDCheck) CreateFile(volume, path string, size int64, reader io.Reader) error {
+func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.CreateFile(volume, path, size, reader)
+	return p.storage.CreateFile(ctx, volume, path, size, reader)
 }
 
-func (p *xlStorageDiskIDCheck) ReadFileStream(volume, path string, offset, length int64) (io.ReadCloser, error) {
+func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
 
-	return p.storage.ReadFileStream(volume, path, offset, length)
+	return p.storage.ReadFileStream(ctx, volume, path, offset, length)
 }
 
-func (p *xlStorageDiskIDCheck) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error {
+func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error {
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.RenameFile(srcVolume, srcPath, dstVolume, dstPath)
+	return p.storage.RenameFile(ctx, srcVolume, srcPath, dstVolume, dstPath)
 }
 
-func (p *xlStorageDiskIDCheck) RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
+func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error {
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.RenameData(srcVolume, srcPath, dataDir, dstVolume, dstPath)
+	return p.storage.RenameData(ctx, srcVolume, srcPath, dataDir, dstVolume, dstPath)
 }
 
-func (p *xlStorageDiskIDCheck) CheckParts(volume string, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.CheckParts(volume, path, fi)
+	return p.storage.CheckParts(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) CheckFile(volume string, path string) (err error) {
+func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, path string) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.CheckFile(volume, path)
+	return p.storage.CheckFile(ctx, volume, path)
 }
 
-func (p *xlStorageDiskIDCheck) DeleteFile(volume string, path string) (err error) {
+func (p *xlStorageDiskIDCheck) DeleteFile(ctx context.Context, volume string, path string) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.DeleteFile(volume, path)
+	return p.storage.DeleteFile(ctx, volume, path)
 }
 
-func (p *xlStorageDiskIDCheck) DeleteVersions(volume string, versions []FileInfo) (errs []error) {
+func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
 	if err := p.checkDiskStale(); err != nil {
 		errs = make([]error, len(versions))
 		for i := range errs {
@@ -245,53 +245,53 @@ func (p *xlStorageDiskIDCheck) DeleteVersions(volume string, versions []FileInfo
 		}
 		return errs
 	}
-	return p.storage.DeleteVersions(volume, versions)
+	return p.storage.DeleteVersions(ctx, volume, versions)
 }
 
-func (p *xlStorageDiskIDCheck) VerifyFile(volume, path string, fi FileInfo) error {
+func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.VerifyFile(volume, path, fi)
+	return p.storage.VerifyFile(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) WriteAll(volume string, path string, reader io.Reader) (err error) {
+func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.WriteAll(volume, path, reader)
+	return p.storage.WriteAll(ctx, volume, path, reader)
 }
 
-func (p *xlStorageDiskIDCheck) DeleteVersion(volume, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.DeleteVersion(volume, path, fi)
+	return p.storage.DeleteVersion(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) WriteMetadata(volume, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.WriteMetadata(volume, path, fi)
+	return p.storage.WriteMetadata(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) ReadVersion(volume, path, versionID string) (fi FileInfo, err error) {
+func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return fi, err
 	}
 
-	return p.storage.ReadVersion(volume, path, versionID)
+	return p.storage.ReadVersion(ctx, volume, path, versionID)
 }
 
-func (p *xlStorageDiskIDCheck) ReadAll(volume string, path string) (buf []byte, err error) {
+func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return nil, err
 	}
 
-	return p.storage.ReadAll(volume, path)
+	return p.storage.ReadAll(ctx, volume, path)
 }

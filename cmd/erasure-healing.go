@@ -78,7 +78,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 				afterState[index] = madmin.DriveStateOffline
 				return errDiskNotFound
 			}
-			if _, serr := storageDisks[index].StatVol(bucket); serr != nil {
+			if _, serr := storageDisks[index].StatVol(ctx, bucket); serr != nil {
 				if serr == errDiskNotFound {
 					beforeState[index] = madmin.DriveStateOffline
 					afterState[index] = madmin.DriveStateOffline
@@ -136,7 +136,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 		index := index
 		g.Go(func() error {
 			if beforeState[index] == madmin.DriveStateMissing {
-				makeErr := storageDisks[index].MakeVol(bucket)
+				makeErr := storageDisks[index].MakeVol(ctx, bucket)
 				if makeErr == nil {
 					afterState[index] = madmin.DriveStateOk
 				}
@@ -171,7 +171,7 @@ func listAllBuckets(storageDisks []StorageAPI, healBuckets map[string]VolInfo) (
 			continue
 		}
 		var volsInfo []VolInfo
-		volsInfo, err = disk.ListVols()
+		volsInfo, err = disk.ListVols(context.TODO())
 		if err != nil {
 			if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 				continue
@@ -472,7 +472,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		}
 
 		// Attempt a rename now from healed data to final location.
-		if err = disk.RenameData(minioMetaTmpBucket, tmpID, partsMetadata[i].DataDir, bucket, object); err != nil {
+		if err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i].DataDir, bucket, object); err != nil {
 			if err != errIsNotRegular && err != errFileNotFound {
 				logger.LogIf(ctx, err)
 			}
@@ -525,7 +525,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 				wg.Add(1)
 				go func(index int, disk StorageAPI) {
 					defer wg.Done()
-					_ = disk.DeleteFile(bucket, object)
+					_ = disk.DeleteFile(ctx, bucket, object)
 				}(index, disk)
 			}
 			wg.Wait()
@@ -557,7 +557,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 	for i, err := range errs {
 		if err == errVolumeNotFound || err == errFileNotFound {
 			// Bucket or prefix/directory not found
-			merr := storageDisks[i].MakeVol(pathJoin(bucket, object))
+			merr := storageDisks[i].MakeVol(ctx, pathJoin(bucket, object))
 			switch merr {
 			case nil, errVolumeExists:
 				hr.After.Drives[i].State = madmin.DriveStateOk
@@ -642,7 +642,7 @@ func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix 
 		}
 		index := index
 		g.Go(func() error {
-			entries, err := storageDisks[index].ListDir(bucket, prefix, 1)
+			entries, err := storageDisks[index].ListDir(ctx, bucket, prefix, 1)
 			if err != nil {
 				return err
 			}

@@ -137,13 +137,10 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 
 	format, err := loadFormatErasure(disk)
 	if err != nil {
-		// Close the internal connection to avoid connection leaks.
-		disk.Close()
 		if errors.Is(err, errUnformattedDisk) {
-			info, derr := disk.DiskInfo()
+			info, derr := disk.DiskInfo(context.TODO())
 			if derr != nil && info.RootDisk {
-				return nil, nil, fmt.Errorf("Disk: %s returned %w but its a root disk refusing to use it",
-					disk, derr) // make sure to '%w' to wrap the error
+				return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, derr) // make sure to '%w' to wrap the error
 			}
 		}
 		return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, err) // make sure to '%w' to wrap the error
@@ -213,14 +210,22 @@ func (s *erasureSets) connectDisks() {
 			defer wg.Done()
 			disk, format, err := connectEndpoint(endpoint)
 			if err != nil {
-				printEndpointError(endpoint, err, true)
+				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
+					logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
+					globalBackgroundHealState.pushHealLocalDisks(endpoint)
+				} else {
+					printEndpointError(endpoint, err, true)
+				}
 				return
 			}
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
 			if err != nil {
-				// Close the internal connection to avoid connection leaks.
-				disk.Close()
-				printEndpointError(endpoint, err, false)
+				if endpoint.IsLocal {
+					globalBackgroundHealState.pushHealLocalDisks(endpoint)
+					logger.Info(fmt.Sprintf("Found inconsistent drive %s with format.json, attempting to heal...", endpoint))
+				} else {
+					printEndpointError(endpoint, err, false)
+				}
 				return
 			}
 			disk.SetDiskID(format.Erasure.This)
@@ -291,7 +296,9 @@ func (s *erasureSets) GetDisks(setIndex int) func() []StorageAPI {
 	}
 }
 
-const defaultMonitorConnectEndpointInterval = time.Second * 10 // Set to 10 secs.
+// defaultMonitorConnectEndpointInterval is the interval to monitor endpoint connections.
+// Must be bigger than defaultMonitorNewDiskInterval.
+const defaultMonitorConnectEndpointInterval = defaultMonitorNewDiskInterval + time.Second*5
 
 // Initialize new set of erasure coded sets.
 func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatErasureV3) (*erasureSets, error) {
@@ -342,12 +349,10 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			}
 			diskID, derr := disk.GetDiskID()
 			if derr != nil {
-				disk.Close()
 				continue
 			}
 			m, n, err := findDiskIndexByDiskID(format, diskID)
 			if err != nil {
-				disk.Close()
 				continue
 			}
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
@@ -961,7 +966,7 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 }
 
 func (s *erasureSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoCh {
-	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
+	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1, false)
 }
 
 func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
@@ -972,90 +977,64 @@ func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefi
 // FileInfoCh which can be read from.
 func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoVersionsCh {
 	var entryChs []FileInfoVersionsCh
-	var success int
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
 	for _, set := range s.sets {
 		// Reset for the next erasure set.
-		success = ndisks
-		for _, disk := range set.getLoadBalancedDisks() {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
-			entryCh, err := disk.WalkVersions(bucket, prefix, marker, recursive, endWalkCh)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				// Disk walk returned error, ignore it.
-				continue
-			}
-			entryChs = append(entryChs, FileInfoVersionsCh{
-				Ch: entryCh,
-			})
-			success--
-			if success == 0 {
-				break
-			}
+		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				entryCh, err := disk.WalkVersions(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
+				if err != nil {
+					return
+				}
+
+				mutex.Lock()
+				entryChs = append(entryChs, FileInfoVersionsCh{
+					Ch: entryCh,
+				})
+				mutex.Unlock()
+			}(disk)
 		}
 	}
+	wg.Wait()
 	return entryChs
 }
 
 // Starts a walk channel across n number of disks and returns a slice of
 // FileInfoCh which can be read from.
-func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
+func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int, splunk bool) []FileInfoCh {
 	var entryChs []FileInfoCh
-	var success int
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
 	for _, set := range s.sets {
 		// Reset for the next erasure set.
-		success = ndisks
-		for _, disk := range set.getLoadBalancedDisks() {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
-			entryCh, err := disk.Walk(bucket, prefix, marker, recursive, endWalkCh)
-			if err != nil {
-				// Disk walk returned error, ignore it.
-				continue
-			}
-			entryChs = append(entryChs, FileInfoCh{
-				Ch: entryCh,
-			})
-			success--
-			if success == 0 {
-				break
-			}
-		}
-	}
-	return entryChs
-}
+		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
 
-// Starts a walk channel across n number of disks and returns a slice of
-// FileInfo channels which can be read from.
-func (s *erasureSets) startSplunkMergeWalksN(ctx context.Context, bucket, prefix, marker string, endWalkCh <-chan struct{}, ndisks int) []FileInfoCh {
-	var entryChs []FileInfoCh
-	var success int
-	for _, set := range s.sets {
-		// Reset for the next erasure set.
-		success = ndisks
-		for _, disk := range set.getLoadBalancedDisks() {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
-			entryCh, err := disk.WalkSplunk(bucket, prefix, marker, endWalkCh)
-			if err != nil {
-				// Disk walk returned error, ignore it.
-				continue
-			}
-			entryChs = append(entryChs, FileInfoCh{
-				Ch: entryCh,
-			})
-			success--
-			if success == 0 {
-				break
-			}
+				var entryCh chan FileInfo
+				var err error
+				if splunk {
+					entryCh, err = disk.WalkSplunk(GlobalContext, bucket, prefix, marker, endWalkCh)
+				} else {
+					entryCh, err = disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
+				}
+				if err != nil {
+					// Disk walk returned error, ignore it.
+					return
+				}
+				mutex.Lock()
+				entryChs = append(entryChs, FileInfoCh{
+					Ch: entryCh,
+				})
+				mutex.Unlock()
+			}(disk)
 		}
 	}
+	wg.Wait()
 	return entryChs
 }
 
@@ -1244,13 +1223,11 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 
 		diskID, err := disk.GetDiskID()
 		if err != nil {
-			disk.Close()
 			continue
 		}
 
 		m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 		if err != nil {
-			disk.Close()
 			continue
 		}
 
@@ -1274,17 +1251,14 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 func isTestSetup(infos []DiskInfo, errs []error) bool {
 	rootDiskCount := 0
 	for i := range errs {
-		if errs[i] != nil && errs[i] != errUnformattedDisk {
-			// On any error which is not unformatted disk
-			// it is safer to reject healing.
-			return false
-		}
-		if infos[i].RootDisk {
-			rootDiskCount++
+		if errs[i] == nil || errs[i] == errUnformattedDisk {
+			if infos[i].RootDisk {
+				rootDiskCount++
+			}
 		}
 	}
-	// It is a test setup if all disks are root disks.
-	return rootDiskCount == len(infos)
+	// It is a test setup if all disks are root disks in quorum.
+	return rootDiskCount >= len(infos)/2+1
 }
 
 func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []error) {
@@ -1300,7 +1274,7 @@ func getHealDiskInfos(storageDisks []StorageAPI, errs []error) ([]DiskInfo, []er
 				return errDiskNotFound
 			}
 			var err error
-			infos[index], err = storageDisks[index].DiskInfo()
+			infos[index], err = storageDisks[index].DiskInfo(context.TODO())
 			return err
 		}, index)
 	}
@@ -1347,6 +1321,19 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	// Mark all root disks down
 	markRootDisksAsDown(storageDisks, sErrs)
 
+	refFormat, err := getFormatErasureInQuorum(formats)
+	if err != nil {
+		return res, err
+	}
+
+	for i, format := range formats {
+		if format != nil {
+			if ferr := formatErasureV3Check(refFormat, format); ferr != nil {
+				sErrs[i] = errUnformattedDisk
+			}
+		}
+	}
+
 	// Prepare heal-result
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
@@ -1370,11 +1357,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		// No unformatted disks found disks are either offline
 		// or online, no healing is required.
 		return res, errNoHealRequired
-	}
-
-	refFormat, err := getFormatErasureInQuorum(formats)
-	if err != nil {
-		return res, err
 	}
 
 	// Mark all UUIDs which might be offline, use list
@@ -1450,13 +1432,11 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 			diskID, err := disk.GetDiskID()
 			if err != nil {
-				disk.Close()
 				continue
 			}
 
 			m, n, err := findDiskIndexByDiskID(refFormat, diskID)
 			if err != nil {
-				disk.Close()
 				continue
 			}
 
