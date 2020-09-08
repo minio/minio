@@ -267,10 +267,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	fi.DataDir = mustGetUUID()
 	fi.ModTime = UTCNow()
-	if opts.UserDefined != nil {
-		fi.Metadata = opts.UserDefined
-	} else {
-		fi.Metadata = make(map[string]string)
+	fi.Metadata = map[string]string{}
+	for k, v := range opts.UserDefined {
+		fi.Metadata[k] = v
 	}
 
 	uploadID := mustGetUUID()
@@ -543,7 +542,10 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		return result, err
 	}
 
-	result.UserDefined = fi.Metadata
+	result.UserDefined = map[string]string{}
+	for k, v := range fi.Metadata {
+		result.UserDefined[k] = v
+	}
 	return result, nil
 }
 
@@ -591,7 +593,10 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.UploadID = uploadID
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
-	result.UserDefined = fi.Metadata
+	result.UserDefined = map[string]string{}
+	for k, v := range fi.Metadata {
+		result.UserDefined[k] = v
+	}
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(fi.Parts) == 0 || maxParts == 0 {
