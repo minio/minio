@@ -356,13 +356,10 @@ func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData
 	for range adm.newRetryTimer(retryCtx, reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter) {
 		// Instantiate a new request.
 		var req *http.Request
-		req, err = adm.newRequest(method, reqData)
+		req, err = adm.newRequest(ctx, method, reqData)
 		if err != nil {
 			return nil, err
 		}
-
-		// Add context to request
-		req = req.WithContext(ctx)
 
 		// Initiate the request.
 		res, err = adm.do(req)
@@ -440,7 +437,7 @@ func (adm AdminClient) getSecretKey() string {
 }
 
 // newRequest - instantiate a new HTTP request for a given method.
-func (adm AdminClient) newRequest(method string, reqData requestData) (req *http.Request, err error) {
+func (adm AdminClient) newRequest(ctx context.Context, method string, reqData requestData) (req *http.Request, err error) {
 	// If no method is supplied default to 'POST'.
 	if method == "" {
 		method = "POST"
@@ -456,7 +453,7 @@ func (adm AdminClient) newRequest(method string, reqData requestData) (req *http
 	}
 
 	// Initialize a new HTTP request for the method.
-	req, err = http.NewRequest(method, targetURL.String(), nil)
+	req, err = http.NewRequestWithContext(ctx, method, targetURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}

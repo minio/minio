@@ -1217,7 +1217,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		return ObjectInfo{}, IncompleteBody{}
+		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.

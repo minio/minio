@@ -427,7 +427,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if n < data.Size() {
-		return pi, IncompleteBody{}
+		return pi, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
 	for i := range writers {

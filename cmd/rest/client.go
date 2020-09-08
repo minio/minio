@@ -27,6 +27,7 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // DefaultRESTTimeout - default RPC timeout is one minute.
@@ -100,11 +101,13 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	if !c.IsOnline() {
 		return nil, &NetworkError{Err: &url.Error{Op: method, URL: c.url.String(), Err: restError("remote server offline")}}
 	}
-	req, err := http.NewRequest(http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
 	if err != nil {
+		if xnet.IsNetworkOrHostDown(err) {
+			c.MarkOffline()
+		}
 		return nil, &NetworkError{err}
 	}
-	req = req.WithContext(ctx)
 	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.Query().Encode()))
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
 	if length > 0 {
@@ -112,9 +115,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		// A canceled context doesn't always mean a network problem.
-		if !errors.Is(err, context.Canceled) {
-			// We are safe from recursion
+		if xnet.IsNetworkOrHostDown(err) || errors.Is(err, context.DeadlineExceeded) {
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
