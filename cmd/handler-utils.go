@@ -404,6 +404,9 @@ func getResource(path string, host string, domains []string) (string, error) {
 		}
 	}
 	for _, domain := range domains {
+		if host == minioReservedBucket+"."+domain {
+			continue
+		}
 		if !strings.HasSuffix(host, "."+domain) {
 			continue
 		}
