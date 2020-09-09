@@ -290,6 +290,213 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	})
 }
 
+// GetCustomObjectContentHandler - GET Object?custom
+// ----------
+// This implementation of the GET operation retrieves object content based
+// on an SQL expression. In the request, along with the sql expression, you must
+// also specify a data serialization format (JSON, CSV) of the object.
+func (api objectAPIHandlers) GetCustomObjectContentHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "SelectObject")
+
+	defer logger.AuditLog(w, r, "SelectObject", mustGetClaimsFromToken(r))
+
+	// Fetch object stat info.
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// get gateway encryption options
+	opts, err := getOpts(ctx, r, bucket, object)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
+	// Check for auth type to return S3 compatible error.
+	// type to return the correct error (NoSuchKey vs AccessDenied)
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object); s3Error != ErrNone {
+		if getRequestAuthType(r) == authTypeAnonymous {
+			// As per "Permission" section in
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
+			// If the object you request does not exist,
+			// the error Amazon S3 returns depends on
+			// whether you also have the s3:ListBucket
+			// permission.
+			// * If you have the s3:ListBucket permission
+			//   on the bucket, Amazon S3 will return an
+			//   HTTP status code 404 ("no such key")
+			//   error.
+			// * if you don’t have the s3:ListBucket
+			//   permission, Amazon S3 will return an HTTP
+			//   status code 403 ("access denied") error.`
+			if globalPolicySys.IsAllowed(policy.Args{
+				Action:          policy.ListBucketAction,
+				BucketName:      bucket,
+				ConditionValues: getConditionValues(r, "", "", nil),
+				IsOwner:         false,
+			}) {
+				_, err = getObjectInfo(ctx, bucket, object, opts)
+				if toAPIError(ctx, err).Code == "NoSuchKey" {
+					s3Error = ErrNoSuchKey
+				}
+			}
+		}
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Get request range.
+	rangeHeader := r.Header.Get(xhttp.Range)
+	if rangeHeader != "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrUnsupportedRangeHeader), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if r.ContentLength <= 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEmptyRequestBody), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	getObjectNInfo := objectAPI.GetObjectNInfo
+	if api.CacheAPI() != nil {
+		getObjectNInfo = api.CacheAPI().GetObjectNInfo
+	}
+
+	getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
+		isSuffixLength := false
+		if offset < 0 {
+			isSuffixLength = true
+		}
+
+		rs := &HTTPRangeSpec{
+			IsSuffixLength: isSuffixLength,
+			Start:          offset,
+			End:            offset + length,
+		}
+
+		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
+	}
+
+	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		if globalBucketVersioningSys.Enabled(bucket) {
+			// Versioning enabled quite possibly object is deleted might be delete-marker
+			// if present set the headers, no idea why AWS S3 sets these headers.
+			if objInfo.VersionID != "" && objInfo.DeleteMarker {
+				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+			}
+		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// filter object lock metadata if permission does not permit
+	getRetPerms := checkRequestAuthType(ctx, r, policy.GetObjectRetentionAction, bucket, object)
+	legalHoldPerms := checkRequestAuthType(ctx, r, policy.GetObjectLegalHoldAction, bucket, object)
+
+	// filter object lock metadata if permission does not permit
+	objInfo.UserDefined = objectlock.FilterObjectLockMetadata(objInfo.UserDefined, getRetPerms != ErrNone, legalHoldPerms != ErrNone)
+
+	if objectAPI.IsEncryptionSupported() {
+		if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+	}
+
+	s3Select, err := s3select.NewS3Select(r.Body)
+	if err != nil {
+		if serr, ok := err.(s3select.SelectError); ok {
+			encodedErrorResponse := encodeResponse(APIErrorResponse{
+				Code:       serr.ErrorCode(),
+				Message:    serr.ErrorMessage(),
+				BucketName: bucket,
+				Key:        object,
+				Resource:   r.URL.Path,
+				RequestID:  w.Header().Get(xhttp.AmzRequestID),
+				HostID:     globalDeploymentID,
+			})
+			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		}
+		return
+	}
+
+	if err = s3Select.Open(getObject); err != nil {
+		if serr, ok := err.(s3select.SelectError); ok {
+			encodedErrorResponse := encodeResponse(APIErrorResponse{
+				Code:       serr.ErrorCode(),
+				Message:    serr.ErrorMessage(),
+				BucketName: bucket,
+				Key:        object,
+				Resource:   r.URL.Path,
+				RequestID:  w.Header().Get(xhttp.AmzRequestID),
+				HostID:     globalDeploymentID,
+			})
+			writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		}
+		return
+	}
+
+	// Set encryption response headers
+	if objectAPI.IsEncryptionSupported() {
+		if crypto.IsEncrypted(objInfo.UserDefined) {
+			switch {
+			case crypto.S3.IsEncrypted(objInfo.UserDefined):
+				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
+				// Validate the SSE-C Key set in the header.
+				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
+				}
+				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
+				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			}
+		}
+	}
+
+	s3Select.Evaluate(w)
+	s3Select.Close()
+
+	// Notify object accessed via a GET request.
+	sendEvent(eventArgs{
+		EventName:    event.ObjectAccessedGet,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
