@@ -46,7 +46,11 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 	return buffer.Bytes(), nil
 }
 
-func deleteConfig(ctx context.Context, objAPI ObjectLayer, configFile string) error {
+type objectDeleter interface {
+	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
+}
+
+func deleteConfig(ctx context.Context, objAPI objectDeleter, configFile string) error {
 	_, err := objAPI.DeleteObject(ctx, minioMetaBucket, configFile, ObjectOptions{})
 	if err != nil && isErrObjectNotFound(err) {
 		return errConfigNotFound
