@@ -81,6 +81,14 @@ func (er erasureObjects) SetDriveCount() int {
 func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(er.getDisks())
+	select {
+	case _, ok := <-er.mrfOpCh:
+		if ok {
+			close(er.mrfOpCh)
+		}
+	default:
+		close(er.mrfOpCh)
+	}
 	return nil
 }
 

@@ -505,7 +505,14 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 			return err
 		}
 	}
-
+	select {
+	case _, ok := <-s.disksConnectEvent:
+		if ok {
+			close(s.disksConnectEvent)
+		}
+	default:
+		close(s.disksConnectEvent)
+	}
 	return nil
 }
 
