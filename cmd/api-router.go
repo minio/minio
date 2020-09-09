@@ -125,9 +125,15 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		// DeleteObjectTagging
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("deleteobjecttagging", httpTraceHdrs(api.DeleteObjectTaggingHandler)))).Queries("tagging", "")
+
 		// SelectObjectContent
 		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("selectobjectcontent", httpTraceHdrs(api.SelectObjectContentHandler)))).Queries("select", "").Queries("select-type", "2")
+
+		// GetCustomObjectContent
+		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
+			maxClients(collectAPIStats("getcustomobjectcontent", httpTraceHdrs(api.GetCustomObjectContentHandler)))).Queries("custom", "").Queries("custom-type", "1")
+
 		// GetObjectRetention
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("getobjectretention", httpTraceAll(api.GetObjectRetentionHandler)))).Queries("retention", "")
