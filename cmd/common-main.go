@@ -33,7 +33,6 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/etcd/dns"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
@@ -285,14 +284,6 @@ func handleCommonEnvVars() {
 		globalOldCred = oldCred
 		os.Unsetenv(config.EnvAccessKeyOld)
 		os.Unsetenv(config.EnvSecretKeyOld)
-	}
-
-	url, user, pwd, ok := env.LookupEnv(config.EnvDNSWebhook)
-	if ok {
-		globalDNSConfig, err = dns.NewOperatorDNS(url, user, pwd)
-		if err != nil {
-			logger.Fatal(err, "Unable to fetch the value of "+config.EnvDNSWebhook)
-		}
 	}
 }
 

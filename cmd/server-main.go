@@ -32,7 +32,6 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/etcd/dns"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
@@ -130,7 +129,6 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
-	dns.RegisterGlobalCAs(globalRootCAs)
 
 	globalMinioAddr = globalCLIContext.Addr
 
