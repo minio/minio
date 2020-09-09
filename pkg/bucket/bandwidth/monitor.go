@@ -91,18 +91,16 @@ func NewMonitor(doneCh <-chan struct{}) *Monitor {
 // SelectionFunction for buckets
 type SelectionFunction func(bucket string) bool
 
-// SelectAllBuckets will select all buckets
-func SelectAllBuckets() SelectionFunction {
-	return func(bucket string) bool {
-		return true
-	}
-}
-
 // SelectBuckets will select all the buckets passed in.
 func SelectBuckets(buckets ...string) SelectionFunction {
+	if len(buckets) == 0 {
+		return func(bucket string) bool {
+			return true
+		}
+	}
 	return func(bucket string) bool {
 		for _, b := range buckets {
-			if b != "" && b == bucket {
+			if b == "" || b == bucket {
 				return true
 			}
 		}
@@ -160,7 +158,7 @@ func (m *Monitor) processAvg() {
 	for _, bucketMeasurement := range m.activeBuckets {
 		bucketMeasurement.updateExponentialMovingAverage(time.Now())
 	}
-	m.pubsub.Publish(m.getReport(SelectAllBuckets()))
+	m.pubsub.Publish(m.getReport(SelectBuckets()))
 }
 
 // track returns the measurement object for bucket and object

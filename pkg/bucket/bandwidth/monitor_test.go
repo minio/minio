@@ -142,13 +142,13 @@ func TestMonitor_GetReport(t *testing.T) {
 				bucketThrottle: map[string]*throttle{"bucket": &thr},
 			}
 			m.activeBuckets["bucket"].updateExponentialMovingAverage(tt.fields.endTime)
-			got := m.GetReport(SelectAllBuckets())
+			got := m.GetReport(SelectBuckets())
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetReport() = %v, want %v", got, tt.want)
 			}
 			m.activeBuckets["bucket"].incrementBytes(tt.fields.update2)
 			m.activeBuckets["bucket"].updateExponentialMovingAverage(tt.fields.endTime2)
-			got = m.GetReport(SelectAllBuckets())
+			got = m.GetReport(SelectBuckets())
 			if !reflect.DeepEqual(got, tt.want2) {
 				t.Errorf("GetReport() = %v, want %v", got, tt.want2)
 			}

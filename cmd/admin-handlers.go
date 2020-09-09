@@ -41,13 +41,10 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
-	bandwidth "github.com/minio/minio/pkg/bandwidth"
-	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	"github.com/minio/minio/pkg/sync/errgroup"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -1441,44 +1438,9 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	}
 
 	setEventStreamHeaders(w)
-	peers := newPeerRestClients(globalEndpoints)
 	bucketsRequestedString := r.URL.Query().Get("buckets")
-	var bucketsRequested []string
-	reports := make([]*bandwidth.Report, len(peers))
-	selectBuckets := bucketBandwidth.SelectAllBuckets()
-	if bucketsRequestedString != "" {
-		bucketsRequested = strings.Split(bucketsRequestedString, ",")
-		selectBuckets = bucketBandwidth.SelectBuckets(bucketsRequested...)
-	}
-	reports = append(reports, globalBucketMonitor.GetReport(selectBuckets))
-	g := errgroup.WithNErrs(len(peers))
-	for index, peer := range peers {
-		if peer == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			var err error
-			reports[index], err = peer.MonitorBandwidth(ctx, bucketsRequested)
-			return err
-		}, index)
-	}
-	consolidatedReport := bandwidth.Report{
-		BucketStats: make(map[string]bandwidth.Details),
-	}
-
-	for _, report := range reports {
-		for bucket := range report.BucketStats {
-			d, ok := consolidatedReport.BucketStats[bucket]
-			if !ok {
-				consolidatedReport.BucketStats[bucket] = bandwidth.Details{}
-				d = consolidatedReport.BucketStats[bucket]
-				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
-			}
-			d.CurrentBandwidthInBytesPerSecond += report.BucketStats[bucket].CurrentBandwidthInBytesPerSecond
-			consolidatedReport.BucketStats[bucket] = d
-		}
-	}
+	bucketsRequested := strings.Split(bucketsRequestedString, ",")
+	consolidatedReport := globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
 	enc := json.NewEncoder(w)
 	err := enc.Encode(consolidatedReport)
 	if err != nil {

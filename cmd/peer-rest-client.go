@@ -891,7 +891,6 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*bandwidth.Report, error) {
 	values := make(url.Values)
 	values.Set(peerRESTBuckets, strings.Join(buckets, ","))
-
 	respBody, err := client.callWithContext(ctx, peerRESTMethodGetBandwidth, values, nil, -1)
 	if err != nil {
 		return nil, err
