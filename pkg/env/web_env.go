@@ -72,10 +72,10 @@ func fetchHTTPConstituentParts(u *url.URL) (username string, password string, en
 	return username, password, envURL, nil
 }
 
-func getEnvValueFromHTTP(urlStr, envKey string) (string, error) {
+func getEnvValueFromHTTP(urlStr, envKey string) (string, string, string, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
 	switch u.Scheme {
@@ -84,12 +84,12 @@ func getEnvValueFromHTTP(urlStr, envKey string) (string, error) {
 	case webEnvSchemeSecure:
 		u.Scheme = "https"
 	default:
-		return "", errors.New("invalid arguments")
+		return "", "", "", errors.New("invalid arguments")
 	}
 
 	username, password, envURL, err := fetchHTTPConstituentParts(u)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -97,7 +97,7 @@ func getEnvValueFromHTTP(urlStr, envKey string) (string, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, envURL+"?key="+envKey, nil)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
 	claims := &jwt.StandardClaims{
@@ -109,7 +109,7 @@ func getEnvValueFromHTTP(urlStr, envKey string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
 	ss, err := token.SignedString([]byte(password))
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+ss)
@@ -136,15 +136,15 @@ func getEnvValueFromHTTP(urlStr, envKey string) (string, error) {
 
 	resp, err := clnt.Do(req)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
 	envValueBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 
-	return string(envValueBytes), nil
+	return string(envValueBytes), username, password, nil
 }
 
 // Environ returns a copy of strings representing the
@@ -161,23 +161,27 @@ func Environ() []string {
 //
 // Additionally if the input is env://username:password@remote:port/
 // to fetch ENV values for the env value from a remote server.
-func LookupEnv(key string) (string, bool) {
+// In this case, it also returns the credentials username and password
+func LookupEnv(key string) (string, string, string, bool) {
 	v, ok := os.LookupEnv(key)
 	if ok && strings.HasPrefix(v, webEnvScheme) {
 		// If env value starts with `env*://`
 		// continue to parse and fetch from remote
 		var err error
-		v, err = getEnvValueFromHTTP(strings.TrimSpace(v), key)
+		v, user, pwd, err := getEnvValueFromHTTP(strings.TrimSpace(v), key)
 		if err != nil {
-			// fallback to cached value if-any.
-			return os.LookupEnv("_" + key)
+			env, eok := os.LookupEnv("_" + key)
+			if eok {
+				// fallback to cached value if-any.
+				return env, user, pwd, eok
+			}
 		}
 		// Set the ENV value to _env value,
 		// this value is a fallback in-case of
 		// server restarts when webhook server
 		// is down.
 		os.Setenv("_"+key, v)
-		return v, true
+		return v, user, pwd, true
 	}
-	return v, ok
+	return v, "", "", ok
 }
