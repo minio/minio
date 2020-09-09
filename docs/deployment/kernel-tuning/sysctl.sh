@@ -33,8 +33,8 @@ net.core.wmem_default = 4194304
 net.core.optmem_max = 4194304
 
 # increase memory thresholds to prevent packet dropping:
-net.ipv4.tcp_rmem = "4096 87380 4194304"
-net.ipv4.tcp_wmem = "4096 65536 4194304"
+net.ipv4.tcp_rmem = 4096 87380 4194304
+net.ipv4.tcp_wmem = 4096 65536 4194304
 
 # enable low latency mode for TCP:
 net.ipv4.tcp_low_latency = 1
