@@ -179,7 +179,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
-			if err == dns.ErrNoEntriesFound {
+			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
@@ -281,7 +281,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually using etcdctl", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
 			return toJSONError(ctx, err)
 		}
 	}

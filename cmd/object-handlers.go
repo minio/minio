@@ -764,7 +764,7 @@ func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.
 // when federation is enabled, ie when globalDNSConfig is non 'nil'.
 //
 // This function is similar to isRemoteCallRequired but specifically for COPY object API
-// if destination and source are same we do not need to check for destnation bucket
+// if destination and source are same we do not need to check for destination bucket
 // to exist locally.
 func isRemoteCopyRequired(ctx context.Context, srcBucket, dstBucket string, objAPI ObjectLayer) bool {
 	if srcBucket == dstBucket {
@@ -2713,7 +2713,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
-		if err != nil {
+		if err != nil && err != dns.ErrNotImplemented {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
