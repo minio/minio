@@ -72,7 +72,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 	// Get buckets in the DNS
 	dnsBuckets, err := globalDNSConfig.List()
-	if err != nil && err != dns.ErrNoEntriesFound {
+	if err != nil && err != dns.ErrNoEntriesFound && err != dns.ErrNotImplemented {
 		logger.LogIf(GlobalContext, err)
 		return
 	}
@@ -80,33 +80,35 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	bucketsSet := set.NewStringSet()
 	bucketsToBeUpdated := set.NewStringSet()
 	bucketsInConflict := set.NewStringSet()
-	for _, bucket := range buckets {
-		bucketsSet.Add(bucket.Name)
-		r, ok := dnsBuckets[bucket.Name]
-		if !ok {
-			bucketsToBeUpdated.Add(bucket.Name)
-			continue
-		}
-		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-			if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-				// No difference in terms of domainIPs and nothing
-				// has changed so we don't change anything on the etcd.
+	if dnsBuckets != nil {
+		for _, bucket := range buckets {
+			bucketsSet.Add(bucket.Name)
+			r, ok := dnsBuckets[bucket.Name]
+			if !ok {
+				bucketsToBeUpdated.Add(bucket.Name)
 				continue
 			}
-			// if domain IPs intersect then it won't be an empty set.
-			// such an intersection means that bucket exists on etcd.
-			// but if we do see a difference with local domain IPs with
-			// hostSlice from etcd then we should update with newer
-			// domainIPs, we proceed to do that here.
-			bucketsToBeUpdated.Add(bucket.Name)
-			continue
+			if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+				if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+					// No difference in terms of domainIPs and nothing
+					// has changed so we don't change anything on the etcd.
+					continue
+				}
+				// if domain IPs intersect then it won't be an empty set.
+				// such an intersection means that bucket exists on etcd.
+				// but if we do see a difference with local domain IPs with
+				// hostSlice from etcd then we should update with newer
+				// domainIPs, we proceed to do that here.
+				bucketsToBeUpdated.Add(bucket.Name)
+				continue
+			}
+			// No IPs seem to intersect, this means that bucket exists but has
+			// different IP addresses perhaps from a different deployment.
+			// bucket names are globally unique in federation at a given
+			// path prefix, name collision is not allowed. We simply log
+			// an error and continue.
+			bucketsInConflict.Add(bucket.Name)
 		}
-		// No IPs seem to intersect, this means that bucket exists but has
-		// different IP addresses perhaps from a different deployment.
-		// bucket names are globally unique in federation at a given
-		// path prefix, name collision is not allowed. We simply log
-		// an error and continue.
-		bucketsInConflict.Add(bucket.Name)
 	}
 
 	// Add/update buckets that are not registered with the DNS
@@ -562,7 +564,9 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	if globalDNSConfig != nil {
 		sr, err := globalDNSConfig.Get(bucket)
 		if err != nil {
-			if err == dns.ErrNoEntriesFound {
+			// ErrNotImplemented indicates a DNS backend that doesn't need to check if bucket already
+			// exists elsewhere
+			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, bucket, opts); err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -1000,7 +1004,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually using etcdctl", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
