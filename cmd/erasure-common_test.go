@@ -32,6 +32,7 @@ func TestErasureParentDirIsObject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize 'Erasure' object layer.")
 	}
+	defer obj.Shutdown(context.Background())
 
 	// Remove all disks.
 	for _, disk := range fsDisks {

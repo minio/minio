@@ -39,6 +39,7 @@ func TestHealing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
 	z := obj.(*erasureZones)

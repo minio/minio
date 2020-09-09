@@ -42,6 +42,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	}
 
 	// cleaning up of temporary test directories
+	defer objLayer.Shutdown(context.Background())
 	defer removeRoots(disks)
 
 	err = objLayer.MakeBucketWithLocation(ctx, "bucket1", BucketOptions{})
@@ -90,6 +91,7 @@ func TestErasureDeleteObjectBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer xl.Shutdown(context.Background())
 
 	err = xl.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
 	if err != nil {
@@ -200,6 +202,7 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Cleanup backend directories
+	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
 	z := obj.(*erasureZones)
@@ -269,6 +272,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
 	z := obj.(*erasureZones)
@@ -331,6 +335,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	}
 
 	// Cleanup backend directories.
+	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
 	z := obj.(*erasureZones)
