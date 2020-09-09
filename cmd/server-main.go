@@ -32,6 +32,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
@@ -157,6 +158,9 @@ func newAllSubsystems() {
 
 	// Create new bucket metadata system.
 	globalBucketMetadataSys = NewBucketMetadataSys()
+
+	// Create the bucket bandwidth monitor
+	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()

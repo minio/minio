@@ -35,17 +35,19 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
+	bandwidth "github.com/minio/minio/pkg/bandwidth"
+	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/minio/minio/pkg/sync/errgroup"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -1423,6 +1425,66 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
+}
+
+// BandwidthMonitorHandler - GET /minio/admin/v3/bandwidth
+// ----------
+// Get bandwidth consumption information
+func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "BandwidthMonitor")
+
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.BandwidthMonitorAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	setEventStreamHeaders(w)
+	peers := newPeerRestClients(globalEndpoints)
+	bucketsRequestedString := r.URL.Query().Get("buckets")
+	var bucketsRequested []string
+	reports := make([]*bandwidth.Report, len(peers))
+	selectBuckets := bucketBandwidth.SelectAllBuckets()
+	if bucketsRequestedString != "" {
+		bucketsRequested = strings.Split(bucketsRequestedString, ",")
+		selectBuckets = bucketBandwidth.SelectBuckets(bucketsRequested...)
+	}
+	reports = append(reports, globalBucketMonitor.GetReport(selectBuckets))
+	g := errgroup.WithNErrs(len(peers))
+	for index, peer := range peers {
+		if peer == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reports[index], err = peer.MonitorBandwidth(ctx, bucketsRequested)
+			return err
+		}, index)
+	}
+	consolidatedReport := bandwidth.Report{
+		BucketStats: make(map[string]bandwidth.Details),
+	}
+
+	for _, report := range reports {
+		for bucket := range report.BucketStats {
+			d, ok := consolidatedReport.BucketStats[bucket]
+			if !ok {
+				consolidatedReport.BucketStats[bucket] = bandwidth.Details{}
+				d = consolidatedReport.BucketStats[bucket]
+				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
+			}
+			d.CurrentBandwidthInBytesPerSecond += report.BucketStats[bucket].CurrentBandwidthInBytesPerSecond
+			consolidatedReport.BucketStats[bucket] = d
+		}
+	}
+	enc := json.NewEncoder(w)
+	err := enc.Encode(consolidatedReport)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+	}
+	w.(http.Flusher).Flush()
 }
 
 // ServerInfoHandler - GET /minio/admin/v3/info

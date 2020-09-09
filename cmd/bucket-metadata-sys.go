@@ -373,6 +373,20 @@ func (sys *BucketMetadataSys) GetBucketTargetsConfig(bucket string) (*madmin.Buc
 	return meta.bucketTargetConfig, nil
 }
 
+// GetBucketTarget returns the target for the bucket and arn.
+func (sys *BucketMetadataSys) GetBucketTarget(bucket string, arn string) (madmin.BucketTarget, error) {
+	targets, err := sys.GetBucketTargetsConfig(bucket)
+	if err != nil {
+		return madmin.BucketTarget{}, err
+	}
+	for _, t := range targets.Targets {
+		if t.Arn == arn {
+			return t, nil
+		}
+	}
+	return madmin.BucketTarget{}, errConfigNotFound
+}
+
 // GetConfig returns a specific configuration from the bucket metadata.
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {

@@ -30,6 +30,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bandwidth"
+	b "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	trace "github.com/minio/minio/pkg/trace"
@@ -628,7 +630,7 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 	}
 
 	if meta.bucketTargetConfig != nil {
-		globalBucketTargetSys.UpdateTarget(bucketName, meta.bucketTargetConfig)
+		globalBucketTargetSys.UpdateAllTargets(bucketName, meta.bucketTargetConfig)
 	}
 }
 
@@ -1047,6 +1049,34 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+// GetBandwidth gets the bandwidth for the buckets requested.
+func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+	bucketsString := r.URL.Query().Get("buckets")
+	w.WriteHeader(http.StatusOK)
+	w.(http.Flusher).Flush()
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+
+	var report *bandwidth.Report
+	selectBuckets := b.SelectAllBuckets()
+	if bucketsString != "" {
+		selectBuckets = b.SelectBuckets(strings.Split(bucketsString, ",")...)
+	}
+	report = globalBucketMonitor.GetReport(selectBuckets)
+
+	enc := gob.NewEncoder(w)
+	if err := enc.Encode(report); err != nil {
+		s.writeErrorResponse(w, errors.New("Encoding report failed: "+err.Error()))
+		return
+	}
+	w.(http.Flusher).Flush()
+}
+
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router) {
 	server := &peerRESTServer{}
@@ -1085,4 +1115,5 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocalDiskIDs).HandlerFunc(httpTraceHdrs(server.GetLocalDiskIDs))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBandwidth).HandlerFunc(httpTraceHdrs(server.GetBandwidth))
 }
