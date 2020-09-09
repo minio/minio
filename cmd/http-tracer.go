@@ -111,7 +111,8 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 
 	var reqBodyRecorder *recordRequest
 	t := trace.Info{FuncName: name}
-	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
+	//reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: logBody, headers: reqHeaders}
+	reqBodyRecorder = &recordRequest{Reader: r.Body, logBody: true, headers: reqHeaders}
 	r.Body = ioutil.NopCloser(reqBodyRecorder)
 	t.NodeName = r.Host
 	if globalIsDistErasure {
