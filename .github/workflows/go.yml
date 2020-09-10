@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Build on ${{ matrix.os }}
+      - name: Build on ${{ matrix.os }} and upload coverage to Codecov
         if: matrix.os == 'windows-latest'
         env:
           CGO_ENABLED: 0
@@ -29,8 +29,9 @@ jobs:
           MINIO_CI_CD: 1
         run: |
           go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
-          go test -v --timeout 50m ./...
-      - name: Build on ${{ matrix.os }}
+          go test -v --timeout 50m ./... -coverprofile="C:\Users\runneradmin\go\coverage.txt" -covermode=atomic
+          curl -s https://codecov.io/bash | bash -s -- -f "C:\\Users\\runneradmin\\go\\coverage.txt" -F windows-latest
+      - name: Build on ${{ matrix.os }} and upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
         env:
           CGO_ENABLED: 0
@@ -50,3 +51,4 @@ jobs:
           make verify-healing
           cd browser && npm install && npm run test && cd ..
           bash -c 'shopt -s globstar; shellcheck mint/**/*.sh'
+          curl -s https://codecov.io/bash | bash -s -- -F ubuntu-latest
