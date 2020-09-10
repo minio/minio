@@ -24,13 +24,13 @@ import (
 
 // Compression environment variables
 const (
-	BitrotScan = "bitrot"
+	BitrotScan = "bitrotscan"
 )
 
 // Config represents the crawler settings.
 type Config struct {
 	// Bitrot will perform bitrot scan on local disk when checking objects.
-	Bitrot bool `json:"bitrot"`
+	Bitrot bool `json:"bitrotscan"`
 }
 
 var (
