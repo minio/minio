@@ -882,7 +882,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	data := r.Reader
 
 	if data.Size() > azureBlockSize/2 {
-		if len(opts.UserDefined) == 0 {
+		if opts.UserDefined == nil {
 			opts.UserDefined = map[string]string{}
 		}
 
