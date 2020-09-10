@@ -635,10 +635,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 			fsMeta = fs.defaultFsJSON(srcObject)
 		}
 
-		fsMeta.Meta = map[string]string{}
-		for k, v := range srcInfo.UserDefined {
-			fsMeta.Meta[k] = v
-		}
+		fsMeta.Meta = cloneMSS(srcInfo.UserDefined)
 		fsMeta.Meta["etag"] = srcInfo.ETag
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
@@ -1124,10 +1121,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	data := r.Reader
 
 	// No metadata is set, allocate a new one.
-	meta := make(map[string]string)
-	for k, v := range opts.UserDefined {
-		meta[k] = v
-	}
+	meta := cloneMSS(opts.UserDefined)
 	var err error
 
 	// Validate if bucket name is valid and exists.
