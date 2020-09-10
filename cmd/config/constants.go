@@ -33,6 +33,7 @@ const (
 	EnvPublicIPs    = "MINIO_PUBLIC_IPS"
 	EnvFSOSync      = "MINIO_FS_OSYNC"
 	EnvArgs         = "MINIO_ARGS"
+	EnvDNSWebhook   = "MINIO_DNS_WEBHOOK_ENDPOINT"
 
 	EnvUpdate = "MINIO_UPDATE"
 

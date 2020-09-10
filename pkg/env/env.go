@@ -45,7 +45,7 @@ func SetEnvOn() {
 
 // IsSet returns if the given env key is set.
 func IsSet(key string) bool {
-	_, ok := LookupEnv(key)
+	_, _, _, ok := LookupEnv(key)
 	return ok
 }
 
@@ -60,7 +60,7 @@ func Get(key, defaultValue string) string {
 	if ok {
 		return defaultValue
 	}
-	if v, ok := LookupEnv(key); ok {
+	if v, _, _, ok := LookupEnv(key); ok {
 		return v
 	}
 	return defaultValue

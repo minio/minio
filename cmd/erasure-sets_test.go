@@ -206,6 +206,7 @@ func TestHashedLayer(t *testing.T) {
 		if err != nil {
 			t.Fatal("Unable to initialize 'Erasure' object layer.", err)
 		}
+		defer obj.Shutdown(ctx)
 
 		// Remove all dirs.
 		for _, dir := range fsDirs {

@@ -188,11 +188,6 @@ func IsServerResolvable(endpoint Endpoint) error {
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodGet, serverURL.String(), nil)
-	if err != nil {
-		return err
-	}
-
 	httpClient := &http.Client{
 		Transport:
 		// For more details about various values used here refer
@@ -215,7 +210,12 @@ func IsServerResolvable(endpoint Endpoint) error {
 	ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
 	defer cancel()
 
-	resp, err := httpClient.Do(req.WithContext(ctx))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL.String(), nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

@@ -382,11 +382,18 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		}
 
 		var totalSize int64
-		for _, version := range fivs.Versions {
+		var numVersions = len(fivs.Versions)
+
+		for i, version := range fivs.Versions {
+			var successorModTime time.Time
+			if i > 0 {
+				successorModTime = fivs.Versions[i-1].ModTime
+			}
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			size := item.applyActions(ctx, objAPI, actionMeta{
-				numVersions: len(fivs.Versions),
-				oi:          oi,
+				numVersions:      numVersions,
+				successorModTime: successorModTime,
+				oi:               oi,
 			})
 			if !version.Deleted {
 				// Bitrot check local data

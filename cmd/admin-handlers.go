@@ -1677,11 +1677,6 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
 	defer cancel()
 
-	req, err := http.NewRequest(http.MethodHead, endpointStr, nil)
-	if err != nil {
-		return err
-	}
-
 	client := &http.Client{Transport: &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(timeout),
@@ -1696,11 +1691,15 @@ func checkConnection(endpointStr string, timeout time.Duration) error {
 	}}
 	defer client.CloseIdleConnections()
 
-	resp, err := client.Do(req.WithContext(ctx))
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, endpointStr, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer xhttp.DrainBody(resp.Body)
-	resp.Body.Close()
 	return nil
 }

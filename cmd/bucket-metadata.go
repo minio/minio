@@ -354,7 +354,7 @@ func (b *BucketMetadata) Save(ctx context.Context, api ObjectLayer) error {
 
 // deleteBucketMetadata deletes bucket metadata
 // If config does not exist no error is returned.
-func deleteBucketMetadata(ctx context.Context, obj ObjectLayer, bucket string) error {
+func deleteBucketMetadata(ctx context.Context, obj objectDeleter, bucket string) error {
 	metadataFiles := []string{
 		dataUsageCacheName,
 		bucketMetadataFile,

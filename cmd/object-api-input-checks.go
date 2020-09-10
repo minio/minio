@@ -60,7 +60,7 @@ func checkBucketAndObjectNames(ctx context.Context, bucket, object string) error
 }
 
 // Checks for all ListObjects arguments validity.
-func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string, obj ObjectLayer) error {
+func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string, obj getBucketInfoI) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
@@ -173,7 +173,7 @@ func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer
 }
 
 // Checks for PutObject arguments validity, also validates if bucket exists.
-func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer, size int64) error {
+func checkPutObjectArgs(ctx context.Context, bucket, object string, obj getBucketInfoI, size int64) error {
 	// Verify if bucket exists before validating object name.
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
@@ -197,8 +197,12 @@ func checkPutObjectArgs(ctx context.Context, bucket, object string, obj ObjectLa
 	return nil
 }
 
+type getBucketInfoI interface {
+	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
+}
+
 // Checks whether bucket exists and returns appropriate error if not.
-func checkBucketExist(ctx context.Context, bucket string, obj ObjectLayer) error {
+func checkBucketExist(ctx context.Context, bucket string, obj getBucketInfoI) error {
 	_, err := obj.GetBucketInfo(ctx, bucket)
 	if err != nil {
 		return err

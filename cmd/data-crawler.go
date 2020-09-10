@@ -609,8 +609,9 @@ func (i *crawlItem) transformMetaDir() {
 
 // actionMeta contains information used to apply actions.
 type actionMeta struct {
-	oi          ObjectInfo
-	numVersions int // The number of versions of this object
+	oi               ObjectInfo
+	successorModTime time.Time // The modtime of the successor version
+	numVersions      int       // The number of versions of this object
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -643,13 +644,14 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	versionID := meta.oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:         i.objectPath(),
-			UserTags:     meta.oi.UserTags,
-			ModTime:      meta.oi.ModTime,
-			VersionID:    meta.oi.VersionID,
-			DeleteMarker: meta.oi.DeleteMarker,
-			IsLatest:     meta.oi.IsLatest,
-			NumVersions:  meta.numVersions,
+			Name:             i.objectPath(),
+			UserTags:         meta.oi.UserTags,
+			ModTime:          meta.oi.ModTime,
+			VersionID:        meta.oi.VersionID,
+			DeleteMarker:     meta.oi.DeleteMarker,
+			IsLatest:         meta.oi.IsLatest,
+			NumVersions:      meta.numVersions,
+			SuccessorModTime: meta.successorModTime,
 		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
@@ -686,13 +688,14 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	// Recalculate action.
 	action = i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:         i.objectPath(),
-			UserTags:     obj.UserTags,
-			ModTime:      obj.ModTime,
-			VersionID:    obj.VersionID,
-			DeleteMarker: obj.DeleteMarker,
-			IsLatest:     obj.IsLatest,
-			NumVersions:  meta.numVersions,
+			Name:             i.objectPath(),
+			UserTags:         obj.UserTags,
+			ModTime:          obj.ModTime,
+			VersionID:        obj.VersionID,
+			DeleteMarker:     obj.DeleteMarker,
+			IsLatest:         obj.IsLatest,
+			NumVersions:      meta.numVersions,
+			SuccessorModTime: meta.successorModTime,
 		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)

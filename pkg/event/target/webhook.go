@@ -109,7 +109,7 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequest(http.MethodHead, target.args.Endpoint.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, target.args.Endpoint.String(), nil)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err) {
 			return false, errNotConnected
@@ -117,9 +117,9 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 		return false, err
 	}
 
-	resp, err := target.httpClient.Do(req.WithContext(ctx))
+	resp, err := target.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) || err == context.DeadlineExceeded {
+		if xnet.IsNetworkOrHostDown(err) || errors.Is(err, context.DeadlineExceeded) {
 			return false, errNotConnected
 		}
 		return false, err

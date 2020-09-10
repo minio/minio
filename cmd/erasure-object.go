@@ -695,8 +695,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if n < data.Size() {
-		logger.LogIf(ctx, IncompleteBody{}, logger.Application)
-		return ObjectInfo{}, IncompleteBody{}
+		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
 	for i, w := range writers {

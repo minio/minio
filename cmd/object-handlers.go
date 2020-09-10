@@ -764,7 +764,7 @@ func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.
 // when federation is enabled, ie when globalDNSConfig is non 'nil'.
 //
 // This function is similar to isRemoteCallRequired but specifically for COPY object API
-// if destination and source are same we do not need to check for destnation bucket
+// if destination and source are same we do not need to check for destination bucket
 // to exist locally.
 func isRemoteCopyRequired(ctx context.Context, srcBucket, dstBucket string, objAPI ObjectLayer) bool {
 	if srcBucket == dstBucket {
@@ -2713,7 +2713,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
-		if err != nil {
+		if err != nil && err != dns.ErrNotImplemented {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -2739,22 +2739,35 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if apiErr == ErrNone {
-		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-		objInfo, err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r, opts)
-		if err != nil {
-			switch err.(type) {
-			case BucketNotFound:
-				// When bucket doesn't exist specially handle it.
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
-		}
-		setPutObjHeaders(w, objInfo, true)
+	if apiErr == ErrNoSuchKey {
+		writeSuccessNoContent(w)
+		return
 	}
 
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+	objInfo, err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r, opts)
+	if err != nil {
+		switch err.(type) {
+		case BucketNotFound:
+			// When bucket doesn't exist specially handle it.
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
+	}
+	setPutObjHeaders(w, objInfo, true)
+
 	writeSuccessNoContent(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectRemovedDelete,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 }
 
 // PutObjectLegalHoldHandler - set legal hold configuration to object,
