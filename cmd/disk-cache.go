@@ -85,16 +85,15 @@ type cacheObjects struct {
 }
 
 func (c *cacheObjects) incHitsToMeta(ctx context.Context, dcache *diskCache, bucket, object string, size int64, eTag string, rs *HTTPRangeSpec) error {
-	metadata := make(map[string]string)
-	metadata["etag"] = eTag
+	metadata := map[string]string{"etag": eTag}
 	return dcache.SaveMetadata(ctx, bucket, object, metadata, size, rs, "", true)
 }
 
 // Backend metadata could have changed through server side copy - reset cache metadata if that is the case
 func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *diskCache, bucket, object string, bkObjectInfo, cacheObjInfo ObjectInfo, rs *HTTPRangeSpec) error {
 
-	bkMeta := make(map[string]string)
-	cacheMeta := make(map[string]string)
+	bkMeta := make(map[string]string, len(bkObjectInfo.UserDefined))
+	cacheMeta := make(map[string]string, len(cacheObjInfo.UserDefined))
 	for k, v := range bkObjectInfo.UserDefined {
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata

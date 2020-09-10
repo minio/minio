@@ -427,10 +427,7 @@ type DecryptBlocksReader struct {
 }
 
 func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
-	m := make(map[string]string)
-	for k, v := range d.metadata {
-		m[k] = v
-	}
+	m := cloneMSS(d.metadata)
 	// Initialize the first decrypter; new decrypters will be
 	// initialized in Read() operation as needed.
 	var key []byte

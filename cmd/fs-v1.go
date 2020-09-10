@@ -1121,10 +1121,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	data := r.Reader
 
 	// No metadata is set, allocate a new one.
-	meta := make(map[string]string)
-	for k, v := range opts.UserDefined {
-		meta[k] = v
-	}
+	meta := cloneMSS(opts.UserDefined)
 	var err error
 
 	// Validate if bucket name is valid and exists.

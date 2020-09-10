@@ -731,7 +731,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, toObjectErr(err, bucket, object)
 	}
 	// Save additional metadata.
-	if len(fsMeta.Meta) == 0 {
+	if fsMeta.Meta == nil {
 		fsMeta.Meta = make(map[string]string)
 	}
 	fsMeta.Meta["etag"] = s3MD5
