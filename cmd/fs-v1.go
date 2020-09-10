@@ -635,10 +635,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 			fsMeta = fs.defaultFsJSON(srcObject)
 		}
 
-		fsMeta.Meta = map[string]string{}
-		for k, v := range srcInfo.UserDefined {
-			fsMeta.Meta[k] = v
-		}
+		fsMeta.Meta = cloneMSS(srcInfo.UserDefined)
 		fsMeta.Meta["etag"] = srcInfo.ETag
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)

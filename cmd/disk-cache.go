@@ -166,7 +166,7 @@ func (c *cacheObjects) DeleteObjects(ctx context.Context, bucket string, objects
 
 // construct a metadata k-v map
 func getMetadata(objInfo ObjectInfo) map[string]string {
-	metadata := make(map[string]string)
+	metadata := make(map[string]string, len(objInfo.UserDefined)+4)
 	metadata["etag"] = objInfo.ETag
 	metadata["content-type"] = objInfo.ContentType
 	if objInfo.ContentEncoding != "" {
@@ -334,11 +334,12 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
+	userDefined := getMetadata(bkReader.ObjInfo)
 	go func() {
 		putErr := dcache.Put(ctx, bucket, object,
 			io.LimitReader(pipeReader, bkReader.ObjInfo.Size),
 			bkReader.ObjInfo.Size, nil, ObjectOptions{
-				UserDefined: getMetadata(bkReader.ObjInfo),
+				UserDefined: userDefined,
 			}, false)
 		// close the write end of the pipe, so the error gets
 		// propagated to getObjReader

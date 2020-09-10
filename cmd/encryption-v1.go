@@ -388,12 +388,7 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 		object:            object,
 		customerKeyHeader: h.Get(crypto.SSECKey),
 		copySource:        copySource,
-	}
-
-	w.metadata = map[string]string{}
-	// Copy encryption metadata for internal use.
-	for k, v := range oi.UserDefined {
-		w.metadata[k] = v
+		metadata:          cloneMSS(oi.UserDefined),
 	}
 
 	if w.copySource {
