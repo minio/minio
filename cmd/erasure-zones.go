@@ -40,6 +40,9 @@ type erasureZones struct {
 	GatewayUnsupported
 
 	zones []*erasureSets
+
+	// Shut down async operations
+	shutdown context.CancelFunc
 }
 
 func (z *erasureZones) SingleZone() bool {
@@ -79,7 +82,7 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 			return nil, err
 		}
 	}
-
+	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
 	return z, nil
 }
@@ -218,6 +221,7 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 }
 
 func (z *erasureZones) Shutdown(ctx context.Context) error {
+	defer z.shutdown()
 	if z.SingleZone() {
 		return z.zones[0].Shutdown(ctx)
 	}
@@ -237,7 +241,6 @@ func (z *erasureZones) Shutdown(ctx context.Context) error {
 		}
 		// let's the rest shutdown
 	}
-
 	return nil
 }
 

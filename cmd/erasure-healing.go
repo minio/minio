@@ -29,16 +29,6 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
-func (er erasureObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
-	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
-}
-
-func (er erasureObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return madmin.HealResultItem{}, NotImplemented{}
-}
-
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
