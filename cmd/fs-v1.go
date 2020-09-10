@@ -502,13 +502,13 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		atomic.AddInt64(&fs.activeIOCount, -1)
 	}()
 
-	var bucketInfos []BucketInfo
 	entries, err := readDir(fs.fsPath)
 	if err != nil {
 		logger.LogIf(ctx, errDiskNotFound)
 		return nil, toObjectErr(errDiskNotFound)
 	}
 
+	bucketInfos := make([]BucketInfo, 0, len(entries))
 	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
 		if isReservedOrInvalidBucket(entry, false) {
