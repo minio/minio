@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -524,6 +525,20 @@ func (z xlMetaV2) TotalSize() int64 {
 	return total
 }
 
+type versionsSorter []FileInfo
+
+func (v versionsSorter) Len() int      { return len(v) }
+func (v versionsSorter) Swap(i, j int) { v[i], v[j] = v[j], v[i] }
+func (v versionsSorter) Less(i, j int) bool {
+	if v[i].IsLatest {
+		return true
+	}
+	if v[j].IsLatest {
+		return false
+	}
+	return v[i].ModTime.After(v[j].ModTime)
+}
+
 // ListVersions lists current versions, and current deleted
 // versions returns error for unexpected entries.
 func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
@@ -562,6 +577,7 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 		break
 	}
 
+	sort.Sort(versionsSorter(versions))
 	return versions, latestModTime, nil
 }
 
