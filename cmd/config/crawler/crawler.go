@@ -47,7 +47,7 @@ var (
 		config.HelpKV{
 			Key:         BitrotScan,
 			Description: `perform bitrot scan on disks when checking objects during crawl`,
-			Optional:    false,
+			Optional:    true,
 			Type:        "on|off",
 		},
 	}
