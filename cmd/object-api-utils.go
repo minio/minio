@@ -38,7 +38,7 @@ import (
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
