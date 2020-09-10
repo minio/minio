@@ -1,16 +1,16 @@
 version: '3.7'
 
-# starts 4 docker containers running minio server instances. Each
-# minio server's web interface will be accessible on the host at port
-# 9001 through 9004.
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
 services:
   minio1:
     image: minio/minio:RELEASE.2020-09-08T23-05-18Z
     volumes:
       - data1-1:/data1
       - data1-2:/data2
-    ports:
-      - "9001:9000"
+    expose:
+      - "9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -26,8 +26,8 @@ services:
     volumes:
       - data2-1:/data1
       - data2-2:/data2
-    ports:
-      - "9002:9000"
+    expose:
+      - "9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -43,8 +43,8 @@ services:
     volumes:
       - data3-1:/data1
       - data3-2:/data2
-    ports:
-      - "9003:9000"
+    expose:
+      - "9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -60,8 +60,8 @@ services:
     volumes:
       - data4-1:/data1
       - data4-2:/data2
-    ports:
-      - "9004:9000"
+    expose:
+      - "9000"
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -71,6 +71,18 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+
+  nginx:
+    image: nginx:1.19.2-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
 
 ## By default this config uses default local driver,
 ## For custom volumes replace with volume driver configuration.

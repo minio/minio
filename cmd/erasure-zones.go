@@ -40,6 +40,9 @@ type erasureZones struct {
 	GatewayUnsupported
 
 	zones []*erasureSets
+
+	// Shut down async operations
+	shutdown context.CancelFunc
 }
 
 func (z *erasureZones) SingleZone() bool {
@@ -79,7 +82,7 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 			return nil, err
 		}
 	}
-
+	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
 	return z, nil
 }
@@ -218,6 +221,7 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 }
 
 func (z *erasureZones) Shutdown(ctx context.Context) error {
+	defer z.shutdown()
 	if z.SingleZone() {
 		return z.zones[0].Shutdown(ctx)
 	}
@@ -237,7 +241,6 @@ func (z *erasureZones) Shutdown(ctx context.Context) error {
 		}
 		// let's the rest shutdown
 	}
-
 	return nil
 }
 
@@ -908,7 +911,7 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, false)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet+1, false)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -1277,7 +1280,7 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
+			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet+1)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)

@@ -240,7 +240,6 @@ func TestDataUsageUpdate(t *testing.T) {
 				t.Fatal("got nil result")
 			}
 			if w.flatten {
-				t.Log(e.Children)
 				*e = got.flatten(*e)
 			}
 			if e.Size != int64(w.size) {

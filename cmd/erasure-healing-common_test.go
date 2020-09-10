@@ -99,6 +99,7 @@ func TestListOnlineDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
+	defer obj.Shutdown(context.Background())
 	defer removeRoots(disks)
 
 	type tamperKind int
@@ -265,6 +266,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
+	defer obj.Shutdown(context.Background())
 	defer removeRoots(disks)
 
 	bucket := "bucket"
