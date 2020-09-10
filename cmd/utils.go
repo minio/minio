@@ -113,10 +113,8 @@ func getWriteQuorum(drive int) int {
 }
 
 // cloneMSS will clone a map[string]string.
+// If input is nil an empty map is returned, not nil.
 func cloneMSS(v map[string]string) map[string]string {
-	if v == nil {
-		return nil
-	}
 	r := make(map[string]string, len(v))
 	for k, v := range v {
 		r[k] = v
