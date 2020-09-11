@@ -26,9 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio-go/v7/pkg/set"
-
 	"github.com/coredns/coredns/plugin/etcd/msg"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"go.etcd.io/etcd/v3/clientv3"
 )
 
@@ -214,6 +213,11 @@ func (c *CoreDNS) DeleteRecord(record SrvRecord) error {
 	return nil
 }
 
+// String stringer name for this implementation of dns.Store
+func (c *CoreDNS) String() string {
+	return "etcdDNS"
+}
+
 // CoreDNS - represents dns config for coredns server.
 type CoreDNS struct {
 	domainNames []string
@@ -223,13 +227,13 @@ type CoreDNS struct {
 	etcdClient  *clientv3.Client
 }
 
-// Option - functional options pattern style
-type Option func(*CoreDNS)
+// EtcdOption - functional options pattern style
+type EtcdOption func(*CoreDNS)
 
 // DomainNames set a list of domain names used by this CoreDNS
 // client setting, note this will fail if set to empty when
 // constructor initializes.
-func DomainNames(domainNames []string) Option {
+func DomainNames(domainNames []string) EtcdOption {
 	return func(args *CoreDNS) {
 		args.domainNames = domainNames
 	}
@@ -237,14 +241,14 @@ func DomainNames(domainNames []string) Option {
 
 // DomainIPs set a list of custom domain IPs, note this will
 // fail if set to empty when constructor initializes.
-func DomainIPs(domainIPs set.StringSet) Option {
+func DomainIPs(domainIPs set.StringSet) EtcdOption {
 	return func(args *CoreDNS) {
 		args.domainIPs = domainIPs
 	}
 }
 
 // DomainPort - is a string version of server port
-func DomainPort(domainPort string) Option {
+func DomainPort(domainPort string) EtcdOption {
 	return func(args *CoreDNS) {
 		args.domainPort = domainPort
 	}
@@ -253,14 +257,14 @@ func DomainPort(domainPort string) Option {
 // CoreDNSPath - custom prefix on etcd to populate DNS
 // service records, optional and can be empty.
 // if empty then c.prefixPath is used i.e "/skydns"
-func CoreDNSPath(prefix string) Option {
+func CoreDNSPath(prefix string) EtcdOption {
 	return func(args *CoreDNS) {
 		args.prefixPath = prefix
 	}
 }
 
 // NewCoreDNS - initialize a new coreDNS set/unset values.
-func NewCoreDNS(cfg clientv3.Config, setters ...Option) (Store, error) {
+func NewCoreDNS(cfg clientv3.Config, setters ...EtcdOption) (Store, error) {
 	etcdClient, err := clientv3.New(cfg)
 	if err != nil {
 		return nil, err

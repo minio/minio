@@ -388,12 +388,7 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 		object:            object,
 		customerKeyHeader: h.Get(crypto.SSECKey),
 		copySource:        copySource,
-	}
-
-	w.metadata = map[string]string{}
-	// Copy encryption metadata for internal use.
-	for k, v := range oi.UserDefined {
-		w.metadata[k] = v
+		metadata:          cloneMSS(oi.UserDefined),
 	}
 
 	if w.copySource {
@@ -432,10 +427,7 @@ type DecryptBlocksReader struct {
 }
 
 func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
-	m := make(map[string]string)
-	for k, v := range d.metadata {
-		m[k] = v
-	}
+	m := cloneMSS(d.metadata)
 	// Initialize the first decrypter; new decrypters will be
 	// initialized in Read() operation as needed.
 	var key []byte

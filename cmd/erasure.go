@@ -81,6 +81,14 @@ func (er erasureObjects) SetDriveCount() int {
 func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(er.getDisks())
+	select {
+	case _, ok := <-er.mrfOpCh:
+		if ok {
+			close(er.mrfOpCh)
+		}
+	default:
+		close(er.mrfOpCh)
+	}
 	return nil
 }
 
@@ -243,19 +251,6 @@ func (er erasureObjects) StorageInfo(ctx context.Context, local bool) (StorageIn
 		endpoints = localEndpoints
 	}
 	return getStorageInfo(disks, endpoints)
-}
-
-// GetMetrics - is not implemented and shouldn't be called.
-func (er erasureObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return &Metrics{}, NotImplemented{}
-}
-
-// CrawlAndGetDataUsage collects usage from all buckets.
-// updates are sent as different parts of the underlying
-// structure has been traversed.
-func (er erasureObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
-	return NotImplemented{API: "CrawlAndGetDataUsage"}
 }
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
@@ -438,10 +433,4 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	saverWg.Wait()
 
 	return nil
-}
-
-// Health shouldn't be called directly - will panic
-func (er erasureObjects) Health(ctx context.Context, _ HealthOptions) HealthResult {
-	logger.CriticalIf(ctx, NotImplemented{})
-	return HealthResult{}
 }
