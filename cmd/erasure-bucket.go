@@ -243,7 +243,10 @@ func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceD
 	// If we reduce quorum to nil, means we have deleted buckets properly
 	// on some servers in quorum, we should look for volumeNotEmpty errors
 	// and delete those buckets as well.
-	deleteDanglingBucket(ctx, storageDisks, dErrs, bucket)
+	//
+	// let this call succeed, even if client cancels the context
+	// this is to ensure that we don't leave any stale content
+	deleteDanglingBucket(context.Background(), storageDisks, dErrs, bucket)
 
 	return nil
 }
