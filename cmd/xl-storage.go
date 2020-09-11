@@ -913,6 +913,18 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 		if st, err := os.Stat(pathJoin(volumeDir, dirPath, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
 			return nil, errFileNotFound
 		}
+	} else if marker == "" {
+		// If we are asked for an object and it exists, no need to walk parent.
+		xlMetaBuf, err := ioutil.ReadFile(pathJoin(volumeDir, dirPath, xlStorageFormatFile))
+		if err == nil {
+			fiv, err := getFileInfoVersions(xlMetaBuf, volume, dirPath)
+			if err == nil {
+				ch = make(chan FileInfoVersions, 1)
+				ch <- fiv
+				close(ch)
+				return ch, nil
+			}
+		}
 	}
 
 	ch = make(chan FileInfoVersions)
