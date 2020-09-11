@@ -29,29 +29,20 @@ type TreeWalkResult struct {
 }
 
 // Return entries that have prefix prefixEntry.
-// Note: input entries are expected to be sorted.
+// The supplied entries are modified and the returned string is a subslice of entries.
 func filterMatchingPrefix(entries []string, prefixEntry string) []string {
-	start := 0
-	end := len(entries)
-	for {
-		if start == end {
-			break
-		}
-		if HasPrefix(entries[start], prefixEntry) {
-			break
-		}
-		start++
+	if len(entries) == 0 || prefixEntry == "" {
+		return entries
 	}
-	for {
-		if start == end {
-			break
+	// Write to the beginning of entries.
+	dst := entries[:0]
+	for _, s := range entries {
+		if !strings.HasPrefix(s, prefixEntry) {
+			continue
 		}
-		if HasPrefix(entries[end-1], prefixEntry) {
-			break
-		}
-		end--
+		dst = append(dst, s)
 	}
-	return entries[start:end]
+	return dst
 }
 
 // xl.ListDir returns entries with trailing "/" for directories. At the object layer
@@ -101,11 +92,11 @@ type IsLeafFunc func(string, string) bool
 type IsLeafDirFunc func(string, string) bool
 
 func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf IsLeafFunc) ([]string, bool) {
-	// Listing needs to be sorted.
-	sort.Strings(entries)
-
 	// Filter entries that have the prefix prefixEntry.
 	entries = filterMatchingPrefix(entries, prefixEntry)
+
+	// Listing needs to be sorted.
+	sort.Strings(entries)
 
 	// Can isLeaf() check be delayed till when it has to be sent down the
 	// TreeWalkResult channel?
@@ -123,7 +114,9 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 
 	// Sort again after removing trailing "/" for objects as the previous sort
 	// does not hold good anymore.
-	sort.Strings(entries)
+	if !sort.StringsAreSorted(entries) {
+		sort.Strings(entries)
+	}
 	return entries, false
 }
 
