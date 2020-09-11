@@ -341,7 +341,10 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 	// check if the version is not "null"
 	if !bytes.Equal(j.VersionID[:], uv[:]) {
 		versionID = uuid.UUID(j.VersionID).String()
+	} else {
+		versionID = nullVersionID
 	}
+
 	fi := FileInfo{
 		Volume:    volume,
 		Name:      path,
@@ -358,7 +361,10 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	// check if the version is not "null"
 	if !bytes.Equal(j.VersionID[:], uv[:]) {
 		versionID = uuid.UUID(j.VersionID).String()
+	} else {
+		versionID = nullVersionID
 	}
+
 	fi := FileInfo{
 		Volume:    volume,
 		Name:      path,
