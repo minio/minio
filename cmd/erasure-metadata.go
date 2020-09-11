@@ -103,11 +103,17 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 			IsDir:  true,
 		}
 	}
+
+	versionID := fi.VersionID
+	if globalBucketVersioningSys.Enabled(bucket) && versionID == "" {
+		versionID = nullVersionID
+	}
+
 	objInfo := ObjectInfo{
 		IsDir:           false,
 		Bucket:          bucket,
 		Name:            object,
-		VersionID:       fi.VersionID,
+		VersionID:       versionID,
 		IsLatest:        fi.IsLatest,
 		DeleteMarker:    fi.Deleted,
 		Size:            fi.Size,
