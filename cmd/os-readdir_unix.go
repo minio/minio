@@ -198,7 +198,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			// Use temp buffer to append a slash to avoid string concat.
 			tmp = tmp[:len(name)+1]
 			copy(tmp, name)
-			tmp[len(name)-1] = '/' // SlashSeparator
+			tmp[len(tmp)-1] = '/' // SlashSeparator
 			entries = append(entries, string(tmp))
 		}
 		count--
