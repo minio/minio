@@ -280,10 +280,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	fi.DataDir = mustGetUUID()
 	fi.ModTime = UTCNow()
-	fi.Metadata = map[string]string{}
-	for k, v := range opts.UserDefined {
-		fi.Metadata[k] = v
-	}
+	fi.Metadata = cloneMSS(opts.UserDefined)
 
 	uploadID := mustGetUUID()
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
@@ -555,10 +552,7 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		return result, err
 	}
 
-	result.UserDefined = map[string]string{}
-	for k, v := range fi.Metadata {
-		result.UserDefined[k] = v
-	}
+	result.UserDefined = cloneMSS(fi.Metadata)
 	return result, nil
 }
 
@@ -606,10 +600,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.UploadID = uploadID
 	result.MaxParts = maxParts
 	result.PartNumberMarker = partNumberMarker
-	result.UserDefined = map[string]string{}
-	for k, v := range fi.Metadata {
-		result.UserDefined[k] = v
-	}
+	result.UserDefined = cloneMSS(fi.Metadata)
 
 	// For empty number of parts or maxParts as zero, return right here.
 	if len(fi.Parts) == 0 || maxParts == 0 {

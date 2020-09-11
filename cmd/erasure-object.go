@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -122,7 +123,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	tempObj := mustGetUUID()
 
 	// Cleanup in case of xl.meta writing failure
-	defer er.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum)
+	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
 
 	// Write unique `xl.meta` for each disk.
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
@@ -599,7 +600,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Delete temporary object in the event of failure.
 	// If PutObject succeeded there would be no temporary
 	// object to delete.
-	defer er.deleteObject(ctx, minioMetaTmpBucket, tempObj, writeQuorum)
+	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
 
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
@@ -818,7 +819,9 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			err := cleanupDir(ctx, disks[index], minioMetaTmpBucket, tmpObj)
+			tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			err := cleanupDir(tctx, disks[index], minioMetaTmpBucket, tmpObj)
 			if err != nil && err != errVolumeNotFound {
 				return err
 			}

@@ -24,4 +24,5 @@ type Store interface {
 	List() (map[string][]SrvRecord, error)
 	DeleteRecord(record SrvRecord) error
 	Close() error
+	String() string
 }
