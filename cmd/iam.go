@@ -1125,7 +1125,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	objectAPI := newObjectLayerWithoutSafeModeFn()
 	if objectAPI == nil || sys == nil || sys.store == nil {
-		return cred, false
+		return cred, true
 	}
 
 	sys.store.rlock()

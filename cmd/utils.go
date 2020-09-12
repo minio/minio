@@ -604,6 +604,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	if prefix != "" {
 		object = prefix
 	}
+
 	reqInfo := &logger.ReqInfo{
 		DeploymentID: globalDeploymentID,
 		RequestID:    w.Header().Get(xhttp.AmzRequestID),

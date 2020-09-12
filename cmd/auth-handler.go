@@ -333,6 +333,9 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// Populate payload again to handle it in HTTP handler.
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	}
+	if cred.AccessKey != "" {
+		logger.GetReqInfo(ctx).AccessKey = cred.AccessKey
+	}
 
 	if cred.AccessKey == "" {
 		if globalPolicySys.IsAllowed(policy.Args{
