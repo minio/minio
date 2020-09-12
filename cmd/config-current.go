@@ -25,8 +25,8 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
-	"github.com/minio/minio/cmd/config/etcd/dns"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
@@ -321,6 +321,19 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
+	if dnsURL, dnsUser, dnsPass, ok := env.LookupEnv(config.EnvDNSWebhook); ok {
+		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
+			dns.Authentication(dnsUser, dnsPass),
+			dns.RootCAs(globalRootCAs))
+		if err != nil {
+			if globalIsGateway {
+				logger.FatalIf(err, "Unable to initialize remote webhook DNS config")
+			} else {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+			}
+		}
+	}
+
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
 		if globalIsGateway {
@@ -342,19 +355,25 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 
-		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil && globalDNSConfig == nil {
-			globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
-				dns.DomainNames(globalDomainNames),
-				dns.DomainIPs(globalDomainIPs),
-				dns.DomainPort(globalMinioPort),
-				dns.CoreDNSPath(etcdCfg.CoreDNSPath),
-			)
-			if err != nil {
-				if globalIsGateway {
-					logger.FatalIf(err, "Unable to initialize DNS config")
-				} else {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
-						globalDomainNames, err))
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
+			if globalDNSConfig != nil {
+				// if global DNS is already configured, indicate with a warning, incase
+				// users are confused.
+				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", globalDNSConfig))
+			} else {
+				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+					dns.DomainNames(globalDomainNames),
+					dns.DomainIPs(globalDomainIPs),
+					dns.DomainPort(globalMinioPort),
+					dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+				)
+				if err != nil {
+					if globalIsGateway {
+						logger.FatalIf(err, "Unable to initialize DNS config")
+					} else {
+						logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+							globalDomainNames, err))
+					}
 				}
 			}
 		}
