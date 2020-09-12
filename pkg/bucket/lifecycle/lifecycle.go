@@ -27,6 +27,7 @@ var (
 	errLifecycleTooManyRules = Errorf("Lifecycle configuration allows a maximum of 1000 rules")
 	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
 	errLifecycleDuplicateID  = Errorf("Lifecycle configuration has rule with the same ID. Rule ID must be unique.")
+	errXMLNotWellFormed      = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
 )
 
 // Action represents a delete action or other transition
@@ -154,7 +155,7 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 		// be expired; if set to false the policy takes no action. This
 		// cannot be specified with Days or Date in a Lifecycle
 		// Expiration Policy.
-		if rule.Expiration.DeleteMarker {
+		if rule.Expiration.DeleteMarker.val {
 			rules = append(rules, rule)
 			continue
 		}
@@ -193,7 +194,7 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 	}
 
 	for _, rule := range lc.FilterActionableRules(obj) {
-		if obj.DeleteMarker && obj.NumVersions == 1 && bool(rule.Expiration.DeleteMarker) {
+		if obj.DeleteMarker && obj.NumVersions == 1 && rule.Expiration.DeleteMarker.val {
 			// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
 			// Only latest marker is removed. If set to true, the delete marker will be expired;
 			// if set to false the policy takes no action. This cannot be specified with Days or
