@@ -398,6 +398,11 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	globalAPIConfig.init(apiConfig, setDriveCount)
 
+	// Initialize remote instance transport once.
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
+	})
+
 	if globalIsErasure {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 		if err != nil {

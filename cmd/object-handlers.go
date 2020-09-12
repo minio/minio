@@ -711,17 +711,17 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 }
 
 // getRemoteInstanceTransport contains a singleton roundtripper.
-var getRemoteInstanceTransport *http.Transport
-var getRemoteInstanceTransportLongTO *http.Transport
-var getRemoteInstanceTransportOnce sync.Once
+var (
+	getRemoteInstanceTransport     *http.Transport
+	getRemoteInstanceTransportOnce sync.Once
+)
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
+	if newObjectLayerFn() == nil {
+		return nil, errServerNotInitialized
+	}
 
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
@@ -730,29 +730,6 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsSSL,
 		Transport: getRemoteInstanceTransport,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return core, nil
-}
-
-// Returns a minio-go Client configured to access remote host described by destDNSRecord
-// Applicable only in a federated deployment.
-// The transport does not contain any timeout except for dialing.
-func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.Core, error) {
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
-
-	cred := getReqAccessCred(r, globalServerRegion)
-	// In a federated deployment, all the instances share config files
-	// and hence expected to have same credentials.
-	core, err := miniogo.NewCore(host, &miniogo.Options{
-		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
-		Secure:    globalIsSSL,
-		Transport: getRemoteInstanceTransportLongTO,
 	})
 	if err != nil {
 		return nil, err
@@ -1222,7 +1199,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -1932,7 +1909,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
