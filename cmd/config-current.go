@@ -455,7 +455,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	// Enable auto-encryption if enabled
 	globalAutoEncryption = kmsCfg.AutoEncryption
-	if globalAutoEncryption {
+	if globalAutoEncryption && !globalIsGateway {
 		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
 	}
 
