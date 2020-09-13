@@ -666,9 +666,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	bucket := mux.Vars(r)["bucket"]
 
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
-
 	// Require Content-Length to be set in the request
 	size := r.ContentLength
 	if size < 0 {

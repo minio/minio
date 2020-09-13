@@ -459,38 +459,16 @@ func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string
 }
 
 func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	var nsUnlocker = func() {}
-
-	// Acquire lock
-	if lockType != noLock {
-		lock := z.NewNSLock(ctx, bucket, object)
-		switch lockType {
-		case writeLock:
-			if err = lock.GetLock(globalOperationTimeout); err != nil {
-				return nil, err
-			}
-			nsUnlocker = lock.Unlock
-		case readLock:
-			if err = lock.GetRLock(globalOperationTimeout); err != nil {
-				return nil, err
-			}
-			nsUnlocker = lock.RUnlock
-		}
-	}
-
 	for _, zone := range z.zones {
 		gr, err = zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
-			nsUnlocker()
 			return gr, err
 		}
-		gr.cleanUpFns = append(gr.cleanUpFns, nsUnlocker)
 		return gr, nil
 	}
-	nsUnlocker()
 	if opts.VersionID != "" {
 		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -498,17 +476,6 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 }
 
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	// Lock the object before reading.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer lk.RUnlock()
-
-	if z.SingleZone() {
-		return z.zones[0].GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
-	}
-
 	for _, zone := range z.zones {
 		if err := zone.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -518,20 +485,13 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 		}
 		return nil
 	}
+	if opts.VersionID != "" {
+		return VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
 	return ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Lock the object before reading.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.RUnlock()
-
-	if z.SingleZone() {
-		return z.zones[0].GetObjectInfo(ctx, bucket, object, opts)
-	}
 	for _, zone := range z.zones {
 		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
 		if err != nil {
@@ -550,13 +510,6 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - writes an object to least used erasure zone.
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
-	// Lock the object.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.Unlock()
-
 	if z.SingleZone() {
 		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
 	}
@@ -571,13 +524,6 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 }
 
 func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Acquire a write lock before deleting the object.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.Unlock()
-
 	if z.SingleZone() {
 		return z.zones[0].DeleteObject(ctx, bucket, object, opts)
 	}
@@ -629,15 +575,7 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 }
 
 func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Check if this request is only metadata update.
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	if !cpSrcDstSame {
-		lk := z.NewNSLock(ctx, dstBucket, dstObject)
-		if err := lk.GetLock(globalOperationTimeout); err != nil {
-			return objInfo, err
-		}
-		defer lk.Unlock()
-	}
 
 	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
@@ -645,12 +583,19 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	}
 
 	if cpSrcDstSame && srcInfo.metadataOnly {
+		// Version ID is set for the destination and source == destination version ID.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
+		// Destination is not versioned and source version ID is empty
+		// perform an in-place update.
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
+		// Destination is versioned, source is not destination version,
+		// as a special case look for if the source object is not legacy
+		// from older format, for older format we will rewrite them as
+		// newer using PutObject() - this is an optimization to save space
 		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
 			// CopyObject optimization where we don't create an entire copy
 			// of the content, instead we add a reference.
@@ -1384,12 +1329,6 @@ func (z *erasureZones) PutObjectPart(ctx context.Context, bucket, object, upload
 		return PartInfo{}, err
 	}
 
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return PartInfo{}, err
-	}
-	defer uploadIDLock.Unlock()
-
 	if z.SingleZone() {
 		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
@@ -1419,12 +1358,6 @@ func (z *erasureZones) GetMultipartInfo(ctx context.Context, bucket, object, upl
 	if err := checkListPartsArgs(ctx, bucket, object, z); err != nil {
 		return MultipartInfo{}, err
 	}
-
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return MultipartInfo{}, err
-	}
-	defer uploadIDLock.RUnlock()
 
 	if z.SingleZone() {
 		return z.zones[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
@@ -1456,12 +1389,6 @@ func (z *erasureZones) ListObjectParts(ctx context.Context, bucket, object, uplo
 		return ListPartsInfo{}, err
 	}
 
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return ListPartsInfo{}, err
-	}
-	defer uploadIDLock.RUnlock()
-
 	if z.SingleZone() {
 		return z.zones[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
@@ -1484,25 +1411,19 @@ func (z *erasureZones) ListObjectParts(ctx context.Context, bucket, object, uplo
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
-func (z *erasureZones) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
+func (z *erasureZones) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
 	if err := checkAbortMultipartArgs(ctx, bucket, object, z); err != nil {
 		return err
 	}
 
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer uploadIDLock.Unlock()
-
 	if z.SingleZone() {
-		return z.zones[0].AbortMultipartUpload(ctx, bucket, object, uploadID)
+		return z.zones[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 	}
 
 	for _, zone := range z.zones {
-		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
+		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
-			return zone.AbortMultipartUpload(ctx, bucket, object, uploadID)
+			return zone.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1523,22 +1444,6 @@ func (z *erasureZones) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err = checkCompleteMultipartArgs(ctx, bucket, object, z); err != nil {
 		return objInfo, err
 	}
-
-	// Hold read-locks to verify uploaded parts, also disallows
-	// parallel part uploads as well.
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err = uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return objInfo, err
-	}
-	defer uploadIDLock.RUnlock()
-
-	// Hold namespace to complete the transaction, only hold
-	// if uploadID can be held exclusively.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
-		return objInfo, err
-	}
-	defer lk.Unlock()
 
 	if z.SingleZone() {
 		return z.zones[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)

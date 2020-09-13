@@ -653,7 +653,7 @@ func (l *s3Objects) ListObjectParts(ctx context.Context, bucket string, object s
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
-func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string) error {
+func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, opts minio.ObjectOptions) error {
 	err := l.Client.AbortMultipartUpload(ctx, bucket, object, uploadID)
 	return minio.ErrorRespToObjectError(err, bucket, object)
 }
