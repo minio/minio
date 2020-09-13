@@ -177,7 +177,7 @@ mc admin update <minio alias, e.g., myminio>
 - `mc admin update` updates and restarts all servers simultaneously, applications would retry and continue their respective operations upon upgrade.
 - `mc admin update` is disabled in kubernetes/container environments, container environments provide their own mechanisms to rollout of updates.
 - In the case of federated setups `mc admin update` should be run against each cluster individually. Avoid updating `mc` to any new releases until all clusters have been successfully updated.
-- If using `kes` as KMS with MinIO, just replace the binary and restart `kes` more information about `kes` can be found [here](https://github.com/minio/kes/wiki)x
+- If using `kes` as KMS with MinIO, just replace the binary and restart `kes` more information about `kes` can be found [here](https://github.com/minio/kes/wiki)
 - If using Vault as KMS with MinIO, ensure you have followed the Vault upgrade procedure outlined here: https://www.vaultproject.io/docs/upgrading/index.html
 - If using etcd with MinIO for the federation, ensure you have followed the etcd upgrade procedure outlined here: https://github.com/etcd-io/etcd/blob/master/Documentation/upgrades/upgrading-etcd.md
 
