@@ -114,9 +114,8 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 
 	// Sort again after removing trailing "/" for objects as the previous sort
 	// does not hold good anymore.
-	if !sort.StringsAreSorted(entries) {
-		sort.Strings(entries)
-	}
+	sort.Strings(entries)
+
 	return entries, false
 }
 
