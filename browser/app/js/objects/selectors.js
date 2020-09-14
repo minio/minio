@@ -28,5 +28,6 @@ const objectsFilterSelector = state => state.objects.filter
 export const getFilteredObjects = createSelector(
   objectsSelector,
   objectsFilterSelector,
-  (objects, filter) => objects.filter(object => object.name.startsWith(filter))
+  (objects, filter) => objects.filter(
+    object => object.name.toLowerCase().startsWith(filter.toLowerCase()))
 )
