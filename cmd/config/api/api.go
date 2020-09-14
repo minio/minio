@@ -29,15 +29,17 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax      = "requests_max"
-	apiRequestsDeadline = "requests_deadline"
-	apiReadyDeadline    = "ready_deadline"
-	apiCorsAllowOrigin  = "cors_allow_origin"
+	apiRequestsMax             = "requests_max"
+	apiRequestsDeadline        = "requests_deadline"
+	apiReadyDeadline           = "ready_deadline"
+	apiCorsAllowOrigin         = "cors_allow_origin"
+	apiRemoteTransportDeadline = "remote_transport_deadline"
 
-	EnvAPIRequestsMax      = "MINIO_API_REQUESTS_MAX"
-	EnvAPIRequestsDeadline = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIReadyDeadline    = "MINIO_API_READY_DEADLINE"
-	EnvAPICorsAllowOrigin  = "MINIO_API_CORS_ALLOW_ORIGIN"
+	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
+	EnvAPIReadyDeadline           = "MINIO_API_READY_DEADLINE"
+	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
+	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 )
 
 // DefaultKVS - default storage class config
@@ -59,15 +61,20 @@ var (
 			Key:   apiCorsAllowOrigin,
 			Value: "*",
 		},
+		config.KV{
+			Key:   apiRemoteTransportDeadline,
+			Value: "2h",
+		},
 	}
 )
 
 // Config storage class configuration
 type Config struct {
-	APIRequestsMax      int           `json:"requests_max"`
-	APIRequestsDeadline time.Duration `json:"requests_deadline"`
-	APIReadyDeadline    time.Duration `json:"ready_deadline"`
-	APICorsAllowOrigin  []string      `json:"cors_allow_origin"`
+	RequestsMax             int           `json:"requests_max"`
+	RequestsDeadline        time.Duration `json:"requests_deadline"`
+	ReadyDeadline           time.Duration `json:"ready_deadline"`
+	CorsAllowOrigin         []string      `json:"cors_allow_origin"`
+	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -108,10 +115,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	corsAllowOrigin := strings.Split(env.Get(EnvAPICorsAllowOrigin, kvs.Get(apiCorsAllowOrigin)), ",")
+
+	remoteTransportDeadline, err := time.ParseDuration(env.Get(EnvAPIRemoteTransportDeadline, kvs.Get(apiRemoteTransportDeadline)))
+	if err != nil {
+		return cfg, err
+	}
+
 	return Config{
-		APIRequestsMax:      requestsMax,
-		APIRequestsDeadline: requestsDeadline,
-		APIReadyDeadline:    readyDeadline,
-		APICorsAllowOrigin:  corsAllowOrigin,
+		RequestsMax:             requestsMax,
+		RequestsDeadline:        requestsDeadline,
+		ReadyDeadline:           readyDeadline,
+		CorsAllowOrigin:         corsAllowOrigin,
+		RemoteTransportDeadline: remoteTransportDeadline,
 	}, nil
 }
