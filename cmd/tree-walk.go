@@ -37,7 +37,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 	// Write to the beginning of entries.
 	dst := entries[:0]
 	for _, s := range entries {
-		if !strings.HasPrefix(s, prefixEntry) {
+		if !HasPrefix(s, prefixEntry) {
 			continue
 		}
 		dst = append(dst, s)
