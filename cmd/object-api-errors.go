@@ -376,6 +376,13 @@ func (e BucketRemoteTargetNotFound) Error() string {
 	return "Remote target not found: " + e.Bucket
 }
 
+// BucketRemoteConnectionErr remote target connection failure.
+type BucketRemoteConnectionErr GenericError
+
+func (e BucketRemoteConnectionErr) Error() string {
+	return "Remote service endpoint or target bucket not available: " + e.Bucket
+}
+
 // BucketRemoteAlreadyExists remote already exists for this target type.
 type BucketRemoteAlreadyExists GenericError
 

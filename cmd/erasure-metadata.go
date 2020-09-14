@@ -273,7 +273,7 @@ func renameFileInfo(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			if err := disks[index].RenameData(srcBucket, srcEntry, "", dstBucket, dstEntry); err != nil {
+			if err := disks[index].RenameData(ctx, srcBucket, srcEntry, "", dstBucket, dstEntry); err != nil {
 				if !IsErrIgnored(err, ignoredErr...) {
 					return err
 				}
@@ -304,7 +304,7 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 			}
 			// Pick one FileInfo for a disk at index.
 			files[index].Erasure.Index = index + 1
-			return disks[index].WriteMetadata(bucket, prefix, files[index])
+			return disks[index].WriteMetadata(ctx, bucket, prefix, files[index])
 		}, index)
 	}
 

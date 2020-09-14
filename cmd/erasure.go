@@ -139,7 +139,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				// Storage disk is empty, perhaps ignored disk or not available.
 				return errDiskNotFound
 			}
-			info, err := disks[index].DiskInfo()
+			info, err := disks[index].DiskInfo(context.TODO())
 			if err != nil {
 				if !IsErr(err, baseErrs...) {
 					reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
@@ -282,7 +282,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		if d == nil || !d.IsOnline() {
 			continue
 		}
-		di, err := d.DiskInfo()
+		di, err := d.DiskInfo(ctx)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue

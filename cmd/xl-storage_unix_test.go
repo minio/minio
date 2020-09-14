@@ -19,6 +19,7 @@
 package cmd
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path"
@@ -56,7 +57,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 
 	// Attempt to create a volume to verify the permissions later.
 	// MakeVol creates 0777.
-	if err = disk.MakeVol(testCase.volName); err != nil {
+	if err = disk.MakeVol(context.Background(), testCase.volName); err != nil {
 		t.Fatalf("Creating a volume failed with %s expected to pass.", err)
 	}
 	defer os.RemoveAll(tmpPath)
@@ -98,7 +99,7 @@ func TestIsValidUmaskFile(t *testing.T) {
 
 	// Attempt to create a volume to verify the permissions later.
 	// MakeVol creates directory with 0777 perms.
-	if err = disk.MakeVol(testCase.volName); err != nil {
+	if err = disk.MakeVol(context.Background(), testCase.volName); err != nil {
 		t.Fatalf("Creating a volume failed with %s expected to pass.", err)
 	}
 
@@ -106,12 +107,12 @@ func TestIsValidUmaskFile(t *testing.T) {
 
 	// Attempt to create a file to verify the permissions later.
 	// AppendFile creates file with 0666 perms.
-	if err = disk.AppendFile(testCase.volName, pathJoin("hello-world.txt", xlStorageFormatFile), []byte("Hello World")); err != nil {
+	if err = disk.AppendFile(context.Background(), testCase.volName, pathJoin("hello-world.txt", xlStorageFormatFile), []byte("Hello World")); err != nil {
 		t.Fatalf("Create a file `test` failed with %s expected to pass.", err)
 	}
 
 	// CheckFile - stat the file.
-	if err := disk.CheckFile(testCase.volName, "hello-world.txt"); err != nil {
+	if err := disk.CheckFile(context.Background(), testCase.volName, "hello-world.txt"); err != nil {
 		t.Fatalf("Stat failed with %s expected to pass.", err)
 	}
 }

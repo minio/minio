@@ -69,14 +69,14 @@ func TestFilterMatchingPrefix(t *testing.T) {
 // Helper function that creates a volume and files in it.
 func createNamespace(disk StorageAPI, volume string, files []string) error {
 	// Make a volume.
-	err := disk.MakeVol(volume)
+	err := disk.MakeVol(context.Background(), volume)
 	if err != nil {
 		return err
 	}
 
 	// Create files.
 	for _, file := range files {
-		err = disk.AppendFile(volume, file, []byte{})
+		err = disk.AppendFile(context.Background(), volume, file, []byte{})
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func createNamespace(disk StorageAPI, volume string, files []string) error {
 // disks - used for doing disk.ListDir()
 func listDirFactory(ctx context.Context, disk StorageAPI, isLeaf IsLeafFunc) ListDirFunc {
 	return func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-		entries, err := disk.ListDir(volume, dirPath, -1)
+		entries, err := disk.ListDir(ctx, volume, dirPath, -1)
 		if err != nil {
 			return false, nil, false
 		}
@@ -163,7 +163,7 @@ func TestTreeWalk(t *testing.T) {
 	}
 
 	isLeafDir := func(bucket, leafPath string) bool {
-		entries, _ := disk.ListDir(bucket, leafPath, 1)
+		entries, _ := disk.ListDir(context.Background(), bucket, leafPath, 1)
 		return len(entries) == 0
 	}
 
@@ -207,7 +207,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	}
 
 	isLeafDir := func(bucket, leafPath string) bool {
-		entries, _ := disk.ListDir(bucket, leafPath, 1)
+		entries, _ := disk.ListDir(context.Background(), bucket, leafPath, 1)
 		return len(entries) == 0
 	}
 
@@ -275,7 +275,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}
 
 	isLeafDir := func(bucket, leafPath string) bool {
-		entries, _ := disk1.ListDir(bucket, leafPath, 1)
+		entries, _ := disk1.ListDir(context.Background(), bucket, leafPath, 1)
 		return len(entries) == 0
 	}
 
@@ -389,7 +389,7 @@ func TestSortedness(t *testing.T) {
 	}
 
 	isLeafDir := func(bucket, leafPath string) bool {
-		entries, _ := disk1.ListDir(bucket, leafPath, 1)
+		entries, _ := disk1.ListDir(context.Background(), bucket, leafPath, 1)
 		return len(entries) == 0
 	}
 
@@ -469,7 +469,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 
 	isLeafDir := func(bucket, leafPath string) bool {
-		entries, _ := disk1.ListDir(bucket, leafPath, 1)
+		entries, _ := disk1.ListDir(context.Background(), bucket, leafPath, 1)
 		return len(entries) == 0
 	}
 

@@ -43,7 +43,9 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if !result.Healthy {
 		// return how many drives are being healed if any
-		w.Header().Set("X-Minio-Healing-Drives", strconv.Itoa(result.HealingDrives))
+		if result.HealingDrives > 0 {
+			w.Header().Set("X-Minio-Healing-Drives", strconv.Itoa(result.HealingDrives))
+		}
 		// As a maintenance call we are purposefully asked to be taken
 		// down, this is for orchestrators to know if we can safely
 		// take this server down, return appropriate error.
