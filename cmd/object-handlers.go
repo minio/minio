@@ -189,7 +189,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			End:            offset + length,
 		}
 
-		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
+		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	}
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
@@ -891,10 +891,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	var lock = noLock
-	if !cpSrcDstSame {
-		lock = readLock
-	}
 	checkCopyPrecondFn := func(o ObjectInfo) bool {
 		if objectAPI.IsEncryptionSupported() {
 			if _, err := DecryptObjectInfo(&o, r); err != nil {
@@ -905,6 +901,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckPrecondFn = checkCopyPrecondFn
+
+	// FIXME: a possible race exists between a parallel
+	// GetObject v/s CopyObject with metadata updates, ideally
+	// we should be holding write lock here but it is not
+	// possible due to other constraints such as knowing
+	// the type of source content etc.
+	lock := noLock
+	if !cpSrcDstSame {
+		lock = readLock
+	}
 
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
@@ -1227,6 +1233,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if api.CacheAPI() != nil {
 			copyObjectFn = api.CacheAPI().CopyObject
 		}
+
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
 		objInfo, err = copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
@@ -1305,9 +1312,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
@@ -1847,7 +1851,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return false
 	}
 	getOpts.CheckPrecondFn = checkCopyPartPrecondFn
-
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
@@ -2055,9 +2058,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
@@ -2308,7 +2308,8 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if err := abortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
+	opts := ObjectOptions{}
+	if err := abortMultipartUpload(ctx, bucket, object, uploadID, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -2355,7 +2356,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	var opts ObjectOptions
+	opts := ObjectOptions{}
 	listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2521,9 +2522,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	var objectEncryptionKey []byte
 	var isEncrypted, ssec bool
-	var opts ObjectOptions
 	if objectAPI.IsEncryptionSupported() {
-		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2546,7 +2546,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	partsMap := make(map[string]PartInfo)
 	if isEncrypted {
 		maxParts := 10000
-		listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, maxParts, opts)
+		listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, maxParts, ObjectOptions{})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2601,7 +2601,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(w)
-	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
+	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, ObjectOptions{})
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.
 	headerWritten := <-completeDoneCh
@@ -2735,16 +2735,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	setPutObjHeaders(w, objInfo, true)
 
 	writeSuccessNoContent(w)
-
-	sendEvent(eventArgs{
-		EventName:    event.ObjectRemovedDelete,
-		BucketName:   bucket,
-		Object:       objInfo,
-		ReqParams:    extractReqParams(r),
-		RespElements: extractRespElements(w),
-		UserAgent:    r.UserAgent(),
-		Host:         handlers.GetSourceIP(r),
-	})
 }
 
 // PutObjectLegalHoldHandler - set legal hold configuration to object,
