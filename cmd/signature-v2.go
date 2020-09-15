@@ -321,7 +321,7 @@ func compareSignatureV2(sig1, sig2 string) bool {
 // Return canonical headers.
 func canonicalizedAmzHeadersV2(headers http.Header) string {
 	var keys []string
-	keyval := make(map[string]string)
+	keyval := make(map[string]string, len(headers))
 	for key := range headers {
 		lkey := strings.ToLower(key)
 		if !strings.HasPrefix(lkey, "x-amz-") {

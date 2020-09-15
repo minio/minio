@@ -25,39 +25,39 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 var (
 	defaultOperatorContextTimeout = 10 * time.Second
-	// ErrNotImplemented - Indicates no entries were found for the given key (directory)
+	// ErrNotImplemented - Indicates the functionality which is not implemented
 	ErrNotImplemented = errors.New("The method is not implemented")
-	globalRootCAs     *x509.CertPool
 )
 
-// RegisterGlobalCAs register the global root CAs
-func RegisterGlobalCAs(CAs *x509.CertPool) {
-	globalRootCAs = CAs
-}
+func (c *OperatorDNS) addAuthHeader(r *http.Request) error {
+	if c.username == "" || c.password == "" {
+		return nil
+	}
 
-func (c *OperatorDNS) addAuthHeader(r *http.Request) (*http.Request, error) {
 	claims := &jwt.StandardClaims{
 		ExpiresAt: int64(15 * time.Minute),
-		Issuer:    c.Username,
+		Issuer:    c.username,
 		Subject:   config.EnvDNSWebhook,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS512, claims)
-	ss, err := token.SignedString([]byte(c.Password))
+	ss, err := token.SignedString([]byte(c.password))
 	if err != nil {
-		return r, err
+		return err
 	}
 
 	r.Header.Set("Authorization", "Bearer "+ss)
-	return r, nil
+	return nil
 }
 
 func (c *OperatorDNS) endpoint(bucket string, delete bool) (string, error) {
@@ -67,11 +67,7 @@ func (c *OperatorDNS) endpoint(bucket string, delete bool) (string, error) {
 	}
 	q := u.Query()
 	q.Add("bucket", bucket)
-	if delete {
-		q.Add("delete", "true")
-	} else {
-		q.Add("delete", "false")
-	}
+	q.Add("delete", strconv.FormatBool(delete))
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }
@@ -88,16 +84,16 @@ func (c *OperatorDNS) Put(bucket string) error {
 	if err != nil {
 		return err
 	}
-	req, err = c.addAuthHeader(req)
-	if err != nil {
+	if err = c.addAuthHeader(req); err != nil {
 		return err
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if err := c.Delete(bucket); err != nil {
-			return err
+		if derr := c.Delete(bucket); derr != nil {
+			return derr
 		}
 	}
+	xhttp.DrainBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("request to create the service for bucket %s, failed with status %s", bucket, resp.Status)
 	}
@@ -116,14 +112,14 @@ func (c *OperatorDNS) Delete(bucket string) error {
 	if err != nil {
 		return err
 	}
-	req, err = c.addAuthHeader(req)
-	if err != nil {
+	if err = c.addAuthHeader(req); err != nil {
 		return err
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
+	xhttp.DrainBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("request to delete the service for bucket %s, failed with status %s", bucket, resp.Status)
 	}
@@ -158,43 +154,68 @@ func (c *OperatorDNS) Get(bucket string) (srvRecords []SrvRecord, err error) {
 	return nil, ErrNotImplemented
 }
 
+// String stringer name for this implementation of dns.Store
+func (c *OperatorDNS) String() string {
+	return "webhookDNS"
+}
+
 // OperatorDNS - represents dns config for MinIO k8s operator.
 type OperatorDNS struct {
 	httpClient *http.Client
 	Endpoint   string
-	Username   string
-	Password   string
+	rootCAs    *x509.CertPool
+	username   string
+	password   string
+}
+
+// OperatorOption - functional options pattern style for OperatorDNS
+type OperatorOption func(*OperatorDNS)
+
+// Authentication - custom username and password for authenticating at the endpoint
+func Authentication(username, password string) OperatorOption {
+	return func(args *OperatorDNS) {
+		args.username = username
+		args.password = password
+	}
+}
+
+// RootCAs - add custom trust certs pool
+func RootCAs(CAs *x509.CertPool) OperatorOption {
+	return func(args *OperatorDNS) {
+		args.rootCAs = CAs
+	}
 }
 
 // NewOperatorDNS - initialize a new K8S Operator DNS set/unset values.
-func NewOperatorDNS(endpoint, user, pwd string) (Store, error) {
-	if endpoint == "" || user == "" || pwd == "" {
+func NewOperatorDNS(endpoint string, setters ...OperatorOption) (Store, error) {
+	if endpoint == "" {
 		return nil, errors.New("invalid argument")
 	}
+
 	args := &OperatorDNS{
-		Username: user,
-		Password: pwd,
 		Endpoint: endpoint,
-		httpClient: &http.Client{
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				DialContext: (&net.Dialer{
-					Timeout:   3 * time.Second,
-					KeepAlive: 5 * time.Second,
-				}).DialContext,
-				ResponseHeaderTimeout: 3 * time.Second,
-				TLSHandshakeTimeout:   3 * time.Second,
-				ExpectContinueTimeout: 3 * time.Second,
-				TLSClientConfig: &tls.Config{
-					RootCAs: globalRootCAs,
-				},
-				// Go net/http automatically unzip if content-type is
-				// gzip disable this feature, as we are always interested
-				// in raw stream.
-				DisableCompression: true,
+	}
+	for _, setter := range setters {
+		setter(args)
+	}
+	args.httpClient = &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   3 * time.Second,
+				KeepAlive: 5 * time.Second,
+			}).DialContext,
+			ResponseHeaderTimeout: 3 * time.Second,
+			TLSHandshakeTimeout:   3 * time.Second,
+			ExpectContinueTimeout: 3 * time.Second,
+			TLSClientConfig: &tls.Config{
+				RootCAs: args.rootCAs,
 			},
+			// Go net/http automatically unzip if content-type is
+			// gzip disable this feature, as we are always interested
+			// in raw stream.
+			DisableCompression: true,
 		},
 	}
-
 	return args, nil
 }

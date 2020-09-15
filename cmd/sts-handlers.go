@@ -88,7 +88,7 @@ func registerSTSRouter(router *mux.Router) {
 		ctypeOk := wildcard.MatchSimple("application/x-www-form-urlencoded*", r.Header.Get(xhttp.ContentType))
 		noQueries := len(r.URL.Query()) == 0
 		return ctypeOk && noQueries
-	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithJWT))
+	}).HandlerFunc(httpTraceAll(sts.AssumeRoleWithSSO))
 
 	// AssumeRoleWithClientGrants
 	stsRouter.Methods(http.MethodPost).HandlerFunc(httpTraceAll(sts.AssumeRoleWithClientGrants)).
@@ -258,8 +258,8 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	writeSuccessResponseXML(w, encodeResponse(assumeRoleResponse))
 }
 
-func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AssumeRoleJWTCommon")
+func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AssumeRoleSSOCommon")
 
 	// Parse the incoming form data.
 	if err := r.ParseForm(); err != nil {
@@ -274,6 +274,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 
 	action := r.Form.Get(stsAction)
 	switch action {
+	case ldapIdentity:
+		sts.AssumeRoleWithLDAPIdentity(w, r)
+		return
 	case clientGrants, webIdentity:
 	default:
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("Unsupported action %s", action))
@@ -417,7 +420,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithJWT(w http.ResponseWriter, r *http.Requ
 // Eg:-
 //    $ curl https://minio:9000/?Action=AssumeRoleWithWebIdentity&WebIdentityToken=<jwt>
 func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *http.Request) {
-	sts.AssumeRoleWithJWT(w, r)
+	sts.AssumeRoleWithSSO(w, r)
 }
 
 // AssumeRoleWithClientGrants - implementation of AWS STS extension API supporting
@@ -426,7 +429,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *h
 // Eg:-
 //    $ curl https://minio:9000/?Action=AssumeRoleWithClientGrants&Token=<jwt>
 func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *http.Request) {
-	sts.AssumeRoleWithJWT(w, r)
+	sts.AssumeRoleWithSSO(w, r)
 }
 
 // AssumeRoleWithLDAPIdentity - implements user auth against LDAP server

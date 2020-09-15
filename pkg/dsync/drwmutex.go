@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/retry"
 )
 
 // Indicator if logging is enabled.
@@ -132,6 +131,10 @@ func (dm *DRWMutex) GetRLock(ctx context.Context, id, source string, opts Option
 	return dm.lockBlocking(ctx, id, source, isReadLock, opts)
 }
 
+const (
+	lockRetryInterval = 50 * time.Millisecond
+)
+
 // lockBlocking will try to acquire either a read or a write lock
 //
 // The function will loop using a built-in timing randomized back-off
@@ -140,40 +143,50 @@ func (dm *DRWMutex) GetRLock(ctx context.Context, id, source string, opts Option
 func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadLock bool, opts Options) (locked bool) {
 	restClnts := dm.clnt.GetLockersFn()
 
-	retryCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	defer cancel()
+	// Create lock array to capture the successful lockers
+	locks := make([]string, len(restClnts))
 
-	// Use incremental back-off algorithm for repeated attempts to acquire the lock
-	for range retry.NewTimer(retryCtx) {
-		// Create temp array on stack.
-		locks := make([]string, len(restClnts))
-
-		// Try to acquire the lock.
-		locked = lock(retryCtx, dm.clnt, &locks, id, source, isReadLock, opts.Tolerance, dm.Names...)
-		if !locked {
-			continue
+	cleanLocks := func(locks []string) {
+		for i := range locks {
+			locks[i] = ""
 		}
-
-		dm.m.Lock()
-
-		// If success, copy array to object
-		if isReadLock {
-			// Append new array of strings at the end
-			dm.readersLocks = append(dm.readersLocks, make([]string, len(restClnts)))
-			// and copy stack array into last spot
-			copy(dm.readersLocks[len(dm.readersLocks)-1], locks[:])
-		} else {
-			copy(dm.writeLocks, locks[:])
-		}
-
-		dm.m.Unlock()
-		return locked
 	}
 
-	// Failed to acquire the lock on this attempt, incrementally wait
-	// for a longer back-off time and try again afterwards.
-	return locked
+	retryCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
+	defer cancel()
+
+	for {
+		// cleanup any older state, re-use the lock slice.
+		cleanLocks(locks)
+
+		select {
+		case <-retryCtx.Done():
+			// Caller context canceled or we timedout,
+			// return false anyways for both situations.
+			return false
+		default:
+			// Try to acquire the lock.
+			if locked = lock(retryCtx, dm.clnt, &locks, id, source, isReadLock, opts.Tolerance, dm.Names...); locked {
+				dm.m.Lock()
+
+				// If success, copy array to object
+				if isReadLock {
+					// Append new array of strings at the end
+					dm.readersLocks = append(dm.readersLocks, make([]string, len(restClnts)))
+					// and copy stack array into last spot
+					copy(dm.readersLocks[len(dm.readersLocks)-1], locks[:])
+				} else {
+					copy(dm.writeLocks, locks[:])
+				}
+
+				dm.m.Unlock()
+				return locked
+			}
+			time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
+		}
+	}
 }
 
 // lock tries to acquire the distributed lock, returning true or false.

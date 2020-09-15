@@ -488,11 +488,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 	return storageInfo, errs
 }
 
-func (s *erasureSets) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
-	// Use the zone-level implementation instead.
-	return NotImplemented{API: "CrawlAndGetDataUsage"}
-}
-
 // Shutdown shutsdown all erasure coded sets in parallel
 // returns error upon first error.
 func (s *erasureSets) Shutdown(ctx context.Context) error {
@@ -510,7 +505,14 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 			return err
 		}
 	}
-
+	select {
+	case _, ok := <-s.disksConnectEvent:
+		if ok {
+			close(s.disksConnectEvent)
+		}
+	default:
+		close(s.disksConnectEvent)
+	}
 	return nil
 }
 
@@ -587,11 +589,6 @@ func (s *erasureSets) getHashedSet(input string) (set *erasureObjects) {
 // GetBucketInfo - returns bucket info from one of the erasure coded set.
 func (s *erasureSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error) {
 	return s.getHashedSet("").GetBucketInfo(ctx, bucket)
-}
-
-// ListObjectsV2 lists all objects in bucket filtered by prefix
-func (s *erasureSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (result ListObjectsV2Info, err error) {
-	return result, NotImplemented{}
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
@@ -765,9 +762,13 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 
 	// Check if this request is only metadata update.
 	if cpSrcDstSame && srcInfo.metadataOnly {
+		// Version ID is set for the destination and source == destination version ID.
+		// perform an in-place update.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
+		// Destination is not versioned and source version ID is empty
+		// perform an in-place update.
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
@@ -1038,22 +1039,6 @@ func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, mark
 	return entryChs
 }
 
-// ListObjectVersions - implements listing of objects across disks, each disk is indepenently
-// walked and merged at this layer. Resulting value through the merge process sends
-// the data in lexically sorted order.
-func (s *erasureSets) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionIDMarker, delimiter string, maxKeys int) (loi ListObjectVersionsInfo, err error) {
-	// Shouldn't be called directly, caller Zones already has an implementation
-	return loi, NotImplemented{}
-}
-
-// ListObjects - implements listing of objects across disks, each disk is indepenently
-// walked and merged at this layer. Resulting value through the merge process sends
-// the data in lexically sorted order.
-func (s *erasureSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-	// Shouldn't be called directly, caller Zones already has an implementation
-	return loi, NotImplemented{}
-}
-
 func (s *erasureSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
 	// In list multipart uploads we are going to treat input prefix as the object,
 	// this means that we are not supporting directory navigation.
@@ -1089,8 +1074,8 @@ func (s *erasureSets) ListObjectParts(ctx context.Context, bucket, object, uploa
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
-func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
-	return s.getHashedSet(object).AbortMultipartUpload(ctx, bucket, object, uploadID)
+func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
+	return s.getHashedSet(object).AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 }
 
 // CompleteMultipartUpload - completes a pending multipart transaction, on hashedSet based on object name.
@@ -1619,18 +1604,6 @@ func (s *erasureSets) DeleteObjectTags(ctx context.Context, bucket, object strin
 // GetObjectTags - get object tags from an existing object
 func (s *erasureSets) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
 	return s.getHashedSet(object).GetObjectTags(ctx, bucket, object, opts)
-}
-
-// GetMetrics - no op
-func (s *erasureSets) GetMetrics(ctx context.Context) (*Metrics, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return &Metrics{}, NotImplemented{}
-}
-
-// Health shouldn't be called directly - will panic
-func (s *erasureSets) Health(ctx context.Context, _ HealthOptions) HealthResult {
-	logger.CriticalIf(ctx, NotImplemented{})
-	return HealthResult{}
 }
 
 // maintainMRFList gathers the list of successful partial uploads

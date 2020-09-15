@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -665,9 +665,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	bucket := mux.Vars(r)["bucket"]
-
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength

@@ -268,7 +268,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 			PartSizes:          make([]int64, len(fi.Parts)),
 			PartActualSizes:    make([]int64, len(fi.Parts)),
 			MetaSys:            make(map[string][]byte),
-			MetaUser:           make(map[string]string),
+			MetaUser:           make(map[string]string, len(fi.Metadata)),
 		},
 	}
 

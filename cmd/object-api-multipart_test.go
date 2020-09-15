@@ -66,7 +66,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	err = obj.AbortMultipartUpload(context.Background(), bucket, "\\", uploadID)
+	err = obj.AbortMultipartUpload(context.Background(), bucket, "\\", uploadID, opts)
 	if err != nil {
 		switch err.(type) {
 		case InvalidUploadID:
@@ -114,7 +114,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for i, testCase := range abortTestCases {
-		err = obj.AbortMultipartUpload(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID)
+		err = obj.AbortMultipartUpload(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, opts)
 		if testCase.expectedErrType == nil && err != nil {
 			t.Errorf("Test %d, unexpected err is received: %v, expected:%v\n", i+1, err, testCase.expectedErrType)
 		}
@@ -146,7 +146,8 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	err = obj.AbortMultipartUpload(context.Background(), bucket, object, "abc")
+	opts := ObjectOptions{}
+	err = obj.AbortMultipartUpload(context.Background(), bucket, object, "abc", opts)
 	switch err.(type) {
 	case InvalidUploadID:
 	default:
@@ -1565,7 +1566,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	}
 
 	for i, testCase := range testCases {
-		actualResult, actualErr := obj.ListObjectParts(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.partNumberMarker, testCase.maxParts, ObjectOptions{})
+		actualResult, actualErr := obj.ListObjectParts(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.partNumberMarker, testCase.maxParts, opts)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, actualErr.Error())
 		}
@@ -1801,6 +1802,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	for _, testCase := range testCases {
 		testCase := testCase
 		t.(*testing.T).Run("", func(t *testing.T) {
+			opts = ObjectOptions{}
 			actualResult, actualErr := obj.CompleteMultipartUpload(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
 			if actualErr != nil && testCase.shouldPass {
 				t.Errorf("%s: Expected to pass, but failed with: <ERROR> %s", instanceType, actualErr)

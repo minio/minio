@@ -85,16 +85,15 @@ type cacheObjects struct {
 }
 
 func (c *cacheObjects) incHitsToMeta(ctx context.Context, dcache *diskCache, bucket, object string, size int64, eTag string, rs *HTTPRangeSpec) error {
-	metadata := make(map[string]string)
-	metadata["etag"] = eTag
+	metadata := map[string]string{"etag": eTag}
 	return dcache.SaveMetadata(ctx, bucket, object, metadata, size, rs, "", true)
 }
 
 // Backend metadata could have changed through server side copy - reset cache metadata if that is the case
 func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *diskCache, bucket, object string, bkObjectInfo, cacheObjInfo ObjectInfo, rs *HTTPRangeSpec) error {
 
-	bkMeta := make(map[string]string)
-	cacheMeta := make(map[string]string)
+	bkMeta := make(map[string]string, len(bkObjectInfo.UserDefined))
+	cacheMeta := make(map[string]string, len(cacheObjInfo.UserDefined))
 	for k, v := range bkObjectInfo.UserDefined {
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			// Do not need to send any internal metadata
@@ -166,7 +165,7 @@ func (c *cacheObjects) DeleteObjects(ctx context.Context, bucket string, objects
 
 // construct a metadata k-v map
 func getMetadata(objInfo ObjectInfo) map[string]string {
-	metadata := make(map[string]string)
+	metadata := make(map[string]string, len(objInfo.UserDefined)+4)
 	metadata["etag"] = objInfo.ETag
 	metadata["content-type"] = objInfo.ContentType
 	if objInfo.ContentEncoding != "" {
@@ -334,11 +333,12 @@ func (c *cacheObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	// Initialize pipe.
 	pipeReader, pipeWriter := io.Pipe()
 	teeReader := io.TeeReader(bkReader, pipeWriter)
+	userDefined := getMetadata(bkReader.ObjInfo)
 	go func() {
 		putErr := dcache.Put(ctx, bucket, object,
 			io.LimitReader(pipeReader, bkReader.ObjInfo.Size),
 			bkReader.ObjInfo.Size, nil, ObjectOptions{
-				UserDefined: getMetadata(bkReader.ObjInfo),
+				UserDefined: userDefined,
 			}, false)
 		// close the write end of the pipe, so the error gets
 		// propagated to getObjReader

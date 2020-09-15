@@ -57,7 +57,7 @@ var (
 
 // FromMinioClientMetadata converts minio metadata to map[string]string
 func FromMinioClientMetadata(metadata map[string][]string) map[string]string {
-	mm := map[string]string{}
+	mm := make(map[string]string, len(metadata))
 	for k, v := range metadata {
 		mm[http.CanonicalHeaderKey(k)] = v[0]
 	}
@@ -227,7 +227,7 @@ func ToMinioClientObjectInfoMetadata(metadata map[string]string) map[string][]st
 
 // ToMinioClientMetadata converts metadata to map[string]string
 func ToMinioClientMetadata(metadata map[string]string) map[string]string {
-	mm := make(map[string]string)
+	mm := make(map[string]string, len(metadata))
 	for k, v := range metadata {
 		mm[http.CanonicalHeaderKey(k)] = v
 	}

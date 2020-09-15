@@ -68,6 +68,9 @@ func newBgHealSequence() *healSequence {
 }
 
 func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
+	if globalBackgroundHealState == nil {
+		return madmin.BgHealState{}, false
+	}
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if !ok {
 		return madmin.BgHealState{}, false

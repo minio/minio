@@ -882,7 +882,7 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	data := r.Reader
 
 	if data.Size() > azureBlockSize/2 {
-		if len(opts.UserDefined) == 0 {
+		if opts.UserDefined == nil {
 			opts.UserDefined = map[string]string{}
 		}
 
@@ -1238,7 +1238,7 @@ func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uplo
 // AbortMultipartUpload - Not Implemented.
 // There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
 // gets deleted after one week.
-func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) (err error) {
+func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (err error) {
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return err
 	}

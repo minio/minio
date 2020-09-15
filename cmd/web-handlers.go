@@ -40,7 +40,7 @@ import (
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/browser"
-	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -427,7 +427,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			}
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		core, err := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(sr))
+		core, err := getRemoteInstanceClient(r, getHostFromSrv(sr))
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -653,7 +653,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 			}
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		core, err := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(sr))
+		core, err := getRemoteInstanceClient(r, getHostFromSrv(sr))
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}

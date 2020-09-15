@@ -112,6 +112,16 @@ func getWriteQuorum(drive int) int {
 	return quorum
 }
 
+// cloneMSS will clone a map[string]string.
+// If input is nil an empty map is returned, not nil.
+func cloneMSS(v map[string]string) map[string]string {
+	r := make(map[string]string, len(v))
+	for k, v := range v {
+		r[k] = v
+	}
+	return r
+}
+
 // URI scheme constants.
 const (
 	httpScheme  = "http"
