@@ -225,7 +225,6 @@ func (m *fsMetaV1) ReadFrom(ctx context.Context, lk *lock.LockedFile) (n int64, 
 	}
 
 	if len(fsMetaBuf) == 0 {
-		logger.LogIf(ctx, io.EOF)
 		return 0, io.EOF
 	}
 
