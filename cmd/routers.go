@@ -108,9 +108,8 @@ func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
 		}
 	}
 
-	// Add API router, additionally all server mode support encryption
-	// but don't allow SSE-KMS.
-	registerAPIRouter(router, true, false)
+	// Add API router
+	registerAPIRouter(router)
 
 	router.Use(registerMiddlewares)
 
