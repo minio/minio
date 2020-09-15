@@ -637,8 +637,8 @@ func (z *erasureZones) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 
 func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 
-	var zonesEntryChs [][]FileInfoCh
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
@@ -653,8 +653,8 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 	var eof bool
 	var prevPrefix string
 
-	var zonesEntriesInfos [][]FileInfo
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -756,9 +756,9 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 
 	recursive := true
 
-	var zonesEntryChs [][]FileInfoCh
-	var zonesEndWalkCh []chan struct{}
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
@@ -848,9 +848,9 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		recursive = false
 	}
 
-	var zonesEntryChs [][]FileInfoCh
-	var zonesEndWalkCh []chan struct{}
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
@@ -1051,8 +1051,8 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 // mergeZonesEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
 func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfoVersions) {
 	var i = 0
-	var zonesEntriesInfos [][]FileInfoVersions
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfoVersions, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -1082,8 +1082,8 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 // mergeZonesEntriesCh - merges FileInfo channel to entries upto maxKeys.
 func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfo) {
 	var i = 0
-	var zonesEntriesInfos [][]FileInfo
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -1218,9 +1218,9 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		recursive = false
 	}
 
-	var zonesEntryChs [][]FileInfoVersionsCh
-	var zonesEndWalkCh []chan struct{}
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoVersionsCh, 0, len(z.zones))
+	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
@@ -1737,18 +1737,15 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		return nil
 	}
 
-	var zonesEntryChs [][]FileInfoCh
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zoneDrivesPerSet := make([]int, 0, len(z.zones))
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
-	}
-
-	var zoneDrivesPerSet []int
-	for _, zone := range z.zones {
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
-	var zonesEntriesInfos [][]FileInfo
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -1779,23 +1776,20 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 type HealObjectFn func(bucket, object, versionID string) error
 
 func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	var zonesEntryChs [][]FileInfoVersionsCh
-
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
+
+	zonesEntryChs := make([][]FileInfoVersionsCh, 0, len(z.zones))
+	zoneDrivesPerSet := make([]int, 0, len(z.zones))
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
 			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh))
-	}
-
-	var zoneDrivesPerSet []int
-	for _, zone := range z.zones {
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
-	var zonesEntriesInfos [][]FileInfoVersions
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfoVersions, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))

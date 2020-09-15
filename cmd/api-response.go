@@ -408,7 +408,7 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 // generates ListBucketsResponse from array of BucketInfo which can be
 // serialized to match XML and JSON API spec output.
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
-	var listbuckets []Bucket
+	listbuckets := make([]Bucket, 0, len(buckets))
 	var data = ListBucketsResponse{}
 	var owner = Owner{}
 
@@ -428,8 +428,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
-	var versions []ObjectVersion
-	var prefixes []CommonPrefix
+	versions := make([]ObjectVersion, 0, len(resp.Objects))
 	var owner = Owner{}
 	var data = ListVersionsResponse{}
 
@@ -473,6 +472,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 	data.VersionIDMarker = versionIDMarker
 	data.IsTruncated = resp.IsTruncated
 
+	prefixes := make([]CommonPrefix, 0, len(resp.Prefixes))
 	for _, prefix := range resp.Prefixes {
 		var prefixItem = CommonPrefix{}
 		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
@@ -484,8 +484,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
 func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
-	var contents []Object
-	var prefixes []CommonPrefix
+	contents := make([]Object, 0, len(resp.Objects))
 	var owner = Owner{}
 	var data = ListObjectsResponse{}
 
@@ -517,9 +516,10 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 	data.Marker = s3EncodeName(marker, encodingType)
 	data.Delimiter = s3EncodeName(delimiter, encodingType)
 	data.MaxKeys = maxKeys
-
 	data.NextMarker = s3EncodeName(resp.NextMarker, encodingType)
 	data.IsTruncated = resp.IsTruncated
+
+	prefixes := make([]CommonPrefix, 0, len(resp.Prefixes))
 	for _, prefix := range resp.Prefixes {
 		var prefixItem = CommonPrefix{}
 		prefixItem.Prefix = s3EncodeName(prefix, encodingType)
@@ -531,8 +531,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
 func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
-	var contents []Object
-	var commonPrefixes []CommonPrefix
+	contents := make([]Object, 0, len(objects))
 	var owner = Owner{}
 	var data = ListObjectsV2Response{}
 
@@ -585,6 +584,8 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 	data.ContinuationToken = base64.StdEncoding.EncodeToString([]byte(token))
 	data.NextContinuationToken = base64.StdEncoding.EncodeToString([]byte(nextToken))
 	data.IsTruncated = isTruncated
+
+	commonPrefixes := make([]CommonPrefix, 0, len(prefixes))
 	for _, prefix := range prefixes {
 		var prefixItem = CommonPrefix{}
 		prefixItem.Prefix = s3EncodeName(prefix, encodingType)

@@ -654,7 +654,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	if err != nil {
 		return nil, errDiskNotFound
 	}
-	var volsInfo []VolInfo
+	volsInfo := make([]VolInfo, 0, len(entries))
 	for _, entry := range entries {
 		if !HasSuffix(entry, SlashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.

@@ -47,7 +47,7 @@ func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request)
 
 	ctx := newContext(r, w, "GetLocks")
 
-	var llockers []map[string][]lockRequesterInfo
+	llockers := make([]map[string][]lockRequesterInfo, 0, len(globalLockServers))
 	for _, llocker := range globalLockServers {
 		llockers = append(llockers, llocker.DupLockMap())
 	}

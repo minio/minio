@@ -829,8 +829,9 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan s
 }
 
 func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
-	var remoteHosts []*xnet.Host
-	for _, hostStr := range GetRemotePeers(endpointZones) {
+	peers := GetRemotePeers(endpointZones)
+	remoteHosts := make([]*xnet.Host, 0, len(peers))
+	for _, hostStr := range peers {
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
