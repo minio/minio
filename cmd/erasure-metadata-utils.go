@@ -119,7 +119,7 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 	metadataArray := make([]FileInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
-	// Read `xl.meta` parallelly across disks.
+	// Read `xl.meta` in parallel across disks.
 	for index := range disks {
 		index := index
 		g.Go(func() (err error) {

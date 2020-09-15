@@ -19,6 +19,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"sync"
@@ -42,14 +43,14 @@ var direntPool = sync.Pool{
 // value used to represent a syscall.DT_UNKNOWN Dirent.Type.
 const unexpectedFileMode os.FileMode = os.ModeNamedPipe | os.ModeSocket | os.ModeDevice
 
-func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode, err error) {
+func parseDirEnt(buf []byte) (consumed int, name []byte, typ os.FileMode, err error) {
 	// golang.org/issue/15653
 	dirent := (*syscall.Dirent)(unsafe.Pointer(&buf[0]))
 	if v := unsafe.Offsetof(dirent.Reclen) + unsafe.Sizeof(dirent.Reclen); uintptr(len(buf)) < v {
-		return consumed, name, typ, fmt.Errorf("buf size of %d smaller than dirent header size %d", len(buf), v)
+		return consumed, nil, typ, fmt.Errorf("buf size of %d smaller than dirent header size %d", len(buf), v)
 	}
 	if len(buf) < int(dirent.Reclen) {
-		return consumed, name, typ, fmt.Errorf("buf size %d < record length %d", len(buf), dirent.Reclen)
+		return consumed, nil, typ, fmt.Errorf("buf size %d < record length %d", len(buf), dirent.Reclen)
 	}
 	consumed = int(dirent.Reclen)
 	if direntInode(dirent) == 0 { // File absent in directory.
@@ -72,11 +73,10 @@ func parseDirEnt(buf []byte) (consumed int, name string, typ os.FileMode, err er
 	nameBuf := (*[unsafe.Sizeof(dirent.Name)]byte)(unsafe.Pointer(&dirent.Name[0]))
 	nameLen, err := direntNamlen(dirent)
 	if err != nil {
-		return consumed, name, typ, err
+		return consumed, nil, typ, err
 	}
 
-	name = string(nameBuf[:nameLen])
-	return consumed, name, typ, nil
+	return consumed, nameBuf[:nameLen], typ, nil
 }
 
 // Return all the entries at the directory dirPath.
@@ -116,13 +116,13 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 			return err
 		}
 		boff += consumed
-		if name == "" || name == "." || name == ".." {
+		if len(name) == 0 || bytes.Equal(name, []byte{'.'}) || bytes.Equal(name, []byte{'.', '.'}) {
 			continue
 		}
 		if typ&os.ModeSymlink == os.ModeSymlink {
 			continue
 		}
-		if err = filter(name, typ); err == errDoneForNow {
+		if err = filter(string(name), typ); err == errDoneForNow {
 			// filtering requested to return by caller.
 			return nil
 		}
@@ -142,6 +142,10 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 
 	bufp := direntPool.Get().(*[]byte)
 	defer direntPool.Put(bufp)
+
+	nameTmp := direntPool.Get().(*[]byte)
+	defer direntPool.Put(nameTmp)
+	tmp := *nameTmp
 
 	boff := 0 // starting read position in buf
 	nbuf := 0 // end valid data in buf
@@ -165,14 +169,14 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			return nil, err
 		}
 		boff += consumed
-		if name == "" || name == "." || name == ".." {
+		if len(name) == 0 || bytes.Equal(name, []byte{'.'}) || bytes.Equal(name, []byte{'.', '.'}) {
 			continue
 		}
 		// Fallback for filesystems (like old XFS) that don't
 		// support Dirent.Type and have DT_UNKNOWN (0) there
 		// instead.
 		if typ == unexpectedFileMode {
-			fi, err := os.Lstat(pathJoin(dirPath, name))
+			fi, err := os.Lstat(pathJoin(dirPath, string(name)))
 			if err != nil {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
@@ -189,9 +193,13 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			continue
 		}
 		if typ.IsRegular() {
-			entries = append(entries, name)
+			entries = append(entries, string(name))
 		} else if typ.IsDir() {
-			entries = append(entries, name+SlashSeparator)
+			// Use temp buffer to append a slash to avoid string concat.
+			tmp = tmp[:len(name)+1]
+			copy(tmp, name)
+			tmp[len(tmp)-1] = '/' // SlashSeparator
+			entries = append(entries, string(tmp))
 		}
 		count--
 	}
