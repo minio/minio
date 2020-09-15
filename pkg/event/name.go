@@ -56,12 +56,21 @@ func (name Name) Expand() []Name {
 	case BucketRemoved:
 		return []Name{BucketRemoved}
 	case ObjectAccessedAll:
-		return []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}
+		return []Name{
+			ObjectAccessedGet, ObjectAccessedHead,
+			ObjectAccessedGetRetention, ObjectAccessedGetLegalHold,
+		}
 	case ObjectCreatedAll:
-		return []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy,
-			ObjectCreatedPost, ObjectCreatedPut, ObjectCreatedPutRetention, ObjectCreatedPutLegalHold}
+		return []Name{
+			ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy,
+			ObjectCreatedPost, ObjectCreatedPut,
+			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold,
+		}
 	case ObjectRemovedAll:
-		return []Name{ObjectRemovedDelete}
+		return []Name{
+			ObjectRemovedDelete,
+			ObjectRemovedDeleteMarkerCreated,
+		}
 	default:
 		return []Name{name}
 	}
