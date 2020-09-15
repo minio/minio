@@ -1377,13 +1377,13 @@ MINIO_NOTIFY_NSQ_COMMENT          (sentence)  optionally add a comment to this s
 
 ```sh
 $ mc admin config get myminio/ notify_nsq
-notify_nsq:1 nsqd_address="" queue_dir="" queue_limit="0"  tls_enable="off" tls_skip_verify="off" topic=""
+notify_nsq:1 nsqd_address="" queue_dir="" queue_limit="0"  tls="off" tls_skip_verify="off" topic=""
 ```
 
 Use `mc admin config set` command to update the configuration for the deployment. Restart the MinIO server to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs::1:nsq` at start-up if there were no errors.
 
 ```sh
-$ mc admin config set myminio notify_nsq:1 nsqd_address="127.0.0.1:4150" queue_dir="" queue_limit="0" tls_enable="off" tls_skip_verify="on" topic="minio"
+$ mc admin config set myminio notify_nsq:1 nsqd_address="127.0.0.1:4150" queue_dir="" queue_limit="0" tls="off" tls_skip_verify="on" topic="minio"
 ```
 
 Note that, you can add as many NSQ daemon endpoint configurations as needed by providing an identifier (like "1" in the example above) for the NSQ instance and an object of per-server configuration parameters.
