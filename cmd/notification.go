@@ -1232,7 +1232,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		},
 	}
 
-	if args.EventName != event.ObjectRemovedDelete {
+	if args.EventName != event.ObjectRemovedDelete && args.EventName != event.ObjectRemovedDeleteMarkerCreated {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
 		newEvent.S3.Object.ContentType = args.Object.ContentType

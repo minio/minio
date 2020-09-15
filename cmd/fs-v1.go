@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -502,13 +503,13 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		atomic.AddInt64(&fs.activeIOCount, -1)
 	}()
 
-	var bucketInfos []BucketInfo
 	entries, err := readDir(fs.fsPath)
 	if err != nil {
 		logger.LogIf(ctx, errDiskNotFound)
 		return nil, toObjectErr(errDiskNotFound)
 	}
 
+	bucketInfos := make([]BucketInfo, 0, len(entries))
 	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
 		if isReservedOrInvalidBucket(entry, false) {
@@ -622,8 +623,15 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			logger.LogIf(ctx, err)
-			return oi, toObjectErr(err, srcBucket, srcObject)
+			if !errors.Is(err, errFileNotFound) {
+				logger.LogIf(ctx, err)
+				return oi, toObjectErr(err, srcBucket, srcObject)
+			}
+			wlk, err = fs.rwPool.Create(fsMetaPath)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return oi, toObjectErr(err, srcBucket, srcObject)
+			}
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -1491,8 +1499,15 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 	fsMeta := fsMetaV1{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
 	if err != nil {
-		logger.LogIf(ctx, err)
-		return toObjectErr(err, bucket, object)
+		if !errors.Is(err, errFileNotFound) {
+			logger.LogIf(ctx, err)
+			return toObjectErr(err, bucket, object)
+		}
+		wlk, err = fs.rwPool.Create(fsMetaPath)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return toObjectErr(err, bucket, object)
+		}
 	}
 	// This close will allow for locks to be synchronized on `fs.json`.
 	defer wlk.Close()

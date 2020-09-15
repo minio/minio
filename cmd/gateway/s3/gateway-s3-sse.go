@@ -316,7 +316,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
-		return nil, minio.ErrorRespToObjectError(err)
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	if l.isGWEncrypted(ctx, bucket, object) {
 		object = getGWContentPath(object)
