@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
@@ -55,6 +56,7 @@ func initHelp() {
 		config.KmsKesSubSys:         crypto.DefaultKesKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+		config.CrawlerSubSys:        crawler.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -105,6 +107,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
+		},
+		config.HelpKV{
+			Key:         config.CrawlerSubSys,
+			Description: "manage continuous disk crawling for bucket disk usage, lifecycle, quota and data integrity checks",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -185,6 +191,7 @@ func initHelp() {
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
+		config.CrawlerSubSys:        crawler.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -243,6 +250,10 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	}
 
 	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+		return err
+	}
+
+	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -398,6 +409,11 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	globalAPIConfig.init(apiConfig, setDriveCount)
 
+	// Initialize remote instance transport once.
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
+	})
+
 	if globalIsErasure {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 		if err != nil {
@@ -422,6 +438,10 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 	}
+	globalCrawlerConfig, err = crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to read crawler config: %w", err))
+	}
 
 	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
 	if err != nil {
@@ -435,7 +455,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	// Enable auto-encryption if enabled
 	globalAutoEncryption = kmsCfg.AutoEncryption
-	if globalAutoEncryption {
+	if globalAutoEncryption && !globalIsGateway {
 		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
 	}
 

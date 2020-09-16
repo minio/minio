@@ -659,15 +659,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	bucket := mux.Vars(r)["bucket"]
-
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
 
 	// Require Content-Length to be set in the request
 	size := r.ContentLength

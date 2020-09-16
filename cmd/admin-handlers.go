@@ -1241,7 +1241,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	vars := mux.Vars(r)
+	query := r.URL.Query()
 	obdInfo := madmin.OBDInfo{}
 	obdInfoCh := make(chan madmin.OBDInfo)
 
@@ -1287,7 +1287,13 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	go func() {
 		defer close(obdInfoCh)
 
-		if cpu, ok := vars["syscpu"]; ok && cpu == "true" {
+		if log := query.Get("log"); log == "true" {
+			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, getLocalLogOBD(deadlinedCtx, r))
+			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, globalNotificationSys.LogOBDInfo(deadlinedCtx)...)
+			partialWrite(obdInfo)
+		}
+
+		if cpu := query.Get("syscpu"); cpu == "true" {
 			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)
 
 			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, cpuInfo)
@@ -1295,7 +1301,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if diskHw, ok := vars["sysdiskhw"]; ok && diskHw == "true" {
+		if diskHw := query.Get("sysdiskhw"); diskHw == "true" {
 			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, diskHwInfo)
@@ -1303,7 +1309,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if osInfo, ok := vars["sysosinfo"]; ok && osInfo == "true" {
+		if osInfo := query.Get("sysosinfo"); osInfo == "true" {
 			osInfo := getLocalOsInfoOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, osInfo)
@@ -1311,7 +1317,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if mem, ok := vars["sysmem"]; ok && mem == "true" {
+		if mem := query.Get("sysmem"); mem == "true" {
 			memInfo := getLocalMemOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, memInfo)
@@ -1319,7 +1325,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if proc, ok := vars["sysprocess"]; ok && proc == "true" {
+		if proc := query.Get("sysprocess"); proc == "true" {
 			procInfo := getLocalProcOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, procInfo)
@@ -1327,14 +1333,14 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if config, ok := vars["minioconfig"]; ok && config == "true" {
+		if config := query.Get("minioconfig"); config == "true" {
 			cfg, err := readServerConfig(ctx, objectAPI)
 			logger.LogIf(ctx, err)
 			obdInfo.Minio.Config = cfg
 			partialWrite(obdInfo)
 		}
 
-		if drive, ok := vars["perfdrive"]; ok && drive == "true" {
+		if drive := query.Get("perfdrive"); drive == "true" {
 			// Get drive obd details from local server's drive(s)
 			driveOBDSerial := getLocalDrivesOBD(deadlinedCtx, false, globalEndpoints, r)
 			driveOBDParallel := getLocalDrivesOBD(deadlinedCtx, true, globalEndpoints, r)
@@ -1365,7 +1371,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistErasure {
+		if net := query.Get("perfnet"); net == "true" && globalIsDistErasure {
 			obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
 			partialWrite(obdInfo)
 
@@ -1379,6 +1385,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			obdInfo.Perf.NetParallel = globalNotificationSys.NetOBDParallelInfo(deadlinedCtx)
 			partialWrite(obdInfo)
 		}
+
 	}()
 
 	ticker := time.NewTicker(30 * time.Second)

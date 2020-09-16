@@ -762,9 +762,13 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 
 	// Check if this request is only metadata update.
 	if cpSrcDstSame && srcInfo.metadataOnly {
+		// Version ID is set for the destination and source == destination version ID.
+		// perform an in-place update.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
+		// Destination is not versioned and source version ID is empty
+		// perform an in-place update.
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
 			return srcSet.CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
@@ -1070,8 +1074,8 @@ func (s *erasureSets) ListObjectParts(ctx context.Context, bucket, object, uploa
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
-func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
-	return s.getHashedSet(object).AbortMultipartUpload(ctx, bucket, object, uploadID)
+func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
+	return s.getHashedSet(object).AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 }
 
 // CompleteMultipartUpload - completes a pending multipart transaction, on hashedSet based on object name.

@@ -859,7 +859,7 @@ func (n *hdfsObjects) CompleteMultipartUpload(ctx context.Context, bucket, objec
 	}, nil
 }
 
-func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) (err error) {
+func (n *hdfsObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (err error) {
 	_, err = n.clnt.Stat(n.hdfsPathJoin(bucket))
 	if err != nil {
 		return hdfsToObjectErr(ctx, err, bucket)

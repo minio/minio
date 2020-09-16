@@ -17,12 +17,9 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -247,7 +244,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	//    version is needed, migration is needed etc.
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	for range retry.NewTimer(retryCtx) {
+	for range retry.NewTimerWithJitter(retryCtx, 250*time.Millisecond, 500*time.Millisecond, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
 		if err = txnLk.GetLock(configLockTimeout); err != nil {
@@ -394,6 +391,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
+	logger.AddTarget(globalConsoleSys)
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
@@ -462,27 +460,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	// Annonying hack to ensure that Go doesn't write its own logging,
-	// interleaved with our formatted logging, this allows us to
-	// honor --json and --quiet flag properly.
-	//
-	// Unfortunately we have to resort to this sort of hacky approach
-	// because, Go automatically initializes ErrorLog on its own
-	// and can log without application control.
-	//
-	// This is an implementation issue in Go and should be fixed, but
-	// until then this hack is okay and works for our needs.
-	pr, pw := io.Pipe()
-	go func() {
-		defer pr.Close()
-		scanner := bufio.NewScanner(&contextReader{pr, GlobalContext})
-		for scanner.Scan() {
-			logger.LogIf(GlobalContext, errors.New(scanner.Text()))
-		}
-	}()
-
 	httpServer := xhttp.NewServer([]string{globalMinioAddr}, criticalErrorHandler{corsHandler(handler)}, getCert)
-	httpServer.ErrorLog = log.New(pw, "", 0)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
 	}

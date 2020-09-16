@@ -877,19 +877,3 @@ func newS2CompressReader(r io.Reader) io.ReadCloser {
 	}()
 	return pr
 }
-
-// Returns error if the context is canceled, indicating
-// either client has disconnected
-type contextReader struct {
-	io.ReadCloser
-	ctx context.Context
-}
-
-func (d *contextReader) Read(p []byte) (int, error) {
-	select {
-	case <-d.ctx.Done():
-		return 0, d.ctx.Err()
-	default:
-		return d.ReadCloser.Read(p)
-	}
-}

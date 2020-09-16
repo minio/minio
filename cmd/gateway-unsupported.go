@@ -91,7 +91,7 @@ func (a GatewayUnsupported) ListObjectParts(ctx context.Context, bucket string, 
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
-func (a GatewayUnsupported) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string) error {
+func (a GatewayUnsupported) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, opts ObjectOptions) error {
 	return NotImplemented{}
 }
 

@@ -349,16 +349,22 @@ func ComputeCompleteMultipartMD5(parts []CompletePart) string {
 // parse gateway sse env variable
 func parseGatewaySSE(s string) (gatewaySSE, error) {
 	l := strings.Split(s, ";")
-	var gwSlice = make([]string, 0)
+	var gwSlice gatewaySSE
 	for _, val := range l {
 		v := strings.ToUpper(val)
-		if v == gatewaySSES3 || v == gatewaySSEC {
+		switch v {
+		case "":
+			continue
+		case gatewaySSES3:
+			fallthrough
+		case gatewaySSEC:
 			gwSlice = append(gwSlice, v)
 			continue
+		default:
+			return nil, config.ErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
 		}
-		return nil, config.ErrInvalidGWSSEValue(nil).Msg("gateway SSE cannot be (%s) ", v)
 	}
-	return gatewaySSE(gwSlice), nil
+	return gwSlice, nil
 }
 
 // handle gateway env vars
@@ -372,7 +378,7 @@ func gatewayHandleEnvVars() {
 	}
 
 	gwsseVal := env.Get("MINIO_GATEWAY_SSE", "")
-	if len(gwsseVal) != 0 {
+	if gwsseVal != "" {
 		var err error
 		GlobalGatewaySSE, err = parseGatewaySSE(gwsseVal)
 		if err != nil {

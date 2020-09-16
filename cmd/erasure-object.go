@@ -72,6 +72,11 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, NotImplemented{}
 	}
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+	lk := er.NewNSLock(ctx, dstBucket, dstObject)
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
+		return oi, err
+	}
+	defer lk.Unlock()
 
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
@@ -112,12 +117,13 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
 
+	srcInfo.UserDefined["etag"] = srcInfo.ETag
+
 	// Update `xl.meta` content on each disks.
 	for index := range metaArr {
 		metaArr[index].ModTime = modTime
 		metaArr[index].VersionID = versionID
 		metaArr[index].Metadata = srcInfo.UserDefined
-		metaArr[index].Metadata["etag"] = srcInfo.ETag
 	}
 
 	tempObj := mustGetUUID()
@@ -145,6 +151,32 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return nil, err
 	}
 
+	var unlockOnDefer bool
+	var nsUnlocker = func() {}
+	defer func() {
+		if unlockOnDefer {
+			nsUnlocker()
+		}
+	}()
+
+	// Acquire lock
+	if lockType != noLock {
+		lock := er.NewNSLock(ctx, bucket, object)
+		switch lockType {
+		case writeLock:
+			if err = lock.GetLock(globalOperationTimeout); err != nil {
+				return nil, err
+			}
+			nsUnlocker = lock.Unlock
+		case readLock:
+			if err = lock.GetRLock(globalOperationTimeout); err != nil {
+				return nil, err
+			}
+			nsUnlocker = lock.RUnlock
+		}
+		unlockOnDefer = true
+	}
+
 	// Handler directory request by returning a reader that
 	// returns no bytes.
 	if HasSuffix(object, SlashSeparator) {
@@ -152,7 +184,8 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		if objInfo, err = er.getObjectInfoDir(ctx, bucket, object); err != nil {
 			return nil, toObjectErr(err, bucket, object)
 		}
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts)
+		unlockOnDefer = false
+		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
 	}
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts)
@@ -173,7 +206,8 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
-	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts)
+	unlockOnDefer = false
+	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
 	if nErr != nil {
 		return nil, nErr
 	}
@@ -201,6 +235,13 @@ func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, s
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
 	}
+
+	// Lock the object before reading.
+	lk := er.NewNSLock(ctx, bucket, object)
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
+		return err
+	}
+	defer lk.RUnlock()
 
 	// Start offset cannot be negative.
 	if startOffset < 0 {
@@ -385,6 +426,13 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return info, err
 	}
+
+	// Lock the object before reading.
+	lk := er.NewNSLock(ctx, bucket, object)
+	if err := lk.GetRLock(globalOperationTimeout); err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.RUnlock()
 
 	if HasSuffix(object, SlashSeparator) {
 		info, err = er.getObjectInfoDir(ctx, bucket, object)
@@ -699,6 +747,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
+	lk := er.NewNSLock(ctx, bucket, object)
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.Unlock()
+
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -969,6 +1023,13 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
 	}
+
+	// Acquire a write lock before deleting the object.
+	lk := er.NewNSLock(ctx, bucket, object)
+	if err = lk.GetLock(globalOperationTimeout); err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.Unlock()
 
 	storageDisks := er.getDisks()
 	writeQuorum := len(storageDisks)/2 + 1

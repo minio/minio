@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -179,20 +180,24 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 	if tgt == nil {
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
+		VersionID: versionID,
+	})
 	if err != nil {
 		return
 	}
-	defer gr.Close()
+
 	objInfo := gr.ObjInfo
 	size, err := objInfo.GetActualSize()
 	if err != nil {
 		logger.LogIf(ctx, err)
+		gr.Close()
 		return
 	}
 
 	dest := cfg.GetDestination()
 	if dest.Bucket == "" {
+		gr.Close()
 		return
 	}
 	// In the rare event that replication is in pending state either due to
@@ -201,6 +206,7 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 	if healPending {
 		_, err := tgt.StatObject(ctx, dest.Bucket, object, miniogo.StatObjectOptions{VersionID: objInfo.VersionID})
 		if err == nil {
+			gr.Close()
 			// object with same VersionID already exists, replication kicked off by
 			// PutObject might have completed.
 			return
@@ -210,6 +216,7 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 
 	replicationStatus := replication.Complete
 	_, err = tgt.PutObject(ctx, dest.Bucket, object, gr, size, "", "", putOpts)
+	gr.Close()
 	if err != nil {
 		replicationStatus = replication.Failed
 		// Notify replication failure  event.
@@ -231,8 +238,10 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 	objInfo.metadataOnly = true // Perform only metadata updates.
 	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: objInfo.VersionID,
-	}, ObjectOptions{VersionID: objInfo.VersionID}); err != nil {
-		logger.LogIf(ctx, err)
+	}, ObjectOptions{
+		VersionID: objInfo.VersionID,
+	}); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s: %s", objInfo.VersionID, err))
 	}
 }
 

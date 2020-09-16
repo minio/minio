@@ -168,6 +168,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
+	logger.AddTarget(globalConsoleSys)
+
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
@@ -261,12 +265,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(registerWebRouter(router), "Unable to configure web browser")
 	}
 
-	// Currently only NAS and S3 gateway support encryption headers.
-	encryptionEnabled := gatewayName == S3BackendGateway || gatewayName == NASBackendGateway
-	allowSSEKMS := gatewayName == S3BackendGateway // Only S3 can support SSE-KMS (as pass-through)
-
 	// Add API router.
-	registerAPIRouter(router, encryptionEnabled, allowSSEKMS)
+	registerAPIRouter(router)
 
 	// Use all the middlewares
 	router.Use(registerMiddlewares)
