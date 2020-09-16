@@ -168,6 +168,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		cli.ShowCommandHelpAndExit(ctx, gatewayName, 1)
 	}
 
+	// Initialize globalConsoleSys system
+	globalConsoleSys = NewConsoleLogger(GlobalContext)
+	logger.AddTarget(globalConsoleSys)
+
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 

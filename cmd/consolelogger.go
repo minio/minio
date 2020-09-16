@@ -122,6 +122,24 @@ func (sys *HTTPConsoleLoggerSys) Validate() error {
 	return nil
 }
 
+// Content returns the console stdout log
+func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
+	sys.RLock()
+	sys.logBuf.Do(func(p interface{}) {
+		if p != nil {
+			lg, ok := p.(log.Info)
+			if ok {
+				if (lg.Entry != log.Entry{}) {
+					logs = append(logs, lg.Entry)
+				}
+			}
+		}
+	})
+	sys.RUnlock()
+
+	return
+}
+
 // Send log message 'e' to console and publish to console
 // log pubsub system
 func (sys *HTTPConsoleLoggerSys) Send(e interface{}, logKind string) error {
