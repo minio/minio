@@ -1166,16 +1166,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mustReplicate {
-		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
-			EventName:    event.ObjectCreatedPut,
-			BucketName:   bucket,
-			Object:       objInfo,
-			ReqParams:    extractReqParams(r),
-			RespElements: extractRespElements(w),
-			UserAgent:    r.UserAgent(),
-			Host:         handlers.GetSourceIP(r),
-		}, false)
+		globalReplicationState.queueReplicaTask(objInfo)
 	}
+
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,

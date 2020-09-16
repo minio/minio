@@ -170,24 +170,29 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 
 // replicateObject replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
-func replicateObject(ctx context.Context, bucket, object, versionID string, objectAPI ObjectLayer, eventArg *eventArgs, healPending bool) {
+func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLayer) {
+	bucket := objInfo.Bucket
+	object := objInfo.Name
+
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
+
 	tgt := globalBucketTargetSys.GetReplicationTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil {
 		return
 	}
+
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
-		VersionID: versionID,
+		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
 		return
 	}
 
-	objInfo := gr.ObjInfo
+	objInfo = gr.ObjInfo
 	size, err := objInfo.GetActualSize()
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -200,6 +205,11 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 		gr.Close()
 		return
 	}
+
+	// if heal encounters a pending replication status, either replication
+	// has failed due to server shutdown or crawler and PutObject replication are in contention.
+	healPending := objInfo.ReplicationStatus == replication.Pending
+
 	// In the rare event that replication is in pending state either due to
 	// server shut down/crash before replication completed or healing and PutObject
 	// race - do an additional stat to see if the version ID exists
@@ -219,22 +229,25 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 	gr.Close()
 	if err != nil {
 		replicationStatus = replication.Failed
-		// Notify replication failure  event.
-		if eventArg == nil {
-			eventArg = &eventArgs{
-				BucketName: bucket,
-				Object:     objInfo,
-				Host:       "Internal: [Replication]",
-			}
-		}
-		eventArg.EventName = event.OperationReplicationFailed
-		eventArg.Object.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
-		sendEvent(*eventArg)
 	}
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
+
+	// FIXME: add support for missing replication events
+	// - event.ObjectReplicationNotTracked
+	// - event.ObjectReplicationMissedThreshold
+	// - event.ObjectReplicationReplicatedAfterThreshold
+	if replicationStatus == replication.Failed {
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationFailed,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+	}
+
 	objInfo.metadataOnly = true // Perform only metadata updates.
 	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: objInfo.VersionID,
@@ -266,4 +279,43 @@ func filterReplicationStatusMetadata(metadata map[string]string) map[string]stri
 
 	delKey(xhttp.AmzBucketReplicationStatus)
 	return dst
+}
+
+type replicationState struct {
+	// add future metrics here
+	replicaCh chan ObjectInfo
+}
+
+func (r *replicationState) queueReplicaTask(oi ObjectInfo) {
+	select {
+	case r.replicaCh <- oi:
+	default:
+	}
+}
+
+var globalReplicationState *replicationState
+
+func newReplicationState() *replicationState {
+	return &replicationState{
+		// TODO: currently keeping it conservative
+		// but eventually can be tuned in future
+		replicaCh: make(chan ObjectInfo, 100),
+	}
+}
+
+func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
+	if globalReplicationState == nil {
+		return
+	}
+	go func() {
+		defer close(globalReplicationState.replicaCh)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case oi := <-globalReplicationState.replicaCh:
+				replicateObject(ctx, oi, objectAPI)
+			}
+		}
+	}()
 }

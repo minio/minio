@@ -224,9 +224,10 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 		}
 	}(txnLk)
 
-	// Enable healing to heal drives if possible
+	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(ctx, newObject)
+		initBackgroundReplication(ctx, newObject)
 	}
 
 	// allocate dynamic timeout once before the loop
@@ -444,6 +445,7 @@ func serverMain(ctx *cli.Context) {
 		// New global heal state
 		globalAllHealState = newHealState()
 		globalBackgroundHealState = newHealState()
+		globalReplicationState = newReplicationState()
 	}
 
 	// Initialize all sub-systems
