@@ -72,6 +72,11 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, NotImplemented{}
 	}
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+	lk := er.NewNSLock(ctx, dstBucket, dstObject)
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
+		return oi, err
+	}
+	defer lk.Unlock()
 
 	// Read metadata associated with the object from all disks.
 	storageDisks := er.getDisks()
@@ -112,12 +117,13 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
 
+	srcInfo.UserDefined["etag"] = srcInfo.ETag
+
 	// Update `xl.meta` content on each disks.
 	for index := range metaArr {
 		metaArr[index].ModTime = modTime
 		metaArr[index].VersionID = versionID
 		metaArr[index].Metadata = srcInfo.UserDefined
-		metaArr[index].Metadata["etag"] = srcInfo.ETag
 	}
 
 	tempObj := mustGetUUID()
@@ -741,6 +747,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
+	lk := er.NewNSLock(ctx, bucket, object)
+	if err := lk.GetLock(globalOperationTimeout); err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.Unlock()
+
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -779,12 +791,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-
-	lk := er.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.Unlock()
 
 	// Rename the successfully written temporary object to final location.
 	if onlineDisks, err = renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, fi.DataDir, bucket, object, writeQuorum, nil); err != nil {
