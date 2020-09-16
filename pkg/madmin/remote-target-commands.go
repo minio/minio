@@ -118,7 +118,15 @@ func (t BucketTarget) URL() string {
 	if t.Secure {
 		scheme = "https"
 	}
-	return fmt.Sprintf("%s://%s", scheme, t.Endpoint)
+	urlStr := fmt.Sprintf("%s://%s", scheme, t.Endpoint)
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return urlStr
+	}
+	if u.Port() == "80" || u.Port() == "443" {
+		u.Host = u.Hostname()
+	}
+	return u.String()
 }
 
 // Empty returns true if struct is empty.
