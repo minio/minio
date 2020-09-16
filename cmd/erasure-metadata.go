@@ -98,9 +98,10 @@ func (fi FileInfo) IsValid() bool {
 func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	if HasSuffix(object, SlashSeparator) {
 		return ObjectInfo{
-			Bucket: bucket,
-			Name:   object,
-			IsDir:  true,
+			Bucket:  bucket,
+			Name:    object,
+			IsDir:   true,
+			ModTime: fi.ModTime,
 		}
 	}
 
