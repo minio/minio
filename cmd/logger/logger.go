@@ -331,8 +331,9 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		API = req.API
 	}
 
-	tags := make(map[string]string)
-	for _, entry := range req.GetTags() {
+	kv := req.GetTags()
+	tags := make(map[string]string, len(kv))
+	for _, entry := range kv {
 		tags[entry.Key] = entry.Val
 	}
 

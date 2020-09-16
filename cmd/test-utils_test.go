@@ -481,6 +481,7 @@ func newTestConfig(bucketLocation string, obj ObjectLayer) (err error) {
 func (testServer TestServer) Stop() {
 	testServer.cancel()
 	testServer.Server.Close()
+	testServer.Obj.Shutdown(context.Background())
 	os.RemoveAll(testServer.Root)
 	for _, ep := range testServer.Disks {
 		for _, disk := range ep.Endpoints {
@@ -1838,6 +1839,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
+	defer objLayer.Shutdown(ctx)
 
 	bucketErasure, erAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
@@ -1893,6 +1895,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
+	defer objLayer.Shutdown(context.Background())
 
 	initAllSubsystems(ctx, objLayer)
 
@@ -1911,6 +1914,7 @@ func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) 
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
+	defer objLayer.Shutdown(ctx)
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
@@ -1933,6 +1937,7 @@ func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundTyp
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
+	defer objLayer.Shutdown(ctx)
 
 	if err = newTestConfig(globalMinioDefaultRegion, objLayer); err != nil {
 		t.Fatal("Failed to create config directory", err)
@@ -2053,7 +2058,7 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFunctions ...string) {
 	if len(apiFunctions) == 0 {
 		// Register all api endpoints by default.
-		registerAPIRouter(muxRouter, true, false)
+		registerAPIRouter(muxRouter)
 		return
 	}
 	// API Router.
@@ -2083,7 +2088,6 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 			}
 			return nil
 		},
-		EncryptionEnabled: func() bool { return true },
 	}
 
 	// Register ListBuckets	handler.
@@ -2104,7 +2108,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
 		return muxRouter
 	}
-	registerAPIRouter(muxRouter, true, false)
+	registerAPIRouter(muxRouter)
 	return muxRouter
 }
 

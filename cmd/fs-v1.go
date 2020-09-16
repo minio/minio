@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -178,7 +179,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	// or cause changes on backend format.
 	fs.fsFormatRlk = rlk
 
-	go fs.cleanupStaleMultipartUploads(ctx, GlobalMultipartCleanupInterval, GlobalMultipartExpiry)
+	go fs.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 	go intDataUpdateTracker.start(ctx, fsPath)
 
 	// Return successfully initialized object layer.
@@ -502,13 +503,13 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 		atomic.AddInt64(&fs.activeIOCount, -1)
 	}()
 
-	var bucketInfos []BucketInfo
 	entries, err := readDir(fs.fsPath)
 	if err != nil {
 		logger.LogIf(ctx, errDiskNotFound)
 		return nil, toObjectErr(errDiskNotFound)
 	}
 
+	bucketInfos := make([]BucketInfo, 0, len(entries))
 	for _, entry := range entries {
 		// Ignore all reserved bucket names and invalid bucket names.
 		if isReservedOrInvalidBucket(entry, false) {
@@ -622,8 +623,15 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			logger.LogIf(ctx, err)
-			return oi, toObjectErr(err, srcBucket, srcObject)
+			if !errors.Is(err, errFileNotFound) {
+				logger.LogIf(ctx, err)
+				return oi, toObjectErr(err, srcBucket, srcObject)
+			}
+			wlk, err = fs.rwPool.Create(fsMetaPath)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return oi, toObjectErr(err, srcBucket, srcObject)
+			}
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -635,10 +643,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 			fsMeta = fs.defaultFsJSON(srcObject)
 		}
 
-		fsMeta.Meta = map[string]string{}
-		for k, v := range srcInfo.UserDefined {
-			fsMeta.Meta[k] = v
-		}
+		fsMeta.Meta = cloneMSS(srcInfo.UserDefined)
 		fsMeta.Meta["etag"] = srcInfo.ETag
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return oi, toObjectErr(err, srcBucket, srcObject)
@@ -1124,10 +1129,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	data := r.Reader
 
 	// No metadata is set, allocate a new one.
-	meta := make(map[string]string)
-	for k, v := range opts.UserDefined {
-		meta[k] = v
-	}
+	meta := cloneMSS(opts.UserDefined)
 	var err error
 
 	// Validate if bucket name is valid and exists.
@@ -1217,7 +1219,7 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < data.Size() {
-		return ObjectInfo{}, IncompleteBody{}
+		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
@@ -1497,8 +1499,15 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 	fsMeta := fsMetaV1{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
 	if err != nil {
-		logger.LogIf(ctx, err)
-		return toObjectErr(err, bucket, object)
+		if !errors.Is(err, errFileNotFound) {
+			logger.LogIf(ctx, err)
+			return toObjectErr(err, bucket, object)
+		}
+		wlk, err = fs.rwPool.Create(fsMetaPath)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return toObjectErr(err, bucket, object)
+		}
 	}
 	// This close will allow for locks to be synchronized on `fs.json`.
 	defer wlk.Close()

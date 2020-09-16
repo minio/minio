@@ -242,7 +242,7 @@ func (g *S3) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) 
 
 		// Start stale enc multipart uploads cleanup routine.
 		go encS.cleanupStaleEncMultipartUploads(minio.GlobalContext,
-			minio.GlobalMultipartCleanupInterval, minio.GlobalMultipartExpiry)
+			minio.GlobalStaleUploadsCleanupInterval, minio.GlobalStaleUploadsExpiry)
 
 		return &encS, nil
 	}
@@ -391,21 +391,21 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
-	var startOffset, length int64
-	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, opts)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
+		err := l.GetObject(ctx, bucket, object, off, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
+
 	// Setup cleanup function to cause the above go-routine to
 	// exit in case of partial read
 	pipeCloser := func() { pr.Close() }
-	return minio.NewGetObjectReaderFromReader(pr, objInfo, opts, pipeCloser)
+	return fn(pr, h, opts.CheckPrecondFn, pipeCloser)
 }
 
 // GetObject reads an object from S3. Supports additional
@@ -653,7 +653,7 @@ func (l *s3Objects) ListObjectParts(ctx context.Context, bucket string, object s
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
-func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string) error {
+func (l *s3Objects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, opts minio.ObjectOptions) error {
 	err := l.Client.AbortMultipartUpload(ctx, bucket, object, uploadID)
 	return minio.ErrorRespToObjectError(err, bucket, object)
 }
@@ -745,7 +745,7 @@ func (l *s3Objects) IsCompressionSupported() bool {
 
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
 func (l *s3Objects) IsEncryptionSupported() bool {
-	return minio.GlobalKMS != nil || len(minio.GlobalGatewaySSE) > 0
+	return minio.GlobalKMS != nil || minio.GlobalGatewaySSE.IsSet()
 }
 
 func (l *s3Objects) IsTaggingSupported() bool {

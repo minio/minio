@@ -40,7 +40,7 @@ import (
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/browser"
-	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -179,7 +179,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 
 	if globalDNSConfig != nil {
 		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
-			if err == dns.ErrNoEntriesFound {
+			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
@@ -281,7 +281,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually using etcdctl", err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
 			return toJSONError(ctx, err)
 		}
 	}
@@ -427,7 +427,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			}
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		core, err := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(sr))
+		core, err := getRemoteInstanceClient(r, getHostFromSrv(sr))
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -653,7 +653,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 			}
 			return toJSONError(ctx, err, args.BucketName)
 		}
-		core, err := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(sr))
+		core, err := getRemoteInstanceClient(r, getHostFromSrv(sr))
 		if err != nil {
 			return toJSONError(ctx, err, args.BucketName)
 		}
@@ -1166,7 +1166,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mustReplicate {
-		defer replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
 			Object:       objInfo,

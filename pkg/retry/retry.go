@@ -99,10 +99,10 @@ func NewTimerWithJitter(ctx context.Context, unit time.Duration, cap time.Durati
 		// Channel used to signal after the expiry of backoff wait seconds.
 		for {
 			select {
-			case attemptCh <- nextBackoff:
-				nextBackoff++
 			case <-ctx.Done():
 				return
+			case attemptCh <- nextBackoff:
+				nextBackoff++
 			}
 
 			t.Start(exponentialBackoffWait(nextBackoff))

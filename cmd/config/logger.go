@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package dns
+package config
 
-// Store dns record store
-type Store interface {
-	Put(bucket string) error
-	Get(bucket string) ([]SrvRecord, error)
-	Delete(bucket string) error
-	List() (map[string][]SrvRecord, error)
-	DeleteRecord(record SrvRecord) error
-	Close() error
+import "context"
+
+// Logger contains injected logger methods.
+var Logger = struct {
+	Info  func(msg string, data ...interface{})
+	LogIf func(ctx context.Context, err error, errKind ...interface{})
+}{
+	// Initialized via injection.
 }

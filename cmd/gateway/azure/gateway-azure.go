@@ -70,7 +70,6 @@ const (
 	azureChunkSizeEnvVar        = "MINIO_AZURE_CHUNK_SIZE_MB"
 
 	azureDownloadRetryAttempts = 5
-	azureBlockSize             = 100 * humanize.MiByte
 	azureS3MinPartSize         = 5 * humanize.MiByte
 	metadataObjectNameTemplate = minio.GatewayMinioSysTmp + "multipart/v1/%s.%x/azure.json"
 	azureMarkerPrefix          = "{minio}"
@@ -473,6 +472,11 @@ func azureCodesToObjectError(err error, serviceCode string, statusCode int, buck
 		err = minio.UnsupportedMetadata{}
 	case "BlobAccessTierNotSupportedForAccountType":
 		err = minio.NotImplemented{}
+	case "OutOfRangeInput":
+		err = minio.ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		}
 	default:
 		switch statusCode {
 		case http.StatusNotFound:
@@ -875,20 +879,15 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 // uses Azure equivalent `UploadStreamToBlockBlob`.
 func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *minio.PutObjReader, opts minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
 	data := r.Reader
-
-	if data.Size() > azureBlockSize/2 {
-		if len(opts.UserDefined) == 0 {
-			opts.UserDefined = map[string]string{}
-		}
-
-		// Save md5sum for future processing on the object.
-		opts.UserDefined["x-amz-meta-md5sum"] = r.MD5CurrentHexString()
+	if opts.UserDefined == nil {
+		opts.UserDefined = map[string]string{}
 	}
 
 	metadata, properties, err := s3MetaToAzureProperties(ctx, opts.UserDefined)
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
+
 	blobURL := a.client.NewContainerURL(bucket).NewBlockBlobURL(object)
 
 	_, err = azblob.UploadStreamToBlockBlob(ctx, data, blobURL, azblob.UploadStreamToBlockBlobOptions{
@@ -900,7 +899,18 @@ func (a *azureObjects) PutObject(ctx context.Context, bucket, object string, r *
 	if err != nil {
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
-
+	// Query the blob's properties and metadata
+	get, err := blobURL.GetProperties(ctx, azblob.BlobAccessConditions{})
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
+	// Update the blob's metadata with Content-MD5 after the upload
+	metadata = get.NewMetadata()
+	metadata["md5sum"] = r.MD5CurrentHexString()
+	_, err = blobURL.SetMetadata(ctx, metadata, azblob.BlobAccessConditions{})
+	if err != nil {
+		return objInfo, azureToObjectError(err, bucket, object)
+	}
 	return a.GetObjectInfo(ctx, bucket, object, opts)
 }
 
@@ -924,6 +934,7 @@ func (a *azureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, des
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
 	}
 	props.ContentMD5 = srcProps.ContentMD5()
+	azureMeta["md5sum"] = srcInfo.ETag
 	res, err := destBlob.StartCopyFromURL(ctx, srcBlobURL, azureMeta, azblob.ModifiedAccessConditions{}, azblob.BlobAccessConditions{})
 	if err != nil {
 		return objInfo, azureToObjectError(err, srcBucket, srcObject)
@@ -1233,7 +1244,7 @@ func (a *azureObjects) ListObjectParts(ctx context.Context, bucket, object, uplo
 // AbortMultipartUpload - Not Implemented.
 // There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
 // gets deleted after one week.
-func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) (err error) {
+func (a *azureObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts minio.ObjectOptions) (err error) {
 	if err = a.checkUploadIDExists(ctx, bucket, object, uploadID); err != nil {
 		return err
 	}

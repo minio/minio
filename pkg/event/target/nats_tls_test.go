@@ -19,7 +19,6 @@ package target
 import (
 	"path"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	xnet "github.com/minio/minio/pkg/net"
@@ -42,9 +41,6 @@ func TestNatsConnTLSCustomCA(t *testing.T) {
 
 	con, err := clientConfig.connectNats()
 	if err != nil {
-		if runtime.Version() == "go1.15" {
-			t.Skip()
-		}
 		t.Errorf("Could not connect to nats: %v", err)
 	}
 	defer con.Close()
@@ -68,9 +64,6 @@ func TestNatsConnTLSClientAuthorization(t *testing.T) {
 
 	con, err := clientConfig.connectNats()
 	if err != nil {
-		if runtime.Version() == "go1.15" {
-			t.Skip()
-		}
 		t.Errorf("Could not connect to nats: %v", err)
 	}
 	defer con.Close()

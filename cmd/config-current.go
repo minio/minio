@@ -25,8 +25,9 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/crawler"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
-	"github.com/minio/minio/cmd/config/etcd/dns"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
@@ -55,6 +56,7 @@ func initHelp() {
 		config.KmsKesSubSys:         crypto.DefaultKesKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
+		config.CrawlerSubSys:        crawler.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -105,6 +107,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.APISubSys,
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
+		},
+		config.HelpKV{
+			Key:         config.CrawlerSubSys,
+			Description: "manage continuous disk crawling for bucket disk usage, lifecycle, quota and data integrity checks",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -185,6 +191,7 @@ func initHelp() {
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
+		config.CrawlerSubSys:        crawler.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -243,6 +250,10 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	}
 
 	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+		return err
+	}
+
+	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -321,6 +332,19 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
+	if dnsURL, dnsUser, dnsPass, ok := env.LookupEnv(config.EnvDNSWebhook); ok {
+		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
+			dns.Authentication(dnsUser, dnsPass),
+			dns.RootCAs(globalRootCAs))
+		if err != nil {
+			if globalIsGateway {
+				logger.FatalIf(err, "Unable to initialize remote webhook DNS config")
+			} else {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+			}
+		}
+	}
+
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
 		if globalIsGateway {
@@ -342,19 +366,25 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 
-		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil && globalDNSConfig == nil {
-			globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
-				dns.DomainNames(globalDomainNames),
-				dns.DomainIPs(globalDomainIPs),
-				dns.DomainPort(globalMinioPort),
-				dns.CoreDNSPath(etcdCfg.CoreDNSPath),
-			)
-			if err != nil {
-				if globalIsGateway {
-					logger.FatalIf(err, "Unable to initialize DNS config")
-				} else {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
-						globalDomainNames, err))
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
+			if globalDNSConfig != nil {
+				// if global DNS is already configured, indicate with a warning, incase
+				// users are confused.
+				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", globalDNSConfig))
+			} else {
+				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+					dns.DomainNames(globalDomainNames),
+					dns.DomainIPs(globalDomainIPs),
+					dns.DomainPort(globalMinioPort),
+					dns.CoreDNSPath(etcdCfg.CoreDNSPath),
+				)
+				if err != nil {
+					if globalIsGateway {
+						logger.FatalIf(err, "Unable to initialize DNS config")
+					} else {
+						logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+							globalDomainNames, err))
+					}
 				}
 			}
 		}
@@ -378,6 +408,11 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	}
 
 	globalAPIConfig.init(apiConfig, setDriveCount)
+
+	// Initialize remote instance transport once.
+	getRemoteInstanceTransportOnce.Do(func() {
+		getRemoteInstanceTransport = newGatewayHTTPTransport(apiConfig.RemoteTransportDeadline)
+	})
 
 	if globalIsErasure {
 		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
@@ -403,6 +438,10 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 	}
+	globalCrawlerConfig, err = crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to read crawler config: %w", err))
+	}
 
 	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
 	if err != nil {
@@ -416,7 +455,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 
 	// Enable auto-encryption if enabled
 	globalAutoEncryption = kmsCfg.AutoEncryption
-	if globalAutoEncryption {
+	if globalAutoEncryption && !globalIsGateway {
 		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
 	}
 

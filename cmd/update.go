@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,8 +163,8 @@ func IsKubernetes() bool {
 	if env.Get("MINIO_CI_CD", "") == "" {
 		// Kubernetes env used to validate if we are
 		// indeed running inside a kubernetes pod
-		// is KUBERNETES_SERVICE_HOST but in future
-		// we might need to enhance this.
+		// is KUBERNETES_SERVICE_HOST
+		// https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/kubelet_pods.go#L541
 		return env.Get("KUBERNETES_SERVICE_HOST", "") != ""
 	}
 	return false
@@ -273,6 +273,15 @@ func getUserAgent(mode string) string {
 		helmChartVersion := getHelmVersion("/podinfo/labels")
 		if helmChartVersion != "" {
 			uaAppend(" MinIO/helm-", helmChartVersion)
+		}
+		// In Kubernetes environment, try to fetch the Operator, VSPHERE plugin version
+		opVersion := env.Get("MINIO_OPERATOR_VERSION", "")
+		if opVersion != "" {
+			uaAppend(" MinIO/operator-", opVersion)
+		}
+		vsphereVersion := env.Get("MINIO_VSPHERE_PLUGIN_VERSION", "")
+		if vsphereVersion != "" {
+			uaAppend(" MinIO/vsphere-plugin-", vsphereVersion)
 		}
 	}
 

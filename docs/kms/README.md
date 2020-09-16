@@ -1,16 +1,10 @@
 # KMS Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests SSE-S3, or auto-encryption
-is enabled, the MinIO server encrypts each object with an unique object key which is protected by a master key
-managed by the KMS.
+MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests SSE-S3, or auto-encryption is enabled, the MinIO server encrypts each object with an unique object key which is protected by a master key managed by the KMS.
 
 ## Quick Start
 
-MinIO supports multiple KMS implementations via our [KES](https://github.com/minio/kes#kes) project. We run
-a KES instance at `https://play.min.io:7373` for you to experiment and quickly get started. To run MinIO with
-a KMS just fetch the root identity, set the following environment variables and then start your MinIO server.
-If you havn't installed MinIO, yet, then follow the MinIO [install instructions](https://docs.min.io/docs/minio-quickstart-guide)
-first.
+MinIO supports multiple KMS implementations via our [KES](https://github.com/minio/kes#kes) project. We run a KES instance at `https://play.min.io:7373` for you to experiment and quickly get started. To run MinIO with a KMS just fetch the root identity, set the following environment variables and then start your MinIO server. If you havn't installed MinIO, yet, then follow the MinIO [install instructions](https://docs.min.io/docs/minio-quickstart-guide) first.
 
 #### 1. Fetch the root identity
 As the initial step, fetch the private key and certificate of the root identity:
@@ -55,11 +49,9 @@ A typical MinIO deployment that uses a KMS for SSE-S3 looks like this:
                                                                 └─────────┘
 ```
 
-In a given setup, there are `n` MinIO instances talking to `m` KES servers but only `1` central KMS. The most simple
-setup consists of `1` MinIO server or cluster talking to `1` KMS via `1` KES server.
+In a given setup, there are `n` MinIO instances talking to `m` KES servers but only `1` central KMS. The most simple setup consists of `1` MinIO server or cluster talking to `1` KMS via `1` KES server.
 
-The main difference between various MinIO-KMS deployments is the KMS implementation. The following table
-helps you select the right option for your use case:
+The main difference between various MinIO-KMS deployments is the KMS implementation. The following table helps you select the right option for your use case:
 
 | KMS                                                                              | Purpose                                                           |
 |:---------------------------------------------------------------------------------|:------------------------------------------------------------------|
@@ -67,8 +59,7 @@ helps you select the right option for your use case:
 | [AWS-KMS + SecretsManager](https://github.com/minio/kes/wiki/AWS-SecretsManager) | Cloud KMS. MinIO in combination with a managed KMS installation   |
 | [FS](https://github.com/minio/kes/wiki/Filesystem-Keystore)                      | Local testing or development (**Not recommended for production**) |
 
-The MinIO-KES configuration is always the same - regardless of the underlying KMS implementation.
-Checkout the MinIO-KES [configuration example](https://github.com/minio/kes/wiki/MinIO-Object-Storage).
+The MinIO-KES configuration is always the same - regardless of the underlying KMS implementation. Checkout the MinIO-KES [configuration example](https://github.com/minio/kes/wiki/MinIO-Object-Storage).
 
 ### Further references
 
@@ -78,9 +69,9 @@ Checkout the MinIO-KES [configuration example](https://github.com/minio/kes/wiki
 - [Understand the KES server concepts](https://github.com/minio/kes/wiki/Concepts)
 
 ## Auto Encryption
+Auto-Encryption is useful when MinIO administrator wants to ensure that all data stored on MinIO is encrypted at rest.
 
-Auto-Encryption is useful when MinIO administrator wants to ensure that all data stored on MinIO is encrypted at rest. 
-
+### Using `mc encrypt` (recommended)
 MinIO automatically encrypts all objects on buckets if KMS is successfully configured and bucket encryption configuration is enabled for each bucket as shown below:
 ```
 mc encrypt sse-s3 myminio/bucket/
@@ -92,7 +83,15 @@ mc encrypt info myminio/bucket/
 Auto encryption 'sse-s3' is enabled
 ```
 
+### Using environment (deprecated)
+> NOTE: Following ENV might be removed in future, you are advised to move to previous recommeneded approach using `mc encrypt`. S3 gateway supports encryption at gateway layer which may thus be dropped in favor of simplicity, it is advised that S3 gateway users migrate to MinIO server mode or enable encryption at REST at the backend.
 
+MinIO automatically encrypts all objects on buckets if KMS is successfully configured and following ENV is enabled:
+```
+export MINIO_KMS_AUTO_ENCRYPTION=on
+```
+
+### Verify auto-encryption
 > Note that auto-encryption only affects requests without S3 encryption headers. So, if a S3 client sends
 > e.g. SSE-C headers, MinIO will encrypt the object with the key sent by the client and won't reach out to
 > the configured KMS.

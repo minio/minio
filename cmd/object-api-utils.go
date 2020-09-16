@@ -38,7 +38,7 @@ import (
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -270,7 +270,7 @@ func removeStandardStorageClass(metadata map[string]string) map[string]string {
 // cleanMetadataKeys takes keyNames to be filtered
 // and returns a new map with all the entries with keyNames removed.
 func cleanMetadataKeys(metadata map[string]string, keyNames ...string) map[string]string {
-	var newMeta = make(map[string]string)
+	var newMeta = make(map[string]string, len(metadata))
 	for k, v := range metadata {
 		if contains(keyNames, k) {
 			continue
@@ -876,20 +876,4 @@ func newS2CompressReader(r io.Reader) io.ReadCloser {
 		pw.Close()
 	}()
 	return pr
-}
-
-// Returns error if the context is canceled, indicating
-// either client has disconnected
-type contextReader struct {
-	io.ReadCloser
-	ctx context.Context
-}
-
-func (d *contextReader) Read(p []byte) (int, error) {
-	select {
-	case <-d.ctx.Done():
-		return 0, d.ctx.Err()
-	default:
-		return d.ReadCloser.Read(p)
-	}
 }

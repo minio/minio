@@ -287,31 +287,30 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 		deleteObject = cache.DeleteObject
 	}
 	// Proceed to delete the object.
-	if objInfo, err = deleteObject(ctx, bucket, object, opts); err != nil {
-		return objInfo, err
+	objInfo, err = deleteObject(ctx, bucket, object, opts)
+	if objInfo.Name != "" {
+		// Requesting only a delete marker which was successfully attempted.
+		if objInfo.DeleteMarker {
+			// Notify object deleted marker event.
+			sendEvent(eventArgs{
+				EventName:  event.ObjectRemovedDeleteMarkerCreated,
+				BucketName: bucket,
+				Object:     objInfo,
+				ReqParams:  extractReqParams(r),
+				UserAgent:  r.UserAgent(),
+				Host:       handlers.GetSourceIP(r),
+			})
+		} else {
+			// Notify object deleted event.
+			sendEvent(eventArgs{
+				EventName:  event.ObjectRemovedDelete,
+				BucketName: bucket,
+				Object:     objInfo,
+				ReqParams:  extractReqParams(r),
+				UserAgent:  r.UserAgent(),
+				Host:       handlers.GetSourceIP(r),
+			})
+		}
 	}
-
-	// Requesting only a delete marker which was successfully attempted.
-	if objInfo.DeleteMarker {
-		// Notify object deleted marker event.
-		sendEvent(eventArgs{
-			EventName:  event.ObjectRemovedDeleteMarkerCreated,
-			BucketName: bucket,
-			Object:     objInfo,
-			ReqParams:  extractReqParams(r),
-			UserAgent:  r.UserAgent(),
-			Host:       handlers.GetSourceIP(r),
-		})
-	} else {
-		// Notify object deleted event.
-		sendEvent(eventArgs{
-			EventName:  event.ObjectRemovedDelete,
-			BucketName: bucket,
-			Object:     objInfo,
-			ReqParams:  extractReqParams(r),
-			UserAgent:  r.UserAgent(),
-			Host:       handlers.GetSourceIP(r),
-		})
-	}
-	return objInfo, nil
+	return objInfo, err
 }

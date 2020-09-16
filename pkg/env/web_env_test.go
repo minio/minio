@@ -67,7 +67,7 @@ func TestWebEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	v, err := getEnvValueFromHTTP(
+	v, user, pwd, err := getEnvValueFromHTTP(
 		fmt.Sprintf("env://minio:minio123@%s/webhook/v1/getenv/default/minio",
 			u.Host),
 		"MINIO_ARGS")
@@ -76,6 +76,14 @@ func TestWebEnv(t *testing.T) {
 	}
 
 	if v != "http://127.0.0.{1..4}:9000/data{1...4}" {
+		t.Fatalf("Unexpected value %s", v)
+	}
+
+	if user != "minio" {
+		t.Fatalf("Unexpected value %s", v)
+	}
+
+	if pwd != "minio123" {
 		t.Fatalf("Unexpected value %s", v)
 	}
 }

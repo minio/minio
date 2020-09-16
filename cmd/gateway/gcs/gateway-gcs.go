@@ -1253,7 +1253,7 @@ func (l *gcsGateway) cleanupMultipartUpload(ctx context.Context, bucket, key, up
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
-func (l *gcsGateway) AbortMultipartUpload(ctx context.Context, bucket string, key string, uploadID string) error {
+func (l *gcsGateway) AbortMultipartUpload(ctx context.Context, bucket string, key string, uploadID string, opts minio.ObjectOptions) error {
 	if err := l.checkUploadIDExists(ctx, bucket, key, uploadID); err != nil {
 		return err
 	}

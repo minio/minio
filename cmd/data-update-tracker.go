@@ -426,6 +426,8 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	}
 	// Ignore what remains on the stream.
 	// Update d:
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.Current = dst.Current
 	d.History = dst.History
 	d.Saved = dst.Saved

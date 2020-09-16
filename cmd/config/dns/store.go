@@ -1,7 +1,5 @@
-// +build go1.14
-
 /*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,23 +14,15 @@
  * limitations under the License.
  */
 
-/*
- * Below main package has canonical imports for 'go get' and 'go build'
- * to work with all other clones of github.com/minio/minio repository. For
- * more information refer https://golang.org/doc/go1.4#canonicalimports
- */
+package dns
 
-package main // import "github.com/minio/minio"
-
-import (
-	"os"
-
-	minio "github.com/minio/minio/cmd"
-
-	// Import gateway
-	_ "github.com/minio/minio/cmd/gateway"
-)
-
-func main() {
-	minio.Main(os.Args)
+// Store dns record store
+type Store interface {
+	Put(bucket string) error
+	Get(bucket string) ([]SrvRecord, error)
+	Delete(bucket string) error
+	List() (map[string][]SrvRecord, error)
+	DeleteRecord(record SrvRecord) error
+	Close() error
+	String() string
 }

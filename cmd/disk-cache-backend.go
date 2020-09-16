@@ -696,10 +696,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return err
 	}
-	var metadata = make(map[string]string)
-	for k, v := range opts.UserDefined {
-		metadata[k] = v
-	}
+	var metadata = cloneMSS(opts.UserDefined)
 	var reader = data
 	var actualSize = uint64(size)
 	if globalCacheKMS != nil {
@@ -721,7 +718,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 
 	if actualSize != uint64(n) {
 		removeAll(cachePath)
-		return IncompleteBody{}
+		return IncompleteBody{Bucket: bucket, Object: object}
 	}
 	return c.saveMetadata(ctx, bucket, object, metadata, n, nil, "", incHitsOnly)
 }
@@ -739,10 +736,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	if err := os.MkdirAll(cachePath, 0777); err != nil {
 		return err
 	}
-	var metadata = make(map[string]string)
-	for k, v := range opts.UserDefined {
-		metadata[k] = v
-	}
+	var metadata = cloneMSS(opts.UserDefined)
 	var reader = data
 	var actualSize = uint64(rlen)
 	// objSize is the actual size of object (with encryption overhead if any)
@@ -768,7 +762,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	}
 	if actualSize != uint64(n) {
 		removeAll(cachePath)
-		return IncompleteBody{}
+		return IncompleteBody{Bucket: bucket, Object: object}
 	}
 	return c.saveMetadata(ctx, bucket, object, metadata, int64(objSize), rs, cacheFile, false)
 }

@@ -51,7 +51,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	cleanupWg.Add(1)
 	go func() {
 		defer cleanupWg.Done()
-		fs.cleanupStaleMultipartUploads(ctx, time.Millisecond, 0)
+		fs.cleanupStaleUploads(ctx, time.Millisecond, 0)
 	}()
 
 	// Wait for 100ms such that - we have given enough time for
@@ -61,7 +61,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	cleanupWg.Wait()
 
 	// Check if upload id was already purged.
-	if err = obj.AbortMultipartUpload(GlobalContext, bucketName, objectName, uploadID); err != nil {
+	if err = obj.AbortMultipartUpload(GlobalContext, bucketName, objectName, uploadID, ObjectOptions{}); err != nil {
 		if _, ok := err.(InvalidUploadID); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
@@ -215,11 +215,12 @@ func TestAbortMultipartUpload(t *testing.T) {
 
 	md5Hex := getMD5Hash(data)
 
-	if _, err := obj.PutObjectPart(GlobalContext, bucketName, objectName, uploadID, 1, mustGetPutObjReader(t, bytes.NewReader(data), 5, md5Hex, ""), ObjectOptions{}); err != nil {
+	opts := ObjectOptions{}
+	if _, err := obj.PutObjectPart(GlobalContext, bucketName, objectName, uploadID, 1, mustGetPutObjReader(t, bytes.NewReader(data), 5, md5Hex, ""), opts); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 	time.Sleep(time.Second) // Without Sleep on windows, the fs.AbortMultipartUpload() fails with "The process cannot access the file because it is being used by another process."
-	if err := obj.AbortMultipartUpload(GlobalContext, bucketName, objectName, uploadID); err != nil {
+	if err := obj.AbortMultipartUpload(GlobalContext, bucketName, objectName, uploadID, opts); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 }

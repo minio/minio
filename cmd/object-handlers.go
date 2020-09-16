@@ -37,7 +37,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/config/etcd/dns"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -99,11 +99,13 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+
+	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -189,7 +191,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			End:            offset + length,
 		}
 
-		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, ObjectOptions{})
+		return getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	}
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
@@ -308,7 +310,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -507,7 +509,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -711,17 +713,17 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 }
 
 // getRemoteInstanceTransport contains a singleton roundtripper.
-var getRemoteInstanceTransport *http.Transport
-var getRemoteInstanceTransportLongTO *http.Transport
-var getRemoteInstanceTransportOnce sync.Once
+var (
+	getRemoteInstanceTransport     *http.Transport
+	getRemoteInstanceTransportOnce sync.Once
+)
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
+	if newObjectLayerFn() == nil {
+		return nil, errServerNotInitialized
+	}
 
 	cred := getReqAccessCred(r, globalServerRegion)
 	// In a federated deployment, all the instances share config files
@@ -737,34 +739,11 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	return core, nil
 }
 
-// Returns a minio-go Client configured to access remote host described by destDNSRecord
-// Applicable only in a federated deployment.
-// The transport does not contain any timeout except for dialing.
-func getRemoteInstanceClientLongTimeout(r *http.Request, host string) (*miniogo.Core, error) {
-	getRemoteInstanceTransportOnce.Do(func() {
-		getRemoteInstanceTransport = NewGatewayHTTPTransport()
-		getRemoteInstanceTransportLongTO = newGatewayHTTPTransport(time.Hour)
-	})
-
-	cred := getReqAccessCred(r, globalServerRegion)
-	// In a federated deployment, all the instances share config files
-	// and hence expected to have same credentials.
-	core, err := miniogo.NewCore(host, &miniogo.Options{
-		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
-		Secure:    globalIsSSL,
-		Transport: getRemoteInstanceTransportLongTO,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return core, nil
-}
-
 // Check if the destination bucket is on a remote site, this code only gets executed
 // when federation is enabled, ie when globalDNSConfig is non 'nil'.
 //
 // This function is similar to isRemoteCallRequired but specifically for COPY object API
-// if destination and source are same we do not need to check for destnation bucket
+// if destination and source are same we do not need to check for destination bucket
 // to exist locally.
 func isRemoteCopyRequired(ctx context.Context, srcBucket, dstBucket string, objAPI ObjectLayer) bool {
 	if srcBucket == dstBucket {
@@ -804,11 +783,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
+
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -914,10 +895,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		getObjectNInfo = api.CacheAPI().GetObjectNInfo
 	}
 
-	var lock = noLock
-	if !cpSrcDstSame {
-		lock = readLock
-	}
 	checkCopyPrecondFn := func(o ObjectInfo) bool {
 		if objectAPI.IsEncryptionSupported() {
 			if _, err := DecryptObjectInfo(&o, r); err != nil {
@@ -928,6 +905,16 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return checkCopyObjectPreconditions(ctx, w, r, o)
 	}
 	getOpts.CheckPrecondFn = checkCopyPrecondFn
+
+	// FIXME: a possible race exists between a parallel
+	// GetObject v/s CopyObject with metadata updates, ideally
+	// we should be holding write lock here but it is not
+	// possible due to other constraints such as knowing
+	// the type of source content etc.
+	lock := noLock
+	if !cpSrcDstSame {
+		lock = readLock
+	}
 
 	var rs *HTTPRangeSpec
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, lock, getOpts)
@@ -1222,7 +1209,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -1250,6 +1237,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if api.CacheAPI() != nil {
 			copyObjectFn = api.CacheAPI().CopyObject
 		}
+
 		// Copy source object to destination, if source and destination
 		// object is same then only metadata is updated.
 		objInfo, err = copyObjectFn(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
@@ -1263,7 +1251,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	if mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
-		defer replicateObject(GlobalContext, dstBucket, dstObject, objInfo.VersionID, objectAPI, &eventArgs{
+		go replicateObject(GlobalContext, dstBucket, dstObject, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedCopy,
 			BucketName:   dstBucket,
 			Object:       objInfo,
@@ -1313,14 +1301,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) && !api.AllowSSEKMS() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
-		return
-	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -1328,9 +1319,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
@@ -1448,7 +1436,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
+	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1579,7 +1567,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if mustReplicate(ctx, r, bucket, object, metadata, "") {
-		defer replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
 			Object:       objInfo,
@@ -1623,14 +1611,17 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) && !api.AllowSSEKMS() {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
-		return
-	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -1647,7 +1638,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) && !crypto.S3KMS.IsRequested(r.Header) {
+	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1748,11 +1739,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
+
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1870,7 +1863,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return false
 	}
 	getOpts.CheckPrecondFn = checkCopyPartPrecondFn
-
 	gr, err := getObjectNInfo(ctx, srcBucket, srcObject, rs, r.Header, readLock, getOpts)
 	if err != nil {
 		if isErrPreconditionFailed(err) {
@@ -1932,7 +1924,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		// Send PutObject request to appropriate instance (in federated deployment)
-		core, rerr := getRemoteInstanceClientLongTimeout(r, getHostFromSrv(dstRecords))
+		core, rerr := getRemoteInstanceClient(r, getHostFromSrv(dstRecords))
 		if rerr != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, rerr), r.URL, guessIsBrowserReq(r))
 			return
@@ -2063,11 +2055,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if crypto.S3KMS.IsRequested(r.Header) {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r)) // SSE-KMS is not supported
+
+	if crypto.S3KMS.IsRequested(r.Header) { // SSE-KMS is not supported
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !api.EncryptionEnabled() && crypto.IsRequested(r.Header) {
+
+	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -2078,9 +2072,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	// To detect if the client has disconnected.
-	r.Body = &contextReader{r.Body, r.Context()}
 
 	// X-Amz-Copy-Source shouldn't be set for this call.
 	if _, ok := r.Header[xhttp.AmzCopySource]; ok {
@@ -2331,7 +2322,8 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if err := abortMultipartUpload(ctx, bucket, object, uploadID); err != nil {
+	opts := ObjectOptions{}
+	if err := abortMultipartUpload(ctx, bucket, object, uploadID, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -2378,7 +2370,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	var opts ObjectOptions
+	opts := ObjectOptions{}
 	listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2544,9 +2536,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	var objectEncryptionKey []byte
 	var isEncrypted, ssec bool
-	var opts ObjectOptions
 	if objectAPI.IsEncryptionSupported() {
-		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		mi, err := objectAPI.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2569,7 +2560,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	partsMap := make(map[string]PartInfo)
 	if isEncrypted {
 		maxParts := 10000
-		listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, maxParts, opts)
+		listPartsInfo, err := objectAPI.ListObjectParts(ctx, bucket, object, uploadID, 0, maxParts, ObjectOptions{})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2580,7 +2571,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Complete parts.
-	var completeParts []CompletePart
+	completeParts := make([]CompletePart, 0, len(complMultipartUpload.Parts))
 	for _, part := range complMultipartUpload.Parts {
 		part.ETag = canonicalizeETag(part.ETag)
 		if isEncrypted {
@@ -2624,7 +2615,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	w = &whiteSpaceWriter{ResponseWriter: w, Flusher: w.(http.Flusher)}
 	completeDoneCh := sendWhiteSpace(w)
-	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, opts)
+	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, completeParts, ObjectOptions{})
 	// Stop writing white spaces to the client. Note that close(doneCh) style is not used as it
 	// can cause white space to be written after we send XML response in a race condition.
 	headerWritten := <-completeDoneCh
@@ -2654,7 +2645,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	setPutObjHeaders(w, objInfo, false)
 	if mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
-		defer replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedCompleteMultipartUpload,
 			BucketName:   bucket,
 			Object:       objInfo,
@@ -2713,7 +2704,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	if globalDNSConfig != nil {
 		_, err := globalDNSConfig.Get(bucket)
-		if err != nil {
+		if err != nil && err != dns.ErrNotImplemented {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -2739,20 +2730,23 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		}
 	}
 
-	if apiErr == ErrNone {
-		// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-		objInfo, err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r, opts)
-		if err != nil {
-			switch err.(type) {
-			case BucketNotFound:
-				// When bucket doesn't exist specially handle it.
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-				return
-			}
-			// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
-		}
-		setPutObjHeaders(w, objInfo, true)
+	if apiErr == ErrNoSuchKey {
+		writeSuccessNoContent(w)
+		return
 	}
+
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+	objInfo, err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, r, opts)
+	if err != nil {
+		switch err.(type) {
+		case BucketNotFound:
+			// When bucket doesn't exist specially handle it.
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
+	}
+	setPutObjHeaders(w, objInfo, true)
 
 	writeSuccessNoContent(w)
 }

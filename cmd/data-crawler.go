@@ -27,9 +27,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/madmin"
-
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -37,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/willf/bloom"
 )
 
@@ -46,7 +46,14 @@ const (
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
-	healDeleteDangling = true
+	healDeleteDangling    = true
+	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
+	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
+
+)
+
+var (
+	globalCrawlerConfig crawler.Config
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -174,9 +181,9 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	// Enable healing in XL mode.
 	if globalIsErasure {
 		// Include a clean folder one in n cycles.
-		s.healFolderInclude = 32
+		s.healFolderInclude = healFolderIncludeProb
 		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
-		s.healObjectSelect = 512
+		s.healObjectSelect = healObjectSelectProb
 	}
 	if len(cache.Info.BloomFilter) > 0 {
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
@@ -602,8 +609,9 @@ func (i *crawlItem) transformMetaDir() {
 
 // actionMeta contains information used to apply actions.
 type actionMeta struct {
-	oi          ObjectInfo
-	numVersions int // The number of versions of this object
+	oi               ObjectInfo
+	successorModTime time.Time // The modtime of the successor version
+	numVersions      int       // The number of versions of this object
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -623,7 +631,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return 0
 		}
-		if !errors.Is(err, NotImplemented{}) {
+		if err != nil && !errors.Is(err, NotImplemented{}) {
 			logger.LogIf(ctx, err)
 			return 0
 		}
@@ -636,13 +644,14 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	versionID := meta.oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:         i.objectPath(),
-			UserTags:     meta.oi.UserTags,
-			ModTime:      meta.oi.ModTime,
-			VersionID:    meta.oi.VersionID,
-			DeleteMarker: meta.oi.DeleteMarker,
-			IsLatest:     meta.oi.IsLatest,
-			NumVersions:  meta.numVersions,
+			Name:             i.objectPath(),
+			UserTags:         meta.oi.UserTags,
+			ModTime:          meta.oi.ModTime,
+			VersionID:        meta.oi.VersionID,
+			DeleteMarker:     meta.oi.DeleteMarker,
+			IsLatest:         meta.oi.IsLatest,
+			NumVersions:      meta.numVersions,
+			SuccessorModTime: meta.successorModTime,
 		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
@@ -679,13 +688,14 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	// Recalculate action.
 	action = i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:         i.objectPath(),
-			UserTags:     obj.UserTags,
-			ModTime:      obj.ModTime,
-			VersionID:    obj.VersionID,
-			DeleteMarker: obj.DeleteMarker,
-			IsLatest:     obj.IsLatest,
-			NumVersions:  meta.numVersions,
+			Name:             i.objectPath(),
+			UserTags:         obj.UserTags,
+			ModTime:          obj.ModTime,
+			VersionID:        obj.VersionID,
+			DeleteMarker:     obj.DeleteMarker,
+			IsLatest:         obj.IsLatest,
+			NumVersions:      meta.numVersions,
+			SuccessorModTime: meta.successorModTime,
 		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -60,31 +61,50 @@ func newCachedObjectLayerFn() CacheObjectLayer {
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 	CacheAPI  func() CacheObjectLayer
-	// Returns true of handlers should interpret encryption.
-	EncryptionEnabled func() bool
-	// Returns true if handlers allow SSE-KMS encryption headers.
-	AllowSSEKMS func() bool
+}
+
+// getHost tries its best to return the request host.
+// According to section 14.23 of RFC 2616 the Host header
+// can include the port number if the default value of 80 is not used.
+func getHost(r *http.Request) string {
+	if r.URL.IsAbs() {
+		return r.URL.Host
+	}
+	return r.Host
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) {
+func registerAPIRouter(router *mux.Router) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 		CacheAPI:  newCachedObjectLayerFn,
-		EncryptionEnabled: func() bool {
-			return encryptionEnabled
-		},
-		AllowSSEKMS: func() bool {
-			return allowSSEKMS
-		},
 	}
 
 	// API Router
 	apiRouter := router.PathPrefix(SlashSeparator).Subrouter()
+
 	var routers []*mux.Router
 	for _, domainName := range globalDomainNames {
-		routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
+		if IsKubernetes() {
+			routers = append(routers, apiRouter.MatcherFunc(func(r *http.Request, match *mux.RouteMatch) bool {
+				host, _, _ := net.SplitHostPort(getHost(r))
+				// Make sure to skip matching minio.<domain>` this is
+				// specifically meant for operator/k8s deployment
+				// The reason we need to skip this is for a special
+				// usecase where we need to make sure that
+				// minio.<namespace>.svc.<cluster_domain> is ignored
+				// by the bucketDNS style to ensure that path style
+				// is available and honored at this domain.
+				//
+				// All other `<bucket>.<namespace>.svc.<cluster_domain>`
+				// makes sure that buckets are routed through this matcher
+				// to match for `<bucket>`
+				return host != minioReservedBucket+"."+domainName
+			}).Host("{bucket:.+}."+domainName).Subrouter())
+		} else {
+			routers = append(routers, apiRouter.Host("{bucket:.+}."+domainName).Subrouter())
+		}
 	}
 	routers = append(routers, apiRouter.PathPrefix("/{bucket}").Subrouter())
 
@@ -94,7 +114,10 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("headobject", httpTraceAll(api.HeadObjectHandler))))
 		// CopyObjectPart
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(maxClients(collectAPIStats("copyobjectpart", httpTraceAll(api.CopyObjectPartHandler)))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").
+			HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").
+			HandlerFunc(maxClients(collectAPIStats("copyobjectpart", httpTraceAll(api.CopyObjectPartHandler)))).
+			Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		// PutObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("putobjectpart", httpTraceHdrs(api.PutObjectPartHandler)))).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
@@ -138,7 +161,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		bucket.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("getobject", httpTraceHdrs(api.GetObjectHandler))))
 		// CopyObject
-		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").HandlerFunc(maxClients(collectAPIStats("copyobject", httpTraceAll(api.CopyObjectHandler))))
+		bucket.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").
+			HandlerFunc(maxClients(collectAPIStats("copyobject", httpTraceAll(api.CopyObjectHandler))))
 		// PutObjectRetention
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
 			maxClients(collectAPIStats("putobjectretention", httpTraceAll(api.PutObjectRetentionHandler)))).Queries("retention", "")
