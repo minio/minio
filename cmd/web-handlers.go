@@ -1166,7 +1166,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mustReplicate {
-		defer replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
+		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
 			EventName:    event.ObjectCreatedPut,
 			BucketName:   bucket,
 			Object:       objInfo,
