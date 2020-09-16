@@ -1251,16 +1251,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	if mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
-		go replicateObject(GlobalContext, dstBucket, dstObject, objInfo.VersionID, objectAPI, &eventArgs{
-			EventName:    event.ObjectCreatedCopy,
-			BucketName:   dstBucket,
-			Object:       objInfo,
-			ReqParams:    extractReqParams(r),
-			RespElements: extractRespElements(w),
-			UserAgent:    r.UserAgent(),
-			Host:         handlers.GetSourceIP(r),
-		}, false)
+		globalReplicationState.queueReplicaTask(objInfo)
 	}
+
 	setPutObjHeaders(w, objInfo, false)
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the x-amz-copy-source-version-id header key to be literally
@@ -1504,7 +1497,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if mustReplicate(ctx, r, bucket, object, metadata, "") {
-		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
+		metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 		if s3Err = isPutActionAllowed(getRequestAuthType(r), bucket, object, r, iampolicy.ReplicateObjectAction); s3Err != ErrNone {
@@ -1567,15 +1560,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if mustReplicate(ctx, r, bucket, object, metadata, "") {
-		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
-			EventName:    event.ObjectCreatedPut,
-			BucketName:   bucket,
-			Object:       objInfo,
-			ReqParams:    extractReqParams(r),
-			RespElements: extractRespElements(w),
-			UserAgent:    r.UserAgent(),
-			Host:         handlers.GetSourceIP(r),
-		}, false)
+		globalReplicationState.queueReplicaTask(objInfo)
 	}
 	setPutObjHeaders(w, objInfo, false)
 
@@ -1692,7 +1677,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 	if mustReplicate(ctx, r, bucket, object, metadata, "") {
-		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
+		metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	// We need to preserve the encryption headers set in EncryptRequest,
 	// so we do not want to override them, copy them instead.
@@ -2645,16 +2630,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	setPutObjHeaders(w, objInfo, false)
 	if mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
-		go replicateObject(GlobalContext, bucket, object, objInfo.VersionID, objectAPI, &eventArgs{
-			EventName:    event.ObjectCreatedCompleteMultipartUpload,
-			BucketName:   bucket,
-			Object:       objInfo,
-			ReqParams:    extractReqParams(r),
-			RespElements: extractRespElements(w),
-			UserAgent:    r.UserAgent(),
-			Host:         handlers.GetSourceIP(r),
-		}, false)
+		globalReplicationState.queueReplicaTask(objInfo)
 	}
+
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 

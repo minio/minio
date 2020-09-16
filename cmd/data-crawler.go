@@ -766,9 +766,6 @@ func sleepDuration(d time.Duration, x float64) {
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
 	if meta.oi.ReplicationStatus == replication.Pending ||
 		meta.oi.ReplicationStatus == replication.Failed {
-		// if heal encounters a pending replication status, either replication
-		// has failed due to server shutdown or crawler and PutObject replication are in contention.
-		healPending := meta.oi.ReplicationStatus == replication.Pending
-		replicateObject(ctx, meta.oi.Bucket, meta.oi.Name, meta.oi.VersionID, o, nil, healPending)
+		globalReplicationState.queueReplicaTask(meta.oi)
 	}
 }
