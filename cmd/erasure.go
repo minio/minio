@@ -140,6 +140,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		index := index
 		g.Go(func() error {
 			if disks[index] == OfflineDisk {
+				logger.LogIf(GlobalContext, fmt.Errorf("%s: %s", errDiskNotFound, endpoints[index]))
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(errDiskNotFound),
 					Endpoint: endpoints[index],
@@ -149,11 +150,9 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
 			if err != nil {
-				if !IsErr(err, baseErrs...) {
-					reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
-					ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-					logger.LogIf(ctx, err)
-				}
+				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
+				ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+				logger.LogIf(ctx, err)
 				disksInfo[index] = madmin.Disk{
 					State:    diskErrToDriveState(err),
 					Endpoint: endpoints[index],
