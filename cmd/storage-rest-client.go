@@ -75,6 +75,8 @@ func toStorageErr(err error) error {
 		return errVolumeExists
 	case errFileNotFound.Error():
 		return errFileNotFound
+	case errFileVersionNotFound.Error():
+		return errFileVersionNotFound
 	case errFileNameTooLong.Error():
 		return errFileNameTooLong
 	case errFileAccessDenied.Error():

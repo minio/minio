@@ -265,7 +265,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			}
 		case errs[i] == errDiskNotFound, dataErrs[i] == errDiskNotFound:
 			driveState = madmin.DriveStateOffline
-		case errs[i] == errFileNotFound, errs[i] == errVolumeNotFound:
+		case errs[i] == errFileNotFound, errs[i] == errFileVersionNotFound, errs[i] == errVolumeNotFound:
 			fallthrough
 		case dataErrs[i] == errFileNotFound, dataErrs[i] == errFileVersionNotFound, dataErrs[i] == errVolumeNotFound:
 			driveState = madmin.DriveStateMissing
