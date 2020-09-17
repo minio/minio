@@ -232,6 +232,7 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 		}
 	}
 	wg.Wait()
+	close(transferChan)
 
 	if err != nil {
 		return info, err
