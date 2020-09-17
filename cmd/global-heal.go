@@ -31,7 +31,7 @@ const (
 	leaderLockTimeoutSleepInterval = time.Hour
 )
 
-var leaderLockTimeout = newDynamicTimeout(30*time.Second, time.Minute)
+var leaderLockTimeout = newDynamicTimeout(30*time.Second, 5*time.Second)
 
 // NewBgHealSequence creates a background healing sequence
 // operation which crawls all objects and heal them.
