@@ -460,9 +460,7 @@ func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string
 }
 
 func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 
 	for _, zone := range z.zones {
 		gr, err = zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
@@ -481,9 +479,7 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 }
 
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 
 	for _, zone := range z.zones {
 		if err := zone.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
@@ -501,10 +497,7 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 }
 
 func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
-
+	object = encodeDirObject(object)
 	for _, zone := range z.zones {
 		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
 		if err != nil {
@@ -515,6 +508,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 		}
 		return objInfo, nil
 	}
+	object = decodeDirObject(object)
 	if opts.VersionID != "" {
 		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -523,9 +517,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - writes an object to least used erasure zone.
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 
 	if z.SingleZone() {
 		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
@@ -541,9 +533,7 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 }
 
 func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 
 	if z.SingleZone() {
 		return z.zones[0].DeleteObject(ctx, bucket, object, opts)
@@ -565,9 +555,7 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 	dobjects := make([]DeletedObject, len(objects))
 	objSets := set.NewStringSet()
 	for i := range derrs {
-		if HasSuffix(objects[i].ObjectName, slashSeparator) {
-			objects[i].ObjectName = strings.TrimSuffix(objects[i].ObjectName, slashSeparator) + globalDirSuffix
-		}
+		objects[i].ObjectName = encodeDirObject(objects[i].ObjectName)
 
 		derrs[i] = checkDelObjArgs(ctx, bucket, objects[i].ObjectName)
 		objSets.Add(objects[i].ObjectName)
@@ -600,12 +588,9 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 }
 
 func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
-	if HasSuffix(srcObject, slashSeparator) {
-		srcObject = strings.TrimSuffix(srcObject, slashSeparator) + globalDirSuffix
-	}
-	if HasSuffix(dstObject, slashSeparator) {
-		dstObject = strings.TrimSuffix(dstObject, slashSeparator) + globalDirSuffix
-	}
+	srcObject = encodeDirObject(srcObject)
+	dstObject = encodeDirObject(dstObject)
+
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
@@ -1114,6 +1099,7 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
+
 	for {
 		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
@@ -1145,6 +1131,7 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTol
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
+	var prevEntry string
 	for {
 		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
@@ -1157,12 +1144,17 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTol
 			continue
 		}
 
+		if HasSuffix(fi.Name, slashSeparator) && fi.Name == prevEntry {
+			continue
+		}
+
 		entries.Files = append(entries.Files, fi)
 		i++
 		if i == maxKeys {
 			entries.IsTruncated = isTruncatedZones(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 			break
 		}
+		prevEntry = fi.Name
 	}
 	return entries
 }
@@ -1892,6 +1884,8 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 }
 
 func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	object = encodeDirObject(object)
+
 	lk := z.NewNSLock(ctx, bucket, object)
 	if bucket == minioMetaBucket {
 		// For .minio.sys bucket heals we should hold write locks.
@@ -2012,6 +2006,7 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 
 	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	diskCount := z.SetDriveCount()
+
 	if parityDrives == 0 {
 		parityDrives = getDefaultParityBlocks(diskCount)
 	}
@@ -2075,9 +2070,7 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 
 // PutObjectTags - replace or add tags to an existing object
 func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 	if z.SingleZone() {
 		return z.zones[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
@@ -2107,9 +2100,7 @@ func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string,
 
 // DeleteObjectTags - delete object tags from an existing object
 func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 	if z.SingleZone() {
 		return z.zones[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
@@ -2138,9 +2129,7 @@ func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object stri
 
 // GetObjectTags - get object tags from an existing object
 func (z *erasureZones) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
-	if HasSuffix(object, slashSeparator) {
-		object = strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
-	}
+	object = encodeDirObject(object)
 	if z.SingleZone() {
 		return z.zones[0].GetObjectTags(ctx, bucket, object, opts)
 	}

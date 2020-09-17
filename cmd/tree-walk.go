@@ -142,6 +142,9 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 		if HasSuffix(second, globalDirSuffix) {
 			second = strings.TrimSuffix(second, globalDirSuffix) + slashSeparator
 		}
+		if first == second {
+			return HasSuffix(entries[i], globalDirSuffix)
+		}
 		return first < second
 	})
 	return entries, false

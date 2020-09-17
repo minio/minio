@@ -131,6 +131,7 @@ func TestServerSuite(t *testing.T) {
 		// Init and run test on ErasureSet backend.
 		{serverType: "ErasureSet", signer: signerV4},
 	}
+	globalCLIContext.StrictS3Compat = true
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
 			runAllTests(testCase, &check{t, testCase.serverType})
@@ -261,20 +262,6 @@ func (s *TestSuiteCommon) TestObjectDir(c *check) {
 	c.Assert(err, nil)
 	// assert the http response status code.
 	c.Assert(response.StatusCode, http.StatusOK)
-
-	request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, "my-object-directory/"),
-		0, nil, s.accessKey, s.secretKey, s.signer)
-	c.Assert(err, nil)
-
-	helloReader := bytes.NewReader([]byte("Hello, World"))
-	request.ContentLength = helloReader.Size()
-	request.Body = ioutil.NopCloser(helloReader)
-
-	// execute the HTTP request.
-	response, err = s.client.Do(request)
-
-	c.Assert(err, nil)
-	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters.", http.StatusBadRequest)
 
 	request, err = newTestSignedRequest(http.MethodHead, getHeadObjectURL(s.endPoint, bucketName, "my-object-directory/"),
 		0, nil, s.accessKey, s.secretKey, s.signer)

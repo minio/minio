@@ -96,22 +96,14 @@ func (fi FileInfo) IsValid() bool {
 
 // ToObjectInfo - Converts metadata to object info.
 func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
-	if HasSuffix(object, SlashSeparator) {
-		return ObjectInfo{
-			Bucket:  bucket,
-			Name:    object,
-			IsDir:   true,
-			ModTime: fi.ModTime,
-		}
-	}
-
+	object = decodeDirObject(object)
 	versionID := fi.VersionID
 	if globalBucketVersioningSys.Enabled(bucket) && versionID == "" {
 		versionID = nullVersionID
 	}
 
 	objInfo := ObjectInfo{
-		IsDir:           false,
+		IsDir:           HasSuffix(object, SlashSeparator),
 		Bucket:          bucket,
 		Name:            object,
 		VersionID:       versionID,
