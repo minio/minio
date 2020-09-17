@@ -106,6 +106,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		s.writeErrorResponse(w, err)
 		return false
 	}
+
 	diskID := r.URL.Query().Get(storageRESTDiskID)
 	if diskID == "" {
 		// Request sent empty disk-id, we allow the request
@@ -113,6 +114,7 @@ func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool
 		// or create format.json
 		return true
 	}
+
 	storedDiskID, err := s.storage.GetDiskID()
 	if err != nil {
 		s.writeErrorResponse(w, err)

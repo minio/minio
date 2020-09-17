@@ -106,23 +106,26 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, bgSeq *healS
 		case <-time.After(defaultMonitorNewDiskInterval):
 			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
 
-			var erasureSetInZoneEndpointToHeal = make([]map[int]Endpoint, len(z.zones))
-			for i := range z.zones {
-				erasureSetInZoneEndpointToHeal[i] = map[int]Endpoint{}
-			}
-
+			var erasureSetInZoneEndpointToHeal []map[int]Endpoints
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
-			// heal only if new disks found.
-			for _, endpoint := range healDisks {
-				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
-					len(healDisks)))
-
+			if len(healDisks) > 0 {
 				// Reformat disks
 				bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
 
 				// Ensure that reformatting disks is finished
 				bgSeq.sourceCh <- healSource{bucket: nopHeal}
 
+				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
+					len(healDisks)))
+
+				erasureSetInZoneEndpointToHeal = make([]map[int]Endpoints, len(z.zones))
+				for i := range z.zones {
+					erasureSetInZoneEndpointToHeal[i] = map[int]Endpoints{}
+				}
+			}
+
+			// heal only if new disks found.
+			for _, endpoint := range healDisks {
 				// Load the new format of this passed endpoint
 				_, format, err := connectEndpoint(endpoint)
 				if err != nil {
@@ -142,20 +145,22 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, bgSeq *healS
 					continue
 				}
 
-				erasureSetInZoneEndpointToHeal[zoneIdx][setIndex] = endpoint
+				erasureSetInZoneEndpointToHeal[zoneIdx][setIndex] = append(erasureSetInZoneEndpointToHeal[zoneIdx][setIndex], endpoint)
 			}
 
 			for i, setMap := range erasureSetInZoneEndpointToHeal {
-				for setIndex, endpoint := range setMap {
-					logger.Info("Healing disk '%s' on %s zone", endpoint, humanize.Ordinal(i+1))
+				for setIndex, endpoints := range setMap {
+					for _, ep := range endpoints {
+						logger.Info("Healing disk '%s' on %s zone", ep, humanize.Ordinal(i+1))
 
-					if err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].setDriveCount); err != nil {
-						logger.LogIf(ctx, err)
-						continue
+						if err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].setDriveCount); err != nil {
+							logger.LogIf(ctx, err)
+							continue
+						}
+
+						// Only upon success pop the healed disk.
+						globalBackgroundHealState.popHealLocalDisks(ep)
 					}
-
-					// Only upon success pop the healed disk.
-					globalBackgroundHealState.popHealLocalDisks(endpoint)
 				}
 			}
 		}

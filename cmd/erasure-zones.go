@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -645,7 +646,7 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
-			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet, false))
+			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.setDriveCount, false))
 		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
 	}
 
@@ -764,7 +765,7 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, true)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.setDriveCount, true)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -856,7 +857,7 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet+1, false)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.setDriveCount, false)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -1225,7 +1226,7 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet+1)
+			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.setDriveCount)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
@@ -1608,13 +1609,8 @@ func (z *erasureZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, e
 }
 
 func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
-	// Acquire lock on format.json
-	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetRLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer formatLock.RUnlock()
-
+	// No locks needed since reload happens in HealFormat under
+	// write lock across all nodes.
 	for _, zone := range z.zones {
 		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
 			return err
@@ -1639,13 +1635,13 @@ func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.Heal
 	var countNoHeal int
 	for _, zone := range z.zones {
 		result, err := zone.HealFormat(ctx, dryRun)
-		if err != nil && err != errNoHealRequired {
+		if err != nil && !errors.Is(err, errNoHealRequired) {
 			logger.LogIf(ctx, err)
 			continue
 		}
 		// Count errNoHealRequired across all zones,
 		// to return appropriate error to the caller
-		if err == errNoHealRequired {
+		if errors.Is(err, errNoHealRequired) {
 			countNoHeal++
 		}
 		r.DiskCount += result.DiskCount
@@ -1653,10 +1649,21 @@ func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.Heal
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
 	}
+
+	// Healing succeeded notify the peers to reload format and re-initialize disks.
+	// We will not notify peers if healing is not required.
+	for _, nerr := range globalNotificationSys.ReloadFormat(dryRun) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
 	// No heal returned by all zones, return errNoHealRequired
 	if countNoHeal == len(z.zones) {
 		return r, errNoHealRequired
 	}
+
 	return r, nil
 }
 

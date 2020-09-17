@@ -45,7 +45,11 @@ const (
 	ObjectRemovedDeleteMarkerCreated
 	BucketCreated
 	BucketRemoved
-	OperationReplicationFailed
+	ObjectReplicationAll
+	ObjectReplicationFailed
+	ObjectReplicationMissedThreshold
+	ObjectReplicationReplicatedAfterThreshold
+	ObjectReplicationNotTracked
 )
 
 // Expand - returns expanded values of abbreviated event type.
@@ -70,6 +74,13 @@ func (name Name) Expand() []Name {
 		return []Name{
 			ObjectRemovedDelete,
 			ObjectRemovedDeleteMarkerCreated,
+		}
+	case ObjectReplicationAll:
+		return []Name{
+			ObjectReplicationFailed,
+			ObjectReplicationNotTracked,
+			ObjectReplicationMissedThreshold,
+			ObjectReplicationReplicatedAfterThreshold,
 		}
 	default:
 		return []Name{name}
@@ -113,8 +124,14 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:Delete"
 	case ObjectRemovedDeleteMarkerCreated:
 		return "s3:ObjectRemoved:DeleteMarkerCreated"
-	case OperationReplicationFailed:
+	case ObjectReplicationFailed:
 		return "s3:Replication:OperationFailedReplication"
+	case ObjectReplicationNotTracked:
+		return "s3:Replication:OperationNotTracked"
+	case ObjectReplicationMissedThreshold:
+		return "s3:Replication:OperationMissedThreshold"
+	case ObjectReplicationReplicatedAfterThreshold:
+		return "s3:Replication:OperationReplicatedAfterThreshold"
 	}
 
 	return ""
@@ -199,8 +216,16 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedDelete, nil
 	case "s3:ObjectRemoved:DeleteMarkerCreated":
 		return ObjectRemovedDeleteMarkerCreated, nil
+	case "s3:Replication:*":
+		return ObjectReplicationAll, nil
 	case "s3:Replication:OperationFailedReplication":
-		return OperationReplicationFailed, nil
+		return ObjectReplicationFailed, nil
+	case "s3:Replication:OperationMissedThreshold":
+		return ObjectReplicationMissedThreshold, nil
+	case "s3:Replication:OperationReplicatedAfterThreshold":
+		return ObjectReplicationReplicatedAfterThreshold, nil
+	case "s3:Replication:OperationNotTracked":
+		return ObjectReplicationNotTracked, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

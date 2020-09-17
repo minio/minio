@@ -481,11 +481,7 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 // ReloadFormat - reload format on the peer node.
 func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	values := make(url.Values)
-	if dryRun {
-		values.Set(peerRESTDryRun, "true")
-	} else {
-		values.Set(peerRESTDryRun, "false")
-	}
+	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
 
 	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
 	if err != nil {
