@@ -80,9 +80,6 @@ type erasureSets struct {
 
 	disksConnectEvent chan diskConnectInfo
 
-	// Done channel to control monitoring loop.
-	disksConnectDoneCh chan struct{}
-
 	// Distribution algorithm of choice.
 	distributionAlgo string
 	deploymentID     [16]byte
@@ -115,7 +112,7 @@ func (s *erasureSets) getDiskMap() map[string]StorageAPI {
 	for i := 0; i < s.setCount; i++ {
 		for j := 0; j < s.setDriveCount; j++ {
 			disk := s.erasureDisks[i][j]
-			if disk == nil {
+			if disk == OfflineDisk {
 				continue
 			}
 			if !disk.IsOnline() {
@@ -211,14 +208,16 @@ func (s *erasureSets) connectDisks() {
 			disk, format, err := connectEndpoint(endpoint)
 			if err != nil {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
-					logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
+					logger.Info(fmt.Sprintf("Found unformatted drive %s, attempting to heal...", endpoint))
 				} else {
 					printEndpointError(endpoint, err, true)
 				}
 				return
 			}
+			s.erasureDisksMu.RLock()
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)
+			s.erasureDisksMu.RUnlock()
 			if err != nil {
 				if endpoint.IsLocal {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
@@ -255,8 +254,6 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-s.disksConnectDoneCh:
 			return
 		case <-time.After(monitorInterval):
 			s.connectDisks()
@@ -318,7 +315,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		listTolerancePerSet: setDriveCount / 2,
 		format:              format,
 		disksConnectEvent:   make(chan diskConnectInfo),
-		disksConnectDoneCh:  make(chan struct{}),
 		distributionAlgo:    format.Erasure.DistributionAlgo,
 		deploymentID:        uuid.MustParse(format.ID),
 		pool:                NewMergeWalkPool(globalMergeLookupTimeout),
@@ -1191,16 +1187,12 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		return err
 	}
 
-	// kill the monitoring loop such that we stop writing
-	// to indicate that we will re-initialize everything
-	// with new format.
-	s.disksConnectDoneCh <- struct{}{}
+	s.erasureDisksMu.Lock()
 
 	// Replace with new reference format.
 	s.format = refFormat
 
 	// Close all existing disks and reconnect all the disks.
-	s.erasureDisksMu.Lock()
 	for _, disk := range storageDisks {
 		if disk == nil {
 			continue
@@ -1223,10 +1215,8 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		s.endpointStrings[m*s.setDriveCount+n] = disk.String()
 		s.erasureDisks[m][n] = disk
 	}
-	s.erasureDisksMu.Unlock()
 
-	// Restart monitoring loop to monitor reformatted disks again.
-	go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
+	s.erasureDisksMu.Unlock()
 
 	return nil
 }
@@ -1400,16 +1390,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			return madmin.HealResultItem{}, err
 		}
 
-		// kill the monitoring loop such that we stop writing
-		// to indicate that we will re-initialize everything
-		// with new format.
-		s.disksConnectDoneCh <- struct{}{}
+		s.erasureDisksMu.Lock()
 
 		// Replace with new reference format.
 		s.format = refFormat
 
 		// Disconnect/relinquish all existing disks, lockers and reconnect the disks, lockers.
-		s.erasureDisksMu.Lock()
 		for _, disk := range storageDisks {
 			if disk == nil {
 				continue
@@ -1432,10 +1418,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			s.endpointStrings[m*s.setDriveCount+n] = disk.String()
 			s.erasureDisks[m][n] = disk
 		}
-		s.erasureDisksMu.Unlock()
 
-		// Restart our monitoring loop to start monitoring newly formatted disks.
-		go s.monitorAndConnectEndpoints(GlobalContext, defaultMonitorConnectEndpointInterval)
+		s.erasureDisksMu.Unlock()
 	}
 
 	return res, nil
