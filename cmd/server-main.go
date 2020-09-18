@@ -231,7 +231,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// allocate dynamic timeout once before the loop
-	configLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
+	configLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
