@@ -194,7 +194,7 @@ func TestDynamicTimeoutAdjustExponential(t *testing.T) {
 
 	timeout := newDynamicTimeout(time.Minute, time.Second)
 
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(0)
 
 	initial := timeout.Timeout()
 
@@ -214,7 +214,7 @@ func TestDynamicTimeoutAdjustNormalized(t *testing.T) {
 
 	timeout := newDynamicTimeout(time.Minute, time.Second)
 
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(0)
 
 	initial := timeout.Timeout()
 
