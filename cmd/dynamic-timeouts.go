@@ -28,6 +28,7 @@ const (
 	dynamicTimeoutDecreaseThresholdPct = 0.10 // Lower threshold for failures in order to decrease timeout
 	dynamicTimeoutLogSize              = 16
 	maxDuration                        = math.MaxInt64
+	maxDynamicTimeout                  = 24 * time.Hour // Never set timeout bigger than this.
 )
 
 // timeouts that are dynamically adapted based on actual usage results
@@ -113,6 +114,10 @@ func (dt *dynamicTimeout) adjust(entries [dynamicTimeoutLogSize]time.Duration) {
 		// We are hitting the timeout too often, so increase the timeout by 25%
 		timeout := atomic.LoadInt64(&dt.timeout) * 125 / 100
 
+		// Set upper cap.
+		if timeout > int64(maxDynamicTimeout) {
+			timeout = int64(maxDynamicTimeout)
+		}
 		// Safety, shouldn't happen
 		if timeout < dt.minimum {
 			timeout = dt.minimum
