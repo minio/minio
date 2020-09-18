@@ -36,6 +36,7 @@ import { getServerInfo, hasServerPublicDomain } from '../browser/selectors'
 
 export const SET_LIST = "objects/SET_LIST"
 export const RESET_LIST = "objects/RESET_LIST"
+export const SET_FILTER = "objects/SET_FILTER"
 export const APPEND_LIST = "objects/APPEND_LIST"
 export const REMOVE = "objects/REMOVE"
 export const SET_SORT_BY = "objects/SET_SORT_BY"
@@ -56,6 +57,13 @@ export const setList = (objects) => ({
 export const resetList = () => ({
   type: RESET_LIST,
 })
+
+export const setFilter = filter => {
+  return {
+    type: SET_FILTER,
+    filter
+  }
+}
 
 export const setListLoading = (listLoading) => ({
   type: SET_LIST_LOADING,
