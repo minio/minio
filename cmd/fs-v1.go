@@ -1173,18 +1173,30 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
-
 		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fs.metaJSONFile)
-		wlk, err = fs.rwPool.Create(fsMetaPath)
+		wlk, err = fs.rwPool.Write(fsMetaPath)
+		var freshFile bool
 		if err != nil {
-			logger.LogIf(ctx, err)
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+			if !errors.Is(err, errFileNotFound) {
+				logger.LogIf(ctx, err)
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+			wlk, err = fs.rwPool.Create(fsMetaPath)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+			freshFile = true
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
 		defer func() {
-			// Remove meta file when PutObject encounters any error
-			if retErr != nil {
+			// Remove meta file when PutObject encounters
+			// any error and it is a fresh file.
+			//
+			// We should preserve the `fs.json` of any
+			// existing object
+			if retErr != nil && freshFile {
 				tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
 				fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir)
 			}
