@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config/api"
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/sys"
 )
 
@@ -45,7 +46,9 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 	if cfg.RequestsMax <= 0 {
 		stats, err := sys.GetStats()
 		if err != nil {
-			return
+			logger.LogIf(GlobalContext, err)
+			// Default to 16 GiB, not critical.
+			stats.TotalRAM = 16 << 30
 		}
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
