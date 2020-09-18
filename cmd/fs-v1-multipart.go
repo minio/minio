@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -708,13 +709,35 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, err
 	}
 	defer destLock.Unlock()
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile)
-	metaFile, err := fs.rwPool.Create(fsMetaPath)
+
+	bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
+	fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fs.metaJSONFile)
+	metaFile, err := fs.rwPool.Write(fsMetaPath)
+	var freshFile bool
 	if err != nil {
-		logger.LogIf(ctx, err)
-		return oi, toObjectErr(err, bucket, object)
+		if !errors.Is(err, errFileNotFound) {
+			logger.LogIf(ctx, err)
+			return oi, toObjectErr(err, bucket, object)
+		}
+		metaFile, err = fs.rwPool.Create(fsMetaPath)
+		if err != nil {
+			logger.LogIf(ctx, err)
+			return oi, toObjectErr(err, bucket, object)
+		}
+		freshFile = true
 	}
 	defer metaFile.Close()
+	defer func() {
+		// Remove meta file when CompleteMultipart encounters
+		// any error and it is a fresh file.
+		//
+		// We should preserve the `fs.json` of any
+		// existing object
+		if e != nil && freshFile {
+			tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
+			fsRemoveMeta(ctx, bucketMetaDir, fsMetaPath, tmpDir)
+		}
+	}()
 
 	// Read saved fs metadata for ongoing multipart.
 	fsMetaBuf, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
