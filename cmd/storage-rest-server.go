@@ -834,7 +834,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 				case errMinDiskSize:
 					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
 				case errUnsupportedDisk:
-					hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, MinIO erasure coding needs filesystems with O_DIRECT support", endpoint.Path)
+					hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support", endpoint.Path)
 					logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
 				case errDiskNotDir:
 					hint := fmt.Sprintf("'%s' MinIO erasure coding needs a directory", endpoint.Path)
@@ -847,12 +847,12 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 					} else {
 						username = "<your-username>"
 					}
-					hint := fmt.Sprintf("Run the following command to add the convenient permissions: `sudo chown -R %s %s && sudo chmod u+rxw %s`", username, endpoint.Path, endpoint.Path)
+					hint := fmt.Sprintf("Run the following command to add write permissions: `sudo chown -R %s %s && sudo chmod u+rxw %s`", username, endpoint.Path, endpoint.Path)
 					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize posix backend")
 				case errFaultyDisk:
 					logger.LogIf(GlobalContext, fmt.Errorf("disk is faulty at %s, please replace the drive", endpoint))
 				case errDiskFull:
-					logger.LogIf(GlobalContext, fmt.Errorf("disks is already full at %s, incoming I/O will fail", endpoint))
+					logger.LogIf(GlobalContext, fmt.Errorf("disk is already full at %s, incoming I/O will fail", endpoint))
 				default:
 					logger.LogIf(GlobalContext, fmt.Errorf("disk returned an unexpected error at %s, please investigate", endpoint))
 				}
