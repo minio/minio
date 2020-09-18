@@ -154,7 +154,9 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 		}
 	}
 
+	log("lockBlocking %s/%s for %#v: lockType readLock(%t), additional opts: %#v\n", id, source, dm.Names, isReadLock, opts)
 	retryCtx, cancel := context.WithTimeout(ctx, opts.Timeout)
+
 	defer cancel()
 
 	for {
@@ -163,6 +165,8 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 
 		select {
 		case <-retryCtx.Done():
+			log("lockBlocking canceled %s/%s for %#v: lockType readLock(%t), additional opts: %#v\n", id, source, dm.Names, isReadLock, opts)
+
 			// Caller context canceled or we timedout,
 			// return false anyways for both situations.
 			return false

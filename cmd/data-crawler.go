@@ -50,10 +50,14 @@ const (
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
 	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
 
+	// sleep for an hour after a lock timeout
+	// before retrying to acquire lock again.
+	dataCrawlerLeaderLockTimeoutSleepInterval = time.Hour
 )
 
 var (
-	globalCrawlerConfig crawler.Config
+	globalCrawlerConfig          crawler.Config
+	dataCrawlerLeaderLockTimeout = newDynamicTimeout(1*time.Minute, 30*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -67,6 +71,18 @@ func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 // The function will block until the context is canceled.
 // There should only ever be one crawler running per cluster.
 func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
+	// Make sure only 1 crawler is running on the cluster.
+	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "runDataCrawler.lock")
+	for {
+		err := locker.GetLock(dataCrawlerLeaderLockTimeout)
+		if err != nil {
+			time.Sleep(dataCrawlerLeaderLockTimeoutSleepInterval)
+			continue
+		}
+		break
+		// No unlock for "leader" lock.
+	}
+
 	// Load current bloom cycle
 	nextBloomCycle := intDataUpdateTracker.current() + 1
 	var buf bytes.Buffer
