@@ -446,52 +446,51 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 		return result, toObjectErr(err, bucket)
 	}
 
-	partsMap := make(map[int]string)
+	partsMap := make(map[int]PartInfo)
 	for _, entry := range entries {
 		if entry == fs.metaJSONFile {
 			continue
 		}
-		partNumber, etag1, _, derr := fs.decodePartFile(entry)
+
+		partNumber, currentEtag, actualSize, derr := fs.decodePartFile(entry)
 		if derr != nil {
 			// Skip part files whose name don't match expected format. These could be backend filesystem specific files.
 			continue
 		}
-		etag2, ok := partsMap[partNumber]
-		if !ok {
-			partsMap[partNumber] = etag1
+
+		entryStat, err := fsStatFile(ctx, pathJoin(uploadIDDir, entry))
+		if err != nil {
 			continue
 		}
-		stat1, serr := fsStatFile(ctx, pathJoin(uploadIDDir, getPartFile(entries, partNumber, etag1)))
-		if serr != nil {
-			return result, toObjectErr(serr)
+
+		currentMeta := PartInfo{
+			PartNumber:   partNumber,
+			ETag:         currentEtag,
+			ActualSize:   actualSize,
+			Size:         entryStat.Size(),
+			LastModified: entryStat.ModTime(),
 		}
-		stat2, serr := fsStatFile(ctx, pathJoin(uploadIDDir, getPartFile(entries, partNumber, etag2)))
-		if serr != nil {
-			return result, toObjectErr(serr)
+
+		cachedMeta, ok := partsMap[partNumber]
+		if !ok {
+			partsMap[partNumber] = currentMeta
+			continue
 		}
-		if stat1.ModTime().After(stat2.ModTime()) {
-			partsMap[partNumber] = etag1
+
+		if currentMeta.LastModified.After(cachedMeta.LastModified) {
+			partsMap[partNumber] = currentMeta
 		}
 	}
 
 	var parts []PartInfo
-	var actualSize int64
-	for partNumber, etag := range partsMap {
-		partFile := getPartFile(entries, partNumber, etag)
-		if partFile == "" {
-			return result, InvalidPart{}
-		}
-		// Read the actualSize from the pathFileName.
-		subParts := strings.Split(partFile, ".")
-		actualSize, err = strconv.ParseInt(subParts[len(subParts)-1], 10, 64)
-		if err != nil {
-			return result, InvalidPart{}
-		}
-		parts = append(parts, PartInfo{PartNumber: partNumber, ETag: etag, ActualSize: actualSize})
+	for _, partInfo := range partsMap {
+		parts = append(parts, partInfo)
 	}
+
 	sort.Slice(parts, func(i int, j int) bool {
 		return parts[i].PartNumber < parts[j].PartNumber
 	})
+
 	i := 0
 	if partNumberMarker != 0 {
 		// If the marker was set, skip the entries till the marker.
@@ -515,21 +514,19 @@ func (fs *FSObjects) ListObjectParts(ctx context.Context, bucket, object, upload
 			result.NextPartNumberMarker = result.Parts[partsCount-1].PartNumber
 		}
 	}
-	for i, part := range result.Parts {
-		var stat os.FileInfo
-		stat, err = fsStatFile(ctx, pathJoin(uploadIDDir,
-			fs.encodePartFile(part.PartNumber, part.ETag, part.ActualSize)))
-		if err != nil {
-			return result, toObjectErr(err)
-		}
-		result.Parts[i].LastModified = stat.ModTime()
-		result.Parts[i].Size = part.ActualSize
-	}
 
-	fsMetaBytes, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
+	rc, _, err := fsOpenFile(ctx, pathJoin(uploadIDDir, fs.metaJSONFile), 0)
 	if err != nil {
-		logger.LogIf(ctx, err)
-		return result, err
+		if err == errFileNotFound || err == errFileAccessDenied {
+			return result, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
+		}
+		return result, toObjectErr(err, bucket, object)
+	}
+	defer rc.Close()
+
+	fsMetaBytes, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return result, toObjectErr(err, bucket, object)
 	}
 
 	var fsMeta fsMetaV1
