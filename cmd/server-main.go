@@ -198,7 +198,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	txnLk := newObject.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
+	txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 	defer func(txnLk RWLocker) {
 		txnLk.Unlock()
 
@@ -248,7 +248,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	for range retry.NewTimerWithJitter(retryCtx, 250*time.Millisecond, 500*time.Millisecond, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(configLockTimeout); err != nil {
+		if err = txnLk.GetLock(retryCtx, configLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}
@@ -368,9 +368,9 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 
 func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 crawler is running on the cluster.
-	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "leader")
+	locker := objAPI.NewNSLock(minioMetaBucket, "leader")
 	for {
-		err := locker.GetLock(leaderLockTimeout)
+		err := locker.GetLock(ctx, leaderLockTimeout)
 		if err != nil {
 			time.Sleep(leaderLockTimeoutSleepInterval)
 			continue

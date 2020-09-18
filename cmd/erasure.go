@@ -68,8 +68,8 @@ type erasureObjects struct {
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (er erasureObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return er.nsMutex.NewNSLock(ctx, er.getLockers, bucket, objects...)
+func (er erasureObjects) NewNSLock(bucket string, objects ...string) RWLocker {
+	return er.nsMutex.NewNSLock(er.getLockers, bucket, objects...)
 }
 
 // SetDriveCount returns the current drives per set.

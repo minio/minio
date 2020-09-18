@@ -142,7 +142,7 @@ type diskCache struct {
 	// nsMutex namespace lock
 	nsMutex *nsLockMap
 	// Object functions pointing to the corresponding functions of backend implementation.
-	NewNSLockFn func(ctx context.Context, cachePath string) RWLocker
+	NewNSLockFn func(cachePath string) RWLocker
 }
 
 // Inits the disk cache dir if it is not initialized already.
@@ -175,8 +175,8 @@ func newDiskCache(ctx context.Context, dir string, config cache.Config) (*diskCa
 	}
 	go cache.purgeWait(ctx)
 	cache.diskSpaceAvailable(0) // update if cache usage is already high.
-	cache.NewNSLockFn = func(ctx context.Context, cachePath string) RWLocker {
-		return cache.nsMutex.NewNSLock(ctx, nil, cachePath, "")
+	cache.NewNSLockFn = func(cachePath string) RWLocker {
+		return cache.nsMutex.NewNSLock(nil, cachePath, "")
 	}
 	return &cache, nil
 }
@@ -419,8 +419,8 @@ func (c *diskCache) Stat(ctx context.Context, bucket, object string) (oi ObjectI
 // if partial object is cached.
 func (c *diskCache) statCachedMeta(ctx context.Context, cacheObjPath string) (meta *cacheMeta, partial bool, numHits int, err error) {
 
-	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err = cLock.GetRLock(globalOperationTimeout); err != nil {
+	cLock := c.NewNSLockFn(cacheObjPath)
+	if err = cLock.GetRLock(ctx, globalOperationTimeout); err != nil {
 		return
 	}
 
@@ -501,8 +501,8 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 // incHitsOnly is true if metadata update is incrementing only the hit counter
 func (c *diskCache) SaveMetadata(ctx context.Context, bucket, object string, meta map[string]string, actualSize int64, rs *HTTPRangeSpec, rsFileName string, incHitsOnly bool) error {
 	cachedPath := getCacheSHADir(c.dir, bucket, object)
-	cLock := c.NewNSLockFn(ctx, cachedPath)
-	if err := cLock.GetLock(globalOperationTimeout); err != nil {
+	cLock := c.NewNSLockFn(cachedPath)
+	if err := cLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
@@ -666,8 +666,8 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		return errDiskFull
 	}
 	cachePath := getCacheSHADir(c.dir, bucket, object)
-	cLock := c.NewNSLockFn(ctx, cachePath)
-	if err := cLock.GetLock(globalOperationTimeout); err != nil {
+	cLock := c.NewNSLockFn(cachePath)
+	if err := cLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()
@@ -866,8 +866,8 @@ func (c *diskCache) bitrotReadFromCache(ctx context.Context, filePath string, of
 // Get returns ObjectInfo and reader for object from disk cache
 func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, numHits int, err error) {
 	cacheObjPath := getCacheSHADir(c.dir, bucket, object)
-	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err := cLock.GetRLock(globalOperationTimeout); err != nil {
+	cLock := c.NewNSLockFn(cacheObjPath)
+	if err := cLock.GetRLock(ctx, globalOperationTimeout); err != nil {
 		return nil, numHits, err
 	}
 
@@ -930,8 +930,8 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 
 // Deletes the cached object
 func (c *diskCache) delete(ctx context.Context, cacheObjPath string) (err error) {
-	cLock := c.NewNSLockFn(ctx, cacheObjPath)
-	if err := cLock.GetLock(globalOperationTimeout); err != nil {
+	cLock := c.NewNSLockFn(cacheObjPath)
+	if err := cLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return err
 	}
 	defer cLock.Unlock()

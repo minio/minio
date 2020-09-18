@@ -72,8 +72,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, NotImplemented{}
 	}
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
-	lk := er.NewNSLock(ctx, dstBucket, dstObject)
-	if err := lk.GetLock(globalOperationTimeout); err != nil {
+	lk := er.NewNSLock(dstBucket, dstObject)
+	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return oi, err
 	}
 	defer lk.Unlock()
@@ -161,15 +161,15 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	// Acquire lock
 	if lockType != noLock {
-		lock := er.NewNSLock(ctx, bucket, object)
+		lock := er.NewNSLock(bucket, object)
 		switch lockType {
 		case writeLock:
-			if err = lock.GetLock(globalOperationTimeout); err != nil {
+			if err = lock.GetLock(ctx, globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.Unlock
 		case readLock:
-			if err = lock.GetRLock(globalOperationTimeout); err != nil {
+			if err = lock.GetRLock(ctx, globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.RUnlock
@@ -237,8 +237,8 @@ func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, s
 	}
 
 	// Lock the object before reading.
-	lk := er.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
+	lk := er.NewNSLock(bucket, object)
+	if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
 		return err
 	}
 	defer lk.RUnlock()
@@ -428,8 +428,8 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	}
 
 	// Lock the object before reading.
-	lk := er.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
+	lk := er.NewNSLock(bucket, object)
+	if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.RUnlock()
@@ -747,8 +747,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
-	lk := er.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalOperationTimeout); err != nil {
+	lk := er.NewNSLock(bucket, object)
+	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.Unlock()
@@ -1025,8 +1025,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	// Acquire a write lock before deleting the object.
-	lk := er.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
+	lk := er.NewNSLock(bucket, object)
+	if err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.Unlock()

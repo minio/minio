@@ -68,7 +68,7 @@ type ObjectLayer interface {
 	SetDriveCount() int // Only implemented by erasure layer
 
 	// Locking operations on object.
-	NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker
+	NewNSLock(bucket string, objects ...string) RWLocker
 
 	// Storage operations.
 	Shutdown(context.Context) error
