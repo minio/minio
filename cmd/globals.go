@@ -63,6 +63,8 @@ const (
 	globalMinioModeErasure         = "mode-server-xl"
 	globalMinioModeDistErasure     = "mode-server-distributed-xl"
 	globalMinioModeGatewayPrefix   = "mode-gateway-"
+	globalDirSuffix                = "__XLDIR__"
+	globalDirSuffixWithSlash       = globalDirSuffix + slashSeparator
 
 	// Add new global values here.
 )

@@ -737,3 +737,20 @@ func (t *timedValue) Invalidate() {
 	t.value = nil
 	t.mu.Unlock()
 }
+
+// On MinIO a directory object is stored as a regular object with "__XLDIR__" suffix.
+// For ex. "prefix/" is stored as "prefix__XLDIR__"
+func encodeDirObject(object string) string {
+	if HasSuffix(object, slashSeparator) {
+		return strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
+	}
+	return object
+}
+
+// Reverse process of encodeDirObject()
+func decodeDirObject(object string) string {
+	if HasSuffix(object, globalDirSuffix) {
+		return strings.TrimSuffix(object, globalDirSuffix) + slashSeparator
+	}
+	return object
+}
