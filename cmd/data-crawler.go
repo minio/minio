@@ -334,7 +334,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil && filter != nil {
+		if f.oldCache.Info.lifeCycle != nil {
 			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 				if f.dataUsageCrawlDebug {
