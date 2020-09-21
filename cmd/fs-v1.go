@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -623,10 +622,6 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(ctx, err)
-				return oi, toObjectErr(err, srcBucket, srcObject)
-			}
 			wlk, err = fs.rwPool.Create(fsMetaPath)
 			if err != nil {
 				logger.LogIf(ctx, err)
@@ -1177,10 +1172,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		wlk, err = fs.rwPool.Write(fsMetaPath)
 		var freshFile bool
 		if err != nil {
-			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(ctx, err)
-				return ObjectInfo{}, toObjectErr(err, bucket, object)
-			}
 			wlk, err = fs.rwPool.Create(fsMetaPath)
 			if err != nil {
 				logger.LogIf(ctx, err)
@@ -1511,10 +1502,6 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 	fsMeta := fsMetaV1{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
 	if err != nil {
-		if !errors.Is(err, errFileNotFound) {
-			logger.LogIf(ctx, err)
-			return toObjectErr(err, bucket, object)
-		}
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			logger.LogIf(ctx, err)

@@ -94,6 +94,10 @@ func isSysErrNotEmpty(err error) bool {
 // Check if the given error corresponds to the specific ERROR_PATH_NOT_FOUND for windows
 func isSysErrPathNotFound(err error) bool {
 	if runtime.GOOS != globalWindowsOSName {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return pathErr.Err == syscall.ENOENT
+		}
 		return false
 	}
 	var pathErr *os.PathError
