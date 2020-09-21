@@ -244,14 +244,25 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		}
 	}
 
-	dd, err := uuid.Parse(fi.DataDir)
-	if err != nil {
-		return err
+	var dd uuid.UUID
+	if fi.DataDir != "" {
+		dd, err = uuid.Parse(fi.DataDir)
+		if err != nil {
+			return err
+		}
 	}
 
-	ventry := xlMetaV2Version{
-		Type: ObjectType,
-		ObjectV2: &xlMetaV2Object{
+	ventry := xlMetaV2Version{}
+
+	if fi.Deleted {
+		ventry.Type = DeleteType
+		ventry.DeleteMarker = &xlMetaV2DeleteMarker{
+			VersionID: uv,
+			ModTime:   fi.ModTime.UnixNano(),
+		}
+	} else {
+		ventry.Type = ObjectType
+		ventry.ObjectV2 = &xlMetaV2Object{
 			VersionID:          uv,
 			DataDir:            dd,
 			Size:               fi.Size,
@@ -269,27 +280,27 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 			PartActualSizes:    make([]int64, len(fi.Parts)),
 			MetaSys:            make(map[string][]byte),
 			MetaUser:           make(map[string]string, len(fi.Metadata)),
-		},
-	}
-
-	for i := range fi.Erasure.Distribution {
-		ventry.ObjectV2.ErasureDist[i] = uint8(fi.Erasure.Distribution[i])
-	}
-
-	for i := range fi.Parts {
-		ventry.ObjectV2.PartSizes[i] = fi.Parts[i].Size
-		if fi.Parts[i].ETag != "" {
-			ventry.ObjectV2.PartETags[i] = fi.Parts[i].ETag
 		}
-		ventry.ObjectV2.PartNumbers[i] = fi.Parts[i].Number
-		ventry.ObjectV2.PartActualSizes[i] = fi.Parts[i].ActualSize
-	}
 
-	for k, v := range fi.Metadata {
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
-			ventry.ObjectV2.MetaSys[k] = []byte(v)
-		} else {
-			ventry.ObjectV2.MetaUser[k] = v
+		for i := range fi.Erasure.Distribution {
+			ventry.ObjectV2.ErasureDist[i] = uint8(fi.Erasure.Distribution[i])
+		}
+
+		for i := range fi.Parts {
+			ventry.ObjectV2.PartSizes[i] = fi.Parts[i].Size
+			if fi.Parts[i].ETag != "" {
+				ventry.ObjectV2.PartETags[i] = fi.Parts[i].ETag
+			}
+			ventry.ObjectV2.PartNumbers[i] = fi.Parts[i].Number
+			ventry.ObjectV2.PartActualSizes[i] = fi.Parts[i].ActualSize
+		}
+
+		for k, v := range fi.Metadata {
+			if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+				ventry.ObjectV2.MetaSys[k] = []byte(v)
+			} else {
+				ventry.ObjectV2.MetaUser[k] = v
+			}
 		}
 	}
 
