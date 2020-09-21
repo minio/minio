@@ -32,6 +32,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	mioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/trie"
 )
 
 // Returns EXPORT/.minio.sys/multipart/SHA256/UPLOADID
@@ -577,7 +578,10 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
 
-	partSize := int64(-1) // Used later to ensure that all parts sizes are same.
+	// ensure that part ETag is canonicalized to strip off extraneous quotes
+	for i := range parts {
+		parts[i].ETag = canonicalizeETag(parts[i].ETag)
+	}
 
 	fsMeta := fsMetaV1{}
 
@@ -591,16 +595,17 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 		return oi, err
 	}
 
-	// ensure that part ETag is canonicalized to strip off extraneous quotes
-	for i := range parts {
-		parts[i].ETag = canonicalizeETag(parts[i].ETag)
+	// Create entries trie structure for prefix match
+	entriesTrie := trie.NewTrie()
+	for _, entry := range entries {
+		entriesTrie.Insert(entry)
 	}
 
 	// Save consolidated actual size.
 	var objectActualSize int64
 	// Validate all parts and then commit to disk.
 	for i, part := range parts {
-		partFile := getPartFile(entries, part.PartNumber, part.ETag)
+		partFile := getPartFile(entriesTrie, part.PartNumber, part.ETag)
 		if partFile == "" {
 			return oi, InvalidPart{
 				PartNumber: part.PartNumber,
@@ -627,9 +632,6 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 				return oi, InvalidPart{}
 			}
 			return oi, err
-		}
-		if partSize == -1 {
-			partSize = actualSize
 		}
 
 		fsMeta.Parts[i] = ObjectPartInfo{
@@ -695,8 +697,16 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 			fsRemoveFile(ctx, file.filePath)
 		}
 		for _, part := range parts {
-			partPath := getPartFile(entries, part.PartNumber, part.ETag)
-			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partPath), globalFSOSync); err != nil {
+			partFile := getPartFile(entriesTrie, part.PartNumber, part.ETag)
+			if partFile == "" {
+				logger.LogIf(ctx, fmt.Errorf("%.5d.%s missing will not proceed",
+					part.PartNumber, part.ETag))
+				return oi, InvalidPart{
+					PartNumber: part.PartNumber,
+					GotETag:    part.ETag,
+				}
+			}
+			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partFile), globalFSOSync); err != nil {
 				logger.LogIf(ctx, err)
 				return oi, toObjectErr(err)
 			}
