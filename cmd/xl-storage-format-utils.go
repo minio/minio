@@ -20,6 +20,20 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+type versionsSorter []FileInfo
+
+func (v versionsSorter) Len() int      { return len(v) }
+func (v versionsSorter) Swap(i, j int) { v[i], v[j] = v[j], v[i] }
+func (v versionsSorter) Less(i, j int) bool {
+	if v[i].IsLatest {
+		return true
+	}
+	if v[j].IsLatest {
+		return false
+	}
+	return v[i].ModTime.After(v[j].ModTime)
+}
+
 func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
 		var xlMeta xlMetaV2
