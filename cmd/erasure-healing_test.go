@@ -422,7 +422,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	z := obj.(*erasureZones)
 	er := z.zones[0].sets[0]
 	firstDisk := er.getDisks()[0]
-	err = firstDisk.DeleteFile(context.Background(), bucket, object)
+	err = firstDisk.DeleteVol(context.Background(), pathJoin(bucket, encodeDirObject(object)), true)
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -434,7 +434,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	}
 
 	// Check if the empty directory is restored in the first disk
-	_, err = firstDisk.StatVol(context.Background(), pathJoin(bucket, object))
+	_, err = firstDisk.StatVol(context.Background(), pathJoin(bucket, encodeDirObject(object)))
 	if err != nil {
 		t.Fatalf("Expected object to be present but stat failed - %v", err)
 	}

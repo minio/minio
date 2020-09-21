@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"reflect"
@@ -27,6 +28,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/crypto"
+	"github.com/minio/minio/pkg/trie"
 )
 
 // Tests validate bucket name.
@@ -440,40 +442,22 @@ func TestExcludeForCompression(t *testing.T) {
 	}
 }
 
-// Test getPartFile function.
-func TestGetPartFile(t *testing.T) {
-	testCases := []struct {
-		entries    []string
-		partNumber int
-		etag       string
-		result     string
-	}{
-		{
-			entries:    []string{"00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", "fs.json", "00002.d73d8ab724016dfb051e2d3584495c54.32891137"},
-			partNumber: 1,
-			etag:       "8a034f82cb9cb31140d87d3ce2a9ede3",
-			result:     "00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864",
-		},
-		{
-			entries:    []string{"00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", "fs.json", "00002.d73d8ab724016dfb051e2d3584495c54.32891137"},
-			partNumber: 2,
-			etag:       "d73d8ab724016dfb051e2d3584495c54",
-			result:     "00002.d73d8ab724016dfb051e2d3584495c54.32891137",
-		},
-		{
-			entries:    []string{"00001.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", "fs.json", "00002.d73d8ab724016dfb051e2d3584495c54.32891137"},
-			partNumber: 1,
-			etag:       "d73d8ab724016dfb051e2d3584495c54",
-			result:     "",
-		},
+func BenchmarkGetPartFileWithTrie(b *testing.B) {
+	b.ResetTimer()
+
+	entriesTrie := trie.NewTrie()
+	for i := 1; i <= 10000; i++ {
+		entriesTrie.Insert(fmt.Sprintf("%.5d.8a034f82cb9cb31140d87d3ce2a9ede3.67108864", i))
 	}
-	for i, test := range testCases {
-		got := getPartFile(test.entries, test.partNumber, test.etag)
-		if got != test.result {
-			t.Errorf("Test %d - expected %s but received %s",
-				i+1, test.result, got)
+
+	for i := 1; i <= 10000; i++ {
+		partFile := getPartFile(entriesTrie, i, "8a034f82cb9cb31140d87d3ce2a9ede3")
+		if partFile == "" {
+			b.Fatal("partFile returned is empty")
 		}
 	}
+
+	b.ReportAllocs()
 }
 
 func TestGetActualSize(t *testing.T) {

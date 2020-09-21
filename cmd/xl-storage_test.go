@@ -453,7 +453,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && !os.IsPermission(err) {
+		if err != nil && err != errFileAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -552,7 +552,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && !os.IsPermission(err) {
+		if err != nil && err != errFileAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -804,7 +804,7 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && !os.IsPermission(err) {
+		if err != nil && err != errFileAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -928,7 +928,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && !os.IsPermission(err) {
+		if err != nil && err != errFileAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -1126,7 +1126,7 @@ func TestXLStorageReadFile(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && !os.IsPermission(err) {
+		if err != nil && err != errFileAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -1296,7 +1296,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 		var xlStoragePermStorage StorageAPI
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && !os.IsPermission(err) {
+		if err != nil && err != errFileAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 

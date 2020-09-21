@@ -21,7 +21,7 @@ package trie
 // Node trie tree node container carries value and children.
 type Node struct {
 	exists bool
-	value  interface{}
+	value  string
 	child  map[rune]*Node // runes as child.
 }
 
@@ -29,7 +29,7 @@ type Node struct {
 func newNode() *Node {
 	return &Node{
 		exists: false,
-		value:  nil,
+		value:  "",
 		child:  make(map[rune]*Node),
 	}
 }
@@ -65,16 +65,16 @@ func (t *Trie) Insert(key string) {
 }
 
 // PrefixMatch - prefix match.
-func (t *Trie) PrefixMatch(key string) []interface{} {
+func (t *Trie) PrefixMatch(key string) []string {
 	node, _ := t.findNode(key)
-	if node != nil {
-		return t.Walk(node)
+	if node == nil {
+		return nil
 	}
-	return []interface{}{}
+	return t.Walk(node)
 }
 
 // Walk the tree.
-func (t *Trie) Walk(node *Node) (ret []interface{}) {
+func (t *Trie) Walk(node *Node) (ret []string) {
 	if node.exists {
 		ret = append(ret, node.value)
 	}

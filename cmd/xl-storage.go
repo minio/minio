@@ -176,15 +176,6 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 		return path, errDiskNotDir
 	}
 
-	di, err := getDiskInfo(path)
-	if err != nil {
-		return path, err
-	}
-
-	if err = checkDiskMinTotal(di); err != nil {
-		return path, err
-	}
-
 	// check if backend is writable.
 	var rnd [8]byte
 	_, _ = rand.Read(rnd[:])
@@ -195,6 +186,7 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 	var file *os.File
 
 	if requireDirectIO {
+		// only erasure coding needs direct-io support
 		file, err = disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
 	} else {
 		file, err = os.OpenFile(fn, os.O_CREATE|os.O_EXCL, 0666)
@@ -204,11 +196,21 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 	// if direct i/o failed.
 	if err != nil {
 		if isSysErrInvalidArg(err) {
+			// O_DIRECT not supported
 			return path, errUnsupportedDisk
 		}
-		return path, err
+		return path, osErrToFileErr(err)
 	}
 	file.Close()
+
+	di, err := getDiskInfo(path)
+	if err != nil {
+		return path, err
+	}
+
+	if err = checkDiskMinTotal(di); err != nil {
+		return path, err
+	}
 
 	return path, nil
 }

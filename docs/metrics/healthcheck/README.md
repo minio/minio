@@ -55,7 +55,7 @@ Date: Tue, 21 Jul 2020 00:36:14 GMT
 ```
 
 #### Checking cluster health for maintenance
-You may query the cluster probe endpoint to check if the node which received the request can be taken down for maintenance, if the server replies back '412 Precondition Failed' this means you will loose HA. '200 OK' means you are okay to proceed.
+You may query the cluster probe endpoint to check if the node which received the request can be taken down for maintenance, if the server replies back '412 Precondition Failed' this means you will lose HA. '200 OK' means you are okay to proceed.
 
 ```
 curl http://minio1:9001/minio/health/cluster?maintenance=true

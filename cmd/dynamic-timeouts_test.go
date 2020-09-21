@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"math/rand"
+	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
@@ -98,7 +100,7 @@ func TestDynamicTimeoutDualDecrease(t *testing.T) {
 	adjustedAgain := timeout.Timeout()
 
 	if initial <= adjusted || adjusted <= adjustedAgain {
-		t.Errorf("Failure to decrease timeout multiple times")
+		t.Errorf("Failure to decrease timeout multiple times, initial: %v, adjusted: %v, again: %v", initial, adjusted, adjustedAgain)
 	}
 }
 
@@ -121,6 +123,30 @@ func TestDynamicTimeoutManyDecreases(t *testing.T) {
 	if initial <= adjusted || adjusted <= successTimeout {
 		t.Errorf("Failure to decrease timeout appropriately")
 	}
+}
+
+func TestDynamicTimeoutConcurrent(t *testing.T) {
+	// Race test.
+	timeout := newDynamicTimeout(time.Second, time.Millisecond)
+	var wg sync.WaitGroup
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		wg.Add(1)
+		rng := rand.New(rand.NewSource(int64(i)))
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 100; i++ {
+				timeout.LogFailure()
+				for j := 0; j < 100; j++ {
+					timeout.LogSuccess(time.Duration(float64(time.Second) * rng.Float64()))
+				}
+				to := timeout.Timeout()
+				if to < time.Millisecond || to > time.Second {
+					panic(to)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestDynamicTimeoutHitMinimum(t *testing.T) {
@@ -168,7 +194,7 @@ func TestDynamicTimeoutAdjustExponential(t *testing.T) {
 
 	timeout := newDynamicTimeout(time.Minute, time.Second)
 
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(0)
 
 	initial := timeout.Timeout()
 
@@ -188,7 +214,7 @@ func TestDynamicTimeoutAdjustNormalized(t *testing.T) {
 
 	timeout := newDynamicTimeout(time.Minute, time.Second)
 
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(0)
 
 	initial := timeout.Timeout()
 

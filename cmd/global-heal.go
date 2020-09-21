@@ -26,17 +26,11 @@ import (
 
 const (
 	bgHealingUUID = "0000-0000-0000-0000"
-	// sleep for an hour after a lock timeout
-	// before retrying to acquire lock again.
-	leaderLockTimeoutSleepInterval = time.Hour
 )
-
-var leaderLockTimeout = newDynamicTimeout(30*time.Second, time.Minute)
 
 // NewBgHealSequence creates a background healing sequence
 // operation which crawls all objects and heal them.
 func newBgHealSequence() *healSequence {
-
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
 	ctx, cancelCtx := context.WithCancel(logger.SetReqInfo(GlobalContext, reqInfo))
 

@@ -121,11 +121,6 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		t.NodeName = host
 	}
 
-	rw := logger.NewResponseWriter(w)
-	rw.LogErrBody = true
-	rw.LogAllBody = logBody
-	f(rw, r)
-
 	rq := trace.RequestInfo{
 		Time:     time.Now().UTC(),
 		Proto:    r.Proto,
@@ -134,14 +129,24 @@ func Trace(f http.HandlerFunc, logBody bool, w http.ResponseWriter, r *http.Requ
 		RawQuery: r.URL.RawQuery,
 		Client:   handlers.GetSourceIP(r),
 		Headers:  reqHeaders,
-		Body:     reqBodyRecorder.Data(),
 	}
+
+	rw := logger.NewResponseWriter(w)
+	rw.LogErrBody = true
+	rw.LogAllBody = logBody
+
+	// Execute call.
+	f(rw, r)
+
 	rs := trace.ResponseInfo{
 		Time:       time.Now().UTC(),
 		Headers:    rw.Header().Clone(),
 		StatusCode: rw.StatusCode,
 		Body:       rw.Body(),
 	}
+
+	// Transfer request body
+	rq.Body = reqBodyRecorder.Data()
 
 	if rs.StatusCode == 0 {
 		rs.StatusCode = http.StatusOK

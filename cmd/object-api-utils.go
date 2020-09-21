@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/trie"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -487,13 +488,12 @@ func hasPattern(patterns []string, matchStr string) bool {
 }
 
 // Returns the part file name which matches the partNumber and etag.
-func getPartFile(entries []string, partNumber int, etag string) string {
-	for _, entry := range entries {
-		if strings.HasPrefix(entry, fmt.Sprintf("%.5d.%s.", partNumber, etag)) {
-			return entry
-		}
+func getPartFile(entriesTrie *trie.Trie, partNumber int, etag string) (partFile string) {
+	for _, match := range entriesTrie.PrefixMatch(fmt.Sprintf("%.5d.%s.", partNumber, etag)) {
+		partFile = match
+		break
 	}
-	return ""
+	return partFile
 }
 
 // Returns the compressed offset which should be skipped.

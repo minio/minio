@@ -231,7 +231,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// allocate dynamic timeout once before the loop
-	configLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
+	configLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
@@ -366,22 +366,6 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	return nil
 }
 
-func startBackgroundOps(ctx context.Context, objAPI ObjectLayer) {
-	// Make sure only 1 crawler is running on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "leader")
-	for {
-		err := locker.GetLock(ctx, leaderLockTimeout)
-		if err != nil {
-			time.Sleep(leaderLockTimeoutSleepInterval)
-			continue
-		}
-		break
-		// No unlock for "leader" lock.
-	}
-
-	initDataCrawler(ctx, objAPI)
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
@@ -503,7 +487,7 @@ func serverMain(ctx *cli.Context) {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	go startBackgroundOps(GlobalContext, newObject)
+	go initDataCrawler(GlobalContext, newObject)
 
 	logger.FatalIf(initSafeMode(GlobalContext, newObject), "Unable to initialize server switching into safe-mode")
 
