@@ -37,30 +37,6 @@ import (
 // list all errors which can be ignored in object operations.
 var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)
 
-// putObjectDir hints the bottom layer to create a new directory.
-func (er erasureObjects) putObjectDir(ctx context.Context, bucket, object string, writeQuorum int) error {
-	storageDisks := er.getDisks()
-
-	g := errgroup.WithNErrs(len(storageDisks))
-
-	// Prepare object creation in all disks
-	for index := range storageDisks {
-		if storageDisks[index] == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			err := storageDisks[index].MakeVol(ctx, pathJoin(bucket, object))
-			if err != nil && err != errVolumeExists {
-				return err
-			}
-			return nil
-		}, index)
-	}
-
-	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
-}
-
 /// Object Operations
 
 // CopyObject - copy object source object to destination object.
@@ -649,24 +625,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// If PutObject succeeded there would be no temporary
 	// object to delete.
 	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempObj, writeQuorum)
-
-	// This is a special case with size as '0' and object ends with
-	// a slash separator, we treat it like a valid operation and
-	// return success.
-	if isObjectDir(object, data.Size()) {
-		// Check if an object is present as one of the parent dir.
-		// -- FIXME. (needs a new kind of lock).
-		// -- FIXME (this also causes performance issue when disks are down).
-		if er.parentDirIsObject(ctx, bucket, path.Dir(object)) {
-			return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
-		}
-
-		if err = er.putObjectDir(ctx, bucket, object, writeQuorum); err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
-
-		return dirObjectInfo(bucket, object, data.Size(), opts.UserDefined), nil
-	}
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
