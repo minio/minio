@@ -979,7 +979,6 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 					continue
 				}
 			}
-
 			select {
 			case ch <- fiv:
 			case <-endWalkCh:
