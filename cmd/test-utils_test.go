@@ -1235,10 +1235,10 @@ func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) er
 	return nil
 }
 
-var src = rand.NewSource(UTCNow().UnixNano())
-
 // Function to generate random string for bucket/object names.
 func randString(n int) string {
+	src := rand.NewSource(UTCNow().UnixNano())
+
 	b := make([]byte, n)
 	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {

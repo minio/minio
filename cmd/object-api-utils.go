@@ -354,12 +354,10 @@ func getHostsSlice(records []dns.SrvRecord) []string {
 	return hosts
 }
 
-var rng = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-
 // returns an online host (and corresponding port) from a slice of DNS records
 func getHostFromSrv(records []dns.SrvRecord) (host string) {
 	hosts := getHostsSlice(records)
-
+	rng := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 	var d net.Dialer
 	var retry int
 	for retry < len(hosts) {
