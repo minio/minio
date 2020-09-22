@@ -18,8 +18,60 @@ mc admin bucket remote add myminio/srcbucket https://accessKey:secretKey@replica
 Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
 ```
 
-Note that the admin needs *s3:GetReplicationConfigurationAction* permission on source cluster. The credential used at the destination requires *s3:ReplicateObject* permission. Once successfully created and authorized this generates a replication target ARN.  The command below lists all the currently authorized replication targets:
+>  The user running the above command needs *s3:GetReplicationConfiguration* and *s3:GetBucketVersioning* permission on the source cluster. We do not recommend running root credentials/super admin with replication, instead create a dedicated user. The access credentials used at the destination requires *s3:ReplicateObject* permission.
 
+The *source* bucket should have following minimal permission policy:
+```
+{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:GetReplicationConfiguration",
+    "s3:ListBucket",
+    "s3:GetBucketLocation",
+    "s3:GetBucketVersioning"
+   ],
+   "Resource": [
+    "arn:aws:s3:::srcbucket"
+   ]
+  }
+}
+```
+The access key provided for the replication *target* cluster should have these minimal permissions:
+```
+{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:GetBucketVersioning"
+   ],
+   "Resource": [
+    "arn:aws:s3:::destbucket"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:ReplicateTags",
+    "s3:GetObject",
+    "s3:GetObjectVersion",
+    "s3:GetObjectVersionTagging",
+    "s3:PutObject",
+    "s3:ReplicateObject"
+   ],
+   "Resource": [
+    "arn:aws:s3:::destbucket/*"
+   ]
+  }
+ ]
+}
+
+```
+Once successfully created and authorized, the `mc admin bucket remote add` command generates a replication target ARN.  This command lists all the currently authorized replication targets:
 ```
 mc admin bucket remote ls myminio/srcbucket --service "replication"
 Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
