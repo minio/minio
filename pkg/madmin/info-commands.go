@@ -264,7 +264,7 @@ type ServerProperties struct {
 	Version  string            `json:"version,omitempty"`
 	CommitID string            `json:"commitID,omitempty"`
 	Network  map[string]string `json:"network,omitempty"`
-	Disks    []Disk            `json:"disks,omitempty"`
+	Disks    []Disk            `json:"drives,omitempty"`
 }
 
 // Disk holds Disk information
