@@ -61,7 +61,7 @@ type ServerLogOBDInfo struct {
 // SysOBDInfo - Includes hardware and system information of the MinIO cluster
 type SysOBDInfo struct {
 	CPUInfo    []ServerCPUOBDInfo    `json:"cpus,omitempty"`
-	DiskHwInfo []ServerDiskHwOBDInfo `json:"disks,omitempty"`
+	DiskHwInfo []ServerDiskHwOBDInfo `json:"drives,omitempty"`
 	OsInfo     []ServerOsOBDInfo     `json:"osinfos,omitempty"`
 	MemInfo    []ServerMemOBDInfo    `json:"meminfos,omitempty"`
 	ProcInfo   []ServerProcOBDInfo   `json:"procinfos,omitempty"`
