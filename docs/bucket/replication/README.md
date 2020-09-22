@@ -18,9 +18,9 @@ mc admin bucket remote add myminio/srcbucket https://accessKey:secretKey@replica
 Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
 ```
 
-> NOTE:  The user running the above command needs *s3:GetReplicationConfiguration* and *s3:GetBucketVersioning* permission on the source cluster (we do not recommend running root credentials/super admin with replication). The access credentials used at the destination requires *s3:ReplicateObject* permission.
+>  The user running the above command needs *s3:GetReplicationConfiguration* and *s3:GetBucketVersioning* permission on the source cluster. We do not recommend running root credentials/super admin with replication, instead create a dedicated user. The access credentials used at the destination requires *s3:ReplicateObject* permission.
 
-Minimal policy on source bucket should have following permissions on the source bucket.
+The *source* bucket should have following minimal permission policy:
 ```
 {
  "Version": "2012-10-17",
@@ -39,7 +39,7 @@ Minimal policy on source bucket should have following permissions on the source 
   }
 }
 ```
-The access key configured to perform replication on the target cluster should have minimal permissions as in example below.
+The access key provided for the replication *target* cluster should have these minimal permissions:
 ```
 {
  "Version": "2012-10-17",
@@ -71,7 +71,7 @@ The access key configured to perform replication on the target cluster should ha
 }
 
 ```
-Once successfully created and authorized the `mc admin bucket remote add` command generates a replication target ARN.  The command below lists all the currently authorized replication targets:
+Once successfully created and authorized, the `mc admin bucket remote add` command generates a replication target ARN.  This command lists all the currently authorized replication targets:
 ```
 mc admin bucket remote ls myminio/srcbucket --service "replication"
 Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
