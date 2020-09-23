@@ -31,15 +31,21 @@ import (
 const (
 	apiRequestsMax             = "requests_max"
 	apiRequestsDeadline        = "requests_deadline"
-	apiReadyDeadline           = "ready_deadline"
+	apiClusterDeadline         = "cluster_deadline"
 	apiCorsAllowOrigin         = "cors_allow_origin"
 	apiRemoteTransportDeadline = "remote_transport_deadline"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIReadyDeadline           = "MINIO_API_READY_DEADLINE"
+	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+)
+
+// Deprecated key and ENVs
+const (
+	apiReadyDeadline    = "ready_deadline"
+	EnvAPIReadyDeadline = "MINIO_API_READY_DEADLINE"
 )
 
 // DefaultKVS - default storage class config
@@ -54,7 +60,7 @@ var (
 			Value: "10s",
 		},
 		config.KV{
-			Key:   apiReadyDeadline,
+			Key:   apiClusterDeadline,
 			Value: "10s",
 		},
 		config.KV{
@@ -72,7 +78,7 @@ var (
 type Config struct {
 	RequestsMax             int           `json:"requests_max"`
 	RequestsDeadline        time.Duration `json:"requests_deadline"`
-	ReadyDeadline           time.Duration `json:"ready_deadline"`
+	ClusterDeadline         time.Duration `json:"cluster_deadline"`
 	CorsAllowOrigin         []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
 }
@@ -90,6 +96,9 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
+	// remove this since we have removed this already.
+	kvs.Delete(apiReadyDeadline)
+
 	if err = config.CheckValidKeys(config.APISubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
@@ -109,7 +118,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
-	readyDeadline, err := time.ParseDuration(env.Get(EnvAPIReadyDeadline, kvs.Get(apiReadyDeadline)))
+	clusterDeadline, err := time.ParseDuration(env.Get(EnvAPIClusterDeadline, kvs.Get(apiClusterDeadline)))
 	if err != nil {
 		return cfg, err
 	}
@@ -124,7 +133,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	return Config{
 		RequestsMax:             requestsMax,
 		RequestsDeadline:        requestsDeadline,
-		ReadyDeadline:           readyDeadline,
+		ClusterDeadline:         clusterDeadline,
 		CorsAllowOrigin:         corsAllowOrigin,
 		RemoteTransportDeadline: remoteTransportDeadline,
 	}, nil

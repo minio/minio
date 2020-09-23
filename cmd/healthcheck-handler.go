@@ -33,7 +33,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getReadyDeadline())
+	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
 
 	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}

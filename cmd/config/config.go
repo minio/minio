@@ -267,6 +267,16 @@ func (kvs KVS) Get(key string) string {
 	return ""
 }
 
+// Delete - deletes the key if present from the KV list.
+func (kvs *KVS) Delete(key string) {
+	for i, kv := range *kvs {
+		if kv.Key == key {
+			*kvs = append((*kvs)[:i], (*kvs)[i+1:]...)
+			return
+		}
+	}
+}
+
 // Lookup - lookup a key in a list of KVS
 func (kvs KVS) Lookup(key string) (string, bool) {
 	for _, kv := range kvs {

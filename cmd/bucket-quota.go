@@ -71,6 +71,8 @@ func (sys *BucketQuotaSys) check(ctx context.Context, bucket string, size int64)
 	sys.bucketStorageCache.Once.Do(func() {
 		sys.bucketStorageCache.TTL = 1 * time.Second
 		sys.bucketStorageCache.Update = func() (interface{}, error) {
+			ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+			defer done()
 			return loadDataUsageFromBackend(ctx, objAPI)
 		}
 	})
