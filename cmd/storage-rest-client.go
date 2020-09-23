@@ -29,7 +29,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -669,7 +668,6 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 
 	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckInterval = 500 * time.Millisecond
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
