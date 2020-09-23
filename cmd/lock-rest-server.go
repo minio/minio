@@ -50,6 +50,11 @@ func (l *lockRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
 
 // IsValid - To authenticate and verify the time difference.
 func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
+	if l.ll == nil {
+		l.writeErrorResponse(w, errLockNotInitialized)
+		return false
+	}
+
 	if err := storageServerRequestValidate(r); err != nil {
 		l.writeErrorResponse(w, err)
 		return false

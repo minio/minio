@@ -42,6 +42,7 @@ const (
 )
 
 var (
-	errLockConflict   = errors.New("lock conflict")
-	errLockNotExpired = errors.New("lock not expired")
+	errLockConflict       = errors.New("lock conflict")
+	errLockNotExpired     = errors.New("lock not expired")
+	errLockNotInitialized = errors.New("lock not initialized")
 )

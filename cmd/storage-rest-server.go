@@ -102,6 +102,11 @@ func storageServerRequestValidate(r *http.Request) error {
 
 // IsValid - To authenticate and verify the time difference.
 func (s *storageRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
+	if s.storage == nil {
+		s.writeErrorResponse(w, errDiskNotFound)
+		return false
+	}
+
 	if err := storageServerRequestValidate(r); err != nil {
 		s.writeErrorResponse(w, err)
 		return false
