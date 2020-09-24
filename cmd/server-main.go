@@ -305,30 +305,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// are modifying this code that you do so, if and when
 	// you want to add extra context to your error. This
 	// ensures top level retry works accordingly.
+	// List buckets to heal, and be re-used for loading configs.
 	var buckets []BucketInfo
-	if globalIsDistErasure || globalIsErasure {
-		// List buckets to heal, and be re-used for loading configs.
+	if globalIsErasure {
 		buckets, err = newObject.ListBucketsHeal(ctx)
 		if err != nil {
 			return fmt.Errorf("Unable to list buckets to heal: %w", err)
-		}
-		// Attempt a heal if possible and re-use the bucket names
-		// to reload their config.
-		wquorum := &InsufficientWriteQuorum{}
-		rquorum := &InsufficientReadQuorum{}
-		for _, bucket := range buckets {
-			if err = newObject.MakeBucketWithLocation(ctx, bucket.Name, BucketOptions{}); err != nil {
-				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
-					// Return the error upwards for the caller to retry.
-					return fmt.Errorf("Unable to heal bucket: %w", err)
-				}
-				if _, ok := err.(BucketExists); !ok {
-					// ignore any other error and log for investigation.
-					logger.LogIf(ctx, err)
-					continue
-				}
-				// Bucket already exists, nothing that needs to be done.
-			}
 		}
 	} else {
 		buckets, err = newObject.ListBuckets(ctx)
@@ -349,7 +331,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	// Initialize bucket metadata sub-system.
-	if err := globalBucketMetadataSys.Init(ctx, buckets, newObject); err != nil {
+	if err = globalBucketMetadataSys.Init(ctx, buckets, newObject); err != nil {
 		return fmt.Errorf("Unable to initialize bucket metadata sub-system: %w", err)
 	}
 

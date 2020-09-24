@@ -665,7 +665,7 @@ func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*erasureObj
 // that all buckets are present on all sets.
 func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
 	// Always lists from the same set signified by the empty string.
-	return s.getHashedSet("").ListBuckets(ctx)
+	return s.ListBucketsHeal(ctx)
 }
 
 // --- Object Operations ---
@@ -1465,7 +1465,7 @@ func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error)
 	var healBuckets = map[string]VolInfo{}
 	for _, set := range s.sets {
 		// lists all unique buckets across drives.
-		if err := listAllBuckets(set.getDisks(), healBuckets); err != nil {
+		if err := listAllBuckets(ctx, set.getDisks(), healBuckets); err != nil {
 			return nil, err
 		}
 	}

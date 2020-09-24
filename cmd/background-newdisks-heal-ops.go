@@ -153,10 +153,21 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, bgSeq *healS
 					for _, ep := range endpoints {
 						logger.Info("Healing disk '%s' on %s zone", ep, humanize.Ordinal(i+1))
 
-						if err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].setDriveCount); err != nil {
+						buckets, err := z.ListBucketsHeal(ctx)
+						if err != nil {
 							logger.LogIf(ctx, err)
 							continue
 						}
+
+						if len(buckets) > 0 {
+							disks := z.zones[i].sets[setIndex].getLoadBalancedDisks()
+							if err := healErasureSet(ctx, setIndex, buckets, disks, z.zones[i].setDriveCount); err != nil {
+								logger.LogIf(ctx, err)
+								continue
+							}
+						}
+
+						logger.Info("Healing disk '%s' on %s zone complete", ep, humanize.Ordinal(i+1))
 
 						// Only upon success pop the healed disk.
 						globalBackgroundHealState.popHealLocalDisks(ep)
