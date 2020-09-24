@@ -1025,7 +1025,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			BucketName:      bucket,
 			ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
 			IsOwner:         owner,
-			ObjectName:      object,
+			ObjectName:      "",
 			Claims:          claims.Map(),
 		}) {
 			replPerms = ErrNone
