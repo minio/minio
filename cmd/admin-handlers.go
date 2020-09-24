@@ -54,16 +54,13 @@ const (
 	maxEConfigJSONSize = 262272
 )
 
-// Type-safe query params.
-type mgmtQueryKey string
-
 // Only valid query params for mgmt admin APIs.
 const (
-	mgmtBucket      mgmtQueryKey = "bucket"
-	mgmtPrefix                   = "prefix"
-	mgmtClientToken              = "clientToken"
-	mgmtForceStart               = "forceStart"
-	mgmtForceStop                = "forceStop"
+	mgmtBucket      = "bucket"
+	mgmtPrefix      = "prefix"
+	mgmtClientToken = "clientToken"
+	mgmtForceStart  = "forceStart"
+	mgmtForceStop   = "forceStop"
 )
 
 func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (us madmin.ServerUpdateStatus, err error) {
@@ -572,8 +569,8 @@ type healInitParams struct {
 
 // extractHealInitParams - Validates params for heal init API.
 func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reader) (hip healInitParams, err APIErrorCode) {
-	hip.bucket = vars[string(mgmtBucket)]
-	hip.objPrefix = vars[string(mgmtPrefix)]
+	hip.bucket = vars[mgmtBucket]
+	hip.objPrefix = vars[mgmtPrefix]
 
 	if hip.bucket == "" {
 		if hip.objPrefix != "" {
@@ -592,13 +589,13 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 		return
 	}
 
-	if len(qParms[string(mgmtClientToken)]) > 0 {
-		hip.clientToken = qParms[string(mgmtClientToken)][0]
+	if len(qParms[mgmtClientToken]) > 0 {
+		hip.clientToken = qParms[mgmtClientToken][0]
 	}
-	if _, ok := qParms[string(mgmtForceStart)]; ok {
+	if _, ok := qParms[mgmtForceStart]; ok {
 		hip.forceStart = true
 	}
-	if _, ok := qParms[string(mgmtForceStop)]; ok {
+	if _, ok := qParms[mgmtForceStop]; ok {
 		hip.forceStop = true
 	}
 
