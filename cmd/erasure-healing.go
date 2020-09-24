@@ -165,7 +165,7 @@ func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets 
 				// we ignore disk not found errors
 				return nil
 			}
-			volsInfo, err := storageDisks[index].ListVols(context.TODO())
+			volsInfo, err := storageDisks[index].ListVols(ctx)
 			if err != nil {
 				return err
 			}
