@@ -298,19 +298,19 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 
 	// Collect for each set in zones.
 	for _, z := range z.zones {
+		buckets, err := z.ListBuckets(ctx)
+		if err != nil {
+			return err
+		}
+		// Add new buckets.
+		for _, b := range buckets {
+			if _, ok := knownBuckets[b.Name]; ok {
+				continue
+			}
+			allBuckets = append(allBuckets, b)
+			knownBuckets[b.Name] = struct{}{}
+		}
 		for _, erObj := range z.sets {
-			// Add new buckets.
-			buckets, err := erObj.ListBuckets(ctx)
-			if err != nil {
-				return err
-			}
-			for _, b := range buckets {
-				if _, ok := knownBuckets[b.Name]; ok {
-					continue
-				}
-				allBuckets = append(allBuckets, b)
-				knownBuckets[b.Name] = struct{}{}
-			}
 			wg.Add(1)
 			results = append(results, dataUsageCache{})
 			go func(i int, erObj *erasureObjects) {

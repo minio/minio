@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"sort"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
@@ -120,53 +119,6 @@ func (er erasureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi B
 		return bi, toObjectErr(err, bucket)
 	}
 	return bucketInfo, nil
-}
-
-// listBuckets - returns list of all buckets from a disk picked at random.
-func (er erasureObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, err error) {
-	for _, disk := range er.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
-		var volsInfo []VolInfo
-		volsInfo, err = disk.ListVols(ctx)
-		if err == nil {
-			// NOTE: The assumption here is that volumes across all disks in
-			// readQuorum have consistent view i.e they all have same number
-			// of buckets.
-			var bucketsInfo []BucketInfo
-			for _, volInfo := range volsInfo {
-				if isReservedOrInvalidBucket(volInfo.Name, true) {
-					continue
-				}
-				bucketsInfo = append(bucketsInfo, BucketInfo(volInfo))
-			}
-			// For buckets info empty, loop once again to check
-			// if we have, can happen if disks were down.
-			if len(bucketsInfo) == 0 {
-				continue
-			}
-			return bucketsInfo, nil
-		}
-		logger.LogIf(ctx, err)
-		// Ignore any disks not found.
-		if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
-			continue
-		}
-		break
-	}
-	return nil, err
-}
-
-// ListBuckets - lists all the buckets, sorted by its name.
-func (er erasureObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
-	bucketInfos, err := er.listBuckets(ctx)
-	if err != nil {
-		return nil, toObjectErr(err)
-	}
-	// Sort by bucket name before returning.
-	sort.Sort(byBucketName(bucketInfos))
-	return bucketInfos, nil
 }
 
 // Dangling buckets should be handled appropriately, in this following situation

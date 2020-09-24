@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -89,12 +90,7 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, setDriveCount int) error {
-	buckets, err := xlObj.ListBuckets(ctx)
-	if err != nil {
-		return err
-	}
-
+func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI, setDriveCount int) error {
 	// Get background heal sequence to send elements to heal
 	var bgSeq *healSequence
 	var ok bool
@@ -125,22 +121,30 @@ func healErasureSet(ctx context.Context, setIndex int, xlObj *erasureObjects, se
 		}
 
 		var entryChs []FileInfoVersionsCh
-		for _, disk := range xlObj.getLoadBalancedDisks() {
+		var mu sync.Mutex
+		var wg sync.WaitGroup
+		for _, disk := range disks {
 			if disk == nil {
 				// Disk can be offline
 				continue
 			}
-
-			entryCh, err := disk.WalkVersions(ctx, bucket.Name, "", "", true, ctx.Done())
-			if err != nil {
-				// Disk walk returned error, ignore it.
-				continue
-			}
-
-			entryChs = append(entryChs, FileInfoVersionsCh{
-				Ch: entryCh,
-			})
+			disk := disk
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				entryCh, err := disk.WalkVersions(ctx, bucket.Name, "", "", true, ctx.Done())
+				if err != nil {
+					// Disk walk returned error, ignore it.
+					return
+				}
+				mu.Lock()
+				entryChs = append(entryChs, FileInfoVersionsCh{
+					Ch: entryCh,
+				})
+				mu.Unlock()
+			}()
 		}
+		wg.Wait()
 
 		entriesValid := make([]bool, len(entryChs))
 		entries := make([]FileInfoVersions, len(entryChs))
