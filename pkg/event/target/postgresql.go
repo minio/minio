@@ -195,6 +195,8 @@ func (target *PostgreSQLTarget) IsActive() (bool, error) {
 			return false, err
 		}
 		target.db = db
+		// Set the maximum connections limit
+		target.db.SetMaxOpenConns(2)
 	}
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
@@ -390,6 +392,8 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 		return target, err
 	}
 	target.db = db
+	// Set the maximum connections limit
+	target.db.SetMaxOpenConns(2)
 
 	var store Store
 

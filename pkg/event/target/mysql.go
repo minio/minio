@@ -196,6 +196,8 @@ func (target *MySQLTarget) IsActive() (bool, error) {
 			return false, sErr
 		}
 		target.db = db
+		// Set the maximum connections limit
+		target.db.SetMaxOpenConns(2)
 	}
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
@@ -383,6 +385,8 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 		return target, err
 	}
 	target.db = db
+	// Set the maximum connections limit
+	target.db.SetMaxOpenConns(2)
 
 	var store Store
 
