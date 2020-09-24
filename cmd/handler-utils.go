@@ -432,27 +432,27 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
 		desc := fmt.Sprintf("Expected 'peer' API version '%s', instead found '%s', please upgrade the servers",
 			peerRESTVersion, version)
-		writeErrorResponseString(r.Context(), w, APIError{
+		writeErrorResponseString(w, APIError{
 			Code:           "XMinioPeerVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
+		})
 	case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
 		desc := fmt.Sprintf("Expected 'storage' API version '%s', instead found '%s', please upgrade the servers",
 			storageRESTVersion, version)
-		writeErrorResponseString(r.Context(), w, APIError{
+		writeErrorResponseString(w, APIError{
 			Code:           "XMinioStorageVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
+		})
 	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
 		desc := fmt.Sprintf("Expected 'lock' API version '%s', instead found '%s', please upgrade the servers",
 			lockRESTVersion, version)
-		writeErrorResponseString(r.Context(), w, APIError{
+		writeErrorResponseString(w, APIError{
 			Code:           "XMinioLockVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
+		})
 	case strings.HasPrefix(r.URL.Path, adminPathPrefix):
 		var desc string
 		if version == "v1" {
