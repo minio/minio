@@ -66,19 +66,26 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
 		return madmin.BgHealState{}, false
 	}
+
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if !ok {
 		return madmin.BgHealState{}, false
 	}
 
-	objAPI := newObjectLayerWithoutSafeModeFn()
-	if objAPI == nil {
-		return madmin.BgHealState{}, false
+	var healDisksMap = map[string]struct{}{}
+	for _, ep := range getLocalDisksToHeal() {
+		healDisksMap[ep.String()] = struct{}{}
+	}
+
+	for _, ep := range globalBackgroundHealState.getHealLocalDisks() {
+		if _, ok := healDisksMap[ep.String()]; !ok {
+			healDisksMap[ep.String()] = struct{}{}
+		}
 	}
 
 	var healDisks []string
-	for _, ep := range getLocalDisksToHeal() {
-		healDisks = append(healDisks, ep.String())
+	for disk := range healDisksMap {
+		healDisks = append(healDisks, disk)
 	}
 
 	return madmin.BgHealState{
