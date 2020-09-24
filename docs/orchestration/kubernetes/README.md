@@ -8,7 +8,7 @@ There are multiple options to deploy MinIO on Kubernetes:
 
 - MinIO-Operator: Operator offers seamless way to create and update highly available distributed MinIO clusters. Refer [MinIO Operator documentation](https://github.com/minio/minio-operator/blob/master/README.md) for more details.
 
-- Helm Chart: MinIO Helm Chart offers customizable and easy MinIO deployment with a single command. Refer [MinIO Helm Chart documentation](https://github.com/helm/charts/tree/master/stable/minio) for more details.
+- Helm Chart: MinIO Helm Chart offers customizable and easy MinIO deployment with a single command. Refer [MinIO Helm Chart documentation](https://github.com/minio/charts) for more details.
 
 ## Monitoring MinIO in Kubernetes
 
