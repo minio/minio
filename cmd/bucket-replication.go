@@ -304,6 +304,11 @@ var (
 )
 
 func newReplicationState() *replicationState {
+
+	// fix minimum concurrent replication to 1 for single CPU setup
+	if globalReplicationConcurrent == 0 {
+		globalReplicationConcurrent = 1
+	}
 	rs := &replicationState{
 		replicaCh: make(chan ObjectInfo, globalReplicationConcurrent*2),
 	}

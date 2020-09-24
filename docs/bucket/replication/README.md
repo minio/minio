@@ -129,6 +129,8 @@ Replication status can be seen in the metadata on the source and destination obj
 
 To perform bi-directional replication, repeat the above process on the target site - this time setting the source bucket as the replication target.
 
+It is recommended that replication be run in a system with atleast two CPU's available to the process, so that replication can run in its own thread.
+
 ![put](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/PUT_bucket_replication.png)
 
 ![head](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/HEAD_bucket_replication.png)
