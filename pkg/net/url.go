@@ -17,6 +17,7 @@
 package net
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -142,6 +143,9 @@ func ParseURL(s string) (u *URL, err error) {
 // IsNetworkOrHostDown - if there was a network error or if the host is down.
 func IsNetworkOrHostDown(err error) bool {
 	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
 		return false
 	}
 	// We need to figure if the error either a timeout
