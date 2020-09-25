@@ -528,7 +528,7 @@ func (h *healSequence) hasEnded() bool {
 	if h.clientToken == bgHealingUUID {
 		return false
 	}
-	return len(h.currentStatus.Items) == 0 || h.currentStatus.Summary == healStoppedStatus || h.currentStatus.Summary == healFinishedStatus
+	return !h.endTime.IsZero()
 }
 
 // stops the heal sequence - safe to call multiple times.
