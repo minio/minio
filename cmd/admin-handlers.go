@@ -336,23 +336,26 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquorum int) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
 		Resource:   resource,
 		ServerList: []string{server},
 		Source:     l.Source,
+		Owner:      l.Owner,
 		ID:         l.UID,
 	}
 	if l.Writer {
 		entry.Type = "WRITE"
+		entry.Quorum = wquorum
 	} else {
 		entry.Type = "READ"
+		entry.Quorum = rquorum
 	}
 	return entry
 }
 
-func topLockEntries(peerLocks []*PeerLocks, count int) madmin.LockEntries {
+func topLockEntries(peerLocks []*PeerLocks, count int, rquorum, wquorum int, stale bool) madmin.LockEntries {
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -364,20 +367,26 @@ func topLockEntries(peerLocks []*PeerLocks, count int) madmin.LockEntries {
 					if val, ok := entryMap[lockReqInfo.UID]; ok {
 						val.ServerList = append(val.ServerList, peerLock.Addr)
 					} else {
-						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
+						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr, rquorum, wquorum)
 					}
 				}
 			}
 		}
 	}
-	var lockEntries = make(madmin.LockEntries, 0, len(entryMap))
+	var lockEntries madmin.LockEntries
 	for _, v := range entryMap {
-		lockEntries = append(lockEntries, *v)
+		if len(lockEntries) == count {
+			break
+		}
+		if stale {
+			lockEntries = append(lockEntries, *v)
+			continue
+		}
+		if len(v.ServerList) >= v.Quorum {
+			lockEntries = append(lockEntries, *v)
+		}
 	}
 	sort.Sort(lockEntries)
-	if len(lockEntries) > count {
-		lockEntries = lockEntries[:count]
-	}
 	return lockEntries
 }
 
@@ -407,21 +416,14 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	stale := r.URL.Query().Get("stale") == "true" // list also stale locks
 
-	peerLocks := globalNotificationSys.GetLocks(ctx)
-	// Once we have received all the locks currently used from peers
-	// add the local peer locks list as well.
-	var getRespLocks GetLocksResp
-	for _, llocker := range globalLockServers {
-		getRespLocks = append(getRespLocks, llocker.DupLockMap())
-	}
+	peerLocks := globalNotificationSys.GetLocks(ctx, r)
 
-	peerLocks = append(peerLocks, &PeerLocks{
-		Addr:  getHostName(r),
-		Locks: getRespLocks,
-	})
+	rquorum := getReadQuorum(objectAPI.SetDriveCount())
+	wquorum := getWriteQuorum(objectAPI.SetDriveCount())
 
-	topLocks := topLockEntries(peerLocks, count)
+	topLocks := topLockEntries(peerLocks, count, rquorum, wquorum, stale)
 
 	// Marshal API response
 	jsonBytes, err := json.Marshal(topLocks)

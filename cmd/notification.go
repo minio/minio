@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -505,34 +506,22 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 }
 
 // GetLocks - makes GetLocks RPC call on all peers.
-func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
+func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*PeerLocks {
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
 		index := index
 		g.Go(func() error {
-			// Try to fetch serverInfo remotely in three attempts.
-			for i := 0; i < 3; i++ {
-				serverLocksResp, err := sys.peerClients[index].GetLocks()
-				if err == nil {
-					locksResp[index] = &PeerLocks{
-						Addr:  sys.peerClients[index].host.String(),
-						Locks: serverLocksResp,
-					}
-					return nil
-				}
-
-				// Last iteration log the error.
-				if i == 2 {
-					return err
-				}
-				// Wait for one second and no need wait after last attempt.
-				if i < 2 {
-					time.Sleep(1 * time.Second)
-				}
+			if client == nil {
+				return nil
+			}
+			serverLocksResp, err := sys.peerClients[index].GetLocks()
+			if err != nil {
+				return err
+			}
+			locksResp[index] = &PeerLocks{
+				Addr:  sys.peerClients[index].host.String(),
+				Locks: serverLocksResp,
 			}
 			return nil
 		}, index)
@@ -543,6 +532,16 @@ func (sys *NotificationSys) GetLocks(ctx context.Context) []*PeerLocks {
 		ctx := logger.SetReqInfo(ctx, reqInfo)
 		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
 	}
+	// Once we have received all the locks currently used from peers
+	// add the local peer locks list as well.
+	var getRespLocks GetLocksResp
+	for _, llocker := range globalLockServers {
+		getRespLocks = append(getRespLocks, llocker.DupLockMap())
+	}
+	locksResp = append(locksResp, &PeerLocks{
+		Addr:  getHostName(r),
+		Locks: getRespLocks,
+	})
 	return locksResp
 }
 

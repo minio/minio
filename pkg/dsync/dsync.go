@@ -20,5 +20,5 @@ package dsync
 // authenticated clients, used to initiate lock REST calls.
 type Dsync struct {
 	// List of rest client objects, one per lock server.
-	GetLockersFn func() []NetLocker
+	GetLockers func() ([]NetLocker, string)
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
@@ -49,10 +50,6 @@ const (
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
 	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
-
-	// sleep for an hour after a lock timeout
-	// before retrying to acquire lock again.
-	dataCrawlerLeaderLockTimeoutSleepInterval = time.Hour
 )
 
 var (
@@ -73,10 +70,11 @@ func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 crawler is running on the cluster.
 	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "runDataCrawler.lock")
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		err := locker.GetLock(dataCrawlerLeaderLockTimeout)
 		if err != nil {
-			time.Sleep(dataCrawlerLeaderLockTimeoutSleepInterval)
+			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
 			continue
 		}
 		break
