@@ -470,11 +470,10 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewInternodeDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
-		MaxIdleConns:          16,
-		IdleConnTimeout:       1 * time.Minute,
+		IdleConnTimeout:       30 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: 15 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		// Go net/http automatically unzip if content-type is
 		// gzip disable this feature, as we are always interested
