@@ -357,6 +357,10 @@ func SetNotifyPostgres(s config.Config, psqName string, cfg target.PostgreSQLArg
 			Key:   target.PostgresQueueLimit,
 			Value: strconv.Itoa(int(cfg.QueueLimit)),
 		},
+		config.KV{
+			Key:   target.PostgresMaxOpenConnections,
+			Value: strconv.Itoa(cfg.MaxOpenConnections),
+		},
 	}
 
 	return nil
@@ -553,6 +557,10 @@ func SetNotifyMySQL(s config.Config, sqlName string, cfg target.MySQLArgs) error
 		config.KV{
 			Key:   target.MySQLQueueLimit,
 			Value: strconv.Itoa(int(cfg.QueueLimit)),
+		},
+		config.KV{
+			Key:   target.MySQLMaxOpenConnections,
+			Value: strconv.Itoa(cfg.MaxOpenConnections),
 		},
 	}
 

@@ -84,43 +84,46 @@ const (
 
 // Postgres constants
 const (
-	PostgresFormat           = "format"
-	PostgresConnectionString = "connection_string"
-	PostgresTable            = "table"
-	PostgresHost             = "host"
-	PostgresPort             = "port"
-	PostgresUsername         = "username"
-	PostgresPassword         = "password"
-	PostgresDatabase         = "database"
-	PostgresQueueDir         = "queue_dir"
-	PostgresQueueLimit       = "queue_limit"
+	PostgresFormat             = "format"
+	PostgresConnectionString   = "connection_string"
+	PostgresTable              = "table"
+	PostgresHost               = "host"
+	PostgresPort               = "port"
+	PostgresUsername           = "username"
+	PostgresPassword           = "password"
+	PostgresDatabase           = "database"
+	PostgresQueueDir           = "queue_dir"
+	PostgresQueueLimit         = "queue_limit"
+	PostgresMaxOpenConnections = "max_open_connections"
 
-	EnvPostgresEnable           = "MINIO_NOTIFY_POSTGRES_ENABLE"
-	EnvPostgresFormat           = "MINIO_NOTIFY_POSTGRES_FORMAT"
-	EnvPostgresConnectionString = "MINIO_NOTIFY_POSTGRES_CONNECTION_STRING"
-	EnvPostgresTable            = "MINIO_NOTIFY_POSTGRES_TABLE"
-	EnvPostgresHost             = "MINIO_NOTIFY_POSTGRES_HOST"
-	EnvPostgresPort             = "MINIO_NOTIFY_POSTGRES_PORT"
-	EnvPostgresUsername         = "MINIO_NOTIFY_POSTGRES_USERNAME"
-	EnvPostgresPassword         = "MINIO_NOTIFY_POSTGRES_PASSWORD"
-	EnvPostgresDatabase         = "MINIO_NOTIFY_POSTGRES_DATABASE"
-	EnvPostgresQueueDir         = "MINIO_NOTIFY_POSTGRES_QUEUE_DIR"
-	EnvPostgresQueueLimit       = "MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT"
+	EnvPostgresEnable             = "MINIO_NOTIFY_POSTGRES_ENABLE"
+	EnvPostgresFormat             = "MINIO_NOTIFY_POSTGRES_FORMAT"
+	EnvPostgresConnectionString   = "MINIO_NOTIFY_POSTGRES_CONNECTION_STRING"
+	EnvPostgresTable              = "MINIO_NOTIFY_POSTGRES_TABLE"
+	EnvPostgresHost               = "MINIO_NOTIFY_POSTGRES_HOST"
+	EnvPostgresPort               = "MINIO_NOTIFY_POSTGRES_PORT"
+	EnvPostgresUsername           = "MINIO_NOTIFY_POSTGRES_USERNAME"
+	EnvPostgresPassword           = "MINIO_NOTIFY_POSTGRES_PASSWORD"
+	EnvPostgresDatabase           = "MINIO_NOTIFY_POSTGRES_DATABASE"
+	EnvPostgresQueueDir           = "MINIO_NOTIFY_POSTGRES_QUEUE_DIR"
+	EnvPostgresQueueLimit         = "MINIO_NOTIFY_POSTGRES_QUEUE_LIMIT"
+	EnvPostgresMaxOpenConnections = "MINIO_NOTIFY_POSTGRES_MAX_OPEN_CONNECTIONS"
 )
 
 // PostgreSQLArgs - PostgreSQL target arguments.
 type PostgreSQLArgs struct {
-	Enable           bool      `json:"enable"`
-	Format           string    `json:"format"`
-	ConnectionString string    `json:"connectionString"`
-	Table            string    `json:"table"`
-	Host             xnet.Host `json:"host"`     // default: localhost
-	Port             string    `json:"port"`     // default: 5432
-	Username         string    `json:"username"` // default: user running minio
-	Password         string    `json:"password"` // default: no password
-	Database         string    `json:"database"` // default: same as user
-	QueueDir         string    `json:"queueDir"`
-	QueueLimit       uint64    `json:"queueLimit"`
+	Enable             bool      `json:"enable"`
+	Format             string    `json:"format"`
+	ConnectionString   string    `json:"connectionString"`
+	Table              string    `json:"table"`
+	Host               xnet.Host `json:"host"`     // default: localhost
+	Port               string    `json:"port"`     // default: 5432
+	Username           string    `json:"username"` // default: user running minio
+	Password           string    `json:"password"` // default: no password
+	Database           string    `json:"database"` // default: same as user
+	QueueDir           string    `json:"queueDir"`
+	QueueLimit         uint64    `json:"queueLimit"`
+	MaxOpenConnections int       `json:"maxOpenConnections"`
 }
 
 // Validate PostgreSQLArgs fields
@@ -160,6 +163,10 @@ func (p PostgreSQLArgs) Validate() error {
 		}
 	}
 
+	if p.MaxOpenConnections < 0 {
+		return errors.New("maxOpenConnections cannot be less than zero")
+	}
+
 	return nil
 }
 
@@ -195,6 +202,10 @@ func (target *PostgreSQLTarget) IsActive() (bool, error) {
 			return false, err
 		}
 		target.db = db
+		if target.args.MaxOpenConnections > 0 {
+			// Set the maximum connections limit
+			target.db.SetMaxOpenConns(target.args.MaxOpenConnections)
+		}
 	}
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
@@ -390,6 +401,11 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 		return target, err
 	}
 	target.db = db
+
+	if args.MaxOpenConnections > 0 {
+		// Set the maximum connections limit
+		target.db.SetMaxOpenConns(args.MaxOpenConnections)
+	}
 
 	var store Store
 

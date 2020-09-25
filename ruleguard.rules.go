@@ -438,7 +438,6 @@ func httpheaderadd(m fluent.Matcher) {
 		Suggest(`$H.Set($KEY, $VALUE)`)
 }
 
-
 func hmacnew(m fluent.Matcher) {
 	m.Match("hmac.New(func() hash.Hash { return $x }, $_)",
 		`$f := func() hash.Hash { return $x }

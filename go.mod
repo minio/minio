@@ -40,7 +40,7 @@ require (
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.9
-	github.com/lib/pq v1.7.0
+	github.com/lib/pq v1.8.0
 	github.com/mattn/go-colorable v0.1.4
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.8

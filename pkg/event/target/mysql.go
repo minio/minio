@@ -83,43 +83,46 @@ const (
 
 // MySQL related constants
 const (
-	MySQLFormat     = "format"
-	MySQLDSNString  = "dsn_string"
-	MySQLTable      = "table"
-	MySQLHost       = "host"
-	MySQLPort       = "port"
-	MySQLUsername   = "username"
-	MySQLPassword   = "password"
-	MySQLDatabase   = "database"
-	MySQLQueueLimit = "queue_limit"
-	MySQLQueueDir   = "queue_dir"
+	MySQLFormat             = "format"
+	MySQLDSNString          = "dsn_string"
+	MySQLTable              = "table"
+	MySQLHost               = "host"
+	MySQLPort               = "port"
+	MySQLUsername           = "username"
+	MySQLPassword           = "password"
+	MySQLDatabase           = "database"
+	MySQLQueueLimit         = "queue_limit"
+	MySQLQueueDir           = "queue_dir"
+	MySQLMaxOpenConnections = "max_open_connections"
 
-	EnvMySQLEnable     = "MINIO_NOTIFY_MYSQL_ENABLE"
-	EnvMySQLFormat     = "MINIO_NOTIFY_MYSQL_FORMAT"
-	EnvMySQLDSNString  = "MINIO_NOTIFY_MYSQL_DSN_STRING"
-	EnvMySQLTable      = "MINIO_NOTIFY_MYSQL_TABLE"
-	EnvMySQLHost       = "MINIO_NOTIFY_MYSQL_HOST"
-	EnvMySQLPort       = "MINIO_NOTIFY_MYSQL_PORT"
-	EnvMySQLUsername   = "MINIO_NOTIFY_MYSQL_USERNAME"
-	EnvMySQLPassword   = "MINIO_NOTIFY_MYSQL_PASSWORD"
-	EnvMySQLDatabase   = "MINIO_NOTIFY_MYSQL_DATABASE"
-	EnvMySQLQueueLimit = "MINIO_NOTIFY_MYSQL_QUEUE_LIMIT"
-	EnvMySQLQueueDir   = "MINIO_NOTIFY_MYSQL_QUEUE_DIR"
+	EnvMySQLEnable             = "MINIO_NOTIFY_MYSQL_ENABLE"
+	EnvMySQLFormat             = "MINIO_NOTIFY_MYSQL_FORMAT"
+	EnvMySQLDSNString          = "MINIO_NOTIFY_MYSQL_DSN_STRING"
+	EnvMySQLTable              = "MINIO_NOTIFY_MYSQL_TABLE"
+	EnvMySQLHost               = "MINIO_NOTIFY_MYSQL_HOST"
+	EnvMySQLPort               = "MINIO_NOTIFY_MYSQL_PORT"
+	EnvMySQLUsername           = "MINIO_NOTIFY_MYSQL_USERNAME"
+	EnvMySQLPassword           = "MINIO_NOTIFY_MYSQL_PASSWORD"
+	EnvMySQLDatabase           = "MINIO_NOTIFY_MYSQL_DATABASE"
+	EnvMySQLQueueLimit         = "MINIO_NOTIFY_MYSQL_QUEUE_LIMIT"
+	EnvMySQLQueueDir           = "MINIO_NOTIFY_MYSQL_QUEUE_DIR"
+	EnvMySQLMaxOpenConnections = "MINIO_NOTIFY_MYSQL_MAX_OPEN_CONNECTIONS"
 )
 
 // MySQLArgs - MySQL target arguments.
 type MySQLArgs struct {
-	Enable     bool     `json:"enable"`
-	Format     string   `json:"format"`
-	DSN        string   `json:"dsnString"`
-	Table      string   `json:"table"`
-	Host       xnet.URL `json:"host"`
-	Port       string   `json:"port"`
-	User       string   `json:"user"`
-	Password   string   `json:"password"`
-	Database   string   `json:"database"`
-	QueueDir   string   `json:"queueDir"`
-	QueueLimit uint64   `json:"queueLimit"`
+	Enable             bool     `json:"enable"`
+	Format             string   `json:"format"`
+	DSN                string   `json:"dsnString"`
+	Table              string   `json:"table"`
+	Host               xnet.URL `json:"host"`
+	Port               string   `json:"port"`
+	User               string   `json:"user"`
+	Password           string   `json:"password"`
+	Database           string   `json:"database"`
+	QueueDir           string   `json:"queueDir"`
+	QueueLimit         uint64   `json:"queueLimit"`
+	MaxOpenConnections int      `json:"maxOpenConnections"`
 }
 
 // Validate MySQLArgs fields
@@ -162,6 +165,10 @@ func (m MySQLArgs) Validate() error {
 		}
 	}
 
+	if m.MaxOpenConnections < 0 {
+		return errors.New("maxOpenConnections cannot be less than zero")
+	}
+
 	return nil
 }
 
@@ -196,6 +203,10 @@ func (target *MySQLTarget) IsActive() (bool, error) {
 			return false, sErr
 		}
 		target.db = db
+		if target.args.MaxOpenConnections > 0 {
+			// Set the maximum connections limit
+			target.db.SetMaxOpenConns(target.args.MaxOpenConnections)
+		}
 	}
 	if err := target.db.Ping(); err != nil {
 		if IsConnErr(err) {
@@ -383,6 +394,11 @@ func NewMySQLTarget(id string, args MySQLArgs, doneCh <-chan struct{}, loggerOnc
 		return target, err
 	}
 	target.db = db
+
+	if args.MaxOpenConnections > 0 {
+		// Set the maximum connections limit
+		target.db.SetMaxOpenConns(args.MaxOpenConnections)
+	}
 
 	var store Store
 
