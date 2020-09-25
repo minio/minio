@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"time"
 
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -152,7 +153,7 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 		}
 	}
 
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, 10*time.Second)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
