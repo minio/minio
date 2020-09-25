@@ -1916,7 +1916,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID,
-			srcInfo.Reader, srcInfo.Size, "", "", dstOpts.ServerSideEncryption)
+			gr, length, "", "", dstOpts.ServerSideEncryption)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
