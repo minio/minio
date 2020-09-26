@@ -199,8 +199,11 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 	// appropriately. This is also true for rotation of encrypted
 	// content.
 	txnLk := newObject.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
+	var locked bool
 	defer func(txnLk RWLocker) {
-		txnLk.Unlock()
+		if locked {
+			txnLk.Unlock()
+		}
 
 		if err != nil {
 			var cerr config.Err
@@ -253,6 +256,9 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 			continue
 		}
 
+		// locked successful
+		locked = true
+
 		// These messages only meant primarily for distributed setup, so only log during distributed setup.
 		if globalIsDistErasure {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. lock acquired")
@@ -283,6 +289,7 @@ func initSafeMode(ctx context.Context, newObject ObjectLayer) (err error) {
 			isErrBucketNotFound(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
 			txnLk.Unlock() // Unlock the transaction lock and allow other nodes to acquire the lock if possible.
+			locked = false
 			continue
 		}
 
