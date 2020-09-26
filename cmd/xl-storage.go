@@ -92,8 +92,7 @@ type xlStorage struct {
 	activeIOCount    int32
 
 	diskPath string
-	hostname string
-	endpoint string
+	endpoint Endpoint
 
 	pool sync.Pool
 
@@ -249,7 +248,6 @@ func newLocalXLStorage(path string) (*xlStorage, error) {
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	path := ep.Path
-	hostname := ep.Host
 	var err error
 	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
@@ -262,8 +260,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 
 	p := &xlStorage{
 		diskPath: path,
-		hostname: hostname,
-		endpoint: ep.String(),
+		endpoint: ep,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -319,7 +316,11 @@ func (s *xlStorage) String() string {
 }
 
 func (s *xlStorage) Hostname() string {
-	return s.hostname
+	return s.endpoint.Host
+}
+
+func (s *xlStorage) Endpoint() Endpoint {
+	return s.endpoint
 }
 
 func (*xlStorage) Close() error {
@@ -332,6 +333,13 @@ func (s *xlStorage) IsOnline() bool {
 
 func (s *xlStorage) IsLocal() bool {
 	return true
+}
+
+func (s *xlStorage) Healing() bool {
+	healingFile := pathJoin(s.diskPath, minioMetaBucket,
+		bucketMetaPrefix, healingTrackerFilename)
+	_, err := os.Stat(healingFile)
+	return err == nil
 }
 
 func (s *xlStorage) waitForLowActiveIO() {
@@ -439,6 +447,7 @@ type DiskInfo struct {
 	Free      uint64
 	Used      uint64
 	RootDisk  bool
+	Healing   bool
 	Endpoint  string
 	MountPath string
 	ID        string
@@ -462,9 +471,10 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 		Total:     di.Total,
 		Free:      di.Free,
 		Used:      di.Total - di.Free,
+		Healing:   s.Healing(),
 		RootDisk:  s.rootDisk,
 		MountPath: s.diskPath,
-		Endpoint:  s.endpoint,
+		Endpoint:  s.endpoint.String(),
 	}
 
 	diskID, err := s.GetDiskID()

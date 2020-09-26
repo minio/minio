@@ -55,7 +55,7 @@ var errFileNotFound = StorageErr("file not found")
 var errFileVersionNotFound = StorageErr("file version not found")
 
 // errTooManyOpenFiles - too many open files.
-var errTooManyOpenFiles = StorageErr("too many open files")
+var errTooManyOpenFiles = StorageErr("too many open files, please increase 'ulimit -n'")
 
 // errFileNameTooLong - given file name is too long than supported length.
 var errFileNameTooLong = StorageErr("file name too long")

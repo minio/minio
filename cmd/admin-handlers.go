@@ -295,6 +295,20 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// ignores any errors here.
 	storageInfo, _ := objectAPI.StorageInfo(ctx, false)
 
+	// Collect any disk healing.
+	healing, _ := getAggregatedBackgroundHealState(ctx)
+	healDisks := make(map[string]struct{}, len(healing.HealDisks))
+	for _, disk := range healing.HealDisks {
+		healDisks[disk] = struct{}{}
+	}
+
+	// find all disks which belong to each respective endpoints
+	for i, disk := range storageInfo.Disks {
+		if _, ok := healDisks[disk.Endpoint]; ok {
+			storageInfo.Disks[i].Healing = true
+		}
+	}
+
 	// Marshal API response
 	jsonBytes, err := json.Marshal(storageInfo)
 	if err != nil {

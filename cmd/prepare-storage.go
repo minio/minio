@@ -141,7 +141,7 @@ func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 				return fmt.Errorf("unable to rename (%s -> %s) %w",
 					pathJoin(epPath, minioMetaTmpBucket),
 					tmpOld,
-					err)
+					osErrToFileErr(err))
 			}
 
 			// Removal of tmp-old folder is backgrounded completely.

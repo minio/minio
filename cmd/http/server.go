@@ -130,6 +130,9 @@ func (srv *Server) Shutdown() error {
 	srv.listenerMutex.Lock()
 	err := srv.listener.Close()
 	srv.listenerMutex.Unlock()
+	if err != nil {
+		return err
+	}
 
 	// Wait for opened connection to be closed up to Shutdown timeout.
 	shutdownTimeout := srv.ShutdownTimeout
@@ -144,12 +147,12 @@ func (srv *Server) Shutdown() error {
 			if err == nil {
 				_ = pprof.Lookup("goroutine").WriteTo(tmp, 1)
 				tmp.Close()
-				return errors.New("timed out. some connections are still active. doing abnormal shutdown. goroutines written to " + tmp.Name())
+				return errors.New("timed out. some connections are still active. goroutines written to " + tmp.Name())
 			}
-			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
+			return errors.New("timed out. some connections are still active")
 		case <-ticker.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
-				return err
+				return nil
 			}
 		}
 	}
