@@ -20,6 +20,7 @@
 package madmin
 
 import (
+	smart "github.com/minio/minio/pkg/smart"
 	diskhw "github.com/shirou/gopsutil/disk"
 )
 
@@ -27,7 +28,16 @@ import (
 type ServerDiskHwOBDInfo struct {
 	Addr       string                           `json:"addr"`
 	Usage      []*diskhw.UsageStat              `json:"usages,omitempty"`
-	Partitions []diskhw.PartitionStat           `json:"partitions,omitempty"`
+	Partitions []PartitionStat                  `json:"partitions,omitempty"`
 	Counters   map[string]diskhw.IOCountersStat `json:"counters,omitempty"`
 	Error      string                           `json:"error,omitempty"`
+}
+
+// PartitionStat - includes data from both shirou/psutil.diskHw.PartitionStat as well as SMART data
+type PartitionStat struct {
+	Device     string     `json:"device"`
+	Mountpoint string     `json:"mountpoint,omitempty"`
+	Fstype     string     `json:"fstype,omitempty"`
+	Opts       string     `json:"opts,omitempty"`
+	SmartInfo  smart.Info `json:"smartInfo,omitempty"`
 }

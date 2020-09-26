@@ -23,8 +23,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"syscall"
 
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/smart"
 	diskhw "github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 )
@@ -68,7 +70,7 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
-	partitions, err := diskhw.PartitionsWithContext(ctx, true)
+	parts, err := diskhw.PartitionsWithContext(ctx, true)
 	if err != nil {
 		return madmin.ServerDiskHwOBDInfo{
 			Addr:  addr,
@@ -78,15 +80,36 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 
 	drives := []string{}
 	paths := []string{}
-	for _, partition := range partitions {
-		device := partition.Device
-		path := partition.Mountpoint
+	partitions := []madmin.PartitionStat{}
+
+	for _, part := range parts {
+		device := part.Device
+		path := part.Mountpoint
 		if strings.Index(device, "/dev/") == 0 {
 			if strings.Contains(device, "loop") {
 				continue
 			}
 			drives = append(drives, device)
 			paths = append(paths, path)
+			smartInfo, err := smart.GetInfo(device)
+			if err != nil {
+				if syscall.EACCES == err {
+					smartInfo.Error = err.Error()
+				} else {
+					return madmin.ServerDiskHwOBDInfo{
+						Addr:  addr,
+						Error: err.Error(),
+					}
+				}
+			}
+			partition := madmin.PartitionStat{
+				Device:     part.Device,
+				Mountpoint: part.Mountpoint,
+				Fstype:     part.Fstype,
+				Opts:       part.Opts,
+				SmartInfo:  smartInfo,
+			}
+			partitions = append(partitions, partition)
 		}
 	}
 
