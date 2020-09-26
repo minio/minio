@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/minio/minio/pkg/dsync"
 )
 
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 	}
 
 	ds = &Dsync{
-		GetLockersFn: func() []NetLocker { return clnts },
+		GetLockers: func() ([]NetLocker, string) { return clnts, uuid.New().String() },
 	}
 
 	startRPCServers(nodes)

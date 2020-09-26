@@ -52,7 +52,7 @@ type erasureObjects struct {
 	getDisks func() []StorageAPI
 
 	// getLockers returns list of remote and local lockers.
-	getLockers func() []dsync.NetLocker
+	getLockers func() ([]dsync.NetLocker, string)
 
 	// getEndpoints returns list of endpoint strings belonging this set.
 	// some may be local and some remote.

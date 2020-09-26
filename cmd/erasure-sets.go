@@ -66,6 +66,9 @@ type erasureSets struct {
 	// Distributed locker clients.
 	erasureLockers setsDsyncLockers
 
+	// Distributed lock owner (constant per running instance).
+	erasureLockOwner string
+
 	// List of endpoints provided on the command line.
 	endpoints Endpoints
 
@@ -261,11 +264,11 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	}
 }
 
-func (s *erasureSets) GetLockers(setIndex int) func() []dsync.NetLocker {
-	return func() []dsync.NetLocker {
+func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string) {
+	return func() ([]dsync.NetLocker, string) {
 		lockers := make([]dsync.NetLocker, s.setDriveCount)
 		copy(lockers, s.erasureLockers[setIndex])
-		return lockers
+		return lockers, s.erasureLockOwner
 	}
 }
 
@@ -308,6 +311,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		sets:                make([]*erasureObjects, setCount),
 		erasureDisks:        make([][]StorageAPI, setCount),
 		erasureLockers:      make([][]dsync.NetLocker, setCount),
+		erasureLockOwner:    mustGetUUID(),
 		endpoints:           endpoints,
 		endpointStrings:     endpointStrings,
 		setCount:            setCount,
