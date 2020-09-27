@@ -91,7 +91,6 @@ func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 	for _, b := range data[:] {
 		if len(b) == 0 {
 			isZero++
-			break
 		}
 	}
 	if isZero == 0 || isZero == len(data) {
