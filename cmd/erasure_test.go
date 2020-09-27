@@ -32,7 +32,8 @@ var erasureEncodeDecodeTests = []struct {
 	shouldFail                 bool
 }{
 	{dataBlocks: 2, parityBlocks: 2, missingData: 0, missingParity: 0, reconstructParity: true, shouldFail: false},
-	{dataBlocks: 2, parityBlocks: 2, missingData: 2, missingParity: 2, reconstructParity: false, shouldFail: false},
+	{dataBlocks: 2, parityBlocks: 2, missingData: 2, missingParity: 2, reconstructParity: false, shouldFail: true},
+	{dataBlocks: 2, parityBlocks: 2, missingData: 2, missingParity: 2, reconstructParity: true, shouldFail: true},
 	{dataBlocks: 3, parityBlocks: 3, missingData: 1, missingParity: 0, reconstructParity: true, shouldFail: false},
 	{dataBlocks: 4, parityBlocks: 4, missingData: 2, missingParity: 0, reconstructParity: false, shouldFail: false},
 	{dataBlocks: 5, parityBlocks: 5, missingData: 0, missingParity: 1, reconstructParity: true, shouldFail: false},
