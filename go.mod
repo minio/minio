@@ -82,7 +82,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	golang.org/x/sys v0.0.0-20200915084602-288bc346aa39
-	golang.org/x/tools v0.0.0-20200814172026-c4923e618c08 // indirect
+	golang.org/x/tools v0.0.0-20200925191224-5d1fdd8fa346 // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3
