@@ -42,6 +42,9 @@ github.com/alecthomas/participle v0.2.1 h1:4AVLj1viSGa4LG5HDXKXrm5xRx19SB/rS/skP
 github.com/alecthomas/participle v0.2.1/go.mod h1:SW6HZGeZgSIpcUWX3fXpfZhuaWHnmoD5KCVaqSaNTkk=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
+github.com/aliyun/aliyun-oss-go-sdk v1.9.8 h1:BOflvK0Zs/zGmoabyFIzTg5c3kguktWTXEwewwbuba0=
+github.com/aliyun/aliyun-oss-go-sdk v2.1.4+incompatible h1:6t4QUhWVCcnilQy+d3aO0zsaO7wH6N3geMo4wgbC4MY=
+github.com/aliyun/aliyun-oss-go-sdk v2.1.4+incompatible/go.mod h1:T/Aws4fEfogEE9v+HPhhw+CntffsBHJ8nXQCwKr0/g8=
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=
 github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 h1:EFSB7Zo9Eg91v7MJPVsifUysc/wPdN+NOnVe6bWbdBM=
 github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878/go.mod h1:3AMJUQhVx52RsWOnlkpikZr01T/yAVN2gn0861vByNg=

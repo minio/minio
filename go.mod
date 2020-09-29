@@ -11,6 +11,7 @@ require (
 	github.com/Shopify/sarama v1.24.1
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
+	github.com/aliyun/aliyun-oss-go-sdk v2.1.4+incompatible // indirect
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
 	github.com/beevik/ntp v0.2.0
 	github.com/cespare/xxhash/v2 v2.1.1
