@@ -464,11 +464,11 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	newObject, err := newObjectLayer(GlobalContext, globalEndpoints)
-	logger.SetDeploymentID(globalDeploymentID)
 	if err != nil {
-		globalHTTPServer.Shutdown()
-		logger.Fatal(err, "Unable to initialize backend")
+		logFatalErrs(err, Endpoint{}, true)
 	}
+
+	logger.SetDeploymentID(globalDeploymentID)
 
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()

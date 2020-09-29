@@ -148,10 +148,8 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 	result.Delimiter = delimiter
 
 	var uploadIDs []string
-	for _, disk := range er.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
+	var disk StorageAPI
+	for _, disk = range er.getLoadBalancedDisks() {
 		uploadIDs, err = disk.ListDir(ctx, minioMetaMultipartBucket, er.getMultipartSHADir(bucket, object), -1)
 		if err != nil {
 			if err == errDiskNotFound {
@@ -176,30 +174,20 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 
 	populatedUploadIds := set.NewStringSet()
 
-retry:
-	for _, disk := range er.getLoadBalancedDisks() {
-		if disk == nil {
+	for _, uploadID := range uploadIDs {
+		if populatedUploadIds.Contains(uploadID) {
 			continue
 		}
-		for _, uploadID := range uploadIDs {
-			if populatedUploadIds.Contains(uploadID) {
-				continue
-			}
-			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
-			if err != nil {
-				if err == errDiskNotFound || err == errFileNotFound {
-					goto retry
-				}
-				return result, toObjectErr(err, bucket, object)
-			}
-			populatedUploadIds.Add(uploadID)
-			uploads = append(uploads, MultipartInfo{
-				Object:    object,
-				UploadID:  uploadID,
-				Initiated: fi.ModTime,
-			})
+		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
+		if err != nil {
+			return result, toObjectErr(err, bucket, object)
 		}
-		break
+		populatedUploadIds.Add(uploadID)
+		uploads = append(uploads, MultipartInfo{
+			Object:    object,
+			UploadID:  uploadID,
+			Initiated: fi.ModTime,
+		})
 	}
 
 	sort.Slice(uploads, func(i int, j int) bool {

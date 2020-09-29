@@ -30,10 +30,13 @@ type StorageAPI interface {
 	IsOnline() bool // Returns true if disk is online.
 	IsLocal() bool
 
-	Hostname() string // Returns host name if remote host.
+	Hostname() string   // Returns host name if remote host.
+	Endpoint() Endpoint // Returns endpoint.
+
 	Close() error
 	GetDiskID() (string, error)
 	SetDiskID(id string)
+	Healing() bool // Returns if disk is healing.
 
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
 	CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)

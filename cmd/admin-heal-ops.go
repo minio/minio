@@ -85,7 +85,7 @@ type healSequenceStatus struct {
 
 // structure to hold state of all heal sequences in server memory
 type allHealState struct {
-	sync.Mutex
+	sync.RWMutex
 
 	// map of heal path to heal sequence
 	healSeqMap     map[string]*healSequence
@@ -105,21 +105,21 @@ func newHealState() *allHealState {
 }
 
 func (ahs *allHealState) healDriveCount() int {
-	ahs.Lock()
-	defer ahs.Unlock()
+	ahs.RLock()
+	defer ahs.RUnlock()
 
 	return len(ahs.healLocalDisks)
 }
 
 func (ahs *allHealState) getHealLocalDisks() Endpoints {
-	ahs.Lock()
-	defer ahs.Unlock()
+	ahs.RLock()
+	defer ahs.RUnlock()
 
-	var healLocalDisks Endpoints
+	var endpoints Endpoints
 	for ep := range ahs.healLocalDisks {
-		healLocalDisks = append(healLocalDisks, ep)
+		endpoints = append(endpoints, ep)
 	}
-	return healLocalDisks
+	return endpoints
 }
 
 func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {

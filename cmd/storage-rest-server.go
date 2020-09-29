@@ -826,6 +826,69 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 	w.(http.Flusher).Flush()
 }
 
+// A single function to write certain errors to be fatal
+// or informative based on the `exit` flag, please look
+// at each implementation of error for added hints.
+//
+// FIXME: This is an unusual function but serves its purpose for
+// now, need to revist the overall erroring structure here.
+// Do not like it :-(
+func logFatalErrs(err error, endpoint Endpoint, exit bool) {
+	if errors.Is(err, errMinDiskSize) {
+		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
+	} else if errors.Is(err, errUnsupportedDisk) {
+		var hint string
+		if endpoint.URL != nil {
+			hint = fmt.Sprintf("Disk '%s' does not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support", endpoint.Path)
+		} else {
+			hint = "Disks do not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support"
+		}
+		logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
+	} else if errors.Is(err, errDiskNotDir) {
+		var hint string
+		if endpoint.URL != nil {
+			hint = fmt.Sprintf("Disk '%s' is not a directory, MinIO erasure coding needs a directory", endpoint.Path)
+		} else {
+			hint = "Disks are not directories, MinIO erasure coding needs directories"
+		}
+		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
+	} else if errors.Is(err, errFileAccessDenied) {
+		// Show a descriptive error with a hint about how to fix it.
+		var username string
+		if u, err := user.Current(); err == nil {
+			username = u.Username
+		} else {
+			username = "<your-username>"
+		}
+		var hint string
+		if endpoint.URL != nil {
+			hint = fmt.Sprintf("Run the following command to add write permissions: `sudo chown -R %s %s && sudo chmod u+rxw %s`",
+				username, endpoint.Path, endpoint.Path)
+		} else {
+			hint = fmt.Sprintf("Run the following command to add write permissions: `sudo chown -R %s. <path> && sudo chmod u+rxw <path>`", username)
+		}
+		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
+	} else if errors.Is(err, errFaultyDisk) {
+		if !exit {
+			logger.LogIf(GlobalContext, fmt.Errorf("disk is faulty at %s, please replace the drive - disk will be offline", endpoint))
+		} else {
+			logger.Fatal(err, "Unable to initialize backend")
+		}
+	} else if errors.Is(err, errDiskFull) {
+		if !exit {
+			logger.LogIf(GlobalContext, fmt.Errorf("disk is already full at %s, incoming I/O will fail - disk will be offline", endpoint))
+		} else {
+			logger.Fatal(err, "Unable to initialize backend")
+		}
+	} else {
+		if !exit {
+			logger.LogIf(GlobalContext, fmt.Errorf("disk returned an unexpected error at %s, please investigate - disk will be offline", endpoint))
+		} else {
+			logger.Fatal(err, "Unable to initialize backend")
+		}
+	}
+}
+
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
 	for _, ep := range endpointZones {
@@ -835,32 +898,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones
 			}
 			storage, err := newXLStorage(endpoint)
 			if err != nil {
-				switch err {
-				case errMinDiskSize:
-					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(err.Error()), "Unable to initialize backend")
-				case errUnsupportedDisk:
-					hint := fmt.Sprintf("'%s' does not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support", endpoint.Path)
-					logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
-				case errDiskNotDir:
-					hint := fmt.Sprintf("'%s' MinIO erasure coding needs a directory", endpoint.Path)
-					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
-				case errFileAccessDenied:
-					// Show a descriptive error with a hint about how to fix it.
-					var username string
-					if u, err := user.Current(); err == nil {
-						username = u.Username
-					} else {
-						username = "<your-username>"
-					}
-					hint := fmt.Sprintf("Run the following command to add write permissions: `sudo chown -R %s %s && sudo chmod u+rxw %s`", username, endpoint.Path, endpoint.Path)
-					logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize posix backend")
-				case errFaultyDisk:
-					logger.LogIf(GlobalContext, fmt.Errorf("disk is faulty at %s, please replace the drive", endpoint))
-				case errDiskFull:
-					logger.LogIf(GlobalContext, fmt.Errorf("disk is already full at %s, incoming I/O will fail", endpoint))
-				default:
-					logger.LogIf(GlobalContext, fmt.Errorf("disk returned an unexpected error at %s, please investigate", endpoint))
-				}
+				// if supported errors don't fail, we proceed to
+				// printing message and moving forward.
+				logFatalErrs(err, endpoint, false)
 			}
 
 			server := &storageRESTServer{storage: storage}

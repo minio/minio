@@ -156,6 +156,14 @@ func (client *storageRESTClient) Hostname() string {
 	return client.endpoint.Host
 }
 
+func (client *storageRESTClient) Endpoint() Endpoint {
+	return client.endpoint
+}
+
+func (client *storageRESTClient) Healing() bool {
+	return false
+}
+
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	b := cache.serialize()
 	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, bytes.NewBuffer(b), int64(len(b)))

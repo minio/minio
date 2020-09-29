@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"reflect"
@@ -335,7 +336,7 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 	return formats, g.Wait()
 }
 
-func saveFormatErasure(disk StorageAPI, format *formatErasureV3) error {
+func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) error {
 	if disk == nil || format == nil {
 		return errDiskNotFound
 	}
@@ -368,6 +369,18 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3) error {
 	}
 
 	disk.SetDiskID(diskID)
+	if heal {
+		htracker := healingTracker{
+			ID: diskID,
+		}
+		htrackerBytes, err := htracker.MarshalMsg(nil)
+		if err != nil {
+			return err
+		}
+		return disk.WriteAll(context.TODO(), minioMetaBucket,
+			pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
+			bytes.NewReader(htrackerBytes))
+	}
 	return nil
 }
 
@@ -551,7 +564,8 @@ func formatErasureFixLocalDeploymentID(endpoints Endpoints, storageDisks []Stora
 					return nil
 				}
 				format.ID = refFormat.ID
-				if err := saveFormatErasure(storageDisks[index], format); err != nil {
+				// Heal the drive if we fixed its deployment ID.
+				if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
 					logger.LogIf(GlobalContext, err)
 					return fmt.Errorf("Unable to save format.json, %w", err)
 				}
@@ -686,6 +700,27 @@ func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*fo
 	return nil
 }
 
+// saveFormatErasureAllWithErrs - populates `format.json` on disks in its order.
+// also adds `.healing.bin` on the disks which are being actively healed.
+func saveFormatErasureAllWithErrs(ctx context.Context, storageDisks []StorageAPI, fErrs []error, formats []*formatErasureV3) error {
+	g := errgroup.WithNErrs(len(storageDisks))
+
+	// Write `format.json` to all disks.
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if formats[index] == nil {
+				return errDiskNotFound
+			}
+			return saveFormatErasure(storageDisks[index], formats[index], errors.Is(fErrs[index], errUnformattedDisk))
+		}, index)
+	}
+
+	writeQuorum := getWriteQuorum(len(storageDisks))
+	// Wait for the routines to finish.
+	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, writeQuorum)
+}
+
 // saveFormatErasureAll - populates `format.json` on disks in its order.
 func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, formats []*formatErasureV3) error {
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -697,7 +732,7 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 			if formats[index] == nil {
 				return errDiskNotFound
 			}
-			return saveFormatErasure(storageDisks[index], formats[index])
+			return saveFormatErasure(storageDisks[index], formats[index], false)
 		}, index)
 	}
 
@@ -771,7 +806,8 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 			}
 			if formats[i].Erasure.This == "" {
 				formats[i].Erasure.This = formats[i].Erasure.Sets[0][i]
-				if err := saveFormatErasure(storageDisks[i], formats[i]); err != nil {
+				// Heal the drive if drive has .This empty.
+				if err := saveFormatErasure(storageDisks[i], formats[i], true); err != nil {
 					return err
 				}
 			}
