@@ -164,8 +164,8 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, bgSeq *healS
 					for _, disk := range disks {
 						logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
 
-						lbDisks := z.zones[i].sets[setIndex].getLoadBalancedDisks()
-						if err := healErasureSet(ctx, setIndex, buckets, lbDisks, z.zones[i].setDriveCount); err != nil {
+						lbDisks := z.zones[i].sets[setIndex].getLoadBalancedNDisks(z.zones[i].listTolerancePerSet)
+						if err := healErasureSet(ctx, setIndex, buckets, lbDisks); err != nil {
 							logger.LogIf(ctx, err)
 							continue
 						}
