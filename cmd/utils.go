@@ -497,7 +497,6 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
-		MaxIdleConns:          16,
 		IdleConnTimeout:       1 * time.Minute,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,

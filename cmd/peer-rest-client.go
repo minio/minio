@@ -883,7 +883,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		}
 	}
 
-	trFn := newInternodeHTTPTransport(tlsConfig, 10*time.Second)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 
 	// Construct a new health function.

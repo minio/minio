@@ -142,7 +142,7 @@ const (
 // algorithm until either the lock is acquired successfully or more
 // time has elapsed than the timeout value.
 func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadLock bool, opts Options) (locked bool) {
-	restClnts, _ := dm.clnt.GetLockers()
+	restClnts, owner := dm.clnt.GetLockers()
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -154,6 +154,26 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 
 	defer cancel()
 
+	// Tolerance is not set, defaults to half of the locker clients.
+	tolerance := opts.Tolerance
+	if tolerance == 0 {
+		tolerance = len(restClnts) / 2
+	}
+
+	// Quorum is effectively = total clients subtracted with tolerance limit
+	quorum := len(restClnts) - tolerance
+	if !isReadLock {
+		// In situations for write locks, as a special case
+		// to avoid split brains we make sure to acquire
+		// quorum + 1 when tolerance is exactly half of the
+		// total locker clients.
+		if quorum == tolerance {
+			quorum++
+		}
+	}
+
+	tolerance = len(restClnts) - quorum
+
 	for {
 		select {
 		case <-retryCtx.Done():
@@ -161,10 +181,14 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 
 			// Caller context canceled or we timedout,
 			// return false anyways for both situations.
+
+			// make sure to unlock any successful locks, since caller has timedout or canceled the request.
+			releaseAll(dm.clnt, quorum, owner, &locks, isReadLock, restClnts, dm.Names...)
+
 			return false
 		default:
 			// Try to acquire the lock.
-			if locked = lock(retryCtx, dm.clnt, &locks, id, source, isReadLock, opts.Tolerance, dm.Names...); locked {
+			if locked = lock(retryCtx, dm.clnt, &locks, id, source, isReadLock, tolerance, quorum, dm.Names...); locked {
 				dm.m.Lock()
 
 				// If success, copy array to object
@@ -186,31 +210,12 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
-func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, isReadLock bool, tolerance int, lockNames ...string) bool {
+func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, isReadLock bool, tolerance, quorum int, lockNames ...string) bool {
 	for i := range *locks {
 		(*locks)[i] = ""
 	}
 
 	restClnts, owner := ds.GetLockers()
-
-	// Tolerance is not set, defaults to half of the locker clients.
-	if tolerance == 0 {
-		tolerance = len(restClnts) / 2
-	}
-
-	// Quorum is effectively = total clients subtracted with tolerance limit
-	quorum := len(restClnts) - tolerance
-	if !isReadLock {
-		// In situations for write locks, as a special case
-		// to avoid split brains we make sure to acquire
-		// quorum + 1 when tolerance is exactly half of the
-		// total locker clients.
-		if quorum == tolerance {
-			quorum++
-		}
-	}
-
-	tolerance = len(restClnts) - quorum
 
 	// Create buffered channel of size equal to total number of nodes.
 	ch := make(chan Granted, len(restClnts))
