@@ -30,8 +30,8 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 )
 
-// DefaultRESTTimeout - default RPC timeout is 15 seconds.
-const DefaultRESTTimeout = 15 * time.Second
+// DefaultTimeout - default REST timeout is 10 seconds.
+const DefaultTimeout = 10 * time.Second
 
 const (
 	offline = iota
