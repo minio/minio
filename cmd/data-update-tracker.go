@@ -236,7 +236,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		d.mu.Lock()
 		if !d.dirty {
 			d.mu.Unlock()
-			return
+			continue
 		}
 		d.Saved = UTCNow()
 		err := d.serialize(&buf)
