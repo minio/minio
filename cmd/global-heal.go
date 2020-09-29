@@ -97,7 +97,7 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI, setDriveCount int) error {
+func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI) error {
 	// Get background heal sequence to send elements to heal
 	var bgSeq *healSequence
 	var ok bool
@@ -131,10 +131,6 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 		var mu sync.Mutex
 		var wg sync.WaitGroup
 		for _, disk := range disks {
-			if disk == nil {
-				// Disk can be offline
-				continue
-			}
 			disk := disk
 			wg.Add(1)
 			go func() {
@@ -157,14 +153,9 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 		entries := make([]FileInfoVersions, len(entryChs))
 
 		for {
-			entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
+			entry, _, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
 			if !ok {
 				break
-			}
-
-			if quorumCount == setDriveCount {
-				// Skip good entries.
-				continue
 			}
 
 			for _, version := range entry.Versions {

@@ -105,6 +105,8 @@ type xlStorage struct {
 	formatFileInfo  os.FileInfo
 	formatLastCheck time.Time
 
+	diskInfoCache timedValue
+
 	ctx context.Context
 	sync.RWMutex
 }
@@ -446,6 +448,7 @@ type DiskInfo struct {
 	Total     uint64
 	Free      uint64
 	Used      uint64
+	FSType    string
 	RootDisk  bool
 	Healing   bool
 	Endpoint  string
@@ -462,23 +465,41 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	di, err := getDiskInfo(s.diskPath)
-	if err != nil {
-		return info, err
-	}
+	s.diskInfoCache.Once.Do(func() {
+		s.diskInfoCache.TTL = time.Second
+		s.diskInfoCache.Update = func() (interface{}, error) {
+			dcinfo := DiskInfo{
+				RootDisk:  s.rootDisk,
+				MountPath: s.diskPath,
+				Endpoint:  s.endpoint.String(),
+			}
+			di, err := getDiskInfo(s.diskPath)
+			if err != nil {
+				return dcinfo, err
+			}
+			dcinfo.Total = di.Total
+			dcinfo.Free = di.Free
+			dcinfo.Used = di.Total - di.Free
+			dcinfo.FSType = di.FSType
 
-	info = DiskInfo{
-		Total:     di.Total,
-		Free:      di.Free,
-		Used:      di.Total - di.Free,
-		Healing:   s.Healing(),
-		RootDisk:  s.rootDisk,
-		MountPath: s.diskPath,
-		Endpoint:  s.endpoint.String(),
-	}
+			diskID, err := s.GetDiskID()
+			if errors.Is(err, errUnformattedDisk) {
+				// if we found an unformatted disk then
+				// healing is automatically true.
+				dcinfo.Healing = true
+			} else {
+				// Check if the disk is being healed if GetDiskID
+				// returned any error other than fresh disk
+				dcinfo.Healing = s.Healing()
+			}
 
-	diskID, err := s.GetDiskID()
-	info.ID = diskID
+			dcinfo.ID = diskID
+			return dcinfo, err
+		}
+	})
+
+	v, err := s.diskInfoCache.Get()
+	info = v.(DiskInfo)
 	return info, err
 }
 
@@ -503,7 +524,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	s.RUnlock()
 
 	// check if we have a valid disk ID that is less than 1 second old.
-	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
+	if fileInfo != nil && diskID != "" && time.Since(lastCheck) <= time.Second {
 		return diskID, nil
 	}
 

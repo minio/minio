@@ -28,7 +28,7 @@ verifiers: getdeps fmt lint ruleguard check-gen
 
 check-gen:
 	@go generate ./... >/dev/null
-	@git diff --exit-code >/dev/null || echo "Non-committed changes in auto-generated code are detected, please check."
+	@git diff --exit-code >/dev/null || echo "Non-committed changes detected, please commit them to proceed."
 
 fmt:
 	@echo "Running $@ check"

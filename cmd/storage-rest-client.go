@@ -161,6 +161,12 @@ func (client *storageRESTClient) Endpoint() Endpoint {
 }
 
 func (client *storageRESTClient) Healing() bool {
+	// This call should never be called over the network
+	// this function should always return 'false'
+	//
+	// To know if a remote disk is being healed
+	// perform DiskInfo() call which would return
+	// back the correct data if disk is being healed.
 	return false
 }
 
