@@ -216,12 +216,11 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []er
 	if err != nil {
 		return StorageInfo{}, []error{err}
 	}
-	used := di.Total - di.Free
 	storageInfo := StorageInfo{
 		Disks: []madmin.Disk{
 			{
 				TotalSpace:     di.Total,
-				UsedSpace:      used,
+				UsedSpace:      di.Used,
 				AvailableSpace: di.Free,
 				DrivePath:      fs.fsPath,
 			},

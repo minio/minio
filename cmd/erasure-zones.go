@@ -662,7 +662,7 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
 			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet, false))
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-1)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	var objInfos []ObjectInfo
@@ -784,7 +784,7 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-1)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
@@ -876,7 +876,7 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-1)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
@@ -1278,7 +1278,7 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-1)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)

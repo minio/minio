@@ -76,5 +76,6 @@ func GetInfo(path string) (info Info, err error) {
 	if info.Free > info.Total {
 		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
 	}
+	info.Used = info.Total - info.Free
 	return info, nil
 }
