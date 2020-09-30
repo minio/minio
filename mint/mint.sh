@@ -182,20 +182,18 @@ function main()
         pids+=" $!"
     done
 
-    completed=0
+    test_ok=0
     for p in $pids; do
         if wait $p; then
-            (( completed++ ))
-        else
-            (( completed-- ))
+            (( test_ok++ ))
         fi
     done
 
     ## Report when all tests in run_list are run
-    if [ $completed -eq "$count" ]; then
+    if [ $test_ok -eq "$count" ]; then
         echo -e "\nAll tests ran successfully"
     else
-        echo -e "\nExecuted $i out of $count tests successfully."
+        echo -e "\nExecuted $test_ok out of $count tests successfully."
         exit 1
     fi
 }
