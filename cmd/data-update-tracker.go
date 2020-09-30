@@ -46,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 2
+	dataUpdateTrackerVersion      = 3
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
@@ -363,7 +363,7 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
-	case 1:
+	case 1, 2:
 		logger.Info(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
 		return nil
 	case dataUpdateTrackerVersion:
