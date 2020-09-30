@@ -167,6 +167,7 @@ function main()
         run_list=( "${run_list[@]}" "$TESTS_DIR/$sdk" )
     done
 
+    pids=""
     count="${#run_list[@]}"
     i=0
     for sdk_dir in "${run_list[@]}"; do
@@ -176,14 +177,22 @@ function main()
             echo "Test $sdk_name not found. Exiting Mint."
             exit 1
         fi
-        echo -n "($i/$count) Running $sdk_name tests ... "
-        if ! run_test "$sdk_dir"; then
-            (( i-- ))
+        echo "($i/$count) Running $sdk_name tests ... "
+        run_test "$sdk_dir" &
+        pids+=" $!"
+    done
+
+    completed=0
+    for p in $pids; do
+        if wait $p; then
+            (( completed++ ))
+        else
+            (( completed-- ))
         fi
     done
 
     ## Report when all tests in run_list are run
-    if [ $i -eq "$count" ]; then
+    if [ $completed -eq "$count" ]; then
         echo -e "\nAll tests ran successfully"
     else
         echo -e "\nExecuted $i out of $count tests successfully."
