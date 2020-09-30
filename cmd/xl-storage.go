@@ -479,7 +479,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			}
 			dcinfo.Total = di.Total
 			dcinfo.Free = di.Free
-			dcinfo.Used = di.Total - di.Free
+			dcinfo.Used = di.Used
 			dcinfo.FSType = di.FSType
 
 			diskID, err := s.GetDiskID()

@@ -59,7 +59,7 @@ func (er erasureObjects) getLoadBalancedDisks() []StorageAPI {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var newDisks []StorageAPI
+	var newDisks = map[uint64][]StorageAPI{}
 	// Based on the random shuffling return back randomized disks.
 	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
 		i := i
@@ -79,13 +79,24 @@ func (er erasureObjects) getLoadBalancedDisks() []StorageAPI {
 				// - Future: skip busy disks
 				return
 			}
+
 			mu.Lock()
-			newDisks = append(newDisks, disks[i-1])
+			// Capture disks usage wise
+			newDisks[di.Used] = append(newDisks[di.Used], disks[i-1])
 			mu.Unlock()
 		}()
 	}
 	wg.Wait()
-	return newDisks
+
+	var max uint64
+	for k := range newDisks {
+		if k > max {
+			max = k
+		}
+	}
+
+	// Return disks which have maximum disk usage common.
+	return newDisks[max]
 }
 
 // This function does the following check, suppose
