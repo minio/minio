@@ -2788,7 +2788,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		if rec.Code == http.StatusOK {
 			// Verify whether the bucket obtained object is same as the one created.
 			if !bytes.Equal(testCase.expectedContent, actualContent) {
-				t.Errorf("Test %d : MinIO %s: Object content differs from expected value.", i+1, instanceType)
+				t.Errorf("Test %d : MinIO %s: CompleteMultipart response content differs from expected value. got %s, expecte %s", i+1, instanceType,
+					string(actualContent), string(testCase.expectedContent))
 			}
 			continue
 		}
