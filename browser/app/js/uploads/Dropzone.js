@@ -36,7 +36,7 @@ export class Dropzone extends React.Component {
     // Overwrite the default styling from react-dropzone; otherwise it
     // won't handle child elements correctly.
     const style = {
-      height: "100%",
+      flex: "1",
       borderWidth: "0",
       borderStyle: "dashed",
       borderColor: "#fff"
