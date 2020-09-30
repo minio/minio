@@ -22,10 +22,12 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -78,26 +80,37 @@ func (c *OperatorDNS) Put(bucket string) error {
 	defer cancel()
 	e, err := c.endpoint(bucket, false)
 	if err != nil {
-		return err
+		return newError(bucket, err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e, nil)
 	if err != nil {
-		return err
+		return newError(bucket, err)
 	}
 	if err = c.addAuthHeader(req); err != nil {
-		return err
+		return newError(bucket, err)
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if derr := c.Delete(bucket); derr != nil {
-			return derr
+			return newError(bucket, derr)
 		}
 	}
+	var errorStringBuilder strings.Builder
+	io.Copy(&errorStringBuilder, io.LimitReader(resp.Body, resp.ContentLength))
 	xhttp.DrainBody(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("request to create the service for bucket %s, failed with status %s", bucket, resp.Status)
+		errorString := errorStringBuilder.String()
+		return newError(bucket, fmt.Errorf("service create for bucket %s, failed with status %s, error %s", bucket, resp.Status, errorString))
 	}
 	return nil
+}
+
+func newError(bucket string, err error) error {
+	e := Error{bucket, err}
+	if strings.Contains(err.Error(), "invalid bucket name") {
+		return ErrInvalidBucketName(e)
+	}
+	return e
 }
 
 // Delete - Removes DNS entries added in Put().

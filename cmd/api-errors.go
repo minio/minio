@@ -1956,6 +1956,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrBackendDown
 	case ObjectNameTooLong:
 		apiErr = ErrKeyTooLongError
+	case dns.ErrInvalidBucketName:
+		apiErr = ErrInvalidBucketName
 	default:
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648
@@ -1992,6 +1994,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 	}
 
 	var apiErr = errorCodes.ToAPIErr(toAPIErrorCode(ctx, err))
+	e, ok := err.(dns.ErrInvalidBucketName)
+	if ok {
+		code := toAPIErrorCode(ctx, e)
+		apiErr = errorCodes.ToAPIErrWithErr(code, e)
+	}
+
 	if apiErr.Code == "InternalError" {
 		// If we see an internal error try to interpret
 		// any underlying errors if possible depending on
