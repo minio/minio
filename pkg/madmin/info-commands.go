@@ -203,7 +203,7 @@ type Usage struct {
 // Vault - Fetches the Vault status
 type Vault struct {
 	Status  string `json:"status,omitempty"`
-	Encrypt string `json:"encryp,omitempty"`
+	Encrypt string `json:"encrypt,omitempty"`
 	Decrypt string `json:"decrypt,omitempty"`
 }
 
