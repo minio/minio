@@ -8,12 +8,10 @@ ENV PATH $GOPATH/bin:$GOROOT/bin:$PATH
 ENV MINT_ROOT_DIR /mint
 
 RUN apt-get --yes update && apt-get --yes upgrade && \
-    apt-get --yes --quiet install wget jq curl git dnsmasq \
-    --no-install-recommends
+    apt-get --yes --quiet install wget jq curl git dnsmasq
 
 COPY mint /mint
 WORKDIR /mint
 RUN /mint/release.sh
-
 
 ENTRYPOINT ["/mint/entrypoint.sh"]
