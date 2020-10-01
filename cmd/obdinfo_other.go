@@ -89,6 +89,11 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 			if strings.Contains(device, "loop") {
 				continue
 			}
+
+			if strings.Contains(device, "/dev/fuse") {
+				continue
+			}
+
 			drives = append(drives, device)
 			paths = append(paths, path)
 			smartInfo, err := smart.GetInfo(device)
