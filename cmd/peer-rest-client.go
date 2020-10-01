@@ -114,19 +114,6 @@ func (n networkOverloadedErr) Error() string {
 	return "network overloaded"
 }
 
-type progressReader struct {
-	r            io.Reader
-	progressChan chan int64
-}
-
-func (p *progressReader) Read(b []byte) (int, error) {
-	n, err := p.r.Read(b)
-	if n >= 0 {
-		p.progressChan <- int64(n)
-	}
-	return n, err
-}
-
 type nullReader struct{}
 
 func (r *nullReader) Read(b []byte) (int, error) {
@@ -141,15 +128,7 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 	buflimiter := make(chan struct{}, threadCount)
 	errChan := make(chan error, threadCount)
 
-	totalTransferred := int64(0)
-	transferChan := make(chan int64, threadCount)
-	defer close(transferChan)
-
-	go func() {
-		for v := range transferChan {
-			atomic.AddInt64(&totalTransferred, v)
-		}
-	}()
+	var totalTransferred int64
 
 	// ensure enough samples to obtain normal distribution
 	maxSamples := int(10 * threadCount)
@@ -188,15 +167,13 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 			}
 
 			go func(i int) {
-				progress := &progressReader{
-					r:            io.LimitReader(&nullReader{}, dataSize),
-					progressChan: transferChan,
-				}
 				start := time.Now()
 				before := atomic.LoadInt64(&totalTransferred)
 
 				ctx, cancel := context.WithTimeout(innerCtx, 10*time.Second)
 				defer cancel()
+
+				progress := io.LimitReader(&nullReader{}, dataSize)
 
 				// Turn off healthCheckFn for OBD tests to cater for higher load on the peers.
 				clnt := newPeerRESTClient(client.host)
@@ -216,8 +193,9 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 				}
 				http.DrainBody(respBody)
 
-				after := atomic.LoadInt64(&totalTransferred)
 				finish()
+				atomic.AddInt64(&totalTransferred, dataSize)
+				after := atomic.LoadInt64(&totalTransferred)
 				end := time.Now()
 
 				latency := end.Sub(start).Seconds()
