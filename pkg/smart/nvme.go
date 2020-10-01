@@ -31,7 +31,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// golint:ignore
+// NVMe admin disk query constants
 const (
 	NvmeAdminGetLogPage = 0x02
 	NvmeAdminIdentify   = 0x06
@@ -42,6 +42,7 @@ var (
 )
 
 // Defined in <linux/nvme_ioctl.h>
+//nolint:structcheck
 type nvmePassthruCommand struct {
 	opcode      uint8
 	flags       uint8
@@ -141,7 +142,7 @@ type nvmeLBAF struct {
 	Rp uint8
 }
 
-//golint:ignore
+//nolint:deadcode
 type nvmeIdentNamespace struct {
 	Nsze    uint64
 	Ncap    uint64
@@ -238,7 +239,7 @@ func (d *NVMeDevice) readLogPage(logID uint8, buf *[]byte) error {
 // le128ToBigInt takes a little-endian 16-byte slice and returns a *big.Int representing it.
 func le128ToBigInt(buf [16]byte) *big.Int {
 	// Int.SetBytes() expects big-endian input, so reverse the bytes locally first
-	rev := make([]byte, 16, 16)
+	rev := make([]byte, 16)
 	for x := 0; x < 16; x++ {
 		rev[x] = buf[16-x-1]
 	}

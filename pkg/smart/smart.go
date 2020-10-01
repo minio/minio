@@ -185,7 +185,7 @@ func getNvmeInfo(d *NVMeDevice) (*NvmeInfo, error) {
 	unitsWritten := le128ToBigInt(sl.DataUnitsWritten)
 
 	nvmeInfo.CriticalWarning = fmt.Sprintf("%x", sl.CritWarning)
-	nvmeInfo.Temperature = fmt.Sprintf("%d Celcius",
+	nvmeInfo.Temperature = fmt.Sprintf("%d Celsius",
 		((uint16(sl.Temperature[1])<<8)|uint16(sl.Temperature[0]))-273) // Kelvin to degrees Celsius
 	nvmeInfo.SpareAvailable = fmt.Sprintf("%d%%", sl.AvailSpare)
 	nvmeInfo.SpareThreshold = fmt.Sprintf("%d%%", sl.SpareThresh)
