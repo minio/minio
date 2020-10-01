@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"syscall"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
@@ -199,9 +198,7 @@ func checkPortAvailability(host, port string) (err error) {
 			if err = l.Close(); err != nil {
 				return err
 			}
-		} else if errors.Is(err, syscall.EADDRINUSE) {
-			// As we got EADDRINUSE error, the port is in use by other process.
-			// Return the error.
+		} else {
 			return err
 		}
 	}

@@ -19,7 +19,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"syscall"
 
@@ -111,18 +110,16 @@ func ErrorToErr(err error) Err {
 		case *net.OpError:
 			return ErrPortAccess(err).Msg("Insufficient permissions to use specified port")
 		}
-		return ErrNoPermissionsToAccessDirFiles(err).Msg("Insufficient permissions to access path")
-	} else if errors.Is(err, io.ErrUnexpectedEOF) {
-		return ErrUnexpectedDataContent(err)
-	} else {
-		// Failed to identify what type of error this, return a simple UI error
-		return Err{msg: err.Error()}
 	}
+
+	// Failed to identify what type of error this, return a simple UI error
+	return Err{msg: err.Error()}
 }
 
 // FmtError converts a fatal error message to a more clear error
 // using some colors
 func FmtError(introMsg string, err error, jsonFlag bool) string {
+
 	renderedTxt := ""
 	uiErr := ErrorToErr(err)
 	// JSON print
