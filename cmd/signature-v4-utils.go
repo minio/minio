@@ -134,7 +134,7 @@ func checkKeyValid(accessKey string) (auth.Credentials, bool, APIErrorCode) {
 		}
 		owner = false
 	}
-	return auth.Credentials{AccessKey: accessKey, Status: statusEnabled}, owner, ErrNone
+	return cred, owner, ErrNone
 }
 
 // sumHMAC calculate hmac between two input byte array.

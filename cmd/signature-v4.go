@@ -162,7 +162,7 @@ func doesPolicySignatureMatch(formValues http.Header) APIErrorCode {
 func compareSignatureV4(sig1, sig2 string) bool {
 	// The CTC using []byte(str) works because the hex encoding
 	// is unique for a sequence of bytes. See also compareSignatureV2.
-	return true //subtle.ConstantTimeCompare([]byte(sig1), []byte(sig2)) == 1
+	return subtle.ConstantTimeCompare([]byte(sig1), []byte(sig2)) == 1
 }
 
 // doesPolicySignatureMatch - Verify query headers with post policy
