@@ -205,12 +205,6 @@ Example 1:
 		`Use 'sudo setcap cap_net_bind_service=+ep /path/to/minio' to provide sufficient permissions`,
 	)
 
-	ErrNoPermissionsToAccessDirFiles = newErrFn(
-		"Missing permissions to access the specified path",
-		"Please ensure the specified path can be accessed",
-		"",
-	)
-
 	ErrSSLUnexpectedError = newErrFn(
 		"Invalid TLS certificate",
 		"Please check the content of your certificate data",
@@ -244,12 +238,6 @@ Example 1:
 	ErrSSLWrongPassword = newErrFn(
 		"Unable to decrypt the private key using the provided password",
 		"Please set the correct password in environment variable `MINIO_CERT_PASSWD`",
-		"",
-	)
-
-	ErrUnexpectedDataContent = newErrFn(
-		"Unexpected data content",
-		"Please contact MinIO at https://slack.min.io",
 		"",
 	)
 
