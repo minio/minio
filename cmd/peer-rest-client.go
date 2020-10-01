@@ -134,6 +134,7 @@ func (r *nullReader) Read(b []byte) (int, error) {
 }
 
 func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.NetOBDInfo, err error) {
+	var mu sync.Mutex // mutex used to protect these slices in go-routines
 	latencies := []float64{}
 	throughputs := []float64{}
 
@@ -142,6 +143,8 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 
 	totalTransferred := int64(0)
 	transferChan := make(chan int64, threadCount)
+	defer close(transferChan)
+
 	go func() {
 		for v := range transferChan {
 			atomic.AddInt64(&totalTransferred, v)
@@ -226,13 +229,16 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 				/* Throughput = (total data transferred across all threads / time taken) */
 				throughput := float64((after - before)) / latency
 
+				// Protect updating latencies and throughputs slices from
+				// multiple go-routines.
+				mu.Lock()
 				latencies = append(latencies, latency)
 				throughputs = append(throughputs, throughput)
+				mu.Unlock()
 			}(i)
 		}
 	}
 	wg.Wait()
-	close(transferChan)
 
 	if err != nil {
 		return info, err
