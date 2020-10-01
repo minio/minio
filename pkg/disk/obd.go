@@ -27,9 +27,6 @@ import (
 	"github.com/montanaflynn/stats"
 )
 
-var globalLatency = map[string]Latency{}
-var globalThroughput = map[string]Throughput{}
-
 // Latency holds latency information for write operations to the drive
 type Latency struct {
 	Avg          float64 `json:"avg_secs,omitempty"`
@@ -154,6 +151,7 @@ func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput,
 	if minThroughput, err = stats.Min(throughputs); err != nil {
 		return Latency{}, Throughput{}, err
 	}
+
 	t := Throughput{
 		Avg:          avgThroughput,
 		Percentile50: percentile50Throughput,
@@ -162,9 +160,6 @@ func GetOBDInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput,
 		Min:          minThroughput,
 		Max:          maxThroughput,
 	}
-
-	globalLatency[drive] = l
-	globalThroughput[drive] = t
 
 	return l, t, nil
 }
