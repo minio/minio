@@ -470,11 +470,10 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewInternodeDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
-		MaxIdleConns:          16,
-		IdleConnTimeout:       1 * time.Minute,
+		IdleConnTimeout:       30 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 10 * time.Second,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ExpectContinueTimeout: 15 * time.Second,
 		TLSClientConfig:       tlsConfig,
 		// Go net/http automatically unzip if content-type is
 		// gzip disable this feature, as we are always interested
@@ -498,7 +497,6 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
 		MaxIdleConnsPerHost:   16,
-		MaxIdleConns:          16,
 		IdleConnTimeout:       1 * time.Minute,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
@@ -736,4 +734,21 @@ func (t *timedValue) Invalidate() {
 	t.mu.Lock()
 	t.value = nil
 	t.mu.Unlock()
+}
+
+// On MinIO a directory object is stored as a regular object with "__XLDIR__" suffix.
+// For ex. "prefix/" is stored as "prefix__XLDIR__"
+func encodeDirObject(object string) string {
+	if HasSuffix(object, slashSeparator) {
+		return strings.TrimSuffix(object, slashSeparator) + globalDirSuffix
+	}
+	return object
+}
+
+// Reverse process of encodeDirObject()
+func decodeDirObject(object string) string {
+	if HasSuffix(object, globalDirSuffix) {
+		return strings.TrimSuffix(object, globalDirSuffix) + slashSeparator
+	}
+	return object
 }

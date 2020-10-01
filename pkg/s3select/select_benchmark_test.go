@@ -30,11 +30,11 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
-var randSrc = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func newRandString(length int) string {
+	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[randSrc.Intn(len(charset))]

@@ -155,34 +155,37 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 
 // listAllBuckets lists all buckets from all disks. It also
 // returns the occurrence of each buckets in all disks
-func listAllBuckets(storageDisks []StorageAPI, healBuckets map[string]VolInfo) (err error) {
-	for _, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		var volsInfo []VolInfo
-		volsInfo, err = disk.ListVols(context.TODO())
-		if err != nil {
-			if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
-				continue
+func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets map[string]VolInfo) error {
+	g := errgroup.WithNErrs(len(storageDisks))
+	var mu sync.Mutex
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] == nil {
+				// we ignore disk not found errors
+				return nil
 			}
-			return err
-		}
-		for _, volInfo := range volsInfo {
-			// StorageAPI can send volume names which are
-			// incompatible with buckets - these are
-			// skipped, like the meta-bucket.
-			if isReservedOrInvalidBucket(volInfo.Name, false) {
-				continue
+			volsInfo, err := storageDisks[index].ListVols(ctx)
+			if err != nil {
+				return err
 			}
-			// always save unique buckets across drives.
-			if _, ok := healBuckets[volInfo.Name]; !ok {
-				healBuckets[volInfo.Name] = volInfo
+			for _, volInfo := range volsInfo {
+				// StorageAPI can send volume names which are
+				// incompatible with buckets - these are
+				// skipped, like the meta-bucket.
+				if isReservedOrInvalidBucket(volInfo.Name, false) {
+					continue
+				}
+				mu.Lock()
+				if _, ok := healBuckets[volInfo.Name]; !ok {
+					healBuckets[volInfo.Name] = volInfo
+				}
+				mu.Unlock()
 			}
-
-		}
+			return nil
+		}, index)
 	}
-	return nil
+	return reduceReadQuorumErrs(ctx, g.Wait(), bucketMetadataOpIgnoredErrs, len(storageDisks)/2)
 }
 
 // Only heal on disks where we are sure that healing is needed. We can expand
@@ -265,7 +268,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			}
 		case errs[i] == errDiskNotFound, dataErrs[i] == errDiskNotFound:
 			driveState = madmin.DriveStateOffline
-		case errs[i] == errFileNotFound, errs[i] == errVolumeNotFound:
+		case errs[i] == errFileNotFound, errs[i] == errFileVersionNotFound, errs[i] == errVolumeNotFound:
 			fallthrough
 		case dataErrs[i] == errFileNotFound, dataErrs[i] == errFileVersionNotFound, dataErrs[i] == errVolumeNotFound:
 			driveState = madmin.DriveStateMissing

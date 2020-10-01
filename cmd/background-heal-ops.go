@@ -21,7 +21,6 @@ import (
 	"path"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -127,25 +126,6 @@ func healDiskFormat(ctx context.Context, objAPI ObjectLayer, opts madmin.HealOpt
 	// already healed.
 	if err != nil && err != errNoHealRequired {
 		return madmin.HealResultItem{}, err
-	}
-
-	// Healing succeeded notify the peers to reload format and re-initialize disks.
-	// We will not notify peers if healing is not required.
-	if err == nil {
-		// Notify servers in background and retry if needed.
-		go func() {
-		retry:
-			for _, nerr := range globalNotificationSys.ReloadFormat(opts.DryRun) {
-				if nerr.Err != nil {
-					if nerr.Err.Error() == errServerNotInitialized.Error() {
-						time.Sleep(time.Second)
-						goto retry
-					}
-					logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-					logger.LogIf(ctx, nerr.Err)
-				}
-			}
-		}()
 	}
 
 	return res, nil

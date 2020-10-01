@@ -15,6 +15,7 @@
  */
 
 import React from "react"
+import ObjectsSearch from "../objects/ObjectsSearch"
 import Path from "../objects/Path"
 import StorageInfo from "./StorageInfo"
 import BrowserDropdown from "./BrowserDropdown"
@@ -27,6 +28,7 @@ export const Header = () => {
     <header className="fe-header">
       <Path />
       {loggedIn && <StorageInfo />}
+      {loggedIn && <ObjectsSearch />}
       <ul className="feh-actions">
         {loggedIn ? (
           <BrowserDropdown />

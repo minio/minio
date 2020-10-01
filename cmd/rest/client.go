@@ -30,8 +30,8 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 )
 
-// DefaultRESTTimeout - default RPC timeout is one minute.
-const DefaultRESTTimeout = 1 * time.Minute
+// DefaultTimeout - default REST timeout is 10 seconds.
+const DefaultTimeout = 10 * time.Second
 
 const (
 	offline = iota
@@ -103,9 +103,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url.String()+method+querySep+values.Encode(), body)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
-			c.MarkOffline()
-		}
 		return nil, &NetworkError{err}
 	}
 	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.Query().Encode()))
@@ -115,7 +112,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) || errors.Is(err, context.DeadlineExceeded) {
+		if xnet.IsNetworkOrHostDown(err) {
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -144,6 +141,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
+			if xnet.IsNetworkOrHostDown(err) {
+				c.MarkOffline()
+			}
 			return nil, err
 		}
 		if len(b) > 0 {
@@ -173,7 +173,6 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 		url:                 url,
 		newAuthToken:        newAuthToken,
 		connected:           online,
-
 		MaxErrResponseSize:  4096,
 		HealthCheckInterval: 200 * time.Millisecond,
 		HealthCheckTimeout:  time.Second,
@@ -191,21 +190,18 @@ func (c *Client) MarkOffline() {
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
 	if c.HealthCheckFn != nil && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
-		if c.httpIdleConnsCloser != nil {
-			c.httpIdleConnsCloser()
-		}
-		go func() {
+		go func(healthFunc func() bool) {
 			ticker := time.NewTicker(c.HealthCheckInterval)
 			defer ticker.Stop()
 			for range ticker.C {
-				if status := atomic.LoadInt32(&c.connected); status == closed {
+				if atomic.LoadInt32(&c.connected) == closed {
 					return
 				}
-				if c.HealthCheckFn() {
+				if healthFunc() {
 					atomic.CompareAndSwapInt32(&c.connected, offline, online)
 					return
 				}
 			}
-		}()
+		}(c.HealthCheckFn)
 	}
 }

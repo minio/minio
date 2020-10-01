@@ -26,7 +26,17 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-const defaultMonitorNewDiskInterval = time.Second * 10
+const (
+	defaultMonitorNewDiskInterval = time.Second * 10
+	healingTrackerFilename        = ".healing.bin"
+)
+
+//go:generate msgp -file $GOFILE -unexported
+type healingTracker struct {
+	ID string
+
+	// future add more tracking capabilities
+}
 
 func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 	z, ok := objAPI.(*erasureZones)
@@ -47,9 +57,7 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 		time.Sleep(time.Second)
 	}
 
-	for _, ep := range getLocalDisksToHeal() {
-		globalBackgroundHealState.pushHealLocalDisks(ep)
-	}
+	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
 
 	if drivesToHeal := globalBackgroundHealState.healDriveCount(); drivesToHeal > 0 {
 		logger.Info(fmt.Sprintf("Found drives to heal %d, waiting until %s to heal the content...",
@@ -76,9 +84,11 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 			}
 			// Try to connect to the current endpoint
 			// and reformat if the current disk is not formatted
-			_, _, err := connectEndpoint(endpoint)
+			disk, _, err := connectEndpoint(endpoint)
 			if errors.Is(err, errUnformattedDisk) {
 				disksToHeal = append(disksToHeal, endpoint)
+			} else if err == nil && disk != nil && disk.Healing() {
+				disksToHeal = append(disksToHeal, disk.Endpoint())
 			}
 		}
 	}
@@ -106,31 +116,34 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, bgSeq *healS
 		case <-time.After(defaultMonitorNewDiskInterval):
 			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
 
-			var erasureSetInZoneEndpointToHeal = make([]map[int]Endpoint, len(z.zones))
-			for i := range z.zones {
-				erasureSetInZoneEndpointToHeal[i] = map[int]Endpoint{}
-			}
+			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
-			// heal only if new disks found.
-			for _, endpoint := range healDisks {
-				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
-					len(healDisks)))
-
+			if len(healDisks) > 0 {
 				// Reformat disks
 				bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
 
 				// Ensure that reformatting disks is finished
 				bgSeq.sourceCh <- healSource{bucket: nopHeal}
 
-				// Load the new format of this passed endpoint
-				_, format, err := connectEndpoint(endpoint)
+				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
+					len(healDisks)))
+
+				erasureSetInZoneDisksToHeal = make([]map[int][]StorageAPI, len(z.zones))
+				for i := range z.zones {
+					erasureSetInZoneDisksToHeal[i] = map[int][]StorageAPI{}
+				}
+			}
+
+			// heal only if new disks found.
+			for _, endpoint := range healDisks {
+				disk, format, err := connectEndpoint(endpoint)
 				if err != nil {
 					printEndpointError(endpoint, err, true)
 					continue
 				}
 
-				zoneIdx := globalEndpoints.GetLocalZoneIdx(endpoint)
+				zoneIdx := globalEndpoints.GetLocalZoneIdx(disk.Endpoint())
 				if zoneIdx < 0 {
 					continue
 				}
@@ -142,20 +155,32 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureZones, bgSeq *healS
 					continue
 				}
 
-				erasureSetInZoneEndpointToHeal[zoneIdx][setIndex] = endpoint
+				erasureSetInZoneDisksToHeal[zoneIdx][setIndex] = append(erasureSetInZoneDisksToHeal[zoneIdx][setIndex], disk)
 			}
 
-			for i, setMap := range erasureSetInZoneEndpointToHeal {
-				for setIndex, endpoint := range setMap {
-					logger.Info("Healing disk '%s' on %s zone", endpoint, humanize.Ordinal(i+1))
+			buckets, _ := z.ListBucketsHeal(ctx)
+			for i, setMap := range erasureSetInZoneDisksToHeal {
+				for setIndex, disks := range setMap {
+					for _, disk := range disks {
+						logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
 
-					if err := healErasureSet(ctx, setIndex, z.zones[i].sets[setIndex], z.zones[i].setDriveCount); err != nil {
-						logger.LogIf(ctx, err)
-						continue
+						lbDisks := z.zones[i].sets[setIndex].getLoadBalancedNDisks(z.zones[i].listTolerancePerSet)
+						if err := healErasureSet(ctx, setIndex, buckets, lbDisks); err != nil {
+							logger.LogIf(ctx, err)
+							continue
+						}
+
+						logger.Info("Healing disk '%s' on %s zone complete", disk, humanize.Ordinal(i+1))
+
+						if err := disk.DeleteFile(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix),
+							healingTrackerFilename); err != nil {
+							logger.LogIf(ctx, err)
+							continue
+						}
+
+						// Only upon success pop the healed disk.
+						globalBackgroundHealState.popHealLocalDisks(disk.Endpoint())
 					}
-
-					// Only upon success pop the healed disk.
-					globalBackgroundHealState.popHealLocalDisks(endpoint)
 				}
 			}
 		}

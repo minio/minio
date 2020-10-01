@@ -28,6 +28,7 @@ const removeObject = (list, objectToRemove, lookup) => {
 export default (
   state = {
     list: [],
+    filter: "",
     listLoading: false,
     sortBy: "",
     sortOrder: SORT_ORDER_ASC,
@@ -52,6 +53,11 @@ export default (
       return {
         ...state,
         list: []
+      }
+    case actionsObjects.SET_FILTER:
+      return {
+        ...state,
+        filter: action.filter
       }
     case actionsObjects.SET_LIST_LOADING:
       return {

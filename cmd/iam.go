@@ -450,7 +450,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	wquorum := InsufficientWriteQuorum{}
 
 	// allocate dynamic timeout once before the loop
-	iamLockTimeout := newDynamicTimeout(3*time.Second, 5*time.Second)
+	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
 	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.

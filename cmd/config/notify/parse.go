@@ -807,6 +807,10 @@ var (
 			Key:   target.MySQLQueueLimit,
 			Value: "0",
 		},
+		config.KV{
+			Key:   target.MySQLMaxOpenConnections,
+			Value: "2",
+		},
 	}
 )
 
@@ -855,13 +859,25 @@ func GetNotifyMySQL(mysqlKVS map[string]config.KVS) (map[string]target.MySQLArgs
 		if k != config.Default {
 			queueDirEnv = queueDirEnv + config.Default + k
 		}
+
+		maxOpenConnectionsEnv := target.EnvMySQLMaxOpenConnections
+		if k != config.Default {
+			maxOpenConnectionsEnv = maxOpenConnectionsEnv + config.Default + k
+		}
+
+		maxOpenConnections, cErr := strconv.Atoi(env.Get(maxOpenConnectionsEnv, kv.Get(target.MySQLMaxOpenConnections)))
+		if cErr != nil {
+			return nil, cErr
+		}
+
 		mysqlArgs := target.MySQLArgs{
-			Enable:     enabled,
-			Format:     env.Get(formatEnv, kv.Get(target.MySQLFormat)),
-			DSN:        env.Get(dsnStringEnv, kv.Get(target.MySQLDSNString)),
-			Table:      env.Get(tableEnv, kv.Get(target.MySQLTable)),
-			QueueDir:   env.Get(queueDirEnv, kv.Get(target.MySQLQueueDir)),
-			QueueLimit: queueLimit,
+			Enable:             enabled,
+			Format:             env.Get(formatEnv, kv.Get(target.MySQLFormat)),
+			DSN:                env.Get(dsnStringEnv, kv.Get(target.MySQLDSNString)),
+			Table:              env.Get(tableEnv, kv.Get(target.MySQLTable)),
+			QueueDir:           env.Get(queueDirEnv, kv.Get(target.MySQLQueueDir)),
+			QueueLimit:         queueLimit,
+			MaxOpenConnections: maxOpenConnections,
 		}
 		if err = mysqlArgs.Validate(); err != nil {
 			return nil, err
@@ -1235,6 +1251,10 @@ var (
 			Key:   target.PostgresQueueLimit,
 			Value: "0",
 		},
+		config.KV{
+			Key:   target.PostgresMaxOpenConnections,
+			Value: "2",
+		},
 	}
 )
 
@@ -1285,13 +1305,24 @@ func GetNotifyPostgres(postgresKVS map[string]config.KVS) (map[string]target.Pos
 			queueDirEnv = queueDirEnv + config.Default + k
 		}
 
+		maxOpenConnectionsEnv := target.EnvPostgresMaxOpenConnections
+		if k != config.Default {
+			maxOpenConnectionsEnv = maxOpenConnectionsEnv + config.Default + k
+		}
+
+		maxOpenConnections, cErr := strconv.Atoi(env.Get(maxOpenConnectionsEnv, kv.Get(target.PostgresMaxOpenConnections)))
+		if cErr != nil {
+			return nil, cErr
+		}
+
 		psqlArgs := target.PostgreSQLArgs{
-			Enable:           enabled,
-			Format:           env.Get(formatEnv, kv.Get(target.PostgresFormat)),
-			ConnectionString: env.Get(connectionStringEnv, kv.Get(target.PostgresConnectionString)),
-			Table:            env.Get(tableEnv, kv.Get(target.PostgresTable)),
-			QueueDir:         env.Get(queueDirEnv, kv.Get(target.PostgresQueueDir)),
-			QueueLimit:       uint64(queueLimit),
+			Enable:             enabled,
+			Format:             env.Get(formatEnv, kv.Get(target.PostgresFormat)),
+			ConnectionString:   env.Get(connectionStringEnv, kv.Get(target.PostgresConnectionString)),
+			Table:              env.Get(tableEnv, kv.Get(target.PostgresTable)),
+			QueueDir:           env.Get(queueDirEnv, kv.Get(target.PostgresQueueDir)),
+			QueueLimit:         uint64(queueLimit),
+			MaxOpenConnections: maxOpenConnections,
 		}
 		if err = psqlArgs.Validate(); err != nil {
 			return nil, err

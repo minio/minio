@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/net"
 
@@ -42,12 +43,25 @@ type OBDInfo struct {
 	Perf      PerfOBDInfo  `json:"perf,omitempty"`
 	Minio     MinioOBDInfo `json:"minio,omitempty"`
 	Sys       SysOBDInfo   `json:"sys,omitempty"`
+	Logging   LogOBDInfo   `json:"logging,omitempty"`
+}
+
+// LogOBDInfo holds different type of logs of all clusters
+type LogOBDInfo struct {
+	ServersLog []ServerLogOBDInfo `json:"serverLogs"`
+}
+
+// ServerLogOBDInfo holds server's stdout log
+type ServerLogOBDInfo struct {
+	Addr    string      `json:"nodeName"`
+	Entries []log.Entry `json:"entries"`
+	Error   string      `json:"error,omitempty"`
 }
 
 // SysOBDInfo - Includes hardware and system information of the MinIO cluster
 type SysOBDInfo struct {
 	CPUInfo    []ServerCPUOBDInfo    `json:"cpus,omitempty"`
-	DiskHwInfo []ServerDiskHwOBDInfo `json:"disks,omitempty"`
+	DiskHwInfo []ServerDiskHwOBDInfo `json:"drives,omitempty"`
 	OsInfo     []ServerOsOBDInfo     `json:"osinfos,omitempty"`
 	MemInfo    []ServerMemOBDInfo    `json:"meminfos,omitempty"`
 	ProcInfo   []ServerProcOBDInfo   `json:"procinfos,omitempty"`
@@ -93,7 +107,7 @@ type SysOBDProcess struct {
 	Tgid           int32                       `json:"tgid,omitempty"`
 	Threads        map[int32]*cpu.TimesStat    `json:"threadstats,omitempty"`
 	Times          *cpu.TimesStat              `json:"cputimes,omitempty"`
-	Uids           []int32                     `json:"uidsomitempty"`
+	Uids           []int32                     `json:"uids,omitempty"`
 	Username       string                      `json:"username,omitempty"`
 }
 
@@ -185,6 +199,7 @@ const (
 	OBDDataTypeSysMem      OBDDataType = "sysmem"
 	OBDDataTypeSysNet      OBDDataType = "sysnet"
 	OBDDataTypeSysProcess  OBDDataType = "sysprocess"
+	OBDDataTypeLog         OBDDataType = "log"
 )
 
 // OBDDataTypesMap - Map of OBD datatypes
@@ -201,6 +216,7 @@ var OBDDataTypesMap = map[string]OBDDataType{
 	"sysmem":      OBDDataTypeSysMem,
 	"sysnet":      OBDDataTypeSysNet,
 	"sysprocess":  OBDDataTypeSysProcess,
+	"log":         OBDDataTypeLog,
 }
 
 // OBDDataTypesList - List of OBD datatypes
@@ -217,6 +233,7 @@ var OBDDataTypesList = []OBDDataType{
 	OBDDataTypeSysMem,
 	OBDDataTypeSysNet,
 	OBDDataTypeSysProcess,
+	OBDDataTypeLog,
 }
 
 // ServerOBDInfo - Connect to a minio server and call OBD Info Management API

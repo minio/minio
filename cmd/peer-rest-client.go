@@ -232,6 +232,7 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 		}
 	}
 	wg.Wait()
+	close(transferChan)
 
 	if err != nil {
 		return info, err
@@ -420,6 +421,17 @@ func (client *peerRESTClient) ProcOBDInfo(ctx context.Context) (info madmin.Serv
 	return info, err
 }
 
+// LogOBDInfo - fetch Log OBD information for a remote node.
+func (client *peerRESTClient) LogOBDInfo(ctx context.Context) (info madmin.ServerLogOBDInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodLogOBDInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
 // StartProfiling - Issues profiling command on the peer node.
 func (client *peerRESTClient) StartProfiling(profiler string) error {
 	values := make(url.Values)
@@ -470,11 +482,7 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 // ReloadFormat - reload format on the peer node.
 func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
 	values := make(url.Values)
-	if dryRun {
-		values.Set(peerRESTDryRun, "true")
-	} else {
-		values.Set(peerRESTDryRun, "false")
-	}
+	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
 
 	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
 	if err != nil {
@@ -829,8 +837,9 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan s
 }
 
 func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
-	var remoteHosts []*xnet.Host
-	for _, hostStr := range GetRemotePeers(endpointZones) {
+	peers := GetRemotePeers(endpointZones)
+	remoteHosts := make([]*xnet.Host, 0, len(peers))
+	for _, hostStr := range peers {
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
@@ -874,7 +883,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		}
 	}
 
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 
 	// Construct a new health function.

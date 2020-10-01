@@ -39,5 +39,11 @@ var (
 			Optional:    true,
 			Type:        "csv",
 		},
+		config.HelpKV{
+			Key:         apiRemoteTransportDeadline,
+			Description: `set the deadline for API requests on remote transports while proxying between federated instances e.g. "2h"`,
+			Optional:    true,
+			Type:        "duration",
+		},
 	}
 )

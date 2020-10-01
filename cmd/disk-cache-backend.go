@@ -194,7 +194,7 @@ func (c *diskCache) diskUsageLow() bool {
 		logger.LogIf(ctx, err)
 		return false
 	}
-	usedPercent := (di.Total - di.Free) * 100 / di.Total
+	usedPercent := (di.Used / di.Total) * 100
 	low := int(usedPercent) < gcStopPct
 	atomic.StoreUint64(&c.stats.UsagePercent, usedPercent)
 	if low {
@@ -218,7 +218,7 @@ func (c *diskCache) diskSpaceAvailable(size int64) bool {
 		logger.Info("diskCache: Received 0 total disk size")
 		return false
 	}
-	usedPercent := float64(di.Total-di.Free) * 100 / float64(di.Total)
+	usedPercent := float64(di.Used) * 100 / float64(di.Total)
 	if usedPercent >= float64(gcTriggerPct) {
 		atomic.StoreInt32(&c.stats.UsageState, 1)
 		c.queueGC()
@@ -226,7 +226,7 @@ func (c *diskCache) diskSpaceAvailable(size int64) bool {
 	atomic.StoreUint64(&c.stats.UsagePercent, uint64(usedPercent))
 
 	// Recalculate percentage with provided size added.
-	usedPercent = float64(di.Total-di.Free+uint64(size)) * 100 / float64(di.Total)
+	usedPercent = float64(di.Used+uint64(size)) * 100 / float64(di.Total)
 
 	return usedPercent < float64(c.quotaPct)
 }

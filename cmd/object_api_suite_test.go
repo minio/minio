@@ -166,7 +166,7 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 		}
 		parts[i] = expectedETaghex
 	}
-	err = obj.AbortMultipartUpload(context.Background(), "bucket", "key", uploadID)
+	err = obj.AbortMultipartUpload(context.Background(), "bucket", "key", uploadID, ObjectOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}

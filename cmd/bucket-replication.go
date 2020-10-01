@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -85,7 +87,7 @@ func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object strin
 
 // mustReplicate returns true if object meets replication criteria.
 func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) bool {
-	if s3Err := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
+	if s3Err := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, "", r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
 		return false
 	}
 	return mustReplicater(ctx, r, bucket, object, meta, replStatus)
@@ -169,38 +171,53 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 
 // replicateObject replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
-func replicateObject(ctx context.Context, bucket, object, versionID string, objectAPI ObjectLayer, eventArg *eventArgs, healPending bool) {
+func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLayer) {
+	bucket := objInfo.Bucket
+	object := objInfo.Name
+
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
+
 	tgt := globalBucketTargetSys.GetReplicationTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil {
 		return
 	}
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{})
+
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
+		VersionID: objInfo.VersionID,
+	})
 	if err != nil {
 		return
 	}
-	defer gr.Close()
-	objInfo := gr.ObjInfo
+
+	objInfo = gr.ObjInfo
 	size, err := objInfo.GetActualSize()
 	if err != nil {
 		logger.LogIf(ctx, err)
+		gr.Close()
 		return
 	}
 
 	dest := cfg.GetDestination()
 	if dest.Bucket == "" {
+		gr.Close()
 		return
 	}
+
+	// if heal encounters a pending replication status, either replication
+	// has failed due to server shutdown or crawler and PutObject replication are in contention.
+	healPending := objInfo.ReplicationStatus == replication.Pending
+
 	// In the rare event that replication is in pending state either due to
 	// server shut down/crash before replication completed or healing and PutObject
 	// race - do an additional stat to see if the version ID exists
 	if healPending {
 		_, err := tgt.StatObject(ctx, dest.Bucket, object, miniogo.StatObjectOptions{VersionID: objInfo.VersionID})
 		if err == nil {
+			gr.Close()
 			// object with same VersionID already exists, replication kicked off by
 			// PutObject might have completed.
 			return
@@ -210,29 +227,35 @@ func replicateObject(ctx context.Context, bucket, object, versionID string, obje
 
 	replicationStatus := replication.Complete
 	_, err = tgt.PutObject(ctx, dest.Bucket, object, gr, size, "", "", putOpts)
+	gr.Close()
 	if err != nil {
 		replicationStatus = replication.Failed
-		// Notify replication failure  event.
-		if eventArg == nil {
-			eventArg = &eventArgs{
-				BucketName: bucket,
-				Object:     objInfo,
-				Host:       "Internal: [Replication]",
-			}
-		}
-		eventArg.EventName = event.OperationReplicationFailed
-		eventArg.Object.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
-		sendEvent(*eventArg)
 	}
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
+
+	// FIXME: add support for missing replication events
+	// - event.ObjectReplicationNotTracked
+	// - event.ObjectReplicationMissedThreshold
+	// - event.ObjectReplicationReplicatedAfterThreshold
+	if replicationStatus == replication.Failed {
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationFailed,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+	}
+
 	objInfo.metadataOnly = true // Perform only metadata updates.
 	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: objInfo.VersionID,
-	}, ObjectOptions{VersionID: objInfo.VersionID}); err != nil {
-		logger.LogIf(ctx, err)
+	}, ObjectOptions{
+		VersionID: objInfo.VersionID,
+	}); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s: %s", objInfo.VersionID, err))
 	}
 }
 
@@ -257,4 +280,70 @@ func filterReplicationStatusMetadata(metadata map[string]string) map[string]stri
 
 	delKey(xhttp.AmzBucketReplicationStatus)
 	return dst
+}
+
+type replicationState struct {
+	// add future metrics here
+	replicaCh chan ObjectInfo
+}
+
+func (r *replicationState) queueReplicaTask(oi ObjectInfo) {
+	select {
+	case r.replicaCh <- oi:
+	default:
+	}
+}
+
+var (
+	globalReplicationState *replicationState
+	// TODO: currently keeping it conservative
+	// but eventually can be tuned in future,
+	// take only half the CPUs for replication
+	// conservatively.
+	globalReplicationConcurrent = runtime.GOMAXPROCS(0) / 2
+)
+
+func newReplicationState() *replicationState {
+
+	// fix minimum concurrent replication to 1 for single CPU setup
+	if globalReplicationConcurrent == 0 {
+		globalReplicationConcurrent = 1
+	}
+	rs := &replicationState{
+		replicaCh: make(chan ObjectInfo, globalReplicationConcurrent*2),
+	}
+	go func() {
+		<-GlobalContext.Done()
+		close(rs.replicaCh)
+	}()
+	return rs
+}
+
+// addWorker creates a new worker to process tasks
+func (r *replicationState) addWorker(ctx context.Context, objectAPI ObjectLayer) {
+	// Add a new worker.
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case oi, ok := <-r.replicaCh:
+				if !ok {
+					return
+				}
+				replicateObject(ctx, oi, objectAPI)
+			}
+		}
+	}()
+}
+
+func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
+	if globalReplicationState == nil {
+		return
+	}
+
+	// Start with globalReplicationConcurrent.
+	for i := 0; i < globalReplicationConcurrent; i++ {
+		globalReplicationState.addWorker(ctx, objectAPI)
+	}
 }

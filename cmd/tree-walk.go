@@ -29,29 +29,20 @@ type TreeWalkResult struct {
 }
 
 // Return entries that have prefix prefixEntry.
-// Note: input entries are expected to be sorted.
+// The supplied entries are modified and the returned string is a subslice of entries.
 func filterMatchingPrefix(entries []string, prefixEntry string) []string {
-	start := 0
-	end := len(entries)
-	for {
-		if start == end {
-			break
-		}
-		if HasPrefix(entries[start], prefixEntry) {
-			break
-		}
-		start++
+	if len(entries) == 0 || prefixEntry == "" {
+		return entries
 	}
-	for {
-		if start == end {
-			break
+	// Write to the beginning of entries.
+	dst := entries[:0]
+	for _, s := range entries {
+		if !HasPrefix(s, prefixEntry) {
+			continue
 		}
-		if HasPrefix(entries[end-1], prefixEntry) {
-			break
-		}
-		end--
+		dst = append(dst, s)
 	}
-	return entries[start:end]
+	return dst
 }
 
 // xl.ListDir returns entries with trailing "/" for directories. At the object layer
@@ -66,6 +57,9 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 // isLeaf should be done in listDir()
 func delayIsLeafCheck(entries []string) bool {
 	for i, entry := range entries {
+		if HasSuffix(entry, globalDirSuffixWithSlash) {
+			return false
+		}
 		if i == len(entries)-1 {
 			break
 		}
@@ -101,11 +95,24 @@ type IsLeafFunc func(string, string) bool
 type IsLeafDirFunc func(string, string) bool
 
 func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf IsLeafFunc) ([]string, bool) {
-	// Listing needs to be sorted.
-	sort.Strings(entries)
-
 	// Filter entries that have the prefix prefixEntry.
 	entries = filterMatchingPrefix(entries, prefixEntry)
+
+	// Listing needs to be sorted.
+	sort.Slice(entries, func(i, j int) bool {
+		if !HasSuffix(entries[i], globalDirSuffixWithSlash) && !HasSuffix(entries[j], globalDirSuffixWithSlash) {
+			return entries[i] < entries[j]
+		}
+		first := entries[i]
+		second := entries[j]
+		if HasSuffix(first, globalDirSuffixWithSlash) {
+			first = strings.TrimSuffix(first, globalDirSuffixWithSlash) + slashSeparator
+		}
+		if HasSuffix(second, globalDirSuffixWithSlash) {
+			second = strings.TrimSuffix(second, globalDirSuffixWithSlash) + slashSeparator
+		}
+		return first < second
+	})
 
 	// Can isLeaf() check be delayed till when it has to be sent down the
 	// TreeWalkResult channel?
@@ -123,7 +130,23 @@ func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry s
 
 	// Sort again after removing trailing "/" for objects as the previous sort
 	// does not hold good anymore.
-	sort.Strings(entries)
+	sort.Slice(entries, func(i, j int) bool {
+		if !HasSuffix(entries[i], globalDirSuffix) && !HasSuffix(entries[j], globalDirSuffix) {
+			return entries[i] < entries[j]
+		}
+		first := entries[i]
+		second := entries[j]
+		if HasSuffix(first, globalDirSuffix) {
+			first = strings.TrimSuffix(first, globalDirSuffix) + slashSeparator
+		}
+		if HasSuffix(second, globalDirSuffix) {
+			second = strings.TrimSuffix(second, globalDirSuffix) + slashSeparator
+		}
+		if first == second {
+			return HasSuffix(entries[i], globalDirSuffix)
+		}
+		return first < second
+	})
 	return entries, false
 }
 
@@ -177,10 +200,10 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 				entry = strings.TrimSuffix(entry, slashSeparator)
 			}
 		} else {
-			leaf = !strings.HasSuffix(entry, slashSeparator)
+			leaf = !HasSuffix(entry, slashSeparator)
 		}
 
-		if strings.HasSuffix(entry, slashSeparator) {
+		if HasSuffix(entry, slashSeparator) {
 			leafDir = isLeafDir(bucket, pathJoin(prefixDir, entry))
 		}
 

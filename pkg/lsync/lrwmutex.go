@@ -19,10 +19,9 @@ package lsync
 import (
 	"context"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
-
-	"github.com/minio/minio/pkg/retry"
 )
 
 // A LRWMutex is a mutual exclusion lock with timeouts.
@@ -94,25 +93,33 @@ func (lm *LRWMutex) lock(id, source string, isWriteLock bool) (locked bool) {
 	return locked
 }
 
+const (
+	lockRetryInterval = 50 * time.Millisecond
+)
+
 // lockLoop will acquire either a read or a write lock
 //
 // The call will block until the lock is granted using a built-in
 // timing randomized back-off algorithm to try again until successful
 func (lm *LRWMutex) lockLoop(ctx context.Context, id, source string, timeout time.Duration, isWriteLock bool) (locked bool) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	retryCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// We timed out on the previous lock, incrementally wait
-	// for a longer back-off time and try again afterwards.
-	for range retry.NewTimer(retryCtx) {
-		if lm.lock(id, source, isWriteLock) {
-			return true
+	for {
+		select {
+		case <-retryCtx.Done():
+			// Caller context canceled or we timedout,
+			// return false anyways for both situations.
+			return false
+		default:
+			if lm.lock(id, source, isWriteLock) {
+				return true
+			}
+			time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
 		}
 	}
-
-	// We timed out on the previous lock, incrementally wait
-	// for a longer back-off time and try again afterwards.
-	return false
 }
 
 // Unlock unlocks the write lock.

@@ -188,7 +188,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointZones EndpointZones) 
 			retries++
 			// after 5 retries start logging that servers are not reachable yet
 			if retries >= 5 {
-				logger.Info(fmt.Sprintf("Waiting for atleast %d servers to be online for bootstrap check", len(clnts)/2))
+				logger.Info(fmt.Sprintf("Waiting for atleast %d remote servers to be online for bootstrap check", len(clnts)/2))
 				logger.Info(fmt.Sprintf("Following servers are currently offline or unreachable %s", offlineEndpoints))
 				retries = 0 // reset to log again after 5 retries.
 			}
@@ -233,7 +233,7 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		}
 	}
 
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
+	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)

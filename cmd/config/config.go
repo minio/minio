@@ -76,6 +76,7 @@ const (
 	KmsKesSubSys         = "kms_kes"
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
+	CrawlerSubSys        = "crawler"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -112,6 +113,7 @@ var SubSystems = set.CreateStringSet([]string{
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
+	CrawlerSubSys,
 	NotifyAMQPSubSys,
 	NotifyESSubSys,
 	NotifyKafkaSubSys,
@@ -138,6 +140,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
+	CrawlerSubSys,
 }...)
 
 // Constant separators
@@ -262,6 +265,16 @@ func (kvs KVS) Get(key string) string {
 		return v
 	}
 	return ""
+}
+
+// Delete - deletes the key if present from the KV list.
+func (kvs *KVS) Delete(key string) {
+	for i, kv := range *kvs {
+		if kv.Key == key {
+			*kvs = append((*kvs)[:i], (*kvs)[i+1:]...)
+			return
+		}
+	}
 }
 
 // Lookup - lookup a key in a list of KVS

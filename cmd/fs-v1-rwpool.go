@@ -157,6 +157,9 @@ func (fsi *fsIOPool) Write(path string) (wlk *lock.LockedFile, err error) {
 		case isSysErrIsDir(err):
 			return nil, errIsNotRegular
 		default:
+			if isSysErrPathNotFound(err) {
+				return nil, errFileNotFound
+			}
 			return nil, err
 		}
 	}

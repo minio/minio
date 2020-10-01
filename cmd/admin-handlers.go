@@ -54,16 +54,13 @@ const (
 	maxEConfigJSONSize = 262272
 )
 
-// Type-safe query params.
-type mgmtQueryKey string
-
 // Only valid query params for mgmt admin APIs.
 const (
-	mgmtBucket      mgmtQueryKey = "bucket"
-	mgmtPrefix                   = "prefix"
-	mgmtClientToken              = "clientToken"
-	mgmtForceStart               = "forceStart"
-	mgmtForceStop                = "forceStop"
+	mgmtBucket      = "bucket"
+	mgmtPrefix      = "prefix"
+	mgmtClientToken = "clientToken"
+	mgmtForceStart  = "forceStart"
+	mgmtForceStop   = "forceStop"
 )
 
 func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (us madmin.ServerUpdateStatus, err error) {
@@ -298,6 +295,20 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// ignores any errors here.
 	storageInfo, _ := objectAPI.StorageInfo(ctx, false)
 
+	// Collect any disk healing.
+	healing, _ := getAggregatedBackgroundHealState(ctx)
+	healDisks := make(map[string]struct{}, len(healing.HealDisks))
+	for _, disk := range healing.HealDisks {
+		healDisks[disk] = struct{}{}
+	}
+
+	// find all disks which belong to each respective endpoints
+	for i, disk := range storageInfo.Disks {
+		if _, ok := healDisks[disk.Endpoint]; ok {
+			storageInfo.Disks[i].Healing = true
+		}
+	}
+
 	// Marshal API response
 	jsonBytes, err := json.Marshal(storageInfo)
 	if err != nil {
@@ -339,23 +350,26 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquorum int) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
 		Resource:   resource,
 		ServerList: []string{server},
 		Source:     l.Source,
+		Owner:      l.Owner,
 		ID:         l.UID,
 	}
 	if l.Writer {
 		entry.Type = "WRITE"
+		entry.Quorum = wquorum
 	} else {
 		entry.Type = "READ"
+		entry.Quorum = rquorum
 	}
 	return entry
 }
 
-func topLockEntries(peerLocks []*PeerLocks, count int) madmin.LockEntries {
+func topLockEntries(peerLocks []*PeerLocks, count int, rquorum, wquorum int, stale bool) madmin.LockEntries {
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -367,20 +381,26 @@ func topLockEntries(peerLocks []*PeerLocks, count int) madmin.LockEntries {
 					if val, ok := entryMap[lockReqInfo.UID]; ok {
 						val.ServerList = append(val.ServerList, peerLock.Addr)
 					} else {
-						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
+						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr, rquorum, wquorum)
 					}
 				}
 			}
 		}
 	}
-	var lockEntries = make(madmin.LockEntries, 0, len(entryMap))
+	var lockEntries madmin.LockEntries
 	for _, v := range entryMap {
-		lockEntries = append(lockEntries, *v)
+		if len(lockEntries) == count {
+			break
+		}
+		if stale {
+			lockEntries = append(lockEntries, *v)
+			continue
+		}
+		if len(v.ServerList) >= v.Quorum {
+			lockEntries = append(lockEntries, *v)
+		}
 	}
 	sort.Sort(lockEntries)
-	if len(lockEntries) > count {
-		lockEntries = lockEntries[:count]
-	}
 	return lockEntries
 }
 
@@ -410,21 +430,14 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	stale := r.URL.Query().Get("stale") == "true" // list also stale locks
 
-	peerLocks := globalNotificationSys.GetLocks(ctx)
-	// Once we have received all the locks currently used from peers
-	// add the local peer locks list as well.
-	var getRespLocks GetLocksResp
-	for _, llocker := range globalLockServers {
-		getRespLocks = append(getRespLocks, llocker.DupLockMap())
-	}
+	peerLocks := globalNotificationSys.GetLocks(ctx, r)
 
-	peerLocks = append(peerLocks, &PeerLocks{
-		Addr:  getHostName(r),
-		Locks: getRespLocks,
-	})
+	rquorum := getReadQuorum(objectAPI.SetDriveCount())
+	wquorum := getWriteQuorum(objectAPI.SetDriveCount())
 
-	topLocks := topLockEntries(peerLocks, count)
+	topLocks := topLockEntries(peerLocks, count, rquorum, wquorum, stale)
 
 	// Marshal API response
 	jsonBytes, err := json.Marshal(topLocks)
@@ -572,8 +585,8 @@ type healInitParams struct {
 
 // extractHealInitParams - Validates params for heal init API.
 func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reader) (hip healInitParams, err APIErrorCode) {
-	hip.bucket = vars[string(mgmtBucket)]
-	hip.objPrefix = vars[string(mgmtPrefix)]
+	hip.bucket = vars[mgmtBucket]
+	hip.objPrefix = vars[mgmtPrefix]
 
 	if hip.bucket == "" {
 		if hip.objPrefix != "" {
@@ -592,13 +605,13 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 		return
 	}
 
-	if len(qParms[string(mgmtClientToken)]) > 0 {
-		hip.clientToken = qParms[string(mgmtClientToken)][0]
+	if len(qParms[mgmtClientToken]) > 0 {
+		hip.clientToken = qParms[mgmtClientToken][0]
 	}
-	if _, ok := qParms[string(mgmtForceStart)]; ok {
+	if _, ok := qParms[mgmtForceStart]; ok {
 		hip.forceStart = true
 	}
-	if _, ok := qParms[string(mgmtForceStop)]; ok {
+	if _, ok := qParms[mgmtForceStop]; ok {
 		hip.forceStop = true
 	}
 
@@ -1241,7 +1254,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	vars := mux.Vars(r)
+	query := r.URL.Query()
 	obdInfo := madmin.OBDInfo{}
 	obdInfoCh := make(chan madmin.OBDInfo)
 
@@ -1287,7 +1300,13 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	go func() {
 		defer close(obdInfoCh)
 
-		if cpu, ok := vars["syscpu"]; ok && cpu == "true" {
+		if log := query.Get("log"); log == "true" {
+			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, getLocalLogOBD(deadlinedCtx, r))
+			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, globalNotificationSys.LogOBDInfo(deadlinedCtx)...)
+			partialWrite(obdInfo)
+		}
+
+		if cpu := query.Get("syscpu"); cpu == "true" {
 			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)
 
 			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, cpuInfo)
@@ -1295,7 +1314,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if diskHw, ok := vars["sysdiskhw"]; ok && diskHw == "true" {
+		if diskHw := query.Get("sysdiskhw"); diskHw == "true" {
 			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, diskHwInfo)
@@ -1303,7 +1322,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if osInfo, ok := vars["sysosinfo"]; ok && osInfo == "true" {
+		if osInfo := query.Get("sysosinfo"); osInfo == "true" {
 			osInfo := getLocalOsInfoOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, osInfo)
@@ -1311,7 +1330,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if mem, ok := vars["sysmem"]; ok && mem == "true" {
+		if mem := query.Get("sysmem"); mem == "true" {
 			memInfo := getLocalMemOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, memInfo)
@@ -1319,7 +1338,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if proc, ok := vars["sysprocess"]; ok && proc == "true" {
+		if proc := query.Get("sysprocess"); proc == "true" {
 			procInfo := getLocalProcOBD(deadlinedCtx, r)
 
 			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, procInfo)
@@ -1327,14 +1346,14 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if config, ok := vars["minioconfig"]; ok && config == "true" {
+		if config := query.Get("minioconfig"); config == "true" {
 			cfg, err := readServerConfig(ctx, objectAPI)
 			logger.LogIf(ctx, err)
 			obdInfo.Minio.Config = cfg
 			partialWrite(obdInfo)
 		}
 
-		if drive, ok := vars["perfdrive"]; ok && drive == "true" {
+		if drive := query.Get("perfdrive"); drive == "true" {
 			// Get drive obd details from local server's drive(s)
 			driveOBDSerial := getLocalDrivesOBD(deadlinedCtx, false, globalEndpoints, r)
 			driveOBDParallel := getLocalDrivesOBD(deadlinedCtx, true, globalEndpoints, r)
@@ -1365,7 +1384,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			partialWrite(obdInfo)
 		}
 
-		if net, ok := vars["perfnet"]; ok && net == "true" && globalIsDistErasure {
+		if net := query.Get("perfnet"); net == "true" && globalIsDistErasure {
 			obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
 			partialWrite(obdInfo)
 
@@ -1379,6 +1398,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 			obdInfo.Perf.NetParallel = globalNotificationSys.NetOBDParallelInfo(deadlinedCtx)
 			partialWrite(obdInfo)
 		}
+
 	}()
 
 	ticker := time.NewTicker(30 * time.Second)

@@ -23,6 +23,7 @@ describe("objects reducer", () => {
     const initialState = reducer(undefined, {})
     expect(initialState).toEqual({
       list: [],
+      filter: "",
       listLoading: false,
       sortBy: "",
       sortOrder: SORT_ORDER_ASC,

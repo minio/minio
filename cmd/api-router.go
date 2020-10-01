@@ -61,10 +61,6 @@ func newCachedObjectLayerFn() CacheObjectLayer {
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 	CacheAPI  func() CacheObjectLayer
-	// Returns true of handlers should interpret encryption.
-	EncryptionEnabled func() bool
-	// Returns true if handlers allow SSE-KMS encryption headers.
-	AllowSSEKMS func() bool
 }
 
 // getHost tries its best to return the request host.
@@ -78,17 +74,11 @@ func getHost(r *http.Request) string {
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) {
+func registerAPIRouter(router *mux.Router) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 		CacheAPI:  newCachedObjectLayerFn,
-		EncryptionEnabled: func() bool {
-			return encryptionEnabled
-		},
-		AllowSSEKMS: func() bool {
-			return allowSSEKMS
-		},
 	}
 
 	// API Router
@@ -98,7 +88,10 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 	for _, domainName := range globalDomainNames {
 		if IsKubernetes() {
 			routers = append(routers, apiRouter.MatcherFunc(func(r *http.Request, match *mux.RouteMatch) bool {
-				host, _, _ := net.SplitHostPort(getHost(r))
+				host, _, err := net.SplitHostPort(getHost(r))
+				if err != nil {
+					host = r.Host
+				}
 				// Make sure to skip matching minio.<domain>` this is
 				// specifically meant for operator/k8s deployment
 				// The reason we need to skip this is for a special
@@ -339,8 +332,8 @@ func registerAPIRouter(router *mux.Router, encryptionEnabled, allowSSEKMS bool) 
 		maxClients(collectAPIStats("listbuckets", httpTraceAll(api.ListBucketsHandler))))
 
 	// If none of the routes match add default error handler routes
-	apiRouter.NotFoundHandler = http.HandlerFunc(collectAPIStats("notfound", httpTraceAll(errorResponseHandler)))
-	apiRouter.MethodNotAllowedHandler = http.HandlerFunc(collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler)))
+	apiRouter.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
+	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler))
 
 }
 

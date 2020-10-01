@@ -46,7 +46,7 @@ const (
 	dataUpdateTrackerQueueSize = 10000
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
-	dataUpdateTrackerVersion      = 2
+	dataUpdateTrackerVersion      = 3
 	dataUpdateTrackerSaveInterval = 5 * time.Minute
 )
 
@@ -236,7 +236,10 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 		d.mu.Lock()
 		if !d.dirty {
 			d.mu.Unlock()
-			return
+			if exit {
+				return
+			}
+			continue
 		}
 		d.Saved = UTCNow()
 		err := d.serialize(&buf)
@@ -363,7 +366,7 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 		return err
 	}
 	switch tmp[0] {
-	case 1:
+	case 1, 2:
 		logger.Info(color.Green("dataUpdateTracker: ") + "deprecated data version, updating.")
 		return nil
 	case dataUpdateTrackerVersion:
@@ -426,6 +429,8 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 	}
 	// Ignore what remains on the stream.
 	// Update d:
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.Current = dst.Current
 	d.History = dst.History
 	d.Saved = dst.Saved

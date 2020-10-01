@@ -21,15 +21,15 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/minio/minio/pkg/madmin"
-
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/willf/bloom"
 )
 
@@ -46,7 +47,14 @@ const (
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
-	healDeleteDangling = true
+	healDeleteDangling    = true
+	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
+	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
+)
+
+var (
+	globalCrawlerConfig          crawler.Config
+	dataCrawlerLeaderLockTimeout = newDynamicTimeout(1*time.Minute, 30*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -60,6 +68,19 @@ func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 // The function will block until the context is canceled.
 // There should only ever be one crawler running per cluster.
 func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
+	// Make sure only 1 crawler is running on the cluster.
+	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "runDataCrawler.lock")
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		err := locker.GetLock(dataCrawlerLeaderLockTimeout)
+		if err != nil {
+			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
+			continue
+		}
+		break
+		// No unlock for "leader" lock.
+	}
+
 	// Load current bloom cycle
 	nextBloomCycle := intDataUpdateTracker.current() + 1
 	var buf bytes.Buffer
@@ -174,9 +195,9 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	// Enable healing in XL mode.
 	if globalIsErasure {
 		// Include a clean folder one in n cycles.
-		s.healFolderInclude = 32
+		s.healFolderInclude = healFolderIncludeProb
 		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
-		s.healObjectSelect = 512
+		s.healObjectSelect = healObjectSelectProb
 	}
 	if len(cache.Info.BloomFilter) > 0 {
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
@@ -327,7 +348,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil && filter != nil {
+		if f.oldCache.Info.lifeCycle != nil {
 			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 				if f.dataUsageCrawlDebug {
@@ -624,7 +645,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return 0
 		}
-		if !errors.Is(err, NotImplemented{}) {
+		if err != nil && !errors.Is(err, NotImplemented{}) {
 			logger.LogIf(ctx, err)
 			return 0
 		}
@@ -759,9 +780,6 @@ func sleepDuration(d time.Duration, x float64) {
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
 	if meta.oi.ReplicationStatus == replication.Pending ||
 		meta.oi.ReplicationStatus == replication.Failed {
-		// if heal encounters a pending replication status, either replication
-		// has failed due to server shutdown or crawler and PutObject replication are in contention.
-		healPending := meta.oi.ReplicationStatus == replication.Pending
-		replicateObject(ctx, meta.oi.Bucket, meta.oi.Name, meta.oi.VersionID, o, nil, healPending)
+		globalReplicationState.queueReplicaTask(meta.oi)
 	}
 }

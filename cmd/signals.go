@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"strings"
 
@@ -53,7 +55,9 @@ func handleSignals() {
 
 		if httpServer := newHTTPServerFn(); httpServer != nil {
 			err = httpServer.Shutdown()
-			logger.LogIf(context.Background(), err)
+			if !errors.Is(err, http.ErrServerClosed) {
+				logger.LogIf(context.Background(), err)
+			}
 		}
 
 		if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {

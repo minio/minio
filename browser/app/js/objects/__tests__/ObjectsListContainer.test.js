@@ -20,13 +20,13 @@ import { ObjectsListContainer } from "../ObjectsListContainer"
 
 describe("ObjectsList", () => {
   it("should render without crashing", () => {
-    shallow(<ObjectsListContainer objects={[]} />)
+    shallow(<ObjectsListContainer filteredObjects={[]} />)
   })
 
   it("should render ObjectsList with objects", () => {
     const wrapper = shallow(
       <ObjectsListContainer
-        objects={[{ name: "test1.jpg" }, { name: "test2.jpg" }]}
+        filteredObjects={[{ name: "test1.jpg" }, { name: "test2.jpg" }]}
       />
     )
     expect(wrapper.find("ObjectsList").length).toBe(1)
@@ -40,7 +40,7 @@ describe("ObjectsList", () => {
     const wrapper = shallow(
       <ObjectsListContainer
         currentBucket="test1"
-        objects={[]}
+        filteredObjects={[]}
         listLoading={true}
       />
     )

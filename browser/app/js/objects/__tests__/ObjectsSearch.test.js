@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,19 @@
  * limitations under the License.
  */
 
-package dns
+import React from "react"
+import { shallow } from "enzyme"
+import { ObjectsSearch } from "../ObjectsSearch"
 
-// Store dns record store
-type Store interface {
-	Put(bucket string) error
-	Get(bucket string) ([]SrvRecord, error)
-	Delete(bucket string) error
-	List() (map[string][]SrvRecord, error)
-	DeleteRecord(record SrvRecord) error
-	Close() error
-}
+describe("ObjectsSearch", () => {
+  it("should render without crashing", () => {
+    shallow(<ObjectsSearch />)
+  })
+
+  it("should call onChange with search text", () => {
+    const onChange = jest.fn()
+    const wrapper = shallow(<ObjectsSearch onChange={onChange} />)
+    wrapper.find("input").simulate("change", { target: { value: "test" } })
+    expect(onChange).toHaveBeenCalledWith("test")
+  })
+})

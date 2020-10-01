@@ -38,7 +38,7 @@ import (
 	"syscall"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/config"
@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -91,8 +92,7 @@ type xlStorage struct {
 	activeIOCount    int32
 
 	diskPath string
-	hostname string
-	endpoint string
+	endpoint Endpoint
 
 	pool sync.Pool
 
@@ -104,6 +104,8 @@ type xlStorage struct {
 
 	formatFileInfo  os.FileInfo
 	formatLastCheck time.Time
+
+	diskInfoCache timedValue
 
 	ctx context.Context
 	sync.RWMutex
@@ -175,15 +177,6 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 		return path, errDiskNotDir
 	}
 
-	di, err := getDiskInfo(path)
-	if err != nil {
-		return path, err
-	}
-
-	if err = checkDiskMinTotal(di); err != nil {
-		return path, err
-	}
-
 	// check if backend is writable.
 	var rnd [8]byte
 	_, _ = rand.Read(rnd[:])
@@ -194,6 +187,7 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 	var file *os.File
 
 	if requireDirectIO {
+		// only erasure coding needs direct-io support
 		file, err = disk.OpenFileDirectIO(fn, os.O_CREATE|os.O_EXCL, 0666)
 	} else {
 		file, err = os.OpenFile(fn, os.O_CREATE|os.O_EXCL, 0666)
@@ -203,11 +197,21 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 	// if direct i/o failed.
 	if err != nil {
 		if isSysErrInvalidArg(err) {
+			// O_DIRECT not supported
 			return path, errUnsupportedDisk
 		}
-		return path, err
+		return path, osErrToFileErr(err)
 	}
 	file.Close()
+
+	di, err := getDiskInfo(path)
+	if err != nil {
+		return path, err
+	}
+
+	if err = checkDiskMinTotal(di); err != nil {
+		return path, err
+	}
 
 	return path, nil
 }
@@ -246,7 +250,6 @@ func newLocalXLStorage(path string) (*xlStorage, error) {
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	path := ep.Path
-	hostname := ep.Host
 	var err error
 	if path, err = getValidPath(path, true); err != nil {
 		return nil, err
@@ -259,8 +262,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 
 	p := &xlStorage{
 		diskPath: path,
-		hostname: hostname,
-		endpoint: ep.String(),
+		endpoint: ep,
 		pool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
@@ -316,7 +318,11 @@ func (s *xlStorage) String() string {
 }
 
 func (s *xlStorage) Hostname() string {
-	return s.hostname
+	return s.endpoint.Host
+}
+
+func (s *xlStorage) Endpoint() Endpoint {
+	return s.endpoint
 }
 
 func (*xlStorage) Close() error {
@@ -329,6 +335,13 @@ func (s *xlStorage) IsOnline() bool {
 
 func (s *xlStorage) IsLocal() bool {
 	return true
+}
+
+func (s *xlStorage) Healing() bool {
+	healingFile := pathJoin(s.diskPath, minioMetaBucket,
+		bucketMetaPrefix, healingTrackerFilename)
+	_, err := os.Stat(healingFile)
+	return err == nil
 }
 
 func (s *xlStorage) waitForLowActiveIO() {
@@ -357,6 +370,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if objAPI == nil {
 		return cache, errServerNotInitialized
 	}
+	opts := globalCrawlerConfig
 
 	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, s.waitForLowActiveIO, func(item crawlItem) (int64, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
@@ -394,6 +408,25 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 				oi:               oi,
 			})
 			if !version.Deleted {
+				// Bitrot check local data
+				if size > 0 && item.heal && opts.Bitrot {
+					s.waitForLowActiveIO()
+					err := s.VerifyFile(ctx, item.bucket, item.objectPath(), version)
+					switch err {
+					case errFileCorrupt:
+						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling, ScanMode: madmin.HealDeepScan})
+						if err != nil {
+							if !errors.Is(err, NotImplemented{}) {
+								logger.LogIf(ctx, err)
+							}
+							size = 0
+						} else {
+							size = res.ObjectSize
+						}
+					default:
+						// VerifyFile already logs errors
+					}
+				}
 				totalSize += size
 			}
 			item.healReplication(ctx, objAPI, actionMeta{oi: oi})
@@ -415,7 +448,9 @@ type DiskInfo struct {
 	Total     uint64
 	Free      uint64
 	Used      uint64
+	FSType    string
 	RootDisk  bool
+	Healing   bool
 	Endpoint  string
 	MountPath string
 	ID        string
@@ -430,22 +465,41 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	di, err := getDiskInfo(s.diskPath)
-	if err != nil {
-		return info, err
-	}
+	s.diskInfoCache.Once.Do(func() {
+		s.diskInfoCache.TTL = time.Second
+		s.diskInfoCache.Update = func() (interface{}, error) {
+			dcinfo := DiskInfo{
+				RootDisk:  s.rootDisk,
+				MountPath: s.diskPath,
+				Endpoint:  s.endpoint.String(),
+			}
+			di, err := getDiskInfo(s.diskPath)
+			if err != nil {
+				return dcinfo, err
+			}
+			dcinfo.Total = di.Total
+			dcinfo.Free = di.Free
+			dcinfo.Used = di.Used
+			dcinfo.FSType = di.FSType
 
-	info = DiskInfo{
-		Total:     di.Total,
-		Free:      di.Free,
-		Used:      di.Total - di.Free,
-		RootDisk:  s.rootDisk,
-		MountPath: s.diskPath,
-		Endpoint:  s.endpoint,
-	}
+			diskID, err := s.GetDiskID()
+			if errors.Is(err, errUnformattedDisk) {
+				// if we found an unformatted disk then
+				// healing is automatically true.
+				dcinfo.Healing = true
+			} else {
+				// Check if the disk is being healed if GetDiskID
+				// returned any error other than fresh disk
+				dcinfo.Healing = s.Healing()
+			}
 
-	diskID, err := s.GetDiskID()
-	info.ID = diskID
+			dcinfo.ID = diskID
+			return dcinfo, err
+		}
+	})
+
+	v, err := s.diskInfoCache.Get()
+	info = v.(DiskInfo)
 	return info, err
 }
 
@@ -470,7 +524,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	s.RUnlock()
 
 	// check if we have a valid disk ID that is less than 1 second old.
-	if fileInfo != nil && diskID != "" && time.Now().Before(lastCheck.Add(time.Second)) {
+	if fileInfo != nil && diskID != "" && time.Since(lastCheck) <= time.Second {
 		return diskID, nil
 	}
 
@@ -633,7 +687,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	if err != nil {
 		return nil, errDiskNotFound
 	}
-	var volsInfo []VolInfo
+	volsInfo := make([]VolInfo, 0, len(entries))
 	for _, entry := range entries {
 		if !HasSuffix(entry, SlashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.

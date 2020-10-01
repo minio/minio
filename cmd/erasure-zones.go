@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -297,19 +298,19 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 
 	// Collect for each set in zones.
 	for _, z := range z.zones {
+		buckets, err := z.ListBuckets(ctx)
+		if err != nil {
+			return err
+		}
+		// Add new buckets.
+		for _, b := range buckets {
+			if _, ok := knownBuckets[b.Name]; ok {
+				continue
+			}
+			allBuckets = append(allBuckets, b)
+			knownBuckets[b.Name] = struct{}{}
+		}
 		for _, erObj := range z.sets {
-			// Add new buckets.
-			buckets, err := erObj.ListBuckets(ctx)
-			if err != nil {
-				return err
-			}
-			for _, b := range buckets {
-				if _, ok := knownBuckets[b.Name]; ok {
-					continue
-				}
-				allBuckets = append(allBuckets, b)
-				knownBuckets[b.Name] = struct{}{}
-			}
 			wg.Add(1)
 			results = append(results, dataUsageCache{})
 			go func(i int, erObj *erasureObjects) {
@@ -459,24 +460,7 @@ func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string
 }
 
 func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	var nsUnlocker = func() {}
-
-	// Acquire lock
-	if lockType != noLock {
-		lock := z.NewNSLock(ctx, bucket, object)
-		switch lockType {
-		case writeLock:
-			if err = lock.GetLock(globalOperationTimeout); err != nil {
-				return nil, err
-			}
-			nsUnlocker = lock.Unlock
-		case readLock:
-			if err = lock.GetRLock(globalOperationTimeout); err != nil {
-				return nil, err
-			}
-			nsUnlocker = lock.RUnlock
-		}
-	}
+	object = encodeDirObject(object)
 
 	for _, zone := range z.zones {
 		gr, err = zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
@@ -484,13 +468,10 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
-			nsUnlocker()
 			return gr, err
 		}
-		gr.cleanUpFns = append(gr.cleanUpFns, nsUnlocker)
 		return gr, nil
 	}
-	nsUnlocker()
 	if opts.VersionID != "" {
 		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -498,16 +479,7 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 }
 
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	// Lock the object before reading.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer lk.RUnlock()
-
-	if z.SingleZone() {
-		return z.zones[0].GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
-	}
+	object = encodeDirObject(object)
 
 	for _, zone := range z.zones {
 		if err := zone.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
@@ -518,20 +490,14 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 		}
 		return nil
 	}
+	if opts.VersionID != "" {
+		return VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
 	return ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Lock the object before reading.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.RUnlock()
-
-	if z.SingleZone() {
-		return z.zones[0].GetObjectInfo(ctx, bucket, object, opts)
-	}
+	object = encodeDirObject(object)
 	for _, zone := range z.zones {
 		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
 		if err != nil {
@@ -542,6 +508,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 		}
 		return objInfo, nil
 	}
+	object = decodeDirObject(object)
 	if opts.VersionID != "" {
 		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -550,12 +517,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - writes an object to least used erasure zone.
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
-	// Lock the object.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.Unlock()
+	object = encodeDirObject(object)
 
 	if z.SingleZone() {
 		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
@@ -571,12 +533,7 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 }
 
 func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Acquire a write lock before deleting the object.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
-	}
-	defer lk.Unlock()
+	object = encodeDirObject(object)
 
 	if z.SingleZone() {
 		return z.zones[0].DeleteObject(ctx, bucket, object, opts)
@@ -598,6 +555,8 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 	dobjects := make([]DeletedObject, len(objects))
 	objSets := set.NewStringSet()
 	for i := range derrs {
+		objects[i].ObjectName = encodeDirObject(objects[i].ObjectName)
+
 		derrs[i] = checkDelObjArgs(ctx, bucket, objects[i].ObjectName)
 		objSets.Add(objects[i].ObjectName)
 	}
@@ -629,15 +588,10 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 }
 
 func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Check if this request is only metadata update.
+	srcObject = encodeDirObject(srcObject)
+	dstObject = encodeDirObject(dstObject)
+
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
-	if !cpSrcDstSame {
-		lk := z.NewNSLock(ctx, dstBucket, dstObject)
-		if err := lk.GetLock(globalOperationTimeout); err != nil {
-			return objInfo, err
-		}
-		defer lk.Unlock()
-	}
 
 	zoneIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
@@ -645,12 +599,19 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	}
 
 	if cpSrcDstSame && srcInfo.metadataOnly {
+		// Version ID is set for the destination and source == destination version ID.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
+		// Destination is not versioned and source version ID is empty
+		// perform an in-place update.
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
 			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
+		// Destination is versioned, source is not destination version,
+		// as a special case look for if the source object is not legacy
+		// from older format, for older format we will rewrite them as
+		// newer using PutObject() - this is an optimization to save space
 		if dstOpts.Versioned && srcOpts.VersionID != dstOpts.VersionID && !srcInfo.Legacy {
 			// CopyObject optimization where we don't create an entire copy
 			// of the content, instead we add a reference.
@@ -692,8 +653,8 @@ func (z *erasureZones) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 
 func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 
-	var zonesEntryChs [][]FileInfoCh
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
@@ -701,15 +662,15 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
 			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet, false))
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	var objInfos []ObjectInfo
 	var eof bool
 	var prevPrefix string
 
-	var zonesEntriesInfos [][]FileInfo
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -811,9 +772,9 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 
 	recursive := true
 
-	var zonesEntryChs [][]FileInfoCh
-	var zonesEndWalkCh []chan struct{}
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
@@ -823,7 +784,7 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
@@ -903,19 +864,19 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		recursive = false
 	}
 
-	var zonesEntryChs [][]FileInfoCh
-	var zonesEndWalkCh []chan struct{}
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet+1, false)
+			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, false)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
@@ -989,7 +950,16 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 				zoneIndex = i
 				continue
 			}
-			if zoneEntries[i][j].Name < lentry.Name {
+			str1 := zoneEntries[i][j].Name
+			str2 := lentry.Name
+			if HasSuffix(str1, globalDirSuffix) {
+				str1 = strings.TrimSuffix(str1, globalDirSuffix) + slashSeparator
+			}
+			if HasSuffix(str2, globalDirSuffix) {
+				str2 = strings.TrimSuffix(str2, globalDirSuffix) + slashSeparator
+			}
+
+			if str1 < str2 {
 				lentry = zoneEntries[i][j]
 				zoneIndex = i
 			}
@@ -1020,6 +990,10 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 			// and will be returned later in Pop()
 			zoneEntryChs[i][j].Push(zoneEntries[i][j])
 		}
+	}
+
+	if HasSuffix(lentry.Name, globalDirSuffix) {
+		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
 	}
 
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
@@ -1067,7 +1041,16 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 				zoneIndex = i
 				continue
 			}
-			if zoneEntries[i][j].Name < lentry.Name {
+			str1 := zoneEntries[i][j].Name
+			str2 := lentry.Name
+			if HasSuffix(str1, globalDirSuffix) {
+				str1 = strings.TrimSuffix(str1, globalDirSuffix) + slashSeparator
+			}
+			if HasSuffix(str2, globalDirSuffix) {
+				str2 = strings.TrimSuffix(str2, globalDirSuffix) + slashSeparator
+			}
+
+			if str1 < str2 {
 				lentry = zoneEntries[i][j]
 				zoneIndex = i
 			}
@@ -1100,18 +1083,23 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 		}
 	}
 
+	if HasSuffix(lentry.Name, globalDirSuffix) {
+		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
+	}
+
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
 // mergeZonesEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
 func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfoVersions) {
 	var i = 0
-	var zonesEntriesInfos [][]FileInfoVersions
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfoVersions, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
+
 	for {
 		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
@@ -1137,12 +1125,13 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 // mergeZonesEntriesCh - merges FileInfo channel to entries upto maxKeys.
 func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfo) {
 	var i = 0
-	var zonesEntriesInfos [][]FileInfo
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
 	}
+	var prevEntry string
 	for {
 		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 		if !ok {
@@ -1155,12 +1144,17 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTol
 			continue
 		}
 
+		if HasSuffix(fi.Name, slashSeparator) && fi.Name == prevEntry {
+			continue
+		}
+
 		entries.Files = append(entries.Files, fi)
 		i++
 		if i == maxKeys {
 			entries.IsTruncated = isTruncatedZones(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 			break
 		}
+		prevEntry = fi.Name
 	}
 	return entries
 }
@@ -1273,18 +1267,18 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		recursive = false
 	}
 
-	var zonesEntryChs [][]FileInfoVersionsCh
-	var zonesEndWalkCh []chan struct{}
-	var zonesListTolerancePerSet []int
+	zonesEntryChs := make([][]FileInfoVersionsCh, 0, len(z.zones))
+	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
+	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
 	for _, zone := range z.zones {
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet+1)
+			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
 		}
 		zonesEntryChs = append(zonesEntryChs, entryChs)
 		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
-		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet)
+		zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
 	}
 
 	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
@@ -1384,12 +1378,6 @@ func (z *erasureZones) PutObjectPart(ctx context.Context, bucket, object, upload
 		return PartInfo{}, err
 	}
 
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return PartInfo{}, err
-	}
-	defer uploadIDLock.Unlock()
-
 	if z.SingleZone() {
 		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
@@ -1419,12 +1407,6 @@ func (z *erasureZones) GetMultipartInfo(ctx context.Context, bucket, object, upl
 	if err := checkListPartsArgs(ctx, bucket, object, z); err != nil {
 		return MultipartInfo{}, err
 	}
-
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return MultipartInfo{}, err
-	}
-	defer uploadIDLock.RUnlock()
 
 	if z.SingleZone() {
 		return z.zones[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
@@ -1456,12 +1438,6 @@ func (z *erasureZones) ListObjectParts(ctx context.Context, bucket, object, uplo
 		return ListPartsInfo{}, err
 	}
 
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return ListPartsInfo{}, err
-	}
-	defer uploadIDLock.RUnlock()
-
 	if z.SingleZone() {
 		return z.zones[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
@@ -1484,25 +1460,19 @@ func (z *erasureZones) ListObjectParts(ctx context.Context, bucket, object, uplo
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
-func (z *erasureZones) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string) error {
+func (z *erasureZones) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
 	if err := checkAbortMultipartArgs(ctx, bucket, object, z); err != nil {
 		return err
 	}
 
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer uploadIDLock.Unlock()
-
 	if z.SingleZone() {
-		return z.zones[0].AbortMultipartUpload(ctx, bucket, object, uploadID)
+		return z.zones[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 	}
 
 	for _, zone := range z.zones {
-		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, ObjectOptions{})
+		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
-			return zone.AbortMultipartUpload(ctx, bucket, object, uploadID)
+			return zone.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		}
 		switch err.(type) {
 		case InvalidUploadID:
@@ -1523,22 +1493,6 @@ func (z *erasureZones) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	if err = checkCompleteMultipartArgs(ctx, bucket, object, z); err != nil {
 		return objInfo, err
 	}
-
-	// Hold read-locks to verify uploaded parts, also disallows
-	// parallel part uploads as well.
-	uploadIDLock := z.NewNSLock(ctx, bucket, pathJoin(object, uploadID))
-	if err = uploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return objInfo, err
-	}
-	defer uploadIDLock.RUnlock()
-
-	// Hold namespace to complete the transaction, only hold
-	// if uploadID can be held exclusively.
-	lk := z.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
-		return objInfo, err
-	}
-	defer lk.Unlock()
 
 	if z.SingleZone() {
 		return z.zones[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
@@ -1703,13 +1657,8 @@ func (z *erasureZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, e
 }
 
 func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
-	// Acquire lock on format.json
-	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetRLock(globalOperationTimeout); err != nil {
-		return err
-	}
-	defer formatLock.RUnlock()
-
+	// No locks needed since reload happens in HealFormat under
+	// write lock across all nodes.
 	for _, zone := range z.zones {
 		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
 			return err
@@ -1734,13 +1683,13 @@ func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.Heal
 	var countNoHeal int
 	for _, zone := range z.zones {
 		result, err := zone.HealFormat(ctx, dryRun)
-		if err != nil && err != errNoHealRequired {
+		if err != nil && !errors.Is(err, errNoHealRequired) {
 			logger.LogIf(ctx, err)
 			continue
 		}
 		// Count errNoHealRequired across all zones,
 		// to return appropriate error to the caller
-		if err == errNoHealRequired {
+		if errors.Is(err, errNoHealRequired) {
 			countNoHeal++
 		}
 		r.DiskCount += result.DiskCount
@@ -1748,10 +1697,21 @@ func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.Heal
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
 	}
+
+	// Healing succeeded notify the peers to reload format and re-initialize disks.
+	// We will not notify peers if healing is not required.
+	for _, nerr := range globalNotificationSys.ReloadFormat(dryRun) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
 	// No heal returned by all zones, return errNoHealRequired
 	if countNoHeal == len(z.zones) {
 		return r, errNoHealRequired
 	}
+
 	return r, nil
 }
 
@@ -1832,18 +1792,15 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		return nil
 	}
 
-	var zonesEntryChs [][]FileInfoCh
+	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
+	zoneDrivesPerSet := make([]int, 0, len(z.zones))
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
-	}
-
-	var zoneDrivesPerSet []int
-	for _, zone := range z.zones {
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
-	var zonesEntriesInfos [][]FileInfo
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -1874,23 +1831,20 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 type HealObjectFn func(bucket, object, versionID string) error
 
 func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	var zonesEntryChs [][]FileInfoVersionsCh
-
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
+
+	zonesEntryChs := make([][]FileInfoVersionsCh, 0, len(z.zones))
+	zoneDrivesPerSet := make([]int, 0, len(z.zones))
 
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs,
 			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh))
-	}
-
-	var zoneDrivesPerSet []int
-	for _, zone := range z.zones {
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
-	var zonesEntriesInfos [][]FileInfoVersions
-	var zonesEntriesValid [][]bool
+	zonesEntriesInfos := make([][]FileInfoVersions, 0, len(zonesEntryChs))
+	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
 	for _, entryChs := range zonesEntryChs {
 		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
 		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
@@ -1930,6 +1884,8 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 }
 
 func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	object = encodeDirObject(object)
+
 	lk := z.NewNSLock(ctx, bucket, object)
 	if bucket == minioMetaBucket {
 		// For .minio.sys bucket heals we should hold write locks.
@@ -2050,6 +2006,7 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 
 	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	diskCount := z.SetDriveCount()
+
 	if parityDrives == 0 {
 		parityDrives = getDefaultParityBlocks(diskCount)
 	}
@@ -2113,6 +2070,7 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 
 // PutObjectTags - replace or add tags to an existing object
 func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+	object = encodeDirObject(object)
 	if z.SingleZone() {
 		return z.zones[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
@@ -2142,6 +2100,7 @@ func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string,
 
 // DeleteObjectTags - delete object tags from an existing object
 func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	object = encodeDirObject(object)
 	if z.SingleZone() {
 		return z.zones[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
@@ -2170,6 +2129,7 @@ func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object stri
 
 // GetObjectTags - get object tags from an existing object
 func (z *erasureZones) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
+	object = encodeDirObject(object)
 	if z.SingleZone() {
 		return z.zones[0].GetObjectTags(ctx, bucket, object, opts)
 	}

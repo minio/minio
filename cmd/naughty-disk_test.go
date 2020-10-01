@@ -58,8 +58,16 @@ func (d *naughtyDisk) IsLocal() bool {
 	return d.disk.IsLocal()
 }
 
+func (d *naughtyDisk) Endpoint() Endpoint {
+	return d.disk.Endpoint()
+}
+
 func (d *naughtyDisk) Hostname() string {
 	return d.disk.Hostname()
+}
+
+func (d *naughtyDisk) Healing() bool {
+	return d.disk.Healing()
 }
 
 func (d *naughtyDisk) Close() (err error) {

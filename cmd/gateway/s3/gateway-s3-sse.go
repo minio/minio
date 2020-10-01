@@ -316,7 +316,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
 	if err != nil {
-		return nil, minio.ErrorRespToObjectError(err)
+		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
 	if l.isGWEncrypted(ctx, bucket, object) {
 		object = getGWContentPath(object)
@@ -569,12 +569,12 @@ func (l *s3EncObjects) ListObjectParts(ctx context.Context, bucket string, objec
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
-func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string) error {
+func (l *s3EncObjects) AbortMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, opts minio.ObjectOptions) error {
 	if _, err := l.getGWMetadata(ctx, bucket, getTmpDareMetaPath(object, uploadID)); err != nil {
-		return l.s3Objects.AbortMultipartUpload(ctx, bucket, object, uploadID)
+		return l.s3Objects.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 	}
 
-	if err := l.s3Objects.AbortMultipartUpload(ctx, bucket, getGWContentPath(object), uploadID); err != nil {
+	if err := l.s3Objects.AbortMultipartUpload(ctx, bucket, getGWContentPath(object), uploadID, opts); err != nil {
 		return err
 	}
 

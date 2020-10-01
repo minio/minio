@@ -43,8 +43,16 @@ func (p *xlStorageDiskIDCheck) IsLocal() bool {
 	return p.storage.IsLocal()
 }
 
+func (p *xlStorageDiskIDCheck) Endpoint() Endpoint {
+	return p.storage.Endpoint()
+}
+
 func (p *xlStorageDiskIDCheck) Hostname() string {
 	return p.storage.Hostname()
+}
+
+func (p *xlStorageDiskIDCheck) Healing() bool {
+	return p.storage.Healing()
 }
 
 func (p *xlStorageDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
