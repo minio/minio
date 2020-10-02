@@ -1750,15 +1750,15 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		return err
 	}
 
+	var zoneDrivesPerSet []int
+	for _, zone := range z.zones {
+		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.listTolerancePerSet-2)
+	}
+
 	if opts.WalkVersions {
 		var zonesEntryChs [][]FileInfoVersionsCh
 		for _, zone := range z.zones {
 			zonesEntryChs = append(zonesEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
-		}
-
-		var zoneDrivesPerSet []int
-		for _, zone := range z.zones {
-			zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 		}
 
 		var zonesEntriesInfos [][]FileInfoVersions
@@ -1772,20 +1772,17 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 			defer close(results)
 
 			for {
-				entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+				entry, quorumCount, _, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 				if !ok {
 					// We have reached EOF across all entryChs, break the loop.
 					return
 				}
 
-				if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
-					// Read quorum exists proceed
+				if quorumCount > 0 {
 					for _, version := range entry.Versions {
 						results <- version.ToObjectInfo(bucket, version.Name)
 					}
 				}
-
-				// skip entries which do not have quorum
 			}
 		}()
 
@@ -1793,10 +1790,8 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 	}
 
 	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
-	zoneDrivesPerSet := make([]int, 0, len(z.zones))
 	for _, zone := range z.zones {
 		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
-		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
 	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
@@ -1810,17 +1805,15 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		defer close(results)
 
 		for {
-			entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+			entry, quorumCount, _, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
 			if !ok {
 				// We have reached EOF across all entryChs, break the loop.
 				return
 			}
 
-			if quorumCount >= zoneDrivesPerSet[zoneIndex]/2 {
-				// Read quorum exists proceed
+			if quorumCount > 0 {
 				results <- entry.ToObjectInfo(bucket, entry.Name)
 			}
-			// skip entries which do not have quorum
 		}
 	}()
 
@@ -1859,6 +1852,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 		if !ok {
 			break
 		}
+
 		// Indicate that first attempt was a success and subsequent loop
 		// knows that its not our first attempt at 'prefix'
 		err = nil
@@ -1866,6 +1860,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 		if zoneIndex >= len(zoneDrivesPerSet) || zoneIndex < 0 {
 			return fmt.Errorf("invalid zone index returned: %d", zoneIndex)
 		}
+
 		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {
 			// Skip good entries.
 			continue

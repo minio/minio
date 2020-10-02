@@ -1330,7 +1330,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		setPartsCountHeaders(w, objInfo)
 	}
 
-	if err = setObjectHeaders(w, objInfo, nil); err != nil {
+	if err = setObjectHeaders(w, objInfo, nil, opts); err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}

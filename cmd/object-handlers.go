@@ -378,6 +378,22 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	rangeHeader := r.Header.Get(xhttp.Range)
 	if rangeHeader != "" {
 		rs, rangeErr = parseRequestRangeSpec(rangeHeader)
+		// Handle only errInvalidRange. Ignore other
+		// parse error and treat it as regular Get
+		// request like Amazon S3.
+		if rangeErr == errInvalidRange {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		if rangeErr != nil {
+			logger.LogIf(ctx, rangeErr, logger.Application)
+		}
+	}
+
+	// Both 'bytes' and 'partNumber' cannot be specified at the same time
+	if rs != nil && opts.PartNumber > 0 {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
+		return
 	}
 
 	// Validate pre-conditions if any.
@@ -393,16 +409,6 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			return true
 		}
 
-		// Handle only errInvalidRange. Ignore other
-		// parse error and treat it as regular Get
-		// request like Amazon S3.
-		if rangeErr == errInvalidRange {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRange), r.URL, guessIsBrowserReq(r))
-			return true
-		}
-		if rangeErr != nil {
-			logger.LogIf(ctx, rangeErr, logger.Application)
-		}
 		return false
 	}
 
@@ -445,7 +451,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if err = setObjectHeaders(w, objInfo, rs); err != nil {
+	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -459,7 +465,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	statusCodeWritten := false
 	httpWriter := ioutil.WriteOnClose(w)
-	if rs != nil {
+	if rs != nil || opts.PartNumber > 0 {
 		statusCodeWritten = true
 		w.WriteHeader(http.StatusPartialContent)
 	}
@@ -613,6 +619,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	// Both 'bytes' and 'partNumber' cannot be specified at the same time
+	if rs != nil && opts.PartNumber > 0 {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
+		return
+	}
+
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
@@ -632,7 +644,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Set standard object headers.
-	if err = setObjectHeaders(w, objInfo, rs); err != nil {
+	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
@@ -646,7 +658,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
-	if rs != nil {
+	if rs != nil || opts.PartNumber > 0 {
 		w.WriteHeader(http.StatusPartialContent)
 	} else {
 		w.WriteHeader(http.StatusOK)
