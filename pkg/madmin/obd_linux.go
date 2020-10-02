@@ -1,4 +1,4 @@
-// +build !freebsd
+// +build linux
 
 /*
  * MinIO Cloud Storage, (C) 2020 MinIO, Inc.

@@ -1,3 +1,5 @@
+// +build linux
+
 /*
  * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
