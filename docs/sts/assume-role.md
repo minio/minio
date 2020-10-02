@@ -96,7 +96,7 @@ $ export MINIO_SECRET_KEY=minio123
 $ minio server ~/test
 ```
 
-Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html)
+Create new users following the multi-user guide [here](https://docs.min.io/docs/minio-multi-user-quickstart-guide.html). `AssumeRole` is not supported without user.
 
 Testing with an example
 > Use the same username and password created in the previous steps.
