@@ -935,9 +935,16 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 
-	obj.PutObject(context.Background(), bucket, "a/one", mustGetPutObjReader(t, strings.NewReader(fileOne), int64(len(fileOne)), "", ""), opts)
-	obj.PutObject(context.Background(), bucket, "a/b/two", mustGetPutObjReader(t, strings.NewReader(fileTwo), int64(len(fileTwo)), "", ""), opts)
-	obj.PutObject(context.Background(), bucket, "a/c/three", mustGetPutObjReader(t, strings.NewReader(fileThree), int64(len(fileThree)), "", ""), opts)
+	for objName, value := range map[string]string{
+		"a/one":     fileOne,
+		"a/b/two":   fileTwo,
+		"a/c/three": fileThree,
+	} {
+		_, err = obj.PutObject(context.Background(), bucket, objName, mustGetPutObjReader(t, strings.NewReader(value), int64(len(value)), "", ""), opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
