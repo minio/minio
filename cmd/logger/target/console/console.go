@@ -37,6 +37,15 @@ func (c *Target) Validate() error {
 	return nil
 }
 
+// Endpoint returns the backend endpoint
+func (c *Target) Endpoint() string {
+	return ""
+}
+
+func (c *Target) String() string {
+	return "console"
+}
+
 // Send log message 'e' to console
 func (c *Target) Send(e interface{}, logKind string) error {
 	entry, ok := e.(log.Entry)

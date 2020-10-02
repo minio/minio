@@ -37,7 +37,6 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -1438,12 +1437,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	cfg, err := readServerConfig(ctx, objectAPI)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
 	usage := madmin.Usage{}
@@ -1455,7 +1448,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 	}
 
-	vault := fetchVaultStatus(cfg)
+	vault := fetchVaultStatus()
 
 	ldap := madmin.LDAP{}
 	if globalLDAPConfig.Enabled {
@@ -1471,10 +1464,10 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	log, audit := fetchLoggerInfo(cfg)
+	log, audit := fetchLoggerInfo()
 
 	// Get the notification target info
-	notifyTarget := fetchLambdaInfo(cfg)
+	notifyTarget := fetchLambdaInfo()
 
 	// Fetching the Storage information, ignore any errors.
 	storageInfo, _ := objectAPI.StorageInfo(ctx, false)
@@ -1514,20 +1507,10 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Notifications: notifyTarget,
 	}
 
-	// Collect any disk healing.
-	healing, _ := getAggregatedBackgroundHealState(ctx)
-	healDisks := make(map[string]struct{}, len(healing.HealDisks))
-	for _, disk := range healing.HealDisks {
-		healDisks[disk] = struct{}{}
-	}
-
 	// find all disks which belong to each respective endpoints
 	for i := range servers {
 		for _, disk := range storageInfo.Disks {
 			if strings.Contains(disk.Endpoint, servers[i].Endpoint) {
-				if _, ok := healDisks[disk.Endpoint]; ok {
-					disk.Healing = true
-				}
 				servers[i].Disks = append(servers[i].Disks, disk)
 			}
 		}
@@ -1539,9 +1522,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 			continue
 		}
 		if disk.Endpoint == disk.DrivePath {
-			if _, ok := healDisks[disk.Endpoint]; ok {
-				disk.Healing = true
-			}
 			servers[len(servers)-1].Disks = append(servers[len(servers)-1].Disks, disk)
 		}
 	}
@@ -1567,27 +1547,19 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	//Reply with storage information (across nodes in a
+	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
-
-	// Fetch the configured targets
-	tr := NewGatewayHTTPTransport()
-	defer tr.CloseIdleConnections()
-	targetList, err := notify.FetchRegisteredTargets(GlobalContext, cfg, tr, true, false)
-	if err != nil && err != notify.ErrTargetsOffline {
-		logger.LogIf(GlobalContext, err)
-		return nil
-	}
+func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
-	for targetID, target := range targetList.TargetMap() {
+	for _, tgt := range globalConfigTargetList.Targets() {
 		targetIDStatus := make(map[string]madmin.Status)
-		active, _ := target.IsActive()
+		active, _ := tgt.IsActive()
+		targetID := tgt.ID()
 		if active {
 			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
 		} else {
@@ -1596,8 +1568,20 @@ func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
 		lambdaMap[targetID.Name] = list
-		// Close any leaking connections
-		_ = target.Close()
+	}
+
+	for _, tgt := range globalEnvTargetList.Targets() {
+		targetIDStatus := make(map[string]madmin.Status)
+		active, _ := tgt.IsActive()
+		targetID := tgt.ID()
+		if active {
+			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
+		} else {
+			targetIDStatus[targetID.ID] = madmin.Status{Status: "Offline"}
+		}
+		list := lambdaMap[targetID.Name]
+		list = append(list, targetIDStatus)
+		lambdaMap[targetID.Name] = list
 	}
 
 	notify := make([]map[string][]madmin.TargetIDStatus, len(lambdaMap))
@@ -1612,7 +1596,7 @@ func fetchLambdaInfo(cfg config.Config) []map[string][]madmin.TargetIDStatus {
 }
 
 // fetchVaultStatus fetches Vault Info
-func fetchVaultStatus(cfg config.Config) madmin.Vault {
+func fetchVaultStatus() madmin.Vault {
 	vault := madmin.Vault{}
 	if GlobalKMS == nil {
 		vault.Status = "disabled"
@@ -1655,41 +1639,42 @@ func fetchVaultStatus(cfg config.Config) madmin.Vault {
 }
 
 // fetchLoggerDetails return log info
-func fetchLoggerInfo(cfg config.Config) ([]madmin.Logger, []madmin.Audit) {
-	loggerCfg, _ := logger.LookupConfig(cfg)
-
-	var logger []madmin.Logger
-	var auditlogger []madmin.Audit
-	for log, l := range loggerCfg.HTTP {
-		if l.Enabled {
-			err := checkConnection(l.Endpoint, 15*time.Second)
+func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
+	var loggerInfo []madmin.Logger
+	var auditloggerInfo []madmin.Audit
+	for _, target := range logger.Targets {
+		if target.Endpoint() != "" {
+			tgt := target.String()
+			err := checkConnection(target.Endpoint(), 15*time.Second)
 			if err == nil {
 				mapLog := make(map[string]madmin.Status)
-				mapLog[log] = madmin.Status{Status: "Online"}
-				logger = append(logger, mapLog)
+				mapLog[tgt] = madmin.Status{Status: "Online"}
+				loggerInfo = append(loggerInfo, mapLog)
 			} else {
 				mapLog := make(map[string]madmin.Status)
-				mapLog[log] = madmin.Status{Status: "offline"}
-				logger = append(logger, mapLog)
+				mapLog[tgt] = madmin.Status{Status: "offline"}
+				loggerInfo = append(loggerInfo, mapLog)
 			}
 		}
 	}
 
-	for audit, l := range loggerCfg.Audit {
-		if l.Enabled {
-			err := checkConnection(l.Endpoint, 15*time.Second)
+	for _, target := range logger.AuditTargets {
+		if target.Endpoint() != "" {
+			tgt := target.String()
+			err := checkConnection(target.Endpoint(), 15*time.Second)
 			if err == nil {
 				mapAudit := make(map[string]madmin.Status)
-				mapAudit[audit] = madmin.Status{Status: "Online"}
-				auditlogger = append(auditlogger, mapAudit)
+				mapAudit[tgt] = madmin.Status{Status: "Online"}
+				auditloggerInfo = append(auditloggerInfo, mapAudit)
 			} else {
 				mapAudit := make(map[string]madmin.Status)
-				mapAudit[audit] = madmin.Status{Status: "Offline"}
-				auditlogger = append(auditlogger, mapAudit)
+				mapAudit[tgt] = madmin.Status{Status: "Offline"}
+				auditloggerInfo = append(auditloggerInfo, mapAudit)
 			}
 		}
 	}
-	return logger, auditlogger
+
+	return loggerInfo, auditloggerInfo
 }
 
 // checkConnection - ping an endpoint , return err in case of no connection

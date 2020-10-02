@@ -493,11 +493,13 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize logger: %w", err))
 	}
 
-	for _, l := range loggerCfg.HTTP {
+	for k, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			// Enable http logging
 			if err = logger.AddTarget(
-				http.New(http.WithEndpoint(l.Endpoint),
+				http.New(
+					http.WithTargetName(k),
+					http.WithEndpoint(l.Endpoint),
 					http.WithAuthToken(l.AuthToken),
 					http.WithUserAgent(loggerUserAgent),
 					http.WithLogKind(string(logger.All)),
@@ -509,11 +511,13 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
-	for _, l := range loggerCfg.Audit {
+	for k, l := range loggerCfg.Audit {
 		if l.Enabled {
 			// Enable http audit logging
 			if err = logger.AddAuditTarget(
-				http.New(http.WithEndpoint(l.Endpoint),
+				http.New(
+					http.WithTargetName(k),
+					http.WithEndpoint(l.Endpoint),
 					http.WithAuthToken(l.AuthToken),
 					http.WithUserAgent(loggerUserAgent),
 					http.WithLogKind(string(logger.All)),
