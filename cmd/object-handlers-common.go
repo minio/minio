@@ -281,7 +281,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 // deleteObject is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	deleteObject := obj.DeleteObject
 	if cache != nil {
 		deleteObject = cache.DeleteObject
@@ -293,22 +293,24 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 		if objInfo.DeleteMarker {
 			// Notify object deleted marker event.
 			sendEvent(eventArgs{
-				EventName:  event.ObjectRemovedDeleteMarkerCreated,
-				BucketName: bucket,
-				Object:     objInfo,
-				ReqParams:  extractReqParams(r),
-				UserAgent:  r.UserAgent(),
-				Host:       handlers.GetSourceIP(r),
+				EventName:    event.ObjectRemovedDeleteMarkerCreated,
+				BucketName:   bucket,
+				Object:       objInfo,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         handlers.GetSourceIP(r),
 			})
 		} else {
 			// Notify object deleted event.
 			sendEvent(eventArgs{
-				EventName:  event.ObjectRemovedDelete,
-				BucketName: bucket,
-				Object:     objInfo,
-				ReqParams:  extractReqParams(r),
-				UserAgent:  r.UserAgent(),
-				Host:       handlers.GetSourceIP(r),
+				EventName:    event.ObjectRemovedDelete,
+				BucketName:   bucket,
+				Object:       objInfo,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         handlers.GetSourceIP(r),
 			})
 		}
 	}

@@ -238,7 +238,9 @@ func extractReqParams(r *http.Request) map[string]string {
 
 // Extract response elements to be sent with event notifiation.
 func extractRespElements(w http.ResponseWriter) map[string]string {
-
+	if w == nil {
+		return map[string]string{}
+	}
 	return map[string]string{
 		"requestId":      w.Header().Get(xhttp.AmzRequestID),
 		"content-length": w.Header().Get(xhttp.ContentLength),
