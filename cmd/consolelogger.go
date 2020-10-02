@@ -122,6 +122,16 @@ func (sys *HTTPConsoleLoggerSys) Validate() error {
 	return nil
 }
 
+// Endpoint - dummy function for interface compatibility
+func (sys *HTTPConsoleLoggerSys) Endpoint() string {
+	return sys.console.Endpoint()
+}
+
+// String - stringer function for interface compatibility
+func (sys *HTTPConsoleLoggerSys) String() string {
+	return "console+http"
+}
+
 // Content returns the console stdout log
 func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 	sys.RLock()

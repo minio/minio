@@ -39,6 +39,7 @@ type Target struct {
 	// Channel of log entries
 	logCh chan interface{}
 
+	name string
 	// HTTP(s) endpoint
 	endpoint string
 	// Authorization token for `endpoint`
@@ -47,6 +48,15 @@ type Target struct {
 	userAgent string
 	logKind   string
 	client    http.Client
+}
+
+// Endpoint returns the backend endpoint
+func (h *Target) Endpoint() string {
+	return h.endpoint
+}
+
+func (h *Target) String() string {
+	return h.name
 }
 
 // Validate validate the http target
@@ -144,6 +154,13 @@ func (h *Target) startHTTPLogger() {
 
 // Option is a function type that accepts a pointer Target
 type Option func(*Target)
+
+// WithTargetName target name
+func WithTargetName(name string) Option {
+	return func(t *Target) {
+		t.name = name
+	}
+}
 
 // WithEndpoint adds a new endpoint
 func WithEndpoint(endpoint string) Option {

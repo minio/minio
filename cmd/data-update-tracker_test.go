@@ -42,6 +42,14 @@ type testingLogger struct {
 	t  testLoggerI
 }
 
+func (t *testingLogger) Endpoint() string {
+	return ""
+}
+
+func (t *testingLogger) String() string {
+	return ""
+}
+
 func (t *testingLogger) Validate() error {
 	return nil
 }
