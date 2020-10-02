@@ -76,8 +76,8 @@ function start_minio_zone_erasure_sets_ipv6()
     export MINIO_ACCESS_KEY=$ACCESS_KEY
     export MINIO_SECRET_KEY=$SECRET_KEY
 
-    "${MINIO[@]}" server --address="[::1]:9000" "http://[::1]:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://[::1]:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9000.log" 2>&1 &
-    "${MINIO[@]}" server --address="[::1]:9001" "http://[::1]:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://[::1]:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-9001.log" 2>&1 &
+    "${MINIO[@]}" server --address="[::1]:9000" "http://[::1]:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://[::1]:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-ipv6-9000.log" 2>&1 &
+    "${MINIO[@]}" server --address="[::1]:9001" "http://[::1]:9000${WORK_DIR}/zone-disk-sets{1...4}" "http://[::1]:9001${WORK_DIR}/zone-disk-sets{5...8}" >"$WORK_DIR/zone-minio-ipv6-9001.log" 2>&1 &
 
     sleep 40
 }

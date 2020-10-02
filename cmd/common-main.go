@@ -334,13 +334,22 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		return nil, nil, false, err
 	}
 	for _, file := range files {
-		// We exclude any regular file and the "CAs/" directory.
-		// The "CAs/" directory contains (root) CA certificates
-		// that MinIO adds to its list of trusted roots (tls.Config.RootCAs).
-		// Therefore, "CAs/" does not contain X.509 certificates that
-		// are meant to be served by MinIO.
-		if !file.IsDir() || file.Name() == "CAs" {
+		// Ignore all
+		// - regular files
+		// - "CAs" directory
+		// - any directory which starts with ".."
+		if file.Mode().IsRegular() || file.Name() == "CAs" || strings.HasPrefix(file.Name(), "..") {
 			continue
+		}
+		if file.Mode()&os.ModeSymlink == os.ModeSymlink {
+			file, err = os.Stat(filepath.Join(root.Name(), file.Name()))
+			if err != nil {
+				// not accessible ignore
+				continue
+			}
+			if !file.IsDir() {
+				continue
+			}
 		}
 
 		var (
@@ -350,8 +359,8 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		if !isFile(certFile) || !isFile(keyFile) {
 			continue
 		}
-		if err := manager.AddCertificate(certFile, keyFile); err != nil {
-			err = fmt.Errorf("Failed to load TLS certificate '%s': %v", certFile, err)
+		if err = manager.AddCertificate(certFile, keyFile); err != nil {
+			err = fmt.Errorf("Unable to load TLS certificate '%s,%s': %w", certFile, keyFile, err)
 			logger.LogIf(GlobalContext, err, logger.Minio)
 		}
 	}

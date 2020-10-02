@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"syscall"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
@@ -190,23 +189,13 @@ func isHostIP(ipAddress string) bool {
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
 func checkPortAvailability(host, port string) (err error) {
-	network := []string{"tcp", "tcp4", "tcp6"}
-	for _, n := range network {
-		l, err := net.Listen(n, net.JoinHostPort(host, port))
-		if err == nil {
-			// As we are able to listen on this network, the port is not in use.
-			// Close the listener and continue check other networks.
-			if err = l.Close(); err != nil {
-				return err
-			}
-		} else if errors.Is(err, syscall.EADDRINUSE) {
-			// As we got EADDRINUSE error, the port is in use by other process.
-			// Return the error.
-			return err
-		}
+	l, err := net.Listen("tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		return err
 	}
-
-	return nil
+	// As we are able to listen on this network, the port is not in use.
+	// Close the listener and continue check other networks.
+	return l.Close()
 }
 
 // extractHostPort - extracts host/port from many address formats

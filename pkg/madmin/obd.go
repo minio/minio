@@ -107,7 +107,7 @@ type SysOBDProcess struct {
 	Tgid           int32                       `json:"tgid,omitempty"`
 	Threads        map[int32]*cpu.TimesStat    `json:"threadstats,omitempty"`
 	Times          *cpu.TimesStat              `json:"cputimes,omitempty"`
-	Uids           []int32                     `json:"uidsomitempty"`
+	Uids           []int32                     `json:"uids,omitempty"`
 	Username       string                      `json:"username,omitempty"`
 }
 

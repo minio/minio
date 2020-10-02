@@ -151,6 +151,13 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 				VersionID: vid,
 			}
 		}
+		if !versioned {
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("VersionID specified %s, but versioning not enabled on  %s", opts.VersionID, bucket),
+			}
+		}
 	}
 	mtime := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	if mtime != "" {
