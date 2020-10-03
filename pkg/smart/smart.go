@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math/big"
 	"regexp"
 	"strings"
 	"unsafe"
@@ -34,65 +33,6 @@ import (
 
 	"gopkg.in/yaml.v2"
 )
-
-// Info contains S.M.A.R.T data about the drive
-type Info struct {
-	Device string `json:"device"`
-
-	Scsi *ScsiInfo `json:"scsi,omitempty"`
-	Nvme *NvmeInfo `json:"nvme,omitempty"`
-	Ata  *AtaInfo  `json:"ata,omitempty"`
-
-	Error string `json:"error,omitempty"`
-}
-
-// AtaInfo contains ATA drive info
-type AtaInfo struct {
-	LUWWNDeviceID         string `json:"scsiLuWWNDeviceID,omitempty"`
-	SerialNum             string `json:"serialNum,omitempty"`
-	ModelNum              string `json:"modelNum,omitempty"`
-	FirmwareRevision      string `json:"firmwareRevision,omitempty"`
-	RotationRate          string `json:"RotationRate,omitempty"`
-	ATAMajorVersion       string `json:"MajorVersion,omitempty"`
-	ATAMinorVersion       string `json:"MinorVersion,omitempty"`
-	SmartSupportAvailable bool   `json:"smartSupportAvailable,omitempty"`
-	SmartSupportEnabled   bool   `json:"smartSupportEnabled,omitempty"`
-	ErrorLog              string `json:"smartErrorLog,omitempty"`
-	Transport             string `json:"transport,omitempty"`
-}
-
-// ScsiInfo contains SCSI drive Info
-type ScsiInfo struct {
-	CapacityBytes int64  `json:"scsiCapacityBytes,omitempty"`
-	ModeSenseBuf  string `json:"scsiModeSenseBuf,omitempty"`
-	RespLen       int64  `json:"scsirespLen,omitempty"`
-	BdLen         int64  `json:"scsiBdLen,omitempty"`
-	Offset        int64  `json:"scsiOffset,omitempty"`
-	RPM           int64  `json:"sciRpm,omitempty"`
-}
-
-// NvmeInfo contains NVMe drive info
-type NvmeInfo struct {
-	SerialNum       string `json:"serialNum,omitempty"`
-	VendorID        string `json:"vendorId,omitempty"`
-	FirmwareVersion string `json:"firmwareVersion,omitempty"`
-	ModelNum        string `json:"modelNum,omitempty"`
-	SpareAvailable  string `json:"spareAvailable,omitempty"`
-	SpareThreshold  string `json:"spareThreshold,omitempty"`
-	Temperature     string `json:"temperature,omitempty"`
-	CriticalWarning string `json:"criticalWarning,omitempty"`
-
-	MaxDataTransferPages        int      `json:"maxDataTransferPages,omitempty"`
-	ControllerBusyTime          *big.Int `json:"controllerBusyTime,omitempty"`
-	PowerOnHours                *big.Int `json:"powerOnHours,omitempty"`
-	PowerCycles                 *big.Int `json:"powerCycles,omitempty"`
-	UnsafeShutdowns             *big.Int `json:"unsafeShutdowns,omitempty"`
-	MediaAndDataIntegrityErrors *big.Int `json:"mediaAndDataIntgerityErrors,omitempty"`
-	DataUnitsReadBytes          *big.Int `json:"dataUnitsReadBytes,omitempty"`
-	DataUnitsWrittenBytes       *big.Int `json:"dataUnitsWrittenBytes,omitempty"`
-	HostReadCommands            *big.Int `json:"hostReadCommands,omitempty"`
-	HostWriteCommands           *big.Int `json:"hostWriteCommands,omitempty"`
-}
 
 // GetInfo - gets info about device
 func GetInfo(device string) (Info, error) {
