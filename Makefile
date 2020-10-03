@@ -18,8 +18,8 @@ getdeps:
 	@mkdir -p ${GOPATH}/bin
 	@which golangci-lint 1>/dev/null || (echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.27.0)
 	@which ruleguard 1>/dev/null || (echo "Installing ruleguard" && GO111MODULE=off go get github.com/quasilyte/go-ruleguard/...)
-	@which msgp 1>/dev/null || (echo "Installing msgp" && go get github.com/tinylib/msgp)
-	@which stringer 1>/dev/null || (echo "Installing stringer" && go get golang.org/x/tools/cmd/stringer)
+	@which msgp 1>/dev/null || (echo "Installing msgp" && GO111MODULE=off go get github.com/tinylib/msgp)
+	@which stringer 1>/dev/null || (echo "Installing stringer" && GO111MODULE=off go get golang.org/x/tools/cmd/stringer)
 
 crosscompile:
 	@(env bash $(PWD)/buildscripts/cross-compile.sh)
