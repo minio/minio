@@ -310,7 +310,7 @@ func newReplicationState() *replicationState {
 		globalReplicationConcurrent = 1
 	}
 	rs := &replicationState{
-		replicaCh: make(chan ObjectInfo, globalReplicationConcurrent*2),
+		replicaCh: make(chan ObjectInfo, 10000),
 	}
 	go func() {
 		<-GlobalContext.Done()
@@ -332,6 +332,7 @@ func (r *replicationState) addWorker(ctx context.Context, objectAPI ObjectLayer)
 					return
 				}
 				replicateObject(ctx, oi, objectAPI)
+			default:
 			}
 		}
 	}()
