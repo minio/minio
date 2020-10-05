@@ -199,9 +199,10 @@ func testPrometheusEndpoint(endpoint string) {
 func main() {
 	endpoint := os.Getenv("SERVER_ENDPOINT")
 	secure := os.Getenv("ENABLE_HTTPS")
-	endpoint = "http://" + endpoint
 	if secure == "1" {
 		endpoint = "https://" + endpoint
+	} else {
+		endpoint = "http://" + endpoint
 	}
 
 	// Output to stdout instead of the default stderr
