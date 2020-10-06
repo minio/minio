@@ -48,7 +48,7 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/minio-go/v7 v7.0.5-0.20200811211821-14ed05478889
+	github.com/minio/minio-go/v7 v7.0.6-0.20200929220449-755b5633803a
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5

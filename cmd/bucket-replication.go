@@ -139,15 +139,17 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 		sc = objInfo.StorageClass
 	}
 	putOpts = miniogo.PutObjectOptions{
-		UserMetadata:         meta,
-		UserTags:             tag.ToMap(),
-		ContentType:          objInfo.ContentType,
-		ContentEncoding:      objInfo.ContentEncoding,
-		StorageClass:         sc,
-		ReplicationVersionID: objInfo.VersionID,
-		ReplicationStatus:    miniogo.ReplicationStatusReplica,
-		ReplicationMTime:     objInfo.ModTime,
-		ReplicationETag:      objInfo.ETag,
+		UserMetadata:    meta,
+		UserTags:        tag.ToMap(),
+		ContentType:     objInfo.ContentType,
+		ContentEncoding: objInfo.ContentEncoding,
+		StorageClass:    sc,
+		Internal: miniogo.AdvancedPutOptions{
+			SourceVersionID:   objInfo.VersionID,
+			ReplicationStatus: miniogo.ReplicationStatusReplica,
+			SourceMTime:       objInfo.ModTime,
+			SourceETag:        objInfo.ETag,
+		},
 	}
 	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
 		rmode := miniogo.RetentionMode(mode)
