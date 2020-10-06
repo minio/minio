@@ -56,29 +56,6 @@ func isObjectDir(object string, size int64) bool {
 	return HasSuffix(object, SlashSeparator) && size == 0
 }
 
-// Converts just bucket, object metadata into ObjectInfo datatype.
-func dirObjectInfo(bucket, object string, size int64, metadata map[string]string) ObjectInfo {
-	// This is a special case with size as '0' and object ends with
-	// a slash separator, we treat it like a valid operation and
-	// return success.
-	etag := metadata["etag"]
-	delete(metadata, "etag")
-	if etag == "" {
-		etag = emptyETag
-	}
-
-	return ObjectInfo{
-		Bucket:      bucket,
-		Name:        object,
-		ModTime:     UTCNow(),
-		ContentType: "application/octet-stream",
-		IsDir:       true,
-		Size:        size,
-		ETag:        etag,
-		UserDefined: metadata,
-	}
-}
-
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {

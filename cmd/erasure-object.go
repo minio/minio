@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -123,10 +122,6 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return nil, err
-	}
-
 	var unlockOnDefer bool
 	var nsUnlocker = func() {}
 	defer func() {
@@ -151,17 +146,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 			nsUnlocker = lock.RUnlock
 		}
 		unlockOnDefer = true
-	}
-
-	// Handler directory request by returning a reader that
-	// returns no bytes.
-	if HasSuffix(object, SlashSeparator) {
-		var objInfo ObjectInfo
-		if objInfo, err = er.getObjectInfoDir(ctx, bucket, object); err != nil {
-			return nil, toObjectErr(err, bucket, object)
-		}
-		unlockOnDefer = false
-		return NewGetObjectReaderFromReader(bytes.NewBuffer(nil), objInfo, opts, nsUnlocker)
 	}
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts)
@@ -208,10 +192,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
-
 	// Lock the object before reading.
 	lk := er.NewNSLock(ctx, bucket, object)
 	if err := lk.GetRLock(globalOperationTimeout); err != nil {
@@ -366,57 +346,14 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, etag, opts, fi, metaArr, onlineDisks)
 }
 
-// getObjectInfoDir - This getObjectInfo is specific to object directory lookup.
-func (er erasureObjects) getObjectInfoDir(ctx context.Context, bucket, object string) (ObjectInfo, error) {
-	storageDisks := er.getDisks()
-
-	g := errgroup.WithNErrs(len(storageDisks))
-
-	// Prepare object creation in a all disks
-	for index, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			// Check if 'prefix' is an object on this 'disk'.
-			entries, err := storageDisks[index].ListDir(ctx, bucket, object, 1)
-			if err != nil {
-				return err
-			}
-			if len(entries) > 0 {
-				// Not a directory if not empty.
-				return errFileNotFound
-			}
-			return nil
-		}, index)
-	}
-
-	readQuorum := getReadQuorum(len(storageDisks))
-	err := reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum)
-	return dirObjectInfo(bucket, object, 0, map[string]string{}), err
-}
-
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
-	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return info, err
-	}
-
 	// Lock the object before reading.
 	lk := er.NewNSLock(ctx, bucket, object)
 	if err := lk.GetRLock(globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.RUnlock()
-
-	if HasSuffix(object, SlashSeparator) {
-		info, err = er.getObjectInfoDir(ctx, bucket, object)
-		if err != nil {
-			return info, toObjectErr(err, bucket, object)
-		}
-		return info, nil
-	}
 
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
@@ -584,11 +521,6 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 // writes `xl.meta` which carries the necessary metadata for future
 // object operations.
 func (er erasureObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	// Validate put object input args.
-	if err = checkPutObjectArgs(ctx, bucket, object, er, data.Size()); err != nil {
-		return ObjectInfo{}, err
-	}
-
 	return er.putObject(ctx, bucket, object, data, opts)
 }
 
@@ -788,11 +720,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			err := disks[index].DeleteVersion(ctx, bucket, object, fi)
-			if err != nil && err != errVolumeNotFound {
-				return err
-			}
-			return nil
+			return disks[index].DeleteVersion(ctx, bucket, object, fi)
 		}, index)
 	}
 
@@ -853,16 +781,9 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	dobjects := make([]DeletedObject, len(objects))
 	writeQuorums := make([]int, len(objects))
 
-	for i, object := range objects {
-		errs[i] = checkDelObjArgs(ctx, bucket, object.ObjectName)
-	}
-
 	storageDisks := er.getDisks()
 
 	for i := range objects {
-		if errs[i] != nil {
-			continue
-		}
 		// Assume (N/2 + 1) quorums for all objects
 		// this is a theoretical assumption such that
 		// for delete's we do not need to honor storage
@@ -876,21 +797,19 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	for i := range objects {
 		if objects[i].VersionID == "" {
 			if opts.Versioned || opts.VersionSuspended {
-				if !HasSuffix(objects[i].ObjectName, SlashSeparator) {
-					fi := FileInfo{
-						Name:    objects[i].ObjectName,
-						ModTime: UTCNow(),
-						Deleted: true, // delete marker
-					}
-					if opts.Versioned {
-						fi.VersionID = mustGetUUID()
-					}
-					// versioning suspended means we add `null`
-					// version as delete marker
-
-					versions[i] = fi
-					continue
+				fi := FileInfo{
+					Name:    objects[i].ObjectName,
+					ModTime: UTCNow(),
+					Deleted: true, // delete marker
 				}
+				if opts.Versioned {
+					fi.VersionID = mustGetUUID()
+				}
+				// versioning suspended means we add `null`
+				// version as delete marker
+
+				versions[i] = fi
+				continue
 			}
 		}
 		versions[i] = FileInfo{
@@ -978,10 +897,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
-		return objInfo, err
-	}
-
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(ctx, bucket, object)
 	if err = lk.GetLock(globalOperationTimeout); err != nil {
@@ -994,26 +909,24 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 	if opts.VersionID == "" {
 		if opts.Versioned || opts.VersionSuspended {
-			if !HasSuffix(object, SlashSeparator) {
-				fi := FileInfo{
-					Name:    object,
-					Deleted: true,
-					ModTime: UTCNow(),
-				}
-
-				if opts.Versioned {
-					fi.VersionID = mustGetUUID()
-				}
-
-				// versioning suspended means we add `null`
-				// version as delete marker
-
-				// Add delete marker, since we don't have any version specified explicitly.
-				if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
-					return objInfo, toObjectErr(err, bucket, object)
-				}
-				return fi.ToObjectInfo(bucket, object), nil
+			fi := FileInfo{
+				Name:    object,
+				Deleted: true,
+				ModTime: UTCNow(),
 			}
+
+			if opts.Versioned {
+				fi.VersionID = mustGetUUID()
+			}
+
+			// versioning suspended means we add `null`
+			// version as delete marker
+
+			// Add delete marker, since we don't have any version specified explicitly.
+			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
+				return objInfo, toObjectErr(err, bucket, object)
+			}
+			return fi.ToObjectInfo(bucket, object), nil
 		}
 	}
 

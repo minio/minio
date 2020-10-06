@@ -653,7 +653,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
 
-	if err := checkPutObjectArgs(ctx, dstBucket, dstObject, fs, srcInfo.PutObjReader.Size()); err != nil {
+	if err := checkPutObjectArgs(ctx, dstBucket, dstObject, fs); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -1097,7 +1097,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, NotImplemented{}
 	}
 
-	if err := checkPutObjectArgs(ctx, bucket, object, fs, r.Size()); err != nil {
+	if err := checkPutObjectArgs(ctx, bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
 	}
 
