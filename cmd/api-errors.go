@@ -820,22 +820,22 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationTargetNotFoundError: {
-		Code:           "XminioAdminReplicationTargetNotFoundError",
+		Code:           "XMinioAdminReplicationTargetNotFoundError",
 		Description:    "The replication target does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationRemoteConnectionError: {
-		Code:           "XminioAdminReplicationRemoteConnectionError",
+		Code:           "XMinioAdminReplicationRemoteConnectionError",
 		Description:    "Remote service endpoint or target bucket not available",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrBucketRemoteIdenticalToSource: {
-		Code:           "XminioAdminRemoteIdenticalToSource",
+		Code:           "XMinioAdminRemoteIdenticalToSource",
 		Description:    "The remote target cannot be identical to source",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBucketRemoteAlreadyExists: {
-		Code:           "XminioAdminBucketRemoteAlreadyExists",
+		Code:           "XMinioAdminBucketRemoteAlreadyExists",
 		Description:    "The remote target already exists",
 		HTTPStatusCode: http.StatusBadRequest,
 	},

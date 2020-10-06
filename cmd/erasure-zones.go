@@ -460,6 +460,10 @@ func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string
 }
 
 func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
+		return nil, err
+	}
+
 	object = encodeDirObject(object)
 
 	for _, zone := range z.zones {
@@ -479,6 +483,10 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 }
 
 func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
+	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
+		return err
+	}
+
 	object = encodeDirObject(object)
 
 	for _, zone := range z.zones {
@@ -497,6 +505,10 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 }
 
 func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
+		return objInfo, err
+	}
+
 	object = encodeDirObject(object)
 	for _, zone := range z.zones {
 		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
@@ -517,6 +529,11 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 
 // PutObject - writes an object to least used erasure zone.
 func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
+	// Validate put object input args.
+	if err := checkPutObjectArgs(ctx, bucket, object, z); err != nil {
+		return ObjectInfo{}, err
+	}
+
 	object = encodeDirObject(object)
 
 	if z.SingleZone() {
@@ -533,6 +550,10 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 }
 
 func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
+		return objInfo, err
+	}
+
 	object = encodeDirObject(object)
 
 	if z.SingleZone() {
