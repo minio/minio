@@ -2,11 +2,14 @@
 
 Events occurring on objects in a bucket can be monitored using bucket event notifications. Event types supported by MinIO server are
 
-| Supported Event Types   |                                            |                          |
-| :---------------------- | ------------------------------------------ | ------------------------ |
-| `s3:ObjectCreated:Put`  | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head` |
-| `s3:ObjectCreated:Post` | `s3:ObjectRemoved:Delete`                  |                          |
-| `s3:ObjectCreated:Copy` | `s3:ObjectAccessed:Get`                    |                          |
+| Supported Event Types   |                                            |                                       |
+| :---------------------- | ------------------------------------------ | ------------------------------------- |
+| `s3:ObjectCreated:Put`                      | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head`               |                                  |
+| `s3:ObjectCreated:Post`                     | `s3:ObjectRemoved:Delete`                  | `s3:ObjectRemoved:DeleteMarkerCreated` |                                  |
+| `s3:ObjectCreated:Copy`                     | `s3:ObjectAccessed:Get`                    | `s3:ObjectAccessed:GetLegalHold`       |                                  |
+| `s3:ObjectCreated:PutRetention`             | `s3:ObjectAccessed:Get`                    | `s3:ObjectCreated:PutLegalHold`        | `s3:ObjectAccessed:GetRetention` |
+| `s3:Replication:OperationFailedReplication` | `s3:BucketCreated`                         | `s3:BucketRemoved`                     |                                  |
+
 
 Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.min.io/docs/minio-client-complete-guide#events). MinIO SDK's [`BucketNotification` APIs](https://docs.min.io/docs/golang-client-api-reference#SetBucketNotification) can also be used. The notification message MinIO sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
 
