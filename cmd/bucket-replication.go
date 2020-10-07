@@ -334,7 +334,6 @@ func (r *replicationState) addWorker(ctx context.Context, objectAPI ObjectLayer)
 					return
 				}
 				replicateObject(ctx, oi, objectAPI)
-			default:
 			}
 		}
 	}()
