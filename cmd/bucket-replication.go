@@ -52,12 +52,12 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
 func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, error) {
-	clnt := globalBucketTargetSys.GetReplicationTargetClient(ctx, rCfg.RoleArn)
+	clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rCfg.RoleArn)
 	if clnt == nil {
 		return false, BucketRemoteTargetNotFound{Bucket: bucket}
 	}
 	if found, _ := clnt.BucketExists(ctx, rCfg.GetDestination().Bucket); !found {
-		return false, BucketReplicationDestinationNotFound{Bucket: rCfg.GetDestination().Bucket}
+		return false, BucketRemoteDestinationNotFound{Bucket: rCfg.GetDestination().Bucket}
 	}
 	if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
 		if ret.LockEnabled {
@@ -182,8 +182,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		logger.LogIf(ctx, err)
 		return
 	}
-
-	tgt := globalBucketTargetSys.GetReplicationTargetClient(ctx, cfg.RoleArn)
+	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil {
 		return
 	}

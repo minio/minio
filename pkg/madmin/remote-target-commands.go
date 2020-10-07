@@ -94,6 +94,7 @@ type BucketTarget struct {
 	Arn          string            `json:"arn,omitempty"`
 	Type         ServiceType       `json:"type"`
 	Region       string            `json:"omitempty"`
+	Label        string            `json:"label,omitempty"`
 }
 
 // Clone returns shallow clone of BucketTarget without secret key in credentials
@@ -109,6 +110,7 @@ func (t *BucketTarget) Clone() BucketTarget {
 		Arn:          t.Arn,
 		Type:         t.Type,
 		Region:       t.Region,
+		Label:        t.Label,
 	}
 }
 

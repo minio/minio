@@ -98,10 +98,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
 		}
 		if vcfg.Status != string(versioning.Enabled) {
-			return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
+			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
-
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -112,6 +111,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if t.Type == tgt.Type {
 			if t.Arn == tgt.Arn {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
+			}
+			if t.Label == tgt.Label {
+				return BucketRemoteLabelInUse{Bucket: t.TargetBucket}
 			}
 			newtgts[idx] = *tgt
 			found = true
@@ -173,8 +175,8 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	return nil
 }
 
-// GetReplicationTargetClient returns minio-go client for replication target instance
-func (sys *BucketTargetSys) GetReplicationTargetClient(ctx context.Context, arn string) *miniogo.Core {
+// GetRemoteTargetClient returns minio-go client for replication target instance
+func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn string) *miniogo.Core {
 	sys.RLock()
 	defer sys.RUnlock()
 	return sys.arnRemotesMap[arn]

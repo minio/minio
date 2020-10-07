@@ -106,16 +106,17 @@ const (
 	ErrNoSuchCORSConfiguration
 	ErrNoSuchWebsiteConfiguration
 	ErrReplicationConfigurationNotFoundError
-	ErrReplicationDestinationNotFoundError
+	ErrRemoteDestinationNotFoundError
 	ErrReplicationDestinationMissingLock
-	ErrReplicationTargetNotFoundError
+	ErrRemoteTargetNotFoundError
 	ErrReplicationRemoteConnectionError
 	ErrBucketRemoteIdenticalToSource
 	ErrBucketRemoteAlreadyExists
+	ErrBucketRemoteLabelInUse
 	ErrBucketRemoteArnTypeInvalid
 	ErrBucketRemoteArnInvalid
 	ErrBucketRemoteRemoveDisallowed
-	ErrReplicationTargetNotVersionedError
+	ErrRemoteTargetNotVersionedError
 	ErrReplicationSourceNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
@@ -809,9 +810,9 @@ var errorCodes = errorCodeMap{
 		Description:    "The replication configuration was not found",
 		HTTPStatusCode: http.StatusNotFound,
 	},
-	ErrReplicationDestinationNotFoundError: {
-		Code:           "ReplicationDestinationNotFoundError",
-		Description:    "The replication destination bucket does not exist",
+	ErrRemoteDestinationNotFoundError: {
+		Code:           "RemoteDestinationNotFoundError",
+		Description:    "The remote destination bucket does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationDestinationMissingLock: {
@@ -819,9 +820,9 @@ var errorCodes = errorCodeMap{
 		Description:    "The replication destination bucket does not have object locking enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrReplicationTargetNotFoundError: {
-		Code:           "XMinioAdminReplicationTargetNotFoundError",
-		Description:    "The replication target does not exist",
+	ErrRemoteTargetNotFoundError: {
+		Code:           "XminioAdminRemoteTargetNotFoundError",
+		Description:    "The remote target does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrReplicationRemoteConnectionError: {
@@ -839,9 +840,14 @@ var errorCodes = errorCodeMap{
 		Description:    "The remote target already exists",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrBucketRemoteLabelInUse: {
+		Code:           "XMinioAdminBucketRemoteLabelInUse",
+		Description:    "The remote target with this label already exists",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrBucketRemoteRemoveDisallowed: {
 		Code:           "XMinioAdminRemoteRemoveDisallowed",
-		Description:    "Replication configuration exists with this ARN.",
+		Description:    "This ARN is in use by an existing configuration",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrBucketRemoteArnTypeInvalid: {
@@ -854,9 +860,9 @@ var errorCodes = errorCodeMap{
 		Description:    "The bucket remote ARN does not have correct format",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrReplicationTargetNotVersionedError: {
-		Code:           "ReplicationTargetNotVersionedError",
-		Description:    "The replication target does not have versioning enabled",
+	ErrRemoteTargetNotVersionedError: {
+		Code:           "RemoteTargetNotVersionedError",
+		Description:    "The remote target does not have versioning enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationSourceNotVersionedError: {
@@ -1906,24 +1912,26 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchQuotaConfiguration
 	case BucketReplicationConfigNotFound:
 		apiErr = ErrReplicationConfigurationNotFoundError
-	case BucketReplicationDestinationNotFound:
-		apiErr = ErrReplicationDestinationNotFoundError
+	case BucketRemoteDestinationNotFound:
+		apiErr = ErrRemoteDestinationNotFoundError
 	case BucketReplicationDestinationMissingLock:
 		apiErr = ErrReplicationDestinationMissingLock
 	case BucketRemoteTargetNotFound:
-		apiErr = ErrReplicationTargetNotFoundError
+		apiErr = ErrRemoteTargetNotFoundError
 	case BucketRemoteConnectionErr:
 		apiErr = ErrReplicationRemoteConnectionError
 	case BucketRemoteAlreadyExists:
 		apiErr = ErrBucketRemoteAlreadyExists
+	case BucketRemoteLabelInUse:
+		apiErr = ErrBucketRemoteLabelInUse
 	case BucketRemoteArnTypeInvalid:
 		apiErr = ErrBucketRemoteArnTypeInvalid
 	case BucketRemoteArnInvalid:
 		apiErr = ErrBucketRemoteArnInvalid
 	case BucketRemoteRemoveDisallowed:
 		apiErr = ErrBucketRemoteRemoveDisallowed
-	case BucketReplicationTargetNotVersioned:
-		apiErr = ErrReplicationTargetNotVersionedError
+	case BucketRemoteTargetNotVersioned:
+		apiErr = ErrRemoteTargetNotVersionedError
 	case BucketReplicationSourceNotVersioned:
 		apiErr = ErrReplicationSourceNotVersionedError
 	case BucketQuotaExceeded:
