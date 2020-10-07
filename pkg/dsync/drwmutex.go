@@ -183,7 +183,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 			// return false anyways for both situations.
 
 			// make sure to unlock any successful locks, since caller has timedout or canceled the request.
-			releaseAll(dm.clnt, quorum, owner, &locks, isReadLock, restClnts, dm.Names...)
+			releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...)
 
 			return false
 		default:
@@ -294,7 +294,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 						done = true
 						// Increment the number of grants received from the buffered channel.
 						i++
-						releaseAll(ds, quorum, owner, locks, isReadLock, restClnts, lockNames...)
+						releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, lockNames...)
 					}
 				}
 			case <-timeout:
@@ -303,7 +303,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				// number of locks to check whether we have quorum or not
 				if !checkQuorumLocked(locks, quorum) {
 					log("Quorum not met after timeout\n")
-					releaseAll(ds, quorum, owner, locks, isReadLock, restClnts, lockNames...)
+					releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, lockNames...)
 				} else {
 					log("Quorum met after timeout\n")
 				}
@@ -339,15 +339,31 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	return quorumLocked
 }
 
-// checkQuorumUnlocked determines whether we have unlocked the required quorum of underlying locks or not
-func checkQuorumUnlocked(locks *[]string, quorum int) bool {
-	count := 0
-	for _, uid := range *locks {
-		if uid == "" {
-			count++
+// checkFailedUnlocks determines whether we have sufficiently unlocked all
+// resources to ensure no deadlocks for future callers
+func checkFailedUnlocks(locks []string, tolerance int) bool {
+	unlocksFailed := 0
+	for lockID := range locks {
+		if isLocked(locks[lockID]) {
+			unlocksFailed++
 		}
 	}
-	return count >= quorum
+
+	// Unlock failures are higher than tolerance limit
+	// for this instance of unlocker, we should let the
+	// caller know that lock is not successfully released
+	// yet.
+	if len(locks)-tolerance == tolerance {
+		// Incase of split brain scenarios where
+		// tolerance is exactly half of the len(*locks)
+		// then we need to make sure we have unlocked
+		// upto tolerance+1 - especially for RUnlock
+		// to ensure that we don't end up with active
+		// read locks on the resource after unlocking
+		// only half of the lockers.
+		return unlocksFailed >= tolerance
+	}
+	return unlocksFailed > tolerance
 }
 
 // checkQuorumLocked determines whether we have locked the required quorum of underlying locks or not
@@ -363,7 +379,7 @@ func checkQuorumLocked(locks *[]string, quorum int) bool {
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(ds *Dsync, quorum int, owner string, locks *[]string, isReadLock bool, restClnts []NetLocker, lockNames ...string) bool {
+func releaseAll(ds *Dsync, tolerance int, owner string, locks *[]string, isReadLock bool, restClnts []NetLocker, lockNames ...string) bool {
 	var wg sync.WaitGroup
 	for lockID := range restClnts {
 		wg.Add(1)
@@ -377,7 +393,12 @@ func releaseAll(ds *Dsync, quorum int, owner string, locks *[]string, isReadLock
 		}(lockID)
 	}
 	wg.Wait()
-	return checkQuorumUnlocked(locks, quorum)
+
+	// Return true if releaseAll was successful, otherwise we return 'false'
+	// to indicate we haven't sufficiently unlocked lockers to avoid deadlocks.
+	//
+	// Caller may use this as an indication to call again.
+	return !checkFailedUnlocks(*locks, tolerance)
 }
 
 // Unlock unlocks the write lock.
@@ -412,20 +433,9 @@ func (dm *DRWMutex) Unlock() {
 	// Tolerance is not set, defaults to half of the locker clients.
 	tolerance := len(restClnts) / 2
 
-	// Quorum is effectively = total clients subtracted with tolerance limit
-	quorum := len(restClnts) - tolerance
-
-	// In situations for write locks, as a special case
-	// to avoid split brains we make sure to acquire
-	// quorum + 1 when tolerance is exactly half of the
-	// total locker clients.
-	if quorum == tolerance {
-		quorum++
-	}
-
 	isReadLock := false
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for !releaseAll(dm.clnt, quorum, owner, &locks, isReadLock, restClnts, dm.Names...) {
+	for !releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
 		time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
 	}
 }
@@ -454,12 +464,9 @@ func (dm *DRWMutex) RUnlock() {
 	// Tolerance is not set, defaults to half of the locker clients.
 	tolerance := len(restClnts) / 2
 
-	// Quorum is effectively = total clients subtracted with tolerance limit
-	quorum := len(restClnts) - tolerance
-
 	isReadLock := true
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for !releaseAll(dm.clnt, quorum, owner, &locks, isReadLock, restClnts, dm.Names...) {
+	for !releaseAll(dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
 		time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
 	}
 }
