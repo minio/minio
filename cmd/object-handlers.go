@@ -21,8 +21,10 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"sort"
 	"strconv"
@@ -42,6 +44,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -3244,4 +3247,186 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	writeSuccessNoContent(w)
+}
+
+// RestoreObjectHandler - POST restore object handler.
+// ----------
+func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PostRestoreObject")
+	defer logger.AuditLog(w, r, "PostRestoreObject", mustGetClaimsFromToken(r))
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := url.PathUnescape(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Fetch object stat info.
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.CacheAPI() != nil {
+		getObjectInfo = api.CacheAPI().GetObjectInfo
+	}
+
+	// Check for auth type to return S3 compatible error.
+	if s3Error := checkRequestAuthType(ctx, r, policy.RestoreObjectAction, bucket, object); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if r.ContentLength <= 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEmptyRequestBody), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	objInfo, err := getObjectInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if objInfo.TransitionStatus != lifecycle.TransitionComplete {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidObjectState), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	rreq, err := parseRestoreRequest(io.LimitReader(r.Body, r.ContentLength))
+	if err != nil {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
+		apiErr.Description = err.Error()
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+	// validate the request
+	if err := rreq.validate(ctx, objectAPI); err != nil {
+		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
+		apiErr.Description = err.Error()
+		writeErrorResponse(ctx, w, apiErr, r.URL, guessIsBrowserReq(r))
+		return
+	}
+	statusCode := http.StatusOK
+	alreadyRestored := false
+	if err == nil {
+		if objInfo.RestoreOngoing && rreq.Type != SelectRestoreRequest {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrObjectRestoreAlreadyInProgress), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		if !objInfo.RestoreOngoing && !objInfo.RestoreExpires.IsZero() {
+			statusCode = http.StatusAccepted
+			alreadyRestored = true
+		}
+	}
+	// set or upgrade restore expiry
+	restoreExpiry := lifecycle.ExpectedExpiryTime(time.Now(), rreq.Days)
+	metadata := cloneMSS(objInfo.UserDefined)
+
+	// update self with restore metadata
+	if rreq.Type != SelectRestoreRequest {
+		objInfo.metadataOnly = true // Perform only metadata updates.
+		ongoingReq := true
+		if alreadyRestored {
+			ongoingReq = false
+		}
+		metadata[xhttp.AmzRestoreExpiryDays] = strconv.Itoa(rreq.Days)
+		metadata[xhttp.AmzRestoreRequestDate] = time.Now().UTC().Format(http.TimeFormat)
+		if alreadyRestored {
+			metadata[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t, expiry-date=%s", ongoingReq, restoreExpiry.Format(http.TimeFormat))
+		} else {
+			metadata[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t", ongoingReq)
+		}
+		objInfo.UserDefined = metadata
+		if _, err := objectAPI.CopyObject(GlobalContext, bucket, object, bucket, object, objInfo, ObjectOptions{
+			VersionID: objInfo.VersionID,
+		}, ObjectOptions{
+			VersionID: objInfo.VersionID,
+		}); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s: %s", objInfo.VersionID, err))
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidObjectState), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		// for previously restored object, just update the restore expiry
+		if alreadyRestored {
+			return
+		}
+	}
+
+	restoreObject := mustGetUUID()
+	if rreq.OutputLocation.S3.BucketName != "" {
+		w.Header()[xhttp.AmzRestoreOutputPath] = []string{pathJoin(rreq.OutputLocation.S3.BucketName, rreq.OutputLocation.S3.Prefix, restoreObject)}
+	}
+	w.WriteHeader(statusCode)
+	// Notify object restore started via a POST request.
+	sendEvent(eventArgs{
+		EventName:  event.ObjectRestorePostInitiated,
+		BucketName: bucket,
+		Object:     objInfo,
+		ReqParams:  extractReqParams(r),
+		UserAgent:  r.UserAgent(),
+		Host:       handlers.GetSourceIP(r),
+	})
+	// now process the restore in background
+	go func() {
+		rctx := GlobalContext
+		if !rreq.SelectParameters.IsEmpty() {
+			getObject := func(offset, length int64) (rc io.ReadCloser, err error) {
+				isSuffixLength := false
+				if offset < 0 {
+					isSuffixLength = true
+				}
+
+				rs := &HTTPRangeSpec{
+					IsSuffixLength: isSuffixLength,
+					Start:          offset,
+					End:            offset + length,
+				}
+
+				return getTransitionedObjectReader(rctx, bucket, object, rs, r.Header, objInfo, ObjectOptions{
+					VersionID: objInfo.VersionID,
+				})
+			}
+			if err = rreq.SelectParameters.Open(getObject); err != nil {
+				if serr, ok := err.(s3select.SelectError); ok {
+					encodedErrorResponse := encodeResponse(APIErrorResponse{
+						Code:       serr.ErrorCode(),
+						Message:    serr.ErrorMessage(),
+						BucketName: bucket,
+						Key:        object,
+						Resource:   r.URL.Path,
+						RequestID:  w.Header().Get(xhttp.AmzRequestID),
+						HostID:     globalDeploymentID,
+					})
+					writeResponse(w, serr.HTTPStatusCode(), encodedErrorResponse, mimeXML)
+				} else {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				}
+				return
+			}
+			nr := httptest.NewRecorder()
+			rw := logger.NewResponseWriter(nr)
+			rw.LogErrBody = true
+			rw.LogAllBody = true
+			rreq.SelectParameters.Evaluate(rw)
+			rreq.SelectParameters.Close()
+			return
+		}
+		if err := restoreTransitionedObject(rctx, bucket, object, objectAPI, objInfo, rreq, restoreExpiry); err != nil {
+			return
+		}
+
+		// Notify object restore completed via a POST request.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectRestorePostCompleted,
+			BucketName: bucket,
+			Object:     objInfo,
+			ReqParams:  extractReqParams(r),
+			UserAgent:  r.UserAgent(),
+			Host:       handlers.GetSourceIP(r),
+		})
+	}()
 }

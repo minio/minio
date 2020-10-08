@@ -66,6 +66,12 @@ const (
 	AmzTagCount      = "x-amz-tagging-count"
 	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
+	// S3 transition restore
+	AmzRestore            = "x-amz-restore"
+	AmzRestoreExpiryDays  = "X-Amz-Restore-Expiry-Days"
+	AmzRestoreRequestDate = "X-Amz-Restore-Request-Date"
+	AmzRestoreOutputPath  = "x-amz-restore-output-path"
+
 	// S3 extensions
 	AmzCopySourceIfModifiedSince   = "x-amz-copy-source-if-modified-since"
 	AmzCopySourceIfUnmodifiedSince = "x-amz-copy-source-if-unmodified-since"

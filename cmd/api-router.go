@@ -307,6 +307,9 @@ func registerAPIRouter(router *mux.Router) {
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(
 			maxClients(collectAPIStats("deletebucket", httpTraceAll(api.DeleteBucketHandler))))
+		// PostRestoreObject
+		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
+			maxClients(collectAPIStats("restoreobject", httpTraceAll(api.PostRestoreObjectHandler)))).Queries("restore", "")
 	}
 
 	/// Root operation

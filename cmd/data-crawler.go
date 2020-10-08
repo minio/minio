@@ -672,12 +672,17 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			IsLatest:         meta.oi.IsLatest,
 			NumVersions:      meta.numVersions,
 			SuccessorModTime: meta.successorModTime,
+			RestoreOngoing:   meta.oi.RestoreOngoing,
+			RestoreExpires:   meta.oi.RestoreExpires,
+			TransitionStatus: meta.oi.TransitionStatus,
 		})
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
 	}
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
+	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 	default:
 		// No action.
 		return size
@@ -706,22 +711,28 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	size = obj.Size
 
 	// Recalculate action.
-	action = i.lifeCycle.ComputeAction(
-		lifecycle.ObjectOpts{
-			Name:             i.objectPath(),
-			UserTags:         obj.UserTags,
-			ModTime:          obj.ModTime,
-			VersionID:        obj.VersionID,
-			DeleteMarker:     obj.DeleteMarker,
-			IsLatest:         obj.IsLatest,
-			NumVersions:      meta.numVersions,
-			SuccessorModTime: meta.successorModTime,
-		})
+	lcOpts := lifecycle.ObjectOpts{
+		Name:             i.objectPath(),
+		UserTags:         obj.UserTags,
+		ModTime:          obj.ModTime,
+		VersionID:        obj.VersionID,
+		DeleteMarker:     obj.DeleteMarker,
+		IsLatest:         obj.IsLatest,
+		NumVersions:      meta.numVersions,
+		SuccessorModTime: meta.successorModTime,
+		RestoreOngoing:   obj.RestoreOngoing,
+		RestoreExpires:   obj.RestoreExpires,
+		TransitionStatus: obj.TransitionStatus,
+	}
+	action = i.lifeCycle.ComputeAction(lcOpts)
+
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
 	}
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
+	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 	default:
 		// No action.
 		return size
@@ -729,7 +740,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 
 	opts := ObjectOptions{}
 	switch action {
-	case lifecycle.DeleteVersionAction:
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
 		// Defensive code, should never happen
 		if obj.VersionID == "" {
 			return size
@@ -744,15 +755,34 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			}
 		}
 		opts.VersionID = obj.VersionID
-	case lifecycle.DeleteAction:
+	case lifecycle.DeleteAction, lifecycle.DeleteRestoredAction:
 		opts.Versioned = globalBucketVersioningSys.Enabled(i.bucket)
+	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+		if obj.TransitionStatus == "" {
+			opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+			opts.VersionID = obj.VersionID
+			opts.TransitionStatus = lifecycle.TransitionPending
+			if _, err = o.DeleteObject(ctx, obj.Bucket, obj.Name, opts); err != nil {
+				// Assume it is still there.
+				logger.LogIf(ctx, err)
+				return size
+			}
+		}
+		globalTransitionState.queueTransitionTask(obj)
+		return 0
 	}
-
-	obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
-	if err != nil {
-		// Assume it is still there.
-		logger.LogIf(ctx, err)
-		return size
+	if obj.TransitionStatus != "" {
+		if err := deleteTransitionedObject(ctx, o, i.bucket, i.objectPath(), obj, lcOpts, action); err != nil {
+			logger.LogIf(ctx, err)
+			return size
+		}
+	} else {
+		obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
+		if err != nil {
+			// Assume it is still there.
+			logger.LogIf(ctx, err)
+			return size
+		}
 	}
 
 	eventName := event.ObjectRemovedDelete

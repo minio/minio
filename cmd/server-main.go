@@ -425,6 +425,8 @@ func serverMain(ctx *cli.Context) {
 		globalAllHealState = newHealState()
 		globalBackgroundHealState = newHealState()
 		globalReplicationState = newReplicationState()
+		globalTransitionState = newTransitionState()
+
 	}
 
 	// Configure server.
@@ -479,6 +481,7 @@ func serverMain(ctx *cli.Context) {
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
 		initBackgroundReplication(GlobalContext, newObject)
+		initBackgroundTransition(GlobalContext, newObject)
 	}
 
 	if err = initServer(GlobalContext, newObject); err != nil {

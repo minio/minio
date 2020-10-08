@@ -271,10 +271,12 @@ func (e Erasure) decode(ctx context.Context, writer io.Writer, readers []io.Read
 				return healRequired, err
 			}
 		}
+
 		if err = e.DecodeDataBlocks(bufs); err != nil {
 			logger.LogIf(ctx, err)
 			return healRequired, err
 		}
+
 		n, err := writeDataBlocks(ctx, writer, bufs, e.dataBlocks, blockOffset, blockLength)
 		if err != nil {
 			return healRequired, err
