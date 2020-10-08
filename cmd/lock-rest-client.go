@@ -76,6 +76,11 @@ func (client *lockRESTClient) IsOnline() bool {
 	return client.restClient.IsOnline()
 }
 
+// Not a local locker
+func (client *lockRESTClient) IsLocal() bool {
+	return false
+}
+
 // Close - marks the client as closed.
 func (client *lockRESTClient) Close() error {
 	client.restClient.Close()

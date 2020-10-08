@@ -68,4 +68,7 @@ type NetLocker interface {
 
 	// Is the underlying connection online? (is always true for any local lockers)
 	IsOnline() bool
+
+	// Is the underlying locker local to this server?
+	IsLocal() bool
 }

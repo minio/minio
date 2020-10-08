@@ -490,6 +490,29 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 	}
 }
 
+func newCustomHTTP11Transport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
+	// For more details about various values used here refer
+	// https://golang.org/pkg/net/http/#Transport documentation
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
+		MaxIdleConnsPerHost:   16,
+		IdleConnTimeout:       1 * time.Minute,
+		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 10 * time.Second,
+		TLSClientConfig:       tlsConfig,
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}
+
+	return func() *http.Transport {
+		return tr
+	}
+}
+
 func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
@@ -532,7 +555,6 @@ func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 
 	// Allow more requests to be in flight.
 	tr.ResponseHeaderTimeout = timeout
-	tr.MaxIdleConns = 256
 	tr.MaxIdleConnsPerHost = 16
 	return tr
 }

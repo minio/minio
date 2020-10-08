@@ -133,7 +133,7 @@ func (dm *DRWMutex) GetRLock(ctx context.Context, id, source string, opts Option
 }
 
 const (
-	lockRetryInterval = 100 * time.Millisecond
+	lockRetryInterval = 1 * time.Second
 )
 
 // lockBlocking will try to acquire either a read or a write lock
@@ -204,6 +204,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 				dm.m.Unlock()
 				return locked
 			}
+
 			time.Sleep(time.Duration(r.Float64() * float64(lockRetryInterval)))
 		}
 	}
@@ -268,6 +269,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 
 	wg.Add(1)
 	go func(isReadLock bool) {
+		defer wg.Done()
 
 		// Wait until we have either
 		//
@@ -316,9 +318,6 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 
 		// Count locks in order to determine whether we have quorum or not
 		quorumLocked = checkQuorumLocked(locks, quorum)
-
-		// Signal that we have the quorum
-		wg.Done()
 
 		// Wait for the other responses and immediately release the locks
 		// (do not add them to the locks array because the DRWMutex could

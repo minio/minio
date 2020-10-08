@@ -211,13 +211,6 @@ func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, s
 		return errUnexpected
 	}
 
-	// If its a directory request, we return an empty body.
-	if HasSuffix(object, SlashSeparator) {
-		_, err := writer.Write([]byte(""))
-		logger.LogIf(ctx, err)
-		return toObjectErr(err, bucket, object)
-	}
-
 	return er.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
@@ -862,11 +855,11 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				dobjects[objIndex] = DeletedObject{
 					DeleteMarker:          versions[objIndex].Deleted,
 					DeleteMarkerVersionID: versions[objIndex].VersionID,
-					ObjectName:            versions[objIndex].Name,
+					ObjectName:            decodeDirObject(versions[objIndex].Name),
 				}
 			} else {
 				dobjects[objIndex] = DeletedObject{
-					ObjectName: versions[objIndex].Name,
+					ObjectName: decodeDirObject(versions[objIndex].Name),
 					VersionID:  versions[objIndex].VersionID,
 				}
 			}
@@ -899,7 +892,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
+	if err = lk.GetLock(globalDeleteOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer lk.Unlock()
@@ -945,7 +938,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	return ObjectInfo{Bucket: bucket, Name: object, VersionID: opts.VersionID}, nil
+	return ObjectInfo{Bucket: bucket, Name: decodeDirObject(object), VersionID: opts.VersionID}, nil
 }
 
 // Send the successful but partial upload/delete, however ignore

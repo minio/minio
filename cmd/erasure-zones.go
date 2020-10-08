@@ -568,6 +568,7 @@ func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object s
 			break
 		}
 	}
+
 	return objInfo, err
 }
 

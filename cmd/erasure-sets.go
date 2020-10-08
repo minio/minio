@@ -273,6 +273,13 @@ func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string
 	return func() ([]dsync.NetLocker, string) {
 		lockers := make([]dsync.NetLocker, s.setDriveCount)
 		copy(lockers, s.erasureLockers[setIndex])
+		sort.Slice(lockers, func(i, j int) bool {
+			// re-order lockers with affinity for
+			// - non-local lockers
+			// - online lockers
+			// are used first
+			return !lockers[i].IsLocal() && lockers[i].IsOnline()
+		})
 		return lockers, s.erasureLockOwner
 	}
 }
