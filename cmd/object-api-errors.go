@@ -361,10 +361,10 @@ func (e BucketReplicationConfigNotFound) Error() string {
 	return "The replication configuration was not found: " + e.Bucket
 }
 
-// BucketReplicationDestinationNotFound bucket does not exist.
-type BucketReplicationDestinationNotFound GenericError
+// BucketRemoteDestinationNotFound bucket does not exist.
+type BucketRemoteDestinationNotFound GenericError
 
-func (e BucketReplicationDestinationNotFound) Error() string {
+func (e BucketRemoteDestinationNotFound) Error() string {
 	return "Destination bucket does not exist: " + e.Bucket
 }
 
@@ -396,6 +396,13 @@ func (e BucketRemoteAlreadyExists) Error() string {
 	return "Remote already exists for this bucket: " + e.Bucket
 }
 
+// BucketRemoteLabelInUse remote already exists for this target label.
+type BucketRemoteLabelInUse GenericError
+
+func (e BucketRemoteLabelInUse) Error() string {
+	return "Remote with this label already exists for this bucket: " + e.Bucket
+}
+
 // BucketRemoteArnTypeInvalid arn type for remote is not valid.
 type BucketRemoteArnTypeInvalid GenericError
 
@@ -417,11 +424,11 @@ func (e BucketRemoteRemoveDisallowed) Error() string {
 	return "Replication configuration exists with this ARN:" + e.Bucket
 }
 
-// BucketReplicationTargetNotVersioned replication target does not have versioning enabled.
-type BucketReplicationTargetNotVersioned GenericError
+// BucketRemoteTargetNotVersioned remote target does not have versioning enabled.
+type BucketRemoteTargetNotVersioned GenericError
 
-func (e BucketReplicationTargetNotVersioned) Error() string {
-	return "Replication target does not have versioning enabled: " + e.Bucket
+func (e BucketRemoteTargetNotVersioned) Error() string {
+	return "Remote target does not have versioning enabled: " + e.Bucket
 }
 
 // BucketReplicationSourceNotVersioned replication source does not have versioning enabled.
