@@ -68,8 +68,7 @@ func (lrw *ResponseWriter) Write(p []byte) (int, error) {
 	if !lrw.headersLogged {
 		// We assume the response code to be '200 OK' when WriteHeader() is not called,
 		// that way following Golang HTTP response behavior.
-		lrw.writeHeaders(&lrw.headers, http.StatusOK, lrw.Header())
-		lrw.headersLogged = true
+		lrw.WriteHeader(http.StatusOK)
 	}
 	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
 		// Always logging error responses.
@@ -107,12 +106,12 @@ func (lrw *ResponseWriter) Body() []byte {
 
 // WriteHeader - writes http status code
 func (lrw *ResponseWriter) WriteHeader(code int) {
-	lrw.StatusCode = code
 	if !lrw.headersLogged {
+		lrw.StatusCode = code
 		lrw.writeHeaders(&lrw.headers, code, lrw.ResponseWriter.Header())
 		lrw.headersLogged = true
+		lrw.ResponseWriter.WriteHeader(code)
 	}
-	lrw.ResponseWriter.WriteHeader(code)
 }
 
 // Flush - Calls the underlying Flush.
