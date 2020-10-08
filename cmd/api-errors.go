@@ -821,7 +821,7 @@ var errorCodes = errorCodeMap{
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrRemoteTargetNotFoundError: {
-		Code:           "XminioAdminRemoteTargetNotFoundError",
+		Code:           "XMinioAdminRemoteTargetNotFoundError",
 		Description:    "The remote target does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
