@@ -368,7 +368,7 @@ func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquor
 	return entry
 }
 
-func topLockEntries(peerLocks []*PeerLocks, count int, rquorum, wquorum int, stale bool) madmin.LockEntries {
+func topLockEntries(peerLocks []*PeerLocks, rquorum, wquorum int, stale bool) madmin.LockEntries {
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -388,9 +388,6 @@ func topLockEntries(peerLocks []*PeerLocks, count int, rquorum, wquorum int, sta
 	}
 	var lockEntries madmin.LockEntries
 	for _, v := range entryMap {
-		if len(lockEntries) == count {
-			break
-		}
 		if stale {
 			lockEntries = append(lockEntries, *v)
 			continue
@@ -436,9 +433,13 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 	rquorum := getReadQuorum(objectAPI.SetDriveCount())
 	wquorum := getWriteQuorum(objectAPI.SetDriveCount())
 
-	topLocks := topLockEntries(peerLocks, count, rquorum, wquorum, stale)
+	topLocks := topLockEntries(peerLocks, rquorum, wquorum, stale)
 
-	// Marshal API response
+	// Marshal API response upto requested count.
+	if len(topLocks) > count && count > 0 {
+		topLocks = topLocks[:count]
+	}
+
 	jsonBytes, err := json.Marshal(topLocks)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

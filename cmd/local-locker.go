@@ -203,8 +203,13 @@ func (l *localLocker) Close() error {
 	return nil
 }
 
-// Local locker is always online.
+// IsOnline - local locker is always online.
 func (l *localLocker) IsOnline() bool {
+	return true
+}
+
+// IsLocal - local locker returns true.
+func (l *localLocker) IsLocal() bool {
 	return true
 }
 

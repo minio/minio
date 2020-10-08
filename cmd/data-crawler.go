@@ -54,7 +54,7 @@ const (
 
 var (
 	globalCrawlerConfig          crawler.Config
-	dataCrawlerLeaderLockTimeout = newDynamicTimeout(1*time.Minute, 30*time.Second)
+	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.

@@ -770,10 +770,11 @@ func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
 				}
 			}
 
-			tr := newCustomHTTPTransport(tlsConfig, rest.DefaultTimeout)()
+			// allow transport to be HTTP/1.1 for proxying.
+			tr := newCustomHTTP11Transport(tlsConfig, rest.DefaultTimeout)()
+
 			// Allow more requests to be in flight with higher response header timeout.
 			tr.ResponseHeaderTimeout = 30 * time.Minute
-			tr.MaxIdleConns = 64
 			tr.MaxIdleConnsPerHost = 64
 
 			proxyEps = append(proxyEps, ProxyEndpoint{

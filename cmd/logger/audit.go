@@ -60,15 +60,15 @@ func NewResponseWriter(w http.ResponseWriter) *ResponseWriter {
 }
 
 func (lrw *ResponseWriter) Write(p []byte) (int, error) {
-	n, err := lrw.ResponseWriter.Write(p)
-	lrw.bytesWritten += n
-	if lrw.TimeToFirstByte == 0 {
-		lrw.TimeToFirstByte = time.Now().UTC().Sub(lrw.StartTime)
-	}
 	if !lrw.headersLogged {
 		// We assume the response code to be '200 OK' when WriteHeader() is not called,
 		// that way following Golang HTTP response behavior.
 		lrw.WriteHeader(http.StatusOK)
+	}
+	n, err := lrw.ResponseWriter.Write(p)
+	lrw.bytesWritten += n
+	if lrw.TimeToFirstByte == 0 {
+		lrw.TimeToFirstByte = time.Now().UTC().Sub(lrw.StartTime)
 	}
 	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
 		// Always logging error responses.

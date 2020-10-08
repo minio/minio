@@ -261,18 +261,20 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 		}
 	}
 
-	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
-		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
-			Name:         objInfo.Name,
-			UserTags:     objInfo.UserTags,
-			VersionID:    objInfo.VersionID,
-			ModTime:      objInfo.ModTime,
-			IsLatest:     objInfo.IsLatest,
-			DeleteMarker: objInfo.DeleteMarker,
-		})
-		if !expiryTime.IsZero() {
-			w.Header()[xhttp.AmzExpiration] = []string{
-				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
+	if objInfo.Bucket != "" {
+		if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
+			ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
+				Name:         objInfo.Name,
+				UserTags:     objInfo.UserTags,
+				VersionID:    objInfo.VersionID,
+				ModTime:      objInfo.ModTime,
+				IsLatest:     objInfo.IsLatest,
+				DeleteMarker: objInfo.DeleteMarker,
+			})
+			if !expiryTime.IsZero() {
+				w.Header()[xhttp.AmzExpiration] = []string{
+					fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
+				}
 			}
 		}
 	}
