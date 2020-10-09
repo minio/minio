@@ -30,7 +30,7 @@ minio gateway s3
 ```
 
 The `CACHE_WATERMARK` numbers are percentages of `CACHE_QUOTA`. 
-In the example above this means that  `MINIO_CACHE_WATERMARK_LOW` is effectively `0.8 * 0.7 * 100 = 56%` and the `MINIO_CACHE_WATERMARK_LOW` is effectively `0.8 * 0.9 * 100 = 72%` of total disk space.     
+In the example above this means that  `MINIO_CACHE_WATERMARK_LOW` is effectively `0.8 * 0.7 * 100 = 56%` and the `MINIO_CACHE_WATERMARK_HIGH` is effectively `0.8 * 0.9 * 100 = 72%` of total disk space.     
 
 
 ### 3. Test your setup
