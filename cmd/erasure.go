@@ -252,7 +252,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	}
 
 	// Collect disks we can use.
-	disks := er.getLoadBalancedDisks()
+	disks := er.getLoadBalancedDisks(true)
 	if len(disks) == 0 {
 		logger.Info(color.Green("data-crawl:") + " all disks are offline or being healed, skipping crawl")
 		return nil
