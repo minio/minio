@@ -899,7 +899,7 @@ func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	var cred auth.Credentials
 	var adminAPIErr APIErrorCode
 	// Get current object layer instance.
-	objectAPI := newObjectLayerWithoutSafeModeFn()
+	objectAPI := newObjectLayerFn()
 	if objectAPI == nil || globalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return nil, cred
@@ -1490,11 +1490,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	mode := "safemode"
-	if newObjectLayerFn() != nil {
-		mode = "online"
-	}
-
+	mode := "online"
 	server := getLocalServerProperty(globalEndpoints, r)
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)

@@ -268,11 +268,6 @@ var (
 	globalBackgroundHealRoutine *healRoutine
 	globalBackgroundHealState   *allHealState
 
-	// Only enabled when one of the sub-systems fail
-	// to initialize, this allows for administrators to
-	// fix the system.
-	globalSafeMode bool
-
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 

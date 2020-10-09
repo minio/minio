@@ -613,18 +613,12 @@ func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		return errServerNotInitialized
 	}
 
-	// In gateway mode, notifications are not supported.
+	// In gateway mode, notifications are not supported - except NAS gateway.
 	if globalIsGateway && !objAPI.IsNotificationSupported() {
 		return nil
 	}
 
-	if globalConfigTargetList != nil {
-		for _, target := range globalConfigTargetList.Targets() {
-			if err := sys.targetList.Add(target); err != nil {
-				return err
-			}
-		}
-	}
+	logger.LogIf(ctx, sys.targetList.Add(globalConfigTargetList.Targets()...))
 
 	go func() {
 		for res := range sys.targetResCh {

@@ -161,7 +161,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	objLayer := newObjectLayerWithoutSafeModeFn()
+	objLayer := newObjectLayerFn()
 	// Service not initialized yet
 	if objLayer == nil {
 		return
@@ -372,7 +372,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 // Populates prometheus with bucket usage metrics, this metrics
 // is only enabled if crawler is enabled.
 func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
-	objLayer := newObjectLayerWithoutSafeModeFn()
+	objLayer := newObjectLayerFn()
 	// Service not initialized yet
 	if objLayer == nil {
 		return
@@ -435,7 +435,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects storage metrics for MinIO server in Prometheus specific format
 // and sends to given channel
 func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
-	objLayer := newObjectLayerWithoutSafeModeFn()
+	objLayer := newObjectLayerFn()
 	// Service not initialized yet
 	if objLayer == nil {
 		return

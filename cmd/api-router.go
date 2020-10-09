@@ -32,28 +32,15 @@ func newHTTPServerFn() *xhttp.Server {
 	return globalHTTPServer
 }
 
-func newObjectLayerWithoutSafeModeFn() ObjectLayer {
-	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
-	return globalObjectAPI
-}
-
 func newObjectLayerFn() ObjectLayer {
 	globalObjLayerMutex.Lock()
 	defer globalObjLayerMutex.Unlock()
-	if globalSafeMode {
-		return nil
-	}
 	return globalObjectAPI
 }
 
 func newCachedObjectLayerFn() CacheObjectLayer {
 	globalObjLayerMutex.Lock()
 	defer globalObjLayerMutex.Unlock()
-
-	if globalSafeMode {
-		return nil
-	}
 	return globalCacheObjectAPI
 }
 

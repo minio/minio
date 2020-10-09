@@ -86,6 +86,10 @@ func (list *TargetList) Remove(targetIDSet TargetIDSet) {
 
 // Targets - list all targets
 func (list *TargetList) Targets() []Target {
+	if list == nil {
+		return []Target{}
+	}
+
 	list.RLock()
 	defer list.RUnlock()
 

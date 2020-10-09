@@ -63,7 +63,7 @@ func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota,
 }
 
 func (sys *BucketQuotaSys) check(ctx context.Context, bucket string, size int64) error {
-	objAPI := newObjectLayerWithoutSafeModeFn()
+	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return errServerNotInitialized
 	}

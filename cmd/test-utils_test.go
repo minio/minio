@@ -2077,16 +2077,10 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 	// operation
 	api := objectAPIHandlers{
 		ObjectAPI: func() ObjectLayer {
-			if !globalSafeMode {
-				return globalObjectAPI
-			}
-			return nil
+			return globalObjectAPI
 		},
 		CacheAPI: func() CacheObjectLayer {
-			if !globalSafeMode {
-				return globalCacheObjectAPI
-			}
-			return nil
+			return globalCacheObjectAPI
 		},
 	}
 
