@@ -38,7 +38,7 @@ import (
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	if globalIsGateway {
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized
 		}
