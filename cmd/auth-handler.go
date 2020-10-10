@@ -383,7 +383,7 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// verify as a fallback.
 		if globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
-			Action:          iampolicy.Action(policy.ListBucketAction),
+			Action:          iampolicy.ListBucketAction,
 			BucketName:      bucketName,
 			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			ObjectName:      objectName,
@@ -554,7 +554,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 		if retMode == objectlock.RetGovernance && byPassSet {
 			byPassSet = globalPolicySys.IsAllowed(policy.Args{
 				AccountName:     cred.AccessKey,
-				Action:          policy.Action(policy.BypassGovernanceRetentionAction),
+				Action:          policy.BypassGovernanceRetentionAction,
 				BucketName:      bucketName,
 				ConditionValues: conditions,
 				IsOwner:         false,
@@ -563,7 +563,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 		}
 		if globalPolicySys.IsAllowed(policy.Args{
 			AccountName:     cred.AccessKey,
-			Action:          policy.Action(policy.PutObjectRetentionAction),
+			Action:          policy.PutObjectRetentionAction,
 			BucketName:      bucketName,
 			ConditionValues: conditions,
 			IsOwner:         false,
@@ -586,7 +586,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 	if retMode == objectlock.RetGovernance && byPassSet {
 		byPassSet = globalIAMSys.IsAllowed(iampolicy.Args{
 			AccountName:     cred.AccessKey,
-			Action:          policy.BypassGovernanceRetentionAction,
+			Action:          iampolicy.BypassGovernanceRetentionAction,
 			BucketName:      bucketName,
 			ObjectName:      objectName,
 			ConditionValues: conditions,
@@ -596,7 +596,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 	}
 	if globalIAMSys.IsAllowed(iampolicy.Args{
 		AccountName:     cred.AccessKey,
-		Action:          policy.PutObjectRetentionAction,
+		Action:          iampolicy.PutObjectRetentionAction,
 		BucketName:      bucketName,
 		ConditionValues: conditions,
 		ObjectName:      objectName,
