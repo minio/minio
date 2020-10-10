@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/pkg/bucket/bandwidth"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
@@ -149,6 +150,7 @@ var (
 	globalEnvTargetList *event.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
+	globalBucketMonitor     *bandwidth.Monitor
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
 

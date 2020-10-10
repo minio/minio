@@ -214,6 +214,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			// -- OBD API --
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/obdinfo").
 				HandlerFunc(httpTraceHdrs(adminAPI.OBDInfoHandler))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
+				HandlerFunc(httpTraceHdrs(adminAPI.BandwidthMonitorHandler))
 		}
 	}
 
