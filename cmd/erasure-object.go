@@ -890,6 +890,15 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
+	if gerr != nil && goi.Name == "" {
+		switch gerr.(type) {
+		case InsufficientReadQuorum:
+			return objInfo, InsufficientWriteQuorum{}
+		}
+		return objInfo, gerr
+	}
+
 	// Acquire a write lock before deleting the object.
 	lk := er.NewNSLock(ctx, bucket, object)
 	if err = lk.GetLock(globalDeleteOperationTimeout); err != nil {

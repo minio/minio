@@ -300,7 +300,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
-	globalSafeMode = true
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
@@ -325,7 +324,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	if enableIAMOps {
 		// Initialize IAM sys.
-		startBackgroundIAMLoad(GlobalContext)
+		startBackgroundIAMLoad(GlobalContext, newObject)
 	}
 
 	if globalCacheConfig.Enabled {
@@ -352,11 +351,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// - encryption
 	// - compression
 	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
-
-	// Disable safe mode operation, after all initialization is over.
-	globalObjLayerMutex.Lock()
-	globalSafeMode = false
-	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
 	if !globalCLIContext.Quiet {

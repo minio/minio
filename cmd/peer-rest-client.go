@@ -26,6 +26,7 @@ import (
 	"math"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,6 +36,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
+	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
@@ -883,4 +885,20 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	}
 
 	return &peerRESTClient{host: peer, restClient: restClient}
+}
+
+// MonitorBandwidth - send http trace request to peer nodes
+func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*bandwidth.Report, error) {
+	values := make(url.Values)
+	values.Set(peerRESTBuckets, strings.Join(buckets, ","))
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetBandwidth, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	defer http.DrainBody(respBody)
+
+	dec := gob.NewDecoder(respBody)
+	var bandwidthReport bandwidth.Report
+	err = dec.Decode(&bandwidthReport)
+	return &bandwidthReport, err
 }

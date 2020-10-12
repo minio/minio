@@ -35,7 +35,7 @@ const (
 	lockMaintenanceInterval = 30 * time.Second
 
 	// Lock validity check interval.
-	lockValidityCheckInterval = 2 * time.Minute
+	lockValidityCheckInterval = 30 * time.Second
 )
 
 // To abstract a node over network.
@@ -242,7 +242,7 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
 func lockMaintenance(ctx context.Context, interval time.Duration) error {
-	objAPI := newObjectLayerWithoutSafeModeFn()
+	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return nil
 	}
@@ -332,7 +332,7 @@ func startLockMaintenance(ctx context.Context) {
 	// no need to start the lock maintenance
 	// if ObjectAPI is not initialized.
 	for {
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue

@@ -30,10 +30,12 @@ import (
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -318,6 +320,13 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	setDriveCount := len(format.Erasure.Sets[0])
 
 	endpointStrings := make([]string, len(endpoints))
+
+	listTolerancePerSet := 3
+	// By default this is off
+	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOff) == config.EnableOn {
+		listTolerancePerSet = -1
+	}
+
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
 		sets:                make([]*erasureObjects, setCount),
@@ -328,7 +337,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		endpointStrings:     endpointStrings,
 		setCount:            setCount,
 		setDriveCount:       setDriveCount,
-		listTolerancePerSet: 3, // Expect 3 good entries across disks.
+		listTolerancePerSet: listTolerancePerSet,
 		format:              format,
 		disksConnectEvent:   make(chan diskConnectInfo),
 		distributionAlgo:    format.Erasure.DistributionAlgo,

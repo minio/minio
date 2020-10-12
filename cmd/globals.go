@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/pkg/bucket/bandwidth"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
@@ -149,6 +150,7 @@ var (
 	globalEnvTargetList *event.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
+	globalBucketMonitor     *bandwidth.Monitor
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
 
@@ -267,11 +269,6 @@ var (
 	// The always present healing routine ready to heal objects
 	globalBackgroundHealRoutine *healRoutine
 	globalBackgroundHealState   *allHealState
-
-	// Only enabled when one of the sub-systems fail
-	// to initialize, this allows for administrators to
-	// fix the system.
-	globalSafeMode bool
 
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
