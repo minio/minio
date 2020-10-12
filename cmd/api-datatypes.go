@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"time"
 )
 
 // DeletedObject objects deleted
@@ -26,6 +27,7 @@ type DeletedObject struct {
 	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
 	ObjectName            string `xml:"Key,omitempty"`
 	VersionID             string `xml:"VersionId,omitempty"`
+	ModTime               time.Time
 }
 
 // ObjectToDelete carries key name for the object to delete.

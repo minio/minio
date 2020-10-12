@@ -1246,9 +1246,11 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 				ARN:           policy.ResourceARNPrefix + args.BucketName,
 			},
 			Object: event.Object{
-				Key:       keyName,
-				VersionID: args.Object.VersionID,
-				Sequencer: uniqueID,
+				Key:          keyName,
+				VersionID:    args.Object.VersionID,
+				DeleteMarker: args.Object.DeleteMarker,
+				LastModified: args.Object.ModTime,
+				Sequencer:    uniqueID,
 			},
 		},
 		Source: event.Source{

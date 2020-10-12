@@ -44,7 +44,7 @@
 // no deletion or modification of existing rows.
 //
 // A different table schema is used for this format. A sample SQL
-// commant that creates a table with the required structure is:
+// command that creates a table with the required structure is:
 //
 // CREATE TABLE myminio (
 //     event_time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -73,13 +73,45 @@ import (
 )
 
 const (
-	psqlTableExists          = `SELECT 1 FROM %s;`
-	psqlCreateNamespaceTable = `CREATE TABLE %s (key VARCHAR PRIMARY KEY, value JSONB);`
-	psqlCreateAccessTable    = `CREATE TABLE %s (event_time TIMESTAMP WITH TIME ZONE NOT NULL, event_data JSONB);`
+	pgCreateAccessTable = `CREATE TABLE %s (event_time TIMESTAMP WITH TIME ZONE NOT NULL, event_data JSONB);`
+	pgInsertRow         = `INSERT INTO %s (event_time, event_data) VALUES ($1, $2);`
 
-	psqlUpdateRow = `INSERT INTO %s (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`
-	psqlDeleteRow = `DELETE FROM %s WHERE key = $1;`
-	psqlInsertRow = `INSERT INTO %s (event_time, event_data) VALUES ($1, $2);`
+	pgCreateNamespaceTable = `CREATE TABLE %s (
+                                      bucket           VARCHAR NOT NULL,
+                                      object           VARCHAR NOT NULL,
+                                      version_id       VARCHAR DEFAULT 'NULL_VERSION' NOT NULL,
+                                      is_delete_marker BOOL DEFAULT false NOT NULL,
+                                      size             INT8,
+                                      etag             VARCHAR,
+                                      last_modified    TIMESTAMPTZ NOT NULL,
+                                      event_data       JSONB NOT NULL,
+                                      PRIMARY KEY (bucket, object, version_id)
+                                  );`
+	pgNamespaceTableSchemaV0 = `SELECT key, value FROM %s WHERE false;`
+
+	pgNamespaceTableSchemaV1 = `SELECT bucket, object, version_id, is_delete_marker, size, etag, last_modified, event_data
+                                      FROM %s
+                                     WHERE false;`
+
+	pgNullVersion = "NULL_VERSION" // implies NULL version id in the namespace table.
+
+	// For PUT objects, replace the row if it already exists.
+	pgNsInsertForPuts = `INSERT INTO %s (bucket, object, version_id, is_delete_marker, size, etag, last_modified, event_data)
+                                     VALUES ($1,     $2,     $3,         $4,               $5,   $6,   $7,            $8)
+                                     ON CONFLICT (bucket, object, version_id)
+                                        DO UPDATE SET is_delete_marker = EXCLUDED.is_delete_marker,
+                                                      size = EXCLUDED.size,
+                                                      etag = EXCLUDED.etag,
+                                                      last_modified = EXCLUDED.last_modified,
+                                                      event_data = EXCLUDED.event_data;`
+	// The ON CONFLICT DO NOTHING clause, allows GetObject/HeadObject events
+	// to add rows to the table if a row matching the object and version is
+	// not present.
+	pgNsInsertForGetsOrHeads = `INSERT INTO %s (bucket, object, version_id, is_delete_marker, size, etag, last_modified, event_data)
+                                            VALUES ($1,     $2,     $3,         $4,               $5,   $6,   $7,            $8)
+                                       ON CONFLICT (bucket, object, version_id)
+                                          DO NOTHING;`
+	pgNsDeleteRow = `DELETE FROM %s WHERE bucket = $1 AND object = $2 AND version_id = $3;`
 )
 
 // Postgres constants
@@ -172,16 +204,17 @@ func (p PostgreSQLArgs) Validate() error {
 
 // PostgreSQLTarget - PostgreSQL target.
 type PostgreSQLTarget struct {
-	id         event.TargetID
-	args       PostgreSQLArgs
-	updateStmt *sql.Stmt
-	deleteStmt *sql.Stmt
-	insertStmt *sql.Stmt
-	db         *sql.DB
-	store      Store
-	firstPing  bool
-	connString string
-	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
+	id                  event.TargetID
+	args                PostgreSQLArgs
+	nsInsertStmtForPuts *sql.Stmt
+	nsInsertStmtForGets *sql.Stmt
+	nsDeleteStmt        *sql.Stmt
+	accInsertStmt       *sql.Stmt
+	db                  *sql.DB
+	store               Store
+	firstPing           bool
+	connString          string
+	loggerOnce          func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
 
 // ID - returns target ID.
@@ -230,7 +263,19 @@ func (target *PostgreSQLTarget) Save(eventData event.Event) error {
 
 // IsConnErr - To detect a connection error.
 func IsConnErr(err error) bool {
+	if err == nil {
+		return false
+	}
 	return IsConnRefusedErr(err) || err.Error() == "sql: database is closed" || err.Error() == "sql: statement is closed" || err.Error() == "invalid connection"
+}
+
+func (target *PostgreSQLTarget) doesTableExist(tableName string) (bool, error) {
+	const pgTableExists = `SELECT 1 FROM %s WHERE false;`
+	_, err := target.db.Exec(fmt.Sprintf(pgTableExists, tableName))
+	if IsConnErr(err) {
+		return false, err
+	}
+	return err == nil, nil
 }
 
 // send - sends an event to the PostgreSQL.
@@ -240,17 +285,65 @@ func (target *PostgreSQLTarget) send(eventData event.Event) error {
 		if err != nil {
 			return err
 		}
-		key := eventData.S3.Bucket.Name + "/" + objectName
+		versionID := eventData.S3.Object.VersionID
+		if versionID == "" {
+			versionID = pgNullVersion
+		}
 
-		if eventData.EventName == event.ObjectRemovedDelete {
-			_, err = target.deleteStmt.Exec(key)
-		} else {
+		switch {
+		case eventData.EventName == event.ObjectRemovedDelete && !eventData.S3.Object.DeleteMarker:
+			args := []interface{}{
+				eventData.S3.Bucket.Name,
+				objectName,
+				versionID,
+			}
+			_, err = target.nsDeleteStmt.Exec(args...)
+		case eventData.EventName == event.ObjectCreatedPut ||
+			(eventData.EventName == event.ObjectRemovedDelete &&
+				eventData.S3.Object.DeleteMarker):
 			var data []byte
-			if data, err = json.Marshal(struct{ Records []event.Event }{[]event.Event{eventData}}); err != nil {
+			if data, err = json.Marshal(eventData); err != nil {
 				return err
 			}
 
-			_, err = target.updateStmt.Exec(key, data)
+			args := []interface{}{
+				eventData.S3.Bucket.Name,
+				objectName,
+				versionID,
+				eventData.S3.Object.DeleteMarker,
+				eventData.S3.Object.Size,
+				eventData.S3.Object.ETag,
+				eventData.S3.Object.LastModified,
+				data,
+			}
+			if eventData.S3.Object.DeleteMarker {
+				// Set size nad etag as NULL in the table
+				args[4] = nil
+				args[5] = nil
+			}
+			_, err = target.nsInsertStmtForPuts.Exec(args...)
+		case eventData.EventName == event.ObjectAccessedGet || eventData.EventName == event.ObjectAccessedHead:
+			var data []byte
+			if data, err = json.Marshal(eventData); err != nil {
+				return err
+			}
+
+			args := []interface{}{
+				eventData.S3.Bucket.Name,
+				objectName,
+				versionID,
+				eventData.S3.Object.DeleteMarker,
+				eventData.S3.Object.Size,
+				eventData.S3.Object.ETag,
+				eventData.S3.Object.LastModified,
+				data,
+			}
+			if eventData.S3.Object.DeleteMarker {
+				// Set size nad etag as NULL in the table
+				args[4] = nil
+				args[5] = nil
+			}
+			_, err = target.nsInsertStmtForGets.Exec(args...)
 		}
 		return err
 	}
@@ -266,7 +359,7 @@ func (target *PostgreSQLTarget) send(eventData event.Event) error {
 			return err
 		}
 
-		if _, err = target.insertStmt.Exec(eventTime, data); err != nil {
+		if _, err = target.accInsertStmt.Exec(eventTime, data); err != nil {
 			return err
 		}
 	}
@@ -281,7 +374,7 @@ func (target *PostgreSQLTarget) Send(eventKey string) error {
 		return err
 	}
 	if !target.firstPing {
-		if err := target.executeStmts(); err != nil {
+		if err := target.initPGTable(); err != nil {
 			if IsConnErr(err) {
 				return errNotConnected
 			}
@@ -312,56 +405,218 @@ func (target *PostgreSQLTarget) Send(eventKey string) error {
 
 // Close - closes underneath connections to PostgreSQL database.
 func (target *PostgreSQLTarget) Close() error {
-	if target.updateStmt != nil {
+	if target.nsInsertStmtForPuts != nil {
 		// FIXME: log returned error. ignore time being.
-		_ = target.updateStmt.Close()
+		_ = target.nsInsertStmtForPuts.Close()
+	}
+	if target.nsInsertStmtForGets != nil {
+		// FIXME: log returned error. ignore time being.
+		_ = target.nsInsertStmtForGets.Close()
 	}
 
-	if target.deleteStmt != nil {
+	if target.nsDeleteStmt != nil {
 		// FIXME: log returned error. ignore time being.
-		_ = target.deleteStmt.Close()
+		_ = target.nsDeleteStmt.Close()
 	}
 
-	if target.insertStmt != nil {
+	if target.accInsertStmt != nil {
 		// FIXME: log returned error. ignore time being.
-		_ = target.insertStmt.Close()
+		_ = target.accInsertStmt.Close()
 	}
 
 	return target.db.Close()
 }
 
-// Executes the table creation statements.
-func (target *PostgreSQLTarget) executeStmts() error {
-
-	_, err := target.db.Exec(fmt.Sprintf(psqlTableExists, target.args.Table))
-	if err != nil {
-		createStmt := psqlCreateNamespaceTable
+func (target *PostgreSQLTarget) createTableAndMigrateData() error {
+	if exists, err := target.doesTableExist(target.args.Table); err != nil {
+		return err
+	} else if !exists {
+		// Table does not already exist, create it:
+		createStmt := pgCreateNamespaceTable
 		if target.args.Format == event.AccessFormat {
-			createStmt = psqlCreateAccessTable
+			createStmt = pgCreateAccessTable
 		}
 
 		if _, dbErr := target.db.Exec(fmt.Sprintf(createStmt, target.args.Table)); dbErr != nil {
 			return dbErr
 		}
+		return nil
 	}
 
+	// For access format, as table already exists, nothing to migrate.
+	if target.args.Format == event.AccessFormat {
+		return nil
+	}
+
+	// For namespace table format, we may have to migrate to new version.
+	renamedTable := fmt.Sprintf("%s_v0_tmp", target.args.Table)
+
+	// Check if existing table is V0
+	if _, err := target.db.Exec(fmt.Sprintf(pgNamespaceTableSchemaV0, target.args.Table)); err != nil {
+		if IsConnErr(err) {
+			return err
+		}
+	} else {
+		// Table schema is V0. Migrate to V1.
+		const pgMigrateV0RenameTable = `ALTER TABLE %s RENAME TO %s;`
+
+		// Rename existing table
+		_, err = target.db.Exec(fmt.Sprintf(pgMigrateV0RenameTable, target.args.Table, renamedTable))
+		if err != nil {
+			return fmt.Errorf("Failed to rename existing table with %v", err)
+		}
+
+		// Create new table
+		if _, dbErr := target.db.Exec(fmt.Sprintf(pgCreateNamespaceTable, target.args.Table)); dbErr != nil {
+			// Attempt to rollback table rename.
+			_, err = target.db.Exec(fmt.Sprintf(pgMigrateV0RenameTable, renamedTable, target.args.Table))
+			if err != nil {
+				return fmt.Errorf("Rollback of renamed table failed with %v; creation of new table failed with %v", err, dbErr)
+			}
+
+			return fmt.Errorf("Failed to create new table after renaming old table with %v", dbErr)
+		}
+
+		// Start data migration thread
+		go target.migrateRowsFromV0ToV1(renamedTable, target.args.Table)
+		return nil
+	}
+
+	// Check if existing table is V1
+	if _, err := target.db.Exec(fmt.Sprintf(pgNamespaceTableSchemaV1, target.args.Table)); err != nil {
+		if IsConnErr(err) {
+			return err
+		}
+	} else {
+		// Table schema is V1 and current, however a migration may be
+		// incomplete - check and resume migration.
+		if oldTableExists, err := target.doesTableExist(renamedTable); err != nil {
+			return err
+		} else if oldTableExists {
+			// Old renamed table exists. Continue data migration
+			go target.migrateRowsFromV0ToV1(renamedTable, target.args.Table)
+		}
+
+		// Old table does not exist, nothing to do.
+		return nil
+	}
+
+	return errors.New("table exists and has an invalid schema")
+}
+
+func (target *PostgreSQLTarget) migrateRowsFromV0ToV1(oldTable, newTable string) {
+	const (
+		pgMigrateV0InsertRows = `INSERT INTO %s (bucket, object, version_id, is_delete_marker, size, etag, last_modified, event_data)
+                                              SELECT left(key, strpos(key, '/')-1),
+                                                     right(key, -strpos(key, '/')),
+                                                     COALESCE(value->'Records'->0->'s3'->'object'->>'versionId', 'NULL_VERSION'),
+                                                     COALESCE((value->'Records'->0->'s3'->'object'->>'deleteMarker')::bool, false),
+                                                     (value->'Records'->0->'s3'->'object'->>'size')::int8,
+                                                     value->'Records'->0->'s3'->'object'->>'eTag',
+                                                     COALESCE((value->'Records'->0->'s3'->'object'->>'lastModified')::timestamptz, '-infinity'),
+                                                     value
+                                                FROM %s
+                                                ORDER BY key ASC
+                                                LIMIT 1000
+                                         ON CONFLICT DO NOTHING;`
+		pgMigrateV0RemoveRows = `DELETE FROM %s WHERE key IN (SELECT key FROM %s ORDER BY key ASC LIMIT 1000);`
+		pgMigrateV0HasRows    = `SELECT CASE
+                                               WHEN EXISTS (SELECT * FROM %s LIMIT 1) THEN true
+                                               ELSE false
+                                             END;`
+		pgMigrateDropTable = `DROP TABLE %s;`
+	)
+	hasRows := func() (bool, error) {
+		rows, err := target.db.Query(fmt.Sprintf(pgMigrateV0HasRows, oldTable))
+		if err != nil {
+			return false, err
+		}
+
+		defer rows.Close()
+		var ret bool
+		for rows.Next() {
+			if e := rows.Scan(&ret); e != nil {
+				return false, e
+			}
+		}
+		return ret, nil
+	}
+	copyRowSet := func() error {
+		tx, err := target.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		if _, err := tx.Exec(fmt.Sprintf(pgMigrateV0InsertRows, newTable, oldTable)); err != nil {
+			return err
+		}
+
+		if _, err := tx.Exec(fmt.Sprintf(pgMigrateV0RemoveRows, oldTable, oldTable)); err != nil {
+			return err
+		}
+
+		return tx.Commit()
+	}
+
+	for {
+		if yes, err := hasRows(); err != nil {
+			oErr := fmt.Errorf("Error checking if old notifications table has rows (%v) - data migration thread will quit and reattempt on server restart.", err)
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return
+		} else if !yes {
+			break
+		}
+
+		if err := copyRowSet(); err != nil {
+			oErr := fmt.Errorf("Error copying notification rows from old table to new table (%v) - data migration thread will quit and reattempt on server restart.", err)
+			target.loggerOnce(context.Background(), oErr, target.ID())
+			return
+		}
+	}
+
+	// Done migration, drop old table.
+	_, err := target.db.Exec(fmt.Sprintf(pgMigrateDropTable, oldTable))
+	if err != nil {
+		oErr := fmt.Errorf("Error removing old table (%v) - data migration thread will quit and reattempt on server restart.", err)
+		target.loggerOnce(context.Background(), oErr, target.ID())
+	}
+}
+
+func (target *PostgreSQLTarget) prepareStatements() error {
+	var err error
 	switch target.args.Format {
 	case event.NamespaceFormat:
-		// insert or update statement
-		if target.updateStmt, err = target.db.Prepare(fmt.Sprintf(psqlUpdateRow, target.args.Table)); err != nil {
+		// insert statements
+		if target.nsInsertStmtForPuts, err = target.db.Prepare(fmt.Sprintf(pgNsInsertForPuts, target.args.Table)); err != nil {
+			return err
+		}
+		if target.nsInsertStmtForGets, err = target.db.Prepare(fmt.Sprintf(pgNsInsertForGetsOrHeads, target.args.Table)); err != nil {
 			return err
 		}
 		// delete statement
-		if target.deleteStmt, err = target.db.Prepare(fmt.Sprintf(psqlDeleteRow, target.args.Table)); err != nil {
+		if target.nsDeleteStmt, err = target.db.Prepare(fmt.Sprintf(pgNsDeleteRow, target.args.Table)); err != nil {
 			return err
 		}
 	case event.AccessFormat:
 		// insert statement
-		if target.insertStmt, err = target.db.Prepare(fmt.Sprintf(psqlInsertRow, target.args.Table)); err != nil {
+		if target.accInsertStmt, err = target.db.Prepare(fmt.Sprintf(pgInsertRow, target.args.Table)); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func (target *PostgreSQLTarget) initPGTable() error {
+	var err error
+	if err = target.createTableAndMigrateData(); err != nil {
+		return err
+	}
+	if err = target.prepareStatements(); err != nil {
+		return err
+	}
+	target.firstPing = true
 	return nil
 }
 
@@ -426,11 +681,10 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, doneCh <-chan struct{},
 			return target, err
 		}
 	} else {
-		if err = target.executeStmts(); err != nil {
+		if err = target.initPGTable(); err != nil {
 			target.loggerOnce(context.Background(), err, target.ID())
 			return target, err
 		}
-		target.firstPing = true
 	}
 
 	if target.store != nil && !test {

@@ -16,6 +16,10 @@
 
 package event
 
+import (
+	"time"
+)
+
 const (
 	// NamespaceFormat - namespace log format used in some event targets.
 	NamespaceFormat = "namespace"
@@ -44,9 +48,11 @@ type Object struct {
 	Key          string            `json:"key"`
 	Size         int64             `json:"size,omitempty"`
 	ETag         string            `json:"eTag,omitempty"`
+	LastModified time.Time         `json:"lastModified,omitempty"`
 	ContentType  string            `json:"contentType,omitempty"`
 	UserMetadata map[string]string `json:"userMetadata,omitempty"`
 	VersionID    string            `json:"versionId,omitempty"`
+	DeleteMarker bool              `json:"deleteMarker,omitempty"`
 	Sequencer    string            `json:"sequencer"`
 }
 

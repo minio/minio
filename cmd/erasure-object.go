@@ -856,6 +856,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					DeleteMarker:          versions[objIndex].Deleted,
 					DeleteMarkerVersionID: versions[objIndex].VersionID,
 					ObjectName:            decodeDirObject(versions[objIndex].Name),
+					ModTime:               versions[objIndex].ModTime,
 				}
 			} else {
 				dobjects[objIndex] = DeletedObject{

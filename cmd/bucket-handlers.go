@@ -496,6 +496,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				Name:         dobj.ObjectName,
 				DeleteMarker: dobj.DeleteMarker,
 				VersionID:    dobj.DeleteMarkerVersionID,
+				ModTime:      dobj.ModTime,
 			}
 		}
 		sendEvent(eventArgs{
