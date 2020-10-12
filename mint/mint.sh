@@ -21,6 +21,7 @@ MINT_MODE=${MINT_MODE:-core}
 SERVER_REGION=${SERVER_REGION:-us-east-1}
 ENABLE_HTTPS=${ENABLE_HTTPS:-0}
 ENABLE_VIRTUAL_STYLE=${ENABLE_VIRTUAL_STYLE:-0}
+MINT_TEST_TIMEOUT=${MINT_TEST_TIMEOUT:-5m}
 GO111MODULE=on
 
 if [ -z "$SERVER_ENDPOINT" ]; then
@@ -80,7 +81,7 @@ function run_test()
 
     mkdir -p "$BASE_LOG_DIR/$sdk_name"
 
-    (cd "$sdk_dir" && ./run.sh "$BASE_LOG_DIR/$LOG_FILE" "$BASE_LOG_DIR/$sdk_name/$ERROR_FILE")
+    (cd "$sdk_dir" && timeout "$MINT_TEST_TIMEOUT" ./run.sh "$BASE_LOG_DIR/$LOG_FILE" "$BASE_LOG_DIR/$sdk_name/$ERROR_FILE")
     rv=$?
     end=$(date +%s)
     duration=$(humanize_time $(( end - start )))
