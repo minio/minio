@@ -449,7 +449,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		}
 	}
 
-	defer er.deleteObject(ctx, minioMetaTmpBucket, tmpID, len(storageDisks)/2+1)
+	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tmpID, len(storageDisks)/2+1)
 
 	// Generate and write `xl.meta` generated from other disks.
 	outDatedDisks, err = writeUniqueFileInfo(ctx, outDatedDisks, minioMetaTmpBucket, tmpID,

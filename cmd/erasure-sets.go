@@ -271,6 +271,17 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	}
 }
 
+// GetAllLockers return a list of all lockers for all sets.
+func (s *erasureSets) GetAllLockers() []dsync.NetLocker {
+	allLockers := make([]dsync.NetLocker, s.setDriveCount*s.setCount)
+	for i, lockers := range s.erasureLockers {
+		for j, locker := range lockers {
+			allLockers[i*s.setDriveCount+j] = locker
+		}
+	}
+	return allLockers
+}
+
 func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string) {
 	return func() ([]dsync.NetLocker, string) {
 		lockers := make([]dsync.NetLocker, s.setDriveCount)

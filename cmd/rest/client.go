@@ -74,11 +74,10 @@ type Client struct {
 	// Should only be modified before any calls are made.
 	MaxErrResponseSize int64
 
-	httpClient          *http.Client
-	httpIdleConnsCloser func()
-	url                 *url.URL
-	newAuthToken        func(audience string) string
-	connected           int32
+	httpClient   *http.Client
+	url          *url.URL
+	newAuthToken func(audience string) string
+	connected    int32
 }
 
 // URL query separator constants
@@ -157,9 +156,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 // Close closes all idle connections of the underlying http client
 func (c *Client) Close() {
 	atomic.StoreInt32(&c.connected, closed)
-	if c.httpIdleConnsCloser != nil {
-		c.httpIdleConnsCloser()
-	}
 }
 
 // NewClient - returns new REST client.
@@ -169,7 +165,6 @@ func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthT
 	tr := newCustomTransport()
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
-		httpIdleConnsCloser: tr.CloseIdleConnections,
 		url:                 url,
 		newAuthToken:        newAuthToken,
 		connected:           online,

@@ -247,6 +247,11 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 		return nil
 	}
 
+	z, ok := objAPI.(*erasureZones)
+	if !ok {
+		return nil
+	}
+
 	type nlock struct {
 		locks  int
 		writer bool
@@ -265,6 +270,8 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 		}
 	}
 
+	allLockersFn := z.GetAllLockers
+
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
@@ -273,8 +280,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			// Locks are only held on first zone, make sure that
 			// we only look for ownership of locks from endpoints
 			// on first zone.
-			for _, endpoint := range globalEndpoints[0].Endpoints {
-				c := newLockAPI(endpoint)
+			for _, c := range allLockersFn() {
 				if !c.IsOnline() {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
 					continue
@@ -292,16 +298,12 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 				cancel()
 				if err != nil {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
-					c.Close()
 					continue
 				}
 
 				if !expired {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
 				}
-
-				// Close the connection regardless of the call response.
-				c.Close()
 			}
 
 			// Read locks we assume quorum for be N/2 success

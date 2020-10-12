@@ -469,8 +469,8 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewInternodeDialContext(dialTimeout),
-		MaxIdleConnsPerHost:   16,
-		IdleConnTimeout:       30 * time.Second,
+		MaxIdleConnsPerHost:   1024,
+		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   15 * time.Second,
 		ExpectContinueTimeout: 15 * time.Second,
@@ -490,15 +490,16 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 	}
 }
 
-func newCustomHTTP11Transport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
+// Used by only proxied requests, specifically only supports HTTP/1.1
+func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
-		MaxIdleConnsPerHost:   16,
-		IdleConnTimeout:       1 * time.Minute,
-		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
+		MaxIdleConnsPerHost:   1024,
+		IdleConnTimeout:       15 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Minute, // Set larger timeouts for proxied requests.
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
 		TLSClientConfig:       tlsConfig,
@@ -519,8 +520,8 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
-		MaxIdleConnsPerHost:   16,
-		IdleConnTimeout:       1 * time.Minute,
+		MaxIdleConnsPerHost:   1024,
+		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 10 * time.Second,
@@ -553,9 +554,8 @@ func newGatewayHTTPTransport(timeout time.Duration) *http.Transport {
 		RootCAs: globalRootCAs,
 	}, defaultDialTimeout)()
 
-	// Allow more requests to be in flight.
+	// Customize response header timeout for gateway transport.
 	tr.ResponseHeaderTimeout = timeout
-	tr.MaxIdleConnsPerHost = 16
 	return tr
 }
 

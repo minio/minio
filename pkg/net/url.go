@@ -148,21 +148,24 @@ func IsNetworkOrHostDown(err error) bool {
 	if errors.Is(err, context.Canceled) {
 		return false
 	}
+
 	// We need to figure if the error either a timeout
 	// or a non-temporary error.
 	e, ok := err.(net.Error)
 	if ok {
-		urlErr, ok := e.(*url.Error)
-		if ok {
+		if urlErr, ok := e.(*url.Error); ok {
 			switch urlErr.Err.(type) {
 			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
 				return true
 			}
 		}
+
 		if e.Timeout() {
 			return true
 		}
+
 	}
+
 	ok = false
 	// Fallback to other mechanisms.
 	if strings.Contains(err.Error(), "Connection closed by foreign host") {
