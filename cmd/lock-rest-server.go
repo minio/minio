@@ -281,7 +281,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			// we only look for ownership of locks from endpoints
 			// on first zone.
 			for _, c := range allLockersFn() {
-				if !c.IsOnline() {
+				if !c.IsOnline() || c == nil {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
 					continue
 				}
