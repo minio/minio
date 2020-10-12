@@ -408,13 +408,6 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 	return sys.store.migrateBackendFormat(ctx)
 }
 
-// Loads IAM users and policies in background, any un-handled
-// error means this code can potentially crash the server
-// in such a situation manual intervention is necessary.
-func startBackgroundIAMLoad(ctx context.Context, objAPI ObjectLayer) {
-	go globalIAMSys.Init(ctx, objAPI)
-}
-
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	if objAPI == nil {

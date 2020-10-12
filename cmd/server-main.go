@@ -190,7 +190,7 @@ func newAllSubsystems() {
 	globalBucketTargetSys = NewBucketTargetSys()
 }
 
-func initServer(ctx context.Context, newObject ObjectLayer) (err error) {
+func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// Create cancel context to control 'newRetryTimer' go routine.
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -203,39 +203,6 @@ func initServer(ctx context.Context, newObject ObjectLayer) (err error) {
 	// appropriately. This is also true for rotation of encrypted
 	// content.
 	txnLk := newObject.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
-	defer func() {
-		if err != nil {
-			var cerr config.Err
-			// For any config error, we don't need to drop into safe-mode
-			// instead its a user error and should be fixed by user.
-			if errors.As(err, &cerr) {
-				logger.FatalIf(err, "Unable to initialize the server")
-				return
-			}
-
-			// If context was canceled
-			if errors.Is(err, context.Canceled) {
-				logger.FatalIf(err, "Server startup canceled upon user request")
-				return
-			}
-		}
-
-		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
-		printStartupMessage(getAPIEndpoints(), err)
-
-		if globalActiveCred.Equal(auth.DefaultCredentials) {
-			msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ACCESS_KEY' and 'MINIO_SECRET_KEY'", globalActiveCred)
-			logger.StartupMessage(color.RedBold(msg))
-		}
-
-		<-globalOSSignalCh
-	}()
-
-	// Enable background operations for erasure coding
-	if globalIsErasure {
-		initAutoHeal(ctx, newObject)
-		initBackgroundReplication(ctx, newObject)
-	}
 
 	// allocate dynamic timeout once before the loop
 	configLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
@@ -252,7 +219,9 @@ func initServer(ctx context.Context, newObject ObjectLayer) (err error) {
 	//    version is needed, migration is needed etc.
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	for range retry.NewTimerWithJitter(retryCtx, 250*time.Millisecond, 500*time.Millisecond, retry.MaxJitter) {
+
+	var err error
+	for range retry.NewTimerWithJitter(retryCtx, 500*time.Millisecond, time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
 		if err = txnLk.GetLock(configLockTimeout); err != nil {
@@ -389,7 +358,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
-	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go handleSignals()
 
@@ -509,10 +478,38 @@ func serverMain(ctx *cli.Context) {
 
 	go initDataCrawler(GlobalContext, newObject)
 
-	// Initialize users credentials and policies in background.
-	go startBackgroundIAMLoad(GlobalContext, newObject)
+	// Enable background operations for erasure coding
+	if globalIsErasure {
+		initAutoHeal(GlobalContext, newObject)
+		initBackgroundReplication(GlobalContext, newObject)
+	}
 
-	initServer(GlobalContext, newObject)
+	if err = initServer(GlobalContext, newObject); err != nil {
+		var cerr config.Err
+		// For any config error, we don't need to drop into safe-mode
+		// instead its a user error and should be fixed by user.
+		if errors.As(err, &cerr) {
+			logger.FatalIf(err, "Unable to initialize the server")
+		}
+
+		// If context was canceled
+		if errors.Is(err, context.Canceled) {
+			logger.FatalIf(err, "Server startup canceled upon user request")
+		}
+	}
+
+	// Initialize users credentials and policies in background right after config has initialized.
+	go globalIAMSys.Init(GlobalContext, newObject)
+
+	// Prints the formatted startup message, if err is not nil then it prints additional information as well.
+	printStartupMessage(getAPIEndpoints(), err)
+
+	if globalActiveCred.Equal(auth.DefaultCredentials) {
+		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ACCESS_KEY' and 'MINIO_SECRET_KEY'", globalActiveCred)
+		logger.StartupMessage(color.RedBold(msg))
+	}
+
+	<-globalOSSignalCh
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

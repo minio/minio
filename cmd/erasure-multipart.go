@@ -277,7 +277,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	// Delete the tmp path later in case we fail to commit (ignore
 	// returned errors) - this will be a no-op in case of a commit
 	// success.
-	defer er.deleteObject(ctx, minioMetaTmpBucket, tempUploadIDPath, writeQuorum)
+	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tempUploadIDPath, writeQuorum)
 
 	var partsMetadata = make([]FileInfo, len(onlineDisks))
 	for i := range onlineDisks {
@@ -396,7 +396,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	tmpPartPath := pathJoin(tmpPart, partSuffix)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
-	defer er.deleteObject(ctx, minioMetaTmpBucket, tmpPart, writeQuorum)
+	defer er.deleteObject(context.Background(), minioMetaTmpBucket, tmpPart, writeQuorum)
 
 	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {

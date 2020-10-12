@@ -289,7 +289,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalHTTPServer = httpServer
 	globalObjLayerMutex.Unlock()
 
-	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	newObject, err := gw.NewGatewayLayer(globalActiveCred)
 	if err != nil {
@@ -323,8 +323,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	if enableIAMOps {
-		// Initialize IAM sys.
-		startBackgroundIAMLoad(GlobalContext, newObject)
+		// Initialize users credentials and policies in background.
+		go globalIAMSys.Init(GlobalContext, newObject)
 	}
 
 	if globalCacheConfig.Enabled {

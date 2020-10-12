@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -90,6 +91,10 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 
 func (z *erasureZones) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
 	return z.zones[0].NewNSLock(ctx, bucket, objects...)
+}
+
+func (z *erasureZones) GetAllLockers() []dsync.NetLocker {
+	return z.zones[0].GetAllLockers()
 }
 
 func (z *erasureZones) SetDriveCount() int {

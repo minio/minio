@@ -19,6 +19,7 @@ package logger
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"go/build"
 	"hash"
@@ -59,11 +60,6 @@ var globalDeploymentID string
 
 // TimeFormat - logging time format.
 const TimeFormat string = "15:04:05 MST 01/02/2006"
-
-// List of error strings to be ignored by LogIf
-const (
-	diskNotFoundError = "disk not found"
-)
 
 var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
@@ -303,7 +299,7 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 		return
 	}
 
-	if err.Error() != diskNotFoundError {
+	if !errors.Is(err, context.Canceled) {
 		logIf(ctx, err, errKind...)
 	}
 }
