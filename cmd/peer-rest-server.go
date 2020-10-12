@@ -30,7 +30,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bandwidth"
 	b "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
@@ -1062,12 +1061,8 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 	doneCh := make(chan struct{})
 	defer close(doneCh)
 
-	var report *bandwidth.Report
-	selectBuckets := b.SelectAllBuckets()
-	if bucketsString != "" {
-		selectBuckets = b.SelectBuckets(strings.Split(bucketsString, ",")...)
-	}
-	report = globalBucketMonitor.GetReport(selectBuckets)
+	selectBuckets := b.SelectBuckets(strings.Split(bucketsString, ",")...)
+	report := globalBucketMonitor.GetReport(selectBuckets)
 
 	enc := gob.NewEncoder(w)
 	if err := enc.Encode(report); err != nil {
