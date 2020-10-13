@@ -135,12 +135,11 @@ type cachedFolder struct {
 }
 
 type folderScanner struct {
-	root               string
-	getSize            getSizeFn
-	oldCache           dataUsageCache
-	newCache           dataUsageCache
-	withFilter         *bloomFilter
-	waitForLowActiveIO func()
+	root       string
+	getSize    getSizeFn
+	oldCache   dataUsageCache
+	newCache   dataUsageCache
+	withFilter *bloomFilter
 
 	dataUsageCrawlMult  float64
 	dataUsageCrawlDebug bool
@@ -155,7 +154,7 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation waitForLowActiveIO is called which can be used to temporarily halt the crawler.
 // If the supplied context is canceled the function will return at the first chance.
-func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, waitForLowActiveIO func(), getSize getSizeFn) (dataUsageCache, error) {
+func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
 	t := UTCNow()
 
 	logPrefix := color.Green("data-usage: ")
@@ -183,7 +182,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		getSize:             getSize,
 		oldCache:            cache,
 		newCache:            dataUsageCache{Info: cache.Info},
-		waitForLowActiveIO:  waitForLowActiveIO,
 		newFolders:          nil,
 		existingFolders:     nil,
 		dataUsageCrawlMult:  delayMult,
@@ -376,7 +374,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 			}
 		}
-		f.waitForLowActiveIO()
 		sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
 
 		cache := dataUsageEntry{}
@@ -424,7 +421,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 				return nil
 			}
-			f.waitForLowActiveIO()
 			// Dynamic time delay.
 			t := UTCNow()
 
@@ -484,7 +480,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// If that doesn't bring it back we remove the folder and assume it was deleted.
 		// This means that the next run will not look for it.
 		for k := range existing {
-			f.waitForLowActiveIO()
+			// Dynamic time delay.
+			t := UTCNow()
+
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
 				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
@@ -498,6 +496,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						versionID: versionID,
 					}, madmin.HealItemObject)
 				})
+			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 
 			if f.dataUsageCrawlDebug && err != nil {
 				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
@@ -535,7 +534,6 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 		default:
 		}
 
-		f.waitForLowActiveIO()
 		if typ&os.ModeDir != 0 {
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
