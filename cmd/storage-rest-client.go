@@ -121,9 +121,6 @@ type storageRESTClient struct {
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *storageRESTClient) call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
-	if !client.IsOnline() {
-		return nil, errDiskNotFound
-	}
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -134,7 +131,6 @@ func (client *storageRESTClient) call(ctx context.Context, method string, values
 	}
 
 	err = toStorageErr(err)
-
 	return nil, err
 }
 

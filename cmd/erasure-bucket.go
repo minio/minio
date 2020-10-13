@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
@@ -49,7 +50,7 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 		g.Go(func() error {
 			if storageDisks[index] != nil {
 				if err := storageDisks[index].MakeVol(ctx, bucket); err != nil {
-					if err != errVolumeExists {
+					if !errors.Is(err, errVolumeExists) {
 						logger.LogIf(ctx, err)
 					}
 					return err
