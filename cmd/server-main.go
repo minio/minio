@@ -98,6 +98,9 @@ func serverCmdArgs(ctx *cli.Context) []string {
 		v = env.Get(config.EnvEndpoints, "")
 	}
 	if v == "" {
+		if !ctx.Args().Present() || ctx.Args().First() == "help" {
+			cli.ShowCommandHelpAndExit(ctx, ctx.Command.Name, 1)
+		}
 		return ctx.Args()
 	}
 	return strings.Fields(v)
