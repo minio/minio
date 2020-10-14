@@ -25,9 +25,9 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
+	"github.com/minio/minio/cmd/config/heal"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
@@ -56,7 +56,7 @@ func initHelp() {
 		config.KmsKesSubSys:         crypto.DefaultKesKVS,
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
-		config.CrawlerSubSys:        crawler.DefaultKVS,
+		config.HealSubSys:           heal.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -109,8 +109,8 @@ func initHelp() {
 			Description: "manage global HTTP API call specific features, such as throttling, authentication types, etc.",
 		},
 		config.HelpKV{
-			Key:         config.CrawlerSubSys,
-			Description: "manage continuous disk crawling for bucket disk usage, lifecycle, quota and data integrity checks",
+			Key:         config.HealSubSys,
+			Description: "manage object healing frequency and bitrot verification checks",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -191,7 +191,7 @@ func initHelp() {
 		config.EtcdSubSys:           etcd.Help,
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
-		config.CrawlerSubSys:        crawler.Help,
+		config.HealSubSys:           heal.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -253,7 +253,7 @@ func validateConfig(s config.Config, setDriveCount int) error {
 		return err
 	}
 
-	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
+	if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -438,9 +438,9 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 	}
-	globalCrawlerConfig, err = crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	globalHealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to read crawler config: %w", err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to read heal config: %w", err))
 	}
 
 	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())

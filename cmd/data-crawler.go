@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/crawler"
+	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -53,7 +53,7 @@ const (
 )
 
 var (
-	globalCrawlerConfig          crawler.Config
+	globalHealConfig             heal.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 )
 

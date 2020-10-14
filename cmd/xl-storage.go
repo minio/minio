@@ -370,7 +370,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if objAPI == nil {
 		return cache, errServerNotInitialized
 	}
-	opts := globalCrawlerConfig
+	opts := globalHealConfig
 
 	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (int64, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
@@ -414,7 +414,10 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 					err := s.VerifyFile(ctx, item.bucket, item.objectPath(), version)
 					switch err {
 					case errFileCorrupt:
-						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling, ScanMode: madmin.HealDeepScan})
+						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
+							Remove:   healDeleteDangling,
+							ScanMode: madmin.HealDeepScan,
+						})
 						if err != nil {
 							if !errors.Is(err, NotImplemented{}) {
 								logger.LogIf(ctx, err)

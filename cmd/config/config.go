@@ -76,7 +76,7 @@ const (
 	KmsKesSubSys         = "kms_kes"
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
-	CrawlerSubSys        = "crawler"
+	HealSubSys           = "heal"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -113,7 +113,7 @@ var SubSystems = set.CreateStringSet([]string{
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
-	CrawlerSubSys,
+	HealSubSys,
 	NotifyAMQPSubSys,
 	NotifyESSubSys,
 	NotifyKafkaSubSys,
@@ -140,7 +140,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
-	CrawlerSubSys,
+	HealSubSys,
 }...)
 
 // Constant separators
