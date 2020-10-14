@@ -410,24 +410,6 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
 func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
-	if z.SingleZone() {
-		if err := z.zones[0].MakeBucketWithLocation(ctx, bucket, opts); err != nil {
-			return err
-		}
-
-		// If it doesn't exist we get a new, so ignore errors
-		meta := newBucketMetadata(bucket)
-		if opts.LockEnabled {
-			meta.VersioningConfigXML = enabledBucketVersioningConfig
-			meta.ObjectLockConfigXML = enabledBucketObjectLockConfig
-		}
-		if err := meta.Save(ctx, z); err != nil {
-			return toObjectErr(err, bucket)
-		}
-		globalBucketMetadataSys.Set(bucket, meta)
-		return nil
-	}
-
 	g := errgroup.WithNErrs(len(z.zones))
 
 	// Create buckets in parallel across all sets.

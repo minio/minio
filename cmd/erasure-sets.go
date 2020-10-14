@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"math/rand"
 	"net/http"
 	"sort"
 	"sync"
@@ -235,7 +236,7 @@ func (s *erasureSets) connectDisks() {
 			disk.SetDiskID(format.Erasure.This)
 			if endpoint.IsLocal && disk.Healing() {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
-				logger.Info(fmt.Sprintf("Found the drive %s which needs healing, attempting to heal...", disk))
+				logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
 			}
 
 			s.erasureDisksMu.Lock()
@@ -261,6 +262,13 @@ func (s *erasureSets) connectDisks() {
 // endpoints by reconnecting them and making sure to place them into right position in
 // the set topology, this monitoring happens at a given monitoring interval.
 func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInterval time.Duration) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
+
+	// Pre-emptively connect the disks if possible.
+	s.connectDisks()
+
 	for {
 		select {
 		case <-ctx.Done():
