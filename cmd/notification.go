@@ -1290,7 +1290,7 @@ func sendEvent(args eventArgs) {
 func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) bandwidth.Report {
 	reports := make([]*bandwidth.Report, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
-	for index, _ := range sys.peerClients {
+	for index := range sys.peerClients {
 		if sys.peerClients[index] == nil {
 			continue
 		}
@@ -1321,6 +1321,9 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 			if !ok {
 				consolidatedReport.BucketStats[bucket] = bandwidth.Details{}
 				d = consolidatedReport.BucketStats[bucket]
+				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
+			}
+			if d.LimitInBytesPerSecond < report.BucketStats[bucket].LimitInBytesPerSecond {
 				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
 			}
 			d.CurrentBandwidthInBytesPerSecond += report.BucketStats[bucket].CurrentBandwidthInBytesPerSecond

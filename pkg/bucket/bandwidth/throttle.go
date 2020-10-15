@@ -33,21 +33,23 @@ type throttle struct {
 	freeBytes        int64        // unused bytes in the interval
 	bytesPerSecond   int64        // max limit for bandwidth
 	bytesPerInterval int64        // bytes allocated for the interval
+	clusterBandwidth int64        // Cluster wide bandwidth needed for reporting
 	cond             *sync.Cond   // Used to notify waiting threads for bandwidth availability
 }
 
 // newThrottle returns a new bandwidth throttle. Set bytesPerSecond to 0 for no limit
-func newThrottle(ctx context.Context, bytesPerSecond int64) *throttle {
+func newThrottle(ctx context.Context, bytesPerSecond int64, clusterBandwidth int64) *throttle {
 	if bytesPerSecond == 0 {
 		return &throttle{}
 	}
 	t := &throttle{
-		bytesPerSecond: bytesPerSecond,
-		generateTicker: time.NewTicker(throttleInternal),
+		bytesPerSecond:   bytesPerSecond,
+		generateTicker:   time.NewTicker(throttleInternal),
+		clusterBandwidth: clusterBandwidth,
 	}
 
 	t.cond = sync.NewCond(&sync.Mutex{})
-	t.SetBandwidth(bytesPerSecond)
+	t.SetBandwidth(bytesPerSecond, clusterBandwidth)
 	t.freeBytes = t.bytesPerInterval
 	go t.generateBandwidth(ctx)
 	return t
@@ -79,7 +81,7 @@ func (t *throttle) GetLimitForBytes(want int64) int64 {
 }
 
 // SetBandwidth sets a new bandwidth limit in bytes per second.
-func (t *throttle) SetBandwidth(bandwidthBiPS int64) {
+func (t *throttle) SetBandwidth(bandwidthBiPS int64, clusterBandwidth int64) {
 	bpi := int64(throttleInternal) * bandwidthBiPS / int64(time.Second)
 	atomic.StoreInt64(&t.bytesPerInterval, bpi)
 }
