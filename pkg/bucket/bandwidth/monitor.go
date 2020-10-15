@@ -80,7 +80,7 @@ type Monitor struct {
 func NewMonitor(doneCh <-chan struct{}) *Monitor {
 	m := &Monitor{
 		activeBuckets:         make(map[string]*bucketMeasurement),
-		bucketMovingAvgTicker: time.NewTicker(1 * time.Second),
+		bucketMovingAvgTicker: time.NewTicker(2 * time.Second),
 		pubsub:                pubsub.New(),
 		bucketThrottle:        make(map[string]*throttle),
 		doneCh:                doneCh,
@@ -138,7 +138,6 @@ func (m *Monitor) process(doneCh <-chan struct{}) {
 			m.processAvg()
 		case <-doneCh:
 			return
-		default:
 		}
 	}
 }
