@@ -1290,14 +1290,14 @@ func sendEvent(args eventArgs) {
 func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) bandwidth.Report {
 	reports := make([]*bandwidth.Report, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
-	for index, peer := range sys.peerClients {
-		if peer == nil {
+	for index, _ := range sys.peerClients {
+		if sys.peerClients[index] == nil {
 			continue
 		}
 		index := index
 		g.Go(func() error {
 			var err error
-			reports[index], err = peer.MonitorBandwidth(ctx, buckets)
+			reports[index], err = sys.peerClients[index].MonitorBandwidth(ctx, buckets)
 			return err
 		}, index)
 	}
