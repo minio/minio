@@ -711,7 +711,8 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	}
 
 	if validMeta.Deleted {
-		return validMeta, false
+		// notFoundParts is ignored since a delete marker does not have any parts
+		return validMeta, corruptedErasureMeta+notFoundErasureMeta > len(errs)/2
 	}
 
 	// We couldn't find any valid meta we are indeed corrupted, return true right away.
