@@ -65,6 +65,7 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 			mu.Unlock()
 		}()
 	}
+	wg.Wait()
 	return newDisks
 }
 
