@@ -61,10 +61,10 @@ func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOB
 
 }
 
-func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones EndpointZones, r *http.Request) madmin.ServerDrivesOBDInfo {
+func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointServerSets EndpointServerSets, r *http.Request) madmin.ServerDrivesOBDInfo {
 	var drivesOBDInfo []madmin.DriveOBDInfo
 	var wg sync.WaitGroup
-	for _, ep := range endpointZones {
+	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			// Only proceed for local endpoints
 			if endpoint.IsLocal {
@@ -105,7 +105,7 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointZones Endpoin
 
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(endpointZones)
+		addr = GetLocalPeer(endpointServerSets)
 	}
 	if parallel {
 		return madmin.ServerDrivesOBDInfo{

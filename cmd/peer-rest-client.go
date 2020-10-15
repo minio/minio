@@ -822,8 +822,8 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan s
 	}()
 }
 
-func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
-	peers := GetRemotePeers(endpointZones)
+func getRemoteHosts(endpointServerSets EndpointServerSets) []*xnet.Host {
+	peers := GetRemotePeers(endpointServerSets)
 	remoteHosts := make([]*xnet.Host, 0, len(peers))
 	for _, hostStr := range peers {
 		host, err := xnet.ParseHost(hostStr)
@@ -838,7 +838,7 @@ func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
 }
 
 // newPeerRestClients creates new peer clients.
-func newPeerRestClients(endpoints EndpointZones) []*peerRESTClient {
+func newPeerRestClients(endpoints EndpointServerSets) []*peerRESTClient {
 	peerHosts := getRemoteHosts(endpoints)
 	restClients := make([]*peerRESTClient, len(peerHosts))
 	for i, host := range peerHosts {

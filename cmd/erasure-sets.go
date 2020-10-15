@@ -351,7 +351,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		sets:                make([]*erasureObjects, setCount),
 		erasureDisks:        make([][]StorageAPI, setCount),
 		erasureLockers:      make([][]dsync.NetLocker, setCount),
-		erasureLockOwner:    mustGetUUID(),
+		erasureLockOwner:    GetLocalPeer(globalEndpoints),
 		endpoints:           endpoints,
 		endpointStrings:     endpointStrings,
 		setCount:            setCount,
@@ -435,7 +435,7 @@ func (s *erasureSets) SetDriveCount() int {
 }
 
 // StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
-// This only returns disk usage info for Zones to perform placement decision, this call
+// This only returns disk usage info for ServerSets to perform placement decision, this call
 // is not implemented in Object interface and is not meant to be used by other object
 // layer implementations.
 func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {

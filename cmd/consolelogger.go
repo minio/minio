@@ -40,8 +40,8 @@ type HTTPConsoleLoggerSys struct {
 	logBuf   *ring.Ring
 }
 
-func mustGetNodeName(endpointZones EndpointZones) (nodeName string) {
-	host, err := xnet.ParseHost(GetLocalPeer(endpointZones))
+func mustGetNodeName(endpointServerSets EndpointServerSets) (nodeName string) {
+	host, err := xnet.ParseHost(GetLocalPeer(endpointServerSets))
 	if err != nil {
 		logger.FatalIf(err, "Unable to start console logging subsystem")
 	}
@@ -63,8 +63,8 @@ func NewConsoleLogger(ctx context.Context) *HTTPConsoleLoggerSys {
 }
 
 // SetNodeName - sets the node name if any after distributed setup has initialized
-func (sys *HTTPConsoleLoggerSys) SetNodeName(endpointZones EndpointZones) {
-	sys.nodeName = mustGetNodeName(endpointZones)
+func (sys *HTTPConsoleLoggerSys) SetNodeName(endpointServerSets EndpointServerSets) {
+	sys.nodeName = mustGetNodeName(endpointServerSets)
 }
 
 // HasLogListeners returns true if console log listeners are registered
