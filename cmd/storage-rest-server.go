@@ -890,8 +890,8 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
-	for _, ep := range endpointZones {
+func registerStorageRESTHandlers(router *mux.Router, endpointServerSets EndpointServerSets) {
+	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue

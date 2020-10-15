@@ -38,34 +38,34 @@ import (
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
-type erasureZones struct {
+type erasureServerSets struct {
 	GatewayUnsupported
 
-	zones []*erasureSets
+	serverSets []*erasureSets
 
 	// Shut down async operations
 	shutdown context.CancelFunc
 }
 
-func (z *erasureZones) SingleZone() bool {
-	return len(z.zones) == 1
+func (z *erasureServerSets) SingleZone() bool {
+	return len(z.serverSets) == 1
 }
 
 // Initialize new zone of erasure sets.
-func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLayer, error) {
+func newErasureServerSets(ctx context.Context, endpointServerSets EndpointServerSets) (ObjectLayer, error) {
 	var (
 		deploymentID string
 		err          error
 
-		formats      = make([]*formatErasureV3, len(endpointZones))
-		storageDisks = make([][]StorageAPI, len(endpointZones))
-		z            = &erasureZones{zones: make([]*erasureSets, len(endpointZones))}
+		formats      = make([]*formatErasureV3, len(endpointServerSets))
+		storageDisks = make([][]StorageAPI, len(endpointServerSets))
+		z            = &erasureServerSets{serverSets: make([]*erasureSets, len(endpointServerSets))}
 	)
 
 	var localDrives []string
 
-	local := endpointZones.FirstLocal()
-	for i, ep := range endpointZones {
+	local := endpointServerSets.FirstLocal()
+	for i, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.IsLocal {
 				localDrives = append(localDrives, endpoint.Path)
@@ -79,7 +79,7 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 		if deploymentID == "" {
 			deploymentID = formats[i].ID
 		}
-		z.zones[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
+		z.serverSets[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
 		if err != nil {
 			return nil, err
 		}
@@ -89,19 +89,19 @@ func newErasureZones(ctx context.Context, endpointZones EndpointZones) (ObjectLa
 	return z, nil
 }
 
-func (z *erasureZones) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return z.zones[0].NewNSLock(ctx, bucket, objects...)
+func (z *erasureServerSets) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+	return z.serverSets[0].NewNSLock(ctx, bucket, objects...)
 }
 
-func (z *erasureZones) GetAllLockers() []dsync.NetLocker {
-	return z.zones[0].GetAllLockers()
+func (z *erasureServerSets) GetAllLockers() []dsync.NetLocker {
+	return z.serverSets[0].GetAllLockers()
 }
 
-func (z *erasureZones) SetDriveCount() int {
-	return z.zones[0].SetDriveCount()
+func (z *erasureServerSets) SetDriveCount() int {
+	return z.serverSets[0].SetDriveCount()
 }
 
-type zonesAvailableSpace []zoneAvailableSpace
+type serverSetsAvailableSpace []zoneAvailableSpace
 
 type zoneAvailableSpace struct {
 	Index     int
@@ -109,7 +109,7 @@ type zoneAvailableSpace struct {
 }
 
 // TotalAvailable - total available space
-func (p zonesAvailableSpace) TotalAvailable() uint64 {
+func (p serverSetsAvailableSpace) TotalAvailable() uint64 {
 	total := uint64(0)
 	for _, z := range p {
 		total += z.Available
@@ -118,42 +118,42 @@ func (p zonesAvailableSpace) TotalAvailable() uint64 {
 }
 
 // getAvailableZoneIdx will return an index that can hold size bytes.
-// -1 is returned if no zones have available space for the size given.
-func (z *erasureZones) getAvailableZoneIdx(ctx context.Context, size int64) int {
-	zones := z.getZonesAvailableSpace(ctx, size)
-	total := zones.TotalAvailable()
+// -1 is returned if no serverSets have available space for the size given.
+func (z *erasureServerSets) getAvailableZoneIdx(ctx context.Context, size int64) int {
+	serverSets := z.getServerSetsAvailableSpace(ctx, size)
+	total := serverSets.TotalAvailable()
 	if total == 0 {
 		return -1
 	}
 	// choose when we reach this many
 	choose := rand.Uint64() % total
 	atTotal := uint64(0)
-	for _, zone := range zones {
+	for _, zone := range serverSets {
 		atTotal += zone.Available
 		if atTotal > choose && zone.Available > 0 {
 			return zone.Index
 		}
 	}
 	// Should not happen, but print values just in case.
-	logger.LogIf(ctx, fmt.Errorf("reached end of zones (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
+	logger.LogIf(ctx, fmt.Errorf("reached end of serverSets (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
 	return -1
 }
 
-// getZonesAvailableSpace will return the available space of each zone after storing the content.
+// getServerSetsAvailableSpace will return the available space of each zone after storing the content.
 // If there is not enough space the zone will return 0 bytes available.
 // Negative sizes are seen as 0 bytes.
-func (z *erasureZones) getZonesAvailableSpace(ctx context.Context, size int64) zonesAvailableSpace {
+func (z *erasureServerSets) getServerSetsAvailableSpace(ctx context.Context, size int64) serverSetsAvailableSpace {
 	if size < 0 {
 		size = 0
 	}
-	var zones = make(zonesAvailableSpace, len(z.zones))
+	var serverSets = make(serverSetsAvailableSpace, len(z.serverSets))
 
-	storageInfos := make([]StorageInfo, len(z.zones))
-	g := errgroup.WithNErrs(len(z.zones))
-	for index := range z.zones {
+	storageInfos := make([]StorageInfo, len(z.serverSets))
+	g := errgroup.WithNErrs(len(z.serverSets))
+	for index := range z.serverSets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.zones[index].StorageUsageInfo(ctx)
+			storageInfos[index] = z.serverSets[index].StorageUsageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -182,21 +182,21 @@ func (z *erasureZones) getZonesAvailableSpace(ctx context.Context, size int64) z
 				available = 0
 			}
 		}
-		zones[i] = zoneAvailableSpace{
+		serverSets[i] = zoneAvailableSpace{
 			Index:     i,
 			Available: available,
 		}
 	}
-	return zones
+	return serverSets
 }
 
 // getZoneIdx returns the found previous object and its corresponding zone idx,
 // if none are found falls back to most available space zone.
-func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
+func (z *erasureServerSets) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
 	if z.SingleZone() {
 		return 0, nil
 	}
-	for i, zone := range z.zones {
+	for i, zone := range z.serverSets {
 		objInfo, err := zone.GetObjectInfo(ctx, bucket, object, opts)
 		switch err.(type) {
 		case ObjectNotFound:
@@ -226,18 +226,18 @@ func (z *erasureZones) getZoneIdx(ctx context.Context, bucket, object string, op
 	return idx, nil
 }
 
-func (z *erasureZones) Shutdown(ctx context.Context) error {
+func (z *erasureServerSets) Shutdown(ctx context.Context) error {
 	defer z.shutdown()
 	if z.SingleZone() {
-		return z.zones[0].Shutdown(ctx)
+		return z.serverSets[0].Shutdown(ctx)
 	}
 
-	g := errgroup.WithNErrs(len(z.zones))
+	g := errgroup.WithNErrs(len(z.serverSets))
 
-	for index := range z.zones {
+	for index := range z.serverSets {
 		index := index
 		g.Go(func() error {
-			return z.zones[index].Shutdown(ctx)
+			return z.serverSets[index].Shutdown(ctx)
 		}, index)
 	}
 
@@ -250,20 +250,20 @@ func (z *erasureZones) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (z *erasureZones) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
+func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 	if z.SingleZone() {
-		return z.zones[0].StorageInfo(ctx, local)
+		return z.serverSets[0].StorageInfo(ctx, local)
 	}
 
 	var storageInfo StorageInfo
 
-	storageInfos := make([]StorageInfo, len(z.zones))
-	storageInfosErrs := make([][]error, len(z.zones))
-	g := errgroup.WithNErrs(len(z.zones))
-	for index := range z.zones {
+	storageInfos := make([]StorageInfo, len(z.serverSets))
+	storageInfosErrs := make([][]error, len(z.serverSets))
+	g := errgroup.WithNErrs(len(z.serverSets))
+	for index := range z.serverSets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfosErrs[index] = z.zones[index].StorageInfo(ctx, local)
+			storageInfos[index], storageInfosErrs[index] = z.serverSets[index].StorageInfo(ctx, local)
 			return nil
 		}, index)
 	}
@@ -284,13 +284,13 @@ func (z *erasureZones) StorageInfo(ctx context.Context, local bool) (StorageInfo
 	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
 
 	var errs []error
-	for i := range z.zones {
+	for i := range z.serverSets {
 		errs = append(errs, storageInfosErrs[i]...)
 	}
 	return storageInfo, errs
 }
 
-func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+func (z *erasureServerSets) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -301,8 +301,8 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 	var knownBuckets = make(map[string]struct{}) // used to deduplicate buckets.
 	var allBuckets []BucketInfo
 
-	// Collect for each set in zones.
-	for _, z := range z.zones {
+	// Collect for each set in serverSets.
+	for _, z := range z.serverSets {
 		buckets, err := z.ListBuckets(ctx)
 		if err != nil {
 			return err
@@ -406,17 +406,17 @@ func (z *erasureZones) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter
 	return firstErr
 }
 
-// MakeBucketWithLocation - creates a new bucket across all zones simultaneously
+// MakeBucketWithLocation - creates a new bucket across all serverSets simultaneously
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
-func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
-	g := errgroup.WithNErrs(len(z.zones))
+func (z *erasureServerSets) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
+	g := errgroup.WithNErrs(len(z.serverSets))
 
 	// Create buckets in parallel across all sets.
-	for index := range z.zones {
+	for index := range z.serverSets {
 		index := index
 		g.Go(func() error {
-			return z.zones[index].MakeBucketWithLocation(ctx, bucket, opts)
+			return z.serverSets[index].MakeBucketWithLocation(ctx, bucket, opts)
 		}, index)
 	}
 
@@ -446,14 +446,14 @@ func (z *erasureZones) MakeBucketWithLocation(ctx context.Context, bucket string
 
 }
 
-func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
+func (z *erasureServerSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
 
 	object = encodeDirObject(object)
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		gr, err = zone.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -469,14 +469,14 @@ func (z *erasureZones) GetObjectNInfo(ctx context.Context, bucket, object string
 	return gr, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
+func (z *erasureServerSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
 		return err
 	}
 
 	object = encodeDirObject(object)
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		if err := zone.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
@@ -491,13 +491,13 @@ func (z *erasureZones) GetObject(ctx context.Context, bucket, object string, sta
 	return ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (z *erasureServerSets) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
 	}
 
 	object = encodeDirObject(object)
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		objInfo, err = zone.GetObjectInfo(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -515,7 +515,7 @@ func (z *erasureZones) GetObjectInfo(ctx context.Context, bucket, object string,
 }
 
 // PutObject - writes an object to least used erasure zone.
-func (z *erasureZones) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
+func (z *erasureServerSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
 	// Validate put object input args.
 	if err := checkPutObjectArgs(ctx, bucket, object, z); err != nil {
 		return ObjectInfo{}, err
@@ -524,7 +524,7 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 	object = encodeDirObject(object)
 
 	if z.SingleZone() {
-		return z.zones[0].PutObject(ctx, bucket, object, data, opts)
+		return z.serverSets[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
 	idx, err := z.getZoneIdx(ctx, bucket, object, opts, data.Size())
@@ -533,10 +533,10 @@ func (z *erasureZones) PutObject(ctx context.Context, bucket string, object stri
 	}
 
 	// Overwrite the object at the right zone
-	return z.zones[idx].PutObject(ctx, bucket, object, data, opts)
+	return z.serverSets[idx].PutObject(ctx, bucket, object, data, opts)
 }
 
-func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (z *erasureServerSets) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if err = checkDelObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err
 	}
@@ -544,9 +544,9 @@ func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object s
 	object = encodeDirObject(object)
 
 	if z.SingleZone() {
-		return z.zones[0].DeleteObject(ctx, bucket, object, opts)
+		return z.serverSets[0].DeleteObject(ctx, bucket, object, opts)
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		objInfo, err = zone.DeleteObject(ctx, bucket, object, opts)
 		if err == nil {
 			return objInfo, nil
@@ -559,7 +559,7 @@ func (z *erasureZones) DeleteObject(ctx context.Context, bucket string, object s
 	return objInfo, err
 }
 
-func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
+func (z *erasureServerSets) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	derrs := make([]error, len(objects))
 	dobjects := make([]DeletedObject, len(objects))
 	objSets := set.NewStringSet()
@@ -580,7 +580,7 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 	}
 	defer multiDeleteLock.Unlock()
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		deletedObjects, errs := zone.DeleteObjects(ctx, bucket, objects, opts)
 		for i, derr := range errs {
 			if derrs[i] == nil {
@@ -596,7 +596,7 @@ func (z *erasureZones) DeleteObjects(ctx context.Context, bucket string, objects
 	return dobjects, derrs
 }
 
-func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (z *erasureServerSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error) {
 	srcObject = encodeDirObject(srcObject)
 	dstObject = encodeDirObject(dstObject)
 
@@ -610,12 +610,12 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 	if cpSrcDstSame && srcInfo.metadataOnly {
 		// Version ID is set for the destination and source == destination version ID.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
-			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+			return z.serverSets[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		// Destination is not versioned and source version ID is empty
 		// perform an in-place update.
 		if !dstOpts.Versioned && srcOpts.VersionID == "" {
-			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+			return z.serverSets[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 		// Destination is versioned, source is not destination version,
 		// as a special case look for if the source object is not legacy
@@ -625,7 +625,7 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 			// CopyObject optimization where we don't create an entire copy
 			// of the content, instead we add a reference.
 			srcInfo.versionOnly = true
-			return z.zones[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
+			return z.serverSets[zoneIdx].CopyObject(ctx, srcBucket, srcObject, dstBucket, dstObject, srcInfo, srcOpts, dstOpts)
 		}
 	}
 
@@ -636,10 +636,10 @@ func (z *erasureZones) CopyObject(ctx context.Context, srcBucket, srcObject, dst
 		VersionID:            dstOpts.VersionID,
 	}
 
-	return z.zones[zoneIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
+	return z.serverSets[zoneIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
-func (z *erasureZones) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
+func (z *erasureServerSets) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
 	marker := continuationToken
 	if marker == "" {
 		marker = startAfter
@@ -660,21 +660,21 @@ func (z *erasureZones) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 	return listObjectsV2Info, err
 }
 
-func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (z *erasureServerSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
 
-	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
-	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
+	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
+	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
 
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
-	for _, zone := range z.zones {
-		zonesEntryChs = append(zonesEntryChs,
+	for _, zone := range z.serverSets {
+		serverSetsEntryChs = append(serverSetsEntryChs,
 			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet, false))
 		if zone.listTolerancePerSet == -1 {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.setDriveCount/2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
 		} else {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
 		}
 	}
 
@@ -682,11 +682,11 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 	var eof bool
 	var prevPrefix string
 
-	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
-	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
-	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
-		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
+	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
+	for _, entryChs := range serverSetsEntryChs {
+		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
+		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
 	for {
@@ -694,13 +694,13 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 			break
 		}
 
-		result, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		result, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			eof = true
 			break
 		}
 
-		if quorumCount < zonesListTolerancePerSet[zoneIndex] {
+		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
 			// Skip entries which are not found on upto expected tolerance
 			continue
 		}
@@ -777,7 +777,7 @@ func (z *erasureZones) listObjectsNonSlash(ctx context.Context, bucket, prefix, 
 	return result, nil
 }
 
-func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, marker string, maxKeys int) (loi ListObjectsInfo, err error) {
+func (z *erasureServerSets) listObjectsSplunk(ctx context.Context, bucket, prefix, marker string, maxKeys int) (loi ListObjectsInfo, err error) {
 	if strings.Contains(prefix, guidSplunk) {
 		logger.LogIf(ctx, NotImplemented{})
 		return loi, NotImplemented{}
@@ -785,26 +785,26 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 
 	recursive := true
 
-	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
-	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
-	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
+	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
+	serverSetsEndWalkCh := make([]chan struct{}, 0, len(z.serverSets))
+	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
 			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, true)
 		}
-		zonesEntryChs = append(zonesEntryChs, entryChs)
-		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
+		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
 		if zone.listTolerancePerSet == -1 {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.setDriveCount/2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
 		} else {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
 		}
 	}
 
-	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
+	entries := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -826,15 +826,15 @@ func (z *erasureZones) listObjectsSplunk(ctx context.Context, bucket, prefix, ma
 	}
 
 	if loi.IsTruncated {
-		for i, zone := range z.zones {
-			zone.poolSplunk.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, zonesEntryChs[i],
-				zonesEndWalkCh[i])
+		for i, zone := range z.serverSets {
+			zone.poolSplunk.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, serverSetsEntryChs[i],
+				serverSetsEndWalkCh[i])
 		}
 	}
 	return loi, nil
 }
 
-func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (z *erasureServerSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	loi := ListObjectsInfo{}
 
 	if err := checkListObjsArgs(ctx, bucket, prefix, marker, z); err != nil {
@@ -881,26 +881,26 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		recursive = false
 	}
 
-	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
-	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
-	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
+	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
+	serverSetsEndWalkCh := make([]chan struct{}, 0, len(z.serverSets))
+	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
 			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, false)
 		}
-		zonesEntryChs = append(zonesEntryChs, entryChs)
-		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
+		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
 		if zone.listTolerancePerSet == -1 {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.setDriveCount/2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
 		} else {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
 		}
 	}
 
-	entries := mergeZonesEntriesCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
+	entries := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
 	if len(entries.Files) == 0 {
 		return loi, nil
 	}
@@ -919,15 +919,15 @@ func (z *erasureZones) listObjects(ctx context.Context, bucket, prefix, marker, 
 		loi.Objects = append(loi.Objects, objInfo)
 	}
 	if loi.IsTruncated {
-		for i, zone := range z.zones {
-			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, zonesEntryChs[i],
-				zonesEndWalkCh[i])
+		for i, zone := range z.serverSets {
+			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, serverSetsEntryChs[i],
+				serverSetsEndWalkCh[i])
 		}
 	}
 	return loi, nil
 }
 
-// Calculate least entry across zones and across multiple FileInfo
+// Calculate least entry across serverSets and across multiple FileInfo
 // channels, returns the least common entry and the total number of times
 // we found this entry. Additionally also returns a boolean
 // to indicate if the caller needs to call this function
@@ -1020,7 +1020,7 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
-// Calculate least entry across zones and across multiple FileInfoVersions
+// Calculate least entry across serverSets and across multiple FileInfoVersions
 // channels, returns the least common entry and the total number of times
 // we found this entry. Additionally also returns a boolean
 // to indicate if the caller needs to call this function
@@ -1111,24 +1111,24 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
-// mergeZonesEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
-func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfoVersions) {
+// mergeServerSetsEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
+func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfoVersions) {
 	var i = 0
-	zonesEntriesInfos := make([][]FileInfoVersions, 0, len(zonesEntryChs))
-	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
-	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	serverSetsEntriesInfos := make([][]FileInfoVersions, 0, len(serverSetsEntryChs))
+	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
+	for _, entryChs := range serverSetsEntryChs {
+		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
 	for {
-		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
 
-		if quorumCount < zonesListTolerancePerSet[zoneIndex] {
+		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
 			// Skip entries which are not found upto the expected tolerance
 			continue
 		}
@@ -1136,31 +1136,31 @@ func mergeZonesEntriesVersionsCh(zonesEntryChs [][]FileInfoVersionsCh, maxKeys i
 		entries.FilesVersions = append(entries.FilesVersions, fi)
 		i++
 		if i == maxKeys {
-			entries.IsTruncated = isTruncatedZonesVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+			entries.IsTruncated = isTruncatedServerSetsVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 			break
 		}
 	}
 	return entries
 }
 
-// mergeZonesEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTolerancePerSet []int) (entries FilesInfo) {
+// mergeServerSetsEntriesCh - merges FileInfo channel to entries upto maxKeys.
+func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfo) {
 	var i = 0
-	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
-	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
-	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
-		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
+	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
+	for _, entryChs := range serverSetsEntryChs {
+		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
+		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 	var prevEntry string
 	for {
-		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
 		}
 
-		if quorumCount < zonesListTolerancePerSet[zoneIndex] {
+		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
 			// Skip entries which are not found upto configured tolerance.
 			continue
 		}
@@ -1172,7 +1172,7 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTol
 		entries.Files = append(entries.Files, fi)
 		i++
 		if i == maxKeys {
-			entries.IsTruncated = isTruncatedZones(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+			entries.IsTruncated = isTruncatedServerSets(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 			break
 		}
 		prevEntry = fi.Name
@@ -1180,7 +1180,7 @@ func mergeZonesEntriesCh(zonesEntryChs [][]FileInfoCh, maxKeys int, zonesListTol
 	return entries
 }
 
-func isTruncatedZones(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) bool {
+func isTruncatedServerSets(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) bool {
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
@@ -1210,7 +1210,7 @@ func isTruncatedZones(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zon
 	return isTruncated
 }
 
-func isTruncatedZonesVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) bool {
+func isTruncatedServerSetsVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) bool {
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
@@ -1240,7 +1240,7 @@ func isTruncatedZonesVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [
 	return isTruncated
 }
 
-func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
+func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
 	loi := ListObjectVersionsInfo{}
 
 	if err := checkListObjsArgs(ctx, bucket, prefix, marker, z); err != nil {
@@ -1288,25 +1288,25 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		recursive = false
 	}
 
-	zonesEntryChs := make([][]FileInfoVersionsCh, 0, len(z.zones))
-	zonesEndWalkCh := make([]chan struct{}, 0, len(z.zones))
-	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
-	for _, zone := range z.zones {
+	serverSetsEntryChs := make([][]FileInfoVersionsCh, 0, len(z.serverSets))
+	serverSetsEndWalkCh := make([]chan struct{}, 0, len(z.serverSets))
+	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
+	for _, zone := range z.serverSets {
 		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
 		if entryChs == nil {
 			endWalkCh = make(chan struct{})
 			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
 		}
-		zonesEntryChs = append(zonesEntryChs, entryChs)
-		zonesEndWalkCh = append(zonesEndWalkCh, endWalkCh)
+		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
+		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
 		if zone.listTolerancePerSet == -1 {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.setDriveCount/2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
 		} else {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
 		}
 	}
 
-	entries := mergeZonesEntriesVersionsCh(zonesEntryChs, maxKeys, zonesListTolerancePerSet)
+	entries := mergeServerSetsEntriesVersionsCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
 	if len(entries.FilesVersions) == 0 {
 		return loi, nil
 	}
@@ -1327,29 +1327,29 @@ func (z *erasureZones) listObjectVersions(ctx context.Context, bucket, prefix, m
 		}
 	}
 	if loi.IsTruncated {
-		for i, zone := range z.zones {
-			zone.poolVersions.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, zonesEntryChs[i],
-				zonesEndWalkCh[i])
+		for i, zone := range z.serverSets {
+			zone.poolVersions.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, serverSetsEntryChs[i],
+				serverSetsEndWalkCh[i])
 		}
 	}
 	return loi, nil
 }
 
-func (z *erasureZones) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
+func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
 	return z.listObjectVersions(ctx, bucket, prefix, marker, versionMarker, delimiter, maxKeys)
 }
 
-func (z *erasureZones) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (z *erasureServerSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return z.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
 }
 
-func (z *erasureZones) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+func (z *erasureServerSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
 	if err := checkListMultipartArgs(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, z); err != nil {
 		return ListMultipartsInfo{}, err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+		return z.serverSets[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	}
 
 	var zoneResult = ListMultipartsInfo{}
@@ -1357,7 +1357,7 @@ func (z *erasureZones) ListMultipartUploads(ctx context.Context, bucket, prefix,
 	zoneResult.KeyMarker = keyMarker
 	zoneResult.Prefix = prefix
 	zoneResult.Delimiter = delimiter
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		result, err := zone.ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker,
 			delimiter, maxUploads)
 		if err != nil {
@@ -1369,13 +1369,13 @@ func (z *erasureZones) ListMultipartUploads(ctx context.Context, bucket, prefix,
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
-func (z *erasureZones) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
+func (z *erasureServerSets) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (string, error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object, z); err != nil {
 		return "", err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].NewMultipartUpload(ctx, bucket, object, opts)
+		return z.serverSets[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
 	// We don't know the exact size, so we ask for at least 1GiB file.
@@ -1384,11 +1384,11 @@ func (z *erasureZones) NewMultipartUpload(ctx context.Context, bucket, object st
 		return "", err
 	}
 
-	return z.zones[idx].NewMultipartUpload(ctx, bucket, object, opts)
+	return z.serverSets[idx].NewMultipartUpload(ctx, bucket, object, opts)
 }
 
 // Copies a part of an object from source hashedSet to destination hashedSet.
-func (z *erasureZones) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (PartInfo, error) {
+func (z *erasureServerSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (PartInfo, error) {
 	if err := checkNewMultipartArgs(ctx, srcBucket, srcObject, z); err != nil {
 		return PartInfo{}, err
 	}
@@ -1398,16 +1398,16 @@ func (z *erasureZones) CopyObjectPart(ctx context.Context, srcBucket, srcObject,
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.
-func (z *erasureZones) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (PartInfo, error) {
+func (z *erasureServerSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (PartInfo, error) {
 	if err := checkPutObjectPartArgs(ctx, bucket, object, z); err != nil {
 		return PartInfo{}, err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
+		return z.serverSets[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return zone.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
@@ -1428,15 +1428,15 @@ func (z *erasureZones) PutObjectPart(ctx context.Context, bucket, object, upload
 	}
 }
 
-func (z *erasureZones) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
+func (z *erasureServerSets) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
 	if err := checkListPartsArgs(ctx, bucket, object, z); err != nil {
 		return MultipartInfo{}, err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
+		return z.serverSets[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		mi, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return mi, nil
@@ -1458,15 +1458,15 @@ func (z *erasureZones) GetMultipartInfo(ctx context.Context, bucket, object, upl
 }
 
 // ListObjectParts - lists all uploaded parts to an object in hashedSet.
-func (z *erasureZones) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (ListPartsInfo, error) {
+func (z *erasureServerSets) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (ListPartsInfo, error) {
 	if err := checkListPartsArgs(ctx, bucket, object, z); err != nil {
 		return ListPartsInfo{}, err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
+		return z.serverSets[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return zone.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
@@ -1485,16 +1485,16 @@ func (z *erasureZones) ListObjectParts(ctx context.Context, bucket, object, uplo
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
-func (z *erasureZones) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
+func (z *erasureServerSets) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
 	if err := checkAbortMultipartArgs(ctx, bucket, object, z); err != nil {
 		return err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
+		return z.serverSets[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 	}
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		_, err := zone.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			return zone.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
@@ -1514,21 +1514,21 @@ func (z *erasureZones) AbortMultipartUpload(ctx context.Context, bucket, object,
 }
 
 // CompleteMultipartUpload - completes a pending multipart transaction, on hashedSet based on object name.
-func (z *erasureZones) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (z *erasureServerSets) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if err = checkCompleteMultipartArgs(ctx, bucket, object, z); err != nil {
 		return objInfo, err
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+		return z.serverSets[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 
 	// Purge any existing object.
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		zone.DeleteObject(ctx, bucket, object, opts)
 	}
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		result, err := zone.ListMultipartUploads(ctx, bucket, object, "", "", "", maxUploadsList)
 		if err != nil {
 			return objInfo, err
@@ -1544,10 +1544,10 @@ func (z *erasureZones) CompleteMultipartUpload(ctx context.Context, bucket, obje
 	}
 }
 
-// GetBucketInfo - returns bucket info from one of the erasure coded zones.
-func (z *erasureZones) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error) {
+// GetBucketInfo - returns bucket info from one of the erasure coded serverSets.
+func (z *erasureServerSets) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error) {
 	if z.SingleZone() {
-		bucketInfo, err = z.zones[0].GetBucketInfo(ctx, bucket)
+		bucketInfo, err = z.serverSets[0].GetBucketInfo(ctx, bucket)
 		if err != nil {
 			return bucketInfo, err
 		}
@@ -1557,7 +1557,7 @@ func (z *erasureZones) GetBucketInfo(ctx context.Context, bucket string) (bucket
 		}
 		return bucketInfo, nil
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		bucketInfo, err = zone.GetBucketInfo(ctx, bucket)
 		if err != nil {
 			if isErrBucketNotFound(err) {
@@ -1577,43 +1577,43 @@ func (z *erasureZones) GetBucketInfo(ctx context.Context, bucket string) (bucket
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.
-func (z *erasureZones) IsNotificationSupported() bool {
+func (z *erasureServerSets) IsNotificationSupported() bool {
 	return true
 }
 
 // IsListenSupported returns whether listen bucket notification is applicable for this layer.
-func (z *erasureZones) IsListenSupported() bool {
+func (z *erasureServerSets) IsListenSupported() bool {
 	return true
 }
 
 // IsEncryptionSupported returns whether server side encryption is implemented for this layer.
-func (z *erasureZones) IsEncryptionSupported() bool {
+func (z *erasureServerSets) IsEncryptionSupported() bool {
 	return true
 }
 
 // IsCompressionSupported returns whether compression is applicable for this layer.
-func (z *erasureZones) IsCompressionSupported() bool {
+func (z *erasureServerSets) IsCompressionSupported() bool {
 	return true
 }
 
-func (z *erasureZones) IsTaggingSupported() bool {
+func (z *erasureServerSets) IsTaggingSupported() bool {
 	return true
 }
 
-// DeleteBucket - deletes a bucket on all zones simultaneously,
-// even if one of the zones fail to delete buckets, we proceed to
+// DeleteBucket - deletes a bucket on all serverSets simultaneously,
+// even if one of the serverSets fail to delete buckets, we proceed to
 // undo a successful operation.
-func (z *erasureZones) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
+func (z *erasureServerSets) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	if z.SingleZone() {
-		return z.zones[0].DeleteBucket(ctx, bucket, forceDelete)
+		return z.serverSets[0].DeleteBucket(ctx, bucket, forceDelete)
 	}
-	g := errgroup.WithNErrs(len(z.zones))
+	g := errgroup.WithNErrs(len(z.serverSets))
 
-	// Delete buckets in parallel across all zones.
-	for index := range z.zones {
+	// Delete buckets in parallel across all serverSets.
+	for index := range z.serverSets {
 		index := index
 		g.Go(func() error {
-			return z.zones[index].DeleteBucket(ctx, bucket, forceDelete)
+			return z.serverSets[index].DeleteBucket(ctx, bucket, forceDelete)
 		}, index)
 	}
 
@@ -1624,7 +1624,7 @@ func (z *erasureZones) DeleteBucket(ctx context.Context, bucket string, forceDel
 	for _, err := range errs {
 		if err != nil {
 			if _, ok := err.(InsufficientWriteQuorum); ok {
-				undoDeleteBucketZones(ctx, bucket, z.zones, errs)
+				undoDeleteBucketServerSets(ctx, bucket, z.serverSets, errs)
 			}
 
 			return err
@@ -1636,15 +1636,15 @@ func (z *erasureZones) DeleteBucket(ctx context.Context, bucket string, forceDel
 }
 
 // This function is used to undo a successful DeleteBucket operation.
-func undoDeleteBucketZones(ctx context.Context, bucket string, zones []*erasureSets, errs []error) {
-	g := errgroup.WithNErrs(len(zones))
+func undoDeleteBucketServerSets(ctx context.Context, bucket string, serverSets []*erasureSets, errs []error) {
+	g := errgroup.WithNErrs(len(serverSets))
 
-	// Undo previous delete bucket on all underlying zones.
-	for index := range zones {
+	// Undo previous delete bucket on all underlying serverSets.
+	for index := range serverSets {
 		index := index
 		g.Go(func() error {
 			if errs[index] == nil {
-				return zones[index].MakeBucketWithLocation(ctx, bucket, BucketOptions{})
+				return serverSets[index].MakeBucketWithLocation(ctx, bucket, BucketOptions{})
 			}
 			return nil
 		}, index)
@@ -1653,14 +1653,14 @@ func undoDeleteBucketZones(ctx context.Context, bucket string, zones []*erasureS
 	g.Wait()
 }
 
-// List all buckets from one of the zones, we are not doing merge
+// List all buckets from one of the serverSets, we are not doing merge
 // sort here just for simplification. As per design it is assumed
-// that all buckets are present on all zones.
-func (z *erasureZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
+// that all buckets are present on all serverSets.
+func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
 	if z.SingleZone() {
-		buckets, err = z.zones[0].ListBuckets(ctx)
+		buckets, err = z.serverSets[0].ListBuckets(ctx)
 	} else {
-		for _, zone := range z.zones {
+		for _, zone := range z.serverSets {
 			buckets, err = zone.ListBuckets(ctx)
 			if err != nil {
 				logger.LogIf(ctx, err)
@@ -1681,10 +1681,10 @@ func (z *erasureZones) ListBuckets(ctx context.Context) (buckets []BucketInfo, e
 	return buckets, nil
 }
 
-func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
+func (z *erasureServerSets) ReloadFormat(ctx context.Context, dryRun bool) error {
 	// No locks needed since reload happens in HealFormat under
 	// write lock across all nodes.
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
 			return err
 		}
@@ -1692,7 +1692,7 @@ func (z *erasureZones) ReloadFormat(ctx context.Context, dryRun bool) error {
 	return nil
 }
 
-func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
+func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
 	if err := formatLock.GetLock(globalOperationTimeout); err != nil {
@@ -1706,13 +1706,13 @@ func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.Heal
 	}
 
 	var countNoHeal int
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		result, err := zone.HealFormat(ctx, dryRun)
 		if err != nil && !errors.Is(err, errNoHealRequired) {
 			logger.LogIf(ctx, err)
 			continue
 		}
-		// Count errNoHealRequired across all zones,
+		// Count errNoHealRequired across all serverSets,
 		// to return appropriate error to the caller
 		if errors.Is(err, errNoHealRequired) {
 			countNoHeal++
@@ -1732,21 +1732,21 @@ func (z *erasureZones) HealFormat(ctx context.Context, dryRun bool) (madmin.Heal
 		}
 	}
 
-	// No heal returned by all zones, return errNoHealRequired
-	if countNoHeal == len(z.zones) {
+	// No heal returned by all serverSets, return errNoHealRequired
+	if countNoHeal == len(z.serverSets) {
 		return r, errNoHealRequired
 	}
 
 	return r, nil
 }
 
-func (z *erasureZones) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error) {
+func (z *erasureServerSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error) {
 	var r = madmin.HealResultItem{
 		Type:   madmin.HealItemBucket,
 		Bucket: bucket,
 	}
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		result, err := zone.HealBucket(ctx, bucket, dryRun, remove)
 		if err != nil {
 			switch err.(type) {
@@ -1768,46 +1768,46 @@ func (z *erasureZones) HealBucket(ctx context.Context, bucket string, dryRun, re
 // to allocate a receive channel for ObjectInfo, upon any unhandled
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
-func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
+func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
 		// Upon error close the channel.
 		close(results)
 		return err
 	}
 
-	zonesListTolerancePerSet := make([]int, 0, len(z.zones))
-	for _, zone := range z.zones {
+	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
+	for _, zone := range z.serverSets {
 		if zone.listTolerancePerSet == -1 {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.setDriveCount/2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
 		} else {
-			zonesListTolerancePerSet = append(zonesListTolerancePerSet, zone.listTolerancePerSet-2)
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
 		}
 	}
 
 	if opts.WalkVersions {
-		var zonesEntryChs [][]FileInfoVersionsCh
-		for _, zone := range z.zones {
-			zonesEntryChs = append(zonesEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
+		var serverSetsEntryChs [][]FileInfoVersionsCh
+		for _, zone := range z.serverSets {
+			serverSetsEntryChs = append(serverSetsEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
 		}
 
-		var zonesEntriesInfos [][]FileInfoVersions
-		var zonesEntriesValid [][]bool
-		for _, entryChs := range zonesEntryChs {
-			zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-			zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+		var serverSetsEntriesInfos [][]FileInfoVersions
+		var serverSetsEntriesValid [][]bool
+		for _, entryChs := range serverSetsEntryChs {
+			serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+			serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 		}
 
 		go func() {
 			defer close(results)
 
 			for {
-				entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+				entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 				if !ok {
 					// We have reached EOF across all entryChs, break the loop.
 					return
 				}
 
-				if quorumCount >= zonesListTolerancePerSet[zoneIdx] {
+				if quorumCount >= serverSetsListTolerancePerSet[zoneIdx] {
 					for _, version := range entry.Versions {
 						results <- version.ToObjectInfo(bucket, version.Name)
 					}
@@ -1818,29 +1818,29 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 		return nil
 	}
 
-	zonesEntryChs := make([][]FileInfoCh, 0, len(z.zones))
-	for _, zone := range z.zones {
-		zonesEntryChs = append(zonesEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
+	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
+	for _, zone := range z.serverSets {
+		serverSetsEntryChs = append(serverSetsEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
 	}
 
-	zonesEntriesInfos := make([][]FileInfo, 0, len(zonesEntryChs))
-	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
-	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfo, len(entryChs)))
-		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
+	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
+	for _, entryChs := range serverSetsEntryChs {
+		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
+		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
 	go func() {
 		defer close(results)
 
 		for {
-			entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZone(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+			entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 			if !ok {
 				// We have reached EOF across all entryChs, break the loop.
 				return
 			}
 
-			if quorumCount >= zonesListTolerancePerSet[zoneIdx] {
+			if quorumCount >= serverSetsListTolerancePerSet[zoneIdx] {
 				results <- entry.ToObjectInfo(bucket, entry.Name)
 			}
 		}
@@ -1852,24 +1852,24 @@ func (z *erasureZones) Walk(ctx context.Context, bucket, prefix string, results 
 // HealObjectFn closure function heals the object.
 type HealObjectFn func(bucket, object, versionID string) error
 
-func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
+func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
 	endWalkCh := make(chan struct{})
 	defer close(endWalkCh)
 
-	zonesEntryChs := make([][]FileInfoVersionsCh, 0, len(z.zones))
-	zoneDrivesPerSet := make([]int, 0, len(z.zones))
+	serverSetsEntryChs := make([][]FileInfoVersionsCh, 0, len(z.serverSets))
+	zoneDrivesPerSet := make([]int, 0, len(z.serverSets))
 
-	for _, zone := range z.zones {
-		zonesEntryChs = append(zonesEntryChs,
+	for _, zone := range z.serverSets {
+		serverSetsEntryChs = append(serverSetsEntryChs,
 			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh))
 		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
 	}
 
-	zonesEntriesInfos := make([][]FileInfoVersions, 0, len(zonesEntryChs))
-	zonesEntriesValid := make([][]bool, 0, len(zonesEntryChs))
-	for _, entryChs := range zonesEntryChs {
-		zonesEntriesInfos = append(zonesEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-		zonesEntriesValid = append(zonesEntriesValid, make([]bool, len(entryChs)))
+	serverSetsEntriesInfos := make([][]FileInfoVersions, 0, len(serverSetsEntryChs))
+	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
+	for _, entryChs := range serverSetsEntryChs {
+		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
+		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
 	// If listing did not return any entries upon first attempt, we
@@ -1877,7 +1877,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 	// actions they may want to take as if `prefix` is missing.
 	err := toObjectErr(errFileNotFound, bucket, prefix)
 	for {
-		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(zonesEntryChs, zonesEntriesInfos, zonesEntriesValid)
+		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			break
 		}
@@ -1907,7 +1907,7 @@ func (z *erasureZones) HealObjects(ctx context.Context, bucket, prefix string, o
 	return err
 }
 
-func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	object = encodeDirObject(object)
 
 	lk := z.NewNSLock(ctx, bucket, object)
@@ -1927,9 +1927,9 @@ func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID
 	}
 
 	if z.SingleZone() {
-		return z.zones[0].HealObject(ctx, bucket, object, versionID, opts)
+		return z.serverSets[0].HealObject(ctx, bucket, object, versionID, opts)
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		result, err := zone.HealObject(ctx, bucket, object, versionID, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -1945,9 +1945,9 @@ func (z *erasureZones) HealObject(ctx context.Context, bucket, object, versionID
 	}
 }
 
-func (z *erasureZones) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
+func (z *erasureServerSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
 	var healBuckets []BucketInfo
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		bucketsInfo, err := zone.ListBucketsHeal(ctx)
 		if err != nil {
 			continue
@@ -1966,14 +1966,14 @@ func (z *erasureZones) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error
 }
 
 // GetMetrics - no op
-func (z *erasureZones) GetMetrics(ctx context.Context) (*Metrics, error) {
+func (z *erasureServerSets) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return &Metrics{}, NotImplemented{}
 }
 
-func (z *erasureZones) getZoneAndSet(id string) (int, int, error) {
-	for zoneIdx := range z.zones {
-		format := z.zones[zoneIdx].format
+func (z *erasureServerSets) getZoneAndSet(id string) (int, int, error) {
+	for zoneIdx := range z.serverSets {
+		format := z.serverSets[zoneIdx].format
 		for setIdx, set := range format.Erasure.Sets {
 			for _, diskID := range set {
 				if diskID == id {
@@ -2004,10 +2004,10 @@ type HealthResult struct {
 // provides if write access exists across sets, additionally
 // can be used to query scenarios if health may be lost
 // if this node is taken down by an external orchestrator.
-func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthResult {
-	erasureSetUpCount := make([][]int, len(z.zones))
-	for i := range z.zones {
-		erasureSetUpCount[i] = make([]int, len(z.zones[i].sets))
+func (z *erasureServerSets) Health(ctx context.Context, opts HealthOptions) HealthResult {
+	erasureSetUpCount := make([][]int, len(z.serverSets))
+	for i := range z.serverSets {
+		erasureSetUpCount[i] = make([]int, len(z.serverSets[i].sets))
 	}
 
 	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
@@ -2093,13 +2093,13 @@ func (z *erasureZones) Health(ctx context.Context, opts HealthOptions) HealthRes
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (z *erasureServerSets) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
 	object = encodeDirObject(object)
 	if z.SingleZone() {
-		return z.zones[0].PutObjectTags(ctx, bucket, object, tags, opts)
+		return z.serverSets[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
 
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		err := zone.PutObjectTags(ctx, bucket, object, tags, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -2123,12 +2123,12 @@ func (z *erasureZones) PutObjectTags(ctx context.Context, bucket, object string,
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (z *erasureServerSets) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	object = encodeDirObject(object)
 	if z.SingleZone() {
-		return z.zones[0].DeleteObjectTags(ctx, bucket, object, opts)
+		return z.serverSets[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		err := zone.DeleteObjectTags(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -2152,12 +2152,12 @@ func (z *erasureZones) DeleteObjectTags(ctx context.Context, bucket, object stri
 }
 
 // GetObjectTags - get object tags from an existing object
-func (z *erasureZones) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
+func (z *erasureServerSets) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
 	object = encodeDirObject(object)
 	if z.SingleZone() {
-		return z.zones[0].GetObjectTags(ctx, bucket, object, opts)
+		return z.serverSets[0].GetObjectTags(ctx, bucket, object, opts)
 	}
-	for _, zone := range z.zones {
+	for _, zone := range z.serverSets {
 		tags, err := zone.GetObjectTags(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {

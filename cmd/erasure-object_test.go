@@ -132,8 +132,8 @@ func TestErasureDeleteObjectsErasureSet(t *testing.T) {
 		for _, dir := range fsDirs {
 			defer os.RemoveAll(dir)
 		}
-		z := obj.(*erasureZones)
-		xl := z.zones[0].sets[0]
+		z := obj.(*erasureServerSets)
+		xl := z.serverSets[0].sets[0]
 		objs = append(objs, xl)
 	}
 
@@ -205,8 +205,8 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
-	z := obj.(*erasureZones)
-	xl := z.zones[0].sets[0]
+	z := obj.(*erasureServerSets)
+	xl := z.serverSets[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
@@ -225,7 +225,7 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
 	erasureDisks := xl.getDisks()
-	z.zones[0].erasureDisksMu.Lock()
+	z.serverSets[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		for i := range erasureDisks[:7] {
 			erasureDisks[i] = newNaughtyDisk(erasureDisks[i], nil, errFaultyDisk)
@@ -233,7 +233,7 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 		return erasureDisks
 	}
 
-	z.zones[0].erasureDisksMu.Unlock()
+	z.serverSets[0].erasureDisksMu.Unlock()
 	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -247,14 +247,14 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 
 	// Remove one more disk to 'lose' quorum, by setting it to nil.
 	erasureDisks = xl.getDisks()
-	z.zones[0].erasureDisksMu.Lock()
+	z.serverSets[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		erasureDisks[7] = nil
 		erasureDisks[8] = nil
 		return erasureDisks
 	}
 
-	z.zones[0].erasureDisksMu.Unlock()
+	z.serverSets[0].erasureDisksMu.Unlock()
 	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
 	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
 	if err != toObjectErr(errErasureWriteQuorum, bucket, object) {
@@ -275,8 +275,8 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
-	z := obj.(*erasureZones)
-	xl := z.zones[0].sets[0]
+	z := obj.(*erasureServerSets)
+	xl := z.serverSets[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
@@ -311,11 +311,11 @@ func TestGetObjectNoQuorum(t *testing.T) {
 				erasureDisks[i] = newNaughtyDisk(erasureDisks[i], diskErrors, errFaultyDisk)
 			}
 		}
-		z.zones[0].erasureDisksMu.Lock()
+		z.serverSets[0].erasureDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI {
 			return erasureDisks
 		}
-		z.zones[0].erasureDisksMu.Unlock()
+		z.serverSets[0].erasureDisksMu.Unlock()
 		// Fetch object from store.
 		err = xl.GetObject(ctx, bucket, object, 0, int64(len("abcd")), ioutil.Discard, "", opts)
 		if err != toObjectErr(errErasureReadQuorum, bucket, object) {
@@ -338,8 +338,8 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
-	z := obj.(*erasureZones)
-	xl := z.zones[0].sets[0]
+	z := obj.(*erasureServerSets)
+	xl := z.serverSets[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
@@ -374,11 +374,11 @@ func TestPutObjectNoQuorum(t *testing.T) {
 				erasureDisks[i] = newNaughtyDisk(erasureDisks[i], diskErrors, errFaultyDisk)
 			}
 		}
-		z.zones[0].erasureDisksMu.Lock()
+		z.serverSets[0].erasureDisksMu.Lock()
 		xl.getDisks = func() []StorageAPI {
 			return erasureDisks
 		}
-		z.zones[0].erasureDisksMu.Unlock()
+		z.serverSets[0].erasureDisksMu.Unlock()
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
 		if err != toObjectErr(errErasureWriteQuorum, bucket, object) {
@@ -404,8 +404,8 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	partCount := 3
 	data := bytes.Repeat([]byte("a"), 6*1024*1024*partCount)
 
-	z := obj.(*erasureZones)
-	xl := z.zones[0].sets[0]
+	z := obj.(*erasureServerSets)
+	xl := z.serverSets[0].sets[0]
 	erasureDisks := xl.getDisks()
 
 	ctx, cancel := context.WithCancel(GlobalContext)

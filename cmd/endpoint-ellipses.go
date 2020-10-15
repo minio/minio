@@ -329,7 +329,7 @@ var (
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports
 // both ellipses and without ellipses transparently.
 func createServerEndpoints(serverAddr string, args ...string) (
-	endpointZones EndpointZones, setupType SetupType, err error) {
+	endpointServerSets EndpointServerSets, setupType SetupType, err error) {
 
 	if len(args) == 0 {
 		return nil, -1, errInvalidArgument
@@ -352,13 +352,13 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if err != nil {
 			return nil, -1, err
 		}
-		endpointZones = append(endpointZones, ZoneEndpoints{
+		endpointServerSets = append(endpointServerSets, ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 		})
 		setupType = newSetupType
-		return endpointZones, setupType, nil
+		return endpointServerSets, setupType, nil
 	}
 
 	var prevSetupType SetupType
@@ -374,12 +374,12 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		if setDriveCount != 0 && setDriveCount != len(setArgs[0]) {
-			return nil, -1, fmt.Errorf("All zones should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
+			return nil, -1, fmt.Errorf("All serverSets should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
 		}
 		if prevSetupType != UnknownSetupType && prevSetupType != setupType {
-			return nil, -1, fmt.Errorf("All zones should be of the same setup-type to maintain the original SLA expectations - expected %s, got %s", prevSetupType, setupType)
+			return nil, -1, fmt.Errorf("All serverSets should be of the same setup-type to maintain the original SLA expectations - expected %s, got %s", prevSetupType, setupType)
 		}
-		if err = endpointZones.Add(ZoneEndpoints{
+		if err = endpointServerSets.Add(ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
@@ -393,5 +393,5 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		prevSetupType = setupType
 	}
 
-	return endpointZones, setupType, nil
+	return endpointServerSets, setupType, nil
 }

@@ -213,8 +213,8 @@ func TestHashedLayer(t *testing.T) {
 			defer os.RemoveAll(dir)
 		}
 
-		z := obj.(*erasureZones)
-		objs = append(objs, z.zones[0].sets[0])
+		z := obj.(*erasureServerSets)
+		objs = append(objs, z.serverSets[0].sets[0])
 	}
 
 	sets := &erasureSets{sets: objs, distributionAlgo: "CRCMOD"}
