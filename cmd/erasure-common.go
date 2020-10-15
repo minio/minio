@@ -75,6 +75,9 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 func (er erasureObjects) getLoadBalancedNDisks(ndisks int) (newDisks []StorageAPI) {
 	disks := er.getLoadBalancedDisks(ndisks != -1)
 	for _, disk := range disks {
+		if disk == nil {
+			continue
+		}
 		newDisks = append(newDisks, disk)
 		ndisks--
 		if ndisks == 0 {
