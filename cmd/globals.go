@@ -274,6 +274,8 @@ var (
 	globalFSOSync bool
 
 	globalProxyEndpoints []ProxyEndpoint
+
+	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.
 )
 

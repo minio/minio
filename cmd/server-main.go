@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -361,6 +362,11 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
+	rand.Seed(time.Now().UTC().UnixNano())
+
+	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
+	defer globalDNSCache.Stop()
+
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go handleSignals()

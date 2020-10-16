@@ -468,7 +468,7 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewInternodeDialContext(dialTimeout),
+		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.
@@ -496,7 +496,7 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
+		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Minute, // Set larger timeouts for proxied requests.
@@ -519,7 +519,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
-		DialContext:           xhttp.NewCustomDialContext(dialTimeout),
+		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
 		MaxIdleConnsPerHost:   1024,
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 3 * time.Minute, // Set conservative timeouts for MinIO internode.

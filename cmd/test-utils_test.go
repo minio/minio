@@ -58,6 +58,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -98,6 +99,8 @@ func init() {
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
 	logger.Disable = true
+
+	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
 
 	initHelp()
 
