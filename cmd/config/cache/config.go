@@ -28,16 +28,17 @@ import (
 
 // Config represents cache config settings
 type Config struct {
-	Enabled       bool     `json:"-"`
-	Drives        []string `json:"drives"`
-	Expiry        int      `json:"expiry"`
-	MaxUse        int      `json:"maxuse"`
-	Quota         int      `json:"quota"`
-	Exclude       []string `json:"exclude"`
-	After         int      `json:"after"`
-	WatermarkLow  int      `json:"watermark_low"`
-	WatermarkHigh int      `json:"watermark_high"`
-	Range         bool     `json:"range"`
+	Enabled         bool     `json:"-"`
+	Drives          []string `json:"drives"`
+	Expiry          int      `json:"expiry"`
+	MaxUse          int      `json:"maxuse"`
+	Quota           int      `json:"quota"`
+	Exclude         []string `json:"exclude"`
+	After           int      `json:"after"`
+	WatermarkLow    int      `json:"watermark_low"`
+	WatermarkHigh   int      `json:"watermark_high"`
+	Range           bool     `json:"range"`
+	CommitWriteback bool     `json:"-"`
 }
 
 // UnmarshalJSON - implements JSON unmarshal interface for unmarshalling
@@ -151,4 +152,14 @@ func parseCacheExcludes(excludes string) ([]string, error) {
 	}
 
 	return excludesSlice, nil
+}
+
+func parseCacheCommitMode(commitStr string) (bool, error) {
+	switch strings.ToLower(commitStr) {
+	case "writeback":
+		return true, nil
+	case "writethrough":
+		return false, nil
+	}
+	return false, config.ErrInvalidCacheCommitValue(nil).Msg("cache commit value must be `writeback` or `writethrough`")
 }
