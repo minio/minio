@@ -559,7 +559,8 @@ func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.Storag
 
 // MakeBucketWithLocation - Create a new container on azure backend.
 func (a *azureObjects) MakeBucketWithLocation(ctx context.Context, bucket string, opts minio.BucketOptions) error {
-	if opts.LockEnabled || opts.VersioningEnabled {
+	// Filter out unsupported features in Azure and return immediately with NotImplemented error
+	if opts.LockEnabled || opts.VersioningEnabled || strings.ContainsAny(bucket, ".") {
 		return minio.NotImplemented{}
 	}
 
