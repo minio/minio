@@ -305,13 +305,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 	newObject = NewGatewayLayerWithLocker(newObject)
 
+	// Calls all New() for all sub-systems.
+	newAllSubsystems()
+
 	// Once endpoints are finalized, initialize the new object api in safe mode.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
-
-	// Calls all New() for all sub-systems.
-	newAllSubsystems()
 
 	if gatewayName == NASBackendGateway {
 		buckets, err := newObject.ListBuckets(GlobalContext)
@@ -331,6 +331,8 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	if enableIAMOps {
 		// Initialize users credentials and policies in background.
+		globalIAMSys.InitStore(newObject)
+
 		go globalIAMSys.Init(GlobalContext, newObject)
 	}
 
