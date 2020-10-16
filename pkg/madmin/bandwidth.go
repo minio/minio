@@ -42,8 +42,8 @@ func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...strin
 	}
 
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
+	defer closeResponse(resp)
 	if err != nil {
-		closeResponse(resp)
 		return bandwidth.Report{}, err
 	}
 	if resp.StatusCode != http.StatusOK {
