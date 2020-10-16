@@ -49,6 +49,7 @@ func (sys *BucketMetadataSys) Remove(bucket string) {
 	}
 	sys.Lock()
 	delete(sys.metadataMap, bucket)
+	globalBucketMonitor.DeleteBucket(bucket)
 	sys.Unlock()
 }
 
