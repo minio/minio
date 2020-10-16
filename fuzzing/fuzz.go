@@ -4,19 +4,19 @@
 
 // +build gofuzz
 
-package csv
+
+package fuzz
 
 import (
 	"bytes"
-	"fmt"
+	csv "github.com/minio/minio/pkg/csvparser"
 	"reflect"
 )
 
 func Fuzz(data []byte) int {
-	score := 0
 	buf := new(bytes.Buffer)
 
-	for _, tt := range []Reader{
+	for _, tt := range []csv.Reader{
 		{},
 		{Comma: ';'},
 		{Comma: '\t'},
@@ -25,7 +25,7 @@ func Fuzz(data []byte) int {
 		{Comment: '#'},
 		{Comment: ';'},
 	} {
-		r := NewReader(bytes.NewReader(data))
+		r := csv.NewReader(bytes.NewReader(data))
 		r.Comma = tt.Comma
 		r.Comment = tt.Comment
 		r.LazyQuotes = tt.LazyQuotes
@@ -35,36 +35,29 @@ func Fuzz(data []byte) int {
 		if err != nil {
 			continue
 		}
-		score = 1
 
 		buf.Reset()
-		w := NewWriter(buf)
+		w := csv.NewWriter(buf)
 		w.Comma = tt.Comma
 		err = w.WriteAll(records)
 		if err != nil {
-			fmt.Printf("writer  = %#v\n", w)
-			fmt.Printf("records = %v\n", records)
-			panic(err)
+			return 0
 		}
 
-		r = NewReader(buf)
+		r = csv.NewReader(buf)
 		r.Comma = tt.Comma
 		r.Comment = tt.Comment
 		r.LazyQuotes = tt.LazyQuotes
 		r.TrimLeadingSpace = tt.TrimLeadingSpace
 		result, err := r.ReadAll()
 		if err != nil {
-			fmt.Printf("reader  = %#v\n", r)
-			fmt.Printf("records = %v\n", records)
-			panic(err)
+			return 0
 		}
 
 		if !reflect.DeepEqual(records, result) {
-			fmt.Println("records = \n", records)
-			fmt.Println("result  = \n", records)
-			panic("not equal")
+			return 0
 		}
 	}
 
-	return score
+	return 1
 }
