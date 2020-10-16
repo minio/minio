@@ -487,19 +487,21 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
+		eventName := event.ObjectRemovedDelete
+
 		objInfo := ObjectInfo{
 			Name:      dobj.ObjectName,
 			VersionID: dobj.VersionID,
 		}
+
 		if dobj.DeleteMarker {
-			objInfo = ObjectInfo{
-				Name:         dobj.ObjectName,
-				DeleteMarker: dobj.DeleteMarker,
-				VersionID:    dobj.DeleteMarkerVersionID,
-			}
+			objInfo.DeleteMarker = dobj.DeleteMarker
+			objInfo.VersionID = dobj.DeleteMarkerVersionID
+			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
+
 		sendEvent(eventArgs{
-			EventName:    event.ObjectRemovedDelete,
+			EventName:    eventName,
 			BucketName:   bucket,
 			Object:       objInfo,
 			ReqParams:    extractReqParams(r),

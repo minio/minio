@@ -747,9 +747,14 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		return size
 	}
 
+	eventName := event.ObjectRemovedDelete
+	if obj.DeleteMarker {
+		eventName = event.ObjectRemovedDeleteMarkerCreated
+	}
+
 	// Notify object deleted event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectRemovedDelete,
+		EventName:  eventName,
 		BucketName: i.bucket,
 		Object:     obj,
 		Host:       "Internal: [ILM-EXPIRY]",
