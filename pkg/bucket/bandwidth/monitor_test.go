@@ -35,8 +35,8 @@ func TestMonitor_GetThrottle(t *testing.T) {
 		bucket          string
 		bpi             int64
 	}
-	t1 := newThrottle(context.Background(), 100)
-	t2 := newThrottle(context.Background(), 200)
+	t1 := newThrottle(context.Background(), 100, 1024*1024)
+	t2 := newThrottle(context.Background(), 200, 1024*1024)
 	tests := []struct {
 		name   string
 		fields fields
@@ -68,7 +68,7 @@ func TestMonitor_GetThrottle(t *testing.T) {
 			m := &Monitor{
 				bucketThrottle: tt.fields.bucketThrottles,
 			}
-			if got := m.throttleBandwidth(context.Background(), tt.fields.bucket, tt.fields.bpi); got.bytesPerInterval != tt.want.bytesPerInterval {
+			if got := m.throttleBandwidth(context.Background(), tt.fields.bucket, tt.fields.bpi, 1024*1024); got.bytesPerInterval != tt.want.bytesPerInterval {
 				t.Errorf("throttleBandwidth() = %v, want %v", got, tt.want)
 			}
 		})
@@ -135,7 +135,8 @@ func TestMonitor_GetReport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			thr := throttle{
-				bytesPerSecond: 1024 * 1024,
+				bytesPerSecond:   1024 * 1024,
+				clusterBandwidth: 1024 * 1024,
 			}
 			m := &Monitor{
 				activeBuckets:  tt.fields.activeBuckets,

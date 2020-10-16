@@ -29,27 +29,31 @@ const (
 
 // throttle implements the throttling for bandwidth
 type throttle struct {
-	generateTicker   *time.Ticker // Ticker to generate available bandwidth
-	freeBytes        int64        // unused bytes in the interval
-	bytesPerSecond   int64        // max limit for bandwidth
-	bytesPerInterval int64        // bytes allocated for the interval
-	cond             *sync.Cond   // Used to notify waiting threads for bandwidth availability
+	generateTicker   *time.Ticker    // Ticker to generate available bandwidth
+	freeBytes        int64           // unused bytes in the interval
+	bytesPerSecond   int64           // max limit for bandwidth
+	bytesPerInterval int64           // bytes allocated for the interval
+	clusterBandwidth int64           // Cluster wide bandwidth needed for reporting
+	cond             *sync.Cond      // Used to notify waiting threads for bandwidth availability
+	goGenerate       int64           // Flag to track if generate routine should be running. 0 == stopped
+	ctx              context.Context // Context for generate
 }
 
 // newThrottle returns a new bandwidth throttle. Set bytesPerSecond to 0 for no limit
-func newThrottle(ctx context.Context, bytesPerSecond int64) *throttle {
+func newThrottle(ctx context.Context, bytesPerSecond int64, clusterBandwidth int64) *throttle {
 	if bytesPerSecond == 0 {
 		return &throttle{}
 	}
 	t := &throttle{
-		bytesPerSecond: bytesPerSecond,
-		generateTicker: time.NewTicker(throttleInternal),
+		bytesPerSecond:   bytesPerSecond,
+		generateTicker:   time.NewTicker(throttleInternal),
+		clusterBandwidth: clusterBandwidth,
+		ctx:              ctx,
 	}
 
 	t.cond = sync.NewCond(&sync.Mutex{})
-	t.SetBandwidth(bytesPerSecond)
+	t.SetBandwidth(bytesPerSecond, clusterBandwidth)
 	t.freeBytes = t.bytesPerInterval
-	go t.generateBandwidth(ctx)
 	return t
 }
 
@@ -74,12 +78,17 @@ func (t *throttle) GetLimitForBytes(want int64) int64 {
 			}
 		}
 		atomic.AddInt64(&t.freeBytes, -send)
+
+		// Bandwidth was consumed, start generate routine to allocate bandwidth
+		if atomic.CompareAndSwapInt64(&t.goGenerate, 0, 1) {
+			go t.generateBandwidth(t.ctx)
+		}
 		return send
 	}
 }
 
 // SetBandwidth sets a new bandwidth limit in bytes per second.
-func (t *throttle) SetBandwidth(bandwidthBiPS int64) {
+func (t *throttle) SetBandwidth(bandwidthBiPS int64, clusterBandwidth int64) {
 	bpi := int64(throttleInternal) * bandwidthBiPS / int64(time.Second)
 	atomic.StoreInt64(&t.bytesPerInterval, bpi)
 }
@@ -94,6 +103,11 @@ func (t *throttle) generateBandwidth(ctx context.Context) {
 	for {
 		select {
 		case <-t.generateTicker.C:
+			if atomic.LoadInt64(&t.freeBytes) == atomic.LoadInt64(&t.bytesPerInterval) {
+				// No bandwidth consumption stop the routine.
+				atomic.StoreInt64(&t.goGenerate, 0)
+				return
+			}
 			// A new window is available
 			t.cond.L.Lock()
 			atomic.StoreInt64(&t.freeBytes, atomic.LoadInt64(&t.bytesPerInterval))
@@ -101,7 +115,6 @@ func (t *throttle) generateBandwidth(ctx context.Context) {
 			t.cond.L.Unlock()
 		case <-ctx.Done():
 			return
-		default:
 		}
 	}
 }

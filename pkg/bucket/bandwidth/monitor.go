@@ -26,16 +26,16 @@ import (
 )
 
 // throttleBandwidth gets the throttle for bucket with the configured value
-func (m *Monitor) throttleBandwidth(ctx context.Context, bucket string, bandwidthBytesPerSecond int64) *throttle {
+func (m *Monitor) throttleBandwidth(ctx context.Context, bucket string, bandwidthBytesPerSecond int64, clusterBandwidth int64) *throttle {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	throttle, ok := m.bucketThrottle[bucket]
 	if !ok {
-		throttle = newThrottle(ctx, bandwidthBytesPerSecond)
+		throttle = newThrottle(ctx, bandwidthBytesPerSecond, clusterBandwidth)
 		m.bucketThrottle[bucket] = throttle
 		return throttle
 	}
-	throttle.SetBandwidth(bandwidthBytesPerSecond)
+	throttle.SetBandwidth(bandwidthBytesPerSecond, clusterBandwidth)
 	return throttle
 }
 
@@ -80,7 +80,7 @@ type Monitor struct {
 func NewMonitor(doneCh <-chan struct{}) *Monitor {
 	m := &Monitor{
 		activeBuckets:         make(map[string]*bucketMeasurement),
-		bucketMovingAvgTicker: time.NewTicker(1 * time.Second),
+		bucketMovingAvgTicker: time.NewTicker(2 * time.Second),
 		pubsub:                pubsub.New(),
 		bucketThrottle:        make(map[string]*throttle),
 		doneCh:                doneCh,
@@ -124,7 +124,7 @@ func (m *Monitor) getReport(selectBucket SelectionFunction) *bandwidth.Report {
 			continue
 		}
 		report.BucketStats[bucket] = bandwidth.Details{
-			LimitInBytesPerSecond:            m.bucketThrottle[bucket].bytesPerSecond,
+			LimitInBytesPerSecond:            m.bucketThrottle[bucket].clusterBandwidth,
 			CurrentBandwidthInBytesPerSecond: bucketMeasurement.getExpMovingAvgBytesPerSecond(),
 		}
 	}
@@ -138,7 +138,6 @@ func (m *Monitor) process(doneCh <-chan struct{}) {
 			m.processAvg()
 		case <-doneCh:
 			return
-		default:
 		}
 	}
 }

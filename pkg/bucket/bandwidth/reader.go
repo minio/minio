@@ -37,7 +37,7 @@ type MonitoredReader struct {
 }
 
 // NewMonitoredReader returns a io.ReadCloser that reports bandwidth details
-func NewMonitoredReader(ctx context.Context, monitor *Monitor, bucket string, object string, reader io.Reader, headerSize int, bandwidthBytesPerSecond int64) *MonitoredReader {
+func NewMonitoredReader(ctx context.Context, monitor *Monitor, bucket string, object string, reader io.Reader, headerSize int, bandwidthBytesPerSecond int64, clusterBandwidth int64) *MonitoredReader {
 	timeNow := time.Now()
 	b := monitor.track(bucket, object, timeNow)
 	return &MonitoredReader{
@@ -47,7 +47,7 @@ func NewMonitoredReader(ctx context.Context, monitor *Monitor, bucket string, ob
 		reader:            reader,
 		lastStop:          timeNow,
 		headerSize:        headerSize,
-		throttle:          monitor.throttleBandwidth(ctx, bucket, bandwidthBytesPerSecond),
+		throttle:          monitor.throttleBandwidth(ctx, bucket, bandwidthBytesPerSecond, clusterBandwidth),
 		monitor:           monitor,
 	}
 }
