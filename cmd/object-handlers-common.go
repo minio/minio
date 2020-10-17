@@ -291,30 +291,20 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 	// Proceed to delete the object.
 	objInfo, err = deleteObject(ctx, bucket, object, opts)
 	if objInfo.Name != "" {
-		// Requesting only a delete marker which was successfully attempted.
+		eventName := event.ObjectRemovedDelete
 		if objInfo.DeleteMarker {
-			// Notify object deleted marker event.
-			sendEvent(eventArgs{
-				EventName:    event.ObjectRemovedDeleteMarkerCreated,
-				BucketName:   bucket,
-				Object:       objInfo,
-				ReqParams:    extractReqParams(r),
-				RespElements: extractRespElements(w),
-				UserAgent:    r.UserAgent(),
-				Host:         handlers.GetSourceIP(r),
-			})
-		} else {
-			// Notify object deleted event.
-			sendEvent(eventArgs{
-				EventName:    event.ObjectRemovedDelete,
-				BucketName:   bucket,
-				Object:       objInfo,
-				ReqParams:    extractReqParams(r),
-				RespElements: extractRespElements(w),
-				UserAgent:    r.UserAgent(),
-				Host:         handlers.GetSourceIP(r),
-			})
+			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
+		// Notify object deleted marker event.
+		sendEvent(eventArgs{
+			EventName:    eventName,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		})
 	}
 	return objInfo, err
 }
