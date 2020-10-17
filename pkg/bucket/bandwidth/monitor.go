@@ -170,3 +170,10 @@ func (m *Monitor) track(bucket string, object string, timeNow time.Time) *bucket
 	b := m.getBucketMeasurement(bucket, timeNow)
 	return b
 }
+
+func (m *Monitor) DeleteBucket(bucket string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	delete(m.activeBuckets, bucket)
+	delete(m.bucketThrottle, bucket)
+}
