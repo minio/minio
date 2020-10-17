@@ -253,7 +253,7 @@ func decryptCacheObjectETag(info *ObjectInfo) error {
 		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), info.Bucket, info.Name); err != nil {
 			return err
 		}
-		etagStr := tryDecryptETag(objectKey[:], info.ETag, false)
+		etagStr := tryDecryptETag(objectKey, info.ETag, false)
 		// backend ETag was hex encoded before encrypting, so hex decode to get actual ETag
 		etag, err := hex.DecodeString(etagStr)
 		if err != nil {

@@ -246,57 +246,58 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 	return newEncryptReader(content, key, bucket, object, metadata, crypto.S3.IsRequested(r.Header))
 }
 
-func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
+func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]string) (crypto.ObjectKey, error) {
+	var extKey [32]byte
 	switch {
 	default:
-		return nil, errObjectTampered
+		return crypto.ObjectKey{}, errObjectTampered
 	case crypto.S3.IsEncrypted(metadata) && isCacheEncrypted(metadata):
 		if globalCacheKMS == nil {
-			return nil, errKMSNotConfigured
+			return crypto.ObjectKey{}, errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
 		if err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
-		extKey, err := globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		extKey, err = globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
 		var objectKey crypto.ObjectKey
 		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), bucket, object); err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
-		return objectKey[:], nil
+		return objectKey, nil
 	case crypto.S3.IsEncrypted(metadata):
 		if GlobalKMS == nil {
-			return nil, errKMSNotConfigured
+			return crypto.ObjectKey{}, errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
 
 		if err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
 		extKey, err := GlobalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
 		var objectKey crypto.ObjectKey
 		if err = objectKey.Unseal(extKey, sealedKey, crypto.S3.String(), bucket, object); err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
-		return objectKey[:], nil
+		return objectKey, nil
 	case crypto.SSEC.IsEncrypted(metadata):
 		var extKey [32]byte
 		copy(extKey[:], key)
 		sealedKey, err := crypto.SSEC.ParseMetadata(metadata)
 		if err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
 		var objectKey crypto.ObjectKey
 		if err = objectKey.Unseal(extKey, sealedKey, crypto.SSEC.String(), bucket, object); err != nil {
-			return nil, err
+			return crypto.ObjectKey{}, err
 		}
-		return objectKey[:], nil
+		return objectKey, nil
 	}
 }
 
@@ -337,7 +338,7 @@ func newDecryptReader(client io.Reader, key []byte, bucket, object string, seqNu
 	if err != nil {
 		return nil, err
 	}
-	return newDecryptReaderWithObjectKey(client, objectEncryptionKey, seqNumber)
+	return newDecryptReaderWithObjectKey(client, objectEncryptionKey[:], seqNumber)
 }
 
 func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte, seqNumber uint32) (io.Reader, error) {
@@ -455,7 +456,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	var partIDbin [4]byte
 	binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
 
-	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
+	mac := hmac.New(sha256.New, objectEncryptionKey[:]) // derive part encryption key from part ID and object key
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
@@ -621,20 +622,18 @@ func getDecryptedETag(headers http.Header, objInfo ObjectInfo, copySource bool) 
 }
 
 // helper to decrypt Etag given object encryption key and encrypted ETag
-func tryDecryptETag(key []byte, encryptedETag string, ssec bool) string {
+func tryDecryptETag(key crypto.ObjectKey, encryptedETag string, ssec bool) string {
 	// ETag for SSE-C encrypted objects need not be content MD5Sum.While encrypted
 	// md5sum is stored internally, return just the last 32 bytes of hex-encoded and
 	// encrypted md5sum string for SSE-C
 	if ssec {
 		return encryptedETag[len(encryptedETag)-32:]
 	}
-	var objectKey crypto.ObjectKey
-	copy(objectKey[:], key)
 	encBytes, err := hex.DecodeString(encryptedETag)
 	if err != nil {
 		return encryptedETag
 	}
-	etagBytes, err := objectKey.UnsealETag(encBytes)
+	etagBytes, err := key.UnsealETag(encBytes)
 	if err != nil {
 		return encryptedETag
 	}

@@ -52,6 +52,34 @@ var encryptRequestTests = []struct {
 	},
 }
 
+func TestTryDecryptedETag(t *testing.T) {
+	tests := []struct {
+		base64Key     string
+		encryptedETag string
+		etag          string
+	}{
+		{
+			"ieCaxXUnFY7QmlIjwuY8/d+6h6jiZ4t+J0gQSL1L5nw=",
+			"20000f00fb93cf5539a2d8441539409f7fa39e62de0a408c9ad3d25b1a0698626ac51c97cae0840b8798365ca01285fd",
+			"760e3d2850682cd3359254511ad15d0f",
+		},
+		{
+			"4y38dA0BVkYTJukZQ9/MX9iTYPsKfe1gnYCUZ0ZgEaY=",
+			"20000f00a0b3cb774c97fa7f8cacca0dfc19ea2338227fe187522eeed98bdd6f9de331bb8d7564803a1c46daa2b28ad7",
+			"2adb567636fb9539618ad327f58c3aaf",
+		},
+	}
+	var ckey crypto.ObjectKey
+	for _, test := range tests {
+		key, _ := base64.StdEncoding.DecodeString(test.base64Key)
+		copy(ckey[:], key)
+		gotETag := tryDecryptETag(ckey, test.encryptedETag, false)
+		if gotETag != test.etag {
+			t.Errorf("Expected etag %s, got %s", test.etag, gotETag)
+		}
+	}
+}
+
 func TestEncryptRequest(t *testing.T) {
 	defer func(flag bool) { globalIsSSL = flag }(globalIsSSL)
 	globalIsSSL = true
