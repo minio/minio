@@ -171,6 +171,7 @@ func (m *Monitor) track(bucket string, object string, timeNow time.Time) *bucket
 	return b
 }
 
+// DeleteBucket deletes monitoring the 'bucket'
 func (m *Monitor) DeleteBucket(bucket string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
