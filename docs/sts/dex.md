@@ -4,7 +4,7 @@ Dex is an identity service that uses OpenID Connect to drive authentication for 
 
 ## Prerequisites
 
-Install Dex by following [Dex Getting Started Guide](https://github.com/dexidp/dex/blob/master/Documentation/getting-started.md)
+Install Dex by following [Dex Getting Started Guide](https://dexidp.io/docs/getting-started/)
 
 ### Start Dex
 
