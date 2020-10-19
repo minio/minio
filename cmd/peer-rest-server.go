@@ -71,11 +71,6 @@ func (s *peerRESTServer) DeletePolicyHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if globalIAMSys == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
 	vars := mux.Vars(r)
 	policyName := vars[peerRESTPolicy]
 	if policyName == "" {
@@ -104,11 +99,6 @@ func (s *peerRESTServer) LoadPolicyHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if globalIAMSys == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
 	vars := mux.Vars(r)
 	policyName := vars[peerRESTPolicy]
 	if policyName == "" {
@@ -133,11 +123,6 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(w http.ResponseWriter, r *http
 
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -171,11 +156,6 @@ func (s *peerRESTServer) DeleteServiceAccountHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if globalIAMSys == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
 	vars := mux.Vars(r)
 	accessKey := vars[peerRESTUser]
 	if accessKey == "" {
@@ -200,11 +180,6 @@ func (s *peerRESTServer) LoadServiceAccountHandler(w http.ResponseWriter, r *htt
 
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -237,11 +212,6 @@ func (s *peerRESTServer) DeleteUserHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if globalIAMSys == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
 	vars := mux.Vars(r)
 	accessKey := vars[peerRESTUser]
 	if accessKey == "" {
@@ -266,11 +236,6 @@ func (s *peerRESTServer) LoadUserHandler(w http.ResponseWriter, r *http.Request)
 
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}
@@ -310,11 +275,6 @@ func (s *peerRESTServer) LoadGroupHandler(w http.ResponseWriter, r *http.Request
 
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	if globalIAMSys == nil {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
 	}

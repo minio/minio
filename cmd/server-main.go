@@ -327,8 +327,11 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 			return fmt.Errorf("Unable to initialize config system: %w", err)
 		}
 		// Any other config errors we simply print a message and proceed forward.
-		logger.LogIf(ctx, err)
+		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
+
+	// Initialize IAM store
+	globalIAMSys.InitStore(newObject)
 
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
@@ -385,6 +388,9 @@ func serverMain(ctx *cli.Context) {
 	// Initialize all help
 	initHelp()
 
+	// Initialize all sub-systems
+	newAllSubsystems()
+
 	var err error
 	globalProxyEndpoints, err = GetProxyEndpoints(globalEndpoints)
 	logger.FatalIf(err, "Invalid command line arguments")
@@ -426,9 +432,6 @@ func serverMain(ctx *cli.Context) {
 		globalBackgroundHealState = newHealState()
 		globalReplicationState = newReplicationState()
 	}
-
-	// Initialize all sub-systems
-	newAllSubsystems()
 
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
@@ -476,11 +479,6 @@ func serverMain(ctx *cli.Context) {
 
 	logger.SetDeploymentID(globalDeploymentID)
 
-	// Once endpoints are finalized, initialize the new object api in safe mode.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
-
 	go initDataCrawler(GlobalContext, newObject)
 
 	// Enable background operations for erasure coding
@@ -502,6 +500,11 @@ func serverMain(ctx *cli.Context) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
 	}
+
+	// Once the config is fully loaded, initialize the new object layer.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
 
 	// Initialize users credentials and policies in background right after config has initialized.
 	go globalIAMSys.Init(GlobalContext, newObject)
