@@ -19,14 +19,12 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
@@ -155,9 +153,6 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
-	rand.Seed(time.Now().UTC().UnixNano())
-
-	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
 	defer globalDNSCache.Stop()
 
 	// This is only to uniquely identify each gateway deployments.
