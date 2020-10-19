@@ -276,7 +276,16 @@ func parseEndpointSet(customSetDriveCount uint64, args ...string) (ep endpointSe
 // specific set size.
 // For example: {1...64} is divided into 4 sets each of size 16.
 // This applies to even distributed setup syntax as well.
-func GetAllSets(customSetDriveCount uint64, args ...string) ([][]string, error) {
+func GetAllSets(args ...string) ([][]string, error) {
+	var customSetDriveCount uint64
+	if v := env.Get(EnvErasureSetDriveCount, ""); v != "" {
+		driveCount, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, config.ErrInvalidErasureSetSize(err)
+		}
+		customSetDriveCount = uint64(driveCount)
+	}
+
 	var setArgs [][]string
 	if !ellipses.HasEllipses(args...) {
 		var setIndexes [][]uint64
@@ -335,16 +344,8 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		return nil, -1, errInvalidArgument
 	}
 
-	var setDriveCount int
-	if v := env.Get(EnvErasureSetDriveCount, ""); v != "" {
-		setDriveCount, err = strconv.Atoi(v)
-		if err != nil {
-			return nil, -1, config.ErrInvalidErasureSetSize(err)
-		}
-	}
-
 	if !ellipses.HasEllipses(args...) {
-		setArgs, err := GetAllSets(uint64(setDriveCount), args...)
+		setArgs, err := GetAllSets(args...)
 		if err != nil {
 			return nil, -1, err
 		}
@@ -363,16 +364,13 @@ func createServerEndpoints(serverAddr string, args ...string) (
 
 	var foundPrevLocal bool
 	for _, arg := range args {
-		setArgs, err := GetAllSets(uint64(setDriveCount), arg)
+		setArgs, err := GetAllSets(arg)
 		if err != nil {
 			return nil, -1, err
 		}
 		endpointList, gotSetupType, err := CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
 		if err != nil {
 			return nil, -1, err
-		}
-		if setDriveCount != 0 && setDriveCount != len(setArgs[0]) {
-			return nil, -1, fmt.Errorf("All serverSets should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
 		}
 		if err = endpointServerSets.Add(ZoneEndpoints{
 			SetCount:     len(setArgs),
@@ -382,9 +380,6 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		foundPrevLocal = endpointList.atleastOneEndpointLocal()
-		if setDriveCount == 0 {
-			setDriveCount = len(setArgs[0])
-		}
 		if setupType == UnknownSetupType {
 			setupType = gotSetupType
 		}

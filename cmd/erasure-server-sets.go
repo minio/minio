@@ -76,6 +76,7 @@ func newErasureServerSets(ctx context.Context, endpointServerSets EndpointServer
 			return nil, err
 		}
 		if deploymentID == "" {
+			// all zones should have same deployment ID
 			deploymentID = formats[i].ID
 		}
 		z.serverSets[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
@@ -97,7 +98,13 @@ func (z *erasureServerSets) GetAllLockers() []dsync.NetLocker {
 }
 
 func (z *erasureServerSets) SetDriveCount() int {
-	return z.serverSets[0].SetDriveCount()
+	minSetDriveCount := z.serverSets[0].SetDriveCount()
+	for _, serverSet := range z.serverSets {
+		if minSetDriveCount > serverSet.setDriveCount {
+			minSetDriveCount = serverSet.setDriveCount
+		}
+	}
+	return minSetDriveCount
 }
 
 type serverSetsAvailableSpace []zoneAvailableSpace
@@ -272,7 +279,7 @@ func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (Storag
 
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity == 0 {
-		scParity = z.SetDriveCount() / 2
+		scParity = getDefaultParityBlocks(z.SetDriveCount())
 	}
 
 	storageInfo.Backend.StandardSCData = z.SetDriveCount() - scParity
@@ -1401,7 +1408,6 @@ func (z *erasureServerSets) Health(ctx context.Context, opts HealthOptions) Heal
 
 	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	diskCount := z.SetDriveCount()
-
 	if parityDrives == 0 {
 		parityDrives = getDefaultParityBlocks(diskCount)
 	}

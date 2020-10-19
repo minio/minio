@@ -2423,7 +2423,7 @@ func migrateV27ToV28() error {
 
 // Migrates ${HOME}/.minio/config.json to '<export_path>/.minio.sys/config/config.json'
 // if etcd is configured then migrates /config/config.json to '<export_path>/.minio.sys/config/config.json'
-func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
+func migrateConfigToMinioSys(objAPI ObjectLayer) (freshConfig bool, err error) {
 	// Construct path to config.json for the given bucket.
 	configFile := path.Join(minioConfigPrefix, minioConfigFile)
 
@@ -2441,7 +2441,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 
 	// Verify if backend already has the file (after holding lock)
 	if err = checkConfig(GlobalContext, objAPI, configFile); err != errConfigNotFound {
-		return err
+		return false, err
 	} // if errConfigNotFound proceed to migrate..
 
 	var configFiles = []string{
@@ -2453,7 +2453,7 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	for _, cfgFile := range configFiles {
 		if _, err = Load(cfgFile, config); err != nil {
 			if !osIsNotExist(err) && !osIsPermission(err) {
-				return err
+				return false, err
 			}
 			continue
 		}
@@ -2464,9 +2464,9 @@ func migrateConfigToMinioSys(objAPI ObjectLayer) (err error) {
 	}
 	if osIsNotExist(err) || osIsPermission(err) {
 		// Initialize the server config, if no config exists.
-		return newSrvConfig(objAPI)
+		return true, newSrvConfig(objAPI)
 	}
-	return saveServerConfig(GlobalContext, objAPI, config)
+	return false, saveServerConfig(GlobalContext, objAPI, config)
 }
 
 // Migrates '.minio.sys/config.json' to v33.

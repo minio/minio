@@ -471,9 +471,8 @@ func checkFormatErasureValues(formats []*formatErasureV3, setDriveCount int) err
 			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
 				humanize.Ordinal(i+1), len(formats), humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]))
 		}
-		// Only if custom erasure drive count is set,
-		// we should fail here other proceed to honor what
-		// is present on the disk.
+		// Only if custom erasure drive count is set, verify if the set_drive_count was manually
+		// changed - we need to honor what present on the drives.
 		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != setDriveCount {
 			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets[0]), setDriveCount)
 		}
@@ -895,13 +894,7 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 func ecDrivesNoConfig(setDriveCount int) int {
 	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if ecDrives == 0 {
-		cfg, err := storageclass.LookupConfig(nil, setDriveCount)
-		if err == nil {
-			ecDrives = cfg.Standard.Parity
-		}
-		if ecDrives == 0 {
-			ecDrives = setDriveCount / 2
-		}
+		ecDrives = getDefaultParityBlocks(setDriveCount)
 	}
 	return ecDrives
 }

@@ -62,7 +62,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID)
 
 	// get Quorum for this object
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -371,7 +371,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := getAllObjectFileInfo(ctx, disks, bucket, object, opts.VersionID)
 
-	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs)
 	if err != nil {
 		return fi, nil, nil, err
 	}
@@ -587,7 +587,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// writeQuorum is dataBlocks + 1
 	writeQuorum := dataDrives
 	if dataDrives == parityDrives {
-		writeQuorum = dataDrives + 1
+		writeQuorum++
 	}
 
 	// Delete temporary object in the event of failure.
@@ -1071,7 +1071,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID)
 
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
@@ -1132,7 +1132,7 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID)
 
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
