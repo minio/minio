@@ -25,6 +25,9 @@ import (
 	"hash"
 	"io"
 
+	humanize "github.com/dustin/go-humanize"
+	md5accel "github.com/liangintel/md5accel"
+	"github.com/minio/minio/pkg/env"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -37,7 +40,7 @@ type Reader struct {
 	bytesRead  int64
 
 	md5sum, sha256sum   []byte // Byte values of md5sum, sha256sum of client sent values.
-	md5Hash, sha256Hash hash.Hash
+	Md5Hash, sha256Hash hash.Hash
 }
 
 // NewReader returns a new hash Reader which computes the MD5 sum and
@@ -56,8 +59,8 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.src.Read(p)
 	if n > 0 {
-		if r.md5Hash != nil {
-			r.md5Hash.Write(p[:n])
+		if r.Md5Hash != nil {
+			r.Md5Hash.Write(p[:n])
 		}
 		if r.sha256Hash != nil {
 			r.sha256Hash.Write(p[:n])
@@ -94,8 +97,8 @@ func (r *Reader) MD5() []byte {
 // NOTE: Calling this function multiple times might yield
 // different results if they are intermixed with Reader.
 func (r *Reader) MD5Current() []byte {
-	if r.md5Hash != nil {
-		return r.md5Hash.Sum(nil)
+	if r.Md5Hash != nil {
+		return r.Md5Hash.Sum(nil)
 	}
 	return nil
 }
@@ -128,8 +131,8 @@ func (r *Reader) verify() error {
 			return SHA256Mismatch{hex.EncodeToString(r.sha256sum), hex.EncodeToString(sum)}
 		}
 	}
-	if r.md5Hash != nil && len(r.md5sum) > 0 {
-		if sum := r.md5Hash.Sum(nil); !bytes.Equal(r.md5sum, sum) {
+	if r.Md5Hash != nil && len(r.md5sum) > 0 {
+		if sum := r.Md5Hash.Sum(nil); !bytes.Equal(r.md5sum, sum) {
 			return BadDigest{hex.EncodeToString(r.md5sum), hex.EncodeToString(sum)}
 		}
 	}
@@ -179,12 +182,26 @@ func (r *Reader) merge(size int64, md5Hex, sha256Hex string, actualSize int64, s
 		return nil, BadDigest{}
 	}
 	// If both are set, they must expect the same.
-	if r.md5Hash != nil && len(md5sum) > 0 {
+	if r.Md5Hash != nil && len(md5sum) > 0 {
 		if !bytes.Equal(r.md5sum, md5sum) {
 			return nil, BadDigest{}
 		}
-	} else if len(md5sum) > 0 || (r.md5Hash == nil && strictCompat) {
-		r.md5Hash = md5.New()
+	} else if len(md5sum) > 0 || (r.Md5Hash == nil && strictCompat) {
+		//
+		// HW offloads md5 calculation when:
+		// 1) env MINIO_MD5_HW_OFFLOAD is set to 'QAT'
+		// 2) with object size between 4MB and max object size hw supported(e.g.128MB)
+		//    Not efficient if size too small or too big
+		// 3) HW has free resource
+		//
+		if "QAT" == env.Get("MINIO_MD5_HW_OFFLOAD", "") &&
+			(4*humanize.MiByte) < size && size < md5accel.Get_max_object_size() &&
+			md5accel.Get_inflight_engine_num() < md5accel.Max_engine {
+			r.Md5Hash = md5accel.New()
+		} else {
+			r.Md5Hash = md5.New()
+		}
+
 		r.md5sum = md5sum
 	}
 	return r, nil
