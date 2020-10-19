@@ -21,6 +21,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -33,6 +34,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
@@ -42,6 +44,9 @@ import (
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
+
+	rand.Seed(time.Now().UTC().UnixNano())
+	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
 
 	gob.Register(StorageErr(""))
 }
