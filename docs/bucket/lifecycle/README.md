@@ -12,7 +12,7 @@ Enable object lifecycle configuration on buckets to setup automatic deletion of 
 - Enable bucket lifecycle configuration using `mc`:
 
 ```sh
-$ mc ilm import play/testbucket
+$ mc ilm import play/testbucket <<EOF
 {
     "Rules": [
         {
@@ -37,7 +37,10 @@ $ mc ilm import play/testbucket
         }
     ]
 }
+EOF
+```
 
+```
 Lifecycle configuration imported successfully to `play/testbucket`.
 ```
 
@@ -51,6 +54,53 @@ OldPictures |   old/   |    ✓       |  ✓     |  1 Jan 2020  |     ✗       
 TempUploads |  temp/   |    ✓       |  ✓     |   7 day(s)   |     ✗        |                  |                  |
 ------------|----------|------------|--------|--------------|--------------|------------------|------------------|------------------
 ```
+
+## 3. Activate ILM versioning features
+
+This will only work with a versioned bucket, take a look at [Bucket Versioning Guide](https://docs.min.io/docs/minio-bucket-versioning-guide.html) for more understanding.
+
+### 3.1 Automatic removal of non current objects versions
+
+A non-current object version is a version which is not the latest for a given object. It is possible to set up an automatic removal of non-current versions when a version becomes older than a given number of days.
+
+e.g., To scan objects stored under `user-uploads/` prefix and remove versions older than one year.
+```
+{
+    "Rules": [
+        {
+            "ID": "Removing all old versions",
+            "Filter": {
+                "Prefix": "users-uploads/"
+            },
+            "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 365
+            },
+            "Status": "Enabled"
+        }
+    ]
+}
+```
+
+### 3.2 Automatic removal of delete markers with no other versions
+
+When an object has only one version as a delete marker, the latter can be automatically removed after a certain number of days using the following configuration:
+
+```
+{
+    "Rules": [
+        {
+            "ID": "Removing all old versions",
+            "Expiration": {
+                "Days": 1,
+                "ExpiredObjectDeleteMarker": true
+            },
+            "Status": "Enabled"
+        }
+    ]
+}
+```
+
+
 
 ## Explore Further
 - [MinIO | Golang Client API Reference](https://docs.min.io/docs/golang-client-api-reference.html#SetBucketLifecycle)
