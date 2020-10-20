@@ -330,6 +330,11 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
 
+	// Once the config is fully loaded, initialize the new object layer.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
+
 	// Initialize IAM store
 	globalIAMSys.InitStore(newObject)
 
@@ -500,11 +505,6 @@ func serverMain(ctx *cli.Context) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
 	}
-
-	// Once the config is fully loaded, initialize the new object layer.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
 
 	// Initialize users credentials and policies in background right after config has initialized.
 	go globalIAMSys.Init(GlobalContext, newObject)

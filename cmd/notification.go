@@ -590,7 +590,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 }
 
 // Loads notification policies for all buckets into NotificationSys.
-func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *NotificationSys) load(buckets []BucketInfo) error {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
 		config, err := globalBucketMetadataSys.GetNotificationConfig(bucket.Name)
@@ -632,7 +632,7 @@ func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		}
 	}()
 
-	go logger.LogIf(ctx, sys.load(buckets, objAPI))
+	go logger.LogIf(ctx, sys.load(buckets))
 	return nil
 }
 
