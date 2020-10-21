@@ -67,6 +67,48 @@ func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 	return n + int64(nn), err
 }
 
+// AppendTo appends the context in a canonical from to dst.
+//
+// AppendTo sorts the context keys and writes the sorted
+// key-value pairs as canonical JSON object to w.
+func (c Context) AppendTo(dst []byte) (output []byte) {
+	if len(c) == 0 {
+		return append(dst, '{', '}')
+	}
+
+	// No need to copy+sort
+	if len(c) == 1 {
+		dst = append(dst, '{')
+		for k, v := range c {
+			dst = append(dst, '"')
+			dst = append(dst, []byte(k)...)
+			dst = append(dst, '"', ':', '"')
+			dst = append(dst, []byte(v)...)
+			dst = append(dst, '"')
+		}
+		return append(dst, '}')
+	}
+
+	sortedKeys := make([]string, 0, len(c))
+	for k := range c {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+
+	dst = append(dst, '{')
+	for i, k := range sortedKeys {
+		dst = append(dst, '"')
+		dst = append(dst, []byte(k)...)
+		dst = append(dst, '"', ':', '"')
+		dst = append(dst, []byte(c[k])...)
+		dst = append(dst, '"')
+		if i < len(sortedKeys)-1 {
+			dst = append(dst, ',')
+		}
+	}
+	return append(dst, '}')
+}
+
 // KMS represents an active and authenticted connection
 // to a Key-Management-Service. It supports generating
 // data key generation and unsealing of KMS-generated
@@ -155,13 +197,12 @@ func (kms *masterKeyKMS) Info() (info KMSInfo) {
 
 func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
 	var (
-		buffer     bytes.Buffer
 		derivedKey = kms.deriveKey(keyID, ctx)
 	)
-	if n, err := sio.Decrypt(&buffer, bytes.NewReader(sealedKey), sio.Config{Key: derivedKey[:]}); err != nil || n != 32 {
+	out, err := sio.DecryptBuffer(key[:0], sealedKey, sio.Config{Key: derivedKey[:]})
+	if err != nil || len(out) != 32 {
 		return key, err // TODO(aead): upgrade sio to use sio.Error
 	}
-	copy(key[:], buffer.Bytes())
 	return key, nil
 }
 
@@ -171,7 +212,7 @@ func (kms *masterKeyKMS) deriveKey(keyID string, context Context) (key [32]byte)
 	}
 	mac := hmac.New(sha256.New, kms.masterKey[:])
 	mac.Write([]byte(keyID))
-	context.WriteTo(mac)
+	mac.Write(context.AppendTo(make([]byte, 0, 128)))
 	mac.Sum(key[:0])
 	return key
 }

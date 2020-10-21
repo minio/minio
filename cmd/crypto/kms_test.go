@@ -83,3 +83,13 @@ func TestContextWriteTo(t *testing.T) {
 		}
 	}
 }
+
+func TestContextAppendTo(t *testing.T) {
+	for i, test := range contextWriteToTests {
+		dst := make([]byte, 0, 1024)
+		dst = test.Context.AppendTo(dst)
+		if s := string(dst); s != test.ExpectedJSON {
+			t.Errorf("Test %d: JSON representation differ - got: '%s' want: '%s'", i, s, test.ExpectedJSON)
+		}
+	}
+}
