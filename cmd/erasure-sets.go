@@ -32,7 +32,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
@@ -227,7 +226,7 @@ func (s *erasureSets) connectDisks() {
 			if err != nil {
 				if endpoint.IsLocal {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-					logger.Info(fmt.Sprintf("Found inconsistent drive %s with format.json, attempting to heal...", endpoint))
+					logger.Info(fmt.Sprintf("Found inconsistent drive %s with format.json, attempting to heal... (%s)", endpoint, err))
 				} else {
 					printEndpointError(endpoint, err, false)
 				}
@@ -483,7 +482,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 
 	storageInfos := make([]StorageInfo, len(s.sets))
 	storageInfoErrs := make([][]error, len(s.sets))
-	storageInfo.Backend.Type = BackendErasure
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
@@ -502,17 +500,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
-
-	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity == 0 {
-		scParity = s.setDriveCount / 2
-	}
-	storageInfo.Backend.StandardSCData = s.setDriveCount - scParity
-	storageInfo.Backend.StandardSCParity = scParity
-
-	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	storageInfo.Backend.RRSCData = s.setDriveCount - rrSCParity
-	storageInfo.Backend.RRSCParity = rrSCParity
 
 	if local {
 		// if local is true, we are not interested in the drive UUID info.
@@ -876,70 +863,6 @@ func (f *FileInfoCh) Pop() (fi FileInfo, ok bool) {
 func (f *FileInfoCh) Push(fi FileInfo) {
 	f.Prev = fi
 	f.Valid = true
-}
-
-// Calculate lexically least entry across multiple FileInfo channels,
-// returns the lexically common entry and the total number of times
-// we found this entry. Additionally also returns a boolean
-// to indicate if the caller needs to call this function
-// again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call lexicallySortedEntry
-// N times until this boolean is 'false'.
-func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
-	for j := range entryChs {
-		entries[j], entriesValid[j] = entryChs[j].Pop()
-	}
-
-	var isTruncated = false
-	for _, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-		isTruncated = true
-		break
-	}
-
-	var lentry FileInfo
-	var found bool
-	for i, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-		if !found {
-			lentry = entries[i]
-			found = true
-			continue
-		}
-		if entries[i].Name < lentry.Name {
-			lentry = entries[i]
-		}
-	}
-
-	// We haven't been able to find any lexically least entry,
-	// this would mean that we don't have valid entry.
-	if !found {
-		return lentry, 0, isTruncated
-	}
-
-	lexicallySortedEntryCount := 0
-	for i, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-
-		// Entries are duplicated across disks,
-		// we should simply skip such entries.
-		if lentry.Name == entries[i].Name && lentry.ModTime.Equal(entries[i].ModTime) {
-			lexicallySortedEntryCount++
-			continue
-		}
-
-		// Push all entries which are lexically higher
-		// and will be returned later in Pop()
-		entryChs[i].Push(entries[i])
-	}
-
-	return lentry, lexicallySortedEntryCount, isTruncated
 }
 
 // Calculate lexically least entry across multiple FileInfo channels,
@@ -1519,105 +1442,6 @@ func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error)
 	}
 	sort.Sort(byBucketName(listBuckets))
 	return listBuckets, nil
-}
-
-// Walk a bucket, optionally prefix recursively, until we have returned
-// all the content to objectInfo channel, it is callers responsibility
-// to allocate a receive channel for ObjectInfo, upon any unhandled
-// error walker returns error. Optionally if context.Done() is received
-// then Walk() stops the walker.
-func (s *erasureSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
-	if err := checkListObjsArgs(ctx, bucket, prefix, "", s); err != nil {
-		// Upon error close the channel.
-		close(results)
-		return err
-	}
-
-	if opts.WalkVersions {
-		entryChs := s.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done())
-
-		entriesValid := make([]bool, len(entryChs))
-		entries := make([]FileInfoVersions, len(entryChs))
-
-		go func() {
-			defer close(results)
-
-			for {
-				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
-				if !ok {
-					return
-				}
-
-				if quorumCount >= s.setDriveCount/2 {
-					// Read quorum exists proceed
-					for _, version := range entry.Versions {
-						results <- version.ToObjectInfo(bucket, version.Name)
-					}
-				}
-				// skip entries which do not have quorum
-			}
-		}()
-
-		return nil
-	}
-
-	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done())
-
-	entriesValid := make([]bool, len(entryChs))
-	entries := make([]FileInfo, len(entryChs))
-
-	go func() {
-		defer close(results)
-
-		for {
-			entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
-			if !ok {
-				return
-			}
-
-			if quorumCount >= s.setDriveCount/2 {
-				// Read quorum exists proceed
-				results <- entry.ToObjectInfo(bucket, entry.Name)
-			}
-			// skip entries which do not have quorum
-		}
-	}()
-
-	return nil
-}
-
-// HealObjects - Heal all objects recursively at a specified prefix, any
-// dangling objects deleted as well automatically.
-func (s *erasureSets) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
-
-	entryChs := s.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh)
-
-	entriesValid := make([]bool, len(entryChs))
-	entries := make([]FileInfoVersions, len(entryChs))
-	for {
-		entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
-		if !ok {
-			break
-		}
-
-		if quorumCount == s.setDriveCount && opts.ScanMode == madmin.HealNormalScan {
-			// Skip good entries.
-			continue
-		}
-
-		for _, version := range entry.Versions {
-			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(s.setDriveCount), time.Second)
-
-			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
-				return toObjectErr(err, bucket, version.Name)
-			}
-		}
-	}
-
-	return nil
 }
 
 // PutObjectTags - replace or add tags to an existing object
