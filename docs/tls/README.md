@@ -16,8 +16,8 @@ Install MinIO Server using the instructions in the [MinIO Quickstart Guide](http
 This section describes how to use a private key and public certificate that have been obtained from a certificate authority (CA). If these files have not been obtained, skip to [3. Generate Self-signed Certificates](#generate-use-self-signed-keys-certificates) or generate them with [Let's Encrypt](https://letsencrypt.org) using these instructions: [Generate Let's Encrypt certificate using Certbot for MinIO](https://docs.min.io/docs/generate-let-s-encypt-certificate-using-concert-for-minio.html).
 
 Copy the existing private key and public certificate to the `certs` directory. The default certs directory is:
-* **Linux:** `${HOME}/.minio/certs`
-* **Windows:** `%%USERPROFILE%%\.minio\certs`
+* **Linux:** `${HOME}/.mc/certs`
+* **Windows:** `%%USERPROFILE%%\.mc\certs`
 
 **Note:**
 * Location of custom certs directory can be specified using `--certs-dir` command line option.
@@ -248,8 +248,8 @@ certtool.exe --generate-self-signed --load-privkey private.key --template cert.c
 ## <a name="install-certificates-from-third-party-cas"></a>4. Install Certificates from Third-party CAs
 
 MinIO can connect to other servers, including MinIO nodes or other server types such as NATs and Redis. If these servers use certificates that were not registered with a known CA, add trust for these certificates to MinIO Server by placing these certificates under one of the following MinIO configuration paths:
-* **Linux:** `~/.minio/certs/CAs/`
-* **Windows**: `C:\Users\<Username>\.minio\certs\CAs`
+* **Linux:** `~/.mc/certs/CAs/`
+* **Windows**: `C:\Users\<Username>\.mc\certs\CAs`
 
 # Explore Further
 * [TLS Configuration for MinIO server on Kubernetes](https://github.com/minio/minio/tree/master/docs/tls/kubernetes)
