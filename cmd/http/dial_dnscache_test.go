@@ -132,8 +132,8 @@ func TestDialContextWithDNSCacheRand(t *testing.T) {
 
 	for _, c := range count {
 		got := float32(c) / float32(100)
-		if got < float32(0.2) {
-			t.Fatalf("expected 0.2 rate got %f", got)
+		if got < float32(0.1) {
+			t.Fatalf("expected 0.1 rate got %f", got)
 		}
 	}
 }
