@@ -83,7 +83,8 @@ type erasureSets struct {
 	setCount, setDriveCount int
 	listTolerancePerSet     int
 
-	disksConnectEvent chan diskConnectInfo
+	monitorContextCancel context.CancelFunc
+	disksConnectEvent    chan diskConnectInfo
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
@@ -220,23 +221,18 @@ func (s *erasureSets) connectDisks() {
 				}
 				return
 			}
-			s.erasureDisksMu.RLock()
-			setIndex, diskIndex, err := findDiskIndex(s.format, format)
-			s.erasureDisksMu.RUnlock()
-			if err != nil {
-				if endpoint.IsLocal {
-					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-					logger.Info(fmt.Sprintf("Found inconsistent drive %s with format.json, attempting to heal... (%s)", endpoint, err))
-				} else {
-					printEndpointError(endpoint, err, false)
-				}
-				return
-			}
-			disk.SetDiskID(format.Erasure.This)
 			if endpoint.IsLocal && disk.Healing() {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
 				logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
 			}
+			s.erasureDisksMu.RLock()
+			setIndex, diskIndex, err := findDiskIndex(s.format, format)
+			s.erasureDisksMu.RUnlock()
+			if err != nil {
+				printEndpointError(endpoint, err, false)
+				return
+			}
+			disk.SetDiskID(format.Erasure.This)
 
 			s.erasureDisksMu.Lock()
 			if s.erasureDisks[setIndex][diskIndex] != nil {
@@ -341,7 +337,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	listTolerancePerSet := 3
 	// By default this is off
-	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOff) == config.EnableOn {
+	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOn) == config.EnableOn {
 		listTolerancePerSet = -1
 	}
 
@@ -412,8 +408,11 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 	}
 
+	mctx, mctxCancel := context.WithCancel(ctx)
+	s.monitorContextCancel = mctxCancel
+
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
 
@@ -1155,6 +1154,8 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		return err
 	}
 
+	s.monitorContextCancel() // turn-off disk monitoring and replace format.
+
 	s.erasureDisksMu.Lock()
 
 	// Replace with new reference format.
@@ -1185,6 +1186,11 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 	}
 
 	s.erasureDisksMu.Unlock()
+
+	mctx, mctxCancel := context.WithCancel(GlobalContext)
+	s.monitorContextCancel = mctxCancel
+
+	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 
 	return nil
 }
@@ -1269,14 +1275,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		return res, err
 	}
 
-	for i, format := range formats {
-		if format != nil {
-			if ferr := formatErasureV3Check(refFormat, format); ferr != nil {
-				sErrs[i] = errUnformattedDisk
-			}
-		}
-	}
-
 	// Prepare heal-result
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
@@ -1297,14 +1295,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	}
 
 	if countErrs(sErrs, errUnformattedDisk) == 0 {
-		// No unformatted disks found disks are either offline
-		// or online, no healing is required.
 		return res, errNoHealRequired
 	}
 
 	// Mark all UUIDs which might be offline, use list
 	// of formats to mark them appropriately.
-	markUUIDsOffline(refFormat, formats)
+	markUUIDsOffline(refFormat, formats, sErrs)
 
 	// Initialize a new set of set formats which will be written to disk.
 	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
@@ -1358,6 +1354,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			return madmin.HealResultItem{}, err
 		}
 
+		s.monitorContextCancel() // turn-off disk monitoring and replace format.
+
 		s.erasureDisksMu.Lock()
 
 		// Replace with new reference format.
@@ -1388,6 +1386,10 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		}
 
 		s.erasureDisksMu.Unlock()
+
+		mctx, mctxCancel := context.WithCancel(GlobalContext)
+		s.monitorContextCancel = mctxCancel
+		go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 	}
 
 	return res, nil
