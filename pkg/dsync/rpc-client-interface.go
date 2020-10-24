@@ -33,6 +33,9 @@ type LockArgs struct {
 	// Owner represents unique ID for this instance, an owner who originally requested
 	// the locked resource, useful primarily in figuring our stale locks.
 	Owner string
+
+	// Quorum represents the expected quorum for this lock type.
+	Quorum int
 }
 
 // NetLocker is dsync compatible locker interface.
