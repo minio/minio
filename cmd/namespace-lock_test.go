@@ -41,6 +41,10 @@ func TestGetSource(t *testing.T) {
 
 // Test lock race
 func TestNSLockRace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	ctx := context.Background()
 
 	for i := 0; i < 10000; i++ {
