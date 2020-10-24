@@ -131,13 +131,17 @@ func (f *formatErasureV3) Clone() *formatErasureV3 {
 }
 
 // Returns formatErasure.Erasure.Version
-func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
+func newFormatErasureV3(numSets int, setLen int, distributionAlgo string) *formatErasureV3 {
 	format := &formatErasureV3{}
 	format.Version = formatMetaVersionV1
 	format.Format = formatBackendErasure
 	format.ID = mustGetUUID()
 	format.Erasure.Version = formatErasureVersionV3
-	format.Erasure.DistributionAlgo = formatErasureVersionV3DistributionAlgo
+	if distributionAlgo == "" {
+		format.Erasure.DistributionAlgo = formatErasureVersionV3DistributionAlgo
+	} else {
+		format.Erasure.DistributionAlgo = distributionAlgo
+	}
 	format.Erasure.Sets = make([][]string, numSets)
 
 	for i := 0; i < numSets; i++ {
@@ -645,8 +649,8 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 		}
 		for j := range reference.Erasure.Sets[i] {
 			if reference.Erasure.Sets[i][j] != format.Erasure.Sets[i][j] {
-				return fmt.Errorf("UUID on positions %d:%d do not match with, expected %s got %s",
-					i, j, reference.Erasure.Sets[i][j], format.Erasure.Sets[i][j])
+				return fmt.Errorf("UUID on positions %d:%d do not match with, expected %s got %s: (%w)",
+					i, j, reference.Erasure.Sets[i][j], format.Erasure.Sets[i][j], errInconsistentDisk)
 			}
 		}
 	}
@@ -824,8 +828,8 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
-func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
-	format := newFormatErasureV3(setCount, setDriveCount)
+func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, distributionAlgo string, deploymentID string, sErrs []error) (*formatErasureV3, error) {
+	format := newFormatErasureV3(setCount, setDriveCount, distributionAlgo)
 	formats := make([]*formatErasureV3, len(storageDisks))
 	wantAtMost := ecDrivesNoConfig(setDriveCount)
 
@@ -942,12 +946,15 @@ func getOfflineUUIDs(refFormat *formatErasureV3, formats []*formatErasureV3) (of
 }
 
 // Mark all UUIDs that are offline.
-func markUUIDsOffline(refFormat *formatErasureV3, formats []*formatErasureV3) {
+func markUUIDsOffline(refFormat *formatErasureV3, formats []*formatErasureV3, errs []error) {
 	offlineUUIDs := getOfflineUUIDs(refFormat, formats)
 	for i, set := range refFormat.Erasure.Sets {
+		setDriveCount := len(set)
 		for j := range set {
 			for _, offlineUUID := range offlineUUIDs {
-				if refFormat.Erasure.Sets[i][j] == offlineUUID {
+				if refFormat.Erasure.Sets[i][j] == offlineUUID &&
+					errors.Is(errs[i*setDriveCount+j], errUnformattedDisk) {
+					// Unformatted drive gets an offline disk UUID
 					refFormat.Erasure.Sets[i][j] = offlineDiskUUID
 				}
 			}
