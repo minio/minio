@@ -113,9 +113,21 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
+// Reads all `xl.meta` metadata as a FileInfo slice and checks if the data dir exists as well,
+// otherwise returns errFileNotFound (or errFileVersionNotFound)
+func getAllObjectFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string) ([]FileInfo, []error) {
+	return readVersionFromDisks(ctx, disks, bucket, object, versionID, true)
+}
+
 // Reads all `xl.meta` metadata as a FileInfo slice.
 // Returns error slice indicating the failed metadata reads.
 func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string) ([]FileInfo, []error) {
+	return readVersionFromDisks(ctx, disks, bucket, object, versionID, false)
+}
+
+// Reads all `xl.meta` metadata as a FileInfo slice and checks if the data dir
+// exists as well, if checkDataDir is set to true.
+func readVersionFromDisks(ctx context.Context, disks []StorageAPI, bucket, object, versionID string, checkDataDir bool) ([]FileInfo, []error) {
 	metadataArray := make([]FileInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -126,7 +138,7 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID)
+			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, checkDataDir)
 			if err != nil {
 				if err != errFileNotFound && err != errVolumeNotFound && err != errFileVersionNotFound {
 					logger.GetReqInfo(ctx).AppendTags("disk", disks[index].String())

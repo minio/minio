@@ -43,7 +43,25 @@ func (er erasureObjects) getMultipartSHADir(bucket, object string) string {
 
 // checkUploadIDExists - verify if a given uploadID exists and is valid.
 func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object, uploadID string) error {
-	_, _, _, err := er.getObjectFileInfo(ctx, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID), ObjectOptions{})
+	disks := er.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllFileInfo(ctx, disks, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID), "")
+
+	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	if err != nil {
+		return err
+	}
+
+	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+		return toObjectErr(reducedErr, bucket, object)
+	}
+
+	// List all online disks.
+	_, modTime := listOnlineDisks(disks, metaArr, errs)
+
+	// Pick latest valid metadata.
+	_, err = pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	return err
 }
 
@@ -110,7 +128,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		}
 		for _, uploadIDDir := range uploadIDDirs {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
-			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "")
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
 			if err != nil {
 				continue
 			}
@@ -124,7 +142,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		return
 	}
 	for _, tmpDir := range tmpDirs {
-		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "")
+		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "", false)
 		if err != nil {
 			continue
 		}
@@ -178,7 +196,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		if populatedUploadIds.Contains(uploadID) {
 			continue
 		}
-		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
+		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
 		if err != nil {
 			return result, toObjectErr(err, bucket, object)
 		}
