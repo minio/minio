@@ -418,7 +418,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if !globalCLIContext.Quiet {
+	if !globalCLIContext.Quiet && globalInplaceUpdateDisabled {
 		// Check for new updates from dl.min.io.
 		checkUpdate(getMinioMode())
 	}
