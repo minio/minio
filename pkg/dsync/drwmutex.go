@@ -241,6 +241,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				UID:       id,
 				Resources: lockNames,
 				Source:    source,
+				Quorum:    quorum,
 			}
 
 			var locked bool

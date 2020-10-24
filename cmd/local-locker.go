@@ -35,6 +35,8 @@ type lockRequesterInfo struct {
 	// Owner represents the UUID of the owner who originally requested the lock
 	// useful in expiry.
 	Owner string
+	// Quorum represents the quorum required for this lock to be active.
+	Quorum int
 }
 
 // isWriteLock returns whether the lock is a write or read lock.
@@ -96,6 +98,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 				UID:           args.UID,
 				Timestamp:     UTCNow(),
 				TimeLastCheck: UTCNow(),
+				Quorum:        args.Quorum,
 			},
 		}
 	}
@@ -153,6 +156,7 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 		UID:           args.UID,
 		Timestamp:     UTCNow(),
 		TimeLastCheck: UTCNow(),
+		Quorum:        args.Quorum,
 	}
 	resource := args.Resources[0]
 	if lri, ok := l.lockMap[resource]; ok {

@@ -348,7 +348,7 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquorum int) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
 		Resource:   resource,
@@ -356,18 +356,17 @@ func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquor
 		Source:     l.Source,
 		Owner:      l.Owner,
 		ID:         l.UID,
+		Quorum:     l.Quorum,
 	}
 	if l.Writer {
 		entry.Type = "WRITE"
-		entry.Quorum = wquorum
 	} else {
 		entry.Type = "READ"
-		entry.Quorum = rquorum
 	}
 	return entry
 }
 
-func topLockEntries(peerLocks []*PeerLocks, rquorum, wquorum int, stale bool) madmin.LockEntries {
+func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -379,7 +378,7 @@ func topLockEntries(peerLocks []*PeerLocks, rquorum, wquorum int, stale bool) ma
 					if val, ok := entryMap[lockReqInfo.UID]; ok {
 						val.ServerList = append(val.ServerList, peerLock.Addr)
 					} else {
-						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr, rquorum, wquorum)
+						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
 					}
 				}
 			}
@@ -429,10 +428,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 
 	peerLocks := globalNotificationSys.GetLocks(ctx, r)
 
-	rquorum := getReadQuorum(objectAPI.SetDriveCount())
-	wquorum := getWriteQuorum(objectAPI.SetDriveCount())
-
-	topLocks := topLockEntries(peerLocks, rquorum, wquorum, stale)
+	topLocks := topLockEntries(peerLocks, stale)
 
 	// Marshal API response upto requested count.
 	if len(topLocks) > count && count > 0 {
