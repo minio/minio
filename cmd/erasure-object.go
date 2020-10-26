@@ -359,10 +359,18 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
 	if err != nil {
-		return fi, nil, nil, err
+		readQuorum = len(metaArr) / 2
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+		if reducedErr == errErasureReadQuorum {
+			if _, ok := isObjectDangling(metaArr, errs, nil); ok {
+				reducedErr = errFileNotFound
+				if opts.VersionID != "" {
+					reducedErr = errFileVersionNotFound
+				}
+			}
+		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -893,10 +901,14 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
+		case ObjectNotFound, VersionNotFound:
+			// Continue deleting since the object/version not found
+			// could also mean a dangling object in the storage
 		case InsufficientReadQuorum:
 			return objInfo, InsufficientWriteQuorum{}
+		default:
+			return objInfo, gerr
 		}
-		return objInfo, gerr
 	}
 
 	// Acquire a write lock before deleting the object.
@@ -947,7 +959,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	return ObjectInfo{Bucket: bucket, Name: decodeDirObject(object), VersionID: opts.VersionID}, nil
+	return ObjectInfo{Bucket: bucket, Name: decodeDirObject(object), VersionID: opts.VersionID}, gerr
 }
 
 // Send the successful but partial upload/delete, however ignore
