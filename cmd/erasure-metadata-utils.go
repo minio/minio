@@ -153,6 +153,30 @@ func readVersionFromDisks(ctx context.Context, disks []StorageAPI, bucket, objec
 	return metadataArray, g.Wait()
 }
 
+// Return disks ordered by the meta.Erasure.Index information.
+func shuffleDisksByIndex(disks []StorageAPI, metaArr []FileInfo) (shuffledDisks []StorageAPI) {
+	shuffledDisks = make([]StorageAPI, len(disks))
+	for i, meta := range metaArr {
+		if disks[i] == nil {
+			continue
+		}
+		shuffledDisks[meta.Erasure.Index-1] = disks[i]
+	}
+	return shuffledDisks
+}
+
+// Return FileInfo slice ordered by the meta.Erasure.Index information.
+func shufflePartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo) []FileInfo {
+	newMetaArr := make([]FileInfo, len(disks))
+	for i, meta := range metaArr {
+		if disks[i] == nil {
+			continue
+		}
+		newMetaArr[meta.Erasure.Index-1] = metaArr[i]
+	}
+	return newMetaArr
+}
+
 // Return shuffled partsMetadata depending on distribution.
 func shufflePartsMetadata(partsMetadata []FileInfo, distribution []int) (shuffledPartsMetadata []FileInfo) {
 	if distribution == nil {

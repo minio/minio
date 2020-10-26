@@ -47,6 +47,7 @@ func TestAddObjectPart(t *testing.T) {
 
 	// Setup.
 	fi := newFileInfo("test-object", 8, 8)
+	fi.Erasure.Index = 1
 	if !fi.IsValid() {
 		t.Fatalf("unable to get xl meta")
 	}
@@ -80,6 +81,7 @@ func TestObjectPartIndex(t *testing.T) {
 
 	// Setup.
 	fi := newFileInfo("test-object", 8, 8)
+	fi.Erasure.Index = 1
 	if !fi.IsValid() {
 		t.Fatalf("unable to get xl meta")
 	}
@@ -108,6 +110,7 @@ func TestObjectPartIndex(t *testing.T) {
 func TestObjectToPartOffset(t *testing.T) {
 	// Setup.
 	fi := newFileInfo("test-object", 8, 8)
+	fi.Erasure.Index = 1
 	if !fi.IsValid() {
 		t.Fatalf("unable to get xl meta")
 	}
