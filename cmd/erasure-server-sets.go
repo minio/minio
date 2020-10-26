@@ -228,9 +228,6 @@ func (z *erasureServerSets) getZoneIdx(ctx context.Context, bucket, object strin
 
 func (z *erasureServerSets) Shutdown(ctx context.Context) error {
 	defer z.shutdown()
-	if z.SingleZone() {
-		return z.serverSets[0].Shutdown(ctx)
-	}
 
 	g := errgroup.WithNErrs(len(z.serverSets))
 
@@ -251,11 +248,8 @@ func (z *erasureServerSets) Shutdown(ctx context.Context) error {
 }
 
 func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
-	if z.SingleZone() {
-		return z.serverSets[0].StorageInfo(ctx, local)
-	}
-
 	var storageInfo StorageInfo
+	storageInfo.Backend.Type = BackendErasure
 
 	storageInfos := make([]StorageInfo, len(z.serverSets))
 	storageInfosErrs := make([][]error, len(z.serverSets))
@@ -277,11 +271,16 @@ func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (Storag
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
-	storageInfo.Backend.Type = storageInfos[0].Backend.Type
-	storageInfo.Backend.StandardSCData = storageInfos[0].Backend.StandardSCData
-	storageInfo.Backend.StandardSCParity = storageInfos[0].Backend.StandardSCParity
-	storageInfo.Backend.RRSCData = storageInfos[0].Backend.RRSCData
-	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
+	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	if scParity == 0 {
+		scParity = z.SetDriveCount() / 2
+	}
+
+	storageInfo.Backend.StandardSCData = z.SetDriveCount() - scParity
+	storageInfo.Backend.StandardSCParity = scParity
+	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
+	storageInfo.Backend.RRSCData = z.SetDriveCount() - rrSCParity
+	storageInfo.Backend.RRSCParity = rrSCParity
 
 	var errs []error
 	for i := range z.serverSets {
@@ -1896,8 +1895,6 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 		}
 
 		for _, version := range entry.Versions {
-			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]), time.Second)
 			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
 				return toObjectErr(err, bucket, version.Name)
 			}
@@ -1926,9 +1923,6 @@ func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, vers
 		defer lk.RUnlock()
 	}
 
-	if z.SingleZone() {
-		return z.serverSets[0].HealObject(ctx, bucket, object, versionID, opts)
-	}
 	for _, zone := range z.serverSets {
 		result, err := zone.HealObject(ctx, bucket, object, versionID, opts)
 		if err != nil {
@@ -1938,6 +1932,13 @@ func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, vers
 			return result, err
 		}
 		return result, nil
+	}
+	if versionID != "" {
+		return madmin.HealResultItem{}, VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: versionID,
+		}
 	}
 	return madmin.HealResultItem{}, ObjectNotFound{
 		Bucket: bucket,

@@ -221,13 +221,13 @@ func main() {
 			return
 		}
 
-		clnt, err := minio.NewWithOptions(u.Host, opts)
+		clnt, err := minio.New(u.Host, opts)
 		if err != nil {
 			log.Println(fmt.Errorf("Error while initializing Minio client, %s", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		buckets, err := clnt.ListBuckets()
+		buckets, err := clnt.ListBuckets(r.Context())
 		if err != nil {
 			log.Println(fmt.Errorf("Error while listing buckets, %s", err))
 			http.Error(w, err.Error(), http.StatusBadRequest)

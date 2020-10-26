@@ -421,6 +421,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 				return nil
 			}
+
 			// Dynamic time delay.
 			t := UTCNow()
 
@@ -480,22 +481,29 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// If that doesn't bring it back we remove the folder and assume it was deleted.
 		// This means that the next run will not look for it.
 		for k := range existing {
-			// Dynamic time delay.
-			t := UTCNow()
-
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
 				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
 			}
 
+			// Dynamic time delay.
+			t := UTCNow()
+
 			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
 				func(bucket, object, versionID string) error {
+					// Wait for each heal as per crawler frequency.
+					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+
+					defer func() {
+						t = UTCNow()
+					}()
 					return bgSeq.queueHealTask(healSource{
 						bucket:    bucket,
 						object:    object,
 						versionID: versionID,
 					}, madmin.HealItemObject)
 				})
+
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 
 			if f.dataUsageCrawlDebug && err != nil {

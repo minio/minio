@@ -32,7 +32,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
@@ -84,7 +83,8 @@ type erasureSets struct {
 	setCount, setDriveCount int
 	listTolerancePerSet     int
 
-	disksConnectEvent chan diskConnectInfo
+	monitorContextCancel context.CancelFunc
+	disksConnectEvent    chan diskConnectInfo
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
@@ -221,23 +221,18 @@ func (s *erasureSets) connectDisks() {
 				}
 				return
 			}
-			s.erasureDisksMu.RLock()
-			setIndex, diskIndex, err := findDiskIndex(s.format, format)
-			s.erasureDisksMu.RUnlock()
-			if err != nil {
-				if endpoint.IsLocal {
-					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-					logger.Info(fmt.Sprintf("Found inconsistent drive %s with format.json, attempting to heal...", endpoint))
-				} else {
-					printEndpointError(endpoint, err, false)
-				}
-				return
-			}
-			disk.SetDiskID(format.Erasure.This)
 			if endpoint.IsLocal && disk.Healing() {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
 				logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
 			}
+			s.erasureDisksMu.RLock()
+			setIndex, diskIndex, err := findDiskIndex(s.format, format)
+			s.erasureDisksMu.RUnlock()
+			if err != nil {
+				printEndpointError(endpoint, err, false)
+				return
+			}
+			disk.SetDiskID(format.Erasure.This)
 
 			s.erasureDisksMu.Lock()
 			if s.erasureDisks[setIndex][diskIndex] != nil {
@@ -342,7 +337,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	listTolerancePerSet := 3
 	// By default this is off
-	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOff) == config.EnableOn {
+	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOn) == config.EnableOn {
 		listTolerancePerSet = -1
 	}
 
@@ -413,8 +408,11 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 	}
 
+	mctx, mctxCancel := context.WithCancel(ctx)
+	s.monitorContextCancel = mctxCancel
+
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
 
@@ -483,7 +481,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 
 	storageInfos := make([]StorageInfo, len(s.sets))
 	storageInfoErrs := make([][]error, len(s.sets))
-	storageInfo.Backend.Type = BackendErasure
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
@@ -502,17 +499,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
-
-	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity == 0 {
-		scParity = s.setDriveCount / 2
-	}
-	storageInfo.Backend.StandardSCData = s.setDriveCount - scParity
-	storageInfo.Backend.StandardSCParity = scParity
-
-	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	storageInfo.Backend.RRSCData = s.setDriveCount - rrSCParity
-	storageInfo.Backend.RRSCParity = rrSCParity
 
 	if local {
 		// if local is true, we are not interested in the drive UUID info.
@@ -885,70 +871,6 @@ func (f *FileInfoCh) Push(fi FileInfo) {
 // again to list the next entry. It is callers responsibility
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func lexicallySortedEntry(entryChs []FileInfoCh, entries []FileInfo, entriesValid []bool) (FileInfo, int, bool) {
-	for j := range entryChs {
-		entries[j], entriesValid[j] = entryChs[j].Pop()
-	}
-
-	var isTruncated = false
-	for _, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-		isTruncated = true
-		break
-	}
-
-	var lentry FileInfo
-	var found bool
-	for i, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-		if !found {
-			lentry = entries[i]
-			found = true
-			continue
-		}
-		if entries[i].Name < lentry.Name {
-			lentry = entries[i]
-		}
-	}
-
-	// We haven't been able to find any lexically least entry,
-	// this would mean that we don't have valid entry.
-	if !found {
-		return lentry, 0, isTruncated
-	}
-
-	lexicallySortedEntryCount := 0
-	for i, valid := range entriesValid {
-		if !valid {
-			continue
-		}
-
-		// Entries are duplicated across disks,
-		// we should simply skip such entries.
-		if lentry.Name == entries[i].Name && lentry.ModTime.Equal(entries[i].ModTime) {
-			lexicallySortedEntryCount++
-			continue
-		}
-
-		// Push all entries which are lexically higher
-		// and will be returned later in Pop()
-		entryChs[i].Push(entries[i])
-	}
-
-	return lentry, lexicallySortedEntryCount, isTruncated
-}
-
-// Calculate lexically least entry across multiple FileInfo channels,
-// returns the lexically common entry and the total number of times
-// we found this entry. Additionally also returns a boolean
-// to indicate if the caller needs to call this function
-// again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call lexicallySortedEntry
-// N times until this boolean is 'false'.
 func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileInfoVersions, entriesValid []bool) (FileInfoVersions, int, bool) {
 	for j := range entryChs {
 		entries[j], entriesValid[j] = entryChs[j].Pop()
@@ -1232,6 +1154,8 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		return err
 	}
 
+	s.monitorContextCancel() // turn-off disk monitoring and replace format.
+
 	s.erasureDisksMu.Lock()
 
 	// Replace with new reference format.
@@ -1262,6 +1186,11 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 	}
 
 	s.erasureDisksMu.Unlock()
+
+	mctx, mctxCancel := context.WithCancel(GlobalContext)
+	s.monitorContextCancel = mctxCancel
+
+	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 
 	return nil
 }
@@ -1346,14 +1275,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		return res, err
 	}
 
-	for i, format := range formats {
-		if format != nil {
-			if ferr := formatErasureV3Check(refFormat, format); ferr != nil {
-				sErrs[i] = errUnformattedDisk
-			}
-		}
-	}
-
 	// Prepare heal-result
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemMetadata,
@@ -1374,14 +1295,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	}
 
 	if countErrs(sErrs, errUnformattedDisk) == 0 {
-		// No unformatted disks found disks are either offline
-		// or online, no healing is required.
 		return res, errNoHealRequired
 	}
 
 	// Mark all UUIDs which might be offline, use list
 	// of formats to mark them appropriately.
-	markUUIDsOffline(refFormat, formats)
+	markUUIDsOffline(refFormat, formats, sErrs)
 
 	// Initialize a new set of set formats which will be written to disk.
 	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
@@ -1435,6 +1354,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			return madmin.HealResultItem{}, err
 		}
 
+		s.monitorContextCancel() // turn-off disk monitoring and replace format.
+
 		s.erasureDisksMu.Lock()
 
 		// Replace with new reference format.
@@ -1465,6 +1386,10 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		}
 
 		s.erasureDisksMu.Unlock()
+
+		mctx, mctxCancel := context.WithCancel(GlobalContext)
+		s.monitorContextCancel = mctxCancel
+		go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 	}
 
 	return res, nil
@@ -1519,105 +1444,6 @@ func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error)
 	}
 	sort.Sort(byBucketName(listBuckets))
 	return listBuckets, nil
-}
-
-// Walk a bucket, optionally prefix recursively, until we have returned
-// all the content to objectInfo channel, it is callers responsibility
-// to allocate a receive channel for ObjectInfo, upon any unhandled
-// error walker returns error. Optionally if context.Done() is received
-// then Walk() stops the walker.
-func (s *erasureSets) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts ObjectOptions) error {
-	if err := checkListObjsArgs(ctx, bucket, prefix, "", s); err != nil {
-		// Upon error close the channel.
-		close(results)
-		return err
-	}
-
-	if opts.WalkVersions {
-		entryChs := s.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done())
-
-		entriesValid := make([]bool, len(entryChs))
-		entries := make([]FileInfoVersions, len(entryChs))
-
-		go func() {
-			defer close(results)
-
-			for {
-				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
-				if !ok {
-					return
-				}
-
-				if quorumCount >= s.setDriveCount/2 {
-					// Read quorum exists proceed
-					for _, version := range entry.Versions {
-						results <- version.ToObjectInfo(bucket, version.Name)
-					}
-				}
-				// skip entries which do not have quorum
-			}
-		}()
-
-		return nil
-	}
-
-	entryChs := s.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done())
-
-	entriesValid := make([]bool, len(entryChs))
-	entries := make([]FileInfo, len(entryChs))
-
-	go func() {
-		defer close(results)
-
-		for {
-			entry, quorumCount, ok := lexicallySortedEntry(entryChs, entries, entriesValid)
-			if !ok {
-				return
-			}
-
-			if quorumCount >= s.setDriveCount/2 {
-				// Read quorum exists proceed
-				results <- entry.ToObjectInfo(bucket, entry.Name)
-			}
-			// skip entries which do not have quorum
-		}
-	}()
-
-	return nil
-}
-
-// HealObjects - Heal all objects recursively at a specified prefix, any
-// dangling objects deleted as well automatically.
-func (s *erasureSets) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
-
-	entryChs := s.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh)
-
-	entriesValid := make([]bool, len(entryChs))
-	entries := make([]FileInfoVersions, len(entryChs))
-	for {
-		entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
-		if !ok {
-			break
-		}
-
-		if quorumCount == s.setDriveCount && opts.ScanMode == madmin.HealNormalScan {
-			// Skip good entries.
-			continue
-		}
-
-		for _, version := range entry.Versions {
-			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(s.setDriveCount), time.Second)
-
-			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
-				return toObjectErr(err, bucket, version.Name)
-			}
-		}
-	}
-
-	return nil
 }
 
 // PutObjectTags - replace or add tags to an existing object

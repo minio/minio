@@ -178,7 +178,9 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		}
 	}
 
-	if len(disksInfo) == rootDiskCount {
+	// Count offline disks as well to ensure consistent
+	// reportability of offline drives on local setups.
+	if len(disksInfo) == (rootDiskCount + offlineDisks.Sum()) {
 		// Success.
 		return disksInfo, errs, onlineDisks, offlineDisks
 	}

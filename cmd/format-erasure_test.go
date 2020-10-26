@@ -27,7 +27,7 @@ import (
 
 // Test get offline/online uuids.
 func TestGetUUIDs(t *testing.T) {
-	fmtV2 := newFormatErasureV3(4, 16)
+	fmtV2 := newFormatErasureV3(4, 16, "CRCMOD")
 	formats := make([]*formatErasureV3, 64)
 
 	for i := 0; i < 4; i++ {
@@ -61,7 +61,12 @@ func TestGetUUIDs(t *testing.T) {
 		t.Errorf("Expected offline count '16', got '%d'", gotCount)
 	}
 
-	markUUIDsOffline(fmtV2, formats)
+	var errs []error
+	for i := 0; i < 4*16; i++ {
+		errs = append(errs, errUnformattedDisk)
+	}
+
+	markUUIDsOffline(fmtV2, formats, errs)
 	gotCount = 0
 	for i := range fmtV2.Erasure.Sets {
 		for j := range fmtV2.Erasure.Sets[i] {
@@ -93,7 +98,7 @@ func TestFixFormatV3(t *testing.T) {
 		}
 	}
 
-	format := newFormatErasureV3(1, 8)
+	format := newFormatErasureV3(1, 8, "CRCMOD")
 	formats := make([]*formatErasureV3, 8)
 
 	for j := 0; j < 8; j++ {
@@ -127,7 +132,7 @@ func TestFixFormatV3(t *testing.T) {
 
 // tests formatErasureV3ThisEmpty conditions.
 func TestFormatErasureEmpty(t *testing.T) {
-	format := newFormatErasureV3(1, 16)
+	format := newFormatErasureV3(1, 16, "CRCMOD")
 	formats := make([]*formatErasureV3, 16)
 
 	for j := 0; j < 16; j++ {
@@ -326,7 +331,7 @@ func TestGetFormatErasureInQuorumCheck(t *testing.T) {
 	setCount := 2
 	setDriveCount := 16
 
-	format := newFormatErasureV3(setCount, setDriveCount)
+	format := newFormatErasureV3(setCount, setDriveCount, "CRCMOD")
 	formats := make([]*formatErasureV3, 32)
 
 	for i := 0; i < setCount; i++ {
@@ -392,7 +397,7 @@ func TestGetErasureID(t *testing.T) {
 	setCount := 2
 	setDriveCount := 8
 
-	format := newFormatErasureV3(setCount, setDriveCount)
+	format := newFormatErasureV3(setCount, setDriveCount, "CRCMOD")
 	formats := make([]*formatErasureV3, 16)
 
 	for i := 0; i < setCount; i++ {
@@ -447,7 +452,7 @@ func TestNewFormatSets(t *testing.T) {
 	setCount := 2
 	setDriveCount := 16
 
-	format := newFormatErasureV3(setCount, setDriveCount)
+	format := newFormatErasureV3(setCount, setDriveCount, "CRCMOD")
 	formats := make([]*formatErasureV3, 32)
 	errs := make([]error, 32)
 

@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -32,10 +33,10 @@ import (
 
 const (
 	// Lock maintenance interval.
-	lockMaintenanceInterval = 30 * time.Second
+	lockMaintenanceInterval = 15 * time.Second
 
 	// Lock validity check interval.
-	lockValidityCheckInterval = 30 * time.Second
+	lockValidityCheckInterval = 5 * time.Second
 )
 
 // To abstract a node over network.
@@ -63,10 +64,16 @@ func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func getLockArgs(r *http.Request) (args dsync.LockArgs, err error) {
+	quorum, err := strconv.Atoi(r.URL.Query().Get(lockRESTQuorum))
+	if err != nil {
+		return args, err
+	}
+
 	args = dsync.LockArgs{
 		Owner:  r.URL.Query().Get(lockRESTOwner),
 		UID:    r.URL.Query().Get(lockRESTUID),
 		Source: r.URL.Query().Get(lockRESTSource),
+		Quorum: quorum,
 	}
 
 	var resources []string
@@ -277,12 +284,8 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
 		nlripsMap := make(map[string]nlock, len(nlrips))
 		for _, nlrip := range nlrips {
-			// Locks are only held on first zone, make sure that
-			// we only look for ownership of locks from endpoints
-			// on first zone.
 			for _, c := range allLockersFn() {
 				if !c.IsOnline() || c == nil {
-					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
 					continue
 				}
 
@@ -306,14 +309,8 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 				}
 			}
 
-			// Read locks we assume quorum for be N/2 success
-			quorum := getReadQuorum(objAPI.SetDriveCount())
-			if nlrip.lri.Writer {
-				quorum = getWriteQuorum(objAPI.SetDriveCount())
-			}
-
 			// less than the quorum, we have locks expired.
-			if nlripsMap[nlrip.name].locks < quorum {
+			if nlripsMap[nlrip.name].locks < nlrip.lri.Quorum {
 				// The lock is no longer active at server that originated
 				// the lock, attempt to remove the lock.
 				globalLockServers[lendpoint].mutex.Lock()
