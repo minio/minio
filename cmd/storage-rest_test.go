@@ -454,7 +454,7 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 	globalServerConfig = newServerConfig()
 	lookupConfigs(globalServerConfig, 0)
 
-	restClient := newStorageRESTClient(endpoint)
+	restClient := newStorageRESTClient(endpoint, false)
 
 	return httpServer, restClient, prevGlobalServerConfig, endpointPath
 }
