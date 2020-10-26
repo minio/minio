@@ -73,8 +73,6 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 		}
 	}
 
-	go monitorLocalDisksInconsistentAndHeal(ctx, z, bgSeq)
-
 	go monitorLocalDisksAndHeal(ctx, z, bgSeq)
 }
 
@@ -98,86 +96,12 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 
 }
 
-func getLocalDisksToHealInconsistent() (refFormats []*formatErasureV3, diskFormats [][]*formatErasureV3, disksToHeal [][]StorageAPI) {
-	disksToHeal = make([][]StorageAPI, len(globalEndpoints))
-	diskFormats = make([][]*formatErasureV3, len(globalEndpoints))
-	refFormats = make([]*formatErasureV3, len(globalEndpoints))
-	for k, ep := range globalEndpoints {
-		disksToHeal[k] = make([]StorageAPI, len(ep.Endpoints))
-		diskFormats[k] = make([]*formatErasureV3, len(ep.Endpoints))
-		formats := make([]*formatErasureV3, len(ep.Endpoints))
-		storageDisks, _ := initStorageDisksWithErrors(ep.Endpoints)
-		for i, disk := range storageDisks {
-			if disk != nil {
-				format, err := loadFormatErasure(disk)
-				if err != nil {
-					// any error we don't care proceed.
-					continue
-				}
-				formats[i] = format
-			}
-		}
-		refFormat, err := getFormatErasureInQuorum(formats)
-		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("No erasured disks are in quorum or too many disks are offline - please investigate immediately"))
-			continue
-		}
-		// We have obtained reference format - check if disks are inconsistent
-		for i, format := range formats {
-			if format == nil {
-				continue
-			}
-			if err := formatErasureV3Check(refFormat, format); err != nil {
-				if errors.Is(err, errInconsistentDisk) {
-					// Found inconsistencies - check which disk it is.
-					if storageDisks[i] != nil && storageDisks[i].IsLocal() {
-						disksToHeal[k][i] = storageDisks[i]
-					}
-				}
-			}
-		}
-		refFormats[k] = refFormat
-		diskFormats[k] = formats
-	}
-	return refFormats, diskFormats, disksToHeal
-}
-
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 	// Run the background healer
 	globalBackgroundHealRoutine = newHealRoutine()
 	go globalBackgroundHealRoutine.run(ctx, objAPI)
 
 	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence())
-}
-
-// monitorLocalDisksInconsistentAndHeal - ensures that inconsistent
-// disks are healed appropriately.
-func monitorLocalDisksInconsistentAndHeal(ctx context.Context, z *erasureServerSets, bgSeq *healSequence) {
-	// Perform automatic disk healing when a disk is found to be inconsistent.
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(defaultMonitorNewDiskInterval):
-			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
-
-			refFormats, diskFormats, localDisksHeal := getLocalDisksToHealInconsistent()
-			for k := range refFormats {
-				for j, disk := range localDisksHeal[k] {
-					if disk == nil {
-						continue
-					}
-					format := diskFormats[k][j].Clone()
-					format.Erasure.Sets = refFormats[k].Erasure.Sets
-					if err := saveFormatErasure(disk, format, true); err != nil {
-						logger.LogIf(ctx, fmt.Errorf("Unable fix inconsistent format for drive %s: %w", disk, err))
-						continue
-					}
-					globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
-				}
-			}
-		}
-	}
 }
 
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed

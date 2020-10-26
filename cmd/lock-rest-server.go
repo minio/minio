@@ -33,7 +33,7 @@ import (
 
 const (
 	// Lock maintenance interval.
-	lockMaintenanceInterval = 15 * time.Second
+	lockMaintenanceInterval = 30 * time.Second
 
 	// Lock validity check interval.
 	lockValidityCheckInterval = 5 * time.Second
@@ -311,12 +311,8 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 
 			// less than the quorum, we have locks expired.
 			if nlripsMap[nlrip.name].locks < nlrip.lri.Quorum {
-				// The lock is no longer active at server that originated
-				// the lock, attempt to remove the lock.
-				globalLockServers[lendpoint].mutex.Lock()
 				// Purge the stale entry if it exists.
 				globalLockServers[lendpoint].removeEntryIfExists(nlrip)
-				globalLockServers[lendpoint].mutex.Unlock()
 			}
 
 		}

@@ -57,6 +57,18 @@ func isObjectDir(object string, size int64) bool {
 	return HasSuffix(object, SlashSeparator) && size == 0
 }
 
+func newStorageAPIWithoutHealthCheck(endpoint Endpoint) (storage StorageAPI, err error) {
+	if endpoint.IsLocal {
+		storage, err := newXLStorage(endpoint)
+		if err != nil {
+			return nil, err
+		}
+		return &xlStorageDiskIDCheck{storage: storage}, nil
+	}
+
+	return newStorageRESTClient(endpoint, false), nil
+}
+
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
@@ -67,7 +79,7 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 		return &xlStorageDiskIDCheck{storage: storage}, nil
 	}
 
-	return newStorageRESTClient(endpoint), nil
+	return newStorageRESTClient(endpoint, true), nil
 }
 
 // Cleanup a directory recursively.

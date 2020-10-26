@@ -661,7 +661,7 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -678,14 +678,16 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 
 	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		cancel()
-		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
+	if healthcheck {
+		restClient.HealthCheckFn = func() bool {
+			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+			// Instantiate a new rest client for healthcheck
+			// to avoid recursive healthCheckFn()
+			respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
+			xhttp.DrainBody(respBody)
+			cancel()
+			return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
+		}
 	}
 
 	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
