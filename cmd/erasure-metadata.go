@@ -91,7 +91,8 @@ func (fi FileInfo) IsValid() bool {
 	dataBlocks := fi.Erasure.DataBlocks
 	parityBlocks := fi.Erasure.ParityBlocks
 	return ((dataBlocks >= parityBlocks) &&
-		(dataBlocks != 0) && (parityBlocks != 0))
+		(dataBlocks != 0) && (parityBlocks != 0) &&
+		(fi.Erasure.Index > 0 && fi.Erasure.Distribution != nil))
 }
 
 // ToObjectInfo - Converts metadata to object info.
