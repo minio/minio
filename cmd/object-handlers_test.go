@@ -2179,7 +2179,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			continue
 		}
 		if rec.Code == http.StatusOK {
 			var cpObjResp CopyObjectResponse

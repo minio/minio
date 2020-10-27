@@ -302,6 +302,8 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[i] = fi
 	}
 
+	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(onlineDisks, partsMetadata, fi.Erasure.Distribution)
+
 	var err error
 	// Write updated `xl.meta` to all disks.
 	onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempUploadIDPath, partsMetadata, writeQuorum)
@@ -743,10 +745,8 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	// Order online disks in accordance with distribution order.
-	onlineDisks = shuffleDisks(onlineDisks, fi.Erasure.Distribution)
-
 	// Order parts metadata in accordance with distribution order.
-	partsMetadata = shufflePartsMetadata(partsMetadata, fi.Erasure.Distribution)
+	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadataByIndex(onlineDisks, partsMetadata, fi.Erasure.Distribution)
 
 	// Save current erasure metadata for validation.
 	var currentFI = fi

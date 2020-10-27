@@ -20,6 +20,7 @@ import (
 	"context"
 	"strconv"
 	"testing"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -152,5 +153,50 @@ func TestObjectToPartOffset(t *testing.T) {
 		if offset != testCase.expectedOffset {
 			t.Fatalf("%+v: offset: expected = %d, got: %d", testCase, testCase.expectedOffset, offset)
 		}
+	}
+}
+
+func TestFindFileInfoInQuorum(t *testing.T) {
+	getNFInfo := func(n int, quorum int, t int64) []FileInfo {
+		fi := newFileInfo("test", 8, 8)
+		fi.AddObjectPart(1, "etag", 100, 100)
+		fi.ModTime = time.Unix(t, 0)
+		fis := make([]FileInfo, n)
+		for i := range fis {
+			fis[i] = fi
+			fis[i].Erasure.Index = i + 1
+			quorum--
+			if quorum == 0 {
+				break
+			}
+		}
+		return fis
+	}
+
+	tests := []struct {
+		fis         []FileInfo
+		modTime     time.Time
+		expectedErr error
+	}{
+		{
+			fis:         getNFInfo(16, 16, 1603863445),
+			modTime:     time.Unix(1603863445, 0),
+			expectedErr: nil,
+		},
+		{
+			fis:         getNFInfo(16, 7, 1603863445),
+			modTime:     time.Unix(1603863445, 0),
+			expectedErr: errErasureReadQuorum,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run("", func(t *testing.T) {
+			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, 8)
+			if err != test.expectedErr {
+				t.Errorf("Expected %s, got %s", test.expectedErr, err)
+			}
+		})
 	}
 }
