@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"strconv"
 
 	"github.com/minio/minio/cmd/http"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -93,6 +94,7 @@ func (client *lockRESTClient) restCall(ctx context.Context, call string, args ds
 	values.Set(lockRESTUID, args.UID)
 	values.Set(lockRESTOwner, args.Owner)
 	values.Set(lockRESTSource, args.Source)
+	values.Set(lockRESTQuorum, strconv.Itoa(args.Quorum))
 	var buffer bytes.Buffer
 	for _, resource := range args.Resources {
 		buffer.WriteString(resource)

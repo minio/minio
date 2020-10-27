@@ -120,6 +120,12 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 		Name: pathJoin(minioMetaBucket, bucketConfigPrefix),
 	}) // add metadata .minio.sys/ bucket prefixes to heal
 
+	// Try to pro-actively heal backend-encrypted file.
+	bgSeq.sourceCh <- healSource{
+		bucket: minioMetaBucket,
+		object: backendEncryptedFile,
+	}
+
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		// Heal current bucket

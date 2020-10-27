@@ -20,6 +20,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
@@ -112,13 +113,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	clnt, err := minio.NewWithOptions(u.Host, opts)
+	clnt, err := minio.New(u.Host, opts)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	d := bytes.NewReader([]byte("Hello, World"))
-	n, err := clnt.PutObject("my-bucketname", "my-objectname", d, d.Size(), minio.PutObjectOptions{})
+	n, err := clnt.PutObject(context.Background(), "my-bucketname", "my-objectname", d, d.Size(), minio.PutObjectOptions{})
 	if err != nil {
 		log.Fatalln(err)
 	}

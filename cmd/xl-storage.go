@@ -1318,7 +1318,7 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 }
 
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
-func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
+func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string, checkDataDir bool) (fi FileInfo, err error) {
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err == errFileNotFound {
@@ -1341,7 +1341,24 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, errFileNotFound
 	}
 
-	return getFileInfo(buf, volume, path, versionID)
+	fi, err = getFileInfo(buf, volume, path, versionID)
+	if err != nil {
+		return fi, err
+	}
+
+	if fi.DataDir != "" && checkDataDir {
+		if _, err = s.StatVol(ctx, pathJoin(volume, path, fi.DataDir, slashSeparator)); err != nil {
+			if err == errVolumeNotFound {
+				if versionID != "" {
+					return fi, errFileVersionNotFound
+				}
+				return fi, errFileNotFound
+			}
+			return fi, err
+		}
+	}
+
+	return fi, nil
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
@@ -2224,16 +2241,18 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	if err = renameAll(srcFilePath, dstFilePath); err != nil {
-		return osErrToFileErr(err)
-	}
-
+	// Commit data
 	if srcDataPath != "" {
 		removeAll(oldDstDataPath)
 		removeAll(dstDataPath)
 		if err = renameAll(srcDataPath, dstDataPath); err != nil {
 			return osErrToFileErr(err)
 		}
+	}
+
+	// Commit meta-file
+	if err = renameAll(srcFilePath, dstFilePath); err != nil {
+		return osErrToFileErr(err)
 	}
 
 	// Remove parent dir of the source file if empty
