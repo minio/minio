@@ -675,14 +675,14 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
 	if os.IsNotExist(err) && c.after >= 1 {
-		return c.saveMetadata(ctx, bucket, object, opts.UserDefined, size, rs, "", false)
+		return c.saveMetadata(ctx, bucket, object, opts.UserDefined, size, nil, "", false)
 	}
 	// Case where object already has a cache metadata entry but not yet cached
 	if err == nil && numHits < c.after {
 		cETag := extractETag(meta.Meta)
 		bETag := extractETag(opts.UserDefined)
 		if cETag == bETag {
-			return c.saveMetadata(ctx, bucket, object, opts.UserDefined, size, rs, "", false)
+			return c.saveMetadata(ctx, bucket, object, opts.UserDefined, size, nil, "", false)
 		}
 		incHitsOnly = true
 	}
@@ -720,7 +720,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 		removeAll(cachePath)
 		return IncompleteBody{Bucket: bucket, Object: object}
 	}
-	return c.saveMetadata(ctx, bucket, object, metadata, n, rs, "", incHitsOnly)
+	return c.saveMetadata(ctx, bucket, object, metadata, n, nil, "", incHitsOnly)
 }
 
 // Caches the range to disk

@@ -113,7 +113,7 @@ func (c *cacheObjects) updateMetadataIfChanged(ctx context.Context, dcache *disk
 		bkObjectInfo.ETag != cacheObjInfo.ETag ||
 		bkObjectInfo.ContentType != cacheObjInfo.ContentType ||
 		!bkObjectInfo.Expires.Equal(cacheObjInfo.Expires) {
-		return dcache.SaveMetadata(ctx, bucket, object, getMetadata(bkObjectInfo), bkObjectInfo.Size, rs, "", false)
+		return dcache.SaveMetadata(ctx, bucket, object, getMetadata(bkObjectInfo), bkObjectInfo.Size, nil, "", false)
 	}
 	return c.incHitsToMeta(ctx, dcache, bucket, object, cacheObjInfo.Size, cacheObjInfo.ETag, rs)
 }
