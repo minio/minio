@@ -369,6 +369,16 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				if opts.VersionID != "" {
 					reducedErr = errFileVersionNotFound
 				}
+				// Remove the dangling object only when:
+				//  - This is a non versioned bucket
+				//  - This is a versioned bucket and the version ID is passed, the reason
+				//    is that it is hard to pick that particular version that is dangling
+				if !opts.Versioned || opts.VersionID != "" {
+					er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
+						Name:      object,
+						VersionID: opts.VersionID,
+					})
+				}
 			}
 		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)
@@ -901,14 +911,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
-		case ObjectNotFound, VersionNotFound:
-			// Continue deleting since the object/version not found
-			// could also mean a dangling object in the storage
 		case InsufficientReadQuorum:
 			return objInfo, InsufficientWriteQuorum{}
-		default:
-			return objInfo, gerr
 		}
+		return objInfo, gerr
 	}
 
 	// Acquire a write lock before deleting the object.
@@ -959,7 +965,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
-	return ObjectInfo{Bucket: bucket, Name: decodeDirObject(object), VersionID: opts.VersionID}, gerr
+	return ObjectInfo{Bucket: bucket, Name: decodeDirObject(object), VersionID: opts.VersionID}, nil
 }
 
 // Send the successful but partial upload/delete, however ignore
