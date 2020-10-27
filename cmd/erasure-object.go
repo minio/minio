@@ -215,11 +215,12 @@ func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, s
 }
 
 func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
+	tmpDisks := onlineDisks
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = shuffleDisks(onlineDisks, fi.Erasure.Distribution)
+	onlineDisks = shuffleDisksByIndex(tmpDisks, metaArr)
 
 	// Reorder parts metadata based on erasure distribution order.
-	metaArr = shufflePartsMetadata(metaArr, fi.Erasure.Distribution)
+	metaArr = shufflePartsMetadataByIndex(tmpDisks, metaArr)
 
 	// For negative length read everything.
 	if length < 0 {
@@ -355,7 +356,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID)
+	metaArr, errs := getAllObjectFileInfo(ctx, disks, bucket, object, opts.VersionID)
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
 	if err != nil {

@@ -27,6 +27,9 @@ var errCorruptedFormat = StorageErr("corrupted backend format, specified disk mo
 // errUnformattedDisk - unformatted disk found.
 var errUnformattedDisk = StorageErr("unformatted disk found")
 
+// errInconsistentDisk - inconsistent disk found.
+var errInconsistentDisk = StorageErr("inconsistent disk found")
+
 // errUnsupporteDisk - when disk does not support O_DIRECT flag.
 var errUnsupportedDisk = StorageErr("disk does not support O_DIRECT")
 

@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v20" // Re-implementation of storage layer
+	storageRESTVersion       = "v21" // Add checkDataDir in ReadVersion API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -60,6 +60,7 @@ const (
 	storageRESTDirPath       = "dir-path"
 	storageRESTFilePath      = "file-path"
 	storageRESTVersionID     = "version-id"
+	storageRESTCheckDataDir  = "check-data-dir"
 	storageRESTTotalVersions = "total-versions"
 	storageRESTSrcVolume     = "source-volume"
 	storageRESTSrcPath       = "source-path"

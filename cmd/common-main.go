@@ -105,11 +105,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	if globalInplaceUpdateDisabled {
-		logStartupMessage(updateMsg)
-	} else {
-		logStartupMessage(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
-	}
+	logStartupMessage(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
 }
 
 func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {

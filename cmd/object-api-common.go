@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"strings"
@@ -56,6 +57,18 @@ func isObjectDir(object string, size int64) bool {
 	return HasSuffix(object, SlashSeparator) && size == 0
 }
 
+func newStorageAPIWithoutHealthCheck(endpoint Endpoint) (storage StorageAPI, err error) {
+	if endpoint.IsLocal {
+		storage, err := newXLStorage(endpoint)
+		if err != nil {
+			return nil, err
+		}
+		return &xlStorageDiskIDCheck{storage: storage}, nil
+	}
+
+	return newStorageRESTClient(endpoint, false), nil
+}
+
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 	if endpoint.IsLocal {
@@ -66,7 +79,7 @@ func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
 		return &xlStorageDiskIDCheck{storage: storage}, nil
 	}
 
-	return newStorageRESTClient(endpoint), nil
+	return newStorageRESTClient(endpoint, true), nil
 }
 
 // Cleanup a directory recursively.
@@ -77,7 +90,11 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		if !HasSuffix(entryPath, SlashSeparator) {
 			// Delete the file entry.
 			err := storage.DeleteFile(ctx, volume, entryPath)
-			if err != errDiskNotFound && err != errUnformattedDisk {
+			if !IsErrIgnored(err, []error{
+				errDiskNotFound,
+				errUnformattedDisk,
+				errFileNotFound,
+			}...) {
 				logger.LogIf(ctx, err)
 			}
 			return err
@@ -85,11 +102,15 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 
 		// If it's a directory, list and call delFunc() for each entry.
 		entries, err := storage.ListDir(ctx, volume, entryPath, -1)
-		// If entryPath prefix never existed, safe to ignore.
-		if err == errFileNotFound {
+		// If entryPath prefix never existed, safe to ignore
+		if errors.Is(err, errFileNotFound) {
 			return nil
 		} else if err != nil { // For any other errors fail.
-			if err != errDiskNotFound && err != errUnformattedDisk {
+			if !IsErrIgnored(err, []error{
+				errDiskNotFound,
+				errUnformattedDisk,
+				errFileNotFound,
+			}...) {
 				logger.LogIf(ctx, err)
 			}
 			return err
@@ -98,7 +119,11 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		// Entry path is empty, just delete it.
 		if len(entries) == 0 {
 			err = storage.DeleteFile(ctx, volume, entryPath)
-			if err != errDiskNotFound && err != errUnformattedDisk {
+			if !IsErrIgnored(err, []error{
+				errDiskNotFound,
+				errUnformattedDisk,
+				errFileNotFound,
+			}...) {
 				logger.LogIf(ctx, err)
 			}
 			return err

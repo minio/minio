@@ -38,7 +38,8 @@ type LockEntry struct {
 	ServerList []string  `json:"serverlist"` // List of servers participating in the lock.
 	Owner      string    `json:"owner"`      // Owner UUID indicates server owns the lock.
 	ID         string    `json:"id"`         // UID to uniquely identify request of client.
-	Quorum     int       `json:"quorum"`     // represents quorum number of servers required to hold this lock, used to look for stale locks.
+	// Represents quorum number of servers required to hold this lock, used to look for stale locks.
+	Quorum int `json:"quorum"`
 }
 
 // LockEntries - To sort the locks
