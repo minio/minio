@@ -504,6 +504,8 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+
+		logger.FatalIf(err, "Unable to initialize the server")
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
