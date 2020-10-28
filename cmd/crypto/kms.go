@@ -39,6 +39,8 @@ type Context map[string]string
 //
 // WriteTo sorts the context keys and writes the sorted
 // key-value pairs as canonical JSON object to w.
+//
+// Note that neither keys nor values are escaped for JSON.
 func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 	sortedKeys := make(sort.StringSlice, 0, len(c))
 	for k := range c {
@@ -71,6 +73,8 @@ func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 //
 // AppendTo sorts the context keys and writes the sorted
 // key-value pairs as canonical JSON object to w.
+//
+// Note that neither keys nor values are escaped for JSON.
 func (c Context) AppendTo(dst []byte) (output []byte) {
 	if len(c) == 0 {
 		return append(dst, '{', '}')
