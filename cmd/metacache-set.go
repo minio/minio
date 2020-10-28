@@ -319,7 +319,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 			entries.o = append(entries.o, entry)
 			return entries.len() < o.Limit
 		})
-		if err != nil && err.Error() == io.EOF.Error() || pastPrefix || r.nextEOF() {
+		if (err != nil && err.Error() == io.EOF.Error()) || pastPrefix || r.nextEOF() {
 			return entries, io.EOF
 		}
 		return entries, err
