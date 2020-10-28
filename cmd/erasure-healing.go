@@ -221,17 +221,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	partsMetadata []FileInfo, errs []error, latestFileInfo FileInfo,
 	dryRun bool, remove bool, scanMode madmin.HealScanMode) (result madmin.HealResultItem, err error) {
 
-	for i, metadata := range shufflePartsMetadata(partsMetadata, latestFileInfo.Erasure.Distribution) {
-		if !metadata.IsValid() {
-			continue
-		}
-		if i != metadata.Erasure.Index-1 {
-			// FIXME: fix in the next release for objects which erasure.Index does not match
-			// with expected distribution.
-			return result, fmt.Errorf("Unable to heal object %s, disk ordering issue detected", pathJoin(bucket, object))
-		}
-	}
-
 	dataBlocks := latestFileInfo.Erasure.DataBlocks
 
 	storageDisks := er.getDisks()
