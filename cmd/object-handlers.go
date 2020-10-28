@@ -1191,7 +1191,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	if rs := r.Header.Get(xhttp.AmzBucketReplicationStatus); rs != "" {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = rs
 	}
-	if mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()) {
+	if ok, _ := mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()); ok {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	// Store the preserved compression metadata.
@@ -1271,8 +1271,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
-	if mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
-		globalReplicationState.queueReplicaTask(objInfo)
+	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
+		if sync {
+			replicateObject(ctx, objInfo, objectAPI)
+		} else {
+			globalReplicationState.queueReplicaTask(objInfo)
+		}
 	}
 
 	setPutObjHeaders(w, objInfo, false)
@@ -1517,7 +1521,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if mustReplicate(ctx, r, bucket, object, metadata, "") {
+	if ok, _ := mustReplicate(ctx, r, bucket, object, metadata, ""); ok {
 		metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
@@ -1580,8 +1584,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 		}
 	}
-	if mustReplicate(ctx, r, bucket, object, metadata, "") {
-		globalReplicationState.queueReplicaTask(objInfo)
+	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
+		if sync {
+			replicateObject(ctx, objInfo, objectAPI)
+		} else {
+			globalReplicationState.queueReplicaTask(objInfo)
+		}
 	}
 	setPutObjHeaders(w, objInfo, false)
 
@@ -1697,7 +1705,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if mustReplicate(ctx, r, bucket, object, metadata, "") {
+	if ok, _ := mustReplicate(ctx, r, bucket, object, metadata, ""); ok {
 		metadata[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 	// We need to preserve the encryption headers set in EncryptRequest,
@@ -2650,10 +2658,13 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	setPutObjHeaders(w, objInfo, false)
-	if mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()) {
-		globalReplicationState.queueReplicaTask(objInfo)
+	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
+		if sync {
+			replicateObject(ctx, objInfo, objectAPI)
+		} else {
+			globalReplicationState.queueReplicaTask(objInfo)
+		}
 	}
-
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
@@ -2731,7 +2742,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			VersionID: opts.VersionID,
 		})
 	}
-	_, replicateDel := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, gerr)
+	_, replicateDel, replicateSync := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, gerr)
 	if replicateDel {
 		if opts.VersionID != "" {
 			opts.VersionPurgeStatus = Pending
@@ -2792,7 +2803,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		} else {
 			versionID = objInfo.VersionID
 		}
-		globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+		dobj := DeletedObjectVersionInfo{
 			DeletedObject: DeletedObject{
 				ObjectName:                    object,
 				VersionID:                     versionID,
@@ -2803,7 +2814,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				VersionPurgeStatus:            objInfo.VersionPurgeStatus,
 			},
 			Bucket: bucket,
-		})
+		}
+		if replicateSync {
+			replicateDelete(ctx, dobj, objectAPI)
+		} else {
+			globalReplicationState.queueReplicaDeleteTask(dobj)
+		}
 	}
 
 	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
@@ -2891,7 +2907,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
-	replicate := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
+	replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
 	if replicate {
 		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
@@ -2907,7 +2923,11 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 	if replicate {
-		globalReplicationState.queueReplicaTask(objInfo)
+		if sync {
+			replicateObject(ctx, objInfo, objectAPI)
+		} else {
+			globalReplicationState.queueReplicaTask(objInfo)
+		}
 	}
 	writeSuccessResponseHeadersOnly(w)
 	// Notify object  event.
@@ -3064,7 +3084,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
-	replicate := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
+	replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
 	if replicate {
 		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
@@ -3079,7 +3099,11 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 	if replicate {
-		globalReplicationState.queueReplicaTask(objInfo)
+		if sync {
+			replicateObject(ctx, objInfo, objectAPI)
+		} else {
+			globalReplicationState.queueReplicaTask(objInfo)
+		}
 	}
 
 	writeSuccessNoContent(w)
@@ -3246,7 +3270,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	replicate := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: tags.String()}, "")
+	replicate, sync := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: tags.String()}, "")
 	if replicate {
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
@@ -3261,7 +3285,11 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 
 	if replicate {
 		if objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			globalReplicationState.queueReplicaTask(objInfo)
+			if sync {
+				replicateObject(ctx, objInfo, objAPI)
+			} else {
+				globalReplicationState.queueReplicaTask(objInfo)
+			}
 		}
 	}
 
@@ -3311,7 +3339,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	replicate := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: oi.UserTags}, "")
+	replicate, sync := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: oi.UserTags}, "")
 	if replicate {
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
@@ -3328,6 +3356,11 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 
 	if replicate {
 		globalReplicationState.queueReplicaTask(oi)
+		if sync {
+			replicateObject(ctx, oi, objAPI)
+		} else {
+			globalReplicationState.queueReplicaTask(oi)
+		}
 	}
 
 	writeSuccessNoContent(w)

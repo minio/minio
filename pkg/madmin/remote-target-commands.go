@@ -86,34 +86,37 @@ func ParseARN(s string) (*ARN, error) {
 
 // BucketTarget represents the target bucket and site association.
 type BucketTarget struct {
-	SourceBucket   string            `json:"sourcebucket"`
-	Endpoint       string            `json:"endpoint"`
-	Credentials    *auth.Credentials `json:"credentials"`
-	TargetBucket   string            `json:"targetbucket"`
-	Secure         bool              `json:"secure"`
-	Path           string            `json:"path,omitempty"`
-	API            string            `json:"api,omitempty"`
-	Arn            string            `json:"arn,omitempty"`
-	Type           ServiceType       `json:"type"`
-	Region         string            `json:"omitempty"`
-	Label          string            `json:"label,omitempty"`
-	BandwidthLimit int64             `json:"bandwidthlimit,omitempty"`
+	SourceBucket    string            `json:"sourcebucket"`
+	Endpoint        string            `json:"endpoint"`
+	Credentials     *auth.Credentials `json:"credentials"`
+	TargetBucket    string            `json:"targetbucket"`
+	Secure          bool              `json:"secure"`
+	Path            string            `json:"path,omitempty"`
+	API             string            `json:"api,omitempty"`
+	Arn             string            `json:"arn,omitempty"`
+	Type            ServiceType       `json:"type"`
+	Region          string            `json:"omitempty"`
+	Label           string            `json:"label,omitempty"`
+	BandwidthLimit  int64             `json:"bandwidthlimit,omitempty"`
+	ReplicationSync bool              `json:"replicationSync"`
 }
 
 // Clone returns shallow clone of BucketTarget without secret key in credentials
 func (t *BucketTarget) Clone() BucketTarget {
 	return BucketTarget{
-		SourceBucket: t.SourceBucket,
-		Endpoint:     t.Endpoint,
-		TargetBucket: t.TargetBucket,
-		Credentials:  &auth.Credentials{AccessKey: t.Credentials.AccessKey},
-		Secure:       t.Secure,
-		Path:         t.Path,
-		API:          t.Path,
-		Arn:          t.Arn,
-		Type:         t.Type,
-		Region:       t.Region,
-		Label:        t.Label,
+		SourceBucket:    t.SourceBucket,
+		Endpoint:        t.Endpoint,
+		TargetBucket:    t.TargetBucket,
+		Credentials:     &auth.Credentials{AccessKey: t.Credentials.AccessKey},
+		Secure:          t.Secure,
+		Path:            t.Path,
+		API:             t.Path,
+		Arn:             t.Arn,
+		Type:            t.Type,
+		Region:          t.Region,
+		Label:           t.Label,
+		BandwidthLimit:  t.BandwidthLimit,
+		ReplicationSync: t.ReplicationSync,
 	}
 }
 

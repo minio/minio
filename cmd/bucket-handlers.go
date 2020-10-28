@@ -406,9 +406,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		getObjectInfoFn = api.CacheAPI().GetObjectInfo
 	}
 	var (
-		hasLockEnabled, hasLifecycleConfig bool
-		goi                                ObjectInfo
-		gerr                               error
+		hasLockEnabled, hasLifecycleConfig, replicateSync bool
+		goi                                               ObjectInfo
+		gerr                                              error
 	)
 	replicateDeletes := hasReplicationRules(ctx, bucket, deleteObjects.Objects)
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
@@ -442,10 +442,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			object.PurgeTransitioned = goi.TransitionStatus
 		}
 		if replicateDeletes {
-			delMarker, replicate := checkReplicateDelete(ctx, bucket, ObjectToDelete{
+			delMarker, replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
 				ObjectName: object.ObjectName,
 				VersionID:  object.VersionID,
 			}, goi, gerr)
+			replicateSync = repsync
 			if replicate {
 				if object.VersionID != "" {
 					object.VersionPurgeStatus = Pending
@@ -536,10 +537,15 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	for _, dobj := range deletedObjects {
 		if replicateDeletes {
 			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+				dv := DeletedObjectVersionInfo{
 					DeletedObject: dobj,
 					Bucket:        bucket,
-				})
+				}
+				if replicateSync {
+					replicateDelete(ctx, dv, objectAPI)
+				} else {
+					globalReplicationState.queueReplicaDeleteTask(dv)
+				}
 			}
 		}
 

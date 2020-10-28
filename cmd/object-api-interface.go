@@ -51,6 +51,8 @@ type ObjectOptions struct {
 	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
 	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 	TransitionStatus              string                 // status of the transition
+	ProxyRequest                  bool                   // only set for GET/HEAD in active-active replication scenario
+
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations

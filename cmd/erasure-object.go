@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -159,6 +160,15 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts)
 	if err != nil {
+		if errors.Is(err, errFileNotFound) ||
+			errors.Is(err, errFileVersionNotFound) {
+			// proxy to replication target if active-active replication is in place.
+			reader, proxy := proxyGetToReplicationTarget(ctx, bucket, object, rs, h, opts)
+			if !proxy || reader == nil {
+				return nil, toObjectErr(err, bucket, object)
+			}
+			return reader, nil
+		}
 		return nil, toObjectErr(err, bucket, object)
 	}
 
@@ -412,7 +422,16 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts)
 	if err != nil {
+		// proxy HEAD to replication target if active-active replication configured on bucket
+		if errors.Is(err, errFileNotFound) ||
+			errors.Is(err, errFileVersionNotFound) {
+			oi, proxy := proxyHeadToReplicationTarget(ctx, bucket, object, opts)
+			if proxy {
+				return oi, nil
+			}
+		}
 		return objInfo, toObjectErr(err, bucket, object)
+
 	}
 	objInfo = fi.ToObjectInfo(bucket, object)
 	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
