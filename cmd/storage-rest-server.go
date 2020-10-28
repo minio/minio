@@ -668,8 +668,10 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	for i := 0; i < totalVersions; i++ {
 		dst := &versions[i]
 		if err := dst.DecodeMsg(decoder); err != nil {
-			s.writeErrorResponse(w, err)
-			return
+			if msgp.Cause(err) != io.EOF && i != totalVersions-1 {
+				s.writeErrorResponse(w, err)
+				return
+			}
 		}
 	}
 
