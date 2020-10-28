@@ -488,7 +488,7 @@ func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPa
 			var fi FileInfoVersions
 			if gerr := fi.DecodeMsg(decoder); gerr != nil {
 				// Upon error return
-				if gerr != io.EOF {
+				if msgp.Cause(gerr) != io.EOF {
 					logger.LogIf(GlobalContext, gerr)
 				}
 				return
