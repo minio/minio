@@ -197,7 +197,7 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 			allAtEOF = false
 			continue
 		}
-		if err == io.EOF {
+		if err.Error() == io.EOF.Error() {
 			continue
 		}
 		logger.LogIf(ctx, err)

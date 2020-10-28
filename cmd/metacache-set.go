@@ -319,7 +319,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 			entries.o = append(entries.o, entry)
 			return entries.len() < o.Limit
 		})
-		if err == io.EOF || pastPrefix || r.nextEOF() {
+		if (err != nil && err.Error() == io.EOF.Error()) || pastPrefix || r.nextEOF() {
 			return entries, io.EOF
 		}
 		return entries, err
@@ -632,6 +632,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			}
 		}()
 
+		const retryDelay = 200 * time.Millisecond
+		const maxTries = 10
+
 		// Write results to disk.
 		bw := newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
 			if debugPrint {
@@ -654,13 +657,24 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				return nil
 			}
 			// Update block 0 metadata.
+			var retries int
 			for {
 				err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), b.headerKV(), ObjectOptions{})
 				if err == nil {
 					break
 				}
-				logger.LogIf(ctx, err)
-				time.Sleep(100 * time.Millisecond)
+				switch err.(type) {
+				case ObjectNotFound:
+					return err
+				case InsufficientReadQuorum:
+				default:
+					logger.LogIf(ctx, err)
+				}
+				if retries >= maxTries {
+					return err
+				}
+				retries++
+				time.Sleep(retryDelay)
 			}
 			return nil
 		})
