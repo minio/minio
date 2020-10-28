@@ -33,7 +33,6 @@ const (
 	peerRESTMethodOsInfoOBDInfo         = "/osinfoobdinfo"
 	peerRESTMethodMemOBDInfo            = "/memobdinfo"
 	peerRESTMethodProcOBDInfo           = "/procobdinfo"
-	peerRESTMethodLogOBDInfo            = "/logobdinfo"
 	peerRESTMethodDispatchNetOBDInfo    = "/dispatchnetobdinfo"
 	peerRESTMethodDeleteBucketMetadata  = "/deletebucketmetadata"
 	peerRESTMethodLoadBucketMetadata    = "/loadbucketmetadata"

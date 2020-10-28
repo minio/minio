@@ -1294,12 +1294,6 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	go func() {
 		defer close(obdInfoCh)
 
-		if log := query.Get("log"); log == "true" {
-			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, getLocalLogOBD(deadlinedCtx, r))
-			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, globalNotificationSys.LogOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
-		}
-
 		if cpu := query.Get("syscpu"); cpu == "true" {
 			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)
 

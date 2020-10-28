@@ -407,17 +407,6 @@ func (client *peerRESTClient) ProcOBDInfo(ctx context.Context) (info madmin.Serv
 	return info, err
 }
 
-// LogOBDInfo - fetch Log OBD information for a remote node.
-func (client *peerRESTClient) LogOBDInfo(ctx context.Context) (info madmin.ServerLogOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodLogOBDInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
 // StartProfiling - Issues profiling command on the peer node.
 func (client *peerRESTClient) StartProfiling(profiler string) error {
 	values := make(url.Values)

@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -235,16 +234,7 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 
 	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		cancel()
-		var ne *rest.NetworkError
-		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
-	}
+	restClient.HealthCheckFn = nil
 
 	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}
 }

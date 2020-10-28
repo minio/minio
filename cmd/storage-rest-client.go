@@ -366,11 +366,12 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 	return err
 }
 
-func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
+func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, checkDataDir bool) (fi FileInfo, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
+	values.Set(storageRESTCheckDataDir, strconv.FormatBool(checkDataDir))
 
 	respBody, err := client.call(ctx, storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {
@@ -661,7 +662,7 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -678,14 +679,16 @@ func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
 
 	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		cancel()
-		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
+	if healthcheck {
+		restClient.HealthCheckFn = func() bool {
+			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+			// Instantiate a new rest client for healthcheck
+			// to avoid recursive healthCheckFn()
+			respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
+			xhttp.DrainBody(respBody)
+			cancel()
+			return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
+		}
 	}
 
 	return &storageRESTClient{endpoint: endpoint, restClient: restClient}

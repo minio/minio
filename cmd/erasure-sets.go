@@ -133,7 +133,7 @@ func (s *erasureSets) getDiskMap() map[string]StorageAPI {
 // Initializes a new StorageAPI from the endpoint argument, returns
 // StorageAPI and also `format` which exists on the disk.
 func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
-	disk, err := newStorageAPI(endpoint)
+	disk, err := newStorageAPIWithoutHealthCheck(endpoint)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -221,7 +221,7 @@ func (s *erasureSets) connectDisks() {
 				}
 				return
 			}
-			if endpoint.IsLocal && disk.Healing() {
+			if disk.IsLocal() && disk.Healing() {
 				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
 				logger.Info(fmt.Sprintf("Found the drive %s that needs healing, attempting to heal...", disk))
 			}
@@ -232,13 +232,24 @@ func (s *erasureSets) connectDisks() {
 				printEndpointError(endpoint, err, false)
 				return
 			}
-			disk.SetDiskID(format.Erasure.This)
 
 			s.erasureDisksMu.Lock()
 			if s.erasureDisks[setIndex][diskIndex] != nil {
 				s.erasureDisks[setIndex][diskIndex].Close()
 			}
-			s.erasureDisks[setIndex][diskIndex] = disk
+			if disk.IsLocal() {
+				disk.SetDiskID(format.Erasure.This)
+				s.erasureDisks[setIndex][diskIndex] = disk
+			} else {
+				// Enable healthcheck disk for remote endpoint.
+				disk, err = newStorageAPI(endpoint)
+				if err != nil {
+					printEndpointError(endpoint, err, false)
+					return
+				}
+				disk.SetDiskID(format.Erasure.This)
+				s.erasureDisks[setIndex][diskIndex] = disk
+			}
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			s.erasureDisksMu.Unlock()
 			go func(setIndex int) {
@@ -788,6 +799,7 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 
 	// Check if this request is only metadata update.
 	if cpSrcDstSame && srcInfo.metadataOnly {
+
 		// Version ID is set for the destination and source == destination version ID.
 		// perform an in-place update.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
@@ -1132,7 +1144,7 @@ func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs 
 // Reloads the format from the disk, usually called by a remote peer notifier while
 // healing in a distributed setup.
 func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
-	storageDisks, errs := initStorageDisksWithErrors(s.endpoints)
+	storageDisks, errs := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
 	for i, err := range errs {
 		if err != nil && err != errDiskNotFound {
 			return fmt.Errorf("Disk %s: %w", s.endpoints[i], err)
@@ -1182,6 +1194,15 @@ func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error)
 		}
 
 		s.endpointStrings[m*s.setDriveCount+n] = disk.String()
+		if !disk.IsLocal() {
+			// Enable healthcheck disk for remote endpoint.
+			disk, err = newStorageAPI(disk.Endpoint())
+			if err != nil {
+				continue
+			}
+			disk.SetDiskID(diskID)
+		}
+
 		s.erasureDisks[m][n] = disk
 	}
 
@@ -1249,7 +1270,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
 func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
-	storageDisks, errs := initStorageDisksWithErrors(s.endpoints)
+	storageDisks, errs := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
 	for i, derr := range errs {
 		if derr != nil && derr != errDiskNotFound {
 			return madmin.HealResultItem{}, fmt.Errorf("Disk %s: %w", s.endpoints[i], derr)
@@ -1298,39 +1319,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 		return res, errNoHealRequired
 	}
 
-	// Mark all UUIDs which might be offline, use list
-	// of formats to mark them appropriately.
-	markUUIDsOffline(refFormat, formats, sErrs)
-
 	// Initialize a new set of set formats which will be written to disk.
 	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
-
-	// Look for all offline/unformatted disks in our reference format,
-	// such that we can fill them up with new UUIDs, this looping also
-	// ensures that the replaced disks allocated evenly across all sets.
-	// Making sure that the redundancy is not lost.
-	for i := range refFormat.Erasure.Sets {
-		for j := range refFormat.Erasure.Sets[i] {
-			if refFormat.Erasure.Sets[i][j] == offlineDiskUUID {
-				for l := range newFormatSets[i] {
-					if newFormatSets[i][l] == nil {
-						continue
-					}
-					if newFormatSets[i][l].Erasure.This == "" {
-						newFormatSets[i][l].Erasure.This = mustGetUUID()
-						refFormat.Erasure.Sets[i][j] = newFormatSets[i][l].Erasure.This
-						for m, v := range res.After.Drives {
-							if v.Endpoint == s.endpoints.GetString(i*s.setDriveCount+l) {
-								res.After.Drives[m].UUID = newFormatSets[i][l].Erasure.This
-								res.After.Drives[m].State = madmin.DriveStateOk
-							}
-						}
-						break
-					}
-				}
-			}
-		}
-	}
 
 	if !dryRun {
 		var tmpNewFormats = make([]*formatErasureV3, s.setCount*s.setDriveCount)
@@ -1339,8 +1329,9 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				if newFormatSets[i][j] == nil {
 					continue
 				}
+				res.After.Drives[i*s.setDriveCount+j].UUID = newFormatSets[i][j].Erasure.This
+				res.After.Drives[i*s.setDriveCount+j].State = madmin.DriveStateOk
 				tmpNewFormats[i*s.setDriveCount+j] = newFormatSets[i][j]
-				tmpNewFormats[i*s.setDriveCount+j].Erasure.Sets = refFormat.Erasure.Sets
 			}
 		}
 
@@ -1382,7 +1373,16 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			}
 
 			s.endpointStrings[m*s.setDriveCount+n] = disk.String()
+			if !disk.IsLocal() {
+				// Enable healthcheck disk for remote endpoint.
+				disk, err = newStorageAPI(disk.Endpoint())
+				if err != nil {
+					continue
+				}
+				disk.SetDiskID(diskID)
+			}
 			s.erasureDisks[m][n] = disk
+
 		}
 
 		s.erasureDisksMu.Unlock()

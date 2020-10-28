@@ -160,6 +160,25 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
 
+	inconsistent := 0
+	for i, meta := range partsMetadata {
+		if !meta.IsValid() {
+			// Since for majority of the cases erasure.Index matches with erasure.Distribution we can
+			// consider the offline disks as consistent.
+			continue
+		}
+		if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+			inconsistent++
+		}
+	}
+
+	erasureDistributionReliable := true
+	if inconsistent > len(partsMetadata)/2 {
+		// If there are too many inconsistent files, then we can't trust erasure.Distribution (most likely
+		// because of bugs found in CopyObject/PutObjectTags) https://github.com/minio/minio/pull/10772
+		erasureDistributionReliable = false
+	}
+
 	for i, onlineDisk := range onlineDisks {
 		if errs[i] != nil {
 			dataErrs[i] = errs[i]
@@ -168,6 +187,18 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		if onlineDisk == nil {
 			dataErrs[i] = errDiskNotFound
 			continue
+		}
+		if erasureDistributionReliable {
+			meta := partsMetadata[i]
+			if !meta.IsValid() {
+				continue
+			}
+			// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
+			if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+				partsMetadata[i] = FileInfo{}
+				dataErrs[i] = errFileCorrupt
+				continue
+			}
 		}
 
 		switch scanMode {

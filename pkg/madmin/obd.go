@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/net"
 
@@ -43,19 +42,6 @@ type OBDInfo struct {
 	Perf      PerfOBDInfo  `json:"perf,omitempty"`
 	Minio     MinioOBDInfo `json:"minio,omitempty"`
 	Sys       SysOBDInfo   `json:"sys,omitempty"`
-	Logging   LogOBDInfo   `json:"logging,omitempty"`
-}
-
-// LogOBDInfo holds different type of logs of all clusters
-type LogOBDInfo struct {
-	ServersLog []ServerLogOBDInfo `json:"serverLogs"`
-}
-
-// ServerLogOBDInfo holds server's stdout log
-type ServerLogOBDInfo struct {
-	Addr    string      `json:"nodeName"`
-	Entries []log.Entry `json:"entries"`
-	Error   string      `json:"error,omitempty"`
 }
 
 // SysOBDInfo - Includes hardware and system information of the MinIO cluster
