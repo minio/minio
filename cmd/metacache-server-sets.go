@@ -124,6 +124,9 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		case "disk":
 			// Ask single disk.
 			o.AskDisks = 1
+		default:
+			// By default asks at max 3 disks.
+			o.AskDisks = 3
 		}
 	}
 
