@@ -26,17 +26,19 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // EndpointType - enum for endpoint type.
@@ -267,6 +269,52 @@ func (l EndpointServerSets) Hostnames() []string {
 		}
 	}
 	return foundSet.ToSlice()
+}
+
+// hostsSorted will return all hosts found.
+// The LOCAL host will be nil, but the indexes of all hosts should
+// remain consistent across the cluster.
+func (l EndpointServerSets) hostsSorted() []*xnet.Host {
+	peers, localPeer := l.peers()
+	sort.Strings(peers)
+	hosts := make([]*xnet.Host, len(peers))
+	for i, hostStr := range peers {
+		if hostStr == localPeer {
+			continue
+		}
+		host, err := xnet.ParseHost(hostStr)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			continue
+		}
+		hosts[i] = host
+	}
+
+	return hosts
+}
+
+// peers will return all peers, including local.
+// The local peer is returned as a separate string.
+func (l EndpointServerSets) peers() (peers []string, local string) {
+	allSet := set.NewStringSet()
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.Type() != URLEndpointType {
+				continue
+			}
+
+			peer := endpoint.Host
+			if endpoint.IsLocal {
+				if _, port := mustSplitHostPort(peer); port == globalMinioPort {
+					local = peer
+				}
+			}
+
+			allSet.Add(peer)
+		}
+	}
+
+	return allSet.ToSlice(), local
 }
 
 // Endpoints - list of same type of endpoint.
@@ -710,28 +758,6 @@ func GetLocalPeer(endpointServerSets EndpointServerSets) (localPeer string) {
 		return net.JoinHostPort("127.0.0.1", globalMinioPort)
 	}
 	return peerSet.ToSlice()[0]
-}
-
-// GetRemotePeers - get hosts information other than this minio service.
-func GetRemotePeers(endpointServerSets EndpointServerSets) []string {
-	peerSet := set.NewStringSet()
-	for _, ep := range endpointServerSets {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.Type() != URLEndpointType {
-				continue
-			}
-
-			peer := endpoint.Host
-			if endpoint.IsLocal {
-				if _, port := mustSplitHostPort(peer); port == globalMinioPort {
-					continue
-				}
-			}
-
-			peerSet.Add(peer)
-		}
-	}
-	return peerSet.ToSlice()
 }
 
 // GetProxyEndpointLocalIndex returns index of the local proxy endpoint

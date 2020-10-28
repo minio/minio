@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/xml"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -837,7 +836,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 		// Verify whether the bucket obtained object is same as the one created.
 		if testCase.expectedContent != nil && !bytes.Equal(testCase.expectedContent, actualContent) {
-			fmt.Println(string(testCase.expectedContent), string(actualContent))
+			t.Log(string(testCase.expectedContent), string(actualContent))
 			t.Errorf("Test %d : MinIO %s: Object content differs from expected value.", i+1, instanceType)
 		}
 	}

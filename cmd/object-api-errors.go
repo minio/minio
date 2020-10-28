@@ -169,11 +169,21 @@ func (e InsufficientReadQuorum) Error() string {
 	return "Storage resources are insufficient for the read operation."
 }
 
+// Unwrap the error.
+func (e InsufficientReadQuorum) Unwrap() error {
+	return errErasureReadQuorum
+}
+
 // InsufficientWriteQuorum storage cannot satisfy quorum for write operation.
 type InsufficientWriteQuorum struct{}
 
 func (e InsufficientWriteQuorum) Error() string {
 	return "Storage resources are insufficient for the write operation."
+}
+
+// Unwrap the error.
+func (e InsufficientWriteQuorum) Unwrap() error {
+	return errErasureWriteQuorum
 }
 
 // GenericError - generic object layer error.

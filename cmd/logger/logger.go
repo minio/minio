@@ -337,7 +337,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	trace := getTrace(3)
 
 	// Get the cause for the Error
-	message := err.Error()
+	message := fmt.Sprintf("%v (%T)", err, err)
 	if req.DeploymentID == "" {
 		req.DeploymentID = globalDeploymentID
 	}
