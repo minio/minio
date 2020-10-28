@@ -817,14 +817,14 @@ func TestXLStorageXlStorageListDir(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.DeleteFile(context.Background(), "mybucket", "myobject"); err != errFileAccessDenied {
+		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.DeleteFile(context.Background(), "del-vol", "my-file")
+	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -878,7 +878,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			expectedErr: nil,
 		},
 		// TestXLStorage case - 2.
-		// The file was deleted in the last  case, so DeleteFile should fail.
+		// The file was deleted in the last  case, so Delete should fail.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
@@ -916,7 +916,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if err = xlStorage.DeleteFile(context.Background(), testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
+		if err = xlStorage.Delete(context.Background(), testCase.srcVol, testCase.srcPath, false); err != testCase.expectedErr {
 			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
@@ -941,14 +941,14 @@ func TestXLStorageDeleteFile(t *testing.T) {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
-		if err = xlStorageNew.DeleteFile(context.Background(), "mybucket", "myobject"); err != errFileAccessDenied {
+		if err = xlStorageNew.Delete(context.Background(), "mybucket", "myobject", false); err != errFileAccessDenied {
 			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 		}
 	}
 
 	// TestXLStorage for delete on an removed disk.
 	// should fail with disk not found.
-	err = xlStorageDeletedStorage.DeleteFile(context.Background(), "del-vol", "my-file")
+	err = xlStorageDeletedStorage.Delete(context.Background(), "del-vol", "my-file", false)
 	if err != errDiskNotFound {
 		t.Errorf("Expected: \"Disk not found\", got \"%s\"", err)
 	}
@@ -1671,7 +1671,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 		t.Fatal("expected to fail bitrot check")
 	}
 
-	if err := xlStorage.DeleteFile(context.Background(), volName, fileName); err != nil {
+	if err := xlStorage.Delete(context.Background(), volName, fileName, false); err != nil {
 		t.Fatal(err)
 	}
 

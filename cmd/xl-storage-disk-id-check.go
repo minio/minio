@@ -237,12 +237,12 @@ func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, pat
 	return p.storage.CheckFile(ctx, volume, path)
 }
 
-func (p *xlStorageDiskIDCheck) DeleteFile(ctx context.Context, volume string, path string) (err error) {
+func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.DeleteFile(ctx, volume, path)
+	return p.storage.Delete(ctx, volume, path, recursive)
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
