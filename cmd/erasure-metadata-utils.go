@@ -153,28 +153,54 @@ func readVersionFromDisks(ctx context.Context, disks []StorageAPI, bucket, objec
 	return metadataArray, g.Wait()
 }
 
-// Return disks ordered by the meta.Erasure.Index information.
-func shuffleDisksByIndex(disks []StorageAPI, metaArr []FileInfo) (shuffledDisks []StorageAPI) {
+func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo, distribution []int) (shuffledDisks []StorageAPI, shuffledPartsMetadata []FileInfo) {
 	shuffledDisks = make([]StorageAPI, len(disks))
+	shuffledPartsMetadata = make([]FileInfo, len(disks))
+	var inconsistent int
 	for i, meta := range metaArr {
 		if disks[i] == nil {
+			// Assuming offline drives as inconsistent,
+			// to be safe and fallback to original
+			// distribution order.
+			inconsistent++
+			continue
+		}
+		// check if erasure distribution order matches the index
+		// position if this is not correct we discard the disk
+		// and move to collect others
+		if distribution[i] != meta.Erasure.Index {
+			inconsistent++ // keep track of inconsistent entries
 			continue
 		}
 		shuffledDisks[meta.Erasure.Index-1] = disks[i]
+		shuffledPartsMetadata[meta.Erasure.Index-1] = metaArr[i]
 	}
-	return shuffledDisks
+
+	// Inconsistent meta info is with in the limit of
+	// expected quorum, proceed with EcIndex based
+	// disk order.
+	if inconsistent < len(disks)/2 {
+		return shuffledDisks, shuffledPartsMetadata
+	}
+
+	// fall back to original distribution based order.
+	return shuffleDisksAndPartsMetadata(disks, metaArr, distribution)
 }
 
-// Return FileInfo slice ordered by the meta.Erasure.Index information.
-func shufflePartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo) []FileInfo {
-	newMetaArr := make([]FileInfo, len(disks))
-	for i, meta := range metaArr {
-		if disks[i] == nil {
-			continue
-		}
-		newMetaArr[meta.Erasure.Index-1] = metaArr[i]
+// Return shuffled partsMetadata depending on distribution.
+func shuffleDisksAndPartsMetadata(disks []StorageAPI, partsMetadata []FileInfo, distribution []int) (shuffledDisks []StorageAPI, shuffledPartsMetadata []FileInfo) {
+	if distribution == nil {
+		return disks, partsMetadata
 	}
-	return newMetaArr
+	shuffledDisks = make([]StorageAPI, len(disks))
+	shuffledPartsMetadata = make([]FileInfo, len(partsMetadata))
+	// Shuffle slice xl metadata for expected distribution.
+	for index := range partsMetadata {
+		blockIndex := distribution[index]
+		shuffledPartsMetadata[blockIndex-1] = partsMetadata[index]
+		shuffledDisks[blockIndex-1] = disks[index]
+	}
+	return shuffledDisks, shuffledPartsMetadata
 }
 
 // Return shuffled partsMetadata depending on distribution.

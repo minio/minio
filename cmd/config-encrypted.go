@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -194,7 +193,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 				// Config is already encrypted with right keys
 				continue
 			}
-			return errors.New("config data not in plain-text form or encrypted")
+			return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 		}
 
 		cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)
@@ -274,7 +273,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 					// Config is already encrypted with right keys
 					continue
 				}
-				return errors.New("config data not in plain-text form or encrypted")
+				return fmt.Errorf("Decrypting config failed %w, possibly credentials are incorrect", err)
 			}
 
 			cencdata, err = madmin.EncryptData(globalActiveCred.String(), data)

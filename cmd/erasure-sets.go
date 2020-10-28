@@ -799,6 +799,7 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 
 	// Check if this request is only metadata update.
 	if cpSrcDstSame && srcInfo.metadataOnly {
+
 		// Version ID is set for the destination and source == destination version ID.
 		// perform an in-place update.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
