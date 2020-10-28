@@ -76,17 +76,19 @@ func (c Context) AppendTo(dst []byte) (output []byte) {
 		return append(dst, '{', '}')
 	}
 
+	// out should not escape.
+	out := bytes.NewBuffer(dst)
+
 	// No need to copy+sort
 	if len(c) == 1 {
-		dst = append(dst, '{')
 		for k, v := range c {
-			dst = append(dst, '"')
-			dst = append(dst, []byte(k)...)
-			dst = append(dst, '"', ':', '"')
-			dst = append(dst, []byte(v)...)
-			dst = append(dst, '"')
+			out.WriteString(`{"`)
+			out.WriteString(k)
+			out.WriteString(`":"`)
+			out.WriteString(v)
+			out.WriteString(`"}`)
 		}
-		return append(dst, '}')
+		return out.Bytes()
 	}
 
 	sortedKeys := make([]string, 0, len(c))
@@ -95,18 +97,19 @@ func (c Context) AppendTo(dst []byte) (output []byte) {
 	}
 	sort.Strings(sortedKeys)
 
-	dst = append(dst, '{')
+	out.WriteByte('{')
 	for i, k := range sortedKeys {
-		dst = append(dst, '"')
-		dst = append(dst, []byte(k)...)
-		dst = append(dst, '"', ':', '"')
-		dst = append(dst, []byte(c[k])...)
-		dst = append(dst, '"')
+		out.WriteByte('"')
+		out.WriteString(k)
+		out.WriteString(`":"`)
+		out.WriteString(c[k])
+		out.WriteByte('"')
 		if i < len(sortedKeys)-1 {
-			dst = append(dst, ',')
+			out.WriteByte(',')
 		}
 	}
-	return append(dst, '}')
+	out.WriteByte('}')
+	return out.Bytes()
 }
 
 // KMS represents an active and authenticted connection

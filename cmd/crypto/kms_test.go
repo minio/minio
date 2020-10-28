@@ -16,6 +16,7 @@ package crypto
 
 import (
 	"bytes"
+	"fmt"
 	"path"
 	"strings"
 	"testing"
@@ -91,5 +92,24 @@ func TestContextAppendTo(t *testing.T) {
 		if s := string(dst); s != test.ExpectedJSON {
 			t.Errorf("Test %d: JSON representation differ - got: '%s' want: '%s'", i, s, test.ExpectedJSON)
 		}
+		// Append one more
+		dst = test.Context.AppendTo(dst)
+		if s := string(dst); s != test.ExpectedJSON+test.ExpectedJSON {
+			t.Errorf("Test %d: JSON representation differ - got: '%s' want: '%s'", i, s, test.ExpectedJSON+test.ExpectedJSON)
+		}
+	}
+}
+
+func BenchmarkContext_AppendTo(b *testing.B) {
+	tests := []Context{{}, {"bucket": "warp-benchmark-bucket"}, {"0": "1", "-": "2", ".": "#"}, {"34trg": "dfioutr89", "ikjfdghkjf": "jkedfhgfjkhg", "sdfhsdjkh": "if88889", "asddsirfh804": "kjfdshgdfuhgfg78-45604586#$%"}}
+	for _, test := range tests {
+		b.Run(fmt.Sprintf("%d-elems", len(test)), func(b *testing.B) {
+			dst := make([]byte, 0, 1024)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				dst = test.AppendTo(dst[:0])
+			}
+		})
 	}
 }
