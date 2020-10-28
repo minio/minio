@@ -148,19 +148,6 @@ func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInf
 	}
 }
 
-func getLocalLogOBD(ctx context.Context, r *http.Request) madmin.ServerLogOBDInfo {
-	addr := r.Host
-	if globalIsDistErasure {
-		addr = GetLocalPeer(globalEndpoints)
-	}
-
-	log := globalConsoleSys.Content()
-	return madmin.ServerLogOBDInfo{
-		Addr:    addr,
-		Entries: log,
-	}
-}
-
 func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDInfo {
 	addr := r.Host
 	if globalIsDistErasure {
