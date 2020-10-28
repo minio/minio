@@ -709,7 +709,10 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		Versioned:        globalBucketVersioningSys.Enabled(args.BucketName),
 		VersionSuspended: globalBucketVersioningSys.Suspended(args.BucketName),
 	}
-	var err error
+	var (
+		err           error
+		replicateSync bool
+	)
 next:
 	for _, objectName := range args.Objects {
 		// If not a directory, remove the object.
@@ -751,7 +754,7 @@ next:
 			}
 			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
 				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
-				if _, replicateDel = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName, VersionID: goi.VersionID}, goi, gerr); replicateDel {
+				if _, replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName, VersionID: goi.VersionID}, goi, gerr); replicateDel {
 					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 					opts.DeleteMarker = true
 				}
@@ -759,7 +762,7 @@ next:
 
 			oi, err := deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
 			if replicateDel && err == nil {
-				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+				dobj := DeletedObjectVersionInfo{
 					DeletedObject: DeletedObject{
 						ObjectName:                    objectName,
 						DeleteMarkerVersionID:         oi.VersionID,
@@ -769,7 +772,8 @@ next:
 						VersionPurgeStatus:            oi.VersionPurgeStatus,
 					},
 					Bucket: args.BucketName,
-				})
+				}
+				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
 			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
 				action := lifecycle.DeleteAction
@@ -855,7 +859,7 @@ next:
 						}
 					}
 				}
-				_, replicateDel := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, obj, nil)
+				_, replicateDel, _ := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, obj, nil)
 				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
 				objToDel := ObjectToDelete{ObjectName: obj.Name}
 				if replicateDel {
@@ -904,10 +908,11 @@ next:
 					Host:       handlers.GetSourceIP(r),
 				})
 				if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-					globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+					dv := DeletedObjectVersionInfo{
 						DeletedObject: dobj,
 						Bucket:        args.BucketName,
-					})
+					}
+					scheduleReplicationDelete(ctx, dv, objectAPI, replicateSync)
 				}
 			}
 		}
@@ -1228,7 +1233,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	mustReplicate := mustReplicateWeb(ctx, r, bucket, object, metadata, "", replPerms)
+	mustReplicate, sync := mustReplicateWeb(ctx, r, bucket, object, metadata, "", replPerms)
 	if mustReplicate {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
 	}
@@ -1298,7 +1303,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if mustReplicate {
-		globalReplicationState.queueReplicaTask(objInfo)
+		scheduleReplication(ctx, objInfo, objectAPI, sync)
 	}
 
 	// Notify object created event.

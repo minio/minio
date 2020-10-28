@@ -88,35 +88,37 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 	return false, BucketRemoteTargetNotFound{Bucket: bucket}
 }
 
-func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, permErr APIErrorCode) bool {
+func mustReplicateWeb(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string, permErr APIErrorCode) (replicate bool, sync bool) {
 	if permErr != ErrNone {
-		return false
+		return
 	}
 	return mustReplicater(ctx, bucket, object, meta, replStatus)
 }
 
-// mustReplicate returns true if object meets replication criteria.
-func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) bool {
+// mustReplicate returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
+// a synchronous manner.
+func mustReplicate(ctx context.Context, r *http.Request, bucket, object string, meta map[string]string, replStatus string) (replicate bool, sync bool) {
 	if s3Err := isPutActionAllowed(ctx, getRequestAuthType(r), bucket, "", r, iampolicy.GetReplicationConfigurationAction); s3Err != ErrNone {
-		return false
+		return
 	}
 	return mustReplicater(ctx, bucket, object, meta, replStatus)
 }
 
-// mustReplicater returns true if object meets replication criteria.
-func mustReplicater(ctx context.Context, bucket, object string, meta map[string]string, replStatus string) bool {
+// mustReplicater returns 2 booleans - true if object meets replication criteria and true if replication is to be done in
+// a synchronous manner.
+func mustReplicater(ctx context.Context, bucket, object string, meta map[string]string, replStatus string) (replicate bool, sync bool) {
 	if globalIsGateway {
-		return false
+		return replicate, sync
 	}
 	if rs, ok := meta[xhttp.AmzBucketReplicationStatus]; ok {
 		replStatus = rs
 	}
 	if replication.StatusType(replStatus) == replication.Replica {
-		return false
+		return replicate, sync
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
-		return false
+		return replicate, sync
 	}
 	opts := replication.ObjectOpts{
 		Name: object,
@@ -126,7 +128,20 @@ func mustReplicater(ctx context.Context, bucket, object string, meta map[string]
 	if ok {
 		opts.UserTags = tagStr
 	}
-	return cfg.Replicate(opts)
+	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
+	if tgt == nil || tgt.isOffline() {
+		return cfg.Replicate(opts), false
+	}
+	return cfg.Replicate(opts), tgt.replicateSync
+}
+
+// Standard headers that needs to be extracted from User metadata.
+var standardHeaders = []string{
+	"content-type",
+	"content-encoding",
+	xhttp.AmzStorageClass,
+	xhttp.AmzObjectTagging,
+	xhttp.AmzBucketReplicationStatus,
 }
 
 // returns true if any of the objects being deleted qualifies for replication.
@@ -143,11 +158,22 @@ func hasReplicationRules(ctx context.Context, bucket string, objects []ObjectToD
 	return false
 }
 
+// isStandardHeader returns true if header is a supported header and not a custom header
+func isStandardHeader(headerKey string) bool {
+	key := strings.ToLower(headerKey)
+	for _, header := range standardHeaders {
+		if strings.ToLower(header) == key {
+			return true
+		}
+	}
+	return false
+}
+
 // returns whether object version is a deletemarker and if object qualifies for replication
-func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (dm, replicate bool) {
+func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (dm, replicate, sync bool) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
-		return false, false
+		return false, false, sync
 	}
 	// when incoming delete is removal of a delete marker( a.k.a versioned delete),
 	// GetObjectInfo returns extra information even though it returns errFileNotFound
@@ -158,9 +184,13 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			validReplStatus = true
 		}
 		if oi.DeleteMarker && validReplStatus {
-			return oi.DeleteMarker, true
+			return oi.DeleteMarker, true, sync
 		}
-		return oi.DeleteMarker, false
+		return oi.DeleteMarker, false, sync
+	}
+	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
+	if tgt == nil || tgt.isOffline() {
+		return oi.DeleteMarker, false, false
 	}
 	opts := replication.ObjectOpts{
 		Name:         dobj.ObjectName,
@@ -169,7 +199,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		DeleteMarker: oi.DeleteMarker,
 		VersionID:    dobj.VersionID,
 	}
-	return oi.DeleteMarker, rcfg.Replicate(opts)
+	return oi.DeleteMarker, rcfg.Replicate(opts), tgt.replicateSync
 }
 
 // replicate deletes to the designated replication target if replication configuration
@@ -296,10 +326,10 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 func putReplicationOpts(ctx context.Context, dest replication.Destination, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
-		if k == xhttp.AmzBucketReplicationStatus {
+		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		if isStandardHeader(k) {
 			continue
 		}
 		meta[k] = v
@@ -413,6 +443,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return
 	}
 	objInfo = gr.ObjInfo
@@ -440,14 +471,14 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			return
 		}
 	}
-
 	replicationStatus := replication.Complete
 	if rtype != replicateAll {
 		gr.Close()
 
 		// replicate metadata for object tagging/copy with metadata replacement
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
-		_, err = tgt.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts)
+		c := &miniogo.Core{Client: tgt.Client}
+		_, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts)
 		if err != nil {
 			replicationStatus = replication.Failed
 		}
@@ -474,7 +505,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 
 		// r takes over closing gr.
 		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
-		_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts)
+		_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, putOpts)
 		if err != nil {
 			replicationStatus = replication.Failed
 		}
@@ -621,5 +652,142 @@ func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	// Start with globalReplicationConcurrent.
 	for i := 0; i < globalReplicationConcurrent; i++ {
 		globalReplicationState.addWorker(ctx, objectAPI)
+	}
+}
+
+// get Reader from replication target if active-active replication is in place and
+// this node returns a 404
+func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, proxy bool) {
+	tgt, oi, proxy, err := proxyHeadToRepTarget(ctx, bucket, object, opts)
+	if !proxy || err != nil {
+		return nil, false
+	}
+	fn, off, length, err := NewGetObjectReader(rs, oi, opts)
+	if err != nil {
+		return nil, false
+	}
+	gopts := miniogo.GetObjectOptions{
+		VersionID:            opts.VersionID,
+		ServerSideEncryption: opts.ServerSideEncryption,
+		Internal: miniogo.AdvancedGetOptions{
+			ReplicationProxyRequest: true,
+		},
+	}
+	// get correct offsets for encrypted object
+	if off >= 0 && length >= 0 {
+		if err := gopts.SetRange(off, off+length-1); err != nil {
+			return nil, false
+		}
+	}
+	c := miniogo.Core{Client: tgt.Client}
+
+	obj, _, _, err := c.GetObject(ctx, bucket, object, gopts)
+	if err != nil {
+		return nil, false
+	}
+	closeReader := func() { obj.Close() }
+
+	reader, err := fn(obj, h, opts.CheckPrecondFn, closeReader)
+	if err != nil {
+		return nil, false
+	}
+	return reader, true
+}
+
+// isProxyable returns true if replication config found for this bucket
+func isProxyable(ctx context.Context, bucket string) bool {
+	cfg, err := getReplicationConfig(ctx, bucket)
+	if err != nil {
+		return false
+	}
+	dest := cfg.GetDestination()
+	return dest.Bucket == bucket
+}
+func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts ObjectOptions) (tgt *TargetClient, oi ObjectInfo, proxy bool, err error) {
+	// this option is set when active-active replication is in place between site A -> B,
+	// and site B does not have the object yet.
+	if opts.ProxyRequest { // true only when site B sets MinIOSourceProxyRequest header
+		return nil, oi, false, nil
+	}
+	cfg, err := getReplicationConfig(ctx, bucket)
+	if err != nil {
+		return nil, oi, false, err
+	}
+	dest := cfg.GetDestination()
+	if dest.Bucket != bucket { // not active-active
+		return nil, oi, false, err
+	}
+	ssec := false
+	if opts.ServerSideEncryption != nil {
+		ssec = opts.ServerSideEncryption.Type() == encrypt.SSEC
+	}
+	ropts := replication.ObjectOpts{
+		Name: object,
+		SSEC: ssec,
+	}
+	if !cfg.Replicate(ropts) { // no matching rule for object prefix
+		return nil, oi, false, nil
+	}
+	tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
+	if tgt == nil || tgt.isOffline() {
+		return nil, oi, false, fmt.Errorf("missing target")
+	}
+
+	gopts := miniogo.GetObjectOptions{
+		VersionID:            opts.VersionID,
+		ServerSideEncryption: opts.ServerSideEncryption,
+		Internal: miniogo.AdvancedGetOptions{
+			ReplicationProxyRequest: true,
+		},
+	}
+
+	objInfo, err := tgt.StatObject(ctx, dest.Bucket, object, gopts)
+	if err != nil {
+		return nil, oi, false, err
+	}
+	tags, _ := tags.MapToObjectTags(objInfo.UserTags)
+	oi = ObjectInfo{
+		Bucket:            bucket,
+		Name:              object,
+		ModTime:           objInfo.LastModified,
+		Size:              objInfo.Size,
+		ETag:              objInfo.ETag,
+		VersionID:         objInfo.VersionID,
+		IsLatest:          objInfo.IsLatest,
+		DeleteMarker:      objInfo.IsDeleteMarker,
+		ContentType:       objInfo.ContentType,
+		Expires:           objInfo.Expires,
+		StorageClass:      objInfo.StorageClass,
+		ReplicationStatus: replication.StatusType(objInfo.ReplicationStatus),
+		UserDefined:       cloneMSS(objInfo.UserMetadata),
+		UserTags:          tags.String(),
+	}
+	if ce, ok := oi.UserDefined[xhttp.ContentEncoding]; ok {
+		oi.ContentEncoding = ce
+		delete(oi.UserDefined, xhttp.ContentEncoding)
+	}
+	return tgt, oi, true, nil
+}
+
+// get object info from replication target if active-active replication is in place and
+// this node returns a 404
+func proxyHeadToReplicationTarget(ctx context.Context, bucket, object string, opts ObjectOptions) (oi ObjectInfo, proxy bool, err error) {
+	_, oi, proxy, err = proxyHeadToRepTarget(ctx, bucket, object, opts)
+	return oi, proxy, err
+}
+
+func scheduleReplication(ctx context.Context, objInfo ObjectInfo, o ObjectLayer, sync bool) {
+	if sync {
+		replicateObject(ctx, objInfo, o)
+	} else {
+		globalReplicationState.queueReplicaTask(objInfo)
+	}
+}
+
+func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectVersionInfo, o ObjectLayer, sync bool) {
+	if sync {
+		replicateDelete(ctx, dv, o)
+	} else {
+		globalReplicationState.queueReplicaDeleteTask(dv)
 	}
 }
