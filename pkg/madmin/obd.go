@@ -185,7 +185,6 @@ const (
 	OBDDataTypeSysMem      OBDDataType = "sysmem"
 	OBDDataTypeSysNet      OBDDataType = "sysnet"
 	OBDDataTypeSysProcess  OBDDataType = "sysprocess"
-	OBDDataTypeLog         OBDDataType = "log"
 )
 
 // OBDDataTypesMap - Map of OBD datatypes
@@ -202,7 +201,6 @@ var OBDDataTypesMap = map[string]OBDDataType{
 	"sysmem":      OBDDataTypeSysMem,
 	"sysnet":      OBDDataTypeSysNet,
 	"sysprocess":  OBDDataTypeSysProcess,
-	"log":         OBDDataTypeLog,
 }
 
 // OBDDataTypesList - List of OBD datatypes
@@ -219,7 +217,6 @@ var OBDDataTypesList = []OBDDataType{
 	OBDDataTypeSysMem,
 	OBDDataTypeSysNet,
 	OBDDataTypeSysProcess,
-	OBDDataTypeLog,
 }
 
 // ServerOBDInfo - Connect to a minio server and call OBD Info Management API
