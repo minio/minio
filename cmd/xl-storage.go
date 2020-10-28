@@ -896,7 +896,7 @@ func (s *xlStorage) WalkSplunk(ctx context.Context, volume, dirPath, marker stri
 				fi = FileInfo{
 					Volume: volume,
 					Name:   walkResult.entry,
-					Mode:   os.ModeDir,
+					Mode:   uint32(os.ModeDir),
 				}
 			} else {
 				var err error
@@ -984,7 +984,7 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 						{
 							Volume: volume,
 							Name:   walkResult.entry,
-							Mode:   os.ModeDir,
+							Mode:   uint32(os.ModeDir),
 						},
 					},
 				}
@@ -1065,7 +1065,7 @@ func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, re
 				fi = FileInfo{
 					Volume: volume,
 					Name:   walkResult.entry,
-					Mode:   os.ModeDir,
+					Mode:   uint32(os.ModeDir),
 				}
 			} else {
 				var err error

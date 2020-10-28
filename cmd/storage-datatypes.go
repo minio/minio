@@ -17,9 +17,10 @@
 package cmd
 
 import (
-	"os"
 	"time"
 )
+
+//go:generate msgp -file=$GOFILE
 
 // VolInfo - represents volume stat information.
 type VolInfo struct {
@@ -60,6 +61,8 @@ type FileInfoVersions struct {
 }
 
 // FileInfo - represents file stat information.
+//msgp:tuple FileInfo
+// The above means that any added/deleted fields are incompatible.
 type FileInfo struct {
 	// Name of the volume.
 	Volume string
@@ -91,7 +94,7 @@ type FileInfo struct {
 	Size int64
 
 	// File mode bits.
-	Mode os.FileMode
+	Mode uint32
 
 	// File metadata
 	Metadata map[string]string
