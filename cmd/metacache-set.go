@@ -663,10 +663,10 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				if err == nil {
 					break
 				}
-				switch err {
-				case ObjectNotFound{}:
+				switch err.(type) {
+				case ObjectNotFound:
 					return err
-				case InsufficientReadQuorum{}:
+				case InsufficientReadQuorum:
 				default:
 					logger.LogIf(ctx, err)
 				}
