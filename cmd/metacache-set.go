@@ -351,6 +351,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		default:
 		}
 
+		const retryDelay = 500 * time.Millisecond
 		// Load first part metadata...
 		// All operations are performed without locks, so we must be careful and allow for failures.
 		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{})
@@ -365,11 +366,10 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					if err != nil {
 						return entries, err
 					}
-					retries = 0
-					continue
+					retries = -1
 				}
 				retries++
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(retryDelay)
 				continue
 			}
 			if debugPrint {
@@ -394,15 +394,15 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				if err != nil {
 					return entries, err
 				}
-				retries = 0
-				continue
+				retries = -1
 			}
 			retries++
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(retryDelay)
 			continue
 		case io.EOF:
 			return entries, io.EOF
 		}
+
 		// We got a stream to start at.
 		loadedPart := 0
 		var buf bytes.Buffer
@@ -426,18 +426,17 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						if err != nil {
 							return entries, err
 						}
-						retries = 0
-						continue
+						retries = -1
 					}
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(retryDelay)
 					continue
 				default:
-					time.Sleep(100 * time.Millisecond)
 					if retries >= 20 {
 						// We had at least 10 retries without getting a result.
 						logger.LogIf(ctx, err)
 						return entries, err
 					}
+					time.Sleep(retryDelay)
 					retries++
 					continue
 				case nil:
@@ -464,7 +463,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					return entries, err
 				}
 				retries++
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(retryDelay)
 				continue
 			default:
 				logger.LogIf(ctx, err)
