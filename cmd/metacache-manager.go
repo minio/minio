@@ -128,6 +128,15 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	return b
 }
 
+// deleteAll will delete all caches.
+func (m *metacacheManager) deleteAll() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, b := range m.buckets {
+		b.deleteAll()
+	}
+}
+
 // getTransient will return a transient bucket.
 func (m *metacacheManager) getTransient() *bucketMetacache {
 	m.init.Do(m.initManager)
