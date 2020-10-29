@@ -91,7 +91,9 @@ func (m *metacache) canBeReplacedBy(other *metacache) bool {
 	if other.started.Before(m.started) || m.id == other.id {
 		return false
 	}
-
+	if other.status == scanStateNone || other.status == scanStateError {
+		return false
+	}
 	// Keep it around a bit longer.
 	if time.Since(m.lastHandout) < time.Hour {
 		return false
