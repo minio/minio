@@ -42,7 +42,7 @@ func isNetworkError(err error) bool {
 		return false
 	}
 	if nerr, ok := err.(*rest.NetworkError); ok {
-		return xnet.IsNetworkOrHostDown(nerr.Err)
+		return xnet.IsNetworkOrHostDown(nerr.Err, false)
 	}
 	return false
 }

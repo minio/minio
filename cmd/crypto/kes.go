@@ -415,7 +415,7 @@ func (c *kesClient) postRetry(path string, body io.ReadSeeker, limit int64) (io.
 		}
 
 		// If the error is not temp. / retryable => fail the request immediately.
-		if !xnet.IsNetworkOrHostDown(err) &&
+		if !xnet.IsNetworkOrHostDown(err, false) &&
 			!errors.Is(err, io.EOF) &&
 			!errors.Is(err, io.ErrUnexpectedEOF) &&
 			!errors.Is(err, context.DeadlineExceeded) {
