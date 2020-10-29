@@ -162,6 +162,7 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 
 	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
 	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient.ExpectTimeouts = true
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
