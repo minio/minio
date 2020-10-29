@@ -39,6 +39,8 @@ type Context map[string]string
 //
 // WriteTo sorts the context keys and writes the sorted
 // key-value pairs as canonical JSON object to w.
+//
+// Note that neither keys nor values are escaped for JSON.
 func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 	sortedKeys := make(sort.StringSlice, 0, len(c))
 	for k := range c {
@@ -65,6 +67,53 @@ func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 	}
 	nn, err = io.WriteString(w, "}")
 	return n + int64(nn), err
+}
+
+// AppendTo appends the context in a canonical from to dst.
+//
+// AppendTo sorts the context keys and writes the sorted
+// key-value pairs as canonical JSON object to w.
+//
+// Note that neither keys nor values are escaped for JSON.
+func (c Context) AppendTo(dst []byte) (output []byte) {
+	if len(c) == 0 {
+		return append(dst, '{', '}')
+	}
+
+	// out should not escape.
+	out := bytes.NewBuffer(dst)
+
+	// No need to copy+sort
+	if len(c) == 1 {
+		for k, v := range c {
+			out.WriteString(`{"`)
+			out.WriteString(k)
+			out.WriteString(`":"`)
+			out.WriteString(v)
+			out.WriteString(`"}`)
+		}
+		return out.Bytes()
+	}
+
+	sortedKeys := make([]string, 0, len(c))
+	for k := range c {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+
+	out.WriteByte('{')
+	for i, k := range sortedKeys {
+		out.WriteByte('"')
+		out.WriteString(k)
+		out.WriteString(`":"`)
+		out.WriteString(c[k])
+		out.WriteByte('"')
+		if i < len(sortedKeys)-1 {
+			out.WriteByte(',')
+		}
+	}
+	out.WriteByte('}')
+	return out.Bytes()
 }
 
 // KMS represents an active and authenticted connection
@@ -155,13 +204,12 @@ func (kms *masterKeyKMS) Info() (info KMSInfo) {
 
 func (kms *masterKeyKMS) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
 	var (
-		buffer     bytes.Buffer
 		derivedKey = kms.deriveKey(keyID, ctx)
 	)
-	if n, err := sio.Decrypt(&buffer, bytes.NewReader(sealedKey), sio.Config{Key: derivedKey[:]}); err != nil || n != 32 {
+	out, err := sio.DecryptBuffer(key[:0], sealedKey, sio.Config{Key: derivedKey[:]})
+	if err != nil || len(out) != 32 {
 		return key, err // TODO(aead): upgrade sio to use sio.Error
 	}
-	copy(key[:], buffer.Bytes())
 	return key, nil
 }
 
@@ -171,7 +219,7 @@ func (kms *masterKeyKMS) deriveKey(keyID string, context Context) (key [32]byte)
 	}
 	mac := hmac.New(sha256.New, kms.masterKey[:])
 	mac.Write([]byte(keyID))
-	context.WriteTo(mac)
+	mac.Write(context.AppendTo(make([]byte, 0, 128)))
 	mac.Sum(key[:0])
 	return key
 }
