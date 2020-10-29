@@ -80,7 +80,7 @@ var (
 		},
 		config.KV{
 			Key:   ClassDMA,
-			Value: "write",
+			Value: defaultDMA,
 		},
 	}
 )
