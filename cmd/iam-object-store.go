@@ -421,7 +421,6 @@ func (iamOS *IAMObjectStore) loadAll(ctx context.Context, sys *IAMSys) error {
 	}
 	// Sets default canned policies, if none are set.
 	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
-
 	iamOS.unlock()
 
 	if isMinIOUsersSys {

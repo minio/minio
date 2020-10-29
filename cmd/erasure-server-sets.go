@@ -1202,15 +1202,7 @@ func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string
 				wg.Add(1)
 				go func(disk StorageAPI) {
 					defer wg.Done()
-					if err := disk.Delete(ctx, bucket, prefix, true); err != nil {
-						if !IsErrIgnored(err, []error{
-							errDiskNotFound,
-							errVolumeNotFound,
-							errFileNotFound,
-						}...) {
-							logger.LogOnceIf(ctx, err, disk.String())
-						}
-					}
+					disk.Delete(ctx, bucket, prefix, true)
 				}(disk)
 			}
 		}
