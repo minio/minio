@@ -167,7 +167,14 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// consider the offline disks as consistent.
 			continue
 		}
+		if len(meta.Erasure.Distribution) != len(onlineDisks) {
+			// Erasure distribution seems to have lesser
+			// number of items than number of online disks.
+			inconsistent++
+			continue
+		}
 		if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+			// Mismatch indexes with distribution order
 			inconsistent++
 		}
 	}
@@ -193,6 +200,16 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			if !meta.IsValid() {
 				continue
 			}
+
+			if len(meta.Erasure.Distribution) != len(onlineDisks) {
+				// Erasure distribution is not the same as onlineDisks
+				// attempt a fix if possible, assuming other entries
+				// might have the right erasure distribution.
+				partsMetadata[i] = FileInfo{}
+				dataErrs[i] = errFileCorrupt
+				continue
+			}
+
 			// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
 			if meta.Erasure.Distribution[i] != meta.Erasure.Index {
 				partsMetadata[i] = FileInfo{}
