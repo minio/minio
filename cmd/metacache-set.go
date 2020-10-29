@@ -96,6 +96,25 @@ func init() {
 	gob.Register(listPathOptions{})
 }
 
+// newMetacache constructs a new metacache from the options.
+func (o listPathOptions) newMetacache() metacache {
+	return metacache{
+		id:           o.ID,
+		bucket:       o.Bucket,
+		root:         o.BaseDir,
+		recursive:    o.Recursive,
+		status:       scanStateStarted,
+		error:        "",
+		started:      UTCNow(),
+		lastHandout:  UTCNow(),
+		lastUpdate:   UTCNow(),
+		ended:        time.Time{},
+		startedCycle: o.CurrentCycle,
+		endedCycle:   0,
+		dataVersion:  metacacheStreamVersion,
+	}
+}
+
 // gatherResults will collect all results on the input channel and filter results according to the options.
 // Caller should close the channel when done.
 // The returned function will return the results once there is enough or input is closed.
@@ -230,23 +249,16 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 	}
 }
 
-// newMetacache constructs a new metacache from the options.
-func (o listPathOptions) newMetacache() metacache {
-	return metacache{
-		id:           o.ID,
-		bucket:       o.Bucket,
-		root:         o.BaseDir,
-		recursive:    o.Recursive,
-		status:       scanStateStarted,
-		error:        "",
-		started:      UTCNow(),
-		lastHandout:  UTCNow(),
-		lastUpdate:   UTCNow(),
-		ended:        time.Time{},
-		startedCycle: o.CurrentCycle,
-		endedCycle:   0,
-		dataVersion:  metacacheStreamVersion,
+// updateMetacacheListing will update the metacache listing.
+func (o *listPathOptions) updateMetacacheListing(m metacache) (metacache, error) {
+	if o.Transient {
+		return localMetacacheMgr.getTransient().updateCacheEntry(m)
 	}
+	rpcClient := globalNotificationSys.restClientFromHash(o.Bucket)
+	if rpcClient == nil {
+		return localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(m)
+	}
+	return rpcClient.UpdateMetacacheListing(context.Background(), m)
 }
 
 func getMetacacheBlockInfo(fi FileInfo, block int) (*metacacheBlock, error) {
@@ -511,14 +523,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		return entries, err
 	}
 
-	rpcClient := globalNotificationSys.restClientFromHash(o.Bucket)
 	meta := o.newMetacache()
 	var metaMu sync.Mutex
 	defer func() {
 		if debugPrint {
 			console.Println("listPath returning:", entries.len(), "err:", err)
 		}
-		if err != nil {
+		if err != nil && err != io.EOF {
 			metaMu.Lock()
 			if meta.status != scanStateError {
 				meta.error = err.Error()
@@ -526,11 +537,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			}
 			lm := meta
 			metaMu.Unlock()
-			if rpcClient == nil {
-				localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(lm)
-			} else {
-				rpcClient.UpdateMetacacheListing(context.Background(), lm)
-			}
+			o.updateMetacacheListing(lm)
 		}
 	}()
 	if debugPrint {
@@ -616,14 +623,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				meta.endedCycle = intDataUpdateTracker.current()
 				lm := meta
 				metaMu.Unlock()
-				var err error
-				if o.Transient {
-					lm, err = localMetacacheMgr.getTransient().updateCacheEntry(lm)
-				} else if rpcClient == nil {
-					lm, err = localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(lm)
-				} else {
-					lm, err = rpcClient.UpdateMetacacheListing(context.Background(), lm)
-				}
+				lm, err := o.updateMetacacheListing(lm)
 				logger.LogIf(ctx, err)
 				if lm.status == scanStateError {
 					cancel()

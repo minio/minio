@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -165,16 +164,16 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context) error {
 	}
 	if cache.status == scanStateSuccess {
 		if time.Since(cache.lastUpdate) > 10*time.Second {
-			return fmt.Errorf("timeout: Finished and data not available after 10 seconds")
+			return fmt.Errorf("timeout: list %s finished and data not available after 10 seconds", cache.id)
 		}
 		return nil
 	}
 	if cache.error != "" {
-		return errors.New(cache.error)
+		return fmt.Errorf("async cache listing failed with: %s", cache.error)
 	}
 	if cache.status == scanStateStarted {
 		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
-			return errors.New("cache listing not updating")
+			return fmt.Errorf("cache id %s listing not updating. Last update %s seconds ago", cache.id, time.Since(cache.lastUpdate).Round(time.Second))
 		}
 	}
 	return nil
