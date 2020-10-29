@@ -111,7 +111,7 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, target.args.Endpoint.String(), nil)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return false, errNotConnected
 		}
 		return false, err
@@ -119,7 +119,7 @@ func (target *WebhookTarget) IsActive() (bool, error) {
 
 	resp, err := target.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) || errors.Is(err, context.DeadlineExceeded) {
+		if xnet.IsNetworkOrHostDown(err, false) || errors.Is(err, context.DeadlineExceeded) {
 			return false, errNotConnected
 		}
 		return false, err
@@ -137,7 +137,7 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 	}
 	err := target.send(eventData)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return errNotConnected
 		}
 	}
@@ -197,7 +197,7 @@ func (target *WebhookTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return errNotConnected
 		}
 		return err

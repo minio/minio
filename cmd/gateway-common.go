@@ -270,7 +270,7 @@ func IsBackendOnline(ctx context.Context, clnt *http.Client, urlStr string) bool
 	resp, err := clnt.Do(req)
 	if err != nil {
 		clnt.CloseIdleConnections()
-		return !xnet.IsNetworkOrHostDown(err)
+		return !xnet.IsNetworkOrHostDown(err, false)
 	}
 	xhttp.DrainBody(resp.Body)
 	return true
@@ -291,7 +291,7 @@ func ErrorRespToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
-	if xnet.IsNetworkOrHostDown(err) {
+	if xnet.IsNetworkOrHostDown(err, false) {
 		return BackendDown{}
 	}
 
