@@ -204,15 +204,17 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	}
 
 	// Check whether all extracted values are well-formed
-	iv, err := base64.StdEncoding.DecodeString(b64IV)
-	if err != nil || len(iv) != 32 {
+	var iv [32]byte
+	n, err := base64.StdEncoding.Decode(iv[:], []byte(b64IV))
+	if err != nil || n != 32 {
 		return keyID, kmsKey, sealedKey, errInvalidInternalIV
 	}
 	if algorithm != SealAlgorithm {
 		return keyID, kmsKey, sealedKey, errInvalidInternalSealAlgorithm
 	}
-	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
-	if err != nil || len(encryptedKey) != 64 {
+	var encryptedKey [64]byte
+	n, err = base64.StdEncoding.Decode(encryptedKey[:], []byte(b64SealedKey))
+	if err != nil || n != 64 {
 		return keyID, kmsKey, sealedKey, Errorf("The internal sealed key for SSE-S3 is invalid")
 	}
 	if idPresent && kmsKeyPresent { // We are using a KMS -> parse the sealed KMS data key.
@@ -223,8 +225,8 @@ func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte
 	}
 
 	sealedKey.Algorithm = algorithm
-	copy(sealedKey.IV[:], iv)
-	copy(sealedKey.Key[:], encryptedKey)
+	sealedKey.IV = iv
+	sealedKey.Key = encryptedKey
 	return keyID, kmsKey, sealedKey, nil
 }
 

@@ -103,7 +103,6 @@ func (key ObjectKey) Seal(extKey, iv [32]byte, domain, bucket, object string) Se
 func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucket, object string) error {
 	var (
 		unsealConfig sio.Config
-		decryptedKey bytes.Buffer
 	)
 	switch sealedKey.Algorithm {
 	default:
@@ -122,10 +121,9 @@ func (key *ObjectKey) Unseal(extKey [32]byte, sealedKey SealedKey, domain, bucke
 		unsealConfig = sio.Config{MinVersion: sio.Version10, Key: sha.Sum(nil)}
 	}
 
-	if n, err := sio.Decrypt(&decryptedKey, bytes.NewReader(sealedKey.Key[:]), unsealConfig); n != 32 || err != nil {
+	if out, err := sio.DecryptBuffer(key[:0], sealedKey.Key[:], unsealConfig); len(out) != 32 || err != nil {
 		return ErrSecretKeyMismatch
 	}
-	copy(key[:], decryptedKey.Bytes())
 	return nil
 }
 
@@ -165,11 +163,7 @@ func (key ObjectKey) UnsealETag(etag []byte) ([]byte, error) {
 	if !IsETagSealed(etag) {
 		return etag, nil
 	}
-	var buffer bytes.Buffer
 	mac := hmac.New(sha256.New, key[:])
 	mac.Write([]byte("SSE-etag"))
-	if _, err := sio.Decrypt(&buffer, bytes.NewReader(etag), sio.Config{Key: mac.Sum(nil)}); err != nil {
-		return nil, err
-	}
-	return buffer.Bytes(), nil
+	return sio.DecryptBuffer(make([]byte, 0, len(etag)), etag, sio.Config{Key: mac.Sum(nil)})
 }
