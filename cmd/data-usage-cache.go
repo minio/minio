@@ -46,11 +46,14 @@ type sizeHistogram [dataUsageBucketLen]uint64
 //msgp:tuple dataUsageEntry
 type dataUsageEntry struct {
 	// These fields do no include any children.
-	Size     int64
-	Objects  uint64
-	ObjSizes sizeHistogram
-
-	Children dataUsageHashMap
+	Size                   int64
+	ReplicatedSize         uint64
+	ReplicationPendingSize uint64
+	ReplicationFailedSize  uint64
+	ReplicaSize            uint64
+	Objects                uint64
+	ObjSizes               sizeHistogram
+	Children               dataUsageHashMap
 }
 
 // dataUsageCache contains a cache of data usage entries.
@@ -75,10 +78,23 @@ type dataUsageCacheInfo struct {
 	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
 }
 
+func (e *dataUsageEntry) addSizes(summary sizeSummary) {
+	e.Size += summary.totalSize
+	e.ReplicatedSize += uint64(summary.replicatedSize)
+	e.ReplicationFailedSize += uint64(summary.failedSize)
+	e.ReplicationPendingSize += uint64(summary.pendingSize)
+	e.ReplicaSize += uint64(summary.replicaSize)
+}
+
 // merge other data usage entry into this, excluding children.
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Size += other.Size
+	e.ReplicationPendingSize += other.ReplicationPendingSize
+	e.ReplicationFailedSize += other.ReplicationFailedSize
+	e.ReplicatedSize += other.ReplicatedSize
+	e.ReplicaSize += other.ReplicaSize
+
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
 	}
@@ -212,11 +228,15 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	}
 	flat := d.flatten(*e)
 	return DataUsageInfo{
-		LastUpdate:        d.Info.LastUpdate,
-		ObjectsTotalCount: flat.Objects,
-		ObjectsTotalSize:  uint64(flat.Size),
-		BucketsCount:      uint64(len(e.Children)),
-		BucketsUsage:      d.bucketsUsageInfo(buckets),
+		LastUpdate:             d.Info.LastUpdate,
+		ObjectsTotalCount:      flat.Objects,
+		ObjectsTotalSize:       uint64(flat.Size),
+		ReplicatedSize:         flat.ReplicatedSize,
+		ReplicationFailedSize:  flat.ReplicationFailedSize,
+		ReplicationPendingSize: flat.ReplicationPendingSize,
+		ReplicaSize:            flat.ReplicaSize,
+		BucketsCount:           uint64(len(e.Children)),
+		BucketsUsage:           d.bucketsUsageInfo(buckets),
 	}
 }
 
@@ -342,9 +362,13 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		}
 		flat := d.flatten(*e)
 		dst[bucket.Name] = BucketUsageInfo{
-			Size:                 uint64(flat.Size),
-			ObjectsCount:         flat.Objects,
-			ObjectSizesHistogram: flat.ObjSizes.toMap(),
+			Size:                   uint64(flat.Size),
+			ObjectsCount:           flat.Objects,
+			ReplicationPendingSize: flat.ReplicationPendingSize,
+			ReplicatedSize:         flat.ReplicatedSize,
+			ReplicationFailedSize:  flat.ReplicationFailedSize,
+			ReplicaSize:            flat.ReplicaSize,
+			ObjectSizesHistogram:   flat.ObjSizes.toMap(),
 		}
 	}
 	return dst
@@ -359,9 +383,13 @@ func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
 	}
 	flat := d.flatten(*e)
 	return BucketUsageInfo{
-		Size:                 uint64(flat.Size),
-		ObjectsCount:         flat.Objects,
-		ObjectSizesHistogram: flat.ObjSizes.toMap(),
+		Size:                   uint64(flat.Size),
+		ObjectsCount:           flat.Objects,
+		ReplicationPendingSize: flat.ReplicationPendingSize,
+		ReplicatedSize:         flat.ReplicatedSize,
+		ReplicationFailedSize:  flat.ReplicationFailedSize,
+		ReplicaSize:            flat.ReplicaSize,
+		ObjectSizesHistogram:   flat.ObjSizes.toMap(),
 	}
 }
 
@@ -481,7 +509,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // dataUsageCacheVer indicates the cache version.
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
-const dataUsageCacheVer = 2
+const dataUsageCacheVer = 3
 
 // serialize the contents of the cache.
 func (d *dataUsageCache) serialize() []byte {

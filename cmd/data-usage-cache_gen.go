@@ -427,13 +427,33 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 4 {
-		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
+	if zb0001 != 8 {
+		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
 		return
 	}
 	z.Size, err = dc.ReadInt64()
 	if err != nil {
 		err = msgp.WrapError(err, "Size")
+		return
+	}
+	z.ReplicatedSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	z.ReplicationPendingSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingSize")
+		return
+	}
+	z.ReplicationFailedSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationFailedSize")
+		return
+	}
+	z.ReplicaSize, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
 		return
 	}
 	z.Objects, err = dc.ReadUint64()
@@ -468,14 +488,34 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 4
-	err = en.Append(0x94)
+	// array header, size 8
+	err = en.Append(0x98)
 	if err != nil {
 		return
 	}
 	err = en.WriteInt64(z.Size)
 	if err != nil {
 		err = msgp.WrapError(err, "Size")
+		return
+	}
+	err = en.WriteUint64(z.ReplicatedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicationPendingSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicationFailedSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationFailedSize")
+		return
+	}
+	err = en.WriteUint64(z.ReplicaSize)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
 		return
 	}
 	err = en.WriteUint64(z.Objects)
@@ -506,9 +546,13 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 4
-	o = append(o, 0x94)
+	// array header, size 8
+	o = append(o, 0x98)
 	o = msgp.AppendInt64(o, z.Size)
+	o = msgp.AppendUint64(o, z.ReplicatedSize)
+	o = msgp.AppendUint64(o, z.ReplicationPendingSize)
+	o = msgp.AppendUint64(o, z.ReplicationFailedSize)
+	o = msgp.AppendUint64(o, z.ReplicaSize)
 	o = msgp.AppendUint64(o, z.Objects)
 	o = msgp.AppendArrayHeader(o, uint32(dataUsageBucketLen))
 	for za0001 := range z.ObjSizes {
@@ -530,13 +574,33 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 4 {
-		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
+	if zb0001 != 8 {
+		err = msgp.ArrayError{Wanted: 8, Got: zb0001}
 		return
 	}
 	z.Size, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Size")
+		return
+	}
+	z.ReplicatedSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicatedSize")
+		return
+	}
+	z.ReplicationPendingSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationPendingSize")
+		return
+	}
+	z.ReplicationFailedSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicationFailedSize")
+		return
+	}
+	z.ReplicaSize, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ReplicaSize")
 		return
 	}
 	z.Objects, bts, err = msgp.ReadUint64Bytes(bts)
@@ -572,7 +636,7 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageEntry) Msgsize() (s int) {
-	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize()
+	s = 1 + msgp.Int64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.ArrayHeaderSize + (dataUsageBucketLen * (msgp.Uint64Size)) + z.Children.Msgsize()
 	return
 }
 

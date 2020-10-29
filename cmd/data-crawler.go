@@ -436,16 +436,16 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				lifeCycle:  activeLifeCycle,
 				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
 			}
-			size, err := f.getSize(item)
+			sizeSummary, err := f.getSize(item)
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 			if err == errSkipFile {
 				return nil
 			}
 			logger.LogIf(ctx, err)
-			cache.Size += size
+			cache.addSizes(sizeSummary)
 			cache.Objects++
-			cache.ObjSizes.add(size)
+			cache.ObjSizes.add(sizeSummary.totalSize)
 
 			return nil
 		})
@@ -569,7 +569,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 			}
 		}
 
-		size, err := f.getSize(
+		sizeSummary, err := f.getSize(
 			crawlItem{
 				Path:       fileName,
 				Typ:        typ,
@@ -588,9 +588,9 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 			return nil
 		}
 		logger.LogIf(ctx, err)
-		cache.Size += size
+		cache.addSizes(sizeSummary)
 		cache.Objects++
-		cache.ObjSizes.add(size)
+		cache.ObjSizes.add(sizeSummary.totalSize)
 		return nil
 	}
 	err := readDirFn(path.Join(dirStack...), addDir)
@@ -613,7 +613,15 @@ type crawlItem struct {
 	debug      bool
 }
 
-type getSizeFn func(item crawlItem) (int64, error)
+type sizeSummary struct {
+	totalSize      int64
+	replicatedSize int64
+	pendingSize    int64
+	failedSize     int64
+	replicaSize    int64
+}
+
+type getSizeFn func(item crawlItem) (sizeSummary, error)
 
 // transformMetaDir will transform a directory to prefix/file.ext
 func (i *crawlItem) transformMetaDir() {
@@ -821,7 +829,7 @@ func sleepDuration(d time.Duration, x float64) {
 }
 
 // healReplication will heal a scanned item that has failed replication.
-func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
+func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) {
 	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
 		//heal delete marker replication failure or versioned delete replication failure
 		if meta.oi.ReplicationStatus == replication.Pending ||
@@ -831,9 +839,17 @@ func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta act
 			return
 		}
 	}
-	if meta.oi.ReplicationStatus == replication.Pending ||
-		meta.oi.ReplicationStatus == replication.Failed {
+	switch meta.oi.ReplicationStatus {
+	case replication.Pending:
+		sizeS.pendingSize += meta.oi.Size
 		globalReplicationState.queueReplicaTask(meta.oi)
+	case replication.Failed:
+		sizeS.failedSize += meta.oi.Size
+		globalReplicationState.queueReplicaTask(meta.oi)
+	case replication.Complete:
+		sizeS.replicatedSize += meta.oi.Size
+	case replication.Replica:
+		sizeS.replicaSize += meta.oi.Size
 	}
 }
 

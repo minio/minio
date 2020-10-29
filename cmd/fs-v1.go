@@ -327,11 +327,11 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 	}
 
 	// Load bucket info.
-	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, func(item crawlItem) (int64, error) {
+	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, func(item crawlItem) (sizeSummary, error) {
 		bucket, object := item.bucket, item.objectPath()
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !osIsNotExist(err) {
-			return 0, errSkipFile
+			return sizeSummary{}, errSkipFile
 		}
 
 		fsMeta := newFSMetaV1()
@@ -349,7 +349,7 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		// Stat the file.
 		fi, fiErr := os.Stat(item.Path)
 		if fiErr != nil {
-			return 0, errSkipFile
+			return sizeSummary{}, errSkipFile
 		}
 		// We cannot heal in FS mode.
 		item.heal = false
@@ -357,10 +357,10 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
 		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
 		if sz >= 0 {
-			return sz, nil
+			return sizeSummary{totalSize: sz}, nil
 		}
 
-		return fi.Size(), nil
+		return sizeSummary{totalSize: fi.Size()}, nil
 	})
 
 	return cache, err
