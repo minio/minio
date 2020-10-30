@@ -30,6 +30,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -1063,61 +1064,70 @@ func TestXLStorageReadFile(t *testing.T) {
 		}
 	}
 
-	// Following block validates all ReadFile test cases.
-	for i, testCase := range testCases {
-		var n int64
-		// Common read buffer.
-		var buf = make([]byte, testCase.bufSize)
-		n, err = xlStorage.ReadFile(context.Background(), testCase.volume, testCase.fileName, testCase.offset, buf, v)
-		if err != nil && testCase.expectedErr != nil {
-			// Validate if the type string of the errors are an exact match.
-			if err.Error() != testCase.expectedErr.Error() {
-				if runtime.GOOS != globalWindowsOSName {
-					t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
-				} else {
-					var resultErrno, expectErrno uintptr
-					if pathErr, ok := err.(*os.PathError); ok {
-						if errno, pok := pathErr.Err.(syscall.Errno); pok {
-							resultErrno = uintptr(errno)
-						}
-					}
-					if pathErr, ok := testCase.expectedErr.(*os.PathError); ok {
-						if errno, pok := pathErr.Err.(syscall.Errno); pok {
-							expectErrno = uintptr(errno)
-						}
-					}
-					if !(expectErrno != 0 && resultErrno != 0 && expectErrno == resultErrno) {
+	for l := 0; l < 2; l++ {
+		// 1st loop tests with dma=write, 2nd loop tests with dma=read-write.
+		if l == 1 {
+			globalStorageClass.DMA.DMA = storageclass.DMAReadWrite
+		}
+		// Following block validates all ReadFile test cases.
+		for i, testCase := range testCases {
+			var n int64
+			// Common read buffer.
+			var buf = make([]byte, testCase.bufSize)
+			n, err = xlStorage.ReadFile(context.Background(), testCase.volume, testCase.fileName, testCase.offset, buf, v)
+			if err != nil && testCase.expectedErr != nil {
+				// Validate if the type string of the errors are an exact match.
+				if err.Error() != testCase.expectedErr.Error() {
+					if runtime.GOOS != globalWindowsOSName {
 						t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
+					} else {
+						var resultErrno, expectErrno uintptr
+						if pathErr, ok := err.(*os.PathError); ok {
+							if errno, pok := pathErr.Err.(syscall.Errno); pok {
+								resultErrno = uintptr(errno)
+							}
+						}
+						if pathErr, ok := testCase.expectedErr.(*os.PathError); ok {
+							if errno, pok := pathErr.Err.(syscall.Errno); pok {
+								expectErrno = uintptr(errno)
+							}
+						}
+						if !(expectErrno != 0 && resultErrno != 0 && expectErrno == resultErrno) {
+							t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
+						}
+					}
+				}
+				// Err unexpected EOF special case, where we verify we have provided a larger
+				// buffer than the data itself, but the results are in-fact valid. So we validate
+				// this error condition specifically treating it as a good condition with valid
+				// results. In this scenario return 'n' is always lesser than the input buffer.
+				if err == io.ErrUnexpectedEOF {
+					if !bytes.Equal(testCase.expectedBuf, buf[:n]) {
+						t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:n]))
+					}
+					if n > int64(len(buf)) {
+						t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
 					}
 				}
 			}
-			// Err unexpected EOF special case, where we verify we have provided a larger
-			// buffer than the data itself, but the results are in-fact valid. So we validate
-			// this error condition specifically treating it as a good condition with valid
-			// results. In this scenario return 'n' is always lesser than the input buffer.
-			if err == io.ErrUnexpectedEOF {
-				if !bytes.Equal(testCase.expectedBuf, buf[:n]) {
-					t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:n]))
+			// ReadFile has returned success, but our expected error is non 'nil'.
+			if err == nil && err != testCase.expectedErr {
+				t.Errorf("Case: %d %#v, expected: %s, got :%s", i+1, testCase, testCase.expectedErr, err)
+			}
+			// Expected error retured, proceed further to validate the returned results.
+			if err == nil && err == testCase.expectedErr {
+				if !bytes.Equal(testCase.expectedBuf, buf) {
+					t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:testCase.bufSize]))
 				}
-				if n > int64(len(buf)) {
+				if n != int64(testCase.bufSize) {
 					t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
 				}
 			}
 		}
-		// ReadFile has returned success, but our expected error is non 'nil'.
-		if err == nil && err != testCase.expectedErr {
-			t.Errorf("Case: %d %#v, expected: %s, got :%s", i+1, testCase, testCase.expectedErr, err)
-		}
-		// Expected error retured, proceed further to validate the returned results.
-		if err == nil && err == testCase.expectedErr {
-			if !bytes.Equal(testCase.expectedBuf, buf) {
-				t.Errorf("Case: %d %#v, expected: \"%s\", got: \"%s\"", i+1, testCase, string(testCase.expectedBuf), string(buf[:testCase.bufSize]))
-			}
-			if n != int64(testCase.bufSize) {
-				t.Errorf("Case: %d %#v, expected: %d, got: %d", i+1, testCase, testCase.bufSize, n)
-			}
-		}
 	}
+
+	// Reset the flag.
+	globalStorageClass.DMA.DMA = storageclass.DMAWrite
 
 	// TestXLStorage for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
