@@ -261,19 +261,19 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		key := strings.ToLower(k)
 
 		// Handle the metadata in presigned put query string
-		if strings.Contains(key, "x-amz-meta-") {
+		if strings.Contains(key, "x-amz-") {
 			query.Set(k, v[0])
 			continue
 		}
 
-		if strings.Contains(key, "x-amz-server-side-") {
-			query.Set(k, v[0])
-			continue
-		}
+		// if strings.Contains(key, "x-amz-server-side-") {
+		// 	query.Set(k, v[0])
+		// 	continue
+		// }
 
-		if strings.HasPrefix(key, "x-amz") {
-			continue
-		}
+		// if strings.HasPrefix(key, "x-amz") {
+		// 	continue
+		// }
 		query[k] = v
 	}
 
@@ -311,6 +311,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method)
 
 	// Get string to sign from canonical request.
+
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, pSignValues.Credential.getScope())
 
 	// Get hmac presigned signing key.
