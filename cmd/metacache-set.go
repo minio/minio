@@ -250,15 +250,14 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 }
 
 // updateMetacacheListing will update the metacache listing.
-func (o *listPathOptions) updateMetacacheListing(m metacache) (metacache, error) {
+func (o *listPathOptions) updateMetacacheListing(m metacache, rpc *peerRESTClient) (metacache, error) {
 	if o.Transient {
 		return localMetacacheMgr.getTransient().updateCacheEntry(m)
 	}
-	rpcClient := globalNotificationSys.restClientFromHash(o.Bucket)
-	if rpcClient == nil {
+	if rpc == nil {
 		return localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(m)
 	}
-	return rpcClient.UpdateMetacacheListing(context.Background(), m)
+	return rpc.UpdateMetacacheListing(context.Background(), m)
 }
 
 func getMetacacheBlockInfo(fi FileInfo, block int) (*metacacheBlock, error) {
@@ -344,6 +343,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
 	const debugPrint = false
+	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	for {
 		select {
 		case <-ctx.Done():
@@ -359,7 +359,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			if err == errFileNotFound || errors.Is(err, errErasureReadQuorum) || errors.Is(err, InsufficientReadQuorum{}) {
 				// Not ready yet...
 				if retries == 10 {
-					err := o.checkMetacacheState(ctx)
+					err := o.checkMetacacheState(ctx, rpc)
 					if debugPrint {
 						logger.Info("waiting for first part (%s), err: %v", o.objectPath(0), err)
 					}
@@ -387,7 +387,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		case nil:
 		case io.ErrUnexpectedEOF, errErasureReadQuorum, InsufficientReadQuorum{}:
 			if retries == 10 {
-				err := o.checkMetacacheState(ctx)
+				err := o.checkMetacacheState(ctx, rpc)
 				if debugPrint {
 					logger.Info("waiting for metadata, err: %v", err)
 				}
@@ -419,7 +419,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				switch err {
 				case errFileNotFound, errErasureReadQuorum, InsufficientReadQuorum{}:
 					if retries >= 10 {
-						err := o.checkMetacacheState(ctx)
+						err := o.checkMetacacheState(ctx, rpc)
 						if debugPrint {
 							logger.Info("waiting for part data (%v), err: %v", o.objectPath(partN), err)
 						}
@@ -523,6 +523,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	}
 
 	meta := o.newMetacache()
+	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	var metaMu sync.Mutex
 	defer func() {
 		if debugPrint {
@@ -536,7 +537,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			}
 			lm := meta
 			metaMu.Unlock()
-			o.updateMetacacheListing(lm)
+			o.updateMetacacheListing(lm, rpc)
 		}
 	}()
 	if debugPrint {
@@ -622,7 +623,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				meta.endedCycle = intDataUpdateTracker.current()
 				lm := meta
 				metaMu.Unlock()
-				lm, err := o.updateMetacacheListing(lm)
+				lm, err := o.updateMetacacheListing(lm, rpc)
 				logger.LogIf(ctx, err)
 				if lm.status == scanStateError {
 					cancel()
@@ -770,15 +771,18 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		if meta.error == "" {
 			meta.status = scanStateSuccess
 			meta.endedCycle = intDataUpdateTracker.current()
-			meta, err = o.updateMetacacheListing(meta)
+			meta, err = o.updateMetacacheListing(meta, rpc)
 		}
 		metaMu.Unlock()
 
 		closeChannels()
 		if err := bw.Close(); err != nil {
 			metaMu.Lock()
-			meta.error = err.Error()
-			meta.status = scanStateError
+			if meta.error == "" {
+				meta.error = err.Error()
+				meta.status = scanStateError
+				meta, err = o.updateMetacacheListing(meta, rpc)
+			}
 			metaMu.Unlock()
 		}
 	}()

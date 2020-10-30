@@ -185,7 +185,7 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		// Update master cache with that information.
 		cache.status = scanStateSuccess
 		cache.fileNotFound = true
-		_, err := o.updateMetacacheListing(cache)
+		_, err := o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
 		logger.LogIf(ctx, err)
 		return entries, errFileNotFound
 	}

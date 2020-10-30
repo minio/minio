@@ -148,12 +148,11 @@ func (m *metacacheManager) getTransient() *bucketMetacache {
 
 // checkMetacacheState should be used if data is not updating.
 // Should only be called if a failure occurred.
-func (o listPathOptions) checkMetacacheState(ctx context.Context) error {
+func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTClient) error {
 	// We operate on a copy...
 	o.Create = false
 	var cache metacache
 	if !o.Transient {
-		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if rpc == nil {
 			// Local
 			cache = localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
