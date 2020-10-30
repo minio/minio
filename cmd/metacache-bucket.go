@@ -398,7 +398,7 @@ func (b *bucketMetacache) deleteAll() {
 		wg.Add(1)
 		go func(cache metacache) {
 			defer wg.Done()
-			logger.LogIf(ctx, ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(cache.bucket, cache.id)))
+			ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(cache.bucket, cache.id))
 		}(b.caches[id])
 		delete(b.caches, id)
 	}
@@ -426,6 +426,6 @@ func (b *bucketMetacache) deleteCache(id string) {
 			logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasureServerSets"))
 			return
 		}
-		logger.LogIf(ctx, ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(c.bucket, c.id)))
+		ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(c.bucket, c.id))
 	}
 }
