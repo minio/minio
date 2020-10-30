@@ -764,18 +764,23 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				}
 			}
 		}
-		closeChannels()
+
+		// Save success
 		metaMu.Lock()
 		if meta.error == "" {
-			if err := bw.Close(); err != nil {
-				meta.error = err.Error()
-				meta.status = scanStateError
-			} else {
-				meta.status = scanStateSuccess
-				meta.endedCycle = intDataUpdateTracker.current()
-			}
+			meta.status = scanStateSuccess
+			meta.endedCycle = intDataUpdateTracker.current()
+			meta, err = o.updateMetacacheListing(meta)
 		}
 		metaMu.Unlock()
+
+		closeChannels()
+		if err := bw.Close(); err != nil {
+			metaMu.Lock()
+			meta.error = err.Error()
+			meta.status = scanStateError
+			metaMu.Unlock()
+		}
 	}()
 
 	return filteredResults()
