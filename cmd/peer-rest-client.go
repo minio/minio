@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/url"
@@ -40,7 +41,8 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/minio/pkg/trace"
+	"github.com/tinylib/msgp/msgp"
 )
 
 // client to talk to peer Nodes.
@@ -657,6 +659,40 @@ func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []st
 	return diskIDs
 }
 
+// GetMetacacheListing - get a new or existing metacache.
+func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPathOptions) (*metacache, error) {
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(o)
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetMetacacheListing, nil, &reader, int64(reader.Len()))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return nil, err
+	}
+	var resp metacache
+	defer http.DrainBody(respBody)
+	return &resp, msgp.Decode(respBody, &resp)
+}
+
+// UpdateMetacacheListing - update an existing metacache it will unconditionally be updated to the new state.
+func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m metacache) (metacache, error) {
+	b, err := m.MarshalMsg(nil)
+	if err != nil {
+		return m, err
+	}
+	respBody, err := client.callWithContext(ctx, peerRESTMethodUpdateMetacacheListing, nil, bytes.NewBuffer(b), int64(len(b)))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return m, err
+	}
+	defer http.DrainBody(respBody)
+	var resp metacache
+	return resp, msgp.Decode(respBody, &resp)
+
+}
+
 func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
@@ -811,30 +847,29 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan s
 	}()
 }
 
-func getRemoteHosts(endpointServerSets EndpointServerSets) []*xnet.Host {
-	peers := GetRemotePeers(endpointServerSets)
-	remoteHosts := make([]*xnet.Host, 0, len(peers))
-	for _, hostStr := range peers {
-		host, err := xnet.ParseHost(hostStr)
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
+// newPeerRestClients creates new peer clients.
+// The two slices will point to the same clients,
+// but 'all' will contain nil entry for local client.
+// The 'all' slice will be in the same order across the cluster.
+func newPeerRestClients(endpoints EndpointServerSets) (remote, all []*peerRESTClient) {
+	if !globalIsDistErasure {
+		// Only useful in distributed setups
+		return nil, nil
+	}
+	hosts := endpoints.hostsSorted()
+	remote = make([]*peerRESTClient, 0, len(hosts))
+	all = make([]*peerRESTClient, len(hosts))
+	for i, host := range hosts {
+		if host == nil {
 			continue
 		}
-		remoteHosts = append(remoteHosts, host)
+		all[i] = newPeerRESTClient(host)
+		remote = append(remote, all[i])
 	}
-
-	return remoteHosts
-}
-
-// newPeerRestClients creates new peer clients.
-func newPeerRestClients(endpoints EndpointServerSets) []*peerRESTClient {
-	peerHosts := getRemoteHosts(endpoints)
-	restClients := make([]*peerRESTClient, len(peerHosts))
-	for i, host := range peerHosts {
-		restClients[i] = newPeerRESTClient(host)
+	if len(all) != len(remote)+1 {
+		logger.LogIf(context.Background(), fmt.Errorf("WARNING: Expected number of all hosts (%v) to be remote +1 (%v)", len(all), len(remote)))
 	}
-
-	return restClients
+	return remote, all
 }
 
 // Returns a peer rest client.

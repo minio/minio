@@ -177,11 +177,10 @@ func (kes *kesService) CreateKey(keyID string) error { return kes.client.CreateK
 // named key referenced by keyID. It also binds the generated key
 // cryptographically to the provided context.
 func (kes *kesService) GenerateKey(keyID string, ctx Context) (key [32]byte, sealedKey []byte, err error) {
-	var context bytes.Buffer
-	ctx.WriteTo(&context)
+	context := ctx.AppendTo(make([]byte, 0, 128))
 
 	var plainKey []byte
-	plainKey, sealedKey, err = kes.client.GenerateDataKey(keyID, context.Bytes())
+	plainKey, sealedKey, err = kes.client.GenerateDataKey(keyID, context)
 	if err != nil {
 		return key, nil, err
 	}
@@ -200,11 +199,10 @@ func (kes *kesService) GenerateKey(keyID string, ctx Context) (key [32]byte, sea
 // The context must be same context as the one provided while
 // generating the plaintext key / sealedKey.
 func (kes *kesService) UnsealKey(keyID string, sealedKey []byte, ctx Context) (key [32]byte, err error) {
-	var context bytes.Buffer
-	ctx.WriteTo(&context)
+	context := ctx.AppendTo(make([]byte, 0, 128))
 
 	var plainKey []byte
-	plainKey, err = kes.client.DecryptDataKey(keyID, sealedKey, context.Bytes())
+	plainKey, err = kes.client.DecryptDataKey(keyID, sealedKey, context)
 	if err != nil {
 		return key, err
 	}
@@ -415,7 +413,7 @@ func (c *kesClient) postRetry(path string, body io.ReadSeeker, limit int64) (io.
 		}
 
 		// If the error is not temp. / retryable => fail the request immediately.
-		if !xnet.IsNetworkOrHostDown(err) &&
+		if !xnet.IsNetworkOrHostDown(err, false) &&
 			!errors.Is(err, io.EOF) &&
 			!errors.Is(err, io.ErrUnexpectedEOF) &&
 			!errors.Is(err, context.DeadlineExceeded) {

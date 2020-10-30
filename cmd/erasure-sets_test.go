@@ -197,27 +197,13 @@ func TestNewErasureSets(t *testing.T) {
 // TestHashedLayer - tests the hashed layer which will be returned
 // consistently for a given object name.
 func TestHashedLayer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var objs []*erasureObjects
-	for i := 0; i < 16; i++ {
-		obj, fsDirs, err := prepareErasure16(ctx)
-		if err != nil {
-			t.Fatal("Unable to initialize 'Erasure' object layer.", err)
-		}
-		defer obj.Shutdown(ctx)
-
-		// Remove all dirs.
-		for _, dir := range fsDirs {
-			defer os.RemoveAll(dir)
-		}
-
-		z := obj.(*erasureServerSets)
-		objs = append(objs, z.serverSets[0].sets[0])
+	// Test distribution with 16 sets.
+	var objs [16]*erasureObjects
+	for i := range objs {
+		objs[i] = &erasureObjects{}
 	}
 
-	sets := &erasureSets{sets: objs, distributionAlgo: "CRCMOD"}
+	sets := &erasureSets{sets: objs[:], distributionAlgo: "CRCMOD"}
 
 	testCases := []struct {
 		objectName  string

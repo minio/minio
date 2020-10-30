@@ -124,7 +124,7 @@ func (target *ElasticsearchTarget) IsActive() (bool, error) {
 	}
 	_, code, err := target.client.Ping(target.args.URL.String()).HttpHeadOnly(true).Do(ctx)
 	if err != nil {
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
+		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
 			return false, errNotConnected
 		}
 		return false, err
@@ -138,7 +138,7 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 		return target.store.Put(eventData)
 	}
 	err := target.send(eventData)
-	if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
+	if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
 		return errNotConnected
 	}
 	return err
@@ -214,7 +214,7 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
+		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
 			return errNotConnected
 		}
 		return err
@@ -267,7 +267,7 @@ func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
 	client, err := elastic.NewClient(options...)
 	if err != nil {
 		// https://github.com/olivere/elastic/wiki/Connection-Errors
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err) {
+		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
 			return nil, errNotConnected
 		}
 		return nil, err

@@ -169,7 +169,12 @@ func TestDataUpdateTracker(t *testing.T) {
 		})
 	}
 	// Cycle to history
-	_, err = dut.cycleFilter(ctx, 1, 2)
+	req := bloomFilterRequest{
+		Oldest:  1,
+		Current: 2,
+	}
+
+	_, err = dut.cycleFilter(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +205,11 @@ func TestDataUpdateTracker(t *testing.T) {
 	if dut.current() != 2 {
 		t.Fatal("current idx after load not preserved. want 2, got:", dut.current())
 	}
-	bfr2, err := dut.cycleFilter(ctx, 1, 3)
+	req = bloomFilterRequest{
+		Oldest:  1,
+		Current: 3,
+	}
+	bfr2, err := dut.cycleFilter(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}

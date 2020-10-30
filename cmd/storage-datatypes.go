@@ -60,6 +60,20 @@ type FileInfoVersions struct {
 	Versions []FileInfo
 }
 
+// forwardPastVersion will truncate the result to only contain versions after 'v'.
+// If v is empty or the version isn't found no changes will be made.
+func (f *FileInfoVersions) forwardPastVersion(v string) {
+	if v == "" {
+		return
+	}
+	for i, ver := range f.Versions {
+		if ver.VersionID == v {
+			f.Versions = f.Versions[i+1:]
+			return
+		}
+	}
+}
+
 // FileInfo - represents file stat information.
 //msgp:tuple FileInfo
 // The above means that any added/deleted fields are incompatible.

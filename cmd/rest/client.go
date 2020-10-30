@@ -27,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
+
 	xhttp "github.com/minio/minio/cmd/http"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -75,6 +77,10 @@ type Client struct {
 	// Should only be modified before any calls are made.
 	MaxErrResponseSize int64
 
+	// ExpectTimeouts indicates if context timeouts are expected.
+	// This will not mark the client offline in these cases.
+	ExpectTimeouts bool
+
 	httpClient   *http.Client
 	url          *url.URL
 	newAuthToken func(audience string) string
@@ -112,7 +118,8 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			logger.LogIf(ctx, err, "marking disk offline")
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -141,7 +148,8 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err) {
+			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+				logger.LogIf(ctx, err, "marking disk offline")
 				c.MarkOffline()
 			}
 			return nil, err

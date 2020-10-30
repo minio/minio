@@ -44,6 +44,12 @@ func newCachedObjectLayerFn() CacheObjectLayer {
 	return globalCacheObjectAPI
 }
 
+func setObjectLayer(o ObjectLayer) {
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = o
+	globalObjLayerMutex.Unlock()
+}
+
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
@@ -320,7 +326,7 @@ func registerAPIRouter(router *mux.Router) {
 
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
-	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler))
+	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(methodNotAllowedHandler("S3")))
 
 }
 

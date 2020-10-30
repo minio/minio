@@ -48,6 +48,9 @@ type StorageAPI interface {
 	StatVol(ctx context.Context, volume string) (vol VolInfo, err error)
 	DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error)
 
+	// WalkDir will walk a directory on disk and return a metacache stream on wr.
+	WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error
+
 	// WalkVersions in sorted order directly on disk.
 	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
 	// Walk in sorted order directly on disk.
@@ -71,7 +74,7 @@ type StorageAPI interface {
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
 	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error
 	CheckFile(ctx context.Context, volume string, path string) (err error)
-	DeleteFile(ctx context.Context, volume string, path string) (err error)
+	Delete(ctx context.Context, volume string, path string, recursive bool) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 
 	// Write all data, syncs the data to disk.
