@@ -65,11 +65,12 @@ var contextWriteToTests = []struct {
 	Context      Context
 	ExpectedJSON string
 }{
-	{Context: Context{}, ExpectedJSON: "{}"},                                                    // 0
-	{Context: Context{"a": "b"}, ExpectedJSON: `{"a":"b"}`},                                     // 1
-	{Context: Context{"a": "b", "c": "d"}, ExpectedJSON: `{"a":"b","c":"d"}`},                   // 2
-	{Context: Context{"c": "d", "a": "b"}, ExpectedJSON: `{"a":"b","c":"d"}`},                   // 3
-	{Context: Context{"0": "1", "-": "2", ".": "#"}, ExpectedJSON: `{"-":"2",".":"#","0":"1"}`}, // 4
+	{Context: Context{}, ExpectedJSON: "{}"},                                                                                    // 0
+	{Context: Context{"a": "b"}, ExpectedJSON: `{"a":"b"}`},                                                                     // 1
+	{Context: Context{"a": "b", "c": "d"}, ExpectedJSON: `{"a":"b","c":"d"}`},                                                   // 2
+	{Context: Context{"c": "d", "a": "b"}, ExpectedJSON: `{"a":"b","c":"d"}`},                                                   // 3
+	{Context: Context{"0": "1", "-": "2", ".": "#"}, ExpectedJSON: `{"-":"2",".":"#","0":"1"}`},                                 // 4
+	{Context: Context{"0": "1", "key\\": "val\tue\r\n", "\"": "\""}, ExpectedJSON: `{"\"":"\"","0":"1","key\\":"val\tue\r\n"}`}, // 5
 }
 
 func TestContextWriteTo(t *testing.T) {
