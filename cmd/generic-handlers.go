@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -157,13 +158,38 @@ const (
 	loginPathPrefix         = SlashSeparator + "login"
 )
 
-// Adds redirect rules for incoming requests.
 type redirectHandler struct {
 	handler http.Handler
 }
 
-func setBrowserRedirectHandler(h http.Handler) http.Handler {
+func setRedirectHandler(h http.Handler) http.Handler {
 	return redirectHandler{handler: h}
+}
+
+// Adds redirect rules for incoming requests.
+type browserRedirectHandler struct {
+	handler http.Handler
+}
+
+func setBrowserRedirectHandler(h http.Handler) http.Handler {
+	return browserRedirectHandler{handler: h}
+}
+
+func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	switch {
+	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), guessIsMetricsReq(r), isAdminReq(r):
+		h.handler.ServeHTTP(w, r)
+		return
+	case newObjectLayerFn() == nil:
+		// if this server is still initializing, proxy the request
+		// to any other online servers to avoid 503 for any incoming
+		// API calls.
+		if idx := getOnlineProxyEndpointIdx(); idx >= 0 {
+			proxyRequest(context.TODO(), w, r, globalProxyEndpoints[idx])
+			return
+		}
+	}
+	h.handler.ServeHTTP(w, r)
 }
 
 // Fetch redirect location if urlPath satisfies certain
@@ -236,7 +262,7 @@ func guessIsRPCReq(req *http.Request) bool {
 		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+SlashSeparator)
 }
 
-func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h browserRedirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Re-direction is handled specifically for browser requests.
 	if guessIsBrowserReq(r) {
 		// Fetch the redirect location if any.
