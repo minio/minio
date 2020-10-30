@@ -18,6 +18,8 @@ package logger
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"sync"
 
 	"time"
@@ -77,5 +79,19 @@ var logOnce = newLogOnceType()
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
 func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+	if err == nil {
+		return
+	}
+
+	if errors.Is(err, context.Canceled) || errors.Is(err, http.ErrServerClosed) {
+		return
+	}
+
+	if e := errors.Unwrap(err); e != nil {
+		if e.Error() == "disk not found" {
+			return
+		}
+	}
+
 	logOnce.logOnceIf(ctx, err, id, errKind...)
 }

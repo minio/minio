@@ -1191,7 +1191,7 @@ func (z *erasureServerSets) DeleteBucket(ctx context.Context, bucket string, for
 // Note that set distribution is ignored so it should only be used in cases where
 // data is not distributed across sets.
 // Errors are logged but individual disk failures are not returned.
-func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) error {
+func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) {
 	var wg sync.WaitGroup
 	for _, servers := range z.serverSets {
 		for _, set := range servers.sets {
@@ -1202,13 +1202,20 @@ func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string
 				wg.Add(1)
 				go func(disk StorageAPI) {
 					defer wg.Done()
-					logger.LogIf(ctx, disk.Delete(ctx, bucket, prefix, true))
+					if err := disk.Delete(ctx, bucket, prefix, true); err != nil {
+						if !IsErrIgnored(err, []error{
+							errDiskNotFound,
+							errVolumeNotFound,
+							errFileNotFound,
+						}...) {
+							logger.LogOnceIf(ctx, err, disk.String())
+						}
+					}
 				}(disk)
 			}
 		}
 	}
 	wg.Wait()
-	return nil
 }
 
 // This function is used to undo a successful DeleteBucket operation.
