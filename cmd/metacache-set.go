@@ -605,6 +605,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		defer cancel()
 		// Save continuous updates
 		go func() {
+			var err error
 			ticker := time.NewTicker(10 * time.Second)
 			defer ticker.Stop()
 			var exit bool
@@ -768,7 +769,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			meta.status = scanStateSuccess
 			meta.endedCycle = intDataUpdateTracker.current()
 		}
-		meta, err = o.updateMetacacheListing(meta, rpc)
+		meta, _ = o.updateMetacacheListing(meta, rpc)
 		metaMu.Unlock()
 
 		closeChannels()
