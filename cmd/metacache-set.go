@@ -525,6 +525,16 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	meta := o.newMetacache()
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	var metaMu sync.Mutex
+
+	if debugPrint {
+		console.Println("listPath: scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
+	}
+
+	// Disconnect from call above, but cancel on exit.
+	ctx, cancel := context.WithCancel(GlobalContext)
+	// We need to ask disks.
+	disks := er.getOnlineDisks()
+
 	defer func() {
 		if debugPrint {
 			console.Println("listPath returning:", entries.len(), "err:", err)
@@ -535,19 +545,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				meta.error = err.Error()
 				meta.status = scanStateError
 			}
-			lm := meta
+			meta, _ = o.updateMetacacheListing(meta, rpc)
 			metaMu.Unlock()
-			o.updateMetacacheListing(lm, rpc)
+			cancel()
 		}
 	}()
-	if debugPrint {
-		console.Println("listPath: scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
-	}
-
-	// Disconnect from call above, but cancel on exit.
-	ctx, cancel := context.WithCancel(GlobalContext)
-	// We need to ask disks.
-	disks := er.getOnlineDisks()
 
 	var askDisks = o.AskDisks
 	switch askDisks {
@@ -585,7 +587,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			cancel()
 			return entries, err
 		}
-		// Send request.
+		// Send request to each disk.
 		go func() {
 			err := d.WalkDir(ctx, WalkDirOptions{Bucket: o.Bucket, BaseDir: o.BaseDir, Recursive: o.Recursive || o.Separator != SlashSeparator}, w)
 			w.CloseWithError(err)
@@ -621,14 +623,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				}
 				metaMu.Lock()
 				meta.endedCycle = intDataUpdateTracker.current()
-				lm := meta
-				metaMu.Unlock()
-				lm, err := o.updateMetacacheListing(lm, rpc)
-				logger.LogIf(ctx, err)
-				if lm.status == scanStateError {
+				meta, err = o.updateMetacacheListing(meta, rpc)
+				if meta.status == scanStateError {
 					cancel()
 					exit = true
 				}
+				metaMu.Unlock()
+				logger.LogIf(ctx, err)
 			}
 		}()
 
@@ -647,8 +648,10 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{UserDefined: custom})
 			if err != nil {
 				metaMu.Lock()
-				meta.status = scanStateError
-				meta.error = err.Error()
+				if meta.error != "" {
+					meta.status = scanStateError
+					meta.error = err.Error()
+				}
 				metaMu.Unlock()
 				cancel()
 				return err
@@ -771,18 +774,16 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		if meta.error == "" {
 			meta.status = scanStateSuccess
 			meta.endedCycle = intDataUpdateTracker.current()
-			meta, err = o.updateMetacacheListing(meta, rpc)
 		}
+		meta, err = o.updateMetacacheListing(meta, rpc)
 		metaMu.Unlock()
 
 		closeChannels()
 		if err := bw.Close(); err != nil {
 			metaMu.Lock()
-			if meta.error == "" {
-				meta.error = err.Error()
-				meta.status = scanStateError
-				meta, err = o.updateMetacacheListing(meta, rpc)
-			}
+			meta.error = err.Error()
+			meta.status = scanStateError
+			meta, err = o.updateMetacacheListing(meta, rpc)
 			metaMu.Unlock()
 		}
 	}()
