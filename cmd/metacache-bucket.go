@@ -247,7 +247,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 			b.caches[best.id] = best
 			b.updated = true
 		}
-		debugPrint("returning cached")
+		debugPrint("returning cached %s, status: %v, ended: %v", best.id, best.status, best.ended)
 		return best
 	}
 	if !o.Create {
@@ -348,16 +348,20 @@ func (b *bucketMetacache) updateCacheEntry(update metacache) (metacache, error) 
 	}
 
 	existing.lastUpdate = UTCNow()
-	if existing.status == scanStateStarted && update.status != scanStateStarted {
-		existing.status = update.status
-	}
-	if existing.status == scanStateSuccess && update.status == scanStateSuccess {
+
+	if existing.status == scanStateStarted && update.status == scanStateSuccess {
 		existing.ended = UTCNow()
 		existing.endedCycle = update.endedCycle
 	}
+
+	if existing.status == scanStateStarted && update.status != scanStateStarted {
+		existing.status = update.status
+	}
+
 	if existing.error == "" && update.error != "" {
 		existing.error = update.error
 		existing.status = scanStateError
+		existing.ended = UTCNow()
 	}
 	existing.fileNotFound = existing.fileNotFound || update.fileNotFound
 	b.caches[update.id] = existing

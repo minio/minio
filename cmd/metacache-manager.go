@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -129,6 +128,15 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	return b
 }
 
+// deleteAll will delete all caches.
+func (m *metacacheManager) deleteAll() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, b := range m.buckets {
+		b.deleteAll()
+	}
+}
+
 // getTransient will return a transient bucket.
 func (m *metacacheManager) getTransient() *bucketMetacache {
 	m.init.Do(m.initManager)
@@ -140,12 +148,11 @@ func (m *metacacheManager) getTransient() *bucketMetacache {
 
 // checkMetacacheState should be used if data is not updating.
 // Should only be called if a failure occurred.
-func (o listPathOptions) checkMetacacheState(ctx context.Context) error {
+func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTClient) error {
 	// We operate on a copy...
 	o.Create = false
 	var cache metacache
 	if !o.Transient {
-		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if rpc == nil {
 			// Local
 			cache = localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
@@ -160,21 +167,21 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context) error {
 		cache = localMetacacheMgr.getTransient().findCache(o)
 	}
 
-	if cache.status == scanStateNone {
+	if cache.status == scanStateNone || cache.fileNotFound {
 		return errFileNotFound
 	}
 	if cache.status == scanStateSuccess {
-		if time.Since(cache.lastUpdate) > 10*time.Second {
-			return fmt.Errorf("timeout: Finished and data not available after 10 seconds")
+		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
+			return fmt.Errorf("timeout: list %s finished and no update for 1 minute", cache.id)
 		}
 		return nil
 	}
 	if cache.error != "" {
-		return errors.New(cache.error)
+		return fmt.Errorf("async cache listing failed with: %s", cache.error)
 	}
 	if cache.status == scanStateStarted {
 		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
-			return errors.New("cache listing not updating")
+			return fmt.Errorf("cache id %s listing not updating. Last update %s seconds ago", cache.id, time.Since(cache.lastUpdate).Round(time.Second))
 		}
 	}
 	return nil

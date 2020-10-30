@@ -78,8 +78,8 @@ func (m *metacache) worthKeeping(currentCycle uint64) bool {
 		// Cycle is too old to be valuable.
 		return false
 	case cache.status == scanStateError || cache.status == scanStateNone:
-		// Remove failed listings
-		return false
+		// Remove failed listings after 10 minutes.
+		return time.Since(cache.lastUpdate) < 10*time.Minute
 	}
 	return true
 }
@@ -91,7 +91,9 @@ func (m *metacache) canBeReplacedBy(other *metacache) bool {
 	if other.started.Before(m.started) || m.id == other.id {
 		return false
 	}
-
+	if other.status == scanStateNone || other.status == scanStateError {
+		return false
+	}
 	// Keep it around a bit longer.
 	if time.Since(m.lastHandout) < time.Hour {
 		return false

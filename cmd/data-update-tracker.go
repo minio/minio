@@ -43,7 +43,7 @@ const (
 	dataUpdateTrackerEstItems = 10000000
 	// ... we want this false positive rate:
 	dataUpdateTrackerFP        = 0.99
-	dataUpdateTrackerQueueSize = 10000
+	dataUpdateTrackerQueueSize = 0
 
 	dataUpdateTrackerFilename     = dataUsageBucket + SlashSeparator + ".tracker.bin"
 	dataUpdateTrackerVersion      = 4
@@ -477,43 +477,64 @@ func (d *dataUpdateTracker) deserialize(src io.Reader, newerThan time.Time) erro
 // start a collector that picks up entries from objectUpdatedCh
 // and adds them  to the current bloom filter.
 func (d *dataUpdateTracker) startCollector(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case in := <-d.input:
-			if d.debug {
-				logger.Info(color.Green("dataUpdateTracker:")+" got (%s)", in)
+	for in := range d.input {
+		bucket, _ := path2BucketObjectWithBasePath("", in)
+		if bucket == "" {
+			if d.debug && len(in) > 0 {
+				logger.Info(color.Green("dataUpdateTracker:")+" no bucket (%s)", in)
 			}
-
-			bucket, _ := path2BucketObjectWithBasePath("", in)
-			if bucket == "" {
-				if d.debug && len(in) > 0 {
-					logger.Info(color.Green("dataUpdateTracker:")+" no bucket (%s)", in)
-				}
-				continue
-			}
-
-			if isReservedOrInvalidBucket(bucket, false) {
-				if d.debug {
-					logger.Info(color.Green("dataUpdateTracker:")+" isReservedOrInvalidBucket: %v, entry: %v", bucket, in)
-				}
-				continue
-			}
-			split := splitPathDeterministic(in)
-
-			// Add all paths until done.
-			d.mu.Lock()
-			for i := range split {
-				if d.debug {
-					logger.Info(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
-				}
-				d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
-			}
-			d.dirty = d.dirty || len(split) > 0
-			d.mu.Unlock()
+			continue
 		}
+
+		if isReservedOrInvalidBucket(bucket, false) {
+			if d.debug {
+				logger.Info(color.Green("dataUpdateTracker:")+" isReservedOrInvalidBucket: %v, entry: %v", bucket, in)
+			}
+			continue
+		}
+		split := splitPathDeterministic(in)
+
+		// Add all paths until done.
+		d.mu.Lock()
+		for i := range split {
+			if d.debug {
+				logger.Info(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
+			}
+			d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
+		}
+		d.dirty = d.dirty || len(split) > 0
+		d.mu.Unlock()
 	}
+}
+
+// markDirty adds the supplied path to the current bloom filter.
+func (d *dataUpdateTracker) markDirty(in string) {
+	bucket, _ := path2BucketObjectWithBasePath("", in)
+	if bucket == "" {
+		if d.debug && len(in) > 0 {
+			logger.Info(color.Green("dataUpdateTracker:")+" no bucket (%s)", in)
+		}
+		return
+	}
+
+	if isReservedOrInvalidBucket(bucket, false) {
+		if d.debug && false {
+			logger.Info(color.Green("dataUpdateTracker:")+" isReservedOrInvalidBucket: %v, entry: %v", bucket, in)
+		}
+		return
+	}
+	split := splitPathDeterministic(in)
+
+	// Add all paths until done.
+	d.mu.Lock()
+	for i := range split {
+		if d.debug {
+			logger.Info(color.Green("dataUpdateTracker:") + " Marking path dirty: " + color.Blue(path.Join(split[:i+1]...)))
+		}
+		d.Current.bf.AddString(hashPath(path.Join(split[:i+1]...)).String())
+	}
+	d.dirty = d.dirty || len(split) > 0
+	d.mu.Unlock()
 }
 
 // find entry with specified index.
@@ -620,7 +641,7 @@ func (d *dataUpdateTracker) cycleFilter(ctx context.Context, req bloomFilterRequ
 // Trailing slashes are removed.
 // Returns 0 length if no parts are found after trimming.
 func splitPathDeterministic(in string) []string {
-	split := strings.Split(in, SlashSeparator)
+	split := strings.Split(decodeDirObject(in), SlashSeparator)
 
 	// Trim empty start/end
 	for len(split) > 0 {
@@ -663,13 +684,9 @@ type bloomFilterResponse struct {
 }
 
 // ObjectPathUpdated indicates a path has been updated.
-// The function will never block.
+// The function will block until the entry has been picked up.
 func ObjectPathUpdated(s string) {
-	if strings.HasPrefix(s, minioMetaBucket) {
-		return
-	}
-	select {
-	case objectUpdatedCh <- s:
-	default:
+	if intDataUpdateTracker != nil {
+		intDataUpdateTracker.markDirty(s)
 	}
 }

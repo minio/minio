@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"path"
 	"sync"
@@ -98,6 +99,10 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		} else {
 			c, err := rpc.GetMetacacheListing(ctx, o)
 			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					// Context is canceled, return at once.
+					return entries, err
+				}
 				logger.LogIf(ctx, err)
 				cache = localMetacacheMgr.getTransient().findCache(o)
 				o.Transient = true
@@ -183,14 +188,7 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		// Update master cache with that information.
 		cache.status = scanStateSuccess
 		cache.fileNotFound = true
-		client := globalNotificationSys.restClientFromHash(o.Bucket)
-		if o.Transient {
-			cache, err = localMetacacheMgr.getTransient().updateCacheEntry(cache)
-		} else if client == nil {
-			cache, err = localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(cache)
-		} else {
-			cache, err = client.UpdateMetacacheListing(context.Background(), cache)
-		}
+		_, err := o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
 		logger.LogIf(ctx, err)
 		return entries, errFileNotFound
 	}

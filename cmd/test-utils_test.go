@@ -1879,6 +1879,9 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
 	defer setObjectLayer(newObjectLayerFn())
 
 	objLayer, fsDir, err := prepareFS()
@@ -1900,6 +1903,11 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
+	defer setObjectLayer(newObjectLayerFn())
+
 	newAllSubsystems()
 	objLayer, fsDirs, err := prepareErasureSets32(ctx)
 	if err != nil {
@@ -1914,6 +1922,10 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for Erasure.
 	objTest(objLayer, ErasureTestStr, t)
+
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
 }
 
 // ExecObjectLayerTestWithDirs - executes object layer tests.
