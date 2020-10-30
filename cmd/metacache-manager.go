@@ -168,12 +168,12 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context) error {
 		cache = localMetacacheMgr.getTransient().findCache(o)
 	}
 
-	if cache.status == scanStateNone {
+	if cache.status == scanStateNone || cache.fileNotFound {
 		return errFileNotFound
 	}
 	if cache.status == scanStateSuccess {
-		if time.Since(cache.lastUpdate) > 10*time.Second {
-			return fmt.Errorf("timeout: list %s finished and data not available after 10 seconds", cache.id)
+		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
+			return fmt.Errorf("timeout: list %s finished and no update for 1 minute", cache.id)
 		}
 		return nil
 	}
