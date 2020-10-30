@@ -551,17 +551,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		}
 	}()
 
-	var askDisks = o.AskDisks
-	switch askDisks {
-	// 50% or at least 3.
-	case -1:
-		o.AskDisks = getReadQuorum(len(er.getDisks()))
-		if o.AskDisks < 3 {
-			o.AskDisks = 3
-		}
-	// Default is 3 disks.
-	case 0:
-		askDisks = 3
+	askDisks := o.AskDisks
+	if askDisks == -1 {
+		askDisks = getReadQuorum(er.SetDriveCount())
 	}
 
 	if len(disks) < askDisks {
@@ -574,10 +566,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		return
 	}
 
-	// Select askDisks random disks, 3 is ok.
+	// Select askDisks random disks.
 	if len(disks) > askDisks {
 		disks = disks[:askDisks]
 	}
+
 	var readers = make([]*metacacheReader, askDisks)
 	for i := range disks {
 		r, w := io.Pipe()

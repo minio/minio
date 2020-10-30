@@ -309,7 +309,7 @@ func downloadReleaseURL(u *url.URL, timeout time.Duration, mode string) (content
 		client := &http.Client{Transport: getUpdateTransport(timeout)}
 		resp, err := client.Do(req)
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err) {
+			if xnet.IsNetworkOrHostDown(err, false) {
 				return content, AdminError{
 					Code:       AdminUpdateURLNotReachable,
 					Message:    err.Error(),
@@ -501,7 +501,7 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 
 	resp, err := clnt.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return nil, AdminError{
 				Code:       AdminUpdateURLNotReachable,
 				Message:    err.Error(),
