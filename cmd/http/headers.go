@@ -126,6 +126,12 @@ const (
 
 	// Header indicates if the etag should be preserved by client
 	MinIOSourceETag = "x-minio-source-etag"
+
+	// Writes expected write quorum
+	MinIOWriteQuorum = "x-minio-write-quorum"
+
+	// Reports number of drives currently healing
+	MinIOHealingDrives = "x-minio-healing-drives"
 )
 
 // Common http query params S3 API
