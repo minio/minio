@@ -45,7 +45,7 @@ const metacacheManagerTransientBucket = "**transient**"
 // initManager will start async saving the cache.
 func (m *metacacheManager) initManager() {
 	// Add a transient bucket.
-	tb := newBucketMetacache(metacacheManagerTransientBucket)
+	tb := newBucketMetacache(metacacheManagerTransientBucket, false)
 	tb.transient = true
 	m.buckets[metacacheManagerTransientBucket] = tb
 
