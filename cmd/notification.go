@@ -675,6 +675,9 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
 	globalBucketMetadataSys.Remove(bucketName)
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteBucketCache(bucketName)
+	}
 
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {

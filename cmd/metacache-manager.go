@@ -128,6 +128,18 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	return b
 }
 
+// deleteBucketCache will delete the bucket cache if it exists.
+func (m *metacacheManager) deleteBucketCache(bucket string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, ok := m.buckets[bucket]
+	if !ok {
+		return
+	}
+	b.deleteAll()
+	delete(m.buckets, bucket)
+}
+
 // deleteAll will delete all caches.
 func (m *metacacheManager) deleteAll() {
 	m.mu.Lock()
