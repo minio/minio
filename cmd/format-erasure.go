@@ -704,28 +704,18 @@ func initErasureMetaVolumesInLocalDisks(storageDisks []StorageAPI, formats []*fo
 	return nil
 }
 
-// saveFormatErasureAllWithErrs - populates `format.json` on disks in its order.
+// saveUnformattedFormat - populates `format.json` on unformatted disks.
 // also adds `.healing.bin` on the disks which are being actively healed.
-func saveFormatErasureAllWithErrs(ctx context.Context, storageDisks []StorageAPI, fErrs []error, formats []*formatErasureV3) error {
-	g := errgroup.WithNErrs(len(storageDisks))
-
-	// Write `format.json` to all disks.
-	for index := range storageDisks {
-		index := index
-		g.Go(func() error {
-			if formats[index] == nil {
-				return errDiskNotFound
-			}
-			if errors.Is(fErrs[index], errUnformattedDisk) {
-				return saveFormatErasure(storageDisks[index], formats[index], true)
-			}
-			return nil
-		}, index)
+func saveUnformattedFormat(ctx context.Context, storageDisks []StorageAPI, formats []*formatErasureV3) error {
+	for index, format := range formats {
+		if format == nil {
+			continue
+		}
+		if err := saveFormatErasure(storageDisks[index], format, true); err != nil {
+			return err
+		}
 	}
-
-	writeQuorum := getWriteQuorum(len(storageDisks))
-	// Wait for the routines to finish.
-	return reduceWriteQuorumErrs(ctx, g.Wait(), nil, writeQuorum)
+	return nil
 }
 
 // saveFormatErasureAll - populates `format.json` on disks in its order.

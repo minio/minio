@@ -1141,81 +1141,6 @@ func formatsToDrivesInfo(endpoints Endpoints, formats []*formatErasureV3, sErrs 
 	return beforeDrives
 }
 
-// Reloads the format from the disk, usually called by a remote peer notifier while
-// healing in a distributed setup.
-func (s *erasureSets) ReloadFormat(ctx context.Context, dryRun bool) (err error) {
-	storageDisks, errs := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
-	for i, err := range errs {
-		if err != nil && err != errDiskNotFound {
-			return fmt.Errorf("Disk %s: %w", s.endpoints[i], err)
-		}
-	}
-	defer func(storageDisks []StorageAPI) {
-		if err != nil {
-			closeStorageDisks(storageDisks)
-		}
-	}(storageDisks)
-
-	formats, _ := loadFormatErasureAll(storageDisks, false)
-	if err = checkFormatErasureValues(formats, s.setDriveCount); err != nil {
-		return err
-	}
-
-	refFormat, err := getFormatErasureInQuorum(formats)
-	if err != nil {
-		return err
-	}
-
-	s.monitorContextCancel() // turn-off disk monitoring and replace format.
-
-	s.erasureDisksMu.Lock()
-
-	// Replace with new reference format.
-	s.format = refFormat
-
-	// Close all existing disks and reconnect all the disks.
-	for _, disk := range storageDisks {
-		if disk == nil {
-			continue
-		}
-
-		diskID, err := disk.GetDiskID()
-		if err != nil {
-			continue
-		}
-
-		m, n, err := findDiskIndexByDiskID(refFormat, diskID)
-		if err != nil {
-			continue
-		}
-
-		if s.erasureDisks[m][n] != nil {
-			s.erasureDisks[m][n].Close()
-		}
-
-		s.endpointStrings[m*s.setDriveCount+n] = disk.String()
-		if !disk.IsLocal() {
-			// Enable healthcheck disk for remote endpoint.
-			disk, err = newStorageAPI(disk.Endpoint())
-			if err != nil {
-				continue
-			}
-			disk.SetDiskID(diskID)
-		}
-
-		s.erasureDisks[m][n] = disk
-	}
-
-	s.erasureDisksMu.Unlock()
-
-	mctx, mctxCancel := context.WithCancel(GlobalContext)
-	s.monitorContextCancel = mctxCancel
-
-	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
-
-	return nil
-}
-
 // If it is a single node Erasure and all disks are root disks, it is most likely a test setup, else it is a production setup.
 // On a test setup we allow creation of format.json on root disks to help with dev/testing.
 func isTestSetup(infos []DiskInfo, errs []error) bool {
@@ -1335,13 +1260,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			}
 		}
 
-		// Save formats `format.json` across all disks.
-		if err = saveFormatErasureAllWithErrs(ctx, storageDisks, sErrs, tmpNewFormats); err != nil {
-			return madmin.HealResultItem{}, err
-		}
-
-		refFormat, err = getFormatErasureInQuorum(tmpNewFormats)
-		if err != nil {
+		// Save new formats `format.json` on unformatted disks.
+		if err = saveUnformattedFormat(ctx, storageDisks, tmpNewFormats); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 
@@ -1349,21 +1269,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 		s.erasureDisksMu.Lock()
 
-		// Replace with new reference format.
-		s.format = refFormat
-
-		// Disconnect/relinquish all existing disks, lockers and reconnect the disks, lockers.
-		for _, disk := range storageDisks {
-			if disk == nil {
+		for index, format := range tmpNewFormats {
+			if format == nil {
 				continue
 			}
 
-			diskID, err := disk.GetDiskID()
-			if err != nil {
-				continue
-			}
-
-			m, n, err := findDiskIndexByDiskID(refFormat, diskID)
+			m, n, err := findDiskIndexByDiskID(refFormat, format.Erasure.This)
 			if err != nil {
 				continue
 			}
@@ -1372,18 +1283,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				s.erasureDisks[m][n].Close()
 			}
 
-			s.endpointStrings[m*s.setDriveCount+n] = disk.String()
-			if !disk.IsLocal() {
-				// Enable healthcheck disk for remote endpoint.
-				disk, err = newStorageAPI(disk.Endpoint())
-				if err != nil {
-					continue
-				}
-				disk.SetDiskID(diskID)
-			}
-			s.erasureDisks[m][n] = disk
-
+			s.erasureDisks[m][n] = storageDisks[index]
+			s.endpointStrings[m*s.setDriveCount+n] = storageDisks[index].String()
 		}
+
+		// Replace with new reference format.
+		s.format = refFormat
 
 		s.erasureDisksMu.Unlock()
 

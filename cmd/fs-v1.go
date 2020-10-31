@@ -1536,12 +1536,6 @@ func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 	return fs.PutObjectTags(ctx, bucket, object, "", opts)
 }
 
-// ReloadFormat - no-op for fs, Valid only for Erasure.
-func (fs *FSObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
-	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
-}
-
 // HealFormat - no-op for fs, Valid only for Erasure.
 func (fs *FSObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	logger.LogIf(ctx, NotImplemented{})
