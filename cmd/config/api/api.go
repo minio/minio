@@ -34,12 +34,15 @@ const (
 	apiClusterDeadline         = "cluster_deadline"
 	apiCorsAllowOrigin         = "cors_allow_origin"
 	apiRemoteTransportDeadline = "remote_transport_deadline"
+	apiListQuorum              = "list_quorum"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
+	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS"
 )
 
 // Deprecated key and ENVs
@@ -71,6 +74,10 @@ var (
 			Key:   apiRemoteTransportDeadline,
 			Value: "2h",
 		},
+		config.KV{
+			Key:   apiListQuorum,
+			Value: "optimal",
+		},
 	}
 )
 
@@ -81,6 +88,7 @@ type Config struct {
 	ClusterDeadline         time.Duration `json:"cluster_deadline"`
 	CorsAllowOrigin         []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
+	ListQuorum              string        `json:"list_strict_quorum"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -92,6 +100,24 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 		Alias: (*Alias)(sCfg),
 	}
 	return json.Unmarshal(data, &aux)
+}
+
+// GetListQuorum interprets list quorum values and returns appropriate
+// acceptable quorum expected for list operations
+func (sCfg Config) GetListQuorum() int {
+	switch sCfg.ListQuorum {
+	case "optimal":
+		return 3
+	case "reduced":
+		return 2
+	case "disk":
+		// least possible value, generally meant for testing.
+		return 1
+	case "strict":
+		return -1
+	}
+	// Defaults to 50% of totalDrives per set.
+	return -1
 }
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
@@ -130,11 +156,19 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	listQuorum := env.Get(EnvAPIListQuorum, kvs.Get(apiListQuorum))
+	switch listQuorum {
+	case "strict", "optimal", "reduced", "disk":
+	default:
+		return cfg, errors.New("invalid value for list strict quorum")
+	}
+
 	return Config{
 		RequestsMax:             requestsMax,
 		RequestsDeadline:        requestsDeadline,
 		ClusterDeadline:         clusterDeadline,
 		CorsAllowOrigin:         corsAllowOrigin,
 		RemoteTransportDeadline: remoteTransportDeadline,
+		ListQuorum:              listQuorum,
 	}, nil
 }
