@@ -1264,17 +1264,6 @@ func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketIn
 	return buckets, nil
 }
 
-func (z *erasureServerSets) ReloadFormat(ctx context.Context, dryRun bool) error {
-	// No locks needed since reload happens in HealFormat under
-	// write lock across all nodes.
-	for _, zone := range z.serverSets {
-		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
@@ -1304,15 +1293,6 @@ func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin
 		r.SetCount += result.SetCount
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
-	}
-
-	// Healing succeeded notify the peers to reload format and re-initialize disks.
-	// We will not notify peers if healing is not required.
-	for _, nerr := range globalNotificationSys.ReloadFormat(dryRun) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// No heal returned by all serverSets, return errNoHealRequired
