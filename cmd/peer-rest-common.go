@@ -50,7 +50,6 @@ const (
 	peerRESTMethodLoadGroup             = "/loadgroup"
 	peerRESTMethodStartProfiling        = "/startprofiling"
 	peerRESTMethodDownloadProfilingData = "/downloadprofilingdata"
-	peerRESTMethodReloadFormat          = "/reloadformat"
 	peerRESTMethodCycleBloom            = "/cyclebloom"
 	peerRESTMethodTrace                 = "/trace"
 	peerRESTMethodListen                = "/listen"
@@ -70,7 +69,6 @@ const (
 	peerRESTIsGroup     = "is-group"
 	peerRESTSignal      = "signal"
 	peerRESTProfiler    = "profiler"
-	peerRESTDryRun      = "dry-run"
 	peerRESTTraceAll    = "all"
 	peerRESTTraceErr    = "err"
 

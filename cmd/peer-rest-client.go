@@ -454,19 +454,6 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	return nil
 }
 
-// ReloadFormat - reload format on the peer node.
-func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
-	values := make(url.Values)
-	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
-
-	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
 // cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
 // The response will contain a bloom filter starting at index x up to, but not including index y.
 // If y is 0, the response will not update y, but return the currently recorded information
