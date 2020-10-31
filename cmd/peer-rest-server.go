@@ -538,7 +538,9 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 	}
 
 	globalBucketMetadataSys.Remove(bucketName)
-	w.(http.Flusher).Flush()
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteBucketCache(bucketName)
+	}
 }
 
 // LoadBucketMetadataHandler - reloads in memory bucket metadata
