@@ -111,13 +111,13 @@ func (sCfg Config) GetListQuorum() int {
 	case "reduced":
 		return 2
 	case "disk":
-		// least possible value, generally meant for testing.
+		// smallest possible value, generally meant for testing.
 		return 1
 	case "strict":
 		return -1
 	}
-	// Defaults to 50% of totalDrives per set.
-	return -1
+	// Defaults to 3 drives per set.
+	return 3
 }
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
