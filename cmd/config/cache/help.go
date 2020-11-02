@@ -76,7 +76,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         Commit,
-			Description: `set to "writeback" or "writethrough" for cache commit mode , defaults to "writethrough"`,
+			Description: `set to control cache commit behavior, defaults to "writethrough"`,
 			Optional:    true,
 			Type:        "string",
 		},
