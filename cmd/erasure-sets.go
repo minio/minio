@@ -83,8 +83,7 @@ type erasureSets struct {
 	setCount, setDriveCount int
 	listTolerancePerSet     int
 
-	monitorContextCancel context.CancelFunc
-	disksConnectEvent    chan diskConnectInfo
+	disksConnectEvent chan diskConnectInfo
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
@@ -419,11 +418,8 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 	}
 
-	mctx, mctxCancel := context.WithCancel(ctx)
-	s.monitorContextCancel = mctxCancel
-
 	// Start the disk monitoring and connect routine.
-	go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
+	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
 	go s.maintainMRFList()
 	go s.healMRFRoutine()
 
@@ -1265,8 +1261,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			return madmin.HealResultItem{}, err
 		}
 
-		s.monitorContextCancel() // turn-off disk monitoring and replace format.
-
 		s.erasureDisksMu.Lock()
 
 		for index, format := range tmpNewFormats {
@@ -1287,14 +1281,10 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			s.endpointStrings[m*s.setDriveCount+n] = storageDisks[index].String()
 		}
 
-		// Replace with new reference format.
+		// Replace reference format with what was loaded from disks.
 		s.format = refFormat
 
 		s.erasureDisksMu.Unlock()
-
-		mctx, mctxCancel := context.WithCancel(GlobalContext)
-		s.monitorContextCancel = mctxCancel
-		go s.monitorAndConnectEndpoints(mctx, defaultMonitorConnectEndpointInterval)
 	}
 
 	return res, nil
