@@ -498,7 +498,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			t := UTCNow()
 			resolver.bucket = bucket
 
-			foundAny := false
+			var foundObjs, foundDirs bool
 			ctx, cancel := context.WithCancel(ctx)
 			err := listPathRaw(ctx, listPathRawOptions{
 				disks:     f.disks,
@@ -506,9 +506,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				path:      prefix + slashSeparator,
 				recursive: true,
 				minDisks:  getWriteQuorum(len(f.disks)),
+				// Weird, maybe transient error.
 				agreed: func(entry metaCacheEntry) {
-					foundAny = true
+					foundObjs = true
 				},
+				// Some disks have data for this.
 				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
 					// Sleep and reset.
 					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
@@ -525,14 +527,16 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						// If no errors and we have less than read quorum, delete it.
 						first, n := entries.firstFound()
 						if n < getReadQuorum(n) {
-							name := first.name
-							if !first.isDir() {
-								name = name + slashSeparator
-							}
+							// If too few disks have the object to read, delete it.
 							objAPI.deleteAll(ctx, bucket, first.name)
 						}
 						return
 					}
+					if entry.isDir() {
+						foundDirs = true
+						return
+					}
+					// We got an entry which we should be able to heal.
 					fiv, err := entry.fileInfoVersions(bucket)
 					if err != nil {
 						err := bgSeq.queueHealTask(healSource{
@@ -540,7 +544,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    entry.name,
 							versionID: "",
 						}, madmin.HealItemObject)
-						foundAny = foundAny || err == nil
+						foundObjs = foundObjs || err == nil
 						return
 					}
 					for _, ver := range fiv.Versions {
@@ -549,21 +553,29 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
-						foundAny = foundAny || err == nil
+						foundObjs = foundObjs || err == nil
 					}
 				},
+				// Too many disks failed.
 				finished: func(errs []error) {
 					cancel()
 				},
 			})
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 			if f.dataUsageCrawlDebug && err != nil {
 				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
 			}
 
+			if err == nil && foundDirs && !foundObjs {
+				// If we have quorum, found directories, but no objects, delete the folder
+				// (we know the folder doesn't exist on this disk)
+				objAPI.deleteAll(ctx, bucket, prefix+slashSeparator)
+			}
+
+			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+
 			// Add unless healing returned an error.
-			if foundAny {
+			if foundObjs {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
 				cache.addChild(hashPath(k))
 				if final {
