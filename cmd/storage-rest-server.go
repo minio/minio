@@ -545,7 +545,7 @@ func (s *storageRESTServer) WalkSplunkHandler(w http.ResponseWriter, r *http.Req
 	for fi := range fch {
 		logger.LogIf(r.Context(), fi.EncodeMsg(encoder))
 	}
-	encoder.Flush()
+	logger.LogIf(r.Context(), encoder.Flush())
 }
 
 // WalkVersionsHandler - remote caller to start walking at a requested directory path.
@@ -574,7 +574,7 @@ func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.R
 	for fi := range fch {
 		logger.LogIf(r.Context(), fi.EncodeMsg(encoder))
 	}
-	encoder.Flush()
+	logger.LogIf(r.Context(), encoder.Flush())
 }
 
 // WalkHandler - remote caller to start walking at a requested directory path.
@@ -603,7 +603,7 @@ func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) 
 	for fi := range fch {
 		logger.LogIf(r.Context(), fi.EncodeMsg(encoder))
 	}
-	encoder.Flush()
+	logger.LogIf(r.Context(), encoder.Flush())
 }
 
 // ListDirHandler - list a directory.
@@ -675,10 +675,8 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	for i := 0; i < totalVersions; i++ {
 		dst := &versions[i]
 		if err := dst.DecodeMsg(decoder); err != nil {
-			if msgp.Cause(err) != io.EOF {
-				s.writeErrorResponse(w, err)
-				return
-			}
+			s.writeErrorResponse(w, err)
+			return
 		}
 	}
 

@@ -579,6 +579,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	for _, version := range versions {
 		version.EncodeMsg(encoder)
 	}
+	logger.LogIf(ctx, encoder.Flush())
 
 	errs = make([]error, len(versions))
 
