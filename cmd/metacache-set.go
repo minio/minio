@@ -784,3 +784,143 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 
 	return filteredResults()
 }
+
+type listPathRawOptions struct {
+	disks        []StorageAPI
+	bucket, path string
+	recursive    bool
+
+	// Callbacks with results:
+
+	// agreed is called if all disks agreed.
+	agreed func(entry metaCacheEntry)
+
+	// partial will be returned when there is disagreement between disks.
+	// if disk did not return any result, but also haven't errored
+	// the entry will be empty and errs will
+	partial func(entries metaCacheEntries, nAgreed int, errs []error)
+
+	// finished will be called when all streams have finished and
+	// more than one disk returned an error.
+	finished func(errs []error)
+}
+
+// listPathRaw will list a path on the provided drives.
+// Cache will be bypassed.
+func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
+	disks := opts.disks
+
+	// Disconnect from call above, but cancel on exit.
+	ctx, cancel := context.WithCancel(GlobalContext)
+	defer cancel()
+
+	askDisks := len(disks)
+	var readers = make([]*metacacheReader, askDisks)
+	for i := range disks {
+		r, w := io.Pipe()
+		d := disks[i]
+		readers[i], err = newMetacacheReader(r)
+		if err != nil {
+			cancel()
+			return err
+		}
+		// Send request to each disk.
+		go func() {
+			err := d.WalkDir(ctx, WalkDirOptions{Bucket: opts.bucket, BaseDir: opts.path, Recursive: opts.recursive}, w)
+			w.CloseWithError(err)
+			if err != io.EOF {
+				logger.LogIf(ctx, err)
+			}
+		}()
+	}
+
+	topEntries := make(metaCacheEntries, len(readers))
+	errs := make([]error, len(readers))
+	for {
+		// Get the top entry from each
+		var current metaCacheEntry
+		var atEOF, hasErr, agree int
+		for i := range topEntries {
+			topEntries[i] = metaCacheEntry{}
+		}
+		for i, r := range readers {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			if errs[i] != nil {
+				hasErr++
+				continue
+			}
+			entry, err := r.peek()
+			switch err {
+			case io.EOF:
+				atEOF++
+				continue
+			case nil:
+			default:
+				hasErr++
+				errs[i] = err
+				continue
+			}
+			// If no current, add it.
+			if current.name == "" {
+				topEntries[i] = entry
+				current = entry
+				agree++
+				continue
+			}
+			// If exact match, we agree.
+			if current.matches(&entry, opts.bucket) {
+				topEntries[i] = entry
+				agree++
+				continue
+			}
+			// If only the name matches we didn't agree, but add it for resolution.
+			if entry.name == current.name {
+				topEntries[i] = entry
+				continue
+			}
+			// We got different entries
+			if entry.name > current.name {
+				continue
+			}
+			// We got a new, better current.
+			// Clear existing entries.
+			for i := range topEntries[:i] {
+				topEntries[i] = metaCacheEntry{}
+			}
+			agree = 1
+			current = entry
+			topEntries[i] = entry
+		}
+		// Break if all at EOF or error.
+		if atEOF+hasErr == len(readers) {
+			if hasErr > 0 && opts.finished != nil {
+				opts.finished(errs)
+			}
+			break
+		}
+		if agree == len(readers) {
+			// Everybody agreed
+			for _, r := range readers {
+				r.skip(1)
+			}
+			if opts.agreed != nil {
+				opts.agreed(current)
+			}
+			continue
+		}
+		if opts.partial != nil {
+			opts.partial(topEntries, agree, errs)
+		}
+		// Skip the inputs we used.
+		for i, r := range readers {
+			if topEntries[i].name != "" {
+				r.skip(1)
+			}
+		}
+	}
+	return nil
+}
