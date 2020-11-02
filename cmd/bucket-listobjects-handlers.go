@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -114,15 +113,6 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	// Forward the request using Source IP or bucket
-	forwardStr := handlers.GetSourceIPFromHeaders(r)
-	if forwardStr == "" {
-		forwardStr = bucket
-	}
-	if proxyRequestByStringHash(ctx, w, r, forwardStr) {
-		return
-	}
-
 	listObjectVersions := objectAPI.ListObjectVersions
 
 	// Inititate a list object versions operation based on the input params.
@@ -145,7 +135,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 // ListObjectsV2MHandler - GET Bucket (List Objects) Version 2 with metadata.
 // --------------------------
 // This implementation of the GET operation returns some or all (up to 10000)
-// of the objects in a bucket. You can use the request parame<ters as selection
+// of the objects in a bucket. You can use the request parameters as selection
 // criteria to return a subset of the objects in a bucket.
 //
 // NOTE: It is recommended that this API to be used for application development.
@@ -185,13 +175,6 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Analyze continuation token and route the request accordingly
-	var success bool
-	token, success = proxyRequestByToken(ctx, w, r, token)
-	if success {
-		return
-	}
-
 	listObjectsV2 := objectAPI.ListObjectsV2
 
 	// Inititate a list objects operation based on the input params.
@@ -207,9 +190,6 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 
 	// The next continuation token has id@node_index format to optimize paginated listing
 	nextContinuationToken := listObjectsV2Info.NextContinuationToken
-	if nextContinuationToken != "" && listObjectsV2Info.IsTruncated {
-		nextContinuationToken = fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
-	}
 
 	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
@@ -262,13 +242,6 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Analyze continuation token and route the request accordingly
-	var success bool
-	token, success = proxyRequestByToken(ctx, w, r, token)
-	if success {
-		return
-	}
-
 	listObjectsV2 := objectAPI.ListObjectsV2
 
 	// Inititate a list objects operation based on the input params.
@@ -282,30 +255,12 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 	concurrentDecryptETag(ctx, listObjectsV2Info.Objects)
 
-	// The next continuation token has id@node_index format to optimize paginated listing
-	nextContinuationToken := listObjectsV2Info.NextContinuationToken
-	if nextContinuationToken != "" && listObjectsV2Info.IsTruncated {
-		nextContinuationToken = fmt.Sprintf("%s@%d", listObjectsV2Info.NextContinuationToken, getLocalNodeIndex())
-	}
-
-	response := generateListObjectsV2Response(bucket, prefix, token, nextContinuationToken, startAfter,
+	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, false)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))
-}
-
-func getLocalNodeIndex() int {
-	if len(globalProxyEndpoints) == 0 {
-		return -1
-	}
-	for i, ep := range globalProxyEndpoints {
-		if ep.IsLocal {
-			return i
-		}
-	}
-	return -1
 }
 
 func parseRequestToken(token string) (subToken string, nodeIndex int) {

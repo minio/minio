@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -35,7 +36,7 @@ const (
 	lockMaintenanceInterval = 30 * time.Second
 
 	// Lock validity check interval.
-	lockValidityCheckInterval = 2 * time.Minute
+	lockValidityCheckInterval = 5 * time.Second
 )
 
 // To abstract a node over network.
@@ -63,10 +64,16 @@ func (l *lockRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func getLockArgs(r *http.Request) (args dsync.LockArgs, err error) {
+	quorum, err := strconv.Atoi(r.URL.Query().Get(lockRESTQuorum))
+	if err != nil {
+		return args, err
+	}
+
 	args = dsync.LockArgs{
 		Owner:  r.URL.Query().Get(lockRESTOwner),
 		UID:    r.URL.Query().Get(lockRESTUID),
 		Source: r.URL.Query().Get(lockRESTSource),
+		Quorum: quorum,
 	}
 
 	var resources []string
@@ -242,8 +249,13 @@ func getLongLivedLocks(interval time.Duration) map[Endpoint][]nameLockRequesterI
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
 func lockMaintenance(ctx context.Context, interval time.Duration) error {
-	objAPI := newObjectLayerWithoutSafeModeFn()
+	objAPI := newObjectLayerFn()
 	if objAPI == nil {
+		return nil
+	}
+
+	z, ok := objAPI.(*erasureServerSets)
+	if !ok {
 		return nil
 	}
 
@@ -265,18 +277,15 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 		}
 	}
 
+	allLockersFn := z.GetAllLockers
+
 	// Validate if long lived locks are indeed clean.
 	// Get list of long lived locks to check for staleness.
 	for lendpoint, nlrips := range getLongLivedLocks(interval) {
 		nlripsMap := make(map[string]nlock, len(nlrips))
 		for _, nlrip := range nlrips {
-			// Locks are only held on first zone, make sure that
-			// we only look for ownership of locks from endpoints
-			// on first zone.
-			for _, endpoint := range globalEndpoints[0].Endpoints {
-				c := newLockAPI(endpoint)
-				if !c.IsOnline() {
-					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
+			for _, c := range allLockersFn() {
+				if !c.IsOnline() || c == nil {
 					continue
 				}
 
@@ -292,32 +301,18 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 				cancel()
 				if err != nil {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
-					c.Close()
 					continue
 				}
 
 				if !expired {
 					updateNlocks(nlripsMap, nlrip.name, nlrip.lri.Writer)
 				}
-
-				// Close the connection regardless of the call response.
-				c.Close()
-			}
-
-			// Read locks we assume quorum for be N/2 success
-			quorum := getReadQuorum(objAPI.SetDriveCount())
-			if nlrip.lri.Writer {
-				quorum = getWriteQuorum(objAPI.SetDriveCount())
 			}
 
 			// less than the quorum, we have locks expired.
-			if nlripsMap[nlrip.name].locks < quorum {
-				// The lock is no longer active at server that originated
-				// the lock, attempt to remove the lock.
-				globalLockServers[lendpoint].mutex.Lock()
+			if nlripsMap[nlrip.name].locks < nlrip.lri.Quorum {
 				// Purge the stale entry if it exists.
 				globalLockServers[lendpoint].removeEntryIfExists(nlrip)
-				globalLockServers[lendpoint].mutex.Unlock()
 			}
 
 		}
@@ -332,7 +327,7 @@ func startLockMaintenance(ctx context.Context) {
 	// no need to start the lock maintenance
 	// if ObjectAPI is not initialized.
 	for {
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue
@@ -366,8 +361,8 @@ func startLockMaintenance(ctx context.Context) {
 }
 
 // registerLockRESTHandlers - register lock rest router.
-func registerLockRESTHandlers(router *mux.Router, endpointZones EndpointZones) {
-	for _, ep := range endpointZones {
+func registerLockRESTHandlers(router *mux.Router, endpointServerSets EndpointServerSets) {
+	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue

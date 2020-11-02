@@ -94,37 +94,37 @@ Input for the key is the object name specified in `PutObject()`, returns a uniqu
 
 - MinIO does erasure coding at the object level not at the volume level, unlike other object storage vendors. This allows applications to choose different storage class by setting `x-amz-storage-class=STANDARD/REDUCED_REDUNDANCY` for each object uploads so effectively utilizing the capacity of the cluster. Additionally these can also be enforced using IAM policies to make sure the client uploads with correct HTTP headers.
 
-- MinIO also supports expansion of existing clusters in zones. Each zone is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created. When no such object exists then MinIO simply uses the least used zone.
+- MinIO also supports expansion of existing clusters in server sets. Each zone is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created. When no such object exists then MinIO simply uses the least used zone.
 
-__There are no limits on how many zones can be combined__
+__There are no limits on how many server sets can be combined__
 
 ```
 minio server http://host{1...32}/export{1...32} http://host{5...6}/export{1...8}
 ```
 
-In above example there are two zones
+In above example there are two server sets
 
 - 32 * 32 = 1024 drives zone1
 - 2 * 8 = 16 drives zone2
 
 > Notice the requirement of common SLA here original cluster had 1024 drives with 16 drives per erasure set, second zone is expected to have a minimum of 16 drives to match the original cluster SLA or it should be in multiples of 16.
 
-MinIO places new objects in zones based on proportionate free space, per zone. Following pseudo code demonstrates this behavior.
+MinIO places new objects in server sets based on proportionate free space, per zone. Following pseudo code demonstrates this behavior.
 ```go
 func getAvailableZoneIdx(ctx context.Context) int {
-        zones := z.getZonesAvailableSpace(ctx)
-        total := zones.TotalAvailable()
+        serverSets := z.getServerSetsAvailableSpace(ctx)
+        total := serverSets.TotalAvailable()
         // choose when we reach this many
         choose := rand.Uint64() % total
         atTotal := uint64(0)
-        for _, zone := range zones {
+        for _, zone := range serverSets {
                 atTotal += zone.Available
                 if atTotal > choose && zone.Available > 0 {
                         return zone.Index
                 }
         }
         // Should not happen, but print values just in case.
-        panic(fmt.Errorf("reached end of zones (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
+        panic(fmt.Errorf("reached end of serverSets (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
 }
 ```
 

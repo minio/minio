@@ -35,6 +35,8 @@ type lockRequesterInfo struct {
 	// Owner represents the UUID of the owner who originally requested the lock
 	// useful in expiry.
 	Owner string
+	// Quorum represents the quorum required for this lock to be active.
+	Quorum int
 }
 
 // isWriteLock returns whether the lock is a write or read lock.
@@ -96,6 +98,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 				UID:           args.UID,
 				Timestamp:     UTCNow(),
 				TimeLastCheck: UTCNow(),
+				Quorum:        args.Quorum,
 			},
 		}
 	}
@@ -111,9 +114,9 @@ func (l *localLocker) Unlock(args dsync.LockArgs) (reply bool, err error) {
 		return reply, fmt.Errorf("Unlock attempted on a read locked entity: %s", args.Resources)
 	}
 	for _, resource := range args.Resources {
-		lri := l.lockMap[resource]
-		if !l.removeEntry(resource, args, &lri) {
-			return false, fmt.Errorf("Unlock unable to find corresponding lock for uid: %s on resource %s", args.UID, resource)
+		lri, ok := l.lockMap[resource]
+		if ok {
+			l.removeEntry(resource, args, &lri)
 		}
 	}
 	return true, nil
@@ -153,6 +156,7 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 		UID:           args.UID,
 		Timestamp:     UTCNow(),
 		TimeLastCheck: UTCNow(),
+		Quorum:        args.Quorum,
 	}
 	resource := args.Resources[0]
 	if lri, ok := l.lockMap[resource]; ok {
@@ -176,15 +180,13 @@ func (l *localLocker) RUnlock(args dsync.LockArgs) (reply bool, err error) {
 	resource := args.Resources[0]
 	if lri, reply = l.lockMap[resource]; !reply {
 		// No lock is held on the given name
-		return reply, fmt.Errorf("RUnlock attempted on an unlocked entity: %s", resource)
+		return true, nil
 	}
 	if reply = !isWriteLock(lri); !reply {
 		// A write-lock is held, cannot release a read lock
 		return reply, fmt.Errorf("RUnlock attempted on a write locked entity: %s", resource)
 	}
-	if !l.removeEntry(resource, args, &lri) {
-		return false, fmt.Errorf("RUnlock unable to find corresponding read lock for uid: %s", args.UID)
-	}
+	l.removeEntry(resource, args, &lri)
 	return reply, nil
 }
 
@@ -203,8 +205,13 @@ func (l *localLocker) Close() error {
 	return nil
 }
 
-// Local locker is always online.
+// IsOnline - local locker is always online.
 func (l *localLocker) IsOnline() bool {
+	return true
+}
+
+// IsLocal - local locker returns true.
+func (l *localLocker) IsLocal() bool {
 	return true
 }
 
@@ -234,6 +241,9 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
 // Caller must hold 'l.mutex' lock.
 func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+
 	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)
 	if lri, ok := l.lockMap[nlrip.name]; ok {
 		// Even if the entry exists, it may not be the same entry which was

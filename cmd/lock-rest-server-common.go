@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v3"
+	lockRESTVersion       = "v4" // Add Quorum query param
 	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
 	lockRESTPrefix        = minioReservedBucketPath + "/lock"
 )
@@ -43,6 +43,10 @@ const (
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.
 	lockRESTSource = "source"
+
+	// Quroum value to be saved along lock requester info, useful
+	// in verifying stale locks
+	lockRESTQuorum = "quorum"
 )
 
 var (

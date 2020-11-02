@@ -237,12 +237,12 @@ func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, pat
 	return p.storage.CheckFile(ctx, volume, path)
 }
 
-func (p *xlStorageDiskIDCheck) DeleteFile(ctx context.Context, volume string, path string) (err error) {
+func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, recursive bool) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.DeleteFile(ctx, volume, path)
+	return p.storage.Delete(ctx, volume, path, recursive)
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
@@ -288,12 +288,12 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 	return p.storage.WriteMetadata(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
+func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, checkDataDir bool) (fi FileInfo, err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return fi, err
 	}
 
-	return p.storage.ReadVersion(ctx, volume, path, versionID)
+	return p.storage.ReadVersion(ctx, volume, path, versionID, checkDataDir)
 }
 
 func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {

@@ -29,10 +29,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
+	bandwidth "github.com/minio/minio/pkg/bandwidth"
+	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
@@ -49,6 +52,7 @@ type NotificationSys struct {
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
 	peerClients                []*peerRESTClient
+	allPeerClients             []*peerRESTClient
 }
 
 // GetARNList - returns available ARNs.
@@ -134,21 +138,6 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 			break
 		}
 	}()
-}
-
-// ReloadFormat - calls ReloadFormat REST call on all peers.
-func (sys *NotificationSys) ReloadFormat(dryRun bool) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		ng.Go(GlobalContext, func() error {
-			return client.ReloadFormat(dryRun)
-		}, idx, *client.host)
-	}
-	return ng.Wait()
 }
 
 // DeletePolicy - deletes policy across all peers.
@@ -449,7 +438,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 
 	// Load initial state from local...
 	var bf *bloomFilter
-	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req.Oldest, req.Current)
+	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req)
 	logger.LogIf(ctx, err)
 	if err == nil && bfr.Complete {
 		nbf := intDataUpdateTracker.newBloomFilter()
@@ -505,6 +494,124 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 	return bf, nil
 }
 
+// collectBloomFilter will collect bloom filters from all servers from the specified cycle.
+func (sys *NotificationSys) collectBloomFilter(ctx context.Context, from uint64) (*bloomFilter, error) {
+	var req = bloomFilterRequest{
+		Current: 0,
+		Oldest:  from,
+	}
+
+	// Load initial state from local...
+	var bf *bloomFilter
+	bfr, err := intDataUpdateTracker.cycleFilter(ctx, req)
+	logger.LogIf(ctx, err)
+	if err == nil && bfr.Complete {
+		nbf := intDataUpdateTracker.newBloomFilter()
+		bf = &nbf
+		_, err = bf.ReadFrom(bytes.NewBuffer(bfr.Filter))
+		logger.LogIf(ctx, err)
+	}
+	if !bfr.Complete {
+		// If local isn't complete just return early
+		return nil, nil
+	}
+
+	var mu sync.Mutex
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		g.Go(func() error {
+			serverBF, err := client.cycleServerBloomFilter(ctx, req)
+			if false && intDataUpdateTracker.debug {
+				b, _ := json.MarshalIndent(serverBF, "", "  ")
+				logger.Info("Disk %v, Bloom filter: %v", client.host.Name, string(b))
+			}
+			// Keep lock while checking result.
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err != nil || !serverBF.Complete || bf == nil {
+				logger.LogIf(ctx, err)
+				bf = nil
+				return nil
+			}
+
+			var tmp bloom.BloomFilter
+			_, err = tmp.ReadFrom(bytes.NewBuffer(serverBF.Filter))
+			if err != nil {
+				logger.LogIf(ctx, err)
+				bf = nil
+				return nil
+			}
+			if bf.BloomFilter == nil {
+				bf.BloomFilter = &tmp
+			} else {
+				err = bf.Merge(&tmp)
+				if err != nil {
+					logger.LogIf(ctx, err)
+					bf = nil
+					return nil
+				}
+			}
+			return nil
+		}, idx)
+	}
+	g.Wait()
+	return bf, nil
+}
+
+// findEarliestCleanBloomFilter will find the earliest bloom filter across the cluster
+// where the directory is clean.
+// Due to how objects are stored this can include object names.
+func (sys *NotificationSys) findEarliestCleanBloomFilter(ctx context.Context, dir string) uint64 {
+
+	// Load initial state from local...
+	current := intDataUpdateTracker.current()
+	best := intDataUpdateTracker.latestWithDir(dir)
+	if best == current {
+		// If the current is dirty no need to check others.
+		return current
+	}
+
+	var req = bloomFilterRequest{
+		Current:     0,
+		Oldest:      best,
+		OldestClean: dir,
+	}
+
+	var mu sync.Mutex
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		g.Go(func() error {
+			serverBF, err := client.cycleServerBloomFilter(ctx, req)
+
+			// Keep lock while checking result.
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err != nil {
+				// Error, don't assume clean.
+				best = current
+				logger.LogIf(ctx, err)
+				return nil
+			}
+			if serverBF.OldestIdx > best {
+				best = serverBF.OldestIdx
+			}
+			return nil
+		}, idx)
+	}
+	g.Wait()
+	return best
+}
+
 // GetLocks - makes GetLocks RPC call on all peers.
 func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*PeerLocks {
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
@@ -534,13 +641,13 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 	}
 	// Once we have received all the locks currently used from peers
 	// add the local peer locks list as well.
-	var getRespLocks GetLocksResp
+	llockers := make(GetLocksResp, 0, len(globalLockServers))
 	for _, llocker := range globalLockServers {
-		getRespLocks = append(getRespLocks, llocker.DupLockMap())
+		llockers = append(llockers, llocker.DupLockMap())
 	}
 	locksResp = append(locksResp, &PeerLocks{
 		Addr:  getHostName(r),
-		Locks: getRespLocks,
+		Locks: llockers,
 	})
 	return locksResp
 }
@@ -568,6 +675,9 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
 	globalBucketMetadataSys.Remove(bucketName)
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteBucketCache(bucketName)
+	}
 
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
@@ -588,12 +698,13 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 }
 
 // Loads notification policies for all buckets into NotificationSys.
-func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *NotificationSys) load(buckets []BucketInfo) {
 	for _, bucket := range buckets {
 		ctx := logger.SetReqInfo(GlobalContext, &logger.ReqInfo{BucketName: bucket.Name})
 		config, err := globalBucketMetadataSys.GetNotificationConfig(bucket.Name)
 		if err != nil {
-			return err
+			logger.LogIf(ctx, err)
+			continue
 		}
 		config.SetRegion(globalServerRegion)
 		if err = config.Validate(globalServerRegion, globalNotificationSys.targetList); err != nil {
@@ -604,7 +715,6 @@ func (sys *NotificationSys) load(buckets []BucketInfo, objAPI ObjectLayer) error
 		}
 		sys.AddRulesMap(bucket.Name, config.ToRulesMap())
 	}
-	return nil
 }
 
 // Init - initializes notification system from notification.xml and listenxl.meta of all buckets.
@@ -613,18 +723,12 @@ func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		return errServerNotInitialized
 	}
 
-	// In gateway mode, notifications are not supported.
+	// In gateway mode, notifications are not supported - except NAS gateway.
 	if globalIsGateway && !objAPI.IsNotificationSupported() {
 		return nil
 	}
 
-	if globalConfigTargetList != nil {
-		for _, target := range globalConfigTargetList.Targets() {
-			if err := sys.targetList.Add(target); err != nil {
-				return err
-			}
-		}
-	}
+	logger.LogIf(ctx, sys.targetList.Add(globalConfigTargetList.Targets()...))
 
 	go func() {
 		for res := range sys.targetResCh {
@@ -636,7 +740,7 @@ func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		}
 	}()
 
-	go logger.LogIf(ctx, sys.load(buckets, objAPI))
+	go sys.load(buckets)
 	return nil
 }
 
@@ -1117,36 +1221,6 @@ func (sys *NotificationSys) ProcOBDInfo(ctx context.Context) []madmin.ServerProc
 	return reply
 }
 
-// LogOBDInfo - Logs OBD information
-func (sys *NotificationSys) LogOBDInfo(ctx context.Context) []madmin.ServerLogOBDInfo {
-	reply := make([]madmin.ServerLogOBDInfo, len(sys.peerClients))
-
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	for index, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		index := index
-		g.Go(func() error {
-			var err error
-			reply[index], err = sys.peerClients[index].LogOBDInfo(ctx)
-			return err
-		}, index)
-	}
-
-	for index, err := range g.Wait() {
-		if err != nil {
-			addr := sys.peerClients[index].host.String()
-			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
-			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogIf(ctx, err)
-			reply[index].Addr = addr
-			reply[index].Error = err.Error()
-		}
-	}
-	return reply
-}
-
 // ServerInfo - calls ServerInfo RPC call on all peers.
 func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 	reply := make([]madmin.ServerProperties, len(sys.peerClients))
@@ -1190,15 +1264,27 @@ func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) (localDiskIDs [
 	return localDiskIDs
 }
 
+// restClientFromHash will return a deterministic peerRESTClient based on s.
+// Will return nil if client is local.
+func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient) {
+	if len(sys.peerClients) == 0 {
+		return nil
+	}
+	idx := xxhash.Sum64String(s) % uint64(len(sys.allPeerClients))
+	return sys.allPeerClients[idx]
+}
+
 // NewNotificationSys - creates new notification system object.
-func NewNotificationSys(endpoints EndpointZones) *NotificationSys {
+func NewNotificationSys(endpoints EndpointServerSets) *NotificationSys {
 	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.Init()
+	remote, all := newPeerRestClients(endpoints)
 	return &NotificationSys{
 		targetList:                 event.NewTargetList(),
 		targetResCh:                make(chan event.TargetIDResult),
 		bucketRulesMap:             make(map[string]event.RulesMap),
 		bucketRemoteTargetRulesMap: make(map[string]map[event.TargetID]event.RulesMap),
-		peerClients:                newPeerRestClients(endpoints),
+		peerClients:                remote,
+		allPeerClients:             all,
 	}
 }
 
@@ -1288,4 +1374,51 @@ func sendEvent(args eventArgs) {
 	}
 
 	globalNotificationSys.Send(args)
+}
+
+// GetBandwidthReports - gets the bandwidth report from all nodes including self.
+func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...string) bandwidth.Report {
+	reports := make([]*bandwidth.Report, len(sys.peerClients))
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index := range sys.peerClients {
+		if sys.peerClients[index] == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reports[index], err = sys.peerClients[index].MonitorBandwidth(ctx, buckets)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
+			sys.peerClients[index].host.String())
+		ctx := logger.SetReqInfo(ctx, reqInfo)
+		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
+	}
+	reports = append(reports, globalBucketMonitor.GetReport(bucketBandwidth.SelectBuckets(buckets...)))
+	consolidatedReport := bandwidth.Report{
+		BucketStats: make(map[string]bandwidth.Details),
+	}
+	for _, report := range reports {
+		if report == nil || report.BucketStats == nil {
+			continue
+		}
+		for bucket := range report.BucketStats {
+			d, ok := consolidatedReport.BucketStats[bucket]
+			if !ok {
+				consolidatedReport.BucketStats[bucket] = bandwidth.Details{}
+				d = consolidatedReport.BucketStats[bucket]
+				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
+			}
+			if d.LimitInBytesPerSecond < report.BucketStats[bucket].LimitInBytesPerSecond {
+				d.LimitInBytesPerSecond = report.BucketStats[bucket].LimitInBytesPerSecond
+			}
+			d.CurrentBandwidthInBytesPerSecond += report.BucketStats[bucket].CurrentBandwidthInBytesPerSecond
+			consolidatedReport.BucketStats[bucket] = d
+		}
+	}
+	return consolidatedReport
 }

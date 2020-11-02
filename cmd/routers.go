@@ -23,9 +23,9 @@ import (
 )
 
 // Composed function registering routers for only distributed Erasure setup.
-func registerDistErasureRouters(router *mux.Router, endpointZones EndpointZones) {
+func registerDistErasureRouters(router *mux.Router, endpointServerSets EndpointServerSets) {
 	// Register storage REST router only if its a distributed setup.
-	registerStorageRESTHandlers(router, endpointZones)
+	registerStorageRESTHandlers(router, endpointServerSets)
 
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)
@@ -34,11 +34,15 @@ func registerDistErasureRouters(router *mux.Router, endpointZones EndpointZones)
 	registerBootstrapRESTHandlers(router)
 
 	// Register distributed namespace lock routers.
-	registerLockRESTHandlers(router, endpointZones)
+	registerLockRESTHandlers(router, endpointServerSets)
 }
 
 // List of some generic handlers which are applied for all incoming requests.
 var globalHandlers = []MiddlewareFunc{
+	// add redirect handler to redirect
+	// requests when object layer is not
+	// initialized.
+	setRedirectHandler,
 	// set x-amz-request-id header.
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.
@@ -79,14 +83,14 @@ var globalHandlers = []MiddlewareFunc{
 }
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(endpointZones EndpointZones) (http.Handler, error) {
+func configureServerHandler(endpointServerSets EndpointServerSets) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// Initialize distributed NS lock.
 	if globalIsDistErasure {
-		registerDistErasureRouters(router, endpointZones)
+		registerDistErasureRouters(router, endpointServerSets)
 	}
 
 	// Add STS router always.

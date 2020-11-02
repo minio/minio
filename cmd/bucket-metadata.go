@@ -107,6 +107,10 @@ func newBucketMetadata(name string) BucketMetadata {
 // Load - loads the metadata of bucket by name from ObjectLayer api.
 // If an error is returned the returned metadata will be default initialized.
 func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string) error {
+	if name == "" {
+		logger.LogIf(ctx, errors.New("bucket name cannot be empty"))
+		return errors.New("bucket name cannot be empty")
+	}
 	configFile := path.Join(bucketConfigPrefix, name, bucketMetadataFile)
 	data, err := readConfig(ctx, api, configFile)
 	if err != nil {
@@ -128,20 +132,22 @@ func (b *BucketMetadata) Load(ctx context.Context, api ObjectLayer, name string)
 	}
 	// OK, parse data.
 	_, err = b.UnmarshalMsg(data[4:])
+	b.Name = name // in-case parsing failed for some reason, make sure bucket name is not empty.
 	return err
 }
 
 // loadBucketMetadata loads and migrates to bucket metadata.
 func loadBucketMetadata(ctx context.Context, objectAPI ObjectLayer, bucket string) (BucketMetadata, error) {
 	b := newBucketMetadata(bucket)
-	err := b.Load(ctx, objectAPI, bucket)
+	err := b.Load(ctx, objectAPI, b.Name)
 	if err == nil {
 		return b, b.convertLegacyConfigs(ctx, objectAPI)
 	}
 
-	if err != errConfigNotFound {
+	if !errors.Is(err, errConfigNotFound) {
 		return b, err
 	}
+
 	// Old bucket without bucket metadata. Hence we migrate existing settings.
 	return b, b.convertLegacyConfigs(ctx, objectAPI)
 }

@@ -42,7 +42,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	target := madmin.BucketTarget{Endpoint: "site2:9000", Credentials: creds, TargetBucket: "destbucket", IsSSL: false, Type: madmin.ReplicationArn}
+	target := madmin.BucketTarget{Endpoint: "site2:9000", Credentials: creds, TargetBucket: "destbucket", IsSSL: false, Type: madmin.ReplicationArn, BandwidthLimit: 2 * 1024 * 1024}
 	// Set bucket target
 	if err := madmClnt.SetBucketTarget(ctx, "srcbucket", &target); err != nil {
 		log.Fatalln(err)

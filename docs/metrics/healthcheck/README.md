@@ -1,22 +1,22 @@
 ## MinIO Healthcheck
 
-MinIO server exposes three un-authenticated, healthcheck endpoints liveness probe and a cluster probe at `/minio/health/live`, `/minio/health/ready` and `/minio/health/cluster` respectively.
+MinIO server exposes three un-authenticated, healthcheck endpoints liveness probe and a cluster probe at `/minio/health/live` and `/minio/health/cluster` respectively.
 
 ### Liveness probe
 
 This probe always responds with '200 OK'. When liveness probe fails, Kubernetes like platforms restart the container.
 
 ```
-          livenessProbe:
-            httpGet:
-              path: /minio/health/live
-              port: 9000
-              scheme: HTTP
-            initialDelaySeconds: 120
-            periodSeconds: 15
-            timeoutSeconds: 10
-            successThreshold: 1
-            failureThreshold: 3
+livenessProbe:
+  httpGet:
+    path: /minio/health/live
+    port: 9000
+    scheme: HTTP
+  initialDelaySeconds: 120
+  periodSeconds: 15
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 3
 ```
 
 ### Cluster probe

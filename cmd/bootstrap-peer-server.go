@@ -18,9 +18,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,7 +52,7 @@ type bootstrapRESTServer struct{}
 type ServerSystemConfig struct {
 	MinioPlatform  string
 	MinioRuntime   string
-	MinioEndpoints EndpointZones
+	MinioEndpoints EndpointServerSets
 }
 
 // Diff - returns error on first difference found in two configs.
@@ -161,9 +159,9 @@ func (client *bootstrapRESTClient) Verify(ctx context.Context, srcCfg ServerSyst
 	return srcCfg.Diff(recvCfg)
 }
 
-func verifyServerSystemConfig(ctx context.Context, endpointZones EndpointZones) error {
+func verifyServerSystemConfig(ctx context.Context, endpointServerSets EndpointServerSets) error {
 	srcCfg := getServerSystemCfg()
-	clnts := newBootstrapRESTClients(endpointZones)
+	clnts := newBootstrapRESTClients(endpointServerSets)
 	var onlineServers int
 	var offlineEndpoints []string
 	var retries int
@@ -198,10 +196,10 @@ func verifyServerSystemConfig(ctx context.Context, endpointZones EndpointZones) 
 	return nil
 }
 
-func newBootstrapRESTClients(endpointZones EndpointZones) []*bootstrapRESTClient {
+func newBootstrapRESTClients(endpointServerSets EndpointServerSets) []*bootstrapRESTClient {
 	seenHosts := set.NewStringSet()
 	var clnts []*bootstrapRESTClient
-	for _, ep := range endpointZones {
+	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			if seenHosts.Contains(endpoint.Host) {
 				continue
@@ -225,26 +223,8 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		Path:   bootstrapRESTPath,
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		cancel()
-		var ne *rest.NetworkError
-		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
-	}
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	restClient.HealthCheckFn = nil
 
 	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}
 }

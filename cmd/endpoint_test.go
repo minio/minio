@@ -380,24 +380,28 @@ func TestGetRemotePeers(t *testing.T) {
 	testCases := []struct {
 		endpointArgs   []string
 		expectedResult []string
+		expectedLocal  string
 	}{
-		{[]string{"/d1", "/d2", "d3", "d4"}, []string{}},
-		{[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"}, []string{"example.com:9000", "example.org:9000"}},
-		{[]string{"http://localhost:9000/d1", "http://localhost:10000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"}, []string{"example.com:9000", "example.org:9000", "localhost:10000"}},
-		{[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"}, []string{"example.com:9000", "example.net:9000", "example.org:9000"}},
-		{[]string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, []string{"localhost:9001", "localhost:9002", "localhost:9003"}},
+		{[]string{"/d1", "/d2", "d3", "d4"}, []string{}, ""},
+		{[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"}, []string{"example.com:9000", "example.org:9000", "localhost:9000"}, "localhost:9000"},
+		{[]string{"http://localhost:9000/d1", "http://localhost:10000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"}, []string{"example.com:9000", "example.org:9000", "localhost:10000", "localhost:9000"}, "localhost:9000"},
+		{[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"}, []string{"example.com:9000", "example.net:9000", "example.org:9000", "localhost:9000"}, "localhost:9000"},
+		{[]string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, []string{"localhost:9000", "localhost:9001", "localhost:9002", "localhost:9003"}, "localhost:9000"},
 	}
 
 	for _, testCase := range testCases {
 		zendpoints := mustGetZoneEndpoints(testCase.endpointArgs...)
 		if !zendpoints[0].Endpoints[0].IsLocal {
 			if err := zendpoints[0].Endpoints.UpdateIsLocal(false); err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
+				t.Errorf("error: expected = <nil>, got = %v", err)
 			}
 		}
-		remotePeers := GetRemotePeers(zendpoints)
+		remotePeers, local := zendpoints.peers()
 		if !reflect.DeepEqual(remotePeers, testCase.expectedResult) {
-			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, remotePeers)
+			t.Errorf("expected: %v, got: %v", testCase.expectedResult, remotePeers)
+		}
+		if local != testCase.expectedLocal {
+			t.Errorf("expected: %v, got: %v", testCase.expectedLocal, local)
 		}
 	}
 }

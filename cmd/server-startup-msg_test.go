@@ -102,5 +102,5 @@ func TestPrintStartupMessage(t *testing.T) {
 	}
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
-	printStartupMessage(apiEndpoints)
+	printStartupMessage(apiEndpoints, nil)
 }

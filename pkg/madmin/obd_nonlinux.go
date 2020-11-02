@@ -1,4 +1,4 @@
-// +build !freebsd
+// +build !linux
 
 /*
  * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
@@ -19,15 +19,8 @@
 
 package madmin
 
-import (
-	diskhw "github.com/shirou/gopsutil/disk"
-)
-
 // ServerDiskHwOBDInfo - Includes usage counters, disk counters and partitions
 type ServerDiskHwOBDInfo struct {
-	Addr       string                           `json:"addr"`
-	Usage      []*diskhw.UsageStat              `json:"usages,omitempty"`
-	Partitions []diskhw.PartitionStat           `json:"partitions,omitempty"`
-	Counters   map[string]diskhw.IOCountersStat `json:"counters,omitempty"`
-	Error      string                           `json:"error,omitempty"`
+	Addr  string `json:"addr"`
+	Error string `json:"error,omitempty"`
 }

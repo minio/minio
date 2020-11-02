@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"crypto/x509"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/pkg/bucket/bandwidth"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
@@ -149,6 +151,7 @@ var (
 	globalEnvTargetList *event.TargetList
 
 	globalBucketMetadataSys *BucketMetadataSys
+	globalBucketMonitor     *bandwidth.Monitor
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
 
@@ -186,7 +189,7 @@ var (
 	// registered listeners
 	globalConsoleSys *HTTPConsoleLoggerSys
 
-	globalEndpoints EndpointZones
+	globalEndpoints EndpointServerSets
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
@@ -210,7 +213,8 @@ var (
 	globalDomainNames []string      // Root domains for virtual host style requests
 	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
 
-	globalOperationTimeout = newDynamicTimeout(10*time.Minute, 5*time.Minute) // default timeout for general ops
+	globalOperationTimeout       = newDynamicTimeout(10*time.Minute, 5*time.Minute) // default timeout for general ops
+	globalDeleteOperationTimeout = newDynamicTimeout(5*time.Minute, 1*time.Minute)  // default time for delete ops
 
 	globalBucketObjectLockSys *BucketObjectLockSys
 	globalBucketQuotaSys      *BucketQuotaSys
@@ -267,15 +271,14 @@ var (
 	globalBackgroundHealRoutine *healRoutine
 	globalBackgroundHealState   *allHealState
 
-	// Only enabled when one of the sub-systems fail
-	// to initialize, this allows for administrators to
-	// fix the system.
-	globalSafeMode bool
-
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
 	globalProxyEndpoints []ProxyEndpoint
+
+	globalInternodeTransport http.RoundTripper
+
+	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.
 )
 

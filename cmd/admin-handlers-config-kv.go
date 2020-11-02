@@ -42,7 +42,7 @@ import (
 
 func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *http.Request) (auth.Credentials, ObjectLayer) {
 	// Get current object layer instance.
-	objectAPI := newObjectLayerWithoutSafeModeFn()
+	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return auth.Credentials{}, nil

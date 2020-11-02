@@ -322,6 +322,10 @@ func isStringEqual(s1 string, s2 string) bool {
 
 // Ignores all reserved bucket names or invalid bucket names.
 func isReservedOrInvalidBucket(bucketEntry string, strict bool) bool {
+	if bucketEntry == "" {
+		return true
+	}
+
 	bucketEntry = strings.TrimSuffix(bucketEntry, SlashSeparator)
 	if strict {
 		if err := s3utils.CheckValidBucketNameStrict(bucketEntry); err != nil {

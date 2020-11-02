@@ -30,6 +30,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -38,7 +39,7 @@ import (
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	if globalIsGateway {
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized
 		}
@@ -52,12 +53,12 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
 func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, error) {
-	clnt := globalBucketTargetSys.GetReplicationTargetClient(ctx, rCfg.RoleArn)
+	clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rCfg.RoleArn)
 	if clnt == nil {
 		return false, BucketRemoteTargetNotFound{Bucket: bucket}
 	}
 	if found, _ := clnt.BucketExists(ctx, rCfg.GetDestination().Bucket); !found {
-		return false, BucketReplicationDestinationNotFound{Bucket: rCfg.GetDestination().Bucket}
+		return false, BucketRemoteDestinationNotFound{Bucket: rCfg.GetDestination().Bucket}
 	}
 	if ret, err := globalBucketObjectLockSys.Get(bucket); err == nil {
 		if ret.LockEnabled {
@@ -119,7 +120,7 @@ func mustReplicater(ctx context.Context, r *http.Request, bucket, object string,
 	return cfg.Replicate(opts)
 }
 
-func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
+func putReplicationOpts(ctx context.Context, dest replication.Destination, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
 		if k == xhttp.AmzBucketReplicationStatus {
@@ -139,15 +140,17 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 		sc = objInfo.StorageClass
 	}
 	putOpts = miniogo.PutObjectOptions{
-		UserMetadata:         meta,
-		UserTags:             tag.ToMap(),
-		ContentType:          objInfo.ContentType,
-		ContentEncoding:      objInfo.ContentEncoding,
-		StorageClass:         sc,
-		ReplicationVersionID: objInfo.VersionID,
-		ReplicationStatus:    miniogo.ReplicationStatusReplica,
-		ReplicationMTime:     objInfo.ModTime,
-		ReplicationETag:      objInfo.ETag,
+		UserMetadata:    meta,
+		UserTags:        tag.ToMap(),
+		ContentType:     objInfo.ContentType,
+		ContentEncoding: objInfo.ContentEncoding,
+		StorageClass:    sc,
+		Internal: miniogo.AdvancedPutOptions{
+			SourceVersionID:   objInfo.VersionID,
+			ReplicationStatus: miniogo.ReplicationStatusReplica,
+			SourceMTime:       objInfo.ModTime,
+			SourceETag:        objInfo.ETag,
+		},
 	}
 	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
 		rmode := miniogo.RetentionMode(mode)
@@ -166,6 +169,7 @@ func putReplicationOpts(dest replication.Destination, objInfo ObjectInfo) (putOp
 	if crypto.S3.IsEncrypted(objInfo.UserDefined) {
 		putOpts.ServerSideEncryption = encrypt.NewSSE()
 	}
+
 	return
 }
 
@@ -180,19 +184,17 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		logger.LogIf(ctx, err)
 		return
 	}
-
-	tgt := globalBucketTargetSys.GetReplicationTargetClient(ctx, cfg.RoleArn)
+	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, cfg.RoleArn))
 		return
 	}
-
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
 		return
 	}
-
 	objInfo = gr.ObjInfo
 	size, err := objInfo.GetActualSize()
 	if err != nil {
@@ -223,11 +225,27 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			return
 		}
 	}
-	putOpts := putReplicationOpts(dest, objInfo)
 
+	target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%s", bucket, cfg.RoleArn, err))
+		return
+	}
+	putOpts := putReplicationOpts(ctx, dest, objInfo)
 	replicationStatus := replication.Complete
-	_, err = tgt.PutObject(ctx, dest.Bucket, object, gr, size, "", "", putOpts)
-	gr.Close()
+
+	// Setup bandwidth throttling
+	peers, _ := globalEndpoints.peers()
+	totalNodesCount := len(peers)
+	b := target.BandwidthLimit / int64(totalNodesCount)
+	var headerSize int
+	for k, v := range putOpts.Header() {
+		headerSize += len(k) + len(v)
+	}
+	r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
+
+	_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts)
+	r.Close()
 	if err != nil {
 		replicationStatus = replication.Failed
 	}
@@ -310,7 +328,7 @@ func newReplicationState() *replicationState {
 		globalReplicationConcurrent = 1
 	}
 	rs := &replicationState{
-		replicaCh: make(chan ObjectInfo, globalReplicationConcurrent*2),
+		replicaCh: make(chan ObjectInfo, 10000),
 	}
 	go func() {
 		<-GlobalContext.Done()

@@ -261,18 +261,20 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 		}
 	}
 
-	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
-		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
-			Name:         objInfo.Name,
-			UserTags:     objInfo.UserTags,
-			VersionID:    objInfo.VersionID,
-			ModTime:      objInfo.ModTime,
-			IsLatest:     objInfo.IsLatest,
-			DeleteMarker: objInfo.DeleteMarker,
-		})
-		if !expiryTime.IsZero() {
-			w.Header()[xhttp.AmzExpiration] = []string{
-				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
+	if objInfo.Bucket != "" {
+		if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
+			ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
+				Name:         objInfo.Name,
+				UserTags:     objInfo.UserTags,
+				VersionID:    objInfo.VersionID,
+				ModTime:      objInfo.ModTime,
+				IsLatest:     objInfo.IsLatest,
+				DeleteMarker: objInfo.DeleteMarker,
+			})
+			if !expiryTime.IsZero() {
+				w.Header()[xhttp.AmzExpiration] = []string{
+					fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
+				}
 			}
 		}
 	}
@@ -281,7 +283,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 // deleteObject is a convenient wrapper to delete an object, this
 // is a common function to be called from object handlers and
 // web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	deleteObject := obj.DeleteObject
 	if cache != nil {
 		deleteObject = cache.DeleteObject
@@ -289,28 +291,20 @@ func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, 
 	// Proceed to delete the object.
 	objInfo, err = deleteObject(ctx, bucket, object, opts)
 	if objInfo.Name != "" {
-		// Requesting only a delete marker which was successfully attempted.
+		eventName := event.ObjectRemovedDelete
 		if objInfo.DeleteMarker {
-			// Notify object deleted marker event.
-			sendEvent(eventArgs{
-				EventName:  event.ObjectRemovedDeleteMarkerCreated,
-				BucketName: bucket,
-				Object:     objInfo,
-				ReqParams:  extractReqParams(r),
-				UserAgent:  r.UserAgent(),
-				Host:       handlers.GetSourceIP(r),
-			})
-		} else {
-			// Notify object deleted event.
-			sendEvent(eventArgs{
-				EventName:  event.ObjectRemovedDelete,
-				BucketName: bucket,
-				Object:     objInfo,
-				ReqParams:  extractReqParams(r),
-				UserAgent:  r.UserAgent(),
-				Host:       handlers.GetSourceIP(r),
-			})
+			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
+		// Notify object deleted marker event.
+		sendEvent(eventArgs{
+			EventName:    eventName,
+			BucketName:   bucket,
+			Object:       objInfo,
+			ReqParams:    extractReqParams(r),
+			RespElements: extractRespElements(w),
+			UserAgent:    r.UserAgent(),
+			Host:         handlers.GetSourceIP(r),
+		})
 	}
 	return objInfo, err
 }

@@ -141,28 +141,35 @@ func ParseURL(s string) (u *URL, err error) {
 }
 
 // IsNetworkOrHostDown - if there was a network error or if the host is down.
-func IsNetworkOrHostDown(err error) bool {
+// expectTimeouts indicates that context timeouts are expected and does not
+// indicate a downed host. Other timeouts still returns down.
+func IsNetworkOrHostDown(err error, expectTimeouts bool) bool {
 	if err == nil {
 		return false
 	}
 	if errors.Is(err, context.Canceled) {
 		return false
 	}
+	if expectTimeouts && errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
 	// We need to figure if the error either a timeout
 	// or a non-temporary error.
 	e, ok := err.(net.Error)
 	if ok {
-		urlErr, ok := e.(*url.Error)
-		if ok {
+		if urlErr, ok := e.(*url.Error); ok {
 			switch urlErr.Err.(type) {
 			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
 				return true
 			}
 		}
+
 		if e.Timeout() {
 			return true
 		}
+
 	}
+
 	ok = false
 	// Fallback to other mechanisms.
 	if strings.Contains(err.Error(), "Connection closed by foreign host") {

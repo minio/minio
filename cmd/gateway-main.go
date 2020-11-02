@@ -153,6 +153,8 @@ func ValidateGatewayArguments(serverAddr, endpointAddr string) error {
 
 // StartGateway - handler for 'minio gateway <name>'.
 func StartGateway(ctx *cli.Context, gw Gateway) {
+	defer globalDNSCache.Stop()
+
 	// This is only to uniquely identify each gateway deployments.
 	globalDeploymentID = env.Get("MINIO_GATEWAY_DEPLOYMENT_ID", mustGetUUID())
 	logger.SetDeploymentID(globalDeploymentID)
@@ -289,7 +291,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	globalHTTPServer = httpServer
 	globalObjLayerMutex.Unlock()
 
-	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	newObject, err := gw.NewGatewayLayer(globalActiveCred)
 	if err != nil {
@@ -298,14 +300,13 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 	newObject = NewGatewayLayerWithLocker(newObject)
 
-	// Once endpoints are finalized, initialize the new object api in safe mode.
-	globalObjLayerMutex.Lock()
-	globalSafeMode = true
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
-
 	// Calls all New() for all sub-systems.
 	newAllSubsystems()
+
+	// Once endpoints are finalized, initialize the new object api in safe mode.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
 
 	if gatewayName == NASBackendGateway {
 		buckets, err := newObject.ListBuckets(GlobalContext)
@@ -324,8 +325,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	if enableIAMOps {
-		// Initialize IAM sys.
-		startBackgroundIAMLoad(GlobalContext)
+		// Initialize users credentials and policies in background.
+		globalIAMSys.InitStore(newObject)
+
+		go globalIAMSys.Init(GlobalContext, newObject)
 	}
 
 	if globalCacheConfig.Enabled {
@@ -352,11 +355,6 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// - encryption
 	// - compression
 	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
-
-	// Disable safe mode operation, after all initialization is over.
-	globalObjLayerMutex.Lock()
-	globalSafeMode = false
-	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
 	if !globalCLIContext.Quiet {

@@ -115,10 +115,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	// Set tag count if object has tags
-	tags, _ := url.ParseQuery(objInfo.UserTags)
-	tagCount := len(tags)
-	if tagCount > 0 {
-		w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(tagCount)}
+	if len(objInfo.UserTags) > 0 {
+		tags, _ := url.ParseQuery(objInfo.UserTags)
+		if len(tags) > 0 {
+			w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(len(tags))}
+		}
 	}
 
 	// Set all other user defined metadata.

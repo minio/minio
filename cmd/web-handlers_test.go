@@ -1224,17 +1224,17 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Set faulty disks to Erasure backend
-	z := obj.(*erasureZones)
-	xl := z.zones[0].sets[0]
+	z := obj.(*erasureServerSets)
+	xl := z.serverSets[0].sets[0]
 	erasureDisks := xl.getDisks()
-	z.zones[0].erasureDisksMu.Lock()
+	z.serverSets[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		for i, d := range erasureDisks {
 			erasureDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
 		}
 		return erasureDisks
 	}
-	z.zones[0].erasureDisksMu.Unlock()
+	z.serverSets[0].erasureDisksMu.Unlock()
 
 	// Initialize web rpc endpoint.
 	apiRouter := initTestWebRPCEndPoint(obj)

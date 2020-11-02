@@ -20,6 +20,7 @@ import (
 	"context"
 	"net/http"
 	"sync"
+	"time"
 
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -98,10 +99,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
 		}
 		if vcfg.Status != string(versioning.Enabled) {
-			return BucketReplicationTargetNotVersioned{Bucket: tgt.TargetBucket}
+			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
-
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -112,6 +112,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		if t.Type == tgt.Type {
 			if t.Arn == tgt.Arn {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
+			}
+			if t.Label == tgt.Label {
+				return BucketRemoteLabelInUse{Bucket: t.TargetBucket}
 			}
 			newtgts[idx] = *tgt
 			found = true
@@ -173,8 +176,8 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	return nil
 }
 
-// GetReplicationTargetClient returns minio-go client for replication target instance
-func (sys *BucketTargetSys) GetReplicationTargetClient(ctx context.Context, arn string) *miniogo.Core {
+// GetRemoteTargetClient returns minio-go client for replication target instance
+func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn string) *miniogo.Core {
 	sys.RLock()
 	defer sys.RUnlock()
 	return sys.arnRemotesMap[arn]
@@ -205,14 +208,14 @@ func (sys *BucketTargetSys) Init(ctx context.Context, buckets []BucketInfo, objA
 	return nil
 }
 
-// UpdateTarget updates target to reflect metadata updates
-func (sys *BucketTargetSys) UpdateTarget(bucket string, cfg *madmin.BucketTargets) {
+// UpdateAllTargets updates target to reflect metadata updates
+func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketTargets) {
 	if sys == nil {
 		return
 	}
 	sys.Lock()
 	defer sys.Unlock()
-	if cfg == nil || cfg.Empty() {
+	if tgts == nil || tgts.Empty() {
 		// remove target and arn association
 		if tgts, ok := sys.targetsMap[bucket]; ok {
 			for _, t := range tgts {
@@ -223,10 +226,10 @@ func (sys *BucketTargetSys) UpdateTarget(bucket string, cfg *madmin.BucketTarget
 		return
 	}
 
-	if len(cfg.Targets) > 0 {
-		sys.targetsMap[bucket] = cfg.Targets
+	if len(tgts.Targets) > 0 {
+		sys.targetsMap[bucket] = tgts.Targets
 	}
-	for _, tgt := range cfg.Targets {
+	for _, tgt := range tgts.Targets {
 		tgtClient, err := sys.getRemoteTargetClient(&tgt)
 		if err != nil {
 			continue
@@ -236,7 +239,7 @@ func (sys *BucketTargetSys) UpdateTarget(bucket string, cfg *madmin.BucketTarget
 			sys.clientsCache[tgtClient.EndpointURL().String()] = tgtClient
 		}
 	}
-	sys.targetsMap[bucket] = cfg.Targets
+	sys.targetsMap[bucket] = tgts.Targets
 }
 
 // create minio-go clients for buckets having remote targets
@@ -279,8 +282,9 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*m
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 
 	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = NewGatewayHTTPTransport()
+		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(1 * time.Hour)
 	})
+
 	core, err := miniogo.NewCore(tcfg.Endpoint, &miniogo.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,

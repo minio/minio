@@ -38,7 +38,7 @@ $APT update
 $APT install gnupg ca-certificates
 
 # download and install golang
-GO_VERSION="1.14.7"
+GO_VERSION="1.15.2"
 GO_INSTALL_PATH="/usr/local"
 download_url="https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz"
 if ! $WGET --output-document=- "$download_url" | tar -C "${GO_INSTALL_PATH}" -zxf -; then

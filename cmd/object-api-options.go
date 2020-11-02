@@ -159,9 +159,10 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			}
 		}
 	}
-	mtime := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
-	if mtime != "" {
-		opts.MTime, err = time.Parse(time.RFC3339, mtime)
+	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	var mtime time.Time
+	if mtimeStr != "" {
+		mtime, err = time.Parse(time.RFC3339, mtimeStr)
 		if err != nil {
 			return opts, InvalidArgument{
 				Bucket: bucket,
@@ -170,7 +171,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			}
 		}
 	} else {
-		opts.MTime = UTCNow()
+		mtime = UTCNow()
 	}
 	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
 	if etag != "" {
@@ -187,6 +188,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			UserDefined:          metadata,
 			VersionID:            vid,
 			Versioned:            versioned,
+			MTime:                mtime,
 		}, nil
 	}
 	if GlobalGatewaySSE.SSEC() && crypto.SSEC.IsRequested(r.Header) {
@@ -210,6 +212,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 			UserDefined:          metadata,
 			VersionID:            vid,
 			Versioned:            versioned,
+			MTime:                mtime,
 		}, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
@@ -219,6 +222,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 	}
 	opts.VersionID = vid
 	opts.Versioned = versioned
+	opts.MTime = mtime
 	return opts, nil
 }
 

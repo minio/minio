@@ -50,6 +50,10 @@ func (rpcClient *ReconnectRPCClient) IsOnline() bool {
 	return rpcClient.rpc != nil
 }
 
+func (rpcClient *ReconnectRPCClient) IsLocal() bool {
+	return false
+}
+
 // Close closes the underlying socket file descriptor.
 func (rpcClient *ReconnectRPCClient) Close() error {
 	rpcClient.mutex.Lock()

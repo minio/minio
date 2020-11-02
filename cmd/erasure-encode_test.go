@@ -195,7 +195,7 @@ func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, 
 			if disk == OfflineDisk {
 				continue
 			}
-			disk.DeleteFile(context.Background(), "testbucket", "object")
+			disk.Delete(context.Background(), "testbucket", "object", false)
 			writers[i] = newBitrotWriter(disk, "testbucket", "object", erasure.ShardFileSize(size), DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		_, err := erasure.Encode(context.Background(), bytes.NewReader(content), writers, buffer, erasure.dataBlocks+1)

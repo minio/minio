@@ -32,29 +32,22 @@ func newHTTPServerFn() *xhttp.Server {
 	return globalHTTPServer
 }
 
-func newObjectLayerWithoutSafeModeFn() ObjectLayer {
-	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
-	return globalObjectAPI
-}
-
 func newObjectLayerFn() ObjectLayer {
 	globalObjLayerMutex.Lock()
 	defer globalObjLayerMutex.Unlock()
-	if globalSafeMode {
-		return nil
-	}
 	return globalObjectAPI
 }
 
 func newCachedObjectLayerFn() CacheObjectLayer {
 	globalObjLayerMutex.Lock()
 	defer globalObjLayerMutex.Unlock()
-
-	if globalSafeMode {
-		return nil
-	}
 	return globalCacheObjectAPI
+}
+
+func setObjectLayer(o ObjectLayer) {
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = o
+	globalObjLayerMutex.Unlock()
 }
 
 // objectAPIHandler implements and provides http handlers for S3 API.
@@ -333,7 +326,7 @@ func registerAPIRouter(router *mux.Router) {
 
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
-	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(errorResponseHandler))
+	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(methodNotAllowedHandler("S3")))
 
 }
 

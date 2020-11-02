@@ -715,7 +715,7 @@ next:
 				}
 			}
 
-			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, r, opts)
+			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
 			logger.LogIf(ctx, err)
 			continue
 		}
@@ -771,12 +771,34 @@ next:
 			}
 
 			// Deletes a list of objects.
-			_, errs := deleteObjects(ctx, args.BucketName, objects, opts)
+			deletedObjects, errs := deleteObjects(ctx, args.BucketName, objects, opts)
 			for _, err := range errs {
 				if err != nil {
 					logger.LogIf(ctx, err)
 					break next
 				}
+			}
+			// Notify deleted event for objects.
+			for _, dobj := range deletedObjects {
+				objInfo := ObjectInfo{
+					Name:      dobj.ObjectName,
+					VersionID: dobj.VersionID,
+				}
+				if dobj.DeleteMarker {
+					objInfo = ObjectInfo{
+						Name:         dobj.ObjectName,
+						DeleteMarker: dobj.DeleteMarker,
+						VersionID:    dobj.DeleteMarkerVersionID,
+					}
+				}
+				sendEvent(eventArgs{
+					EventName:  event.ObjectRemovedDelete,
+					BucketName: args.BucketName,
+					Object:     objInfo,
+					ReqParams:  extractReqParams(r),
+					UserAgent:  r.UserAgent(),
+					Host:       handlers.GetSourceIP(r),
+				})
 			}
 		}
 	}

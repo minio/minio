@@ -362,7 +362,7 @@ func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		err := storage.DeleteFile(context.Background(), testCase.volumeName, testCase.objectName)
+		err := storage.Delete(context.Background(), testCase.volumeName, testCase.objectName, false)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -454,7 +454,7 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 	globalServerConfig = newServerConfig()
 	lookupConfigs(globalServerConfig, 0)
 
-	restClient := newStorageRESTClient(endpoint)
+	restClient := newStorageRESTClient(endpoint, false)
 
 	return httpServer, restClient, prevGlobalServerConfig, endpointPath
 }

@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/gob"
 	"encoding/hex"
 	"errors"
@@ -42,7 +41,7 @@ func isNetworkError(err error) bool {
 		return false
 	}
 	if nerr, ok := err.(*rest.NetworkError); ok {
-		return xnet.IsNetworkOrHostDown(nerr.Err)
+		return xnet.IsNetworkOrHostDown(nerr.Err, false)
 	}
 	return false
 }
@@ -121,9 +120,6 @@ type storageRESTClient struct {
 // permanently. The only way to restore the storage connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *storageRESTClient) call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
-	if !client.IsOnline() {
-		return nil, errDiskNotFound
-	}
 	if values == nil {
 		values = make(url.Values)
 	}
@@ -134,7 +130,6 @@ func (client *storageRESTClient) call(ctx context.Context, method string, values
 	}
 
 	err = toStorageErr(err)
-
 	return nil, err
 }
 
@@ -370,11 +365,12 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 	return err
 }
 
-func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
+func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, checkDataDir bool) (fi FileInfo, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
+	values.Set(storageRESTCheckDataDir, strconv.FormatBool(checkDataDir))
 
 	respBody, err := client.call(ctx, storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {
@@ -558,10 +554,11 @@ func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath st
 }
 
 // DeleteFile - deletes a file.
-func (client *storageRESTClient) DeleteFile(ctx context.Context, volume string, path string) error {
+func (client *storageRESTClient) Delete(ctx context.Context, volume string, path string, recursive bool) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
 	respBody, err := client.call(ctx, storageRESTMethodDeleteFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
@@ -665,31 +662,24 @@ func (client *storageRESTClient) Close() error {
 }
 
 // Returns a storage rest client.
-func newStorageRESTClient(endpoint Endpoint) *storageRESTClient {
+func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClient {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
 		Path:   path.Join(storageRESTPrefix, endpoint.Path, storageRESTVersion),
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	if healthcheck {
+		restClient.HealthCheckFn = func() bool {
+			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+			// Instantiate a new rest client for healthcheck
+			// to avoid recursive healthCheckFn()
+			respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
+			xhttp.DrainBody(respBody)
+			cancel()
+			return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
 		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		cancel()
-		return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
 	}
 
 	return &storageRESTClient{endpoint: endpoint, restClient: restClient}

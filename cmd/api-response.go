@@ -35,11 +35,11 @@ import (
 
 const (
 	// RFC3339 a subset of the ISO8601 timestamp format. e.g 2014-04-29T18:30:38Z
-	iso8601TimeFormat = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
-	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
-	maxDeleteList     = 10000                      // Limit number of objects deleted in a delete call.
-	maxUploadsList    = 10000                      // Limit number of uploads in a listUploadsResponse.
-	maxPartsList      = 10000                      // Limit number of parts in a listPartsResponse.
+	iso8601TimeFormat = "2006-01-02T15:04:05.000Z"                     // Reply date format with nanosecond precision.
+	maxObjectList     = metacacheBlockSize - (metacacheBlockSize / 10) // Limit number of objects in a listObjectsResponse/listObjectsVersionsResponse.
+	maxDeleteList     = 10000                                          // Limit number of objects deleted in a delete call.
+	maxUploadsList    = 10000                                          // Limit number of uploads in a listUploadsResponse.
+	maxPartsList      = 10000                                          // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
@@ -703,10 +703,6 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, err
 }
 
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
-	if newObjectLayerFn() == nil {
-		// Server still in safe mode.
-		w.Header().Set(xhttp.MinIOServerStatus, "safemode")
-	}
 	setCommonHeaders(w)
 	if mType != mimeNone {
 		w.Header().Set(xhttp.ContentType, string(mType))
@@ -773,10 +769,6 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 		// The request is from browser and also if browser
 		// is enabled we need to redirect.
 		if browser && globalBrowserEnabled {
-			if newObjectLayerFn() == nil {
-				// server still in safe mode.
-				w.Header().Set(xhttp.MinIOServerStatus, "safemode")
-			}
 			w.Header().Set(xhttp.Location, minioReservedBucketPath+reqURL.Path)
 			w.WriteHeader(http.StatusTemporaryRedirect)
 			return
