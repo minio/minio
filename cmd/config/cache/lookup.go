@@ -35,6 +35,7 @@ const (
 	WatermarkLow  = "watermark_low"
 	WatermarkHigh = "watermark_high"
 	Range         = "range"
+	Commit        = "commit"
 
 	EnvCacheDrives        = "MINIO_CACHE_DRIVES"
 	EnvCacheExclude       = "MINIO_CACHE_EXCLUDE"
@@ -45,6 +46,7 @@ const (
 	EnvCacheWatermarkLow  = "MINIO_CACHE_WATERMARK_LOW"
 	EnvCacheWatermarkHigh = "MINIO_CACHE_WATERMARK_HIGH"
 	EnvCacheRange         = "MINIO_CACHE_RANGE"
+	EnvCacheCommit        = "MINIO_CACHE_COMMIT"
 
 	EnvCacheEncryptionMasterKey = "MINIO_CACHE_ENCRYPTION_MASTER_KEY"
 
@@ -53,6 +55,7 @@ const (
 	DefaultAfter         = "0"
 	DefaultWaterMarkLow  = "70"
 	DefaultWaterMarkHigh = "80"
+	DefaultCacheCommit   = "writethrough"
 )
 
 // DefaultKVS - default KV settings for caching.
@@ -89,6 +92,10 @@ var (
 		config.KV{
 			Key:   Range,
 			Value: config.EnableOn,
+		},
+		config.KV{
+			Key:   Commit,
+			Value: DefaultCacheCommit,
 		},
 	}
 )
@@ -209,6 +216,12 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 			return cfg, config.ErrInvalidCacheRange(err)
 		}
 		cfg.Range = rng
+	}
+	if commit := env.Get(EnvCacheCommit, kvs.Get(Commit)); commit != "" {
+		cfg.CommitWriteback, err = parseCacheCommitMode(commit)
+		if err != nil {
+			return cfg, err
+		}
 	}
 
 	return cfg, nil
