@@ -360,10 +360,28 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
 	if err != nil {
-		return fi, nil, nil, err
+		readQuorum = len(metaArr) / 2
 	}
 
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
+		if reducedErr == errErasureReadQuorum {
+			if _, ok := isObjectDangling(metaArr, errs, nil); ok {
+				reducedErr = errFileNotFound
+				if opts.VersionID != "" {
+					reducedErr = errFileVersionNotFound
+				}
+				// Remove the dangling object only when:
+				//  - This is a non versioned bucket
+				//  - This is a versioned bucket and the version ID is passed, the reason
+				//    is that it is hard to pick that particular version that is dangling
+				if !opts.Versioned || opts.VersionID != "" {
+					er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
+						Name:      object,
+						VersionID: opts.VersionID,
+					})
+				}
+			}
+		}
 		return fi, nil, nil, toObjectErr(reducedErr, bucket, object)
 	}
 
