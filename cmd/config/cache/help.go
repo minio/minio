@@ -74,5 +74,11 @@ var (
 			Optional:    true,
 			Type:        "string",
 		},
+		config.HelpKV{
+			Key:         Commit,
+			Description: `set to control cache commit behavior, defaults to "writethrough"`,
+			Optional:    true,
+			Type:        "string",
+		},
 	}
 )
