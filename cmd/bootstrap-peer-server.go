@@ -18,9 +18,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -225,26 +223,8 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		Path:   bootstrapRESTPath,
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, bootstrapRESTMethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		cancel()
-		var ne *rest.NetworkError
-		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
-	}
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	restClient.HealthCheckFn = nil
 
 	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}
 }

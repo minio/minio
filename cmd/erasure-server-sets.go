@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
@@ -228,9 +227,6 @@ func (z *erasureServerSets) getZoneIdx(ctx context.Context, bucket, object strin
 
 func (z *erasureServerSets) Shutdown(ctx context.Context) error {
 	defer z.shutdown()
-	if z.SingleZone() {
-		return z.serverSets[0].Shutdown(ctx)
-	}
 
 	g := errgroup.WithNErrs(len(z.serverSets))
 
@@ -251,11 +247,8 @@ func (z *erasureServerSets) Shutdown(ctx context.Context) error {
 }
 
 func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
-	if z.SingleZone() {
-		return z.serverSets[0].StorageInfo(ctx, local)
-	}
-
 	var storageInfo StorageInfo
+	storageInfo.Backend.Type = BackendErasure
 
 	storageInfos := make([]StorageInfo, len(z.serverSets))
 	storageInfosErrs := make([][]error, len(z.serverSets))
@@ -277,11 +270,16 @@ func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (Storag
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
-	storageInfo.Backend.Type = storageInfos[0].Backend.Type
-	storageInfo.Backend.StandardSCData = storageInfos[0].Backend.StandardSCData
-	storageInfo.Backend.StandardSCParity = storageInfos[0].Backend.StandardSCParity
-	storageInfo.Backend.RRSCData = storageInfos[0].Backend.RRSCData
-	storageInfo.Backend.RRSCParity = storageInfos[0].Backend.RRSCParity
+	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	if scParity == 0 {
+		scParity = z.SetDriveCount() / 2
+	}
+
+	storageInfo.Backend.StandardSCData = z.SetDriveCount() - scParity
+	storageInfo.Backend.StandardSCParity = scParity
+	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
+	storageInfo.Backend.RRSCData = z.SetDriveCount() - rrSCParity
+	storageInfo.Backend.RRSCParity = rrSCParity
 
 	var errs []error
 	for i := range z.serverSets {
@@ -660,274 +658,7 @@ func (z *erasureServerSets) ListObjectsV2(ctx context.Context, bucket, prefix, c
 	return listObjectsV2Info, err
 }
 
-func (z *erasureServerSets) listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, err error) {
-
-	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
-	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
-
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
-
-	for _, zone := range z.serverSets {
-		serverSetsEntryChs = append(serverSetsEntryChs,
-			zone.startMergeWalksN(ctx, bucket, prefix, "", true, endWalkCh, zone.listTolerancePerSet, false))
-		if zone.listTolerancePerSet == -1 {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
-		} else {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
-		}
-	}
-
-	var objInfos []ObjectInfo
-	var eof bool
-	var prevPrefix string
-
-	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
-	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
-	for _, entryChs := range serverSetsEntryChs {
-		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
-		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
-	}
-
-	for {
-		if len(objInfos) == maxKeys {
-			break
-		}
-
-		result, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-		if !ok {
-			eof = true
-			break
-		}
-
-		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
-			// Skip entries which are not found on upto expected tolerance
-			continue
-		}
-
-		var objInfo ObjectInfo
-
-		index := strings.Index(strings.TrimPrefix(result.Name, prefix), delimiter)
-		if index == -1 {
-			objInfo = ObjectInfo{
-				IsDir:           false,
-				Bucket:          bucket,
-				Name:            result.Name,
-				ModTime:         result.ModTime,
-				Size:            result.Size,
-				ContentType:     result.Metadata["content-type"],
-				ContentEncoding: result.Metadata["content-encoding"],
-			}
-
-			// Extract etag from metadata.
-			objInfo.ETag = extractETag(result.Metadata)
-
-			// All the parts per object.
-			objInfo.Parts = result.Parts
-
-			// etag/md5Sum has already been extracted. We need to
-			// remove to avoid it from appearing as part of
-			// response headers. e.g, X-Minio-* or X-Amz-*.
-			objInfo.UserDefined = cleanMetadata(result.Metadata)
-
-			// Update storage class
-			if sc, ok := result.Metadata[xhttp.AmzStorageClass]; ok {
-				objInfo.StorageClass = sc
-			} else {
-				objInfo.StorageClass = globalMinioDefaultStorageClass
-			}
-		} else {
-			index = len(prefix) + index + len(delimiter)
-			currPrefix := result.Name[:index]
-			if currPrefix == prevPrefix {
-				continue
-			}
-			prevPrefix = currPrefix
-
-			objInfo = ObjectInfo{
-				Bucket: bucket,
-				Name:   currPrefix,
-				IsDir:  true,
-			}
-		}
-
-		if objInfo.Name <= marker {
-			continue
-		}
-
-		objInfos = append(objInfos, objInfo)
-	}
-
-	result := ListObjectsInfo{}
-	for _, objInfo := range objInfos {
-		if objInfo.IsDir {
-			result.Prefixes = append(result.Prefixes, objInfo.Name)
-			continue
-		}
-		result.Objects = append(result.Objects, objInfo)
-	}
-
-	if !eof {
-		result.IsTruncated = true
-		if len(objInfos) > 0 {
-			result.NextMarker = objInfos[len(objInfos)-1].Name
-		}
-	}
-
-	return result, nil
-}
-
-func (z *erasureServerSets) listObjectsSplunk(ctx context.Context, bucket, prefix, marker string, maxKeys int) (loi ListObjectsInfo, err error) {
-	if strings.Contains(prefix, guidSplunk) {
-		logger.LogIf(ctx, NotImplemented{})
-		return loi, NotImplemented{}
-	}
-
-	recursive := true
-
-	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
-	serverSetsEndWalkCh := make([]chan struct{}, 0, len(z.serverSets))
-	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
-
-	for _, zone := range z.serverSets {
-		entryChs, endWalkCh := zone.poolSplunk.Release(listParams{bucket, recursive, marker, prefix})
-		if entryChs == nil {
-			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, true)
-		}
-		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
-		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
-		if zone.listTolerancePerSet == -1 {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
-		} else {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
-		}
-	}
-
-	entries := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
-	if len(entries.Files) == 0 {
-		return loi, nil
-	}
-
-	loi.IsTruncated = entries.IsTruncated
-	if loi.IsTruncated {
-		loi.NextMarker = entries.Files[len(entries.Files)-1].Name
-	}
-
-	for _, entry := range entries.Files {
-		objInfo := entry.ToObjectInfo(bucket, entry.Name)
-		splits := strings.Split(objInfo.Name, guidSplunk)
-		if len(splits) == 0 {
-			loi.Objects = append(loi.Objects, objInfo)
-			continue
-		}
-
-		loi.Prefixes = append(loi.Prefixes, splits[0]+guidSplunk)
-	}
-
-	if loi.IsTruncated {
-		for i, zone := range z.serverSets {
-			zone.poolSplunk.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, serverSetsEntryChs[i],
-				serverSetsEndWalkCh[i])
-		}
-	}
-	return loi, nil
-}
-
-func (z *erasureServerSets) listObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	loi := ListObjectsInfo{}
-
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, z); err != nil {
-		return loi, err
-	}
-
-	// Marker is set validate pre-condition.
-	if marker != "" {
-		// Marker not common with prefix is not implemented. Send an empty response
-		if !HasPrefix(marker, prefix) {
-			return loi, nil
-		}
-	}
-
-	// With max keys of zero we have reached eof, return right here.
-	if maxKeys == 0 {
-		return loi, nil
-	}
-
-	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter'
-	// along // with the prefix. On a flat namespace with 'prefix'
-	// as '/' we don't have any entries, since all the keys are
-	// of form 'keyName/...'
-	if delimiter == SlashSeparator && prefix == SlashSeparator {
-		return loi, nil
-	}
-
-	// Over flowing count - reset to maxObjectList.
-	if maxKeys < 0 || maxKeys > maxObjectList {
-		maxKeys = maxObjectList
-	}
-
-	if delimiter != SlashSeparator && delimiter != "" {
-		if delimiter == guidSplunk {
-			return z.listObjectsSplunk(ctx, bucket, prefix, marker, maxKeys)
-		}
-		return z.listObjectsNonSlash(ctx, bucket, prefix, marker, delimiter, maxKeys)
-	}
-
-	// Default is recursive, if delimiter is set then list non recursive.
-	recursive := true
-	if delimiter == SlashSeparator {
-		recursive = false
-	}
-
-	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
-	serverSetsEndWalkCh := make([]chan struct{}, 0, len(z.serverSets))
-	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
-
-	for _, zone := range z.serverSets {
-		entryChs, endWalkCh := zone.pool.Release(listParams{bucket, recursive, marker, prefix})
-		if entryChs == nil {
-			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet, false)
-		}
-		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
-		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
-		if zone.listTolerancePerSet == -1 {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
-		} else {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
-		}
-	}
-
-	entries := mergeServerSetsEntriesCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
-	if len(entries.Files) == 0 {
-		return loi, nil
-	}
-
-	loi.IsTruncated = entries.IsTruncated
-	if loi.IsTruncated {
-		loi.NextMarker = entries.Files[len(entries.Files)-1].Name
-	}
-
-	for _, entry := range entries.Files {
-		objInfo := entry.ToObjectInfo(entry.Volume, entry.Name)
-		if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
-			loi.Prefixes = append(loi.Prefixes, objInfo.Name)
-			continue
-		}
-		loi.Objects = append(loi.Objects, objInfo)
-	}
-	if loi.IsTruncated {
-		for i, zone := range z.serverSets {
-			zone.pool.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, serverSetsEntryChs[i],
-				serverSetsEndWalkCh[i])
-		}
-	}
-	return loi, nil
-}
-
-// Calculate least entry across serverSets and across multiple FileInfo
+// Calculate least entry across zones and across multiple FileInfo
 // channels, returns the least common entry and the total number of times
 // we found this entry. Additionally also returns a boolean
 // to indicate if the caller needs to call this function
@@ -1111,236 +842,57 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
-// mergeServerSetsEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
-func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfoVersions) {
-	var i = 0
-	serverSetsEntriesInfos := make([][]FileInfoVersions, 0, len(serverSetsEntryChs))
-	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
-	for _, entryChs := range serverSetsEntryChs {
-		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
-	}
-
-	for {
-		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-		if !ok {
-			// We have reached EOF across all entryChs, break the loop.
-			break
-		}
-
-		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
-			// Skip entries which are not found upto the expected tolerance
-			continue
-		}
-
-		entries.FilesVersions = append(entries.FilesVersions, fi)
-		i++
-		if i == maxKeys {
-			entries.IsTruncated = isTruncatedServerSetsVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-			break
-		}
-	}
-	return entries
-}
-
-// mergeServerSetsEntriesCh - merges FileInfo channel to entries upto maxKeys.
-func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, serverSetsListTolerancePerSet []int) (entries FilesInfo) {
-	var i = 0
-	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
-	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
-	for _, entryChs := range serverSetsEntryChs {
-		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
-		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
-	}
-	var prevEntry string
-	for {
-		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-		if !ok {
-			// We have reached EOF across all entryChs, break the loop.
-			break
-		}
-
-		if quorumCount < serverSetsListTolerancePerSet[zoneIndex] {
-			// Skip entries which are not found upto configured tolerance.
-			continue
-		}
-
-		if HasSuffix(fi.Name, slashSeparator) && fi.Name == prevEntry {
-			continue
-		}
-
-		entries.Files = append(entries.Files, fi)
-		i++
-		if i == maxKeys {
-			entries.IsTruncated = isTruncatedServerSets(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-			break
-		}
-		prevEntry = fi.Name
-	}
-	return entries
-}
-
-func isTruncatedServerSets(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) bool {
-	for i, entryChs := range zoneEntryChs {
-		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-		}
-	}
-
-	var isTruncated = false
-	for _, entriesValid := range zoneEntriesValid {
-		for _, valid := range entriesValid {
-			if valid {
-				isTruncated = true
-				break
-			}
-		}
-		if isTruncated {
-			break
-		}
-	}
-	for i, entryChs := range zoneEntryChs {
-		for j := range entryChs {
-			if zoneEntriesValid[i][j] {
-				zoneEntryChs[i][j].Push(zoneEntries[i][j])
-			}
-		}
-
-	}
-	return isTruncated
-}
-
-func isTruncatedServerSetsVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) bool {
-	for i, entryChs := range zoneEntryChs {
-		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-		}
-	}
-
-	var isTruncated = false
-	for _, entriesValid := range zoneEntriesValid {
-		for _, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-			isTruncated = true
-			break
-		}
-		if isTruncated {
-			break
-		}
-	}
-	for i, entryChs := range zoneEntryChs {
-		for j := range entryChs {
-			if zoneEntriesValid[i][j] {
-				zoneEntryChs[i][j].Push(zoneEntries[i][j])
-			}
-		}
-	}
-	return isTruncated
-}
-
-func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
+func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
 	loi := ListObjectVersionsInfo{}
-
-	if err := checkListObjsArgs(ctx, bucket, prefix, marker, z); err != nil {
-		return loi, err
-	}
-
-	// Marker is set validate pre-condition.
-	if marker != "" {
-		// Marker not common with prefix is not implemented. Send an empty response
-		if !HasPrefix(marker, prefix) {
-			return loi, nil
-		}
-	}
-
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-
-	// With max keys of zero we have reached eof, return right here.
-	if maxKeys == 0 {
-		return loi, nil
+	merged, err := z.listPath(ctx, listPathOptions{
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeys,
+		Marker:      marker,
+		InclDeleted: true,
+	})
+	if err != nil && err != io.EOF {
+		return loi, err
 	}
-
-	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter'
-	// along // with the prefix. On a flat namespace with 'prefix'
-	// as '/' we don't have any entries, since all the keys are
-	// of form 'keyName/...'
-	if delimiter == SlashSeparator && prefix == SlashSeparator {
-		return loi, nil
-	}
-
-	// Over flowing count - reset to maxObjectList.
-	if maxKeys < 0 || maxKeys > maxObjectList {
-		maxKeys = maxObjectList
-	}
-
-	if delimiter != SlashSeparator && delimiter != "" {
-		return loi, NotImplemented{}
-	}
-
-	// Default is recursive, if delimiter is set then list non recursive.
-	recursive := true
-	if delimiter == SlashSeparator {
-		recursive = false
-	}
-
-	serverSetsEntryChs := make([][]FileInfoVersionsCh, 0, len(z.serverSets))
-	serverSetsEndWalkCh := make([]chan struct{}, 0, len(z.serverSets))
-	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
-	for _, zone := range z.serverSets {
-		entryChs, endWalkCh := zone.poolVersions.Release(listParams{bucket, recursive, marker, prefix})
-		if entryChs == nil {
-			endWalkCh = make(chan struct{})
-			entryChs = zone.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, zone.listTolerancePerSet)
-		}
-		serverSetsEntryChs = append(serverSetsEntryChs, entryChs)
-		serverSetsEndWalkCh = append(serverSetsEndWalkCh, endWalkCh)
-		if zone.listTolerancePerSet == -1 {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
-		} else {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
-		}
-	}
-
-	entries := mergeServerSetsEntriesVersionsCh(serverSetsEntryChs, maxKeys, serverSetsListTolerancePerSet)
-	if len(entries.FilesVersions) == 0 {
-		return loi, nil
-	}
-
-	loi.IsTruncated = entries.IsTruncated
-	if loi.IsTruncated {
-		loi.NextMarker = entries.FilesVersions[len(entries.FilesVersions)-1].Name
-	}
-
-	for _, entry := range entries.FilesVersions {
-		for _, version := range entry.Versions {
-			objInfo := version.ToObjectInfo(bucket, entry.Name)
-			if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
-				loi.Prefixes = append(loi.Prefixes, objInfo.Name)
-				continue
-			}
-			loi.Objects = append(loi.Objects, objInfo)
-		}
+	loi.Objects, loi.Prefixes = merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
+	loi.IsTruncated = err == nil && len(loi.Objects) > 0
+	if maxKeys > 0 && len(loi.Objects) > maxKeys {
+		loi.Objects = loi.Objects[:maxKeys]
+		loi.IsTruncated = true
 	}
 	if loi.IsTruncated {
-		for i, zone := range z.serverSets {
-			zone.poolVersions.Set(listParams{bucket, recursive, loi.NextMarker, prefix}, serverSetsEntryChs[i],
-				serverSetsEndWalkCh[i])
-		}
+		last := loi.Objects[len(loi.Objects)-1]
+		loi.NextMarker = encodeMarker(last.Name, merged.listID)
+		loi.NextVersionIDMarker = last.VersionID
 	}
 	return loi, nil
 }
 
-func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
-	return z.listObjectVersions(ctx, bucket, prefix, marker, versionMarker, delimiter, maxKeys)
-}
-
 func (z *erasureServerSets) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return z.listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
+	var loi ListObjectsInfo
+	merged, err := z.listPath(ctx, listPathOptions{
+		Bucket:      bucket,
+		Prefix:      prefix,
+		Separator:   delimiter,
+		Limit:       maxKeys,
+		Marker:      marker,
+		InclDeleted: false,
+	})
+	if err != nil && err != io.EOF {
+		logger.LogIf(ctx, err)
+		return loi, err
+	}
+	// Default is recursive, if delimiter is set then list non recursive.
+	loi.Objects, loi.Prefixes = merged.fileInfos(bucket, prefix, delimiter)
+	loi.IsTruncated = err == nil && len(loi.Objects) > 0
+	if loi.IsTruncated {
+		loi.NextMarker = encodeMarker(loi.Objects[len(loi.Objects)-1].Name, merged.listID)
+	}
+	return loi, nil
 }
 
 func (z *erasureServerSets) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
@@ -1635,6 +1187,37 @@ func (z *erasureServerSets) DeleteBucket(ctx context.Context, bucket string, for
 	return nil
 }
 
+// deleteAll will delete a bucket+prefix unconditionally across all disks.
+// Note that set distribution is ignored so it should only be used in cases where
+// data is not distributed across sets.
+// Errors are logged but individual disk failures are not returned.
+func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) {
+	var wg sync.WaitGroup
+	for _, servers := range z.serverSets {
+		for _, set := range servers.sets {
+			for _, disk := range set.getDisks() {
+				if disk == nil {
+					continue
+				}
+				wg.Add(1)
+				go func(disk StorageAPI) {
+					defer wg.Done()
+					if err := disk.Delete(ctx, bucket, prefix, true); err != nil {
+						if !IsErrIgnored(err, []error{
+							errDiskNotFound,
+							errVolumeNotFound,
+							errFileNotFound,
+						}...) {
+							logger.LogOnceIf(ctx, err, disk.String())
+						}
+					}
+				}(disk)
+			}
+		}
+	}
+	wg.Wait()
+}
+
 // This function is used to undo a successful DeleteBucket operation.
 func undoDeleteBucketServerSets(ctx context.Context, bucket string, serverSets []*erasureSets, errs []error) {
 	g := errgroup.WithNErrs(len(serverSets))
@@ -1681,17 +1264,6 @@ func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketIn
 	return buckets, nil
 }
 
-func (z *erasureServerSets) ReloadFormat(ctx context.Context, dryRun bool) error {
-	// No locks needed since reload happens in HealFormat under
-	// write lock across all nodes.
-	for _, zone := range z.serverSets {
-		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
@@ -1721,15 +1293,6 @@ func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin
 		r.SetCount += result.SetCount
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
-	}
-
-	// Healing succeeded notify the peers to reload format and re-initialize disks.
-	// We will not notify peers if healing is not required.
-	for _, nerr := range globalNotificationSys.ReloadFormat(dryRun) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// No heal returned by all serverSets, return errNoHealRequired
@@ -1896,8 +1459,6 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 		}
 
 		for _, version := range entry.Versions {
-			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(zoneDrivesPerSet[zoneIndex]), time.Second)
 			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
 				return toObjectErr(err, bucket, version.Name)
 			}
@@ -1926,9 +1487,6 @@ func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, vers
 		defer lk.RUnlock()
 	}
 
-	if z.SingleZone() {
-		return z.serverSets[0].HealObject(ctx, bucket, object, versionID, opts)
-	}
 	for _, zone := range z.serverSets {
 		result, err := zone.HealObject(ctx, bucket, object, versionID, opts)
 		if err != nil {
@@ -1938,6 +1496,13 @@ func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, vers
 			return result, err
 		}
 		return result, nil
+	}
+	if versionID != "" {
+		return madmin.HealResultItem{}, VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: versionID,
+		}
 	}
 	return madmin.HealResultItem{}, ObjectNotFound{
 		Bucket: bucket,

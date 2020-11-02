@@ -402,6 +402,7 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
+	defer ObjectPathUpdated(bucket + slashSeparator)
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
@@ -1533,12 +1534,6 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 // DeleteObjectTags - delete object tags from an existing object
 func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	return fs.PutObjectTags(ctx, bucket, object, "", opts)
-}
-
-// ReloadFormat - no-op for fs, Valid only for Erasure.
-func (fs *FSObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
-	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
 }
 
 // HealFormat - no-op for fs, Valid only for Erasure.

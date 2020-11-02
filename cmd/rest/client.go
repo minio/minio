@@ -75,6 +75,10 @@ type Client struct {
 	// Should only be modified before any calls are made.
 	MaxErrResponseSize int64
 
+	// ExpectTimeouts indicates if context timeouts are expected.
+	// This will not mark the client offline in these cases.
+	ExpectTimeouts bool
+
 	httpClient   *http.Client
 	url          *url.URL
 	newAuthToken func(audience string) string
@@ -112,7 +116,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err) {
+		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -141,7 +145,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err) {
+			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
 				c.MarkOffline()
 			}
 			return nil, err
@@ -160,10 +164,9 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func(aud string) string) *Client {
+func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
-	tr := newCustomTransport()
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
 		url:                 url,

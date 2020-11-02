@@ -90,8 +90,12 @@ func (fi FileInfo) IsValid() bool {
 	}
 	dataBlocks := fi.Erasure.DataBlocks
 	parityBlocks := fi.Erasure.ParityBlocks
+	correctIndexes := (fi.Erasure.Index > 0 &&
+		fi.Erasure.Index <= dataBlocks+parityBlocks &&
+		len(fi.Erasure.Distribution) == (dataBlocks+parityBlocks))
 	return ((dataBlocks >= parityBlocks) &&
-		(dataBlocks != 0) && (parityBlocks != 0))
+		(dataBlocks != 0) && (parityBlocks != 0) &&
+		correctIndexes)
 }
 
 // ToObjectInfo - Converts metadata to object info.
@@ -213,13 +217,15 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 
 func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, quorum int) (xmv FileInfo, e error) {
 	metaHashes := make([]string, len(metaArr))
+	h := sha256.New()
 	for i, meta := range metaArr {
 		if meta.IsValid() && meta.ModTime.Equal(modTime) {
-			h := sha256.New()
 			for _, part := range meta.Parts {
 				h.Write([]byte(fmt.Sprintf("part.%d", part.Number)))
 			}
+			h.Write([]byte(fmt.Sprintf("%v", meta.Erasure.Distribution)))
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
+			h.Reset()
 		}
 	}
 

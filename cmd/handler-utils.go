@@ -424,6 +424,17 @@ func extractAPIVersion(r *http.Request) string {
 	return regexVersion.FindString(r.URL.Path)
 }
 
+func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := "XMinio" + api + "VersionMismatch"
+		writeErrorResponseString(r.Context(), w, APIError{
+			Code:           code,
+			Description:    "Not allowed (" + r.Method + " " + r.URL.String() + " on " + api + " API)",
+			HTTPStatusCode: http.StatusMethodNotAllowed,
+		}, r.URL)
+	}
+}
+
 // If none of the http routes match respond with appropriate errors
 func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {

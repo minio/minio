@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	trace "github.com/minio/minio/pkg/trace"
+	"github.com/tinylib/msgp/msgp"
 )
 
 // To abstract a node over network.
@@ -506,22 +507,6 @@ func (s *peerRESTServer) ProcOBDInfoHandler(w http.ResponseWriter, r *http.Reque
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
 
-// LogOBDInfoHandler - returns Log OBD info.
-func (s *peerRESTServer) LogOBDInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := getLocalLogOBD(ctx, r)
-
-	defer w.(http.Flusher).Flush()
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
-}
-
 // MemOBDInfoHandler - returns Mem OBD info.
 func (s *peerRESTServer) MemOBDInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -553,7 +538,9 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(w http.ResponseWriter, r *h
 	}
 
 	globalBucketMetadataSys.Remove(bucketName)
-	w.(http.Flusher).Flush()
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteBucketCache(bucketName)
+	}
 }
 
 // LoadBucketMetadataHandler - reloads in memory bucket metadata
@@ -593,46 +580,7 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(w http.ResponseWriter, r *htt
 	}
 }
 
-// ReloadFormatHandler - Reload Format.
-func (s *peerRESTServer) ReloadFormatHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	vars := mux.Vars(r)
-	dryRunString := vars[peerRESTDryRun]
-	if dryRunString == "" {
-		s.writeErrorResponse(w, errors.New("dry-run parameter is missing"))
-		return
-	}
-
-	var dryRun bool
-	switch strings.ToLower(dryRunString) {
-	case "true":
-		dryRun = true
-	case "false":
-		dryRun = false
-	default:
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	err := objAPI.ReloadFormat(GlobalContext, dryRun)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	w.(http.Flusher).Flush()
-}
-
-// CycleServerBloomFilterHandler cycles bllom filter on server.
+// CycleServerBloomFilterHandler cycles bloom filter on server.
 func (s *peerRESTServer) CycleServerBloomFilterHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		s.writeErrorResponse(w, errors.New("Invalid request"))
@@ -647,13 +595,58 @@ func (s *peerRESTServer) CycleServerBloomFilterHandler(w http.ResponseWriter, r 
 		s.writeErrorResponse(w, err)
 		return
 	}
-	bf, err := intDataUpdateTracker.cycleFilter(ctx, req.Oldest, req.Current)
+	bf, err := intDataUpdateTracker.cycleFilter(ctx, req)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(bf))
+}
+
+func (s *peerRESTServer) GetMetacacheListingHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+	ctx := newContext(r, w, "GetMetacacheListing")
+
+	var opts listPathOptions
+	err := gob.NewDecoder(r.Body).Decode(&opts)
+	if err != nil && err != io.EOF {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	resp := localMetacacheMgr.getBucket(ctx, opts.Bucket).findCache(opts)
+	logger.LogIf(ctx, msgp.Encode(w, &resp))
+}
+
+func (s *peerRESTServer) UpdateMetacacheListingHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		s.writeErrorResponse(w, errors.New("Invalid request"))
+		return
+	}
+	ctx := newContext(r, w, "UpdateMetacacheListing")
+
+	var req metacache
+	err := msgp.Decode(r.Body, &req)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	b := localMetacacheMgr.getBucket(ctx, req.bucket)
+	if b == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	cache, err := b.updateCacheEntry(req)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	// Return updated metadata.
+	logger.LogIf(ctx, msgp.Encode(w, &cache))
 }
 
 // PutBucketNotificationHandler - Set bucket policy.
@@ -1040,7 +1033,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(httpTraceHdrs(server.GetLocksHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(httpTraceHdrs(server.ServerInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcOBDInfo).HandlerFunc(httpTraceHdrs(server.ProcOBDInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLogOBDInfo).HandlerFunc(httpTraceHdrs(server.LogOBDInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemOBDInfo).HandlerFunc(httpTraceHdrs(server.MemOBDInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodOsInfoOBDInfo).HandlerFunc(httpTraceHdrs(server.OsOBDInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDiskHwOBDInfo).HandlerFunc(httpTraceHdrs(server.DiskHwOBDInfoHandler))
@@ -1064,11 +1056,12 @@ func registerPeerRESTHandlers(router *mux.Router) {
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(httpTraceAll(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(httpTraceHdrs(server.DownloadProfilingDataHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodReloadFormat).HandlerFunc(httpTraceHdrs(server.ReloadFormatHandler)).Queries(restQueries(peerRESTDryRun)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodListen).HandlerFunc(httpTraceHdrs(server.ListenHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocalDiskIDs).HandlerFunc(httpTraceHdrs(server.GetLocalDiskIDs))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBandwidth).HandlerFunc(httpTraceHdrs(server.GetBandwidth))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetMetacacheListing).HandlerFunc(httpTraceHdrs(server.GetMetacacheListingHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(httpTraceHdrs(server.UpdateMetacacheListingHandler))
 }

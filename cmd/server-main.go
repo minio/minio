@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -31,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
 	"github.com/minio/minio/pkg/certs"
@@ -137,6 +139,11 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
+	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
+	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
+		RootCAs: globalRootCAs,
+	}, rest.DefaultTimeout)()
+
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
 	// (non-)minio process is listening on IPv4 of given port.
@@ -194,6 +201,14 @@ func newAllSubsystems() {
 }
 
 func initServer(ctx context.Context, newObject ObjectLayer) error {
+	// Once the config is fully loaded, initialize the new object layer.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
+
+	// Initialize IAM store
+	globalIAMSys.InitStore(newObject)
+
 	// Create cancel context to control 'newRetryTimer' go routine.
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -330,14 +345,6 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
 
-	// Once the config is fully loaded, initialize the new object layer.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
-
-	// Initialize IAM store
-	globalIAMSys.InitStore(newObject)
-
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
 		// Background this operation.
@@ -396,10 +403,6 @@ func serverMain(ctx *cli.Context) {
 	// Initialize all sub-systems
 	newAllSubsystems()
 
-	var err error
-	globalProxyEndpoints, err = GetProxyEndpoints(globalEndpoints)
-	logger.FatalIf(err, "Invalid command line arguments")
-
 	globalMinioEndpoint = func() string {
 		host := globalMinioHost
 		if host == "" {
@@ -418,7 +421,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if !globalCLIContext.Quiet {
+	if !globalCLIContext.Quiet && globalInplaceUpdateDisabled {
 		// Check for new updates from dl.min.io.
 		checkUpdate(getMinioMode())
 	}

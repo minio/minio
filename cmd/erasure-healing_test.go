@@ -67,7 +67,7 @@ func TestHealing(t *testing.T) {
 	}
 
 	disk := er.getDisks()[0]
-	fileInfoPreHeal, err := disk.ReadVersion(context.Background(), bucket, object, "")
+	fileInfoPreHeal, err := disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileInfoPostHeal, err := disk.ReadVersion(context.Background(), bucket, object, "")
+	fileInfoPostHeal, err := disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileInfoPostHeal, err = disk.ReadVersion(context.Background(), bucket, object, "")
+	fileInfoPostHeal, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	er := z.serverSets[0].sets[0]
 	erasureDisks := er.getDisks()
 	firstDisk := erasureDisks[0]
-	err = firstDisk.DeleteFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile))
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
@@ -221,7 +221,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Expected er.meta file to be present but stat failed - %v", err)
 	}
 
-	err = firstDisk.DeleteFile(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"))
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
 	if err != nil {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
@@ -246,7 +246,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("FileInfo not equal after healing")
 	}
 
-	err = firstDisk.DeleteFile(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"))
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
 	if err != nil {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
@@ -275,7 +275,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	// Test 4: checks if HealObject returns an error when xl.meta is not found
 	// in more than read quorum number of disks, to create a corrupted situation.
 	for i := 0; i <= len(er.getDisks())/2; i++ {
-		er.getDisks()[i].DeleteFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile))
+		er.getDisks()[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
 	}
 
 	// Try healing now, expect to receive errFileNotFound.
@@ -351,7 +351,7 @@ func TestHealObjectErasure(t *testing.T) {
 		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
-	err = firstDisk.DeleteFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile))
+	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
 	if err != nil {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}

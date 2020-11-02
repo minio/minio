@@ -578,6 +578,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 	for i, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
+			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:", testCase.prefix, "marker:", testCase.marker, "delimiter:", testCase.delimiter, "maxkeys:", testCase.maxKeys)
 			result, err := obj.ListObjects(context.Background(), testCase.bucketName,
 				testCase.prefix, testCase.marker, testCase.delimiter, int(testCase.maxKeys))
 			if err != nil && testCase.shouldPass {
@@ -602,9 +603,15 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				// otherwise it may lead to index out of range error in
 				// assertion following this.
 				if len(testCase.result.Objects) != len(result.Objects) {
-					t.Fatalf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
+					t.Logf("want: %v", objInfoNames(testCase.result.Objects))
+					t.Logf("got: %v", objInfoNames(result.Objects))
+					t.Errorf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
 				}
 				for j := 0; j < len(testCase.result.Objects); j++ {
+					if j >= len(result.Objects) {
+						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but not nothing instead", i+1, instanceType, testCase.result.Objects[j].Name)
+						continue
+					}
 					if testCase.result.Objects[j].Name != result.Objects[j].Name {
 						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 					}
@@ -616,16 +623,25 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				}
 
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {
-					t.Fatalf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i+1, instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
+					t.Logf("want: %v", testCase.result.Prefixes)
+					t.Logf("got: %v", result.Prefixes)
+					t.Errorf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i+1, instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
 				}
 				for j := 0; j < len(testCase.result.Prefixes); j++ {
+					if j >= len(result.Prefixes) {
+						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found no result", i+1, instanceType, testCase.result.Prefixes[j])
+						continue
+					}
 					if testCase.result.Prefixes[j] != result.Prefixes[j] {
 						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Prefixes[j], result.Prefixes[j])
 					}
 				}
 
 				if testCase.result.IsTruncated != result.IsTruncated {
-					t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
+					// Allow an extra continuation token.
+					if !result.IsTruncated || len(result.Objects) == 0 {
+						t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
+					}
 				}
 
 				if testCase.result.IsTruncated && result.NextMarker == "" {
@@ -633,20 +649,33 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				}
 
 				if !testCase.result.IsTruncated && result.NextMarker != "" {
-					t.Errorf("Test %d: %s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
+					if !result.IsTruncated || len(result.Objects) == 0 {
+						t.Errorf("Test %d: %s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
+					}
 				}
 
 			}
 			// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
-			if result.IsTruncated {
-				_, err = obj.ListObjects(context.Background(), testCase.bucketName,
+			for result.IsTruncated {
+				result, err = obj.ListObjects(context.Background(), testCase.bucketName,
 					testCase.prefix, result.NextMarker, testCase.delimiter, 1000)
 				if err != nil {
 					t.Fatal(err)
 				}
+				if !testCase.result.IsTruncated && len(result.Objects) > 0 {
+					t.Errorf("expected to get all objects in the previous call, but got %d more", len(result.Objects))
+				}
 			}
 		})
 	}
+}
+
+func objInfoNames(o []ObjectInfo) []string {
+	var res = make([]string, len(o))
+	for i := range o {
+		res[i] = o[i].Name
+	}
+	return res
 }
 
 // Wrapper for calling ListObjectVersions tests for both Erasure multiple disks and single node setup.
@@ -1240,7 +1269,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 				}
 
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {
-					fmt.Println(testCase, testCase.result.Prefixes, result.Prefixes)
+					t.Log(testCase, testCase.result.Prefixes, result.Prefixes)
 					t.Fatalf("%s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
 				}
 				for j := 0; j < len(testCase.result.Prefixes); j++ {
@@ -1250,7 +1279,10 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 				}
 
 				if testCase.result.IsTruncated != result.IsTruncated {
-					t.Errorf("%s: Expected IsTruncated flag to be %v, but instead found it to be %v", instanceType, testCase.result.IsTruncated, result.IsTruncated)
+					// Allow an extra continuation token.
+					if !result.IsTruncated || len(result.Objects) == 0 {
+						t.Errorf("%s: Expected IsTruncated flag to be %v, but instead found it to be %v", instanceType, testCase.result.IsTruncated, result.IsTruncated)
+					}
 				}
 
 				if testCase.result.IsTruncated && result.NextMarker == "" {
@@ -1258,16 +1290,21 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 				}
 
 				if !testCase.result.IsTruncated && result.NextMarker != "" {
-					t.Errorf("%s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", instanceType, result.NextMarker)
+					if !result.IsTruncated || len(result.Objects) == 0 {
+						t.Errorf("%s: Expected NextContinuationToken to be empty since listing is not truncated, but instead found `%v`", instanceType, result.NextMarker)
+					}
 				}
 
 			}
 			// Take ListObject treeWalk go-routine to completion, if available in the treewalk pool.
-			if result.IsTruncated {
-				_, err = obj.ListObjectVersions(context.Background(), testCase.bucketName,
+			for result.IsTruncated {
+				result, err = obj.ListObjectVersions(context.Background(), testCase.bucketName,
 					testCase.prefix, result.NextMarker, "", testCase.delimiter, 1000)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if !testCase.result.IsTruncated && len(result.Objects) > 0 {
+					t.Errorf("expected to get all objects in the previous call, but got %d more", len(result.Objects))
 				}
 			}
 		})

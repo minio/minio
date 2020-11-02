@@ -124,7 +124,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	listenCh := make(chan interface{}, 4000)
 
-	peers := newPeerRestClients(globalEndpoints)
+	peers, _ := newPeerRestClients(globalEndpoints)
 
 	globalHTTPListen.Subscribe(listenCh, ctx.Done(), func(evI interface{}) bool {
 		ev, ok := evI.(event.Event)

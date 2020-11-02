@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v20" // Re-implementation of storage layer
+	storageRESTVersion       = "v22" // Add dir listing and recursive delete operation.
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -52,6 +52,7 @@ const (
 	storageRESTMethodDeleteVersions = "/deleteverions"
 	storageRESTMethodRenameFile     = "/renamefile"
 	storageRESTMethodVerifyFile     = "/verifyfile"
+	storageRESTMethodWalkDir        = "/walkdir"
 )
 
 const (
@@ -60,6 +61,7 @@ const (
 	storageRESTDirPath       = "dir-path"
 	storageRESTFilePath      = "file-path"
 	storageRESTVersionID     = "version-id"
+	storageRESTCheckDataDir  = "check-data-dir"
 	storageRESTTotalVersions = "total-versions"
 	storageRESTSrcVolume     = "source-volume"
 	storageRESTSrcPath       = "source-path"

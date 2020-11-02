@@ -85,8 +85,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	if globalInplaceUpdateDisabled {
-		// if MINIO_UPDATE=off - inplace update is disabled, mostly
-		// in containers.
+		// if MINIO_UPDATE=off - inplace update is disabled, mostly in containers.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
 	}
@@ -348,7 +347,7 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
 }
 
-func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquorum int) *madmin.LockEntry {
+func lriToLockEntry(l lockRequesterInfo, resource, server string) *madmin.LockEntry {
 	entry := &madmin.LockEntry{
 		Timestamp:  l.Timestamp,
 		Resource:   resource,
@@ -356,18 +355,17 @@ func lriToLockEntry(l lockRequesterInfo, resource, server string, rquorum, wquor
 		Source:     l.Source,
 		Owner:      l.Owner,
 		ID:         l.UID,
+		Quorum:     l.Quorum,
 	}
 	if l.Writer {
 		entry.Type = "WRITE"
-		entry.Quorum = wquorum
 	} else {
 		entry.Type = "READ"
-		entry.Quorum = rquorum
 	}
 	return entry
 }
 
-func topLockEntries(peerLocks []*PeerLocks, rquorum, wquorum int, stale bool) madmin.LockEntries {
+func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 	entryMap := make(map[string]*madmin.LockEntry)
 	for _, peerLock := range peerLocks {
 		if peerLock == nil {
@@ -379,7 +377,7 @@ func topLockEntries(peerLocks []*PeerLocks, rquorum, wquorum int, stale bool) ma
 					if val, ok := entryMap[lockReqInfo.UID]; ok {
 						val.ServerList = append(val.ServerList, peerLock.Addr)
 					} else {
-						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr, rquorum, wquorum)
+						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
 					}
 				}
 			}
@@ -429,10 +427,7 @@ func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request
 
 	peerLocks := globalNotificationSys.GetLocks(ctx, r)
 
-	rquorum := getReadQuorum(objectAPI.SetDriveCount())
-	wquorum := getWriteQuorum(objectAPI.SetDriveCount())
-
-	topLocks := topLockEntries(peerLocks, rquorum, wquorum, stale)
+	topLocks := topLockEntries(peerLocks, stale)
 
 	// Marshal API response upto requested count.
 	if len(topLocks) > count && count > 0 {
@@ -1040,7 +1035,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	traceCh := make(chan interface{}, 4000)
 
-	peers := newPeerRestClients(globalEndpoints)
+	peers, _ := newPeerRestClients(globalEndpoints)
 
 	globalHTTPTrace.Subscribe(traceCh, ctx.Done(), func(entry interface{}) bool {
 		return mustTrace(entry, trcAll, trcErr)
@@ -1108,7 +1103,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 
 	logCh := make(chan interface{}, 4000)
 
-	peers := newPeerRestClients(globalEndpoints)
+	peers, _ := newPeerRestClients(globalEndpoints)
 
 	globalConsoleSys.Subscribe(logCh, ctx.Done(), node, limitLines, logKind, nil)
 
@@ -1298,12 +1293,6 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 
 	go func() {
 		defer close(obdInfoCh)
-
-		if log := query.Get("log"); log == "true" {
-			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, getLocalLogOBD(deadlinedCtx, r))
-			obdInfo.Logging.ServersLog = append(obdInfo.Logging.ServersLog, globalNotificationSys.LogOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
-		}
 
 		if cpu := query.Get("syscpu"); cpu == "true" {
 			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)

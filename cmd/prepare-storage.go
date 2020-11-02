@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"sync"
 	"time"
 
@@ -177,7 +176,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
-		Path:   path.Join(healthCheckPathPrefix, healthCheckLivenessPath),
+		Path:   pathJoin(healthCheckPathPrefix, healthCheckLivenessPath),
 	}
 
 	var tlsConfig *tls.Config
@@ -195,9 +194,9 @@ func IsServerResolvable(endpoint Endpoint) error {
 		&http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           xhttp.NewCustomDialContext(3 * time.Second),
-			ResponseHeaderTimeout: 5 * time.Second,
-			TLSHandshakeTimeout:   5 * time.Second,
-			ExpectContinueTimeout: 5 * time.Second,
+			ResponseHeaderTimeout: 3 * time.Second,
+			TLSHandshakeTimeout:   3 * time.Second,
+			ExpectContinueTimeout: 3 * time.Second,
 			TLSClientConfig:       tlsConfig,
 			// Go net/http automatically unzip if content-type is
 			// gzip disable this feature, as we are always interested
@@ -207,23 +206,29 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithTimeout(GlobalContext, 3*time.Second)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL.String(), nil)
 	if err != nil {
+		cancel()
 		return err
 	}
 
 	resp, err := httpClient.Do(req)
+	cancel()
 	if err != nil {
 		return err
 	}
-	defer xhttp.DrainBody(resp.Body)
+	xhttp.DrainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return StorageErr(resp.Status)
 	}
+
+	if resp.Header.Get(xhttp.MinIOServerStatus) == unavailable {
+		return StorageErr(unavailable)
+	}
+
 	return nil
 }
 
@@ -278,7 +283,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 			humanize.Ordinal(zoneCount), setCount, setDriveCount)
 
 		// Initialize erasure code format on disks
-		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, deploymentID, sErrs)
+		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, "", deploymentID, sErrs)
 		if err != nil {
 			return nil, nil, err
 		}

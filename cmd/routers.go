@@ -39,6 +39,10 @@ func registerDistErasureRouters(router *mux.Router, endpointServerSets EndpointS
 
 // List of some generic handlers which are applied for all incoming requests.
 var globalHandlers = []MiddlewareFunc{
+	// add redirect handler to redirect
+	// requests when object layer is not
+	// initialized.
+	setRedirectHandler,
 	// set x-amz-request-id header.
 	addCustomHeaders,
 	// set HTTP security headers such as Content-Security-Policy.

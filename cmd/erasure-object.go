@@ -46,6 +46,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if !srcInfo.metadataOnly {
 		return oi, NotImplemented{}
 	}
+
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 	lk := er.NewNSLock(ctx, dstBucket, dstObject)
 	if err := lk.GetLock(globalOperationTimeout); err != nil {
@@ -71,6 +72,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
+
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
 
 	if fi.Deleted {
 		if srcOpts.VersionID == "" {
@@ -174,7 +177,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, "", opts, fi, metaArr, onlineDisks)
+		err := er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, fi, metaArr, onlineDisks)
 		pw.CloseWithError(err)
 	}()
 
@@ -211,15 +214,13 @@ func (er erasureObjects) GetObject(ctx context.Context, bucket, object string, s
 		return errUnexpected
 	}
 
-	return er.getObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
+	return er.getObject(ctx, bucket, object, startOffset, length, writer, opts)
 }
 
-func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
+func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = shuffleDisks(onlineDisks, fi.Erasure.Distribution)
-
 	// Reorder parts metadata based on erasure distribution order.
-	metaArr = shufflePartsMetadata(metaArr, fi.Erasure.Distribution)
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
 
 	// For negative length read everything.
 	if length < 0 {
@@ -323,7 +324,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 }
 
 // getObject wrapper for erasure GetObject
-func (er erasureObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
+func (er erasureObjects) getObject(ctx context.Context, bucket, object string, startOffset, length int64, writer io.Writer, opts ObjectOptions) error {
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
@@ -336,7 +337,7 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 		return toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
-	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, etag, opts, fi, metaArr, onlineDisks)
+	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, fi, metaArr, onlineDisks)
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
@@ -355,7 +356,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID)
+	metaArr, errs := getAllObjectFileInfo(ctx, disks, bucket, object, opts.VersionID)
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
 	if err != nil {
@@ -374,7 +375,6 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	if err != nil {
 		return fi, nil, nil, err
 	}
-
 	return fi, metaArr, onlineDisks, nil
 }
 
@@ -425,6 +425,9 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dataDir, dstBucket, dstEntry string, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
 	dataDir = retainSlash(dataDir)
+	defer ObjectPathUpdated(path.Join(srcBucket, srcEntry))
+	defer ObjectPathUpdated(path.Join(dstBucket, dstEntry))
+
 	g := errgroup.WithNErrs(len(disks))
 
 	// Rename file on all underlying storage disks.
@@ -472,11 +475,12 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, da
 // rename - common function that renamePart and renameObject use to rename
 // the respective underlying storage layer representations.
 func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
-
 	if isDir {
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
+	defer ObjectPathUpdated(path.Join(srcBucket, srcEntry))
+	defer ObjectPathUpdated(path.Join(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
 
@@ -583,7 +587,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	// Order disks according to erasure distribution
-	onlineDisks := shuffleDisks(storageDisks, fi.Erasure.Distribution)
+	var onlineDisks []StorageAPI
+	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(storageDisks, partsMetadata, fi.Erasure.Distribution)
 
 	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
@@ -703,10 +708,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 }
 
 func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo) error {
+	defer ObjectPathUpdated(pathJoin(bucket, object))
 	disks := er.getDisks()
-
 	g := errgroup.WithNErrs(len(disks))
-
 	for index := range disks {
 		index := index
 		g.Go(func() error {
@@ -851,6 +855,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		}
 		errs[objIndex] = reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
 		if errs[objIndex] == nil {
+			ObjectPathUpdated(pathJoin(bucket, objects[objIndex].ObjectName))
 			if versions[objIndex].Deleted {
 				dobjects[objIndex] = DeletedObject{
 					DeleteMarker:          versions[objIndex].Deleted,
@@ -890,6 +895,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	defer ObjectPathUpdated(path.Join(bucket, object))
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
@@ -972,13 +978,15 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	// List all online disks.
-	_, modTime := listOnlineDisks(disks, metaArr, errs)
+	onlineDisks, modTime := listOnlineDisks(disks, metaArr, errs)
 
 	// Pick latest valid metadata.
 	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
+
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
 
 	if fi.Deleted {
 		if opts.VersionID == "" {
@@ -999,6 +1007,66 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		if tags != "" {
 			fi.Metadata[xhttp.AmzObjectTagging] = tags
 		}
+		metaArr[i].Metadata = fi.Metadata
+	}
+
+	tempObj := mustGetUUID()
+
+	// Write unique `xl.meta` for each disk.
+	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	// Atomically rename metadata from tmp location to destination for each disk.
+	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	return nil
+}
+
+// updateObjectMeta will update the metadata of a file.
+func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, meta map[string]string, opts ObjectOptions) error {
+	if len(meta) == 0 {
+		return nil
+	}
+	disks := er.getDisks()
+
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID)
+
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	// List all online disks.
+	_, modTime := listOnlineDisks(disks, metaArr, errs)
+
+	// Pick latest valid metadata.
+	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	// Update metadata
+	for k, v := range meta {
+		fi.Metadata[k] = v
+	}
+
+	if fi.Deleted {
+		if opts.VersionID == "" {
+			return toObjectErr(errFileNotFound, bucket, object)
+		}
+		return toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
+	for i := range metaArr {
+		if errs[i] != nil {
+			// Avoid disks where loading metadata fail
+			continue
+		}
+
 		metaArr[i].Metadata = fi.Metadata
 	}
 

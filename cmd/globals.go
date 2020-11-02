@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"crypto/x509"
+	"net/http"
 	"os"
 	"time"
 
@@ -274,6 +275,8 @@ var (
 	globalFSOSync bool
 
 	globalProxyEndpoints []ProxyEndpoint
+
+	globalInternodeTransport http.RoundTripper
 
 	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.
