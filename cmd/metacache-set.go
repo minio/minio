@@ -571,25 +571,6 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		disks = disks[:askDisks]
 	}
 
-	var readers = make([]*metacacheReader, askDisks)
-	for i := range disks {
-		r, w := io.Pipe()
-		d := disks[i]
-		readers[i], err = newMetacacheReader(r)
-		if err != nil {
-			cancel()
-			return entries, err
-		}
-		// Send request to each disk.
-		go func() {
-			err := d.WalkDir(ctx, WalkDirOptions{Bucket: o.Bucket, BaseDir: o.BaseDir, Recursive: o.Recursive || o.Separator != SlashSeparator}, w)
-			w.CloseWithError(err)
-			if err != io.EOF {
-				logger.LogIf(ctx, err)
-			}
-		}()
-	}
-
 	// Create output for our results.
 	cacheCh := make(chan metaCacheEntry, metacacheBlockSize)
 
@@ -683,92 +664,37 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			bucket:    o.Bucket,
 		}
 
-		topEntries := make(metaCacheEntries, len(readers))
-		for {
-			// Get the top entry from each
-			var current metaCacheEntry
-			var atEOF, agree int
-			for i, r := range readers {
-				topEntries[i].name = ""
-				entry, err := r.peek()
-				switch err {
-				case io.EOF:
-					atEOF++
-					continue
-				case nil:
-				default:
-					closeChannels()
-					metaMu.Lock()
-					meta.status = scanStateError
-					meta.error = err.Error()
-					metaMu.Unlock()
-					return
+		err := listPathRaw(ctx, listPathRawOptions{
+			disks:     disks,
+			bucket:    o.Bucket,
+			path:      o.BaseDir,
+			recursive: o.Recursive,
+			minDisks:  askDisks - 1,
+			agreed: func(entry metaCacheEntry) {
+				cacheCh <- entry
+				filterCh <- entry
+			},
+			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+				// Results Disagree :-(
+				entry, ok := entries.resolve(&resolver)
+				if ok {
+					cacheCh <- *entry
+					filterCh <- *entry
 				}
-				// If no current, add it.
-				if current.name == "" {
-					topEntries[i] = entry
-					current = entry
-					agree++
-					continue
-				}
-				// If exact match, we agree.
-				if current.matches(&entry, o.Bucket) {
-					topEntries[i] = entry
-					agree++
-					continue
-				}
-				// If only the name matches we didn't agree, but add it for resolution.
-				if entry.name == current.name {
-					topEntries[i] = entry
-					continue
-				}
-				// We got different entries
-				if entry.name > current.name {
-					continue
-				}
-				// We got a new, better current.
-				// Clear existing entries.
-				for i := range topEntries[:i] {
-					topEntries[i] = metaCacheEntry{}
-				}
-				agree = 1
-				current = entry
-				topEntries[i] = entry
-			}
-			// Break if all at EOF.
-			if atEOF == len(readers) {
-				break
-			}
-			if agree == len(readers) {
-				// Everybody agreed
-				for _, r := range readers {
-					r.skip(1)
-				}
-				cacheCh <- topEntries[0]
-				filterCh <- topEntries[0]
-				continue
-			}
+			},
+		})
 
-			// Results Disagree :-(
-			entry, ok := topEntries.resolve(&resolver)
-			if ok {
-				cacheCh <- *entry
-				filterCh <- *entry
-			}
-			// Skip the inputs we used.
-			for i, r := range readers {
-				if topEntries[i].name != "" {
-					r.skip(1)
-				}
-			}
-		}
-
-		// Save success
 		metaMu.Lock()
+		if err != nil {
+			meta.status = scanStateError
+			meta.error = err.Error()
+		}
+		// Save success
 		if meta.error == "" {
 			meta.status = scanStateSuccess
 			meta.endedCycle = intDataUpdateTracker.current()
 		}
+
 		meta, _ = o.updateMetacacheListing(meta, rpc)
 		metaMu.Unlock()
 
@@ -789,6 +715,9 @@ type listPathRawOptions struct {
 	disks        []StorageAPI
 	bucket, path string
 	recursive    bool
+	// Minimum number of good disks to continue.
+	// An error will be returned.
+	minDisks int
 
 	// Callbacks with results:
 	// If set to nil, it will not be called.
@@ -901,6 +830,21 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			current = entry
 			topEntries[i] = entry
 		}
+
+		// Stop if we exceed number of bad disks
+		if hasErr > len(disks)-opts.minDisks {
+			if opts.finished != nil {
+				opts.finished(errs)
+			}
+			var combinedErr []string
+			for i, err := range errs {
+				if err != nil {
+					combinedErr = append(combinedErr, fmt.Sprintf("disk %d returned: %s", i, err))
+				}
+			}
+			return errors.New(strings.Join(combinedErr, ", "))
+		}
+
 		// Break if all at EOF or error.
 		if atEOF+hasErr == len(readers) {
 			if hasErr > 0 && opts.finished != nil {
