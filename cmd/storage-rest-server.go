@@ -83,7 +83,7 @@ func storageServerRequestValidate(r *http.Request) error {
 		return errAuthentication
 	}
 
-	if claims.Audience != r.URL.Query().Encode() {
+	if claims.Audience != r.URL.RawQuery {
 		return errAuthentication
 	}
 
