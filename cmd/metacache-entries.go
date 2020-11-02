@@ -246,6 +246,19 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	return selected, selected != nil
 }
 
+// firstFound returns the first found and the number of set entries.
+func (m metaCacheEntries) firstFound() (first *metaCacheEntry, n int) {
+	for _, entry := range m {
+		if entry.name != "" {
+			n++
+			if first == nil {
+				first = &entry
+			}
+		}
+	}
+	return first, n
+}
+
 // names will return all names in order.
 // Since this allocates it should not be used in critical functions.
 func (m metaCacheEntries) names() []string {

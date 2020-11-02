@@ -148,6 +148,7 @@ type folderScanner struct {
 
 	newFolders      []cachedFolder
 	existingFolders []cachedFolder
+	disks           []StorageAPI
 }
 
 // crawlDataFolder will crawl the basepath+cache.Info.Name and return an updated cache.
@@ -459,8 +460,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
+		objAPI, ok := newObjectLayerFn().(*erasureServerSets)
+		if !ok {
 			continue
 		}
 
@@ -480,6 +481,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// We therefore perform a heal check.
 		// If that doesn't bring it back we remove the folder and assume it was deleted.
 		// This means that the next run will not look for it.
+		// How to resolve results.
+		resolver := metadataResolutionParams{
+			dirQuorum: getReadQuorum(len(f.disks)),
+			objQuorum: getReadQuorum(len(f.disks)),
+			bucket:    "",
+		}
+
 		for k := range existing {
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
@@ -488,30 +496,74 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 			// Dynamic time delay.
 			t := UTCNow()
+			resolver.bucket = bucket
 
-			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
-				func(bucket, object, versionID string) error {
-					// Wait for each heal as per crawler frequency.
+			foundAny := false
+			ctx, cancel := context.WithCancel(ctx)
+			err := listPathRaw(ctx, listPathRawOptions{
+				disks:     f.disks,
+				bucket:    bucket,
+				path:      prefix + slashSeparator,
+				recursive: true,
+				minDisks:  getWriteQuorum(len(f.disks)),
+				agreed: func(entry metaCacheEntry) {
+					foundAny = true
+				},
+				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+					// Sleep and reset.
 					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+					t = UTCNow()
+					entry, ok := entries.resolve(&resolver)
+					if !ok {
+						for _, err := range errs {
+							if err != nil {
+								// Not all disks are ready, do nothing for now.
+								return
+							}
+						}
 
-					defer func() {
-						t = UTCNow()
-					}()
-					return bgSeq.queueHealTask(healSource{
-						bucket:    bucket,
-						object:    object,
-						versionID: versionID,
-					}, madmin.HealItemObject)
-				})
+						// If no errors and we have less than read quorum, delete it.
+						first, n := entries.firstFound()
+						if n < getReadQuorum(n) {
+							name := first.name
+							if !first.isDir() {
+								name = name + slashSeparator
+							}
+							objAPI.deleteAll(ctx, bucket, first.name)
+						}
+						return
+					}
+					fiv, err := entry.fileInfoVersions(bucket)
+					if err != nil {
+						err := bgSeq.queueHealTask(healSource{
+							bucket:    bucket,
+							object:    entry.name,
+							versionID: "",
+						}, madmin.HealItemObject)
+						foundAny = foundAny || err == nil
+						return
+					}
+					for _, ver := range fiv.Versions {
+						err := bgSeq.queueHealTask(healSource{
+							bucket:    bucket,
+							object:    fiv.Name,
+							versionID: ver.VersionID,
+						}, madmin.HealItemObject)
+						foundAny = foundAny || err == nil
+					}
+				},
+				finished: func(errs []error) {
+					cancel()
+				},
+			})
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-
 			if f.dataUsageCrawlDebug && err != nil {
 				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
 			}
 
 			// Add unless healing returned an error.
-			if err == nil {
+			if foundAny {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
 				cache.addChild(hashPath(k))
 				if final {
