@@ -109,7 +109,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	if err != nil {
 		return nil, &NetworkError{err}
 	}
-	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.Query().Encode()))
+	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.RawQuery))
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
 	if length > 0 {
 		req.ContentLength = length
