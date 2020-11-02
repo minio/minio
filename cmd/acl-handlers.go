@@ -29,7 +29,7 @@ import (
 )
 
 // Data types used for returning dummy access control
-// policy XML, these variables shouldn't be used elsewhere
+// policy XML, these variables shouldn't be used elsewhere,
 // they are only defined to be used in this file alone.
 type grantee struct {
 	XMLNS       string `xml:"xmlns:xsi,attr"`
