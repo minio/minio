@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -224,16 +223,7 @@ func newBootstrapRESTClient(endpoint Endpoint) *bootstrapRESTClient {
 		Path:   bootstrapRESTPath,
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 	restClient.HealthCheckFn = nil
 
 	return &bootstrapRESTClient{endpoint: endpoint, restClient: restClient}

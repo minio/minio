@@ -300,14 +300,12 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 		return
 	}
 
-	if errors.Is(err, context.Canceled) || errors.Is(err, http.ErrServerClosed) {
+	if errors.Is(err, context.Canceled) {
 		return
 	}
 
-	if e := errors.Unwrap(err); e != nil {
-		if e.Error() == "disk not found" {
-			return
-		}
+	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
+		return
 	}
 
 	logIf(ctx, err, errKind...)
