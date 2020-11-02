@@ -164,10 +164,9 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func(aud string) string) *Client {
+func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
-	tr := newCustomTransport()
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
 		url:                 url,

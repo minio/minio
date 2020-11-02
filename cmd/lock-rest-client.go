@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"io"
 	"net/url"
@@ -152,22 +151,13 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 		Path:   pathJoin(lockRESTPrefix, endpoint.Path, lockRESTVersion),
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 	restClient.ExpectTimeouts = true
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
 		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, lockRESTMethodHealth, nil, nil, -1)
+		respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, lockRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError
