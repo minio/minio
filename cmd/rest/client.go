@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
-
 	xhttp "github.com/minio/minio/cmd/http"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -119,7 +117,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			logger.LogIf(ctx, err, "marking disk offline")
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -149,7 +146,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-				logger.LogIf(ctx, err, "marking disk offline")
 				c.MarkOffline()
 			}
 			return nil, err

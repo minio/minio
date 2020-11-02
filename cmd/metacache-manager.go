@@ -45,7 +45,7 @@ const metacacheManagerTransientBucket = "**transient**"
 // initManager will start async saving the cache.
 func (m *metacacheManager) initManager() {
 	// Add a transient bucket.
-	tb := newBucketMetacache(metacacheManagerTransientBucket)
+	tb := newBucketMetacache(metacacheManagerTransientBucket, false)
 	tb.transient = true
 	m.buckets[metacacheManagerTransientBucket] = tb
 
@@ -126,6 +126,18 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	m.buckets[bucket] = b
 	m.mu.Unlock()
 	return b
+}
+
+// deleteBucketCache will delete the bucket cache if it exists.
+func (m *metacacheManager) deleteBucketCache(bucket string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, ok := m.buckets[bucket]
+	if !ok {
+		return
+	}
+	b.deleteAll()
+	delete(m.buckets, bucket)
 }
 
 // deleteAll will delete all caches.
