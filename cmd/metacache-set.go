@@ -791,6 +791,7 @@ type listPathRawOptions struct {
 	recursive    bool
 
 	// Callbacks with results:
+	// If set to nil, it will not be called.
 
 	// agreed is called if all disks agreed.
 	agreed func(entry metaCacheEntry)
@@ -802,11 +803,15 @@ type listPathRawOptions struct {
 
 	// finished will be called when all streams have finished and
 	// more than one disk returned an error.
+	// Will not be called if everything operates as expected.
 	finished func(errs []error)
 }
 
 // listPathRaw will list a path on the provided drives.
+// See listPathRawOptions on how results are delivered.
+// Directories are always returned.
 // Cache will be bypassed.
+// Context cancellation will be respected but may take a while to effectuate.
 func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	disks := opts.disks
 
@@ -843,12 +848,13 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		for i := range topEntries {
 			topEntries[i] = metaCacheEntry{}
 		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		for i, r := range readers {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
+
 			if errs[i] != nil {
 				hasErr++
 				continue
