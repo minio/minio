@@ -840,7 +840,7 @@ func getOnlineProxyEndpointIdx() int {
 }
 
 // GetProxyEndpoints - get all endpoints that can be used to proxy list request.
-func GetProxyEndpoints(endpointServerSets EndpointServerSets) ([]ProxyEndpoint, error) {
+func GetProxyEndpoints(endpointServerSets EndpointServerSets) []ProxyEndpoint {
 	var proxyEps []ProxyEndpoint
 
 	proxyEpSet := set.NewStringSet()
@@ -874,7 +874,7 @@ func GetProxyEndpoints(endpointServerSets EndpointServerSets) ([]ProxyEndpoint, 
 			})
 		}
 	}
-	return proxyEps, nil
+	return proxyEps
 }
 
 func updateDomainIPs(endPoints set.StringSet) {
