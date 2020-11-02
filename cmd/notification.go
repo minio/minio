@@ -140,21 +140,6 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 	}()
 }
 
-// ReloadFormat - calls ReloadFormat REST call on all peers.
-func (sys *NotificationSys) ReloadFormat(dryRun bool) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		ng.Go(GlobalContext, func() error {
-			return client.ReloadFormat(dryRun)
-		}, idx, *client.host)
-	}
-	return ng.Wait()
-}
-
 // DeletePolicy - deletes policy across all peers.
 func (sys *NotificationSys) DeletePolicy(policyName string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
@@ -690,6 +675,9 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
 	globalBucketMetadataSys.Remove(bucketName)
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteBucketCache(bucketName)
+	}
 
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {

@@ -27,8 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
-
 	xhttp "github.com/minio/minio/cmd/http"
 	xnet "github.com/minio/minio/pkg/net"
 )
@@ -119,7 +117,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			logger.LogIf(ctx, err, "marking disk offline")
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -149,7 +146,6 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-				logger.LogIf(ctx, err, "marking disk offline")
 				c.MarkOffline()
 			}
 			return nil, err
@@ -168,10 +164,9 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func(aud string) string) *Client {
+func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
-	tr := newCustomTransport()
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
 		url:                 url,

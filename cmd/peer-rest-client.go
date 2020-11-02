@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -456,19 +455,6 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	return nil
 }
 
-// ReloadFormat - reload format on the peer node.
-func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
-	values := make(url.Values)
-	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
-
-	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
 // cycleServerBloomFilter will cycle the bloom filter to start recording to index y if not already.
 // The response will contain a bloom filter starting at index x up to, but not including index y.
 // If y is 0, the response will not update y, but return the currently recorded information
@@ -885,23 +871,13 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		Path:   peerRESTPath,
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: peer.Name,
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 	// Construct a new health function.
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
 		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
+		respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError

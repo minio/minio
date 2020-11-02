@@ -18,6 +18,7 @@ package storageclass
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,17 +33,26 @@ const (
 	RRS = "REDUCED_REDUNDANCY"
 	// Standard storage class
 	STANDARD = "STANDARD"
+	// DMA storage class
+	DMA = "DMA"
+
+	// Valid values are "write" and "read-write"
+	DMAWrite     = "write"
+	DMAReadWrite = "read-write"
 )
 
 // Standard constats for config info storage class
 const (
 	ClassStandard = "standard"
 	ClassRRS      = "rrs"
+	ClassDMA      = "dma"
 
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
 	// Standard storage class environment variable
 	StandardEnv = "MINIO_STORAGE_CLASS_STANDARD"
+	// DMA storage class environment variable
+	DMAEnv = "MINIO_STORAGE_CLASS_DMA"
 
 	// Supported storage class scheme is EC
 	schemePrefix = "EC"
@@ -52,6 +62,9 @@ const (
 
 	// Default RRS parity is always minimum parity.
 	defaultRRSParity = minParityDisks
+
+	// Default DMA value
+	defaultDMA = DMAWrite
 )
 
 // DefaultKVS - default storage class config
@@ -65,18 +78,24 @@ var (
 			Key:   ClassRRS,
 			Value: "EC:2",
 		},
+		config.KV{
+			Key:   ClassDMA,
+			Value: defaultDMA,
+		},
 	}
 )
 
 // StorageClass - holds storage class information
 type StorageClass struct {
 	Parity int
+	DMA    string
 }
 
 // Config storage class configuration
 type Config struct {
 	Standard StorageClass `json:"standard"`
 	RRS      StorageClass `json:"rrs"`
+	DMA      StorageClass `json:"dma"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -93,7 +112,7 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 // IsValid - returns true if input string is a valid
 // storage class kind supported.
 func IsValid(sc string) bool {
-	return sc == RRS || sc == STANDARD
+	return sc == RRS || sc == STANDARD || sc == DMA
 }
 
 // UnmarshalText unmarshals storage class from its textual form into
@@ -101,6 +120,14 @@ func IsValid(sc string) bool {
 func (sc *StorageClass) UnmarshalText(b []byte) error {
 	scStr := string(b)
 	if scStr == "" {
+		return nil
+	}
+	if scStr == DMAWrite {
+		sc.DMA = DMAWrite
+		return nil
+	}
+	if scStr == DMAReadWrite {
+		sc.DMA = DMAReadWrite
 		return nil
 	}
 	s, err := parseStorageClass(scStr)
@@ -116,14 +143,14 @@ func (sc *StorageClass) MarshalText() ([]byte, error) {
 	if sc.Parity != 0 {
 		return []byte(fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)), nil
 	}
-	return []byte(""), nil
+	return []byte(sc.DMA), nil
 }
 
 func (sc *StorageClass) String() string {
 	if sc.Parity != 0 {
 		return fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)
 	}
-	return ""
+	return sc.DMA
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.
@@ -212,6 +239,11 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 	}
 }
 
+// GetDMA - returns DMA configuration.
+func (sCfg Config) GetDMA() string {
+	return sCfg.DMA.DMA
+}
+
 // Enabled returns if etcd is enabled.
 func Enabled(kvs config.KVS) bool {
 	ssc := kvs.Get(ClassStandard)
@@ -231,6 +263,7 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 
 	ssc := env.Get(StandardEnv, kvs.Get(ClassStandard))
 	rrsc := env.Get(RRSEnv, kvs.Get(ClassRRS))
+	dma := env.Get(DMAEnv, kvs.Get(ClassDMA))
 	// Check for environment variables and parse into storageClass struct
 	if ssc != "" {
 		cfg.Standard, err = parseStorageClass(ssc)
@@ -251,6 +284,14 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	if cfg.RRS.Parity == 0 {
 		cfg.RRS.Parity = defaultRRSParity
 	}
+
+	if dma == "" {
+		dma = defaultDMA
+	}
+	if dma != DMAReadWrite && dma != DMAWrite {
+		return Config{}, errors.New(`valid dma values are "read-write" and "write"`)
+	}
+	cfg.DMA.DMA = dma
 
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.

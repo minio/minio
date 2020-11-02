@@ -1191,7 +1191,7 @@ func (z *erasureServerSets) DeleteBucket(ctx context.Context, bucket string, for
 // Note that set distribution is ignored so it should only be used in cases where
 // data is not distributed across sets.
 // Errors are logged but individual disk failures are not returned.
-func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) error {
+func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) {
 	var wg sync.WaitGroup
 	for _, servers := range z.serverSets {
 		for _, set := range servers.sets {
@@ -1202,13 +1202,20 @@ func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string
 				wg.Add(1)
 				go func(disk StorageAPI) {
 					defer wg.Done()
-					logger.LogIf(ctx, disk.Delete(ctx, bucket, prefix, true))
+					if err := disk.Delete(ctx, bucket, prefix, true); err != nil {
+						if !IsErrIgnored(err, []error{
+							errDiskNotFound,
+							errVolumeNotFound,
+							errFileNotFound,
+						}...) {
+							logger.LogOnceIf(ctx, err, disk.String())
+						}
+					}
 				}(disk)
 			}
 		}
 	}
 	wg.Wait()
-	return nil
 }
 
 // This function is used to undo a successful DeleteBucket operation.
@@ -1257,17 +1264,6 @@ func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketIn
 	return buckets, nil
 }
 
-func (z *erasureServerSets) ReloadFormat(ctx context.Context, dryRun bool) error {
-	// No locks needed since reload happens in HealFormat under
-	// write lock across all nodes.
-	for _, zone := range z.serverSets {
-		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
 	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
@@ -1297,15 +1293,6 @@ func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin
 		r.SetCount += result.SetCount
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
-	}
-
-	// Healing succeeded notify the peers to reload format and re-initialize disks.
-	// We will not notify peers if healing is not required.
-	for _, nerr := range globalNotificationSys.ReloadFormat(dryRun) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// No heal returned by all serverSets, return errNoHealRequired

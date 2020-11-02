@@ -42,6 +42,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
@@ -1584,6 +1585,56 @@ func (s *xlStorage) openFile(volume, path string, mode int) (f *os.File, err err
 	return w, nil
 }
 
+// To support O_DIRECT reads for erasure backends.
+type odirectreader struct {
+	f         *os.File
+	buf       []byte
+	bufp      *[]byte
+	freshRead bool
+	s         *xlStorage
+	err       error
+}
+
+// Read - Implements Reader interface.
+func (o *odirectreader) Read(buf []byte) (n int, err error) {
+	if o.err != nil {
+		return 0, o.err
+	}
+	if o.buf == nil {
+		o.bufp = o.s.pool.Get().(*[]byte)
+	}
+	if o.freshRead {
+		o.buf = *o.bufp
+		n, err = o.f.Read(o.buf)
+		if err != nil && err != io.EOF {
+			o.err = err
+			return n, err
+		}
+		if n == 0 {
+			// err is io.EOF
+			o.err = err
+			return n, err
+		}
+		o.buf = o.buf[:n]
+		o.freshRead = false
+	}
+	if len(buf) >= len(o.buf) {
+		n = copy(buf, o.buf)
+		o.freshRead = true
+		return n, nil
+	}
+	n = copy(buf, o.buf)
+	o.buf = o.buf[n:]
+	return n, nil
+}
+
+// Close - Release the buffer and close the file.
+func (o *odirectreader) Close() error {
+	o.s.pool.Put(o.bufp)
+	atomic.AddInt32(&o.s.activeIOCount, -1)
+	return o.f.Close()
+}
+
 // ReadFileStream - Returns the read stream of the file.
 func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if offset < 0 {
@@ -1609,6 +1660,29 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
 		return nil, err
+	}
+
+	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
+		file, err := disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
+		if err != nil {
+			switch {
+			case os.IsNotExist(err):
+				return nil, errFileNotFound
+			case os.IsPermission(err):
+				return nil, errFileAccessDenied
+			case isSysErrNotDir(err):
+				return nil, errFileAccessDenied
+			case isSysErrIO(err):
+				return nil, errFaultyDisk
+			case isSysErrTooManyFiles(err):
+				return nil, errTooManyOpenFiles
+			default:
+				return nil, err
+			}
+		}
+
+		atomic.AddInt32(&s.activeIOCount, 1)
+		return &odirectreader{file, nil, nil, true, s, nil}, nil
 	}
 
 	// Open the file for reading.
