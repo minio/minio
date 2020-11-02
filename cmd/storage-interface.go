@@ -78,7 +78,8 @@ type StorageAPI interface {
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 
 	// Write all data, syncs the data to disk.
-	WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error)
+	// Should be used for smaller payloads.
+	WriteAll(ctx context.Context, volume string, path string, b []byte) (err error)
 
 	// Read all.
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)

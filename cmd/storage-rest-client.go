@@ -316,11 +316,11 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 }
 
 // WriteAll - write all data to a file.
-func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) error {
+func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, path string, b []byte) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(ctx, storageRESTMethodWriteAll, values, reader, -1)
+	respBody, err := client.call(ctx, storageRESTMethodWriteAll, values, bytes.NewBuffer(b), int64(len(b)))
 	defer http.DrainBody(respBody)
 	return err
 }

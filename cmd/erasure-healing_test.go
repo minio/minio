@@ -226,7 +226,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
 
-	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bytes.NewReader([]byte{}))
+	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), []byte{})
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
@@ -252,7 +252,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	bdata := bytes.Repeat([]byte("b"), int(nfi.Size))
-	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bytes.NewReader(bdata))
+	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bdata)
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
