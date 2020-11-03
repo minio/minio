@@ -273,11 +273,11 @@ func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID s
 	return d.disk.ReadVersion(ctx, volume, path, versionID, checkDataDir)
 }
 
-func (d *naughtyDisk) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error) {
+func (d *naughtyDisk) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.WriteAll(ctx, volume, path, reader)
+	return d.disk.WriteAll(ctx, volume, path, b)
 }
 
 func (d *naughtyDisk) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {

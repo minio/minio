@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -363,7 +362,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) erro
 	defer disk.Delete(context.TODO(), minioMetaBucket, tmpFormat, false)
 
 	// write to unique file.
-	if err = disk.WriteAll(context.TODO(), minioMetaBucket, tmpFormat, bytes.NewReader(formatBytes)); err != nil {
+	if err = disk.WriteAll(context.TODO(), minioMetaBucket, tmpFormat, formatBytes); err != nil {
 		return err
 	}
 
@@ -383,7 +382,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) erro
 		}
 		return disk.WriteAll(context.TODO(), minioMetaBucket,
 			pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
-			bytes.NewReader(htrackerBytes))
+			htrackerBytes)
 	}
 	return nil
 }
