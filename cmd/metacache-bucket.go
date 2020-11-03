@@ -204,6 +204,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 
 	// Check if exists already.
 	if c, ok := b.caches[o.ID]; ok {
+		debugPrint("returning existing %v", o.ID)
 		return c
 	}
 
@@ -279,6 +280,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 	best = o.newMetacache()
 	b.caches[o.ID] = best
 	b.updated = true
+	debugPrint("returning new cache %s, bucket: %v", best.id, best.bucket)
 	return best
 }
 
@@ -442,17 +444,6 @@ func (b *bucketMetacache) deleteCache(id string) {
 	}
 	b.mu.Unlock()
 	if ok {
-		ctx := context.Background()
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			logger.LogIf(ctx, errors.New("bucketMetacache: no object layer"))
-			return
-		}
-		ez, ok := objAPI.(*erasureServerSets)
-		if !ok {
-			logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasureServerSets"))
-			return
-		}
-		ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(c.bucket, c.id))
+		c.delete(context.Background())
 	}
 }
