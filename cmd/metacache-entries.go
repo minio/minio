@@ -122,7 +122,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
 		return &FileInfo{
 			Volume: bucket,
 			Name:   e.name,
-			Mode:   os.ModeDir,
+			Mode:   uint32(os.ModeDir),
 		}, nil
 	}
 	if e.cached == nil {
@@ -146,7 +146,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 				{
 					Volume: bucket,
 					Name:   e.name,
-					Mode:   os.ModeDir,
+					Mode:   uint32(os.ModeDir),
 				},
 			},
 		}, nil

@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
+	"github.com/tinylib/msgp/msgp"
 )
 
 func isNetworkError(err error) bool {
@@ -290,7 +291,7 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path
 	values.Set(storageRESTFilePath, path)
 
 	var reader bytes.Buffer
-	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+	if err := msgp.Encode(&reader, &fi); err != nil {
 		return err
 	}
 
@@ -305,7 +306,7 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 	values.Set(storageRESTFilePath, path)
 
 	var buffer bytes.Buffer
-	if err := gob.NewEncoder(&buffer).Encode(fi); err != nil {
+	if err := msgp.Encode(&buffer, &fi); err != nil {
 		return err
 	}
 
@@ -341,7 +342,7 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 	values.Set(storageRESTFilePath, path)
 
 	var reader bytes.Buffer
-	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+	if err := msgp.Encode(&reader, &fi); err != nil {
 		logger.LogIf(context.Background(), err)
 		return err
 	}
@@ -377,8 +378,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 		return fi, err
 	}
 	defer http.DrainBody(respBody)
-
-	err = gob.NewDecoder(respBody).Decode(&fi)
+	err = msgp.Decode(respBody, &fi)
 	return fi, err
 }
 
@@ -447,10 +447,10 @@ func (client *storageRESTClient) WalkSplunk(ctx context.Context, volume, dirPath
 		defer close(ch)
 		defer http.DrainBody(respBody)
 
-		decoder := gob.NewDecoder(respBody)
+		decoder := msgp.NewReader(respBody)
 		for {
 			var fi FileInfo
-			if gerr := decoder.Decode(&fi); gerr != nil {
+			if gerr := fi.DecodeMsg(decoder); gerr != nil {
 				// Upon error return
 				return
 			}
@@ -482,12 +482,12 @@ func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPa
 		defer close(ch)
 		defer http.DrainBody(respBody)
 
-		decoder := gob.NewDecoder(respBody)
+		decoder := msgp.NewReader(respBody)
 		for {
 			var fi FileInfoVersions
-			if gerr := decoder.Decode(&fi); gerr != nil {
+			if gerr := fi.DecodeMsg(decoder); gerr != nil {
 				// Upon error return
-				if gerr != io.EOF {
+				if msgp.Cause(gerr) != io.EOF {
 					logger.LogIf(GlobalContext, gerr)
 				}
 				return
@@ -519,10 +519,10 @@ func (client *storageRESTClient) Walk(ctx context.Context, volume, dirPath, mark
 		defer close(ch)
 		defer http.DrainBody(respBody)
 
-		decoder := gob.NewDecoder(respBody)
+		decoder := msgp.NewReader(respBody)
 		for {
 			var fi FileInfo
-			if gerr := decoder.Decode(&fi); gerr != nil {
+			if gerr := fi.DecodeMsg(decoder); gerr != nil {
 				// Upon error return
 				return
 			}
@@ -575,10 +575,11 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	values.Set(storageRESTTotalVersions, strconv.Itoa(len(versions)))
 
 	var buffer bytes.Buffer
-	encoder := gob.NewEncoder(&buffer)
+	encoder := msgp.NewWriter(&buffer)
 	for _, version := range versions {
-		encoder.Encode(&version)
+		version.EncodeMsg(encoder)
 	}
+	logger.LogIf(ctx, encoder.Flush())
 
 	errs = make([]error, len(versions))
 
@@ -632,7 +633,7 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 	values.Set(storageRESTFilePath, path)
 
 	var reader bytes.Buffer
-	if err := gob.NewEncoder(&reader).Encode(fi); err != nil {
+	if err := msgp.Encode(&reader, &fi); err != nil {
 		return err
 	}
 
