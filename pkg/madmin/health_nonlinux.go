@@ -19,8 +19,8 @@
 
 package madmin
 
-// ServerDiskHwOBDInfo - Includes usage counters, disk counters and partitions
-type ServerDiskHwOBDInfo struct {
+// ServerDiskHwInfo - Includes usage counters, disk counters and partitions
+type ServerDiskHwInfo struct {
 	Addr  string `json:"addr"`
 	Error string `json:"error,omitempty"`
 }

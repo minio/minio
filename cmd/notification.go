@@ -847,13 +847,13 @@ func (sys *NotificationSys) Send(args eventArgs) {
 	sys.targetList.Send(args.ToEvent(true), targetIDSet, sys.targetResCh)
 }
 
-// NetOBDInfo - Net OBD information
-func (sys *NotificationSys) NetOBDInfo(ctx context.Context) madmin.ServerNetOBDInfo {
+// NetInfo - Net information
+func (sys *NotificationSys) NetInfo(ctx context.Context) madmin.ServerNetHealthInfo {
 	var sortedGlobalEndpoints []string
 
 	/*
 			Ensure that only untraversed links are visited by this server
-		        i.e. if netOBD tests have been performed between a -> b, then do
+		        i.e. if net perf tests have been performed between a -> b, then do
 			not run it between b -> a
 
 		        The graph of tests looks like this
@@ -905,51 +905,51 @@ func (sys *NotificationSys) NetOBDInfo(ctx context.Context) madmin.ServerNetOBDI
 		}
 	}
 
-	netOBDs := make([]madmin.NetOBDInfo, len(remoteTargets))
+	netInfos := make([]madmin.NetPerfInfo, len(remoteTargets))
 
 	for index, client := range remoteTargets {
 		if client == nil {
 			continue
 		}
 		var err error
-		netOBDs[index], err = client.NetOBDInfo(ctx)
+		netInfos[index], err = client.NetInfo(ctx)
 
 		addr := client.host.String()
 		reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 		logger.LogIf(ctx, err)
-		netOBDs[index].Addr = addr
+		netInfos[index].Addr = addr
 		if err != nil {
-			netOBDs[index].Error = err.Error()
+			netInfos[index].Error = err.Error()
 		}
 	}
-	return madmin.ServerNetOBDInfo{
-		Net:  netOBDs,
+	return madmin.ServerNetHealthInfo{
+		Net:  netInfos,
 		Addr: GetLocalPeer(globalEndpoints),
 	}
 }
 
-// DispatchNetOBDInfo - Net OBD information from other nodes
-func (sys *NotificationSys) DispatchNetOBDInfo(ctx context.Context) []madmin.ServerNetOBDInfo {
-	serverNetOBDs := []madmin.ServerNetOBDInfo{}
+// DispatchNetPerfInfo - Net perf information from other nodes
+func (sys *NotificationSys) DispatchNetPerfInfo(ctx context.Context) []madmin.ServerNetHealthInfo {
+	serverNetInfos := []madmin.ServerNetHealthInfo{}
 
 	for index, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
-		serverNetOBD, err := sys.peerClients[index].DispatchNetOBDInfo(ctx)
+		serverNetInfo, err := sys.peerClients[index].DispatchNetInfo(ctx)
 		if err != nil {
-			serverNetOBD.Addr = client.host.String()
-			serverNetOBD.Error = err.Error()
+			serverNetInfo.Addr = client.host.String()
+			serverNetInfo.Error = err.Error()
 		}
-		serverNetOBDs = append(serverNetOBDs, serverNetOBD)
+		serverNetInfos = append(serverNetInfos, serverNetInfo)
 	}
-	return serverNetOBDs
+	return serverNetInfos
 }
 
-// DispatchNetOBDChan - Net OBD information from other nodes
-func (sys *NotificationSys) DispatchNetOBDChan(ctx context.Context) chan madmin.ServerNetOBDInfo {
-	serverNetOBDs := make(chan madmin.ServerNetOBDInfo)
+// DispatchNetPerfChan - Net perf information from other nodes
+func (sys *NotificationSys) DispatchNetPerfChan(ctx context.Context) chan madmin.ServerNetHealthInfo {
+	serverNetInfos := make(chan madmin.ServerNetHealthInfo)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -958,27 +958,27 @@ func (sys *NotificationSys) DispatchNetOBDChan(ctx context.Context) chan madmin.
 			if client == nil {
 				continue
 			}
-			serverNetOBD, err := client.DispatchNetOBDInfo(ctx)
+			serverNetInfo, err := client.DispatchNetInfo(ctx)
 			if err != nil {
-				serverNetOBD.Addr = client.host.String()
-				serverNetOBD.Error = err.Error()
+				serverNetInfo.Addr = client.host.String()
+				serverNetInfo.Error = err.Error()
 			}
-			serverNetOBDs <- serverNetOBD
+			serverNetInfos <- serverNetInfo
 		}
 		wg.Done()
 	}()
 
 	go func() {
 		wg.Wait()
-		close(serverNetOBDs)
+		close(serverNetInfos)
 	}()
 
-	return serverNetOBDs
+	return serverNetInfos
 }
 
-// NetOBDParallelInfo - Performs NetOBD tests
-func (sys *NotificationSys) NetOBDParallelInfo(ctx context.Context) madmin.ServerNetOBDInfo {
-	netOBDs := []madmin.NetOBDInfo{}
+// NetPerfParallelInfo - Performs Net parallel tests
+func (sys *NotificationSys) NetPerfParallelInfo(ctx context.Context) madmin.ServerNetHealthInfo {
+	netInfos := []madmin.NetPerfInfo{}
 	wg := sync.WaitGroup{}
 
 	for index, client := range sys.peerClients {
@@ -988,26 +988,26 @@ func (sys *NotificationSys) NetOBDParallelInfo(ctx context.Context) madmin.Serve
 
 		wg.Add(1)
 		go func(index int) {
-			netOBD, err := sys.peerClients[index].NetOBDInfo(ctx)
-			netOBD.Addr = sys.peerClients[index].host.String()
+			netInfo, err := sys.peerClients[index].NetInfo(ctx)
+			netInfo.Addr = sys.peerClients[index].host.String()
 			if err != nil {
-				netOBD.Error = err.Error()
+				netInfo.Error = err.Error()
 			}
-			netOBDs = append(netOBDs, netOBD)
+			netInfos = append(netInfos, netInfo)
 			wg.Done()
 		}(index)
 	}
 	wg.Wait()
-	return madmin.ServerNetOBDInfo{
-		Net:  netOBDs,
+	return madmin.ServerNetHealthInfo{
+		Net:  netInfos,
 		Addr: GetLocalPeer(globalEndpoints),
 	}
 
 }
 
-// DriveOBDInfo - Drive OBD information
-func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDrivesOBDInfo {
-	reply := make([]madmin.ServerDrivesOBDInfo, len(sys.peerClients))
+// DrivePerfInfo - Drive perf information
+func (sys *NotificationSys) DrivePerfInfo(ctx context.Context) []madmin.ServerDrivesInfo {
+	reply := make([]madmin.ServerDrivesInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1017,7 +1017,7 @@ func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDri
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].DriveOBDInfo(ctx)
+			reply[index], err = sys.peerClients[index].DriveInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1035,9 +1035,9 @@ func (sys *NotificationSys) DriveOBDInfo(ctx context.Context) []madmin.ServerDri
 	return reply
 }
 
-// DriveOBDInfoChan - Drive OBD information
-func (sys *NotificationSys) DriveOBDInfoChan(ctx context.Context) chan madmin.ServerDrivesOBDInfo {
-	updateChan := make(chan madmin.ServerDrivesOBDInfo)
+// DrivePerfInfoChan - Drive perf information
+func (sys *NotificationSys) DrivePerfInfoChan(ctx context.Context) chan madmin.ServerDrivesInfo {
+	updateChan := make(chan madmin.ServerDrivesInfo)
 	wg := sync.WaitGroup{}
 
 	for _, client := range sys.peerClients {
@@ -1046,7 +1046,7 @@ func (sys *NotificationSys) DriveOBDInfoChan(ctx context.Context) chan madmin.Se
 		}
 		wg.Add(1)
 		go func(client *peerRESTClient) {
-			reply, err := client.DriveOBDInfo(ctx)
+			reply, err := client.DriveInfo(ctx)
 
 			addr := client.host.String()
 			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
@@ -1071,9 +1071,9 @@ func (sys *NotificationSys) DriveOBDInfoChan(ctx context.Context) chan madmin.Se
 	return updateChan
 }
 
-// CPUOBDInfo - CPU OBD information
-func (sys *NotificationSys) CPUOBDInfo(ctx context.Context) []madmin.ServerCPUOBDInfo {
-	reply := make([]madmin.ServerCPUOBDInfo, len(sys.peerClients))
+// CPUInfo - CPU information
+func (sys *NotificationSys) CPUInfo(ctx context.Context) []madmin.ServerCPUInfo {
+	reply := make([]madmin.ServerCPUInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1083,7 +1083,7 @@ func (sys *NotificationSys) CPUOBDInfo(ctx context.Context) []madmin.ServerCPUOB
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].CPUOBDInfo(ctx)
+			reply[index], err = sys.peerClients[index].CPUInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1101,9 +1101,9 @@ func (sys *NotificationSys) CPUOBDInfo(ctx context.Context) []madmin.ServerCPUOB
 	return reply
 }
 
-// DiskHwOBDInfo - Disk HW OBD information
-func (sys *NotificationSys) DiskHwOBDInfo(ctx context.Context) []madmin.ServerDiskHwOBDInfo {
-	reply := make([]madmin.ServerDiskHwOBDInfo, len(sys.peerClients))
+// DiskHwInfo - Disk HW information
+func (sys *NotificationSys) DiskHwInfo(ctx context.Context) []madmin.ServerDiskHwInfo {
+	reply := make([]madmin.ServerDiskHwInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1113,7 +1113,7 @@ func (sys *NotificationSys) DiskHwOBDInfo(ctx context.Context) []madmin.ServerDi
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].DiskHwOBDInfo(ctx)
+			reply[index], err = sys.peerClients[index].DiskHwInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1131,9 +1131,9 @@ func (sys *NotificationSys) DiskHwOBDInfo(ctx context.Context) []madmin.ServerDi
 	return reply
 }
 
-// OsOBDInfo - Os OBD information
-func (sys *NotificationSys) OsOBDInfo(ctx context.Context) []madmin.ServerOsOBDInfo {
-	reply := make([]madmin.ServerOsOBDInfo, len(sys.peerClients))
+// OsInfo - Os information
+func (sys *NotificationSys) OsInfo(ctx context.Context) []madmin.ServerOsInfo {
+	reply := make([]madmin.ServerOsInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1143,7 +1143,7 @@ func (sys *NotificationSys) OsOBDInfo(ctx context.Context) []madmin.ServerOsOBDI
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].OsOBDInfo(ctx)
+			reply[index], err = sys.peerClients[index].OsInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1161,9 +1161,9 @@ func (sys *NotificationSys) OsOBDInfo(ctx context.Context) []madmin.ServerOsOBDI
 	return reply
 }
 
-// MemOBDInfo - Mem OBD information
-func (sys *NotificationSys) MemOBDInfo(ctx context.Context) []madmin.ServerMemOBDInfo {
-	reply := make([]madmin.ServerMemOBDInfo, len(sys.peerClients))
+// MemInfo - Mem information
+func (sys *NotificationSys) MemInfo(ctx context.Context) []madmin.ServerMemInfo {
+	reply := make([]madmin.ServerMemInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1173,7 +1173,7 @@ func (sys *NotificationSys) MemOBDInfo(ctx context.Context) []madmin.ServerMemOB
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].MemOBDInfo(ctx)
+			reply[index], err = sys.peerClients[index].MemInfo(ctx)
 			return err
 		}, index)
 	}
@@ -1191,9 +1191,9 @@ func (sys *NotificationSys) MemOBDInfo(ctx context.Context) []madmin.ServerMemOB
 	return reply
 }
 
-// ProcOBDInfo - Process OBD information
-func (sys *NotificationSys) ProcOBDInfo(ctx context.Context) []madmin.ServerProcOBDInfo {
-	reply := make([]madmin.ServerProcOBDInfo, len(sys.peerClients))
+// ProcInfo - Process information
+func (sys *NotificationSys) ProcInfo(ctx context.Context) []madmin.ServerProcInfo {
+	reply := make([]madmin.ServerProcInfo, len(sys.peerClients))
 
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
@@ -1203,7 +1203,7 @@ func (sys *NotificationSys) ProcOBDInfo(ctx context.Context) []madmin.ServerProc
 		index := index
 		g.Go(func() error {
 			var err error
-			reply[index], err = sys.peerClients[index].ProcOBDInfo(ctx)
+			reply[index], err = sys.peerClients[index].ProcInfo(ctx)
 			return err
 		}, index)
 	}

@@ -24,8 +24,8 @@ import (
 	diskhw "github.com/shirou/gopsutil/disk"
 )
 
-// ServerDiskHwOBDInfo - Includes usage counters, disk counters and partitions
-type ServerDiskHwOBDInfo struct {
+// ServerDiskHwInfo - Includes usage counters, disk counters and partitions
+type ServerDiskHwInfo struct {
 	Addr       string                           `json:"addr"`
 	Usage      []*diskhw.UsageStat              `json:"usages,omitempty"`
 	Partitions []PartitionStat                  `json:"partitions,omitempty"`

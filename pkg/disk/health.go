@@ -15,13 +15,19 @@
  *
  */
 
-package net
+package disk
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/dustin/go-humanize"
 	"github.com/montanaflynn/stats"
 )
 
-// Latency holds latency information for read/write operations to the drive
+// Latency holds latency information for write operations to the drive
 type Latency struct {
 	Avg          float64 `json:"avg_secs,omitempty"`
 	Percentile50 float64 `json:"percentile50_secs,omitempty"`
@@ -31,7 +37,7 @@ type Latency struct {
 	Max          float64 `json:"max_secs,omitempty"`
 }
 
-// Throughput holds throughput information for read/write operations to the drive
+// Throughput holds throughput information for write operations to the drive
 type Throughput struct {
 	Avg          float64 `json:"avg_bytes_per_sec,omitempty"`
 	Percentile50 float64 `json:"percentile50_bytes_per_sec,omitempty"`
@@ -41,8 +47,51 @@ type Throughput struct {
 	Max          float64 `json:"max_bytes_per_sec,omitempty"`
 }
 
-// ComputeOBDStats takes arrays of Latency & Throughput to compute Statistics
-func ComputeOBDStats(latencies, throughputs []float64) (Latency, Throughput, error) {
+// GetHealthInfo about the drive
+func GetHealthInfo(ctx context.Context, drive, fsPath string) (Latency, Throughput, error) {
+
+	// Create a file with O_DIRECT flag, choose default umask and also make sure
+	// we are exclusively writing to a new file using O_EXCL.
+	w, err := OpenFileDirectIO(fsPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0666)
+	if err != nil {
+		return Latency{}, Throughput{}, err
+	}
+
+	defer func() {
+		w.Close()
+		os.Remove(fsPath)
+	}()
+
+	blockSize := 4 * humanize.MiByte
+	fileSize := 256 * humanize.MiByte
+
+	latencies := make([]float64, fileSize/blockSize)
+	throughputs := make([]float64, fileSize/blockSize)
+
+	data := AlignedBlock(blockSize)
+
+	for i := 0; i < (fileSize / blockSize); i++ {
+		if ctx.Err() != nil {
+			return Latency{}, Throughput{}, ctx.Err()
+		}
+		startTime := time.Now()
+		if n, err := w.Write(data); err != nil {
+			return Latency{}, Throughput{}, err
+		} else if n != blockSize {
+			return Latency{}, Throughput{}, fmt.Errorf("Expected to write %d, but only wrote %d", blockSize, n)
+		}
+		latencyInSecs := time.Since(startTime).Seconds()
+		latencies[i] = latencyInSecs
+	}
+
+	// Sync every full writes fdatasync
+	Fdatasync(w)
+
+	for i := range latencies {
+		throughput := float64(blockSize) / latencies[i]
+		throughputs[i] = throughput
+	}
+
 	var avgLatency float64
 	var percentile50Latency float64
 	var percentile90Latency float64
@@ -56,7 +105,6 @@ func ComputeOBDStats(latencies, throughputs []float64) (Latency, Throughput, err
 	var percentile99Throughput float64
 	var minThroughput float64
 	var maxThroughput float64
-	var err error
 
 	if avgLatency, err = stats.Mean(latencies); err != nil {
 		return Latency{}, Throughput{}, err
@@ -103,6 +151,7 @@ func ComputeOBDStats(latencies, throughputs []float64) (Latency, Throughput, err
 	if minThroughput, err = stats.Min(throughputs); err != nil {
 		return Latency{}, Throughput{}, err
 	}
+
 	t := Throughput{
 		Avg:          avgThroughput,
 		Percentile50: percentile50Throughput,

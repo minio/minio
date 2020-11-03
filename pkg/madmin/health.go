@@ -35,34 +35,34 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-// OBDInfo - MinIO cluster's OBD Info
-type OBDInfo struct {
-	TimeStamp time.Time    `json:"timestamp,omitempty"`
-	Error     string       `json:"error,omitempty"`
-	Perf      PerfOBDInfo  `json:"perf,omitempty"`
-	Minio     MinioOBDInfo `json:"minio,omitempty"`
-	Sys       SysOBDInfo   `json:"sys,omitempty"`
-}
-
-// SysOBDInfo - Includes hardware and system information of the MinIO cluster
-type SysOBDInfo struct {
-	CPUInfo    []ServerCPUOBDInfo    `json:"cpus,omitempty"`
-	DiskHwInfo []ServerDiskHwOBDInfo `json:"drives,omitempty"`
-	OsInfo     []ServerOsOBDInfo     `json:"osinfos,omitempty"`
-	MemInfo    []ServerMemOBDInfo    `json:"meminfos,omitempty"`
-	ProcInfo   []ServerProcOBDInfo   `json:"procinfos,omitempty"`
-	Error      string                `json:"error,omitempty"`
-}
-
-// ServerProcOBDInfo - Includes host process lvl information
-type ServerProcOBDInfo struct {
-	Addr      string          `json:"addr"`
-	Processes []SysOBDProcess `json:"processes,omitempty"`
+// HealthInfo - MinIO cluster's health Info
+type HealthInfo struct {
+	TimeStamp time.Time       `json:"timestamp,omitempty"`
 	Error     string          `json:"error,omitempty"`
+	Perf      PerfInfo        `json:"perf,omitempty"`
+	Minio     MinioHealthInfo `json:"minio,omitempty"`
+	Sys       SysHealthInfo   `json:"sys,omitempty"`
 }
 
-// SysOBDProcess - Includes process lvl information about a single process
-type SysOBDProcess struct {
+// SysHealthInfo - Includes hardware and system information of the MinIO cluster
+type SysHealthInfo struct {
+	CPUInfo    []ServerCPUInfo    `json:"cpus,omitempty"`
+	DiskHwInfo []ServerDiskHwInfo `json:"drives,omitempty"`
+	OsInfo     []ServerOsInfo     `json:"osinfos,omitempty"`
+	MemInfo    []ServerMemInfo    `json:"meminfos,omitempty"`
+	ProcInfo   []ServerProcInfo   `json:"procinfos,omitempty"`
+	Error      string             `json:"error,omitempty"`
+}
+
+// ServerProcInfo - Includes host process lvl information
+type ServerProcInfo struct {
+	Addr      string       `json:"addr"`
+	Processes []SysProcess `json:"processes,omitempty"`
+	Error     string       `json:"error,omitempty"`
+}
+
+// SysProcess - Includes process lvl information about a single process
+type SysProcess struct {
 	Pid            int32                       `json:"pid"`
 	Background     bool                        `json:"background,omitempty"`
 	CPUPercent     float64                     `json:"cpupercent,omitempty"`
@@ -84,29 +84,27 @@ type SysOBDProcess struct {
 	NumCtxSwitches *process.NumCtxSwitchesStat `json:"numctxswitches,omitempty"`
 	NumFds         int32                       `json:"numfds,omitempty"`
 	NumThreads     int32                       `json:"numthreads,omitempty"`
-	OpenFiles      []process.OpenFilesStat     `json:"openfiles,omitempty"`
 	PageFaults     *process.PageFaultsStat     `json:"pagefaults,omitempty"`
 	Parent         int32                       `json:"parent,omitempty"`
 	Ppid           int32                       `json:"ppid,omitempty"`
 	Rlimit         []process.RlimitStat        `json:"rlimit,omitempty"`
 	Status         string                      `json:"status,omitempty"`
 	Tgid           int32                       `json:"tgid,omitempty"`
-	Threads        map[int32]*cpu.TimesStat    `json:"threadstats,omitempty"`
 	Times          *cpu.TimesStat              `json:"cputimes,omitempty"`
 	Uids           []int32                     `json:"uids,omitempty"`
 	Username       string                      `json:"username,omitempty"`
 }
 
-// ServerMemOBDInfo - Includes host virtual and swap mem information
-type ServerMemOBDInfo struct {
+// ServerMemInfo - Includes host virtual and swap mem information
+type ServerMemInfo struct {
 	Addr       string                 `json:"addr"`
 	SwapMem    *mem.SwapMemoryStat    `json:"swap,omitempty"`
 	VirtualMem *mem.VirtualMemoryStat `json:"virtualmem,omitempty"`
 	Error      string                 `json:"error,omitempty"`
 }
 
-// ServerOsOBDInfo - Includes host os information
-type ServerOsOBDInfo struct {
+// ServerOsInfo - Includes host os information
+type ServerOsInfo struct {
 	Addr    string                 `json:"addr"`
 	Info    *host.InfoStat         `json:"info,omitempty"`
 	Sensors []host.TemperatureStat `json:"sensors,omitempty"`
@@ -114,115 +112,115 @@ type ServerOsOBDInfo struct {
 	Error   string                 `json:"error,omitempty"`
 }
 
-// ServerCPUOBDInfo - Includes cpu and timer stats of each node of the MinIO cluster
-type ServerCPUOBDInfo struct {
+// ServerCPUInfo - Includes cpu and timer stats of each node of the MinIO cluster
+type ServerCPUInfo struct {
 	Addr     string          `json:"addr"`
 	CPUStat  []cpu.InfoStat  `json:"cpu,omitempty"`
 	TimeStat []cpu.TimesStat `json:"time,omitempty"`
 	Error    string          `json:"error,omitempty"`
 }
 
-// MinioOBDInfo - Includes MinIO confifuration information
-type MinioOBDInfo struct {
+// MinioHealthInfo - Includes MinIO confifuration information
+type MinioHealthInfo struct {
 	Info   InfoMessage `json:"info,omitempty"`
 	Config interface{} `json:"config,omitempty"`
 	Error  string      `json:"error,omitempty"`
 }
 
-// PerfOBDInfo - Includes Drive and Net perf info for the entire MinIO cluster
-type PerfOBDInfo struct {
-	DriveInfo   []ServerDrivesOBDInfo `json:"drives,omitempty"`
-	Net         []ServerNetOBDInfo    `json:"net,omitempty"`
-	NetParallel ServerNetOBDInfo      `json:"net_parallel,omitempty"`
+// PerfInfo - Includes Drive and Net perf info for the entire MinIO cluster
+type PerfInfo struct {
+	DriveInfo   []ServerDrivesInfo    `json:"drives,omitempty"`
+	Net         []ServerNetHealthInfo `json:"net,omitempty"`
+	NetParallel ServerNetHealthInfo   `json:"net_parallel,omitempty"`
 	Error       string                `json:"error,omitempty"`
 }
 
-// ServerDrivesOBDInfo - Drive OBD info about all drives in a single MinIO node
-type ServerDrivesOBDInfo struct {
-	Addr     string         `json:"addr"`
-	Serial   []DriveOBDInfo `json:"serial,omitempty"`
-	Parallel []DriveOBDInfo `json:"parallel,omitempty"`
-	Error    string         `json:"error,omitempty"`
+// ServerDrivesInfo - Drive info about all drives in a single MinIO node
+type ServerDrivesInfo struct {
+	Addr     string          `json:"addr"`
+	Serial   []DrivePerfInfo `json:"serial,omitempty"`
+	Parallel []DrivePerfInfo `json:"parallel,omitempty"`
+	Error    string          `json:"error,omitempty"`
 }
 
-// DriveOBDInfo - Stats about a single drive in a MinIO node
-type DriveOBDInfo struct {
+// DrivePerfInfo - Stats about a single drive in a MinIO node
+type DrivePerfInfo struct {
 	Path       string          `json:"endpoint"`
 	Latency    disk.Latency    `json:"latency,omitempty"`
 	Throughput disk.Throughput `json:"throughput,omitempty"`
 	Error      string          `json:"error,omitempty"`
 }
 
-// ServerNetOBDInfo - Network OBD info about a single MinIO node
-type ServerNetOBDInfo struct {
-	Addr  string       `json:"addr"`
-	Net   []NetOBDInfo `json:"net,omitempty"`
-	Error string       `json:"error,omitempty"`
+// ServerNetHealthInfo - Network health info about a single MinIO node
+type ServerNetHealthInfo struct {
+	Addr  string        `json:"addr"`
+	Net   []NetPerfInfo `json:"net,omitempty"`
+	Error string        `json:"error,omitempty"`
 }
 
-// NetOBDInfo - one-to-one network connectivity Stats between 2 MinIO nodes
-type NetOBDInfo struct {
+// NetPerfInfo - one-to-one network connectivity Stats between 2 MinIO nodes
+type NetPerfInfo struct {
 	Addr       string         `json:"remote"`
 	Latency    net.Latency    `json:"latency,omitempty"`
 	Throughput net.Throughput `json:"throughput,omitempty"`
 	Error      string         `json:"error,omitempty"`
 }
 
-// OBDDataType - Typed OBD data types
-type OBDDataType string
+// HealthDataType - Typed Health data types
+type HealthDataType string
 
-// OBDDataTypes
+// HealthDataTypes
 const (
-	OBDDataTypePerfDrive   OBDDataType = "perfdrive"
-	OBDDataTypePerfNet     OBDDataType = "perfnet"
-	OBDDataTypeMinioInfo   OBDDataType = "minioinfo"
-	OBDDataTypeMinioConfig OBDDataType = "minioconfig"
-	OBDDataTypeSysCPU      OBDDataType = "syscpu"
-	OBDDataTypeSysDiskHw   OBDDataType = "sysdiskhw"
-	OBDDataTypeSysDocker   OBDDataType = "sysdocker" // is this really needed?
-	OBDDataTypeSysOsInfo   OBDDataType = "sysosinfo"
-	OBDDataTypeSysLoad     OBDDataType = "sysload" // provides very little info. Making it TBD
-	OBDDataTypeSysMem      OBDDataType = "sysmem"
-	OBDDataTypeSysNet      OBDDataType = "sysnet"
-	OBDDataTypeSysProcess  OBDDataType = "sysprocess"
+	HealthDataTypePerfDrive   HealthDataType = "perfdrive"
+	HealthDataTypePerfNet     HealthDataType = "perfnet"
+	HealthDataTypeMinioInfo   HealthDataType = "minioinfo"
+	HealthDataTypeMinioConfig HealthDataType = "minioconfig"
+	HealthDataTypeSysCPU      HealthDataType = "syscpu"
+	HealthDataTypeSysDiskHw   HealthDataType = "sysdiskhw"
+	HealthDataTypeSysDocker   HealthDataType = "sysdocker" // is this really needed?
+	HealthDataTypeSysOsInfo   HealthDataType = "sysosinfo"
+	HealthDataTypeSysLoad     HealthDataType = "sysload" // provides very little info. Making it TBD
+	HealthDataTypeSysMem      HealthDataType = "sysmem"
+	HealthDataTypeSysNet      HealthDataType = "sysnet"
+	HealthDataTypeSysProcess  HealthDataType = "sysprocess"
 )
 
-// OBDDataTypesMap - Map of OBD datatypes
-var OBDDataTypesMap = map[string]OBDDataType{
-	"perfdrive":   OBDDataTypePerfDrive,
-	"perfnet":     OBDDataTypePerfNet,
-	"minioinfo":   OBDDataTypeMinioInfo,
-	"minioconfig": OBDDataTypeMinioConfig,
-	"syscpu":      OBDDataTypeSysCPU,
-	"sysdiskhw":   OBDDataTypeSysDiskHw,
-	"sysdocker":   OBDDataTypeSysDocker,
-	"sysosinfo":   OBDDataTypeSysOsInfo,
-	"sysload":     OBDDataTypeSysLoad,
-	"sysmem":      OBDDataTypeSysMem,
-	"sysnet":      OBDDataTypeSysNet,
-	"sysprocess":  OBDDataTypeSysProcess,
+// HealthDataTypesMap - Map of Health datatypes
+var HealthDataTypesMap = map[string]HealthDataType{
+	"perfdrive":   HealthDataTypePerfDrive,
+	"perfnet":     HealthDataTypePerfNet,
+	"minioinfo":   HealthDataTypeMinioInfo,
+	"minioconfig": HealthDataTypeMinioConfig,
+	"syscpu":      HealthDataTypeSysCPU,
+	"sysdiskhw":   HealthDataTypeSysDiskHw,
+	"sysdocker":   HealthDataTypeSysDocker,
+	"sysosinfo":   HealthDataTypeSysOsInfo,
+	"sysload":     HealthDataTypeSysLoad,
+	"sysmem":      HealthDataTypeSysMem,
+	"sysnet":      HealthDataTypeSysNet,
+	"sysprocess":  HealthDataTypeSysProcess,
 }
 
-// OBDDataTypesList - List of OBD datatypes
-var OBDDataTypesList = []OBDDataType{
-	OBDDataTypePerfDrive,
-	OBDDataTypePerfNet,
-	OBDDataTypeMinioInfo,
-	OBDDataTypeMinioConfig,
-	OBDDataTypeSysCPU,
-	OBDDataTypeSysDiskHw,
-	OBDDataTypeSysDocker,
-	OBDDataTypeSysOsInfo,
-	OBDDataTypeSysLoad,
-	OBDDataTypeSysMem,
-	OBDDataTypeSysNet,
-	OBDDataTypeSysProcess,
+// HealthDataTypesList - List of Health datatypes
+var HealthDataTypesList = []HealthDataType{
+	HealthDataTypePerfDrive,
+	HealthDataTypePerfNet,
+	HealthDataTypeMinioInfo,
+	HealthDataTypeMinioConfig,
+	HealthDataTypeSysCPU,
+	HealthDataTypeSysDiskHw,
+	HealthDataTypeSysDocker,
+	HealthDataTypeSysOsInfo,
+	HealthDataTypeSysLoad,
+	HealthDataTypeSysMem,
+	HealthDataTypeSysNet,
+	HealthDataTypeSysProcess,
 }
 
-// ServerOBDInfo - Connect to a minio server and call OBD Info Management API
-// to fetch server's information represented by OBDInfo structure
-func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDataType, deadline time.Duration) <-chan OBDInfo {
-	respChan := make(chan OBDInfo)
+// ServerHealthInfo - Connect to a minio server and call Health Info Management API
+// to fetch server's information represented by HealthInfo structure
+func (adm *AdminClient) ServerHealthInfo(ctx context.Context, healthDataTypes []HealthDataType, deadline time.Duration) <-chan HealthInfo {
+	respChan := make(chan HealthInfo)
 	go func() {
 		v := url.Values{}
 
@@ -230,37 +228,37 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 			deadline.Truncate(1*time.Second).String())
 
 		// start with all set to false
-		for _, d := range OBDDataTypesList {
+		for _, d := range HealthDataTypesList {
 			v.Set(string(d), "false")
 		}
 
 		// only 'trueify' user provided values
-		for _, d := range obdDataTypes {
+		for _, d := range healthDataTypes {
 			v.Set(string(d), "true")
 		}
-		var OBDInfoMessage OBDInfo
-		OBDInfoMessage.TimeStamp = time.Now()
+		var healthInfoMessage HealthInfo
+		healthInfoMessage.TimeStamp = time.Now()
 
-		if v.Get(string(OBDDataTypeMinioInfo)) == "true" {
+		if v.Get(string(HealthDataTypeMinioInfo)) == "true" {
 			info, err := adm.ServerInfo(ctx)
 			if err != nil {
-				respChan <- OBDInfo{
+				respChan <- HealthInfo{
 					Error: err.Error(),
 				}
 				return
 			}
-			OBDInfoMessage.Minio.Info = info
-			respChan <- OBDInfoMessage
+			healthInfoMessage.Minio.Info = info
+			respChan <- healthInfoMessage
 		}
 
 		resp, err := adm.executeMethod(ctx, "GET", requestData{
-			relPath:     adminAPIPrefix + "/obdinfo",
+			relPath:     adminAPIPrefix + "/healthinfo",
 			queryValues: v,
 		})
 
 		defer closeResponse(resp)
 		if err != nil {
-			respChan <- OBDInfo{
+			respChan <- HealthInfo{
 				Error: err.Error(),
 			}
 			close(respChan)
@@ -269,7 +267,7 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 
 		// Check response http status code
 		if resp.StatusCode != http.StatusOK {
-			respChan <- OBDInfo{
+			respChan <- HealthInfo{
 				Error: httpRespToErrorResponse(resp).Error(),
 			}
 			return
@@ -278,21 +276,21 @@ func (adm *AdminClient) ServerOBDInfo(ctx context.Context, obdDataTypes []OBDDat
 		// Unmarshal the server's json response
 		decoder := json.NewDecoder(resp.Body)
 		for {
-			err := decoder.Decode(&OBDInfoMessage)
-			OBDInfoMessage.TimeStamp = time.Now()
+			err := decoder.Decode(&healthInfoMessage)
+			healthInfoMessage.TimeStamp = time.Now()
 
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
-				respChan <- OBDInfo{
+				respChan <- HealthInfo{
 					Error: err.Error(),
 				}
 			}
-			respChan <- OBDInfoMessage
+			respChan <- healthInfoMessage
 		}
 
-		respChan <- OBDInfoMessage
+		respChan <- healthInfoMessage
 		close(respChan)
 	}()
 	return respChan
