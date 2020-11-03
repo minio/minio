@@ -264,12 +264,12 @@ func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path stri
 	return p.storage.VerifyFile(ctx, volume, path, fi)
 }
 
-func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error) {
+func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
 
-	return p.storage.WriteAll(ctx, volume, path, reader)
+	return p.storage.WriteAll(ctx, volume, path, b)
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) (err error) {

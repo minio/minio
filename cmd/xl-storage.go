@@ -897,7 +897,7 @@ func (s *xlStorage) WalkSplunk(ctx context.Context, volume, dirPath, marker stri
 				fi = FileInfo{
 					Volume: volume,
 					Name:   walkResult.entry,
-					Mode:   os.ModeDir,
+					Mode:   uint32(os.ModeDir),
 				}
 			} else {
 				var err error
@@ -985,7 +985,7 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 						{
 							Volume: volume,
 							Name:   walkResult.entry,
-							Mode:   os.ModeDir,
+							Mode:   uint32(os.ModeDir),
 						},
 					},
 				}
@@ -1066,7 +1066,7 @@ func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, re
 				fi = FileInfo{
 					Volume: volume,
 					Name:   walkResult.entry,
-					Mode:   os.ModeDir,
+					Mode:   uint32(os.ModeDir),
 				}
 			} else {
 				var err error
@@ -1203,7 +1203,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	}
 
 	if !lastVersion {
-		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), bytes.NewReader(buf))
+		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
 	// Delete the meta file, if there are no more versions the
@@ -1251,7 +1251,7 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 		}
 	}
 
-	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), bytes.NewReader(buf))
+	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 }
 
 func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
@@ -1861,7 +1861,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	return nil
 }
 
-func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error) {
+func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
@@ -1873,12 +1873,14 @@ func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, re
 	}
 
 	defer w.Close()
-
-	bufp := s.pool.Get().(*[]byte)
-	defer s.pool.Put(bufp)
-
-	_, err = io.CopyBuffer(w, reader, *bufp)
-	return err
+	n, err := w.Write(b)
+	if err != nil {
+		return err
+	}
+	if n != len(b) {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 // AppendFile - append a byte array at path, if file doesn't exist at
@@ -2311,7 +2313,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return errFileCorrupt
 	}
 
-	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), bytes.NewReader(dstBuf)); err != nil {
+	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
 		return err
 	}
 

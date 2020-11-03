@@ -1202,15 +1202,7 @@ func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string
 				wg.Add(1)
 				go func(disk StorageAPI) {
 					defer wg.Done()
-					if err := disk.Delete(ctx, bucket, prefix, true); err != nil {
-						if !IsErrIgnored(err, []error{
-							errDiskNotFound,
-							errVolumeNotFound,
-							errFileNotFound,
-						}...) {
-							logger.LogOnceIf(ctx, err, disk.String())
-						}
-					}
+					disk.Delete(ctx, bucket, prefix, true)
 				}(disk)
 			}
 		}
@@ -1340,10 +1332,12 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 
 	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
 	for _, zone := range z.serverSets {
-		if zone.listTolerancePerSet == -1 {
+		quorum := globalAPIConfig.getListQuorum()
+		switch quorum {
+		case -1:
 			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
-		} else {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
+		default:
+			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, quorum)
 		}
 	}
 

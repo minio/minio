@@ -160,7 +160,7 @@ var (
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig apiConfig
+	globalAPIConfig = apiConfig{listQuorum: 3}
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config

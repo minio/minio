@@ -36,9 +36,9 @@ const (
 	// DMA storage class
 	DMA = "DMA"
 
-	// Valid values are "write" and "read-write"
+	// Valid values are "write" and "read+write"
 	DMAWrite     = "write"
-	DMAReadWrite = "read-write"
+	DMAReadWrite = "read+write"
 )
 
 // Standard constats for config info storage class

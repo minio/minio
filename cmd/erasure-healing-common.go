@@ -26,22 +26,25 @@ import (
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
 	var maxima int // Counter for remembering max occurrence of elements.
-	timeOccurenceMap := make(map[time.Time]int)
+	timeOccurenceMap := make(map[int64]int)
 	// Ignore the uuid sentinel and count the rest.
 	for _, time := range modTimes {
 		if time.Equal(timeSentinel) {
 			continue
 		}
-		timeOccurenceMap[time]++
+		timeOccurenceMap[time.UnixNano()]++
 	}
+
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
-	for time, count := range timeOccurenceMap {
-		if count > maxima || (count == maxima && time.After(modTime)) {
+	for nano, count := range timeOccurenceMap {
+		t := time.Unix(0, nano)
+		if count > maxima || (count == maxima && t.After(modTime)) {
 			maxima = count
-			modTime = time
+			modTime = t
 		}
 	}
+
 	// Return the collected common uuid.
 	return modTime, maxima
 }

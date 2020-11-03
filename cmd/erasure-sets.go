@@ -31,11 +31,9 @@ import (
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -81,7 +79,6 @@ type erasureSets struct {
 
 	// Total number of sets and the number of disks per set.
 	setCount, setDriveCount int
-	listTolerancePerSet     int
 
 	disksConnectEvent chan diskConnectInfo
 
@@ -345,31 +342,24 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	endpointStrings := make([]string, len(endpoints))
 
-	listTolerancePerSet := 3
-	// By default this is off
-	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOn) == config.EnableOn {
-		listTolerancePerSet = -1
-	}
-
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
-		sets:                make([]*erasureObjects, setCount),
-		erasureDisks:        make([][]StorageAPI, setCount),
-		erasureLockers:      make([][]dsync.NetLocker, setCount),
-		erasureLockOwner:    GetLocalPeer(globalEndpoints),
-		endpoints:           endpoints,
-		endpointStrings:     endpointStrings,
-		setCount:            setCount,
-		setDriveCount:       setDriveCount,
-		listTolerancePerSet: listTolerancePerSet,
-		format:              format,
-		disksConnectEvent:   make(chan diskConnectInfo),
-		distributionAlgo:    format.Erasure.DistributionAlgo,
-		deploymentID:        uuid.MustParse(format.ID),
-		pool:                NewMergeWalkPool(globalMergeLookupTimeout),
-		poolSplunk:          NewMergeWalkPool(globalMergeLookupTimeout),
-		poolVersions:        NewMergeWalkVersionsPool(globalMergeLookupTimeout),
-		mrfOperations:       make(map[healSource]int),
+		sets:              make([]*erasureObjects, setCount),
+		erasureDisks:      make([][]StorageAPI, setCount),
+		erasureLockers:    make([][]dsync.NetLocker, setCount),
+		erasureLockOwner:  GetLocalPeer(globalEndpoints),
+		endpoints:         endpoints,
+		endpointStrings:   endpointStrings,
+		setCount:          setCount,
+		setDriveCount:     setDriveCount,
+		format:            format,
+		disksConnectEvent: make(chan diskConnectInfo),
+		distributionAlgo:  format.Erasure.DistributionAlgo,
+		deploymentID:      uuid.MustParse(format.ID),
+		pool:              NewMergeWalkPool(globalMergeLookupTimeout),
+		poolSplunk:        NewMergeWalkPool(globalMergeLookupTimeout),
+		poolVersions:      NewMergeWalkVersionsPool(globalMergeLookupTimeout),
+		mrfOperations:     make(map[healSource]int),
 	}
 
 	mutex := newNSLock(globalIsDistErasure)
