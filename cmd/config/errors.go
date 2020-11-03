@@ -102,6 +102,12 @@ var (
 		"MINIO_CACHE_RANGE: Valid expected value is `on` or `off`",
 	)
 
+	ErrInvalidCacheCommitValue = newErrFn(
+		"Invalid cache commit value",
+		"Please check the passed value",
+		"MINIO_CACHE_COMMIT: Valid expected value is `writeback` or `writethrough`",
+	)
+
 	ErrInvalidRotatingCredentialsBackendEncrypted = newErrFn(
 		"Invalid rotating credentials",
 		"Please set correct rotating credentials in the environment for decryption",

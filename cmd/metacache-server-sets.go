@@ -23,9 +23,7 @@ import (
 	"path"
 	"sync"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
 )
 
 // listPath will return the requested entries.
@@ -119,20 +117,7 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 	}
 
 	if o.AskDisks == 0 {
-		switch env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOff) {
-		case config.EnableOn:
-			// If strict, ask at least 50%.
-			o.AskDisks = -1
-		case "reduced":
-			// Reduced safety.
-			o.AskDisks = 2
-		case "disk":
-			// Ask single disk.
-			o.AskDisks = 1
-		default:
-			// By default asks at max 3 disks.
-			o.AskDisks = 3
-		}
+		o.AskDisks = globalAPIConfig.getListQuorum()
 	}
 
 	var mu sync.Mutex

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"crypto/x509"
+	"net/http"
 	"os"
 	"time"
 
@@ -159,7 +160,7 @@ var (
 	globalBucketTargetSys    *BucketTargetSys
 	// globalAPIConfig controls S3 API requests throttling,
 	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig apiConfig
+	globalAPIConfig = apiConfig{listQuorum: 3}
 
 	globalStorageClass storageclass.Config
 	globalLDAPConfig   xldap.Config
@@ -274,6 +275,8 @@ var (
 	globalFSOSync bool
 
 	globalProxyEndpoints []ProxyEndpoint
+
+	globalInternodeTransport http.RoundTripper
 
 	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.

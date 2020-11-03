@@ -21,7 +21,6 @@ import (
 	"errors"
 	"net/http"
 	"sync"
-
 	"time"
 )
 
@@ -83,14 +82,12 @@ func LogOnceIf(ctx context.Context, err error, id interface{}, errKind ...interf
 		return
 	}
 
-	if errors.Is(err, context.Canceled) || errors.Is(err, http.ErrServerClosed) {
+	if errors.Is(err, context.Canceled) {
 		return
 	}
 
-	if e := errors.Unwrap(err); e != nil {
-		if e.Error() == "disk not found" {
-			return
-		}
+	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
+		return
 	}
 
 	logOnce.logOnceIf(ctx, err, id, errKind...)

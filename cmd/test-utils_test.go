@@ -61,6 +61,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
@@ -69,6 +70,7 @@ import (
 // TestMain to set up global env.
 func TestMain(m *testing.M) {
 	flag.Parse()
+
 	globalActiveCred = auth.Credentials{
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
@@ -106,6 +108,8 @@ func TestMain(m *testing.M) {
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
 	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
+
+	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
 
 	initHelp()
 

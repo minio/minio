@@ -182,19 +182,14 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTC
 	if cache.status == scanStateNone || cache.fileNotFound {
 		return errFileNotFound
 	}
-	if cache.status == scanStateSuccess {
+	if cache.status == scanStateSuccess || cache.status == scanStateStarted {
 		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
-			return fmt.Errorf("timeout: list %s finished and no update for 1 minute", cache.id)
+			return fmt.Errorf("timeout: list %s not updated for 1 minute", cache.id)
 		}
 		return nil
 	}
 	if cache.error != "" {
 		return fmt.Errorf("async cache listing failed with: %s", cache.error)
-	}
-	if cache.status == scanStateStarted {
-		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
-			return fmt.Errorf("cache id %s listing not updating. Last update %s seconds ago", cache.id, time.Since(cache.lastUpdate).Round(time.Second))
-		}
 	}
 	return nil
 }
