@@ -88,11 +88,6 @@ type erasureSets struct {
 
 	disksStorageInfoCache timedValue
 
-	// Merge tree walk
-	pool         *MergeWalkPool
-	poolSplunk   *MergeWalkPool
-	poolVersions *MergeWalkVersionsPool
-
 	mrfMU         sync.Mutex
 	mrfOperations map[healSource]int
 }
@@ -356,9 +351,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 		disksConnectEvent: make(chan diskConnectInfo),
 		distributionAlgo:  format.Erasure.DistributionAlgo,
 		deploymentID:      uuid.MustParse(format.ID),
-		pool:              NewMergeWalkPool(globalMergeLookupTimeout),
-		poolSplunk:        NewMergeWalkPool(globalMergeLookupTimeout),
-		poolVersions:      NewMergeWalkVersionsPool(globalMergeLookupTimeout),
 		mrfOperations:     make(map[healSource]int),
 	}
 
@@ -926,10 +918,6 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 	return lentry, lexicallySortedEntryCount, isTruncated
 }
 
-func (s *erasureSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoCh {
-	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1, false)
-}
-
 func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
 	return s.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
 }
@@ -954,42 +942,6 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 
 				mutex.Lock()
 				entryChs = append(entryChs, FileInfoVersionsCh{
-					Ch: entryCh,
-				})
-				mutex.Unlock()
-			}(disk)
-		}
-	}
-	wg.Wait()
-	return entryChs
-}
-
-// Starts a walk channel across n number of disks and returns a slice of
-// FileInfoCh which can be read from.
-func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int, splunk bool) []FileInfoCh {
-	var entryChs []FileInfoCh
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	for _, set := range s.sets {
-		// Reset for the next erasure set.
-		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
-			wg.Add(1)
-			go func(disk StorageAPI) {
-				defer wg.Done()
-
-				var entryCh chan FileInfo
-				var err error
-				if splunk {
-					entryCh, err = disk.WalkSplunk(GlobalContext, bucket, prefix, marker, endWalkCh)
-				} else {
-					entryCh, err = disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
-				}
-				if err != nil {
-					// Disk walk returned error, ignore it.
-					return
-				}
-				mutex.Lock()
-				entryChs = append(entryChs, FileInfoCh{
 					Ch: entryCh,
 				})
 				mutex.Unlock()
