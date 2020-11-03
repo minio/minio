@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -33,7 +34,6 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/retry"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -443,11 +443,15 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	// allocate dynamic timeout once before the loop
 	iamLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
 
-	for range retry.NewTimerWithJitter(retryCtx, time.Second, 5*time.Second, retry.MaxJitter) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	var err error
+	for {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err := txnLk.GetLock(iamLockTimeout); err != nil {
+		if err = txnLk.GetLock(iamLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
+			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue
 		}
 
@@ -455,7 +459,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
+			if err = migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
 				txnLk.Unlock()
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
@@ -469,11 +473,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		}
 
 		// Migrate IAM configuration, if necessary.
-		if err := sys.doIAMConfigMigration(ctx); err != nil {
+		if err = sys.doIAMConfigMigration(ctx); err != nil {
 			txnLk.Unlock()
 			if errors.Is(err, errDiskNotFound) ||
 				errors.Is(err, errConfigNotFound) ||
-				errors.Is(err, context.Canceled) ||
 				errors.Is(err, context.DeadlineExceeded) ||
 				errors.As(err, &rquorum) ||
 				errors.As(err, &wquorum) ||
@@ -491,11 +494,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		break
 	}
 
-	err := sys.store.loadAll(ctx, sys)
+	err = sys.store.loadAll(ctx, sys)
 
 	// Invalidate the old cred always, even upon error to avoid any leakage.
 	globalOldCred = auth.Credentials{}
-
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available %w", err))
 	}
@@ -579,11 +581,17 @@ func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
 	}
 
 	sys.store.rlock()
-	defer sys.store.runlock()
+	fallback := sys.storeFallback
+	sys.store.runlock()
 
-	if sys.storeFallback {
-		return nil, errIAMNotInitialized
+	if fallback {
+		if err := sys.store.loadAll(context.Background(), sys); err != nil {
+			return nil, err
+		}
 	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
 
 	policyDocsMap := make(map[string]iampolicy.Policy, len(sys.iamPolicyDocsMap))
 	for k, v := range sys.iamPolicyDocsMap {
@@ -741,18 +749,24 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 		return nil, errServerNotInitialized
 	}
 
-	var users = make(map[string]madmin.UserInfo)
-
-	sys.store.rlock()
-	defer sys.store.runlock()
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return nil, errIAMActionNotAllowed
 	}
 
-	if sys.storeFallback {
-		return nil, errIAMNotInitialized
+	sys.store.rlock()
+	fallback := sys.storeFallback
+	sys.store.runlock()
+
+	if fallback {
+		if err := sys.store.loadAll(context.Background(), sys); err != nil {
+			return nil, err
+		}
 	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	var users = make(map[string]madmin.UserInfo)
 
 	for k, v := range sys.iamUsersMap {
 		if !v.IsTemp() && !v.IsServiceAccount() {
@@ -975,14 +989,19 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	}
 
 	sys.store.rlock()
-	defer sys.store.runlock()
+	fallback := sys.storeFallback
+	sys.store.runlock()
 
-	if sys.storeFallback {
-		return nil, errIAMNotInitialized
+	if fallback {
+		if err := sys.store.loadAll(context.Background(), sys); err != nil {
+			return nil, err
+		}
 	}
 
-	var serviceAccounts []string
+	sys.store.rlock()
+	defer sys.store.runlock()
 
+	var serviceAccounts []string
 	for k, v := range sys.iamUsersMap {
 		if v.IsServiceAccount() && v.ParentUser == accessKey {
 			serviceAccounts = append(serviceAccounts, k)
@@ -1083,12 +1102,12 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 		return errServerNotInitialized
 	}
 
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
 	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
 
 	cred, ok := sys.iamUsersMap[accessKey]
 	if !ok {
@@ -1181,12 +1200,12 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 		return errInvalidArgument
 	}
 
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
 	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
 
 	// Validate that all members exist.
 	for _, member := range members {
@@ -1241,12 +1260,12 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 		return errInvalidArgument
 	}
 
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
 	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
 
 	// Validate that all members exist.
 	for _, member := range members {
@@ -1317,12 +1336,12 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 		return errServerNotInitialized
 	}
 
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return errIAMActionNotAllowed
 	}
+
+	sys.store.lock()
+	defer sys.store.unlock()
 
 	if group == "" {
 		return errInvalidArgument
@@ -1392,20 +1411,28 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 		return r, errServerNotInitialized
 	}
 
-	sys.store.rlock()
-	defer sys.store.runlock()
-
-	if sys.storeFallback {
-		return nil, errIAMNotInitialized
-	}
-
 	if sys.usersSysType != MinIOUsersSysType {
 		return nil, errIAMActionNotAllowed
 	}
 
+	sys.store.rlock()
+	fallback := sys.storeFallback
+	sys.store.runlock()
+
+	if fallback {
+		if err := sys.store.loadAll(context.Background(), sys); err != nil {
+			return nil, err
+		}
+	}
+
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	r = make([]string, 0, len(sys.iamGroupsMap))
 	for k := range sys.iamGroupsMap {
 		r = append(r, k)
 	}
+
 	return r, nil
 }
 
@@ -1909,9 +1936,6 @@ func (sys *IAMSys) removeGroupFromMembershipsMap(group string) {
 
 // EnableLDAPSys - enable ldap system users type.
 func (sys *IAMSys) EnableLDAPSys() {
-	sys.store.lock()
-	defer sys.store.unlock()
-
 	sys.usersSysType = LDAPUsersSysType
 }
 
