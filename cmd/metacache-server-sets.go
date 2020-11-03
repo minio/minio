@@ -103,7 +103,8 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					// Context is canceled, return at once.
-					return entries, err
+					// request canceled, no entries to return
+					return entries, io.EOF
 				}
 				logger.LogIf(ctx, err)
 				o.Transient = true
@@ -113,15 +114,12 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 			}
 		}
 		if cache.fileNotFound {
-			return entries, errFileNotFound
+			// No cache found, no entries found.
+			return entries, io.EOF
 		}
 		// Only create if we created a new.
 		o.Create = o.ID == cache.id
 		o.ID = cache.id
-	}
-
-	if o.AskDisks == 0 {
-		o.AskDisks = globalAPIConfig.getListQuorum()
 	}
 
 	var mu sync.Mutex
@@ -179,7 +177,8 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		cache.fileNotFound = true
 		_, err := o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
 		logger.LogIf(ctx, err)
-		return entries, errFileNotFound
+		// cache returned not found, entries truncated.
+		return entries, io.EOF
 	}
 
 	for _, err := range errs {
