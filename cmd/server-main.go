@@ -199,9 +199,6 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Initialize IAM store
-	globalIAMSys.InitStore(newObject)
-
 	// Create cancel context to control 'newRetryTimer' go routine.
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -337,6 +334,9 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		// Any other config errors we simply print a message and proceed forward.
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
+
+	// Initialize IAM store
+	globalIAMSys.InitStore(newObject)
 
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
