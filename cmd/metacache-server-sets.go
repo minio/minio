@@ -91,9 +91,13 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		o.OldestCycle = globalNotificationSys.findEarliestCleanBloomFilter(ctx, path.Join(o.Bucket, o.BaseDir))
 		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
-		if rpc == nil {
+		if isReservedOrInvalidBucket(o.Bucket, false) {
+			rpc = nil
+			o.Transient = true
+		}
+		if rpc == nil || o.Transient {
 			// Local
-			cache = localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
+			cache = localMetacacheMgr.findCache(ctx, o)
 		} else {
 			c, err := rpc.GetMetacacheListing(ctx, o)
 			if err != nil {
@@ -103,8 +107,8 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 					return entries, io.EOF
 				}
 				logger.LogIf(ctx, err)
-				cache = localMetacacheMgr.getTransient().findCache(o)
 				o.Transient = true
+				cache = localMetacacheMgr.findCache(ctx, o)
 			} else {
 				cache = *c
 			}

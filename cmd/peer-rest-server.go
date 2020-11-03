@@ -634,13 +634,7 @@ func (s *peerRESTServer) UpdateMetacacheListingHandler(w http.ResponseWriter, r 
 		s.writeErrorResponse(w, err)
 		return
 	}
-	b := localMetacacheMgr.getBucket(ctx, req.bucket)
-	if b == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
-	}
-
-	cache, err := b.updateCacheEntry(req)
+	cache, err := localMetacacheMgr.updateCacheEntry(req)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
