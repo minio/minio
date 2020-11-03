@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v3"
+	lockRESTVersion       = "v4" // Add Quorum query param
 	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
 	lockRESTPrefix        = minioReservedBucketPath + "/lock"
 )
@@ -34,14 +34,23 @@ const (
 	lockRESTMethodRUnlock = "/runlock"
 	lockRESTMethodExpired = "/expired"
 
+	// lockRESTOwner represents owner UUID
+	lockRESTOwner = "owner"
+
 	// Unique ID of lock/unlock request.
 	lockRESTUID = "uid"
+
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.
 	lockRESTSource = "source"
+
+	// Quroum value to be saved along lock requester info, useful
+	// in verifying stale locks
+	lockRESTQuorum = "quorum"
 )
 
 var (
-	errLockConflict   = errors.New("lock conflict")
-	errLockNotExpired = errors.New("lock not expired")
+	errLockConflict       = errors.New("lock conflict")
+	errLockNotExpired     = errors.New("lock not expired")
+	errLockNotInitialized = errors.New("lock not initialized")
 )

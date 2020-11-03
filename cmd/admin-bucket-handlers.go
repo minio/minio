@@ -226,6 +226,11 @@ func (a adminAPIHandlers) ListRemoteTargetsHandler(w http.ResponseWriter, r *htt
 		return
 	}
 	if bucket != "" {
+		// Check if bucket exists.
+		if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 		if _, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket); err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return

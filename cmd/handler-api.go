@@ -31,7 +31,8 @@ type apiConfig struct {
 
 	requestsDeadline time.Duration
 	requestsPool     chan struct{}
-	readyDeadline    time.Duration
+	clusterDeadline  time.Duration
+	listQuorum       int
 	corsAllowOrigins []string
 }
 
@@ -39,7 +40,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	t.readyDeadline = cfg.ReadyDeadline
+	t.clusterDeadline = cfg.ClusterDeadline
 	t.corsAllowOrigins = cfg.CorsAllowOrigin
 
 	var apiRequestsMaxPerNode int
@@ -63,6 +64,14 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 
 	t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
 	t.requestsDeadline = cfg.RequestsDeadline
+	t.listQuorum = cfg.GetListQuorum()
+}
+
+func (t *apiConfig) getListQuorum() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.listQuorum
 }
 
 func (t *apiConfig) getCorsAllowOrigins() []string {
@@ -74,15 +83,15 @@ func (t *apiConfig) getCorsAllowOrigins() []string {
 	return corsAllowOrigins
 }
 
-func (t *apiConfig) getReadyDeadline() time.Duration {
+func (t *apiConfig) getClusterDeadline() time.Duration {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	if t.readyDeadline == 0 {
+	if t.clusterDeadline == 0 {
 		return 10 * time.Second
 	}
 
-	return t.readyDeadline
+	return t.clusterDeadline
 }
 
 func (t *apiConfig) getRequestsPool() (chan struct{}, <-chan time.Time) {

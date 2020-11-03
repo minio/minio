@@ -12,13 +12,17 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package madmin
+package bandwidth
 
-// ServerDiskHwOBDInfo - Includes usage counters, disk counters and partitions
-type ServerDiskHwOBDInfo struct {
-	Addr  string `json:"addr"`
-	Error string `json:"error,omitempty"`
+// Details for the measured bandwidth
+type Details struct {
+	LimitInBytesPerSecond            int64   `json:"limitInBits"`
+	CurrentBandwidthInBytesPerSecond float64 `json:"currentBandwidth"`
+}
+
+// Report captures the details for all buckets.
+type Report struct {
+	BucketStats map[string]Details `json:"bucketStats,omitempty"`
 }

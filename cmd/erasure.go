@@ -52,7 +52,7 @@ type erasureObjects struct {
 	getDisks func() []StorageAPI
 
 	// getLockers returns list of remote and local lockers.
-	getLockers func() []dsync.NetLocker
+	getLockers func() ([]dsync.NetLocker, string)
 
 	// getEndpoints returns list of endpoint strings belonging this set.
 	// some may be local and some remote.
@@ -81,14 +81,6 @@ func (er erasureObjects) SetDriveCount() int {
 func (er erasureObjects) Shutdown(ctx context.Context) error {
 	// Add any object layer shutdown activities here.
 	closeStorageDisks(er.getDisks())
-	select {
-	case _, ok := <-er.mrfOpCh:
-		if ok {
-			close(er.mrfOpCh)
-		}
-	default:
-		close(er.mrfOpCh)
-	}
 	return nil
 }
 
@@ -149,16 +141,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				return errDiskNotFound
 			}
 			info, err := disks[index].DiskInfo(context.TODO())
-			if err != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("disk", disks[index].String())
-				ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-				logger.LogIf(ctx, err)
-				disksInfo[index] = madmin.Disk{
-					State:    diskErrToDriveState(err),
-					Endpoint: endpoints[index],
-				}
-				return err
-			}
 			di := madmin.Disk{
 				Endpoint:       endpoints[index],
 				DrivePath:      info.MountPath,
@@ -167,6 +149,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				AvailableSpace: info.Free,
 				UUID:           info.ID,
 				RootDisk:       info.RootDisk,
+				Healing:        info.Healing,
 				State:          diskErrToDriveState(err),
 			}
 			if info.Total > 0 {
@@ -181,7 +164,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 	// Wait for the routines.
 	for i, diskInfoErr := range errs {
 		ep := disksInfo[i].Endpoint
-		if diskInfoErr != nil {
+		if diskInfoErr != nil && !errors.Is(diskInfoErr, errUnformattedDisk) {
 			offlineDisks[ep]++
 			continue
 		}
@@ -195,7 +178,9 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		}
 	}
 
-	if len(disksInfo) == rootDiskCount {
+	// Count offline disks as well to ensure consistent
+	// reportability of offline drives on local setups.
+	if len(disksInfo) == (rootDiskCount + offlineDisks.Sum()) {
 		// Success.
 		return disksInfo, errs, onlineDisks, offlineDisks
 	}
@@ -256,46 +241,20 @@ func (er erasureObjects) StorageInfo(ctx context.Context, local bool) (StorageIn
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	if len(buckets) == 0 {
+		logger.Info(color.Green("data-crawl:") + " No buckets found, skipping crawl")
 		return nil
 	}
 
-	// Collect any disk healing.
-	healing, err := getAggregatedBackgroundHealState(ctx)
-	if err != nil {
-		return err
-	}
-
-	healDisks := make(map[string]struct{}, len(healing.HealDisks))
-	for _, disk := range healing.HealDisks {
-		healDisks[disk] = struct{}{}
-	}
-
 	// Collect disks we can use.
-	var disks []StorageAPI
-	for _, d := range er.getLoadBalancedDisks() {
-		if d == nil || !d.IsOnline() {
-			continue
-		}
-		di, err := d.DiskInfo(ctx)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			continue
-		}
-		if _, ok := healDisks[di.Endpoint]; ok {
-			logger.Info(color.Green("data-crawl:")+" Disk %q is Healing, skipping disk.", di.Endpoint)
-			continue
-		}
-		disks = append(disks, d)
-	}
+	disks := er.getOnlineDisks()
 	if len(disks) == 0 {
-		logger.Info(color.Green("data-crawl:") + " No disks found, skipping crawl")
+		logger.Info(color.Green("data-crawl:") + " all disks are offline or being healed, skipping crawl")
 		return nil
 	}
 
 	// Load bucket totals
 	oldCache := dataUsageCache{}
-	err = oldCache.load(ctx, er, dataUsageCacheName)
-	if err != nil {
+	if err := oldCache.load(ctx, er, dataUsageCacheName); err != nil {
 		return err
 	}
 
@@ -403,6 +362,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 
 				// Calc usage
 				before := cache.Info.LastUpdate
+				var err error
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
 				cache.Info.BloomFilter = nil
 				if err != nil {

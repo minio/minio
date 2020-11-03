@@ -19,13 +19,14 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -35,10 +36,12 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
+	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	trace "github.com/minio/minio/pkg/trace"
+	"github.com/minio/minio/pkg/trace"
+	"github.com/tinylib/msgp/msgp"
 )
 
 // client to talk to peer Nodes.
@@ -114,19 +117,6 @@ func (n networkOverloadedErr) Error() string {
 	return "network overloaded"
 }
 
-type progressReader struct {
-	r            io.Reader
-	progressChan chan int64
-}
-
-func (p *progressReader) Read(b []byte) (int, error) {
-	n, err := p.r.Read(b)
-	if n >= 0 {
-		p.progressChan <- int64(n)
-	}
-	return n, err
-}
-
 type nullReader struct{}
 
 func (r *nullReader) Read(b []byte) (int, error) {
@@ -134,19 +124,14 @@ func (r *nullReader) Read(b []byte) (int, error) {
 }
 
 func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.NetOBDInfo, err error) {
+	var mu sync.Mutex // mutex used to protect these slices in go-routines
 	latencies := []float64{}
 	throughputs := []float64{}
 
 	buflimiter := make(chan struct{}, threadCount)
 	errChan := make(chan error, threadCount)
 
-	totalTransferred := int64(0)
-	transferChan := make(chan int64, threadCount)
-	go func() {
-		for v := range transferChan {
-			atomic.AddInt64(&totalTransferred, v)
-		}
-	}()
+	var totalTransferred int64
 
 	// ensure enough samples to obtain normal distribution
 	maxSamples := int(10 * threadCount)
@@ -185,15 +170,13 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 			}
 
 			go func(i int) {
-				progress := &progressReader{
-					r:            io.LimitReader(&nullReader{}, dataSize),
-					progressChan: transferChan,
-				}
 				start := time.Now()
 				before := atomic.LoadInt64(&totalTransferred)
 
 				ctx, cancel := context.WithTimeout(innerCtx, 10*time.Second)
 				defer cancel()
+
+				progress := io.LimitReader(&nullReader{}, dataSize)
 
 				// Turn off healthCheckFn for OBD tests to cater for higher load on the peers.
 				clnt := newPeerRESTClient(client.host)
@@ -213,8 +196,9 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 				}
 				http.DrainBody(respBody)
 
-				after := atomic.LoadInt64(&totalTransferred)
 				finish()
+				atomic.AddInt64(&totalTransferred, dataSize)
+				after := atomic.LoadInt64(&totalTransferred)
 				end := time.Now()
 
 				latency := end.Sub(start).Seconds()
@@ -226,13 +210,16 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 				/* Throughput = (total data transferred across all threads / time taken) */
 				throughput := float64((after - before)) / latency
 
+				// Protect updating latencies and throughputs slices from
+				// multiple go-routines.
+				mu.Lock()
 				latencies = append(latencies, latency)
 				throughputs = append(throughputs, throughput)
+				mu.Unlock()
 			}(i)
 		}
 	}
 	wg.Wait()
-	close(transferChan)
 
 	if err != nil {
 		return info, err
@@ -421,17 +408,6 @@ func (client *peerRESTClient) ProcOBDInfo(ctx context.Context) (info madmin.Serv
 	return info, err
 }
 
-// LogOBDInfo - fetch Log OBD information for a remote node.
-func (client *peerRESTClient) LogOBDInfo(ctx context.Context) (info madmin.ServerLogOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodLogOBDInfo, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
-}
-
 // StartProfiling - Issues profiling command on the peer node.
 func (client *peerRESTClient) StartProfiling(profiler string) error {
 	values := make(url.Values)
@@ -472,19 +448,6 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
 	respBody, err := client.call(peerRESTMethodDeleteBucketMetadata, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// ReloadFormat - reload format on the peer node.
-func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
-	values := make(url.Values)
-	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
-
-	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
 	if err != nil {
 		return err
 	}
@@ -682,6 +645,40 @@ func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []st
 	return diskIDs
 }
 
+// GetMetacacheListing - get a new or existing metacache.
+func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPathOptions) (*metacache, error) {
+	var reader bytes.Buffer
+	err := gob.NewEncoder(&reader).Encode(o)
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetMetacacheListing, nil, &reader, int64(reader.Len()))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return nil, err
+	}
+	var resp metacache
+	defer http.DrainBody(respBody)
+	return &resp, msgp.Decode(respBody, &resp)
+}
+
+// UpdateMetacacheListing - update an existing metacache it will unconditionally be updated to the new state.
+func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m metacache) (metacache, error) {
+	b, err := m.MarshalMsg(nil)
+	if err != nil {
+		return m, err
+	}
+	respBody, err := client.callWithContext(ctx, peerRESTMethodUpdateMetacacheListing, nil, bytes.NewBuffer(b), int64(len(b)))
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return m, err
+	}
+	defer http.DrainBody(respBody)
+	var resp metacache
+	return resp, msgp.Decode(respBody, &resp)
+
+}
+
 func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))
@@ -836,30 +833,29 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan s
 	}()
 }
 
-func getRemoteHosts(endpointZones EndpointZones) []*xnet.Host {
-	peers := GetRemotePeers(endpointZones)
-	remoteHosts := make([]*xnet.Host, 0, len(peers))
-	for _, hostStr := range peers {
-		host, err := xnet.ParseHost(hostStr)
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
+// newPeerRestClients creates new peer clients.
+// The two slices will point to the same clients,
+// but 'all' will contain nil entry for local client.
+// The 'all' slice will be in the same order across the cluster.
+func newPeerRestClients(endpoints EndpointServerSets) (remote, all []*peerRESTClient) {
+	if !globalIsDistErasure {
+		// Only useful in distributed setups
+		return nil, nil
+	}
+	hosts := endpoints.hostsSorted()
+	remote = make([]*peerRESTClient, 0, len(hosts))
+	all = make([]*peerRESTClient, len(hosts))
+	for i, host := range hosts {
+		if host == nil {
 			continue
 		}
-		remoteHosts = append(remoteHosts, host)
+		all[i] = newPeerRESTClient(host)
+		remote = append(remote, all[i])
 	}
-
-	return remoteHosts
-}
-
-// newPeerRestClients creates new peer clients.
-func newPeerRestClients(endpoints EndpointZones) []*peerRESTClient {
-	peerHosts := getRemoteHosts(endpoints)
-	restClients := make([]*peerRESTClient, len(peerHosts))
-	for i, host := range peerHosts {
-		restClients[i] = newPeerRESTClient(host)
+	if len(all) != len(remote)+1 {
+		logger.LogIf(context.Background(), fmt.Errorf("WARNING: Expected number of all hosts (%v) to be remote +1 (%v)", len(all), len(remote)))
 	}
-
-	return restClients
+	return remote, all
 }
 
 // Returns a peer rest client.
@@ -875,23 +871,13 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		Path:   peerRESTPath,
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: peer.Name,
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
-
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 	// Construct a new health function.
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
 		// Instantiate a new rest client for healthcheck
 		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
+		respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
 		cancel()
 		var ne *rest.NetworkError
@@ -899,4 +885,20 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	}
 
 	return &peerRESTClient{host: peer, restClient: restClient}
+}
+
+// MonitorBandwidth - send http trace request to peer nodes
+func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*bandwidth.Report, error) {
+	values := make(url.Values)
+	values.Set(peerRESTBuckets, strings.Join(buckets, ","))
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetBandwidth, values, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	defer http.DrainBody(respBody)
+
+	dec := gob.NewDecoder(respBody)
+	var bandwidthReport bandwidth.Report
+	err = dec.Decode(&bandwidthReport)
+	return &bandwidthReport, err
 }

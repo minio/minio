@@ -27,6 +27,9 @@ var errCorruptedFormat = StorageErr("corrupted backend format, specified disk mo
 // errUnformattedDisk - unformatted disk found.
 var errUnformattedDisk = StorageErr("unformatted disk found")
 
+// errInconsistentDisk - inconsistent disk found.
+var errInconsistentDisk = StorageErr("inconsistent disk found")
+
 // errUnsupporteDisk - when disk does not support O_DIRECT flag.
 var errUnsupportedDisk = StorageErr("disk does not support O_DIRECT")
 
@@ -55,7 +58,7 @@ var errFileNotFound = StorageErr("file not found")
 var errFileVersionNotFound = StorageErr("file version not found")
 
 // errTooManyOpenFiles - too many open files.
-var errTooManyOpenFiles = StorageErr("too many open files")
+var errTooManyOpenFiles = StorageErr("too many open files, please increase 'ulimit -n'")
 
 // errFileNameTooLong - given file name is too long than supported length.
 var errFileNameTooLong = StorageErr("file name too long")

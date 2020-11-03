@@ -935,9 +935,16 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 
-	obj.PutObject(context.Background(), bucket, "a/one", mustGetPutObjReader(t, strings.NewReader(fileOne), int64(len(fileOne)), "", ""), opts)
-	obj.PutObject(context.Background(), bucket, "a/b/two", mustGetPutObjReader(t, strings.NewReader(fileTwo), int64(len(fileTwo)), "", ""), opts)
-	obj.PutObject(context.Background(), bucket, "a/c/three", mustGetPutObjReader(t, strings.NewReader(fileThree), int64(len(fileThree)), "", ""), opts)
+	for objName, value := range map[string]string{
+		"a/one":     fileOne,
+		"a/b/two":   fileTwo,
+		"a/c/three": fileThree,
+	} {
+		_, err = obj.PutObject(context.Background(), bucket, objName, mustGetPutObjReader(t, strings.NewReader(value), int64(len(value)), "", ""), opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
@@ -1217,17 +1224,17 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Set faulty disks to Erasure backend
-	z := obj.(*erasureZones)
-	xl := z.zones[0].sets[0]
+	z := obj.(*erasureServerSets)
+	xl := z.serverSets[0].sets[0]
 	erasureDisks := xl.getDisks()
-	z.zones[0].erasureDisksMu.Lock()
+	z.serverSets[0].erasureDisksMu.Lock()
 	xl.getDisks = func() []StorageAPI {
 		for i, d := range erasureDisks {
 			erasureDisks[i] = newNaughtyDisk(d, nil, errFaultyDisk)
 		}
 		return erasureDisks
 	}
-	z.zones[0].erasureDisksMu.Unlock()
+	z.serverSets[0].erasureDisksMu.Unlock()
 
 	// Initialize web rpc endpoint.
 	apiRouter := initTestWebRPCEndPoint(obj)

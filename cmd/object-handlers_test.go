@@ -2179,7 +2179,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			continue
 		}
 		if rec.Code == http.StatusOK {
 			var cpObjResp CopyObjectResponse
@@ -2788,7 +2789,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		if rec.Code == http.StatusOK {
 			// Verify whether the bucket obtained object is same as the one created.
 			if !bytes.Equal(testCase.expectedContent, actualContent) {
-				t.Errorf("Test %d : MinIO %s: Object content differs from expected value.", i+1, instanceType)
+				t.Errorf("Test %d : MinIO %s: CompleteMultipart response content differs from expected value. got %s, expecte %s", i+1, instanceType,
+					string(actualContent), string(testCase.expectedContent))
 			}
 			continue
 		}

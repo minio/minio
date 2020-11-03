@@ -16,6 +16,22 @@
 
 package dns
 
+// Error - DNS related errors error.
+type Error struct {
+	Bucket string
+	Err    error
+}
+
+// ErrInvalidBucketName for buckets with invalid name
+type ErrInvalidBucketName Error
+
+func (e ErrInvalidBucketName) Error() string {
+	return "invalid bucket name error: " + e.Err.Error()
+}
+func (e Error) Error() string {
+	return "dns related error: " + e.Err.Error()
+}
+
 // Store dns record store
 type Store interface {
 	Put(bucket string) error

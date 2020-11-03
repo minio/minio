@@ -27,9 +27,9 @@ import (
 var cfg = &tcplisten.Config{
 	DeferAccept: true,
 	FastOpen:    true,
-	// Bump up the soMaxConn value from 128 to 2048 to
+	// Bump up the soMaxConn value from 128 to 4096 to
 	// handle large incoming concurrent requests.
-	Backlog: 2048,
+	Backlog: 4096,
 }
 
 // Unix listener with special TCP options.

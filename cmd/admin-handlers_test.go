@@ -105,8 +105,8 @@ func initTestErasureObjLayer(ctx context.Context) (ObjectLayer, []string, error)
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer := &erasureZones{zones: make([]*erasureSets, 1)}
-	objLayer.zones[0], err = newErasureSets(ctx, endpoints, storageDisks, format)
+	objLayer := &erasureServerSets{serverSets: make([]*erasureSets, 1)}
+	objLayer.serverSets[0], err = newErasureSets(ctx, endpoints, storageDisks, format)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -327,13 +327,13 @@ func TestExtractHealInitParams(t *testing.T) {
 	mkParams := func(clientToken string, forceStart, forceStop bool) url.Values {
 		v := url.Values{}
 		if clientToken != "" {
-			v.Add(string(mgmtClientToken), clientToken)
+			v.Add(mgmtClientToken, clientToken)
 		}
 		if forceStart {
-			v.Add(string(mgmtForceStart), "")
+			v.Add(mgmtForceStart, "")
 		}
 		if forceStop {
-			v.Add(string(mgmtForceStop), "")
+			v.Add(mgmtForceStop, "")
 		}
 		return v
 	}
@@ -351,11 +351,11 @@ func TestExtractHealInitParams(t *testing.T) {
 	}
 	varsArr := []map[string]string{
 		// Invalid cases
-		{string(mgmtPrefix): "objprefix"},
+		{mgmtPrefix: "objprefix"},
 		// Valid cases
 		{},
-		{string(mgmtBucket): "bucket"},
-		{string(mgmtBucket): "bucket", string(mgmtPrefix): "objprefix"},
+		{mgmtBucket: "bucket"},
+		{mgmtBucket: "bucket", mgmtPrefix: "objprefix"},
 	}
 
 	// Body is always valid - we do not test JSON decoding.

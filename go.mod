@@ -12,7 +12,7 @@ require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
-	github.com/beevik/ntp v0.2.0
+	github.com/beevik/ntp v0.3.0
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/cheggaaa/pb v1.0.28
 	github.com/colinmarc/hdfs/v2 v2.1.1
@@ -20,6 +20,7 @@ require (
 	github.com/dchest/siphash v1.2.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/djherbis/atime v1.0.0
+	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/elazarl/go-bindata-assetfs v1.0.0
@@ -40,18 +41,18 @@ require (
 	github.com/klauspost/pgzip v1.2.1
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.9
-	github.com/lib/pq v1.7.0
+	github.com/lib/pq v1.8.0
 	github.com/mattn/go-colorable v0.1.4
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.8
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/minio-go/v7 v7.0.5-0.20200811211821-14ed05478889
+	github.com/minio/minio-go/v7 v7.0.6-0.20200929220449-755b5633803a
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5
-	github.com/minio/sio v0.2.0
+	github.com/minio/sio v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
 	github.com/montanaflynn/stats v0.5.0
@@ -82,7 +83,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	golang.org/x/sys v0.0.0-20200915084602-288bc346aa39
-	golang.org/x/tools v0.0.0-20200814172026-c4923e618c08 // indirect
+	golang.org/x/tools v0.0.0-20200929223013-bf155c11ec6f // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3

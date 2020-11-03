@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math/rand"
 	"os"
 	"path"
 	"strconv"
@@ -28,7 +29,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config"
-	"github.com/minio/minio/cmd/config/crawler"
+	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -49,15 +50,11 @@ const (
 	healDeleteDangling    = true
 	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
 	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
-
-	// sleep for an hour after a lock timeout
-	// before retrying to acquire lock again.
-	dataCrawlerLeaderLockTimeoutSleepInterval = time.Hour
 )
 
 var (
-	globalCrawlerConfig          crawler.Config
-	dataCrawlerLeaderLockTimeout = newDynamicTimeout(1*time.Minute, 30*time.Second)
+	globalHealConfig             heal.Config
+	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -73,10 +70,11 @@ func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 crawler is running on the cluster.
 	locker := objAPI.NewNSLock(minioMetaBucket, "runDataCrawler.lock")
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		err := locker.GetLock(ctx, dataCrawlerLeaderLockTimeout)
 		if err != nil {
-			time.Sleep(dataCrawlerLeaderLockTimeoutSleepInterval)
+			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
 			continue
 		}
 		break
@@ -137,12 +135,11 @@ type cachedFolder struct {
 }
 
 type folderScanner struct {
-	root               string
-	getSize            getSizeFn
-	oldCache           dataUsageCache
-	newCache           dataUsageCache
-	withFilter         *bloomFilter
-	waitForLowActiveIO func()
+	root       string
+	getSize    getSizeFn
+	oldCache   dataUsageCache
+	newCache   dataUsageCache
+	withFilter *bloomFilter
 
 	dataUsageCrawlMult  float64
 	dataUsageCrawlDebug bool
@@ -157,7 +154,7 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation waitForLowActiveIO is called which can be used to temporarily halt the crawler.
 // If the supplied context is canceled the function will return at the first chance.
-func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, waitForLowActiveIO func(), getSize getSizeFn) (dataUsageCache, error) {
+func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
 	t := UTCNow()
 
 	logPrefix := color.Green("data-usage: ")
@@ -185,7 +182,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		getSize:             getSize,
 		oldCache:            cache,
 		newCache:            dataUsageCache{Info: cache.Info},
-		waitForLowActiveIO:  waitForLowActiveIO,
 		newFolders:          nil,
 		existingFolders:     nil,
 		dataUsageCrawlMult:  delayMult,
@@ -350,7 +346,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil && filter != nil {
+		if f.oldCache.Info.lifeCycle != nil {
 			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 				if f.dataUsageCrawlDebug {
@@ -378,7 +374,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 			}
 		}
-		f.waitForLowActiveIO()
 		sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
 
 		cache := dataUsageEntry{}
@@ -426,7 +421,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 				return nil
 			}
-			f.waitForLowActiveIO()
+
 			// Dynamic time delay.
 			t := UTCNow()
 
@@ -464,7 +459,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			continue
 		}
@@ -486,20 +481,30 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// If that doesn't bring it back we remove the folder and assume it was deleted.
 		// This means that the next run will not look for it.
 		for k := range existing {
-			f.waitForLowActiveIO()
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
 				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
 			}
 
+			// Dynamic time delay.
+			t := UTCNow()
+
 			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
 				func(bucket, object, versionID string) error {
+					// Wait for each heal as per crawler frequency.
+					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+
+					defer func() {
+						t = UTCNow()
+					}()
 					return bgSeq.queueHealTask(healSource{
 						bucket:    bucket,
 						object:    object,
 						versionID: versionID,
 					}, madmin.HealItemObject)
 				})
+
+			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 
 			if f.dataUsageCrawlDebug && err != nil {
 				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
@@ -537,7 +542,6 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 		default:
 		}
 
-		f.waitForLowActiveIO()
 		if typ&os.ModeDir != 0 {
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
@@ -751,9 +755,14 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		return size
 	}
 
+	eventName := event.ObjectRemovedDelete
+	if obj.DeleteMarker {
+		eventName = event.ObjectRemovedDeleteMarkerCreated
+	}
+
 	// Notify object deleted event.
 	sendEvent(eventArgs{
-		EventName:  event.ObjectRemovedDelete,
+		EventName:  eventName,
 		BucketName: i.bucket,
 		Object:     obj,
 		Host:       "Internal: [ILM-EXPIRY]",

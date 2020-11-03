@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -26,17 +28,20 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // EndpointType - enum for endpoint type.
@@ -201,12 +206,12 @@ type ZoneEndpoints struct {
 	Endpoints    Endpoints
 }
 
-// EndpointZones - list of list of endpoints
-type EndpointZones []ZoneEndpoints
+// EndpointServerSets - list of list of endpoints
+type EndpointServerSets []ZoneEndpoints
 
 // GetLocalZoneIdx returns the zone which endpoint belongs to locally.
 // if ep is remote this code will return -1 zoneIndex
-func (l EndpointZones) GetLocalZoneIdx(ep Endpoint) int {
+func (l EndpointServerSets) GetLocalZoneIdx(ep Endpoint) int {
 	for i, zep := range l {
 		for _, cep := range zep.Endpoints {
 			if cep.IsLocal && ep.IsLocal {
@@ -220,14 +225,14 @@ func (l EndpointZones) GetLocalZoneIdx(ep Endpoint) int {
 }
 
 // Add add zone endpoints
-func (l *EndpointZones) Add(zeps ZoneEndpoints) error {
+func (l *EndpointServerSets) Add(zeps ZoneEndpoints) error {
 	existSet := set.NewStringSet()
 	for _, zep := range *l {
 		for _, ep := range zep.Endpoints {
 			existSet.Add(ep.String())
 		}
 	}
-	// Validate if there are duplicate endpoints across zones
+	// Validate if there are duplicate endpoints across serverSets
 	for _, ep := range zeps.Endpoints {
 		if existSet.Contains(ep.String()) {
 			return fmt.Errorf("duplicate endpoints found")
@@ -238,17 +243,17 @@ func (l *EndpointZones) Add(zeps ZoneEndpoints) error {
 }
 
 // FirstLocal returns true if the first endpoint is local.
-func (l EndpointZones) FirstLocal() bool {
+func (l EndpointServerSets) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal
 }
 
 // HTTPS - returns true if secure for URLEndpointType.
-func (l EndpointZones) HTTPS() bool {
+func (l EndpointServerSets) HTTPS() bool {
 	return l[0].Endpoints.HTTPS()
 }
 
 // NEndpoints - returns all nodes count
-func (l EndpointZones) NEndpoints() (count int) {
+func (l EndpointServerSets) NEndpoints() (count int) {
 	for _, ep := range l {
 		count += len(ep.Endpoints)
 	}
@@ -256,7 +261,7 @@ func (l EndpointZones) NEndpoints() (count int) {
 }
 
 // Hostnames - returns list of unique hostnames
-func (l EndpointZones) Hostnames() []string {
+func (l EndpointServerSets) Hostnames() []string {
 	foundSet := set.NewStringSet()
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
@@ -267,6 +272,52 @@ func (l EndpointZones) Hostnames() []string {
 		}
 	}
 	return foundSet.ToSlice()
+}
+
+// hostsSorted will return all hosts found.
+// The LOCAL host will be nil, but the indexes of all hosts should
+// remain consistent across the cluster.
+func (l EndpointServerSets) hostsSorted() []*xnet.Host {
+	peers, localPeer := l.peers()
+	sort.Strings(peers)
+	hosts := make([]*xnet.Host, len(peers))
+	for i, hostStr := range peers {
+		if hostStr == localPeer {
+			continue
+		}
+		host, err := xnet.ParseHost(hostStr)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			continue
+		}
+		hosts[i] = host
+	}
+
+	return hosts
+}
+
+// peers will return all peers, including local.
+// The local peer is returned as a separate string.
+func (l EndpointServerSets) peers() (peers []string, local string) {
+	allSet := set.NewStringSet()
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.Type() != URLEndpointType {
+				continue
+			}
+
+			peer := endpoint.Host
+			if endpoint.IsLocal {
+				if _, port := mustSplitHostPort(peer); port == globalMinioPort {
+					local = peer
+				}
+			}
+
+			allSet.Add(peer)
+		}
+	}
+
+	return allSet.ToSlice(), local
 }
 
 // Endpoints - list of same type of endpoint.
@@ -688,9 +739,9 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 // the first element from the set of peers which indicate that
 // they are local. There is always one entry that is local
 // even with repeated server endpoints.
-func GetLocalPeer(endpointZones EndpointZones) (localPeer string) {
+func GetLocalPeer(endpointServerSets EndpointServerSets) (localPeer string) {
 	peerSet := set.NewStringSet()
-	for _, ep := range endpointZones {
+	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.Type() != URLEndpointType {
 				continue
@@ -712,28 +763,6 @@ func GetLocalPeer(endpointZones EndpointZones) (localPeer string) {
 	return peerSet.ToSlice()[0]
 }
 
-// GetRemotePeers - get hosts information other than this minio service.
-func GetRemotePeers(endpointZones EndpointZones) []string {
-	peerSet := set.NewStringSet()
-	for _, ep := range endpointZones {
-		for _, endpoint := range ep.Endpoints {
-			if endpoint.Type() != URLEndpointType {
-				continue
-			}
-
-			peer := endpoint.Host
-			if endpoint.IsLocal {
-				if _, port := mustSplitHostPort(peer); port == globalMinioPort {
-					continue
-				}
-			}
-
-			peerSet.Add(peer)
-		}
-	}
-	return peerSet.ToSlice()
-}
-
 // GetProxyEndpointLocalIndex returns index of the local proxy endpoint
 func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
 	for i, pep := range proxyEps {
@@ -744,13 +773,79 @@ func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
 	return -1
 }
 
+func httpDo(clnt *http.Client, req *http.Request, f func(*http.Response, error) error) error {
+	ctx, cancel := context.WithTimeout(GlobalContext, 200*time.Millisecond)
+	defer cancel()
+
+	// Run the HTTP request in a goroutine and pass the response to f.
+	c := make(chan error, 1)
+	req = req.WithContext(ctx)
+	go func() { c <- f(clnt.Do(req)) }()
+	select {
+	case <-ctx.Done():
+		<-c // Wait for f to return.
+		return ctx.Err()
+	case err := <-c:
+		return err
+	}
+}
+
+func getOnlineProxyEndpointIdx() int {
+	type reqIndex struct {
+		Request *http.Request
+		Idx     int
+	}
+
+	proxyRequests := make(map[*http.Client]reqIndex, len(globalProxyEndpoints))
+	for i, proxyEp := range globalProxyEndpoints {
+		proxyEp := proxyEp
+		serverURL := &url.URL{
+			Scheme: proxyEp.Scheme,
+			Host:   proxyEp.Host,
+			Path:   pathJoin(healthCheckPathPrefix, healthCheckLivenessPath),
+		}
+
+		req, err := http.NewRequest(http.MethodGet, serverURL.String(), nil)
+		if err != nil {
+			continue
+		}
+
+		proxyRequests[&http.Client{
+			Transport: proxyEp.Transport,
+		}] = reqIndex{
+			Request: req,
+			Idx:     i,
+		}
+	}
+
+	for c, r := range proxyRequests {
+		if err := httpDo(c, r.Request, func(resp *http.Response, err error) error {
+			if err != nil {
+				return err
+			}
+			xhttp.DrainBody(resp.Body)
+			if resp.StatusCode != http.StatusOK {
+				return errors.New(resp.Status)
+			}
+			if v := resp.Header.Get(xhttp.MinIOServerStatus); v == unavailable {
+				return errors.New(v)
+			}
+			return nil
+		}); err != nil {
+			continue
+		}
+		return r.Idx
+	}
+	return -1
+}
+
 // GetProxyEndpoints - get all endpoints that can be used to proxy list request.
-func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
+func GetProxyEndpoints(endpointServerSets EndpointServerSets) []ProxyEndpoint {
 	var proxyEps []ProxyEndpoint
 
 	proxyEpSet := set.NewStringSet()
 
-	for _, ep := range endpointZones {
+	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.Type() != URLEndpointType {
 				continue
@@ -770,11 +865,8 @@ func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
 				}
 			}
 
-			tr := newCustomHTTPTransport(tlsConfig, rest.DefaultRESTTimeout)()
-			// Allow more requests to be in flight with higher response header timeout.
-			tr.ResponseHeaderTimeout = 30 * time.Minute
-			tr.MaxIdleConns = 64
-			tr.MaxIdleConnsPerHost = 64
+			// allow transport to be HTTP/1.1 for proxying.
+			tr := newCustomHTTPProxyTransport(tlsConfig, rest.DefaultTimeout)()
 
 			proxyEps = append(proxyEps, ProxyEndpoint{
 				Endpoint:  endpoint,
@@ -782,7 +874,7 @@ func GetProxyEndpoints(endpointZones EndpointZones) ([]ProxyEndpoint, error) {
 			})
 		}
 	}
-	return proxyEps, nil
+	return proxyEps
 }
 
 func updateDomainIPs(endPoints set.StringSet) {

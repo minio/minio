@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -217,12 +216,11 @@ func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []er
 	if err != nil {
 		return StorageInfo{}, []error{err}
 	}
-	used := di.Total - di.Free
 	storageInfo := StorageInfo{
 		Disks: []madmin.Disk{
 			{
 				TotalSpace:     di.Total,
-				UsedSpace:      used,
+				UsedSpace:      di.Used,
 				AvailableSpace: di.Free,
 				DrivePath:      fs.fsPath,
 			},
@@ -329,7 +327,7 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 	}
 
 	// Load bucket info.
-	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, fs.waitForLowActiveIO, func(item crawlItem) (int64, error) {
+	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, func(item crawlItem) (int64, error) {
 		bucket, object := item.bucket, item.objectPath()
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !os.IsNotExist(err) {
@@ -404,6 +402,7 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
+	defer ObjectPathUpdated(bucket + slashSeparator)
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
@@ -623,10 +622,6 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fs.metaJSONFile)
 		wlk, err := fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(ctx, err)
-				return oi, toObjectErr(err, srcBucket, srcObject)
-			}
 			wlk, err = fs.rwPool.Create(fsMetaPath)
 			if err != nil {
 				logger.LogIf(ctx, err)
@@ -659,7 +654,7 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
 
-	if err := checkPutObjectArgs(ctx, dstBucket, dstObject, fs, srcInfo.PutObjReader.Size()); err != nil {
+	if err := checkPutObjectArgs(ctx, dstBucket, dstObject, fs); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -1103,7 +1098,7 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 		return objInfo, NotImplemented{}
 	}
 
-	if err := checkPutObjectArgs(ctx, bucket, object, fs, r.Size()); err != nil {
+	if err := checkPutObjectArgs(ctx, bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
 	}
 
@@ -1177,10 +1172,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		wlk, err = fs.rwPool.Write(fsMetaPath)
 		var freshFile bool
 		if err != nil {
-			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(ctx, err)
-				return ObjectInfo{}, toObjectErr(err, bucket, object)
-			}
 			wlk, err = fs.rwPool.Create(fsMetaPath)
 			if err != nil {
 				logger.LogIf(ctx, err)
@@ -1511,10 +1502,6 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 	fsMeta := fsMetaV1{}
 	wlk, err := fs.rwPool.Write(fsMetaPath)
 	if err != nil {
-		if !errors.Is(err, errFileNotFound) {
-			logger.LogIf(ctx, err)
-			return toObjectErr(err, bucket, object)
-		}
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			logger.LogIf(ctx, err)
@@ -1547,12 +1534,6 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 // DeleteObjectTags - delete object tags from an existing object
 func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	return fs.PutObjectTags(ctx, bucket, object, "", opts)
-}
-
-// ReloadFormat - no-op for fs, Valid only for Erasure.
-func (fs *FSObjects) ReloadFormat(ctx context.Context, dryRun bool) error {
-	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
 }
 
 // HealFormat - no-op for fs, Valid only for Erasure.

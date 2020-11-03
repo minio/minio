@@ -60,7 +60,7 @@ func handleSignals() {
 			}
 		}
 
-		if objAPI := newObjectLayerWithoutSafeModeFn(); objAPI != nil {
+		if objAPI := newObjectLayerFn(); objAPI != nil {
 			oerr = objAPI.Shutdown(context.Background())
 			logger.LogIf(context.Background(), oerr)
 		}

@@ -84,7 +84,7 @@ func setPartsCountHeaders(w http.ResponseWriter, objInfo ObjectInfo) {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec) (err error) {
+func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec, opts ObjectOptions) (err error) {
 	// set common headers
 	setCommonHeaders(w)
 
@@ -115,10 +115,11 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	// Set tag count if object has tags
-	tags, _ := url.ParseQuery(objInfo.UserTags)
-	tagCount := len(tags)
-	if tagCount > 0 {
-		w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(tagCount)}
+	if len(objInfo.UserTags) > 0 {
+		tags, _ := url.ParseQuery(objInfo.UserTags)
+		if len(tags) > 0 {
+			w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(len(tags))}
+		}
 	}
 
 	// Set all other user defined metadata.
@@ -147,15 +148,26 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		}
 	}
 
+	var start, rangeLen int64
 	totalObjectSize, err := objInfo.GetActualSize()
 	if err != nil {
 		return err
 	}
 
-	// for providing ranged content
-	start, rangeLen, err := rs.GetOffsetLength(totalObjectSize)
-	if err != nil {
-		return err
+	if opts.PartNumber > 0 {
+		var start, end int64
+		for i := 0; i < len(objInfo.Parts) && i < opts.PartNumber; i++ {
+			start = end
+			end = start + objInfo.Parts[i].ActualSize - 1
+		}
+		rs = &HTTPRangeSpec{Start: start, End: end}
+		rangeLen = end - start + 1
+	} else {
+		// for providing ranged content
+		start, rangeLen, err = rs.GetOffsetLength(totalObjectSize)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Set content length.

@@ -74,10 +74,9 @@ func GetSourceScheme(r *http.Request) string {
 	return scheme
 }
 
-// GetSourceIP retrieves the IP from the X-Forwarded-For, X-Real-IP and RFC7239
-// Forwarded headers (in that order), falls back to r.RemoteAddr when all
-// else fails.
-func GetSourceIP(r *http.Request) string {
+// GetSourceIPFromHeaders retrieves the IP from the X-Forwarded-For, X-Real-IP
+// and RFC7239 Forwarded headers (in that order)
+func GetSourceIPFromHeaders(r *http.Request) string {
 	var addr string
 
 	if fwd := r.Header.Get(xForwardedFor); fwd != "" {
@@ -106,6 +105,13 @@ func GetSourceIP(r *http.Request) string {
 		}
 	}
 
+	return addr
+}
+
+// GetSourceIP retrieves the IP from the request headers
+// and falls back to r.RemoteAddr when necessary.
+func GetSourceIP(r *http.Request) string {
+	addr := GetSourceIPFromHeaders(r)
 	if addr != "" {
 		return addr
 	}

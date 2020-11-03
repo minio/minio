@@ -238,7 +238,9 @@ func extractReqParams(r *http.Request) map[string]string {
 
 // Extract response elements to be sent with event notifiation.
 func extractRespElements(w http.ResponseWriter) map[string]string {
-
+	if w == nil {
+		return map[string]string{}
+	}
 	return map[string]string{
 		"requestId":      w.Header().Get(xhttp.AmzRequestID),
 		"content-length": w.Header().Get(xhttp.ContentLength),
@@ -420,6 +422,17 @@ var regexVersion = regexp.MustCompile(`(\w\d+)`)
 
 func extractAPIVersion(r *http.Request) string {
 	return regexVersion.FindString(r.URL.Path)
+}
+
+func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		code := "XMinio" + api + "VersionMismatch"
+		writeErrorResponseString(r.Context(), w, APIError{
+			Code:           code,
+			Description:    "Not allowed (" + r.Method + " " + r.URL.String() + " on " + api + " API)",
+			HTTPStatusCode: http.StatusMethodNotAllowed,
+		}, r.URL)
+	}
 }
 
 // If none of the http routes match respond with appropriate errors

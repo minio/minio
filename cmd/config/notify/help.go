@@ -340,6 +340,12 @@ var (
 			Optional:    true,
 			Type:        "sentence",
 		},
+		config.HelpKV{
+			Key:         target.PostgresMaxOpenConnections,
+			Description: "To set the maximum number of open connections to the database. The value is set to `2` by default.",
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 
 	HelpMySQL = config.HelpKVS{
@@ -376,6 +382,12 @@ var (
 			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
+		},
+		config.HelpKV{
+			Key:         target.MySQLMaxOpenConnections,
+			Description: "To set the maximum number of open connections to the database. The value is set to `2` by default.",
+			Optional:    true,
+			Type:        "number",
 		},
 	}
 

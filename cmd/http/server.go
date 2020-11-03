@@ -30,6 +30,7 @@ import (
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/env"
 )
@@ -130,6 +131,9 @@ func (srv *Server) Shutdown() error {
 	srv.listenerMutex.Lock()
 	err := srv.listener.Close()
 	srv.listenerMutex.Unlock()
+	if err != nil {
+		return err
+	}
 
 	// Wait for opened connection to be closed up to Shutdown timeout.
 	shutdownTimeout := srv.ShutdownTimeout
@@ -144,12 +148,12 @@ func (srv *Server) Shutdown() error {
 			if err == nil {
 				_ = pprof.Lookup("goroutine").WriteTo(tmp, 1)
 				tmp.Close()
-				return errors.New("timed out. some connections are still active. doing abnormal shutdown. goroutines written to " + tmp.Name())
+				return errors.New("timed out. some connections are still active. goroutines written to " + tmp.Name())
 			}
-			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
+			return errors.New("timed out. some connections are still active")
 		case <-ticker.C:
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
-				return err
+				return nil
 			}
 		}
 	}
@@ -177,13 +181,9 @@ var secureCipherSuites = []uint16{
 // Go only provides constant-time implementations of Curve25519 and NIST P-256 curve.
 var secureCurves = []tls.CurveID{tls.X25519, tls.CurveP256}
 
-const (
-	enableSecureCiphersEnv = "MINIO_API_SECURE_CIPHERS"
-)
-
 // NewServer - creates new HTTP server using given arguments.
 func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificateFunc) *Server {
-	secureCiphers := env.Get(enableSecureCiphersEnv, config.EnableOn) == config.EnableOn
+	secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn
 
 	var tlsConfig *tls.Config
 	if getCert != nil {

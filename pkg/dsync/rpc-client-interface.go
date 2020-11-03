@@ -29,6 +29,13 @@ type LockArgs struct {
 	// Source contains the line number, function and file name of the code
 	// on the client node that requested the lock.
 	Source string
+
+	// Owner represents unique ID for this instance, an owner who originally requested
+	// the locked resource, useful primarily in figuring our stale locks.
+	Owner string
+
+	// Quorum represents the expected quorum for this lock type.
+	Quorum int
 }
 
 // NetLocker is dsync compatible locker interface.
@@ -64,4 +71,7 @@ type NetLocker interface {
 
 	// Is the underlying connection online? (is always true for any local lockers)
 	IsOnline() bool
+
+	// Is the underlying locker local to this server?
+	IsLocal() bool
 }

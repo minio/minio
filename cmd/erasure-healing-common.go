@@ -26,22 +26,25 @@ import (
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
 	var maxima int // Counter for remembering max occurrence of elements.
-	timeOccurenceMap := make(map[time.Time]int)
+	timeOccurenceMap := make(map[int64]int)
 	// Ignore the uuid sentinel and count the rest.
 	for _, time := range modTimes {
 		if time.Equal(timeSentinel) {
 			continue
 		}
-		timeOccurenceMap[time]++
+		timeOccurenceMap[time.UnixNano()]++
 	}
+
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
-	for time, count := range timeOccurenceMap {
-		if count > maxima || (count == maxima && time.After(modTime)) {
+	for nano, count := range timeOccurenceMap {
+		t := time.Unix(0, nano)
+		if count > maxima || (count == maxima && t.After(modTime)) {
 			maxima = count
-			modTime = time
+			modTime = t
 		}
 	}
+
 	// Return the collected common uuid.
 	return modTime, maxima
 }
@@ -160,6 +163,32 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
 
+	inconsistent := 0
+	for i, meta := range partsMetadata {
+		if !meta.IsValid() {
+			// Since for majority of the cases erasure.Index matches with erasure.Distribution we can
+			// consider the offline disks as consistent.
+			continue
+		}
+		if len(meta.Erasure.Distribution) != len(onlineDisks) {
+			// Erasure distribution seems to have lesser
+			// number of items than number of online disks.
+			inconsistent++
+			continue
+		}
+		if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+			// Mismatch indexes with distribution order
+			inconsistent++
+		}
+	}
+
+	erasureDistributionReliable := true
+	if inconsistent > len(partsMetadata)/2 {
+		// If there are too many inconsistent files, then we can't trust erasure.Distribution (most likely
+		// because of bugs found in CopyObject/PutObjectTags) https://github.com/minio/minio/pull/10772
+		erasureDistributionReliable = false
+	}
+
 	for i, onlineDisk := range onlineDisks {
 		if errs[i] != nil {
 			dataErrs[i] = errs[i]
@@ -168,6 +197,28 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		if onlineDisk == nil {
 			dataErrs[i] = errDiskNotFound
 			continue
+		}
+		if erasureDistributionReliable {
+			meta := partsMetadata[i]
+			if !meta.IsValid() {
+				continue
+			}
+
+			if len(meta.Erasure.Distribution) != len(onlineDisks) {
+				// Erasure distribution is not the same as onlineDisks
+				// attempt a fix if possible, assuming other entries
+				// might have the right erasure distribution.
+				partsMetadata[i] = FileInfo{}
+				dataErrs[i] = errFileCorrupt
+				continue
+			}
+
+			// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
+			if meta.Erasure.Distribution[i] != meta.Erasure.Index {
+				partsMetadata[i] = FileInfo{}
+				dataErrs[i] = errFileCorrupt
+				continue
+			}
 		}
 
 		switch scanMode {

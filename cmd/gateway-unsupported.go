@@ -160,11 +160,6 @@ func (a GatewayUnsupported) DeleteBucketSSEConfig(ctx context.Context, bucket st
 	return NotImplemented{}
 }
 
-// ReloadFormat - Not implemented stub.
-func (a GatewayUnsupported) ReloadFormat(ctx context.Context, dryRun bool) error {
-	return NotImplemented{}
-}
-
 // HealFormat - Not implemented stub
 func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	return madmin.HealResultItem{}, NotImplemented{}

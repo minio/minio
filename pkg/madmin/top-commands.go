@@ -36,7 +36,10 @@ type LockEntry struct {
 	Type       string    `json:"type"`       // Type indicates if 'Write' or 'Read' lock
 	Source     string    `json:"source"`     // Source at which lock was granted
 	ServerList []string  `json:"serverlist"` // List of servers participating in the lock.
+	Owner      string    `json:"owner"`      // Owner UUID indicates server owns the lock.
 	ID         string    `json:"id"`         // UID to uniquely identify request of client.
+	// Represents quorum number of servers required to hold this lock, used to look for stale locks.
+	Quorum int `json:"quorum"`
 }
 
 // LockEntries - To sort the locks
@@ -54,13 +57,21 @@ func (l LockEntries) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
-// TopNLocks - returns the count number of oldest locks currently active on the server.
-func (adm *AdminClient) TopNLocks(ctx context.Context, count int) (LockEntries, error) {
+// TopLockOpts top lock options
+type TopLockOpts struct {
+	Count int
+	Stale bool
+}
+
+// TopLocksWithOpts - returns the count number of oldest locks currently active on the server.
+// additionally we can also enable `stale` to get stale locks currently present on server.
+func (adm *AdminClient) TopLocksWithOpts(ctx context.Context, opts TopLockOpts) (LockEntries, error) {
 	// Execute GET on /minio/admin/v3/top/locks?count=10
 	// to get the 'count' number of oldest locks currently
 	// active on the server.
 	queryVals := make(url.Values)
-	queryVals.Set("count", strconv.Itoa(count))
+	queryVals.Set("count", strconv.Itoa(opts.Count))
+	queryVals.Set("stale", strconv.FormatBool(opts.Stale))
 	resp, err := adm.executeMethod(ctx,
 		http.MethodGet,
 		requestData{
@@ -89,5 +100,5 @@ func (adm *AdminClient) TopNLocks(ctx context.Context, count int) (LockEntries, 
 
 // TopLocks - returns top '10' oldest locks currently active on the server.
 func (adm *AdminClient) TopLocks(ctx context.Context) (LockEntries, error) {
-	return adm.TopNLocks(ctx, 10)
+	return adm.TopLocksWithOpts(ctx, TopLockOpts{Count: 10})
 }

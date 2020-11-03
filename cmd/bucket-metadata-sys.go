@@ -49,6 +49,7 @@ func (sys *BucketMetadataSys) Remove(bucket string) {
 	}
 	sys.Lock()
 	delete(sys.metadataMap, bucket)
+	globalBucketMonitor.DeleteBucket(bucket)
 	sys.Unlock()
 }
 
@@ -72,7 +73,7 @@ func (sys *BucketMetadataSys) Set(bucket string, meta BucketMetadata) {
 // Update update bucket metadata for the specified config file.
 // The configData data should not be modified after being sent here.
 func (sys *BucketMetadataSys) Update(bucket string, configFile string, configData []byte) error {
-	objAPI := newObjectLayerWithoutSafeModeFn()
+	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
@@ -275,7 +276,7 @@ func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Life
 func (sys *BucketMetadataSys) GetNotificationConfig(bucket string) (*event.Config, error) {
 	if globalIsGateway && globalGatewayName == NASBackendGateway {
 		// Only needed in case of NAS gateway.
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized
 		}
@@ -313,7 +314,7 @@ func (sys *BucketMetadataSys) GetSSEConfig(bucket string) (*bucketsse.BucketSSEC
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetPolicyConfig(bucket string) (*policy.Policy, error) {
 	if globalIsGateway {
-		objAPI := newObjectLayerWithoutSafeModeFn()
+		objAPI := newObjectLayerFn()
 		if objAPI == nil {
 			return nil, errServerNotInitialized
 		}
@@ -373,10 +374,24 @@ func (sys *BucketMetadataSys) GetBucketTargetsConfig(bucket string) (*madmin.Buc
 	return meta.bucketTargetConfig, nil
 }
 
+// GetBucketTarget returns the target for the bucket and arn.
+func (sys *BucketMetadataSys) GetBucketTarget(bucket string, arn string) (madmin.BucketTarget, error) {
+	targets, err := sys.GetBucketTargetsConfig(bucket)
+	if err != nil {
+		return madmin.BucketTarget{}, err
+	}
+	for _, t := range targets.Targets {
+		if t.Arn == arn {
+			return t, nil
+		}
+	}
+	return madmin.BucketTarget{}, errConfigNotFound
+}
+
 // GetConfig returns a specific configuration from the bucket metadata.
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetConfig(bucket string) (BucketMetadata, error) {
-	objAPI := newObjectLayerWithoutSafeModeFn()
+	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return newBucketMetadata(bucket), errServerNotInitialized
 	}
@@ -418,12 +433,12 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 	}
 
 	// Load bucket metadata sys in background
-	go logger.LogIf(ctx, sys.load(ctx, buckets, objAPI))
+	go sys.load(ctx, buckets, objAPI)
 	return nil
 }
 
 // concurrently load bucket metadata to speed up loading bucket metadata.
-func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) {
 	g := errgroup.WithNErrs(len(buckets))
 	for index := range buckets {
 		index := index
@@ -440,22 +455,20 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	}
 	for _, err := range g.Wait() {
 		if err != nil {
-			return err
+			logger.LogIf(ctx, err)
 		}
 	}
-	return nil
 }
 
 // Loads bucket metadata for all buckets into BucketMetadataSys.
-func (sys *BucketMetadataSys) load(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *BucketMetadataSys) load(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) {
 	count := 100 // load 100 bucket metadata at a time.
 	for {
 		if len(buckets) < count {
-			return sys.concurrentLoad(ctx, buckets, objAPI)
+			sys.concurrentLoad(ctx, buckets, objAPI)
+			return
 		}
-		if err := sys.concurrentLoad(ctx, buckets[:count], objAPI); err != nil {
-			return err
-		}
+		sys.concurrentLoad(ctx, buckets[:count], objAPI)
 		buckets = buckets[count:]
 	}
 }

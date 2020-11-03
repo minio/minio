@@ -113,9 +113,21 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
+// Reads all `xl.meta` metadata as a FileInfo slice and checks if the data dir exists as well,
+// otherwise returns errFileNotFound (or errFileVersionNotFound)
+func getAllObjectFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string) ([]FileInfo, []error) {
+	return readVersionFromDisks(ctx, disks, bucket, object, versionID, true)
+}
+
 // Reads all `xl.meta` metadata as a FileInfo slice.
 // Returns error slice indicating the failed metadata reads.
 func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string) ([]FileInfo, []error) {
+	return readVersionFromDisks(ctx, disks, bucket, object, versionID, false)
+}
+
+// Reads all `xl.meta` metadata as a FileInfo slice and checks if the data dir
+// exists as well, if checkDataDir is set to true.
+func readVersionFromDisks(ctx context.Context, disks []StorageAPI, bucket, object, versionID string, checkDataDir bool) ([]FileInfo, []error) {
 	metadataArray := make([]FileInfo, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -126,7 +138,7 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID)
+			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, checkDataDir)
 			if err != nil {
 				if err != errFileNotFound && err != errVolumeNotFound && err != errFileVersionNotFound {
 					logger.GetReqInfo(ctx).AppendTags("disk", disks[index].String())
@@ -139,6 +151,56 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 
 	// Return all the metadata.
 	return metadataArray, g.Wait()
+}
+
+func shuffleDisksAndPartsMetadataByIndex(disks []StorageAPI, metaArr []FileInfo, distribution []int) (shuffledDisks []StorageAPI, shuffledPartsMetadata []FileInfo) {
+	shuffledDisks = make([]StorageAPI, len(disks))
+	shuffledPartsMetadata = make([]FileInfo, len(disks))
+	var inconsistent int
+	for i, meta := range metaArr {
+		if disks[i] == nil {
+			// Assuming offline drives as inconsistent,
+			// to be safe and fallback to original
+			// distribution order.
+			inconsistent++
+			continue
+		}
+		// check if erasure distribution order matches the index
+		// position if this is not correct we discard the disk
+		// and move to collect others
+		if distribution[i] != meta.Erasure.Index {
+			inconsistent++ // keep track of inconsistent entries
+			continue
+		}
+		shuffledDisks[meta.Erasure.Index-1] = disks[i]
+		shuffledPartsMetadata[meta.Erasure.Index-1] = metaArr[i]
+	}
+
+	// Inconsistent meta info is with in the limit of
+	// expected quorum, proceed with EcIndex based
+	// disk order.
+	if inconsistent < len(disks)/2 {
+		return shuffledDisks, shuffledPartsMetadata
+	}
+
+	// fall back to original distribution based order.
+	return shuffleDisksAndPartsMetadata(disks, metaArr, distribution)
+}
+
+// Return shuffled partsMetadata depending on distribution.
+func shuffleDisksAndPartsMetadata(disks []StorageAPI, partsMetadata []FileInfo, distribution []int) (shuffledDisks []StorageAPI, shuffledPartsMetadata []FileInfo) {
+	if distribution == nil {
+		return disks, partsMetadata
+	}
+	shuffledDisks = make([]StorageAPI, len(disks))
+	shuffledPartsMetadata = make([]FileInfo, len(partsMetadata))
+	// Shuffle slice xl metadata for expected distribution.
+	for index := range partsMetadata {
+		blockIndex := distribution[index]
+		shuffledPartsMetadata[blockIndex-1] = partsMetadata[index]
+		shuffledDisks[blockIndex-1] = disks[index]
+	}
+	return shuffledDisks, shuffledPartsMetadata
 }
 
 // Return shuffled partsMetadata depending on distribution.

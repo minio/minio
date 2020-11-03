@@ -148,13 +148,13 @@ func TestShuffleDisks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	z := objLayer.(*erasureZones)
+	z := objLayer.(*erasureServerSets)
 	testShuffleDisks(t, z)
 }
 
 // Test shuffleDisks which returns shuffled slice of disks for their actual distribution.
-func testShuffleDisks(t *testing.T, z *erasureZones) {
-	disks := z.zones[0].GetDisks(0)()
+func testShuffleDisks(t *testing.T, z *erasureServerSets) {
+	disks := z.serverSets[0].GetDisks(0)()
 	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
 	shuffledDisks := shuffleDisks(disks, distribution)
 	// From the "distribution" above you can notice that:
@@ -196,6 +196,6 @@ func TestEvalDisks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	z := objLayer.(*erasureZones)
+	z := objLayer.(*erasureServerSets)
 	testShuffleDisks(t, z)
 }

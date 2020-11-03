@@ -19,9 +19,11 @@ package logger
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"go/build"
 	"hash"
+	"net/http"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -59,11 +61,6 @@ var globalDeploymentID string
 
 // TimeFormat - logging time format.
 const TimeFormat string = "15:04:05 MST 01/02/2006"
-
-// List of error strings to be ignored by LogIf
-const (
-	diskNotFoundError = "disk not found"
-)
 
 var matchingFuncNames = [...]string{
 	"http.HandlerFunc.ServeHTTP",
@@ -303,9 +300,15 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 		return
 	}
 
-	if err.Error() != diskNotFoundError {
-		logIf(ctx, err, errKind...)
+	if errors.Is(err, context.Canceled) {
+		return
 	}
+
+	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
+		return
+	}
+
+	logIf(ctx, err, errKind...)
 }
 
 // logIf prints a detailed error message during
@@ -341,7 +344,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	trace := getTrace(3)
 
 	// Get the cause for the Error
-	message := err.Error()
+	message := fmt.Sprintf("%v (%T)", err, err)
 	if req.DeploymentID == "" {
 		req.DeploymentID = globalDeploymentID
 	}

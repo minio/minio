@@ -353,13 +353,16 @@ type Table struct {
 
 	// Left margin width for table
 	TableIndentWidth int
+
+	// Flag to print separator under heading. Row 0 is considered heading
+	HeaderRowSeparator bool
 }
 
 // NewTable - create a new Table instance. Takes per-row colors and
 // per-column right-align flags and table indentation width (i.e. left
 // margin width)
 func NewTable(rowColors []*color.Color, alignRight []bool, indentWidth int) *Table {
-	return &Table{rowColors, alignRight, indentWidth}
+	return &Table{rowColors, alignRight, indentWidth, false}
 }
 
 // DisplayTable - prints the table
@@ -410,6 +413,11 @@ func (t *Table) DisplayTable(rows [][]string) error {
 
 	// Print the table with colors
 	for r, row := range paddedText {
+		if t.HeaderRowSeparator && r == 1 {
+			// Draw table header-row border
+			border = fmt.Sprintf("%s├%s┤", indentText, strings.Join(segments, "┼"))
+			fmt.Println(border)
+		}
 		fmt.Print(indentText + "│ ")
 		for c, text := range row {
 			t.RowColors[r].Print(text)

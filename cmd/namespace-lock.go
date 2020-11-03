@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/lsync"
@@ -147,17 +146,8 @@ func (di *distLockInstance) GetLock(ctx context.Context, timeout *dynamicTimeout
 	lockSource := getSource(2)
 	start := UTCNow()
 
-	// Lockers default to standard storage class always, why because
-	// we always dictate storage tolerance in terms of standard
-	// storage class be it number of drives or a multiplicative
-	// of number of nodes, defaulting lockers to this value
-	// simply means that locking is always similar in behavior
-	// and effect with erasure coded drive tolerance.
-	tolerance := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-
 	if !di.rwMutex.GetLock(ctx, di.opsID, lockSource, dsync.Options{
-		Timeout:   timeout.Timeout(),
-		Tolerance: tolerance,
+		Timeout: timeout.Timeout(),
 	}) {
 		timeout.LogFailure()
 		return OperationTimedOut{}
@@ -176,12 +166,8 @@ func (di *distLockInstance) GetRLock(ctx context.Context, timeout *dynamicTimeou
 	lockSource := getSource(2)
 	start := UTCNow()
 
-	// Lockers default to standard storage class always.
-	tolerance := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-
 	if !di.rwMutex.GetRLock(ctx, di.opsID, lockSource, dsync.Options{
-		Timeout:   timeout.Timeout(),
-		Tolerance: tolerance,
+		Timeout: timeout.Timeout(),
 	}) {
 		timeout.LogFailure()
 		return OperationTimedOut{}
@@ -206,11 +192,11 @@ type localLockInstance struct {
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
-func (n *nsLockMap) NewNSLock(lockersFn func() []dsync.NetLocker, volume string, paths ...string) RWLocker {
+func (n *nsLockMap) NewNSLock(lockers func() ([]dsync.NetLocker, string), volume string, paths ...string) RWLocker {
 	opsID := mustGetUUID()
 	if n.isDistErasure {
 		drwmutex := dsync.NewDRWMutex(&dsync.Dsync{
-			GetLockersFn: lockersFn,
+			GetLockers: lockers,
 		}, pathsJoinPrefix(volume, paths...)...)
 		return &distLockInstance{drwmutex, opsID}
 	}

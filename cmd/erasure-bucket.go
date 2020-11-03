@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"context"
-	"sort"
+	"errors"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio/cmd/logger"
@@ -50,7 +50,7 @@ func (er erasureObjects) MakeBucketWithLocation(ctx context.Context, bucket stri
 		g.Go(func() error {
 			if storageDisks[index] != nil {
 				if err := storageDisks[index].MakeVol(ctx, bucket); err != nil {
-					if err != errVolumeExists {
+					if !errors.Is(err, errVolumeExists) {
 						logger.LogIf(ctx, err)
 					}
 					return err
@@ -86,31 +86,40 @@ func undoDeleteBucket(storageDisks []StorageAPI, bucket string) {
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (er erasureObjects) getBucketInfo(ctx context.Context, bucketName string) (bucketInfo BucketInfo, err error) {
-	var bucketErrs []error
-	for _, disk := range er.getLoadBalancedDisks() {
-		if disk == nil {
-			bucketErrs = append(bucketErrs, errDiskNotFound)
-			continue
-		}
-		volInfo, serr := disk.StatVol(ctx, bucketName)
-		if serr == nil {
-			return BucketInfo(volInfo), nil
-		}
-		err = serr
-		// For any reason disk went offline continue and pick the next one.
-		if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
-			bucketErrs = append(bucketErrs, err)
-			continue
-		}
-		// Any error which cannot be ignored, we return quickly.
-		return BucketInfo{}, err
+	storageDisks := er.getDisks()
+
+	g := errgroup.WithNErrs(len(storageDisks))
+	var bucketsInfo = make([]BucketInfo, len(storageDisks))
+	// Undo previous make bucket entry on all underlying storage disks.
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] == nil {
+				return errDiskNotFound
+			}
+			volInfo, err := storageDisks[index].StatVol(ctx, bucketName)
+			if err != nil {
+				return err
+			}
+			bucketsInfo[index] = BucketInfo(volInfo)
+			return nil
+		}, index)
 	}
+
+	errs := g.Wait()
+
+	for i, err := range errs {
+		if err == nil {
+			return bucketsInfo[i], nil
+		}
+	}
+
 	// If all our errors were ignored, then we try to
 	// reduce to one error based on read quorum.
 	// `nil` is deliberately passed for ignoredErrs
 	// because these errors were already ignored.
-	readQuorum := getReadQuorum(len(er.getDisks()))
-	return BucketInfo{}, reduceReadQuorumErrs(ctx, bucketErrs, nil, readQuorum)
+	readQuorum := getReadQuorum(len(storageDisks))
+	return BucketInfo{}, reduceReadQuorumErrs(ctx, errs, nil, readQuorum)
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
@@ -120,53 +129,6 @@ func (er erasureObjects) GetBucketInfo(ctx context.Context, bucket string) (bi B
 		return bi, toObjectErr(err, bucket)
 	}
 	return bucketInfo, nil
-}
-
-// listBuckets - returns list of all buckets from a disk picked at random.
-func (er erasureObjects) listBuckets(ctx context.Context) (bucketsInfo []BucketInfo, err error) {
-	for _, disk := range er.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
-		var volsInfo []VolInfo
-		volsInfo, err = disk.ListVols(ctx)
-		if err == nil {
-			// NOTE: The assumption here is that volumes across all disks in
-			// readQuorum have consistent view i.e they all have same number
-			// of buckets.
-			var bucketsInfo []BucketInfo
-			for _, volInfo := range volsInfo {
-				if isReservedOrInvalidBucket(volInfo.Name, true) {
-					continue
-				}
-				bucketsInfo = append(bucketsInfo, BucketInfo(volInfo))
-			}
-			// For buckets info empty, loop once again to check
-			// if we have, can happen if disks were down.
-			if len(bucketsInfo) == 0 {
-				continue
-			}
-			return bucketsInfo, nil
-		}
-		logger.LogIf(ctx, err)
-		// Ignore any disks not found.
-		if IsErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
-			continue
-		}
-		break
-	}
-	return nil, err
-}
-
-// ListBuckets - lists all the buckets, sorted by its name.
-func (er erasureObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
-	bucketInfos, err := er.listBuckets(ctx)
-	if err != nil {
-		return nil, toObjectErr(err)
-	}
-	// Sort by bucket name before returning.
-	sort.Sort(byBucketName(bucketInfos))
-	return bucketInfos, nil
 }
 
 // Dangling buckets should be handled appropriately, in this following situation
@@ -196,6 +158,7 @@ func deleteDanglingBucket(ctx context.Context, storageDisks []StorageAPI, dErrs 
 // DeleteBucket - deletes a bucket.
 func (er erasureObjects) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
 	// Collect if all disks report volume not found.
+	defer ObjectPathUpdated(bucket + slashSeparator)
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))

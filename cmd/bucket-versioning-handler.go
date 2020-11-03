@@ -70,6 +70,14 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		}, r.URL, guessIsBrowserReq(r))
 		return
 	}
+	if _, err := getReplicationConfig(ctx, bucket); err == nil && v.Suspended() {
+		writeErrorResponse(ctx, w, APIError{
+			Code:           "InvalidBucketState",
+			Description:    "A replication configuration is present on this bucket, so the versioning state cannot be changed.",
+			HTTPStatusCode: http.StatusConflict,
+		}, r.URL, guessIsBrowserReq(r))
+		return
+	}
 
 	configData, err := xml.Marshal(v)
 	if err != nil {

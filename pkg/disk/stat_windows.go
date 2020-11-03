@@ -19,19 +19,23 @@
 package disk
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
-	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 
 	// GetDiskFreeSpaceEx - https://msdn.microsoft.com/en-us/library/windows/desktop/aa364937(v=vs.85).aspx
 	// Retrieves information about the amount of space that is available on a disk volume,
 	// which is the total amount of space, the total amount of free space, and the total
 	// amount of free space available to the user that is associated with the calling thread.
 	GetDiskFreeSpaceEx = kernel32.NewProc("GetDiskFreeSpaceExW")
+
 	// GetDiskFreeSpace - https://msdn.microsoft.com/en-us/library/windows/desktop/aa364935(v=vs.85).aspx
 	// Retrieves information about the specified disk, including the amount of free space on the disk.
 	GetDiskFreeSpace = kernel32.NewProc("GetDiskFreeSpaceW")
@@ -62,10 +66,18 @@ func GetInfo(path string) (info Info, err error) {
 		uintptr(unsafe.Pointer(&lpFreeBytesAvailable)),
 		uintptr(unsafe.Pointer(&lpTotalNumberOfBytes)),
 		uintptr(unsafe.Pointer(&lpTotalNumberOfFreeBytes)))
-	info = Info{}
-	info.Total = uint64(lpTotalNumberOfBytes)
-	info.Free = uint64(lpFreeBytesAvailable)
-	info.FSType = getFSType(path)
+
+	if uint64(lpTotalNumberOfFreeBytes) > uint64(lpTotalNumberOfBytes) {
+		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'",
+			uint64(lpTotalNumberOfFreeBytes), uint64(lpTotalNumberOfBytes), path)
+	}
+
+	info = Info{
+		Total:  uint64(lpTotalNumberOfBytes),
+		Free:   uint64(lpTotalNumberOfFreeBytes),
+		Used:   uint64(lpTotalNumberOfBytes) - uint64(lpTotalNumberOfFreeBytes),
+		FSType: getFSType(path),
+	}
 
 	// Return values of GetDiskFreeSpace()
 	lpSectorsPerCluster := uint32(0)

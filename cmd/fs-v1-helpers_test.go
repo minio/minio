@@ -297,7 +297,7 @@ func TestFSDeletes(t *testing.T) {
 			srcPath:     "success-file",
 			expectedErr: nil,
 		},
-		// The file was deleted in the last case, so DeleteFile should fail.
+		// The file was deleted in the last case, so Delete should fail.
 		{
 			basePath:    path,
 			srcVol:      "success-vol",
@@ -423,7 +423,7 @@ func TestFSRemoves(t *testing.T) {
 			expectedErr: nil,
 		},
 		// Test case - 2.
-		// The file was deleted in the last case, so DeleteFile should fail.
+		// The file was deleted in the last case, so Delete should fail.
 		{
 			srcFSPath:   path,
 			srcVol:      "success-vol",
