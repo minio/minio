@@ -219,24 +219,14 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 
 // isDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) bool {
-	f, err := os.Open(dirname)
+	entries, err := readDirN(dirname, 1)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			logger.LogIf(GlobalContext, err)
-		}
-
-		return false
-	}
-	defer f.Close()
-	// List one entry.
-	if _, err = f.Readdirnames(1); err != io.EOF {
-		if !os.IsNotExist(err) {
+		if err != errFileNotFound {
 			logger.LogIf(GlobalContext, err)
 		}
 		return false
 	}
-	// Returns true if we have reached EOF, directory is indeed empty.
-	return true
+	return len(entries) == 0
 }
 
 // Initialize a new storage disk.
