@@ -207,7 +207,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 				return info, err
 			}
 			defer http.DrainBody(respBody)
-			err = gob.NewDecoder(respBody).Decode(&info)
+			err = msgp.Decode(respBody, &info)
 			if err != nil {
 				return info, err
 			}
@@ -247,8 +247,9 @@ func (client *storageRESTClient) ListVols(ctx context.Context) (vols []VolInfo, 
 		return
 	}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&vols)
-	return vols, err
+	vinfos := VolsInfo(vols)
+	err = msgp.Decode(respBody, &vinfos)
+	return vinfos, err
 }
 
 // StatVol - get volume info over the network.
@@ -260,7 +261,7 @@ func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vo
 		return
 	}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&vol)
+	err = msgp.Decode(respBody, &vol)
 	return vol, err
 }
 
@@ -444,40 +445,6 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 	return int64(n), err
 }
 
-func (client *storageRESTClient) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTDirPath, dirPath)
-	values.Set(storageRESTMarkerPath, marker)
-	respBody, err := client.call(ctx, storageRESTMethodWalkSplunk, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan FileInfo)
-	go func() {
-		defer close(ch)
-		defer http.DrainBody(respBody)
-
-		decoder := msgp.NewReader(respBody)
-		for {
-			var fi FileInfo
-			if gerr := fi.DecodeMsg(decoder); gerr != nil {
-				// Upon error return
-				return
-			}
-			select {
-			case ch <- fi:
-			case <-endWalkCh:
-				return
-			}
-
-		}
-	}()
-
-	return ch, nil
-}
-
 func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
@@ -509,41 +476,6 @@ func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPa
 			case <-endWalkCh:
 				return
 			}
-		}
-	}()
-
-	return ch, nil
-}
-
-func (client *storageRESTClient) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTDirPath, dirPath)
-	values.Set(storageRESTMarkerPath, marker)
-	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(ctx, storageRESTMethodWalk, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-
-	ch := make(chan FileInfo)
-	go func() {
-		defer close(ch)
-		defer http.DrainBody(respBody)
-
-		decoder := msgp.NewReader(respBody)
-		for {
-			var fi FileInfo
-			if gerr := fi.DecodeMsg(decoder); gerr != nil {
-				// Upon error return
-				return
-			}
-			select {
-			case ch <- fi:
-			case <-endWalkCh:
-				return
-			}
-
 		}
 	}()
 
