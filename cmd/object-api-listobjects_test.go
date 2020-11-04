@@ -47,6 +47,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		"empty-bucket",
 		// Listing the case where the marker > last object.
 		"test-bucket-single-object",
+		// Listing uncommon delimiter.
+		"test-bucket-delimiter",
 	}
 	for _, bucket := range testBuckets {
 		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
@@ -75,6 +77,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{testBuckets[1], "obj2", "obj2", nil},
 		{testBuckets[1], "temporary/0/", "", nil},
 		{testBuckets[3], "A/B", "contentstring", nil},
+		{testBuckets[4], "file1/receipt.json", "content", nil},
+		{testBuckets[4], "file1/guidSplunk-aaaa/file", "content", nil},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
@@ -455,6 +459,14 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 			IsTruncated: false,
 			Objects:     []ObjectInfo{},
 		},
+		// ListObjectsResult-35 list with custom uncommon delimiter
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "file1/receipt.json"},
+			},
+			Prefixes: []string{"file1/guidSplunk"},
+		},
 	}
 
 	testCases := []struct {
@@ -573,6 +585,10 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{"test-bucket-single-object", "", "A/C", "", 1000, resultCases[34], nil, true},
 		// Test listing an object with a trailing slash and a slash delimiter (66)
 		{"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, resultCases[34], nil, true},
+		// Test listing an object with uncommon delimiter
+		{testBuckets[4], "", "", "guidSplunk", 1000, resultCases[35], nil, true},
+		// Test listing an object with uncommon delimiter and matching prefix
+		{testBuckets[4], "file1/", "", "guidSplunk", 1000, resultCases[35], nil, true},
 	}
 
 	for i, testCase := range testCases {
@@ -696,10 +712,16 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		"empty-bucket",
 		// Listing the case where the marker > last object.
 		"test-bucket-single-object",
+		// Listing uncommon delimiter.
+		"test-bucket-delimiter",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
+		err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{VersioningEnabled: true})
 		if err != nil {
+			if _, ok := err.(NotImplemented); ok {
+				// Skip test for FS mode.
+				continue
+			}
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
@@ -724,12 +746,18 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		{testBuckets[1], "obj2", "obj2", nil},
 		{testBuckets[1], "temporary/0/", "", nil},
 		{testBuckets[3], "A/B", "contentstring", nil},
+		{testBuckets[4], "file1/receipt.json", "content", nil},
+		{testBuckets[4], "file1/guidSplunk-aaaa/file", "content", nil},
 	}
 	for _, object := range testObjects {
 		md5Bytes := md5.Sum([]byte(object.content))
 		_, err = obj.PutObject(context.Background(), object.parentBucket, object.name, mustGetPutObjReader(t, bytes.NewBufferString(object.content),
 			int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{UserDefined: object.meta})
 		if err != nil {
+			if _, ok := err.(BucketNotFound); ok {
+				// Skip test failure for FS mode.
+				continue
+			}
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 
@@ -1104,6 +1132,14 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			IsTruncated: false,
 			Objects:     []ObjectInfo{},
 		},
+		// ListObjectsResult-35 list with custom uncommon delimiter
+		{
+			IsTruncated: false,
+			Objects: []ObjectInfo{
+				{Name: "file1/receipt.json"},
+			},
+			Prefixes: []string{"file1/guidSplunk"},
+		},
 	}
 
 	testCases := []struct {
@@ -1222,6 +1258,10 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		{"test-bucket-single-object", "", "A/C", "", 1000, resultCases[34], nil, true},
 		// Test listing an object with a trailing slash and a slash delimiter (64)
 		{"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, resultCases[34], nil, true},
+		// Test listing an object with uncommon delimiter
+		{testBuckets[4], "", "", "guidSplunk", 1000, resultCases[35], nil, true},
+		// Test listing an object with uncommon delimiter and matching prefix
+		{testBuckets[4], "file1/", "", "guidSplunk", 1000, resultCases[35], nil, true},
 	}
 
 	for i, testCase := range testCases {
