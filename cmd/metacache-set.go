@@ -255,7 +255,7 @@ func (o *listPathOptions) updateMetacacheListing(m metacache, rpc *peerRESTClien
 		return localMetacacheMgr.getTransient().updateCacheEntry(m)
 	}
 	if rpc == nil {
-		return localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(m)
+		return localMetacacheMgr.updateCacheEntry(m)
 	}
 	return rpc.UpdateMetacacheListing(context.Background(), m)
 }
