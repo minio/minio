@@ -232,7 +232,7 @@ const (
 
 // key options
 type options struct {
-	ttl int64
+	ttl int64 //expiry in seconds
 }
 
 // IAMStorageAPI defines an interface for the IAM persistence layer
