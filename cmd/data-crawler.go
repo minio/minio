@@ -69,10 +69,10 @@ func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 // There should only ever be one crawler running per cluster.
 func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 crawler is running on the cluster.
-	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "runDataCrawler.lock")
+	locker := objAPI.NewNSLock(minioMetaBucket, "runDataCrawler.lock")
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		err := locker.GetLock(dataCrawlerLeaderLockTimeout)
+		err := locker.GetLock(ctx, dataCrawlerLeaderLockTimeout)
 		if err != nil {
 			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
 			continue

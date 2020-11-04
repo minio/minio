@@ -101,6 +101,9 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, <-chan time.Time) {
 	if t.requestsPool == nil {
 		return nil, nil
 	}
+	if t.requestsDeadline <= 0 {
+		return t.requestsPool, nil
+	}
 
 	return t.requestsPool, time.NewTimer(t.requestsDeadline).C
 }
