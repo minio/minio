@@ -28,6 +28,7 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -117,6 +118,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			logger.Info("Marking %s temporary offline; caused by %v", c.url.String(), err)
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -139,6 +141,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if resp.StatusCode == http.StatusPreconditionFailed {
+			logger.Info("Marking %s temporary offline; caused by PreconditionFailed.", c.url.String())
 			c.MarkOffline()
 		}
 		defer xhttp.DrainBody(resp.Body)
@@ -146,6 +149,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+				logger.Info("Marking %s temporary offline; caused by %v", c.url.String(), err)
 				c.MarkOffline()
 			}
 			return nil, err
@@ -197,6 +201,7 @@ func (c *Client) MarkOffline() {
 				}
 				if c.HealthCheckFn() {
 					atomic.CompareAndSwapInt32(&c.connected, offline, online)
+					logger.Info("Client %s online", c.url.String())
 					return
 				}
 				time.Sleep(time.Duration(r.Float64() * float64(c.HealthCheckInterval)))
