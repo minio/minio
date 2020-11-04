@@ -99,7 +99,7 @@ func (ies *IAMEtcdStore) runlock() {
 	ies.RUnlock()
 }
 
-func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, path string) error {
+func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, pa
 			return err
 		}
 	}
-	return saveKeyEtcd(ctx, ies.client, path, data)
+	return saveKeyEtcd(ctx, ies.client, path, data, opts...)
 }
 
 func (ies *IAMEtcdStore) loadIAMConfig(ctx context.Context, item interface{}, path string) error {
@@ -566,12 +566,12 @@ func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p
 	return ies.saveIAMConfig(ctx, &p, getPolicyDocPath(policyName))
 }
 
-func (ies *IAMEtcdStore) saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy) error {
-	return ies.saveIAMConfig(ctx, mp, getMappedPolicyPath(name, userType, isGroup))
+func (ies *IAMEtcdStore) saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy, opts ...options) error {
+	return ies.saveIAMConfig(ctx, mp, getMappedPolicyPath(name, userType, isGroup), opts...)
 }
 
-func (ies *IAMEtcdStore) saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity) error {
-	return ies.saveIAMConfig(ctx, u, getUserIdentityPath(name, userType))
+func (ies *IAMEtcdStore) saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity, opts ...options) error {
+	return ies.saveIAMConfig(ctx, u, getUserIdentityPath(name, userType), opts...)
 }
 
 func (ies *IAMEtcdStore) saveGroupInfo(ctx context.Context, name string, gi GroupInfo) error {
