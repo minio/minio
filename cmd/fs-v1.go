@@ -186,9 +186,9 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (fs *FSObjects) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+func (fs *FSObjects) NewNSLock(bucket string, objects ...string) RWLocker {
 	// lockers are explicitly 'nil' for FS mode since there are only local lockers
-	return fs.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
+	return fs.nsMutex.NewNSLock(nil, bucket, objects...)
 }
 
 // SetDriveCount no-op
@@ -601,8 +601,8 @@ func (fs *FSObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBu
 	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
 
 	if !cpSrcDstSame {
-		objectDWLock := fs.NewNSLock(ctx, dstBucket, dstObject)
-		if err := objectDWLock.GetLock(globalOperationTimeout); err != nil {
+		objectDWLock := fs.NewNSLock(dstBucket, dstObject)
+		if err := objectDWLock.GetLock(ctx, globalOperationTimeout); err != nil {
 			return oi, err
 		}
 		defer objectDWLock.Unlock()
@@ -692,15 +692,15 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	if lockType != noLock {
 		// Lock the object before reading.
-		lock := fs.NewNSLock(ctx, bucket, object)
+		lock := fs.NewNSLock(bucket, object)
 		switch lockType {
 		case writeLock:
-			if err = lock.GetLock(globalOperationTimeout); err != nil {
+			if err = lock.GetLock(ctx, globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.Unlock
 		case readLock:
-			if err = lock.GetRLock(globalOperationTimeout); err != nil {
+			if err = lock.GetRLock(ctx, globalOperationTimeout); err != nil {
 				return nil, err
 			}
 			nsUnlocker = lock.RUnlock
@@ -785,8 +785,8 @@ func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offse
 	}
 
 	// Lock the object before reading.
-	lk := fs.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
+	lk := fs.NewNSLock(bucket, object)
+	if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
@@ -1013,8 +1013,8 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 // getObjectInfoWithLock - reads object metadata and replies back ObjectInfo.
 func (fs *FSObjects) getObjectInfoWithLock(ctx context.Context, bucket, object string) (oi ObjectInfo, e error) {
 	// Lock the object before reading.
-	lk := fs.NewNSLock(ctx, bucket, object)
-	if err := lk.GetRLock(globalOperationTimeout); err != nil {
+	lk := fs.NewNSLock(bucket, object)
+	if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
 		return oi, err
 	}
 	defer lk.RUnlock()
@@ -1051,8 +1051,8 @@ func (fs *FSObjects) GetObjectInfo(ctx context.Context, bucket, object string, o
 
 	oi, err := fs.getObjectInfoWithLock(ctx, bucket, object)
 	if err == errCorruptedFormat || err == io.EOF {
-		lk := fs.NewNSLock(ctx, bucket, object)
-		if err = lk.GetLock(globalOperationTimeout); err != nil {
+		lk := fs.NewNSLock(bucket, object)
+		if err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
 			return oi, toObjectErr(err, bucket, object)
 		}
 
@@ -1102,8 +1102,8 @@ func (fs *FSObjects) PutObject(ctx context.Context, bucket string, object string
 	}
 
 	// Lock the object.
-	lk := fs.NewNSLock(ctx, bucket, object)
-	if err := lk.GetLock(globalOperationTimeout); err != nil {
+	lk := fs.NewNSLock(bucket, object)
+	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		logger.LogIf(ctx, err)
 		return objInfo, err
 	}
@@ -1284,8 +1284,8 @@ func (fs *FSObjects) DeleteObject(ctx context.Context, bucket, object string, op
 	}
 
 	// Acquire a write lock before deleting the object.
-	lk := fs.NewNSLock(ctx, bucket, object)
-	if err = lk.GetLock(globalOperationTimeout); err != nil {
+	lk := fs.NewNSLock(bucket, object)
+	if err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return objInfo, err
 	}
 	defer lk.Unlock()

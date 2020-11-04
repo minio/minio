@@ -210,7 +210,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	txnLk := newObject.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
+	txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 
 	// allocate dynamic timeout once before the loop
 	configLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
@@ -232,7 +232,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	for range retry.NewTimerWithJitter(retryCtx, 500*time.Millisecond, time.Second, retry.MaxJitter) {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(configLockTimeout); err != nil {
+		if err = txnLk.GetLock(retryCtx, configLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 			continue
 		}

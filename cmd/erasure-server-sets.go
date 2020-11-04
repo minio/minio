@@ -89,8 +89,8 @@ func newErasureServerSets(ctx context.Context, endpointServerSets EndpointServer
 	return z, nil
 }
 
-func (z *erasureServerSets) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return z.serverSets[0].NewNSLock(ctx, bucket, objects...)
+func (z *erasureServerSets) NewNSLock(bucket string, objects ...string) RWLocker {
+	return z.serverSets[0].NewNSLock(bucket, objects...)
 }
 
 func (z *erasureServerSets) GetAllLockers() []dsync.NetLocker {
@@ -570,8 +570,8 @@ func (z *erasureServerSets) DeleteObjects(ctx context.Context, bucket string, ob
 	}
 
 	// Acquire a bulk write lock across 'objects'
-	multiDeleteLock := z.NewNSLock(ctx, bucket, objSets.ToSlice()...)
-	if err := multiDeleteLock.GetLock(globalOperationTimeout); err != nil {
+	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
+	if err := multiDeleteLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		for i := range derrs {
 			derrs[i] = err
 		}
@@ -1682,8 +1682,8 @@ func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketIn
 
 func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
-	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalOperationTimeout); err != nil {
+	formatLock := z.NewNSLock(minioMetaBucket, formatConfigFile)
+	if err := formatLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 	defer formatLock.Unlock()
@@ -1887,17 +1887,17 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	object = encodeDirObject(object)
 
-	lk := z.NewNSLock(ctx, bucket, object)
+	lk := z.NewNSLock(bucket, object)
 	if bucket == minioMetaBucket {
 		// For .minio.sys bucket heals we should hold write locks.
-		if err := lk.GetLock(globalOperationTimeout); err != nil {
+		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 		defer lk.Unlock()
 	} else {
 		// Lock the object before healing. Use read lock since healing
 		// will only regenerate parts & xl.meta of outdated disks.
-		if err := lk.GetRLock(globalOperationTimeout); err != nil {
+		if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 		defer lk.RUnlock()
