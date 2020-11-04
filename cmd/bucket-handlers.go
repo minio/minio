@@ -383,6 +383,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
+	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
+	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
+
 	// Before proceeding validate if bucket exists.
 	_, err := objectAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
