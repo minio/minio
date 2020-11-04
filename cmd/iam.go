@@ -230,6 +230,11 @@ const (
 	srvAccUser
 )
 
+// key options
+type options struct {
+	ttl int64 //expiry in seconds
+}
+
 // IAMStorageAPI defines an interface for the IAM persistence layer
 type IAMStorageAPI interface {
 	lock()
@@ -254,13 +259,13 @@ type IAMStorageAPI interface {
 
 	loadAll(context.Context, *IAMSys) error
 
-	saveIAMConfig(ctx context.Context, item interface{}, path string) error
+	saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error
 	loadIAMConfig(ctx context.Context, item interface{}, path string) error
 	deleteIAMConfig(ctx context.Context, path string) error
 
 	savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error
-	saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy) error
-	saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity) error
+	saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy, opts ...options) error
+	saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity, opts ...options) error
 	saveGroupInfo(ctx context.Context, group string, gi GroupInfo) error
 
 	deletePolicyDoc(ctx context.Context, policyName string) error
@@ -703,6 +708,8 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	sys.store.lock()
 	defer sys.store.unlock()
 
+	ttl := int64(UTCNow().Sub(cred.Expiration).Seconds())
+
 	// If OPA is not set we honor any policy claims for this
 	// temporary user which match with pre-configured canned
 	// policies for this server.
@@ -727,7 +734,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 			return nil
 		}
 
-		if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp); err != nil {
+		if err := sys.store.saveMappedPolicy(context.Background(), accessKey, stsUser, false, mp, options{ttl: ttl}); err != nil {
 			return err
 		}
 
@@ -735,7 +742,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	}
 
 	u := newUserIdentity(cred)
-	if err := sys.store.saveUserIdentity(context.Background(), accessKey, stsUser, u); err != nil {
+	if err := sys.store.saveUserIdentity(context.Background(), accessKey, stsUser, u, options{ttl: ttl}); err != nil {
 		return err
 	}
 

@@ -204,7 +204,7 @@ func (iamOS *IAMObjectStore) migrateBackendFormat(ctx context.Context) error {
 	return iamOS.migrateToV1(ctx)
 }
 
-func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, path string) error {
+func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -512,12 +512,12 @@ func (iamOS *IAMObjectStore) savePolicyDoc(ctx context.Context, policyName strin
 	return iamOS.saveIAMConfig(ctx, &p, getPolicyDocPath(policyName))
 }
 
-func (iamOS *IAMObjectStore) saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy) error {
-	return iamOS.saveIAMConfig(ctx, mp, getMappedPolicyPath(name, userType, isGroup))
+func (iamOS *IAMObjectStore) saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy, opts ...options) error {
+	return iamOS.saveIAMConfig(ctx, mp, getMappedPolicyPath(name, userType, isGroup), opts...)
 }
 
-func (iamOS *IAMObjectStore) saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity) error {
-	return iamOS.saveIAMConfig(ctx, u, getUserIdentityPath(name, userType))
+func (iamOS *IAMObjectStore) saveUserIdentity(ctx context.Context, name string, userType IAMUserType, u UserIdentity, opts ...options) error {
+	return iamOS.saveIAMConfig(ctx, u, getUserIdentityPath(name, userType), opts...)
 }
 
 func (iamOS *IAMObjectStore) saveGroupInfo(ctx context.Context, name string, gi GroupInfo) error {

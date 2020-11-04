@@ -38,9 +38,23 @@ func etcdErrToErr(err error, etcdEndpoints []string) error {
 	}
 }
 
-func saveKeyEtcd(ctx context.Context, client *etcd.Client, key string, data []byte) error {
+func saveKeyEtcdWithTTL(ctx context.Context, client *etcd.Client, key string, data []byte, ttl int64) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
+	lease, err := client.Grant(timeoutCtx, ttl)
+	if err != nil {
+		return etcdErrToErr(err, client.Endpoints())
+	}
+	_, err = client.Put(timeoutCtx, key, string(data), etcd.WithLease(lease.ID))
+	return etcdErrToErr(err, client.Endpoints())
+}
+
+func saveKeyEtcd(ctx context.Context, client *etcd.Client, key string, data []byte, opts ...options) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
+	defer cancel()
+	if len(opts) > 0 {
+		return saveKeyEtcdWithTTL(ctx, client, key, data, opts[0].ttl)
+	}
 	_, err := client.Put(timeoutCtx, key, string(data))
 	return etcdErrToErr(err, client.Endpoints())
 }
