@@ -297,27 +297,34 @@ func (b *bucketMetacache) cleanup() {
 
 	b.mu.RLock()
 	for id, cache := range b.caches {
-		if b.transient && time.Since(cache.started) > time.Hour {
+		if b.transient && time.Since(cache.lastUpdate) > 15*time.Minute && time.Since(cache.lastHandout) > 15*time.Minute {
 			// Keep transient caches only for 1 hour.
 			remove[id] = struct{}{}
+			continue
 		}
 		if !cache.worthKeeping(currentCycle) {
 			debugPrint("cache %s not worth keeping", id)
 			remove[id] = struct{}{}
+			continue
 		}
 		if cache.id != id {
 			logger.Info("cache ID mismatch %s != %s", id, cache.id)
 			remove[id] = struct{}{}
+			continue
 		}
 		if cache.bucket != b.bucket && !b.transient {
 			logger.Info("cache bucket mismatch %s != %s", b.bucket, cache.bucket)
 			remove[id] = struct{}{}
+			continue
 		}
 	}
 
 	// Check all non-deleted against eachother.
 	// O(n*n), but should still be rather quick.
 	for id, cache := range b.caches {
+		if b.transient {
+			break
+		}
 		if _, ok := remove[id]; ok {
 			continue
 		}
