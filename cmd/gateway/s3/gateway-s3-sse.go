@@ -65,8 +65,8 @@ type s3EncObjects struct {
 
 // ListObjects lists all blobs in S3 bucket filtered by prefix
 func (l *s3EncObjects) ListObjects(ctx context.Context, bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi minio.ListObjectsInfo, e error) {
-	var continuationToken, startAfter string
-	res, err := l.ListObjectsV2(ctx, bucket, prefix, continuationToken, delimiter, maxKeys, false, startAfter)
+	var startAfter string
+	res, err := l.ListObjectsV2(ctx, bucket, prefix, marker, delimiter, maxKeys, false, startAfter)
 	if err != nil {
 		return loi, err
 	}
@@ -91,10 +91,12 @@ func (l *s3EncObjects) ListObjectsV2(ctx context.Context, bucket, prefix, contin
 		if e != nil {
 			return loi, minio.ErrorRespToObjectError(e, bucket)
 		}
+
+		continuationToken = loi.NextContinuationToken
+		isTruncated = loi.IsTruncated
+
 		for _, obj := range loi.Objects {
 			startAfter = obj.Name
-			continuationToken = loi.NextContinuationToken
-			isTruncated = loi.IsTruncated
 
 			if !isGWObject(obj.Name) {
 				continue
