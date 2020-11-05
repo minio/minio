@@ -62,7 +62,7 @@ require (
 	github.com/nats-io/stan.go v0.7.0
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
-	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/philhofer/fwd v1.1.0 // indirect
 	github.com/pierrec/lz4 v2.4.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.0.0
@@ -75,6 +75,7 @@ require (
 	github.com/tidwall/gjson v1.3.5
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3-0.20201021170154-7dcb1f1e923b
+	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
