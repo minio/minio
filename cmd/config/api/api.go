@@ -43,7 +43,7 @@ const (
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
-	EnvAPIExtendListCacheLife     = "MINIO_API_EXTEND_LIFE_CACHE_LIFE"
+	EnvAPIExtendListCacheLife     = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
 	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS"
 )
 
