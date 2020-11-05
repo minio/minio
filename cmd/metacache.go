@@ -79,6 +79,9 @@ func (m *metacache) worthKeeping(currentCycle uint64) bool {
 	case cache.finished() && cache.startedCycle > currentCycle:
 		// Cycle is somehow bigger.
 		return false
+	case cache.finished() && time.Since(cache.lastHandout) > 48*time.Hour:
+		// Keep only for 2 days. Fallback if crawler is clogged.
+		return false
 	case cache.finished() && currentCycle >= dataUsageUpdateDirCycles && cache.startedCycle < currentCycle-dataUsageUpdateDirCycles:
 		// Cycle is too old to be valuable.
 		return false

@@ -33,6 +33,7 @@ type apiConfig struct {
 	requestsPool     chan struct{}
 	clusterDeadline  time.Duration
 	listQuorum       int
+	extendListLife   time.Duration
 	corsAllowOrigins []string
 }
 
@@ -65,6 +66,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 	t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.GetListQuorum()
+	t.extendListLife = cfg.ExtendListLife
 }
 
 func (t *apiConfig) getListQuorum() int {
@@ -72,6 +74,13 @@ func (t *apiConfig) getListQuorum() int {
 	defer t.mu.RUnlock()
 
 	return t.listQuorum
+}
+
+func (t *apiConfig) getExtendListLife() time.Duration {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.extendListLife
 }
 
 func (t *apiConfig) getCorsAllowOrigins() []string {

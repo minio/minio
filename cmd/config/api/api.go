@@ -35,6 +35,7 @@ const (
 	apiCorsAllowOrigin         = "cors_allow_origin"
 	apiRemoteTransportDeadline = "remote_transport_deadline"
 	apiListQuorum              = "list_quorum"
+	apiExtendListCacheLife     = "extend_list_cache_life"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
@@ -42,6 +43,7 @@ const (
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
+	EnvAPIExtendListCacheLife     = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
 	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS"
 )
 
@@ -78,6 +80,10 @@ var (
 			Key:   apiListQuorum,
 			Value: "optimal",
 		},
+		config.KV{
+			Key:   apiExtendListCacheLife,
+			Value: "0s",
+		},
 	}
 )
 
@@ -89,6 +95,7 @@ type Config struct {
 	CorsAllowOrigin         []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
 	ListQuorum              string        `json:"list_strict_quorum"`
+	ExtendListLife          time.Duration `json:"extend_list_cache_life"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -163,6 +170,11 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, errors.New("invalid value for list strict quorum")
 	}
 
+	listLife, err := time.ParseDuration(env.Get(EnvAPIExtendListCacheLife, kvs.Get(apiExtendListCacheLife)))
+	if err != nil {
+		return cfg, err
+	}
+
 	return Config{
 		RequestsMax:             requestsMax,
 		RequestsDeadline:        requestsDeadline,
@@ -170,5 +182,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		CorsAllowOrigin:         corsAllowOrigin,
 		RemoteTransportDeadline: remoteTransportDeadline,
 		ListQuorum:              listQuorum,
+		ExtendListLife:          listLife,
 	}, nil
 }
