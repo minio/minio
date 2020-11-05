@@ -381,24 +381,7 @@ func (b *bucketMetacache) updateCacheEntry(update metacache) (metacache, error) 
 		logger.Info("updateCacheEntry: bucket %s list id %v not found", b.bucket, update.id)
 		return update, errFileNotFound
 	}
-
-	existing.lastUpdate = UTCNow()
-
-	if existing.status == scanStateStarted && update.status == scanStateSuccess {
-		existing.ended = UTCNow()
-		existing.endedCycle = update.endedCycle
-	}
-
-	if existing.status == scanStateStarted && update.status != scanStateStarted {
-		existing.status = update.status
-	}
-
-	if existing.error == "" && update.error != "" {
-		existing.error = update.error
-		existing.status = scanStateError
-		existing.ended = UTCNow()
-	}
-	existing.fileNotFound = existing.fileNotFound || update.fileNotFound
+	existing.update(update)
 	b.caches[update.id] = existing
 	b.updated = true
 	return existing, nil

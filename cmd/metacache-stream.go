@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 
@@ -84,56 +83,20 @@ func newMetacacheWriter(out io.Writer, blockSize int) *metacacheWriter {
 			return err
 		}
 
-		w.closer = func() error {
+		w.closer = func() (err error) {
+			defer func() {
+				cerr := s2w.Close()
+				if err == nil && cerr != nil {
+					err = cerr
+				}
+			}()
 			if w.streamErr != nil {
 				return w.streamErr
 			}
-			if err := w.mw.WriteBool(false); err != nil {
+			if err = w.mw.WriteBool(false); err != nil {
 				return err
 			}
-			if err := w.mw.Flush(); err != nil {
-				return err
-			}
-			return s2w.Close()
-		}
-		return nil
-	}
-	return &w
-}
-
-func newMetacacheFile(file string) *metacacheWriter {
-	w := metacacheWriter{
-		mw: nil,
-	}
-	w.creator = func() error {
-		fw, err := os.Create(file)
-		if err != nil {
-			return err
-		}
-		s2w := s2.NewWriter(fw, s2.WriterBlockSize(1<<20))
-		w.mw = msgp.NewWriter(s2w)
-		w.creator = nil
-		if err := w.mw.WriteByte(metacacheStreamVersion); err != nil {
-			return err
-		}
-		w.closer = func() error {
-			if w.streamErr != nil {
-				fw.Close()
-				return w.streamErr
-			}
-			// Indicate EOS
-			if err := w.mw.WriteBool(false); err != nil {
-				return err
-			}
-			if err := w.mw.Flush(); err != nil {
-				fw.Close()
-				return err
-			}
-			if err := s2w.Close(); err != nil {
-				fw.Close()
-				return err
-			}
-			return fw.Close()
+			return w.mw.Flush()
 		}
 		return nil
 	}
