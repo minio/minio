@@ -304,7 +304,6 @@ func (b *bucketMetacache) cleanup() {
 		debugPrint = logger.Info
 	}
 
-	extend := globalAPIConfig.getExtendListLife()
 	b.mu.RLock()
 	for id, cache := range b.caches {
 		if b.transient && time.Since(cache.lastUpdate) > 15*time.Minute && time.Since(cache.lastHandout) > 15*time.Minute {
@@ -312,7 +311,7 @@ func (b *bucketMetacache) cleanup() {
 			remove[id] = struct{}{}
 			continue
 		}
-		if !cache.worthKeeping(currentCycle, extend) {
+		if !cache.worthKeeping(currentCycle) {
 			debugPrint("cache %s not worth keeping", id)
 			remove[id] = struct{}{}
 			continue
