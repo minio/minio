@@ -67,7 +67,7 @@ func (m *metacache) finished() bool {
 }
 
 // worthKeeping indicates if the cache by itself is worth keeping.
-func (m *metacache) worthKeeping(currentCycle uint64) bool {
+func (m *metacache) worthKeeping(currentCycle uint64, extend time.Duration) bool {
 	if m == nil {
 		return false
 	}
@@ -81,7 +81,9 @@ func (m *metacache) worthKeeping(currentCycle uint64) bool {
 		return false
 	case cache.finished() && currentCycle >= dataUsageUpdateDirCycles && cache.startedCycle < currentCycle-dataUsageUpdateDirCycles:
 		// Cycle is too old to be valuable.
-		return false
+		if extend <= 0 || time.Since(cache.lastUpdate) > metacacheMaxRunningAge+extend {
+			return false
+		}
 	case cache.status == scanStateError || cache.status == scanStateNone:
 		// Remove failed listings after 10 minutes.
 		return time.Since(cache.lastUpdate) < 10*time.Minute

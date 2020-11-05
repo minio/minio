@@ -209,12 +209,13 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 	}
 
 	var best metacache
+	extend := globalAPIConfig.getExtendListLife()
 	for _, cached := range b.caches {
 		// Never return transient caches if there is no id.
 		if b.transient {
 			break
 		}
-		if cached.status == scanStateError || cached.dataVersion != metacacheStreamVersion {
+		if cached.status == scanStateError || cached.status == scanStateNone || cached.dataVersion != metacacheStreamVersion {
 			debugPrint("cache %s state or stream version mismatch", cached.id)
 			continue
 		}
@@ -242,15 +243,23 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 			// Non slash separator requires recursive.
 			continue
 		}
-		if cached.ended.IsZero() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
+		if !cached.finished() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
 			debugPrint("cache %s not running, time: %v", cached.id, time.Since(cached.lastUpdate))
 			// Abandoned
 			continue
 		}
-		if !cached.ended.IsZero() && cached.endedCycle <= o.OldestCycle {
-			debugPrint("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
-			// If scan has ended the oldest requested must be less.
-			continue
+
+		if cached.finished() && cached.endedCycle <= o.OldestCycle {
+			if extend <= 0 {
+				// If scan has ended the oldest requested must be less.
+				debugPrint("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
+				continue
+			}
+			if time.Since(cached.lastUpdate) > metacacheMaxRunningAge+extend {
+				// Cache ended within bloom cycle, but we can extend the life.
+				debugPrint("cache %s ended (%v) and beyond extended life (%v)", cached.id, cached.lastUpdate, extend+metacacheMaxRunningAge)
+				continue
+			}
 		}
 		if cached.started.Before(best.started) {
 			debugPrint("cache %s disregarded - we have a better", cached.id)
@@ -295,6 +304,7 @@ func (b *bucketMetacache) cleanup() {
 		debugPrint = logger.Info
 	}
 
+	extend := globalAPIConfig.getExtendListLife()
 	b.mu.RLock()
 	for id, cache := range b.caches {
 		if b.transient && time.Since(cache.lastUpdate) > 15*time.Minute && time.Since(cache.lastHandout) > 15*time.Minute {
@@ -302,7 +312,7 @@ func (b *bucketMetacache) cleanup() {
 			remove[id] = struct{}{}
 			continue
 		}
-		if !cache.worthKeeping(currentCycle) {
+		if !cache.worthKeeping(currentCycle, extend) {
 			debugPrint("cache %s not worth keeping", id)
 			remove[id] = struct{}{}
 			continue
