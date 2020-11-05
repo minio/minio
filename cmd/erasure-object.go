@@ -373,7 +373,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				// Remove the dangling object only when:
 				//  - This is a non versioned bucket
 				//  - This is a versioned bucket and the version ID is passed, the reason
-				//    is that it is hard to pick that particular version that is dangling
+				//    is that we cannot fetch the ID of the latest version when we don't trust xl.meta
 				if !opts.Versioned || opts.VersionID != "" {
 					er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
 						Name:      object,
