@@ -461,7 +461,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[deleteList[i]]
+		dindex := objectsToDelete[ObjectToDelete{
+			ObjectName: dObjects[i].ObjectName,
+			VersionID:  dObjects[i].VersionID,
+		}]
 		apiErr := toAPIError(ctx, errs[i])
 		if apiErr.Code == "" || apiErr.Code == "NoSuchKey" || apiErr.Code == "InvalidArgument" {
 			deletedObjects[dindex] = dObjects[i]
