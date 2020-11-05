@@ -99,8 +99,11 @@ func (m *metacache) canBeReplacedBy(other *metacache) bool {
 	if other.status == scanStateNone || other.status == scanStateError {
 		return false
 	}
+	if m.status == scanStateStarted && time.Since(m.lastUpdate) < metacacheMaxRunningAge {
+		return false
+	}
 	// Keep it around a bit longer.
-	if time.Since(m.lastHandout) < time.Hour {
+	if time.Since(m.lastHandout) < time.Hour || time.Since(m.lastUpdate) < metacacheMaxRunningAge {
 		return false
 	}
 
@@ -136,6 +139,28 @@ func baseDirFromPrefix(prefix string) string {
 		b += slashSeparator
 	}
 	return b
+}
+
+// update cache with new status.
+// The updates are conditional so multiple callers can update with different states.
+func (m *metacache) update(update metacache) {
+	m.lastUpdate = UTCNow()
+
+	if m.status == scanStateStarted && update.status == scanStateSuccess {
+		m.ended = UTCNow()
+		m.endedCycle = update.endedCycle
+	}
+
+	if m.status == scanStateStarted && update.status != scanStateStarted {
+		m.status = update.status
+	}
+
+	if m.error == "" && update.error != "" {
+		m.error = update.error
+		m.status = scanStateError
+		m.ended = UTCNow()
+	}
+	m.fileNotFound = m.fileNotFound || update.fileNotFound
 }
 
 // delete all cache data on disks.
