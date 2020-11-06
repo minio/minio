@@ -233,17 +233,14 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTC
 	// We operate on a copy...
 	o.Create = false
 	var cache metacache
-	if !o.Transient {
-		if rpc == nil || o.Transient {
-			// Local
-			cache = localMetacacheMgr.findCache(ctx, o)
-		} else {
-			c, err := rpc.GetMetacacheListing(ctx, o)
-			if err != nil {
-				return err
-			}
-			cache = *c
+	if rpc == nil || o.Transient {
+		cache = localMetacacheMgr.findCache(ctx, o)
+	} else {
+		c, err := rpc.GetMetacacheListing(ctx, o)
+		if err != nil {
+			return err
 		}
+		cache = *c
 	}
 
 	if cache.status == scanStateNone || cache.fileNotFound {
@@ -251,7 +248,16 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTC
 	}
 	if cache.status == scanStateSuccess || cache.status == scanStateStarted {
 		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
-			return fmt.Errorf("timeout: list %s not updated for 1 minute", cache.id)
+			// We got a stale entry, mark error on handling server.
+			err := fmt.Errorf("timeout: list %s not updated", cache.id)
+			cache.error = err.Error()
+			cache.status = scanStateError
+			if rpc == nil || o.Transient {
+				localMetacacheMgr.updateCacheEntry(cache)
+			} else {
+				rpc.UpdateMetacacheListing(ctx, cache)
+			}
+			return err
 		}
 		return nil
 	}
