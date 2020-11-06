@@ -710,16 +710,15 @@ func (l *s3EncObjects) cleanupStaleEncMultipartUploads(ctx context.Context, clea
 
 // cleanupStaleUploads removes old custom encryption multipart uploads on backend
 func (l *s3EncObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
-	for {
-		buckets, err := l.s3Objects.ListBuckets(ctx)
-		if err != nil {
-			break
-		}
-		for _, b := range buckets {
-			expParts := l.getStalePartsForBucket(ctx, b.Name, expiry)
-			for k := range expParts {
-				l.s3Objects.DeleteObject(ctx, b.Name, k, minio.ObjectOptions{})
-			}
+	buckets, err := l.s3Objects.ListBuckets(ctx)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return
+	}
+	for _, b := range buckets {
+		expParts := l.getStalePartsForBucket(ctx, b.Name, expiry)
+		for k := range expParts {
+			l.s3Objects.DeleteObject(ctx, b.Name, k, minio.ObjectOptions{})
 		}
 	}
 }
@@ -731,6 +730,7 @@ func (l *s3EncObjects) getStalePartsForBucket(ctx context.Context, bucket string
 	for {
 		loi, err := l.s3Objects.ListObjectsV2(ctx, bucket, prefix, continuationToken, delimiter, 1000, false, startAfter)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			break
 		}
 		for _, obj := range loi.Objects {
