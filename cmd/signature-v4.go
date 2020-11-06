@@ -236,40 +236,80 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	t := pSignValues.Date
 	expireSeconds := int(pSignValues.Expires / time.Second)
 
-	// Construct the query map
+	// Construct new query.
 	query := make(url.Values)
-	for key, val := range req.URL.Query() {
-		switch key {
-		case xhttp.AmzContentSha256:
-			{
-				if val != nil {
-					query.Set(xhttp.AmzContentSha256, hashedPayload)
-				}
-			}
-		case xhttp.AmzSecurityToken:
-			{
-				if val != nil {
-					query.Set(xhttp.AmzSecurityToken, cred.SessionToken)
-				}
-			}
-		case xhttp.AmzExpires:
-			{
-				if val != nil {
-					query.Set(xhttp.AmzExpires, strconv.Itoa(expireSeconds))
-				}
-			}
-		case xhttp.AmzSignature:
-		default:
-			{
-				query.Set(key, val[0])
-			}
+	clntHashedPayload := req.URL.Query().Get(xhttp.AmzContentSha256)
+	if clntHashedPayload != "" {
+		query.Set(xhttp.AmzContentSha256, hashedPayload)
+	}
+
+	token := req.URL.Query().Get(xhttp.AmzSecurityToken)
+	if token != "" {
+		query.Set(xhttp.AmzSecurityToken, cred.SessionToken)
+	}
+
+	query.Set(xhttp.AmzAlgorithm, signV4Algorithm)
+
+	// Construct the query.
+	query.Set(xhttp.AmzDate, t.Format(iso8601Format))
+	query.Set(xhttp.AmzExpires, strconv.Itoa(expireSeconds))
+	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
+	query.Set(xhttp.AmzCredential, cred.AccessKey+SlashSeparator+pSignValues.Credential.getScope())
+
+	excludeParams := []string{
+		xhttp.AmzContentSha256,
+		xhttp.AmzSecurityToken,
+		xhttp.AmzAlgorithm,
+		xhttp.AmzDate,
+		xhttp.AmzExpires,
+		xhttp.AmzSignedHeaders,
+		xhttp.AmzCredential,
+		xhttp.AmzSignature,
+	}
+	rquery := make(url.Values)
+	for k, v := range req.URL.Query() {
+		rquery[k] = v
+	}
+	// Remove all excluded params.
+	for _, k := range excludeParams {
+		if rquery.Get(k) != "" {
+			rquery.Del(k)
 		}
+	}
+	// Save other headers available in the request parameters.
+	for k, v := range rquery {
+		query[k] = v
 	}
 
 	// Get the encoded query.
 	encodedQuery := query.Encode()
 
-	/// Finally verify if the signatures are the same.
+	// Verify if date query is same.
+	if req.URL.Query().Get(xhttp.AmzDate) != query.Get(xhttp.AmzDate) {
+		return ErrSignatureDoesNotMatch
+	}
+	// Verify if expires query is same.
+	if req.URL.Query().Get(xhttp.AmzExpires) != query.Get(xhttp.AmzExpires) {
+		return ErrSignatureDoesNotMatch
+	}
+	// Verify if signed headers query is same.
+	if req.URL.Query().Get(xhttp.AmzSignedHeaders) != query.Get(xhttp.AmzSignedHeaders) {
+		return ErrSignatureDoesNotMatch
+	}
+	// Verify if credential query is same.
+	if req.URL.Query().Get(xhttp.AmzCredential) != query.Get(xhttp.AmzCredential) {
+		return ErrSignatureDoesNotMatch
+	}
+	// Verify if sha256 payload query is same.
+	if clntHashedPayload != "" && clntHashedPayload != query.Get(xhttp.AmzContentSha256) {
+		return ErrContentSHA256Mismatch
+	}
+	// Verify if security token is correct.
+	if token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
+		return ErrInvalidToken
+	}
+
+	/// Verify finally if signature is same.
 
 	// Get canonical request.
 	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method)
