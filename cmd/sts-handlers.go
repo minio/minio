@@ -328,11 +328,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	var policyName string
 	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
 	if ok {
-		policyName = globalIAMSys.currentPolicies(strings.Join(policySet.ToSlice(), ","))
+		policyName = globalIAMSys.CurrentPolicies(strings.Join(policySet.ToSlice(), ","))
 	}
 
 	if policyName == "" && globalPolicyOPA == nil {
-		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
+			fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
 		return
 	}
 	m[iamPolicyClaimNameOpenID()] = policyName
