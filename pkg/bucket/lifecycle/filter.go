@@ -38,6 +38,11 @@ type Filter struct {
 // MarshalXML - produces the xml representation of the Filter struct
 // only one of Prefix, And and Tag should be present in the output.
 func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	if f.And.isEmpty() && f.Tag.IsEmpty() && f.Prefix == "" {
+		// filter is empty skip XML
+		return nil
+	}
+
 	if err := e.EncodeToken(start); err != nil {
 		return err
 	}
@@ -52,9 +57,11 @@ func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 			return err
 		}
 	default:
-		// Always print Prefix field when both And & Tag are empty
-		if err := e.EncodeElement(f.Prefix, xml.StartElement{Name: xml.Name{Local: "Prefix"}}); err != nil {
-			return err
+		if f.Prefix != "" {
+			// Always print Prefix field when both And & Tag are empty
+			if err := e.EncodeElement(f.Prefix, xml.StartElement{Name: xml.Name{Local: "Prefix"}}); err != nil {
+				return err
+			}
 		}
 	}
 
