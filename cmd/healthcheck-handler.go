@@ -30,13 +30,13 @@ const unavailable = "offline"
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClusterCheckHandler")
 
-	objLayer := newObjectLayerFn()
-	// Service not initialized yet
-	if objLayer == nil {
+	if shouldProxy() {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
+
+	objLayer := newObjectLayerFn()
 
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
@@ -66,7 +66,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // ReadinessCheckHandler Checks if the process is up. Always returns success.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if newObjectLayerFn() == nil {
+	if shouldProxy() {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}
@@ -76,7 +76,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // LivenessCheckHandler - Checks if the process is up. Always returns success.
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	if newObjectLayerFn() == nil {
+	if shouldProxy() {
 		// Service not initialized yet
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 	}

@@ -175,12 +175,20 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 	return browserRedirectHandler{handler: h}
 }
 
+func shouldProxy() bool {
+	if newObjectLayerFn() == nil {
+		return true
+	}
+	return !globalIAMSys.Initialized()
+}
+
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch {
-	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), guessIsMetricsReq(r), isAdminReq(r):
+	if guessIsRPCReq(r) || guessIsBrowserReq(r) ||
+		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) || isAdminReq(r) {
 		h.handler.ServeHTTP(w, r)
 		return
-	case newObjectLayerFn() == nil:
+	}
+	if shouldProxy() {
 		// if this server is still initializing, proxy the request
 		// to any other online servers to avoid 503 for any incoming
 		// API calls.

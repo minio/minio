@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -201,6 +202,8 @@ func newMappedPolicy(policy string) MappedPolicy {
 
 // IAMSys - config system.
 type IAMSys struct {
+	sync.Mutex
+
 	usersSysType UsersSysType
 
 	// map of policy names to policy definitions
@@ -277,7 +280,7 @@ type IAMStorageAPI interface {
 // simplifies the implementation for group removal. This is called
 // only via IAM notifications.
 func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
-	if objAPI == nil || sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -318,7 +321,7 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 
 // LoadPolicy - reloads a specific canned policy from backend disks or etcd.
 func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
-	if objAPI == nil || sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -336,7 +339,7 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 // LoadPolicyMapping - loads the mapped policy for a user or group
 // from storage into server memory.
 func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isGroup bool) error {
-	if objAPI == nil || sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -362,7 +365,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 
 // LoadUser - reloads a specific user from backend disks or etcd.
 func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUserType) error {
-	if objAPI == nil || sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -386,7 +389,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 
 // LoadServiceAccount - reloads a specific service account from backend disks or etcd.
 func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -410,6 +413,9 @@ func (sys *IAMSys) doIAMConfigMigration(ctx context.Context) error {
 
 // InitStore initializes IAM stores
 func (sys *IAMSys) InitStore(objAPI ObjectLayer) {
+	sys.Lock()
+	defer sys.Unlock()
+
 	if globalEtcdClient == nil {
 		sys.store = newIAMObjectStore(objAPI)
 	} else {
@@ -419,6 +425,16 @@ func (sys *IAMSys) InitStore(objAPI ObjectLayer) {
 	if globalLDAPConfig.Enabled {
 		sys.EnableLDAPSys()
 	}
+}
+
+// Initialized check if IAM is initialized
+func (sys *IAMSys) Initialized() bool {
+	if sys == nil {
+		return false
+	}
+	sys.Lock()
+	defer sys.Unlock()
+	return sys.store != nil
 }
 
 // Init - initializes config system by reading entries from config/iam
@@ -505,7 +521,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 
 // DeletePolicy - deletes a canned policy from backend or etcd.
 func (sys *IAMSys) DeletePolicy(policyName string) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -557,7 +573,7 @@ func (sys *IAMSys) DeletePolicy(policyName string) error {
 
 // InfoPolicy - expands the canned policy into its JSON structure.
 func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return iampolicy.Policy{}, errServerNotInitialized
 	}
 
@@ -574,7 +590,7 @@ func (sys *IAMSys) InfoPolicy(policyName string) (iampolicy.Policy, error) {
 
 // ListPolicies - lists all canned policies.
 func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
@@ -595,7 +611,7 @@ func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
 
 // SetPolicy - sets a new name policy.
 func (sys *IAMSys) SetPolicy(policyName string, p iampolicy.Policy) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -616,7 +632,7 @@ func (sys *IAMSys) SetPolicy(policyName string, p iampolicy.Policy) error {
 
 // DeleteUser - delete user (only for long-term users not STS users).
 func (sys *IAMSys) DeleteUser(accessKey string) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -665,13 +681,14 @@ func (sys *IAMSys) DeleteUser(accessKey string) error {
 	return err
 }
 
-// returns comma separated policy string, from an input policy
-// after validating if there are any current policies which exist
-// on MinIO corresponding to the input.
-func (sys *IAMSys) currentPolicies(policyName string) string {
-	if sys.store == nil {
+// CurrentPolicies - returns comma separated policy string, from
+// an input policy after validating if there are any current
+// policies which exist on MinIO corresponding to the input.
+func (sys *IAMSys) CurrentPolicies(policyName string) string {
+	if !sys.Initialized() {
 		return ""
 	}
+
 	sys.store.rlock()
 	defer sys.store.runlock()
 
@@ -688,7 +705,7 @@ func (sys *IAMSys) currentPolicies(policyName string) string {
 
 // SetTempUser - set temporary user credentials, these credentials have an expiry.
 func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyName string) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -737,7 +754,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 
 // ListUsers - list all users.
 func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
@@ -773,7 +790,7 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 
 // IsTempUser - returns if given key is a temporary user.
 func (sys *IAMSys) IsTempUser(name string) (bool, error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return false, errServerNotInitialized
 	}
 
@@ -790,7 +807,7 @@ func (sys *IAMSys) IsTempUser(name string) (bool, error) {
 
 // IsServiceAccount - returns if given key is a service account
 func (sys *IAMSys) IsServiceAccount(name string) (bool, string, error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return false, "", errServerNotInitialized
 	}
 
@@ -811,7 +828,7 @@ func (sys *IAMSys) IsServiceAccount(name string) (bool, string, error) {
 
 // GetUserInfo - get info on a user.
 func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return u, errServerNotInitialized
 	}
 
@@ -856,8 +873,7 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 
 // SetUserStatus - sets current user status, supports disabled or enabled.
 func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) error {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -902,8 +918,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 
 // NewServiceAccount - create a new service account
 func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, sessionPolicy *iampolicy.Policy) (auth.Credentials, error) {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return auth.Credentials{}, errServerNotInitialized
 	}
 
@@ -969,8 +984,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 
 // ListServiceAccounts - lists all services accounts associated to a specific user
 func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]string, error) {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
@@ -994,8 +1008,7 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 
 // GetServiceAccountParent - gets information about a service account
 func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string) (string, error) {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return "", errServerNotInitialized
 	}
 
@@ -1011,8 +1024,7 @@ func (sys *IAMSys) GetServiceAccountParent(ctx context.Context, accessKey string
 
 // DeleteServiceAccount - delete a service account
 func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) error {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1040,8 +1052,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string) e
 
 // SetUser - set user credentials and policy.
 func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1078,8 +1089,7 @@ func (sys *IAMSys) SetUser(accessKey string, uinfo madmin.UserInfo) error {
 
 // SetUserSecretKey - sets user secret key
 func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
-
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1107,7 +1117,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 
 // GetUser - get user credentials
 func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return cred, false
 	}
 
@@ -1173,7 +1183,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 // AddUsersToGroup - adds users to a group, creating the group if
 // needed. No error if user(s) already are in the group.
 func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1233,7 +1243,7 @@ func (sys *IAMSys) AddUsersToGroup(group string, members []string) error {
 // RemoveUsersFromGroup - remove users from group. If no users are
 // given, and the group is empty, deletes the group as well.
 func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1313,7 +1323,7 @@ func (sys *IAMSys) RemoveUsersFromGroup(group string, members []string) error {
 
 // SetGroupStatus - enable/disabled a group
 func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1348,7 +1358,7 @@ func (sys *IAMSys) SetGroupStatus(group string, enabled bool) error {
 
 // GetGroupDescription - builds up group description
 func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return gd, errServerNotInitialized
 	}
 
@@ -1388,7 +1398,7 @@ func (sys *IAMSys) GetGroupDescription(group string) (gd madmin.GroupDesc, err e
 
 // ListGroups - lists groups.
 func (sys *IAMSys) ListGroups() (r []string, err error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return r, errServerNotInitialized
 	}
 
@@ -1411,7 +1421,7 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 
 // PolicyDBSet - sets a policy for a user or group in the PolicyDB.
 func (sys *IAMSys) PolicyDBSet(name, policy string, isGroup bool) error {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
 
@@ -1477,7 +1487,7 @@ func (sys *IAMSys) policyDBSet(name, policyName string, userType IAMUserType, is
 // be a member of multiple groups, this function returns an array of
 // applicable policies (each group is mapped to at most one policy).
 func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
-	if sys == nil || sys.store == nil {
+	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
