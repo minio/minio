@@ -173,11 +173,18 @@ All metrics are labeled by `bucket`, each metric is displayed per bucket. `bucke
 - *BETWEEN_128_MB_AND_512_MB*
 - *GREATER_THAN_512_MB*
 
+
+Units defintions:
+- 1 MB = 1024 KB
+- 1 KB = 1024 B
+
+
 | name                       | description                                         |
 |:---------------------------|:----------------------------------------------------|
 | `bucket_usage_size`        | Total size of the bucket                            |
 | `bucket_objects_count`     | Total number of objects in a bucket                 |
 | `bucket_objects_histogram` | Total number of objects filtered by different sizes |
+
 
 ### Cache specific metrics
 
