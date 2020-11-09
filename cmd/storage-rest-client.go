@@ -615,15 +615,17 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 	}
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+
 	if healthcheck {
+		// Use a separate client to avoid recursive calls.
+		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+		healthClient.ExpectTimeouts = true
 		restClient.HealthCheckFn = func() bool {
 			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-			// Instantiate a new rest client for healthcheck
-			// to avoid recursive healthCheckFn()
-			respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, storageRESTMethodHealth, nil, nil, -1)
+			respBody, err := healthClient.Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 			xhttp.DrainBody(respBody)
 			cancel()
-			return !errors.Is(err, context.DeadlineExceeded) && toStorageErr(err) != errDiskNotFound
+			return !xnet.IsNetworkOrHostDown(err, false) && toStorageErr(err) != errDiskNotFound
 		}
 	}
 
