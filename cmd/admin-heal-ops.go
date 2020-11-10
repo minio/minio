@@ -228,7 +228,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 // `keepHealSeqStateDuration`. This function also launches a
 // background routine to clean up heal results after the
 // aforementioned duration.
-func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
+func (ahs *allHealState) LaunchNewHealSequence(h *healSequence, objAPI ObjectLayer) (
 	respBytes []byte, apiErr APIError, errMsg string) {
 
 	if h.forceStarted {
@@ -265,7 +265,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence) (
 	ahs.healSeqMap[hpath] = h
 
 	// Launch top-level background heal go-routine
-	go h.healSequenceStart()
+	go h.healSequenceStart(objAPI)
 
 	clientToken := h.clientToken
 	if globalIsDistErasure {
@@ -609,7 +609,7 @@ func (h *healSequence) pushHealResultItem(r madmin.HealResultItem) error {
 // routine for completion, and (2) listens for external stop
 // signals. When either event happens, it sets the finish status for
 // the heal-sequence.
-func (h *healSequence) healSequenceStart() {
+func (h *healSequence) healSequenceStart(objAPI ObjectLayer) {
 	// Set status as running
 	h.mutex.Lock()
 	h.currentStatus.Summary = healRunningStatus
@@ -617,7 +617,7 @@ func (h *healSequence) healSequenceStart() {
 	h.mutex.Unlock()
 
 	if h.sourceCh == nil {
-		go h.traverseAndHeal()
+		go h.traverseAndHeal(objAPI)
 	} else {
 		go h.healFromSourceCh()
 	}
@@ -766,28 +766,23 @@ func (h *healSequence) healFromSourceCh() {
 	h.healItemsFromSourceCh()
 }
 
-func (h *healSequence) healDiskMeta() error {
-	// Start with format healing
-	if err := h.healDiskFormat(); err != nil {
-		return err
-	}
-
+func (h *healSequence) healDiskMeta(objAPI ObjectLayer) error {
 	// Start healing the config prefix.
-	if err := h.healMinioSysMeta(minioConfigPrefix)(); err != nil {
+	if err := h.healMinioSysMeta(objAPI, minioConfigPrefix)(); err != nil {
 		return err
 	}
 
 	// Start healing the bucket config prefix.
-	return h.healMinioSysMeta(bucketConfigPrefix)()
+	return h.healMinioSysMeta(objAPI, bucketConfigPrefix)()
 }
 
-func (h *healSequence) healItems(bucketsOnly bool) error {
-	if err := h.healDiskMeta(); err != nil {
+func (h *healSequence) healItems(objAPI ObjectLayer, bucketsOnly bool) error {
+	if err := h.healDiskMeta(objAPI); err != nil {
 		return err
 	}
 
 	// Heal buckets and objects
-	return h.healBuckets(bucketsOnly)
+	return h.healBuckets(objAPI, bucketsOnly)
 }
 
 // traverseAndHeal - traverses on-disk data and performs healing
@@ -797,26 +792,20 @@ func (h *healSequence) healItems(bucketsOnly bool) error {
 // quit signal is received, this routine cannot quit immediately and
 // has to wait until a safe point is reached, such as between scanning
 // two objects.
-func (h *healSequence) traverseAndHeal() {
+func (h *healSequence) traverseAndHeal(objAPI ObjectLayer) {
 	bucketsOnly := false // Heals buckets and objects also.
-	h.traverseAndHealDoneCh <- h.healItems(bucketsOnly)
+	h.traverseAndHealDoneCh <- h.healItems(objAPI, bucketsOnly)
 	close(h.traverseAndHealDoneCh)
 }
 
 // healMinioSysMeta - heals all files under a given meta prefix, returns a function
 // which in-turn heals the respective meta directory path and any files in int.
-func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
+func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) func() error {
 	return func() error {
-		// Get current object layer instance.
-		objectAPI := newObjectLayerFn()
-		if objectAPI == nil {
-			return errServerNotInitialized
-		}
-
 		// NOTE: Healing on meta is run regardless
 		// of any bucket being selected, this is to ensure that
 		// meta are always upto date and correct.
-		return objectAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket, object, versionID string) error {
+		return objAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket, object, versionID string) error {
 			if h.isQuitting() {
 				return errHealStopSignalled
 			}
@@ -843,39 +832,27 @@ func (h *healSequence) healDiskFormat() error {
 		return errHealStopSignalled
 	}
 
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
 	return h.queueHealTask(healSource{bucket: SlashSeparator}, madmin.HealItemMetadata)
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.
-func (h *healSequence) healBuckets(bucketsOnly bool) error {
+func (h *healSequence) healBuckets(objAPI ObjectLayer, bucketsOnly bool) error {
 	if h.isQuitting() {
 		return errHealStopSignalled
 	}
 
 	// 1. If a bucket was specified, heal only the bucket.
 	if h.bucket != "" {
-		return h.healBucket(h.bucket, bucketsOnly)
+		return h.healBucket(objAPI, h.bucket, bucketsOnly)
 	}
 
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
-	buckets, err := objectAPI.ListBucketsHeal(h.ctx)
+	buckets, err := objAPI.ListBucketsHeal(h.ctx)
 	if err != nil {
 		return errFnHealFromAPIErr(h.ctx, err)
 	}
 
 	for _, bucket := range buckets {
-		if err = h.healBucket(bucket.Name, bucketsOnly); err != nil {
+		if err = h.healBucket(objAPI, bucket.Name, bucketsOnly); err != nil {
 			return err
 		}
 	}
@@ -884,13 +861,7 @@ func (h *healSequence) healBuckets(bucketsOnly bool) error {
 }
 
 // healBucket - traverses and heals given bucket
-func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
+func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly bool) error {
 	if err := h.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket); err != nil {
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			return err
@@ -905,7 +876,7 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 		if h.object != "" {
 			// Check if an object named as the objPrefix exists,
 			// and if so heal it.
-			oi, err := objectAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
+			oi, err := objAPI.GetObjectInfo(h.ctx, bucket, h.object, ObjectOptions{})
 			if err == nil {
 				if err = h.healObject(bucket, h.object, oi.VersionID); err != nil {
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -919,7 +890,7 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 		return nil
 	}
 
-	if err := objectAPI.HealObjects(h.ctx, bucket, h.object, h.settings, h.healObject); err != nil {
+	if err := objAPI.HealObjects(h.ctx, bucket, h.object, h.settings, h.healObject); err != nil {
 		// Object might have been deleted, by the time heal
 		// was attempted we ignore this object an move on.
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -931,12 +902,6 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 
 // healObject - heal the given object and record result
 func (h *healSequence) healObject(bucket, object, versionID string) error {
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return errServerNotInitialized
-	}
-
 	if h.isQuitting() {
 		return errHealStopSignalled
 	}
