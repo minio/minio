@@ -237,6 +237,9 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	// Setup bandwidth throttling
 	peers, _ := globalEndpoints.peers()
 	totalNodesCount := len(peers)
+	if totalNodesCount == 0 {
+		totalNodesCount = 1 // For standalone erasure coding
+	}
 	b := target.BandwidthLimit / int64(totalNodesCount)
 	var headerSize int
 	for k, v := range putOpts.Header() {
