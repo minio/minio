@@ -725,7 +725,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	ttl := int64(UTCNow().Sub(cred.Expiration).Seconds())
+	ttl := int64(cred.Expiration.Sub(UTCNow()).Seconds())
 
 	// If OPA is not set we honor any policy claims for this
 	// temporary user which match with pre-configured canned
