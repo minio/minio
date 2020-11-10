@@ -774,10 +774,8 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	dstSet := s.getHashedSet(dstObject)
 
 	cpSrcDstSame := srcSet == dstSet
-
 	// Check if this request is only metadata update.
 	if cpSrcDstSame && srcInfo.metadataOnly {
-
 		// Version ID is set for the destination and source == destination version ID.
 		// perform an in-place update.
 		if dstOpts.VersionID != "" && srcOpts.VersionID == dstOpts.VersionID {
@@ -803,6 +801,7 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 		UserDefined:          srcInfo.UserDefined,
 		Versioned:            dstOpts.Versioned,
 		VersionID:            dstOpts.VersionID,
+		MTime:                dstOpts.MTime,
 	}
 
 	return dstSet.putObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
