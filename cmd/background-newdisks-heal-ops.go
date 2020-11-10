@@ -64,12 +64,21 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 			drivesToHeal, defaultMonitorNewDiskInterval))
 
 		// Heal any disk format and metadata early, if possible.
-		if err := bgSeq.healDiskMeta(); err != nil {
+		// Start with format healing
+		if err := bgSeq.healDiskFormat(); err != nil {
 			if newObjectLayerFn() != nil {
 				// log only in situations, when object layer
 				// has fully initialized.
 				logger.LogIf(bgSeq.ctx, err)
 			}
+		}
+	}
+
+	if err := bgSeq.healDiskMeta(objAPI); err != nil {
+		if newObjectLayerFn() != nil {
+			// log only in situations, when object layer
+			// has fully initialized.
+			logger.LogIf(bgSeq.ctx, err)
 		}
 	}
 
@@ -101,7 +110,7 @@ func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 	globalBackgroundHealRoutine = newHealRoutine()
 	go globalBackgroundHealRoutine.run(ctx, objAPI)
 
-	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence())
+	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence(), objAPI)
 }
 
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed
