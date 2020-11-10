@@ -132,6 +132,12 @@ const (
 
 	// Reports number of drives currently healing
 	MinIOHealingDrives = "x-minio-healing-drives"
+
+	// Header indicates if the delete marker should be preserved by client
+	MinIOSourceDeleteMarker = "x-minio-source-deletemarker"
+
+	// Header indicates if the delete marker version needs to be purged.
+	MinIOSourceDeleteMarkerDelete = "x-minio-source-deletemarker-delete"
 )
 
 // Common http query params S3 API

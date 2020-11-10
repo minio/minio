@@ -136,6 +136,39 @@ type FileInfo struct {
 
 	// Erasure info for all objects.
 	Erasure ErasureInfo
+
+	// DeleteMarkerReplicationStatus is set when this FileInfo represents
+	// replication on a DeleteMarker
+	MarkDeleted                   bool // mark this version as deleted
+	DeleteMarkerReplicationStatus string
+	VersionPurgeStatus            VersionPurgeStatusType
+}
+
+// VersionPurgeStatusKey denotes purge status in metadata
+const VersionPurgeStatusKey = "purgestatus"
+
+// VersionPurgeStatusType represents status of a versioned delete or permanent delete w.r.t bucket replication
+type VersionPurgeStatusType string
+
+const (
+	// Pending - versioned delete replication is pending.
+	Pending VersionPurgeStatusType = "PENDING"
+
+	// Complete - versioned delete replication is now complete, erase version on disk.
+	Complete VersionPurgeStatusType = "COMPLETE"
+
+	// Failed - versioned delete replication failed.
+	Failed VersionPurgeStatusType = "FAILED"
+)
+
+// Empty returns true if purge status was not set.
+func (v VersionPurgeStatusType) Empty() bool {
+	return string(v) == ""
+}
+
+// Pending returns true if the version is pending purge.
+func (v VersionPurgeStatusType) Pending() bool {
+	return v == Pending || v == Failed
 }
 
 // newFileInfo - initializes new FileInfo, allocates a fresh erasure info.

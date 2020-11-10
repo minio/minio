@@ -45,9 +45,47 @@ func (d DeleteMarkerReplication) Validate() error {
 	if d.IsEmpty() {
 		return errDeleteMarkerReplicationMissing
 	}
-	if d.Status != Disabled {
+	if d.Status != Disabled && d.Status != Enabled {
 		return errInvalidDeleteMarkerReplicationStatus
 	}
+	return nil
+}
+
+// DeleteReplication - whether versioned deletes are replicated - this is a MinIO only
+// extension.
+type DeleteReplication struct {
+	Status Status `xml:"Status"` // should be set to "Disabled" by default
+}
+
+// IsEmpty returns true if DeleteReplication is not set
+func (d DeleteReplication) IsEmpty() bool {
+	return len(d.Status) == 0
+}
+
+// Validate validates whether the status is disabled.
+func (d DeleteReplication) Validate() error {
+	if d.IsEmpty() {
+		return errDeleteReplicationMissing
+	}
+	if d.Status != Disabled && d.Status != Enabled {
+		return errInvalidDeleteReplicationStatus
+	}
+	return nil
+}
+
+// UnmarshalXML - decodes XML data.
+func (d *DeleteReplication) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) (err error) {
+	// Make subtype to avoid recursive UnmarshalXML().
+	type deleteReplication DeleteReplication
+	drep := deleteReplication{}
+
+	if err := dec.DecodeElement(&drep, &start); err != nil {
+		return err
+	}
+	if len(drep.Status) == 0 {
+		drep.Status = Disabled
+	}
+	d.Status = drep.Status
 	return nil
 }
 
@@ -58,8 +96,10 @@ type Rule struct {
 	Status                  Status                  `xml:"Status" json:"Status"`
 	Priority                int                     `xml:"Priority" json:"Priority"`
 	DeleteMarkerReplication DeleteMarkerReplication `xml:"DeleteMarkerReplication" json:"DeleteMarkerReplication"`
-	Destination             Destination             `xml:"Destination" json:"Destination"`
-	Filter                  Filter                  `xml:"Filter" json:"Filter"`
+	// MinIO extension to replicate versioned deletes
+	DeleteReplication DeleteReplication `xml:"DeleteReplication" json:"DeleteReplication"`
+	Destination       Destination       `xml:"Destination" json:"Destination"`
+	Filter            Filter            `xml:"Filter" json:"Filter"`
 }
 
 var (
@@ -70,6 +110,8 @@ var (
 	errPriorityMissing                      = Errorf("Priority must be specified")
 	errInvalidDeleteMarkerReplicationStatus = Errorf("Delete marker replication is currently not supported")
 	errDestinationSourceIdentical           = Errorf("Destination bucket cannot be the same as the source bucket.")
+	errDeleteReplicationMissing             = Errorf("Delete replication must be specified")
+	errInvalidDeleteReplicationStatus       = Errorf("Delete replication is either enable|disable")
 )
 
 // validateID - checks if ID is valid or not.
@@ -144,6 +186,9 @@ func (r Rule) Validate(bucket string, sameTarget bool) error {
 		return err
 	}
 	if err := r.DeleteMarkerReplication.Validate(); err != nil {
+		return err
+	}
+	if err := r.DeleteReplication.Validate(); err != nil {
 		return err
 	}
 	if r.Priority < 0 {
