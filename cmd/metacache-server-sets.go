@@ -91,33 +91,35 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		o.OldestCycle = globalNotificationSys.findEarliestCleanBloomFilter(ctx, path.Join(o.Bucket, o.BaseDir))
 		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
-		if rpc == nil {
+		if isReservedOrInvalidBucket(o.Bucket, false) {
+			rpc = nil
+			o.Transient = true
+		}
+		if rpc == nil || o.Transient {
 			// Local
-			cache = localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
+			cache = localMetacacheMgr.findCache(ctx, o)
 		} else {
 			c, err := rpc.GetMetacacheListing(ctx, o)
 			if err != nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 					// Context is canceled, return at once.
-					return entries, err
+					// request canceled, no entries to return
+					return entries, io.EOF
 				}
 				logger.LogIf(ctx, err)
-				cache = localMetacacheMgr.getTransient().findCache(o)
 				o.Transient = true
+				cache = localMetacacheMgr.findCache(ctx, o)
 			} else {
 				cache = *c
 			}
 		}
 		if cache.fileNotFound {
-			return entries, errFileNotFound
+			// No cache found, no entries found.
+			return entries, io.EOF
 		}
 		// Only create if we created a new.
 		o.Create = o.ID == cache.id
 		o.ID = cache.id
-	}
-
-	if o.AskDisks == 0 {
-		o.AskDisks = globalAPIConfig.getListQuorum()
 	}
 
 	var mu sync.Mutex
@@ -175,7 +177,8 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		cache.fileNotFound = true
 		_, err := o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
 		logger.LogIf(ctx, err)
-		return entries, errFileNotFound
+		// cache returned not found, entries truncated.
+		return entries, io.EOF
 	}
 
 	for _, err := range errs {

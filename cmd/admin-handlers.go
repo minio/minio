@@ -794,7 +794,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	case hip.clientToken == "":
 		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), hip.hs, hip.forceStart)
 		go func() {
-			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
+			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh, objectAPI)
 			hr := healResp{respBytes, apiErr, errMsg}
 			respCh <- hr
 		}()
@@ -1284,8 +1284,8 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
-	nsLock := objectAPI.NewNSLock(ctx, minioMetaBucket, "obd-in-progress")
-	if err := nsLock.GetLock(newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "obd-in-progress")
+	if err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return
 	}

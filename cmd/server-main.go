@@ -206,15 +206,12 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Initialize IAM store
-	globalIAMSys.InitStore(newObject)
-
 	// Make sure to hold lock for entire migration to avoid
 	// such that only one server should migrate the entire config
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	txnLk := newObject.NewNSLock(ctx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
+	txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
@@ -244,7 +241,7 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(lockTimeout); err != nil {
+		if err = txnLk.GetLock(ctx, lockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
 
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
@@ -341,6 +338,9 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		// Any other config errors we simply print a message and proceed forward.
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
+
+	// Initialize IAM store
+	globalIAMSys.InitStore(newObject)
 
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {

@@ -32,12 +32,14 @@ import (
 // Therefore no cluster locks are required.
 var localMetacacheMgr = &metacacheManager{
 	buckets: make(map[string]*bucketMetacache),
+	trash:   make(map[string]metacache),
 }
 
 type metacacheManager struct {
 	mu      sync.RWMutex
 	init    sync.Once
 	buckets map[string]*bucketMetacache
+	trash   map[string]metacache // Recently deleted lists.
 }
 
 const metacacheManagerTransientBucket = "**transient**"
@@ -78,9 +80,54 @@ func (m *metacacheManager) initManager() {
 				logger.LogIf(bg, v.save(bg))
 			}
 			m.mu.RUnlock()
+			m.mu.Lock()
+			for k, v := range m.trash {
+				if time.Since(v.lastUpdate) > metacacheMaxRunningAge {
+					v.delete(context.Background())
+					delete(m.trash, k)
+				}
+			}
+			m.mu.Unlock()
 		}
 		m.getTransient().deleteAll()
 	}()
+}
+
+// findCache will get a metacache.
+func (m *metacacheManager) findCache(ctx context.Context, o listPathOptions) metacache {
+	if o.Transient || isReservedOrInvalidBucket(o.Bucket, false) {
+		return m.getTransient().findCache(o)
+	}
+	m.mu.RLock()
+	b, ok := m.buckets[o.Bucket]
+	if ok {
+		m.mu.RUnlock()
+		return b.findCache(o)
+	}
+	if meta, ok := m.trash[o.ID]; ok {
+		m.mu.RUnlock()
+		return meta
+	}
+	m.mu.RUnlock()
+	return m.getBucket(ctx, o.Bucket).findCache(o)
+}
+
+// updateCacheEntry will update non-transient state.
+func (m *metacacheManager) updateCacheEntry(update metacache) (metacache, error) {
+	m.mu.RLock()
+	if meta, ok := m.trash[update.id]; ok {
+		m.mu.RUnlock()
+		return meta, nil
+	}
+
+	b, ok := m.buckets[update.bucket]
+	if ok {
+		m.mu.RUnlock()
+		return b.updateCacheEntry(update)
+	}
+	m.mu.RUnlock()
+	// We should have either a trashed bucket or this
+	return metacache{}, errVolumeNotFound
 }
 
 // getBucket will get a bucket metacache or load it from disk if needed.
@@ -118,6 +165,7 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 	b, err := loadBucketMetaCache(ctx, bucket)
 	if err != nil {
 		m.mu.Unlock()
+		logger.LogIf(ctx, err)
 		return m.getTransient()
 	}
 	if b.bucket != bucket {
@@ -130,22 +178,43 @@ func (m *metacacheManager) getBucket(ctx context.Context, bucket string) *bucket
 
 // deleteBucketCache will delete the bucket cache if it exists.
 func (m *metacacheManager) deleteBucketCache(bucket string) {
+	m.init.Do(m.initManager)
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	b, ok := m.buckets[bucket]
 	if !ok {
+		m.mu.Unlock()
 		return
 	}
-	b.deleteAll()
 	delete(m.buckets, bucket)
+	m.mu.Unlock()
+
+	// Since deletes may take some time we try to do it without
+	// holding lock to m all the time.
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for k, v := range b.caches {
+		if time.Since(v.lastUpdate) > metacacheMaxRunningAge {
+			v.delete(context.Background())
+			continue
+		}
+		v.error = "Bucket deleted"
+		v.status = scanStateError
+		m.mu.Lock()
+		m.trash[k] = v
+		m.mu.Unlock()
+	}
 }
 
 // deleteAll will delete all caches.
 func (m *metacacheManager) deleteAll() {
+	m.init.Do(m.initManager)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, b := range m.buckets {
+	for bucket, b := range m.buckets {
 		b.deleteAll()
+		if !b.transient {
+			delete(m.buckets, bucket)
+		}
 	}
 }
 
@@ -164,19 +233,14 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTC
 	// We operate on a copy...
 	o.Create = false
 	var cache metacache
-	if !o.Transient {
-		if rpc == nil {
-			// Local
-			cache = localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
-		} else {
-			c, err := rpc.GetMetacacheListing(ctx, o)
-			if err != nil {
-				return err
-			}
-			cache = *c
-		}
+	if rpc == nil || o.Transient {
+		cache = localMetacacheMgr.findCache(ctx, o)
 	} else {
-		cache = localMetacacheMgr.getTransient().findCache(o)
+		c, err := rpc.GetMetacacheListing(ctx, o)
+		if err != nil {
+			return err
+		}
+		cache = *c
 	}
 
 	if cache.status == scanStateNone || cache.fileNotFound {
@@ -184,7 +248,16 @@ func (o listPathOptions) checkMetacacheState(ctx context.Context, rpc *peerRESTC
 	}
 	if cache.status == scanStateSuccess || cache.status == scanStateStarted {
 		if time.Since(cache.lastUpdate) > metacacheMaxRunningAge {
-			return fmt.Errorf("timeout: list %s not updated for 1 minute", cache.id)
+			// We got a stale entry, mark error on handling server.
+			err := fmt.Errorf("timeout: list %s not updated", cache.id)
+			cache.error = err.Error()
+			cache.status = scanStateError
+			if rpc == nil || o.Transient {
+				localMetacacheMgr.updateCacheEntry(cache)
+			} else {
+				rpc.UpdateMetacacheListing(ctx, cache)
+			}
+			return err
 		}
 		return nil
 	}

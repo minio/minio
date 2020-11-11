@@ -47,11 +47,6 @@ func loadMetacacheSampleEntries(t testing.TB) metaCacheEntriesSorted {
 	if err != io.EOF {
 		t.Fatal(err)
 	}
-	if false {
-		w := newMetacacheFile("testdata/metacache-new.s2")
-		w.write(entries.entries()...)
-		w.Close()
-	}
 
 	return entries
 }

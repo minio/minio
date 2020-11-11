@@ -36,15 +36,18 @@ type GetObjectInfoFn func(ctx context.Context, bucket, object string, opts Objec
 
 // ObjectOptions represents object options for ObjectLayer object operations
 type ObjectOptions struct {
-	ServerSideEncryption encrypt.ServerSide
-	VersionSuspended     bool                // indicates if the bucket was previously versioned but is currently suspended.
-	Versioned            bool                // indicates if the bucket is versioned
-	WalkVersions         bool                // indicates if the we are interested in walking versions
-	VersionID            string              // Specifies the versionID which needs to be overwritten or read
-	MTime                time.Time           // Is only set in POST/PUT operations
-	UserDefined          map[string]string   // only set in case of POST/PUT operations
-	PartNumber           int                 // only useful in case of GetObject/HeadObject
-	CheckPrecondFn       CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	ServerSideEncryption          encrypt.ServerSide
+	VersionSuspended              bool                   // indicates if the bucket was previously versioned but is currently suspended.
+	Versioned                     bool                   // indicates if the bucket is versioned
+	WalkVersions                  bool                   // indicates if the we are interested in walking versions
+	VersionID                     string                 // Specifies the versionID which needs to be overwritten or read
+	MTime                         time.Time              // Is only set in POST/PUT operations
+	DeleteMarker                  bool                   // Is only set in DELETE operations for delete marker replication
+	UserDefined                   map[string]string      // only set in case of POST/PUT operations
+	PartNumber                    int                    // only useful in case of GetObject/HeadObject
+	CheckPrecondFn                CheckPreconditionFn    // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
+	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -68,7 +71,7 @@ type ObjectLayer interface {
 	SetDriveCount() int // Only implemented by erasure layer
 
 	// Locking operations on object.
-	NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker
+	NewNSLock(bucket string, objects ...string) RWLocker
 
 	// Storage operations.
 	Shutdown(context.Context) error

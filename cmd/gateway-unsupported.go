@@ -41,8 +41,8 @@ func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, bf *bloomF
 }
 
 // NewNSLock is a dummy stub for gateway.
-func (a GatewayUnsupported) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	logger.CriticalIf(ctx, errors.New("not implemented"))
+func (a GatewayUnsupported) NewNSLock(bucket string, objects ...string) RWLocker {
+	logger.CriticalIf(context.Background(), errors.New("not implemented"))
 	return nil
 }
 

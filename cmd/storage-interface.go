@@ -53,10 +53,6 @@ type StorageAPI interface {
 
 	// WalkVersions in sorted order directly on disk.
 	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
-	// Walk in sorted order directly on disk.
-	Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error)
-	// Walk in sorted order directly on disk.
-	WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error)
 
 	// Metadata operations
 	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error

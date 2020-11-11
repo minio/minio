@@ -69,10 +69,10 @@ func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 // There should only ever be one crawler running per cluster.
 func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 	// Make sure only 1 crawler is running on the cluster.
-	locker := objAPI.NewNSLock(ctx, minioMetaBucket, "runDataCrawler.lock")
+	locker := objAPI.NewNSLock(minioMetaBucket, "runDataCrawler.lock")
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		err := locker.GetLock(dataCrawlerLeaderLockTimeout)
+		err := locker.GetLock(ctx, dataCrawlerLeaderLockTimeout)
 		if err != nil {
 			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
 			continue
@@ -853,8 +853,43 @@ func sleepDuration(d time.Duration, x float64) {
 
 // healReplication will heal a scanned item that has failed replication.
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
+	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
+		//heal delete marker replication failure or versioned delete replication failure
+		if meta.oi.ReplicationStatus == replication.Pending ||
+			meta.oi.ReplicationStatus == replication.Failed ||
+			meta.oi.VersionPurgeStatus == Failed || meta.oi.VersionPurgeStatus == Pending {
+			i.healReplicationDeletes(ctx, o, meta)
+			return
+		}
+	}
 	if meta.oi.ReplicationStatus == replication.Pending ||
 		meta.oi.ReplicationStatus == replication.Failed {
 		globalReplicationState.queueReplicaTask(meta.oi)
+	}
+}
+
+// healReplicationDeletes will heal a scanned deleted item that failed to replicate deletes.
+func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, meta actionMeta) {
+	// handle soft delete and permanent delete failures here.
+	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
+		versionID := ""
+		dmVersionID := ""
+		if meta.oi.VersionPurgeStatus.Empty() {
+			dmVersionID = meta.oi.VersionID
+		} else {
+			versionID = meta.oi.VersionID
+		}
+		globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+			DeletedObject: DeletedObject{
+				ObjectName:                    meta.oi.Name,
+				DeleteMarkerVersionID:         dmVersionID,
+				VersionID:                     versionID,
+				DeleteMarkerReplicationStatus: string(meta.oi.ReplicationStatus),
+				DeleteMarkerMTime:             meta.oi.ModTime,
+				DeleteMarker:                  meta.oi.DeleteMarker,
+				VersionPurgeStatus:            meta.oi.VersionPurgeStatus,
+			},
+			Bucket: meta.oi.Bucket,
+		})
 	}
 }

@@ -219,24 +219,14 @@ func getValidPath(path string, requireDirectIO bool) (string, error) {
 
 // isDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) bool {
-	f, err := os.Open(dirname)
+	entries, err := readDirN(dirname, 1)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			logger.LogIf(GlobalContext, err)
-		}
-
-		return false
-	}
-	defer f.Close()
-	// List one entry.
-	if _, err = f.Readdirnames(1); err != io.EOF {
-		if !os.IsNotExist(err) {
+		if err != errFileNotFound {
 			logger.LogIf(GlobalContext, err)
 		}
 		return false
 	}
-	// Returns true if we have reached EOF, directory is indeed empty.
-	return true
+	return len(entries) == 0
 }
 
 // Initialize a new storage disk.
@@ -389,7 +379,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
+		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), true)
 		if err != nil {
 			return 0, errSkipFile
 		}
@@ -433,7 +423,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 				}
 				totalSize += size
 			}
-			item.healReplication(ctx, objAPI, actionMeta{oi: oi})
+			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
 		}
 		return totalSize, nil
 	})
@@ -444,21 +434,6 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 
 	dataUsageInfo.Info.LastUpdate = time.Now()
 	return dataUsageInfo, nil
-}
-
-// DiskInfo is an extended type which returns current
-// disk usage per path.
-type DiskInfo struct {
-	Total     uint64
-	Free      uint64
-	Used      uint64
-	FSType    string
-	RootDisk  bool
-	Healing   bool
-	Endpoint  string
-	MountPath string
-	ID        string
-	Error     string // carries the error over the network
 }
 
 // DiskInfo provides current information about disk space usage,
@@ -853,79 +828,6 @@ func (s *xlStorage) isLeafDir(volume, leafPath string) bool {
 	return isDirEmpty(pathJoin(volumeDir, leafPath))
 }
 
-// WalkSplunk - is a sorted walker which returns file entries in lexically
-// sorted order, additionally along with metadata about each of those entries.
-// Implemented specifically for Splunk backend structure and List call with
-// delimiter as "guidSplunk"
-func (s *xlStorage) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
-	// Verify if volume is valid and it exists.
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
-	ch = make(chan FileInfo)
-	go func() {
-		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-			entries, err := s.ListDirSplunk(volume, dirPath, -1)
-			if err != nil {
-				return false, nil, false
-			}
-			if len(entries) == 0 {
-				return true, nil, false
-			}
-			entries, delayIsLeaf = filterListEntries(volume, dirPath, entries, dirEntry, s.isLeafSplunk)
-			return false, entries, delayIsLeaf
-		}
-
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, true, listDir, s.isLeafSplunk, s.isLeafDir, endWalkCh)
-		for walkResult := range walkResultCh {
-			var fi FileInfo
-			if HasSuffix(walkResult.entry, SlashSeparator) {
-				fi = FileInfo{
-					Volume: volume,
-					Name:   walkResult.entry,
-					Mode:   uint32(os.ModeDir),
-				}
-			} else {
-				var err error
-				var xlMetaBuf []byte
-				xlMetaBuf, err = ioutil.ReadFile(pathJoin(volumeDir, walkResult.entry, xlStorageFormatFile))
-				if err != nil {
-					continue
-				}
-				fi, err = getFileInfo(xlMetaBuf, volume, walkResult.entry, "")
-				if err != nil {
-					continue
-				}
-				if fi.Deleted {
-					// Ignore delete markers.
-					continue
-				}
-			}
-			select {
-			case ch <- fi:
-			case <-endWalkCh:
-				return
-			}
-		}
-	}()
-
-	return ch, nil
-}
-
 // WalkVersions - is a sorted walker which returns file entries in lexically sorted order,
 // additionally along with metadata version info about each of those entries.
 func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (ch chan FileInfoVersions, err error) {
@@ -995,97 +897,13 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 					continue
 				}
 
-				fiv, err = getFileInfoVersions(xlMetaBuf, volume, walkResult.entry)
+				fiv, err = getFileInfoVersions(xlMetaBuf, volume, walkResult.entry, false)
 				if err != nil {
 					continue
 				}
 			}
 			select {
 			case ch <- fiv:
-			case <-endWalkCh:
-				return
-			}
-		}
-	}()
-
-	return ch, nil
-}
-
-// Walk - is a sorted walker which returns file entries in lexically
-// sorted order, additionally along with metadata about each of those entries.
-func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (ch chan FileInfo, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
-	// Verify if volume is valid and it exists.
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
-	// Fast exit track to check if we are listing an object with
-	// a trailing slash, this will avoid to list the object content.
-	if HasSuffix(dirPath, SlashSeparator) {
-		if st, err := os.Stat(pathJoin(volumeDir, dirPath, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
-			return nil, errFileNotFound
-		}
-	}
-
-	ch = make(chan FileInfo)
-	go func() {
-		defer close(ch)
-		listDir := func(volume, dirPath, dirEntry string) (emptyDir bool, entries []string, delayIsLeaf bool) {
-			entries, err := s.ListDir(ctx, volume, dirPath, -1)
-			if err != nil {
-				return false, nil, false
-			}
-			if len(entries) == 0 {
-				return true, nil, false
-			}
-			entries, delayIsLeaf = filterListEntries(volume, dirPath, entries, dirEntry, s.isLeaf)
-			return false, entries, delayIsLeaf
-		}
-
-		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, s.isLeaf, s.isLeafDir, endWalkCh)
-		for walkResult := range walkResultCh {
-			var fi FileInfo
-			if HasSuffix(walkResult.entry, SlashSeparator) {
-				fi = FileInfo{
-					Volume: volume,
-					Name:   walkResult.entry,
-					Mode:   uint32(os.ModeDir),
-				}
-			} else {
-				var err error
-				var xlMetaBuf []byte
-				xlMetaBuf, err = ioutil.ReadFile(pathJoin(volumeDir, walkResult.entry, xlStorageFormatFile))
-				if err != nil {
-					continue
-				}
-				fi, err = getFileInfo(xlMetaBuf, volume, walkResult.entry, "")
-				if err != nil {
-					continue
-				}
-				if fi.Deleted {
-					// Ignore delete markers.
-					continue
-				}
-			}
-			select {
-			case ch <- fi:
 			case <-endWalkCh:
 				return
 			}

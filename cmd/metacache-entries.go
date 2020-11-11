@@ -151,7 +151,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 			},
 		}, nil
 	}
-	return getFileInfoVersions(e.metadata, bucket, e.name)
+	return getFileInfoVersions(e.metadata, bucket, e.name, false)
 }
 
 // metaCacheEntries is a slice of metacache entries.
@@ -314,6 +314,20 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 	prevPrefix := ""
 	for _, entry := range m.o {
 		if entry.isObject() {
+			if delimiter != "" {
+				idx := strings.Index(strings.TrimPrefix(entry.name, prefix), delimiter)
+				if idx >= 0 {
+					idx = len(prefix) + idx + len(delimiter)
+					currPrefix := entry.name[:idx]
+					if currPrefix == prevPrefix {
+						continue
+					}
+					prevPrefix = currPrefix
+					commonPrefixes = append(commonPrefixes, currPrefix)
+					continue
+				}
+			}
+
 			fiv, err := entry.fileInfoVersions(bucket)
 			if afterV != "" {
 				// Forward first entry to specified version
@@ -327,6 +341,7 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 			}
 			continue
 		}
+
 		if entry.isDir() {
 			if delimiter == "" {
 				continue
@@ -356,6 +371,20 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 	prevPrefix := ""
 	for _, entry := range m.o {
 		if entry.isObject() {
+			if delimiter != "" {
+				idx := strings.Index(strings.TrimPrefix(entry.name, prefix), delimiter)
+				if idx >= 0 {
+					idx = len(prefix) + idx + len(delimiter)
+					currPrefix := entry.name[:idx]
+					if currPrefix == prevPrefix {
+						continue
+					}
+					prevPrefix = currPrefix
+					commonPrefixes = append(commonPrefixes, currPrefix)
+					continue
+				}
+			}
+
 			fi, err := entry.fileInfo(bucket)
 			if err == nil {
 				objects = append(objects, fi.ToObjectInfo(bucket, entry.name))

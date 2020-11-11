@@ -149,22 +149,6 @@ func (p *xlStorageDiskIDCheck) WalkVersions(ctx context.Context, volume, dirPath
 	return p.storage.WalkVersions(ctx, volume, dirPath, marker, recursive, endWalkCh)
 }
 
-func (p *xlStorageDiskIDCheck) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	if err := p.checkDiskStale(); err != nil {
-		return nil, err
-	}
-
-	return p.storage.Walk(ctx, volume, dirPath, marker, recursive, endWalkCh)
-}
-
-func (p *xlStorageDiskIDCheck) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	if err := p.checkDiskStale(); err != nil {
-		return nil, err
-	}
-
-	return p.storage.WalkSplunk(ctx, volume, dirPath, marker, endWalkCh)
-}
-
 func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
