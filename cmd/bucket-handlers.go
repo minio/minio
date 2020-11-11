@@ -441,7 +441,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		// Avoid duplicate objects, we use map to filter them out.
 		if _, ok := objectsToDelete[object]; !ok {
 			if replicateDeletes {
-				if delMarker, replicate := checkReplicateDelete(ctx, getObjectInfoFn, bucket, ObjectToDelete{ObjectName: object.ObjectName, VersionID: object.VersionID}); replicate {
+				delMarker, replicate := checkReplicateDelete(ctx, getObjectInfoFn, bucket, ObjectToDelete{
+					ObjectName: object.ObjectName,
+					VersionID:  object.VersionID,
+				})
+				if replicate {
 					if object.VersionID != "" {
 						object.VersionPurgeStatus = Pending
 						if delMarker {
@@ -474,17 +478,30 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[ObjectToDelete{
-			ObjectName: dObjects[i].ObjectName,
-			VersionID:  dObjects[i].VersionID,
-		}]
-		apiErr := toAPIError(ctx, errs[i])
-		if apiErr.Code == "" || apiErr.Code == "NoSuchKey" || apiErr.Code == "InvalidArgument" {
-			dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
-			dObjects[i].VersionPurgeStatus = deleteList[i].VersionPurgeStatus
+		var dindex int
+		if replicateDeletes {
+			dindex = objectsToDelete[ObjectToDelete{
+				ObjectName:                    dObjects[i].ObjectName,
+				VersionID:                     dObjects[i].VersionID,
+				DeleteMarkerVersionID:         dObjects[i].DeleteMarkerVersionID,
+				VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
+				DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
+			}]
+		} else {
+			dindex = objectsToDelete[ObjectToDelete{
+				ObjectName: dObjects[i].ObjectName,
+				VersionID:  dObjects[i].VersionID,
+			}]
+		}
+		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {
+			if replicateDeletes {
+				dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
+				dObjects[i].VersionPurgeStatus = deleteList[i].VersionPurgeStatus
+			}
 			deletedObjects[dindex] = dObjects[i]
 			continue
 		}
+		apiErr := toAPIError(ctx, errs[i])
 		dErrs[dindex] = DeleteError{
 			Code:      apiErr.Code,
 			Message:   apiErr.Description,
@@ -507,11 +524,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 	for _, dobj := range deletedObjects {
-		if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-			globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
-				DeletedObject: dobj,
-				Bucket:        bucket,
-			})
+		if replicateDeletes {
+			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
+				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+					DeletedObject: dobj,
+					Bucket:        bucket,
+				})
+			}
 		}
 	}
 	// Notify deleted event for objects.

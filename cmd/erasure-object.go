@@ -48,7 +48,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		return oi, NotImplemented{}
 	}
 
-	defer ObjectPathUpdated(path.Join(dstBucket, dstObject))
+	defer ObjectPathUpdated(pathJoin(dstBucket, dstObject))
 	lk := er.NewNSLock(dstBucket, dstObject)
 	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return oi, err
@@ -444,8 +444,8 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
 func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dataDir, dstBucket, dstEntry string, writeQuorum int, ignoredErr []error) ([]StorageAPI, error) {
 	dataDir = retainSlash(dataDir)
-	defer ObjectPathUpdated(path.Join(srcBucket, srcEntry))
-	defer ObjectPathUpdated(path.Join(dstBucket, dstEntry))
+	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
+	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
 
@@ -498,8 +498,8 @@ func rename(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBuc
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
-	defer ObjectPathUpdated(path.Join(srcBucket, srcEntry))
-	defer ObjectPathUpdated(path.Join(dstBucket, dstEntry))
+	defer ObjectPathUpdated(pathJoin(srcBucket, srcEntry))
+	defer ObjectPathUpdated(pathJoin(dstBucket, dstEntry))
 
 	g := errgroup.WithNErrs(len(disks))
 
@@ -542,7 +542,7 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer ObjectPathUpdated(path.Join(bucket, object))
+	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	data := r.Reader
 
@@ -749,7 +749,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int) error {
 	var disks []StorageAPI
 	var err error
-	defer ObjectPathUpdated(path.Join(bucket, object))
+	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	tmpObj := mustGetUUID()
 	if bucket == minioMetaTmpBucket {
@@ -810,17 +810,16 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 
 	versions := make([]FileInfo, len(objects))
 	for i := range objects {
-		modTime := opts.MTime
-		if opts.MTime.IsZero() {
-			modTime = UTCNow()
-		}
-		uuid := opts.VersionID
-		if uuid == "" {
-			uuid = mustGetUUID()
-		}
-
 		if objects[i].VersionID == "" {
-			if (opts.Versioned || opts.VersionSuspended) && !HasSuffix(objects[i].ObjectName, SlashSeparator) {
+			modTime := opts.MTime
+			if opts.MTime.IsZero() {
+				modTime = UTCNow()
+			}
+			uuid := opts.VersionID
+			if uuid == "" {
+				uuid = mustGetUUID()
+			}
+			if opts.Versioned || opts.VersionSuspended {
 				versions[i] = FileInfo{
 					Name:                          objects[i].ObjectName,
 					ModTime:                       modTime,
@@ -983,7 +982,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		modTime = UTCNow()
 	}
 	if markDelete {
-		if (opts.Versioned || opts.VersionSuspended) && !HasSuffix(object, SlashSeparator) {
+		if opts.Versioned || opts.VersionSuspended {
 			fi := FileInfo{
 				Name:                          object,
 				Deleted:                       deleteMarker,

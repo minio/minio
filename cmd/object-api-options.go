@@ -125,17 +125,20 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	opts.VersionID = vid
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
-		if delMarker != "true" && delMarker != "false" {
+		switch delMarker {
+		case "true":
+			opts.DeleteMarker = true
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false"))
 			logger.LogIf(ctx, err)
 			return opts, InvalidArgument{
 				Bucket: bucket,
 				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false")),
+				Err:    err,
 			}
 		}
-		if delMarker == "true" {
-			opts.DeleteMarker = true
-		}
+
 	}
 	return opts, nil
 }
@@ -150,31 +153,35 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
 	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
 	if delMarker != "" {
-		if delMarker != "true" && delMarker != "false" {
+		switch delMarker {
+		case "true":
+			opts.DeleteMarker = true
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false"))
 			logger.LogIf(ctx, err)
 			return opts, InvalidArgument{
 				Bucket: bucket,
 				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false")),
+				Err:    err,
 			}
-		}
-		if delMarker == "true" {
-			opts.DeleteMarker = true
 		}
 	}
 
 	purgeVersion := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarkerDelete))
 	if purgeVersion != "" {
-		if purgeVersion != "true" && purgeVersion != "false" {
+		switch purgeVersion {
+		case "true":
+			opts.VersionPurgeStatus = Complete
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarkerDelete, fmt.Errorf("DeleteMarkerPurge should be true or false"))
 			logger.LogIf(ctx, err)
 			return opts, InvalidArgument{
 				Bucket: bucket,
 				Object: object,
-				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarkerDelete, fmt.Errorf("DeleteMarkerPurge should be true or false")),
+				Err:    err,
 			}
-		}
-		if purgeVersion == "true" {
-			opts.VersionPurgeStatus = Complete
 		}
 	}
 
