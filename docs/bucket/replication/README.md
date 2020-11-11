@@ -37,6 +37,7 @@ The *source* bucket should have following minimal permission policy:
     "arn:aws:s3:::srcbucket"
    ]
   }
+ ]
 }
 ```
 The access key provided for the replication *target* cluster should have these minimal permissions:
