@@ -781,6 +781,10 @@ type httpStreamResponse struct {
 // Write part of the the streaming response.
 // Note that upstream errors are currently not forwarded, but may be in the future.
 func (h *httpStreamResponse) Write(b []byte) (int, error) {
+	if len(b) == 0 || h.err != nil {
+		// Ignore 0 length blocks
+		return 0, h.err
+	}
 	tmp := make([]byte, len(b))
 	copy(tmp, b)
 	h.block <- tmp
