@@ -574,7 +574,7 @@ func (z *erasureServerSets) DeleteObjects(ctx context.Context, bucket string, ob
 		for i := range derrs {
 			derrs[i] = err
 		}
-		return nil, derrs
+		return dobjects, derrs
 	}
 	defer multiDeleteLock.Unlock()
 
