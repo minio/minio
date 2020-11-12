@@ -102,14 +102,14 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 	err := objAPI.GetObject(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), 0, -1, w, "", ObjectOptions{})
 	logger.LogIf(ctx, w.CloseWithError(err))
 	if err != nil {
-		if isErrObjectNotFound(err) {
+		switch err.(type) {
+		case ObjectNotFound:
 			err = nil
-		} else {
-			logger.LogIf(ctx, err)
-		}
-		if errors.Is(err, InsufficientReadQuorum{}) {
+		case InsufficientReadQuorum:
 			// Cache is likely lost. Clean up and return new.
 			return newBucketMetacache(bucket, true), nil
+		default:
+			logger.LogIf(ctx, err)
 		}
 		return newBucketMetacache(bucket, false), err
 	}
