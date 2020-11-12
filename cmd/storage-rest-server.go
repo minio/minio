@@ -33,6 +33,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tinylib/msgp/msgp"
+
 	jwtreq "github.com/dgrijalva/jwt-go/request"
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/config"
@@ -81,7 +83,7 @@ func storageServerRequestValidate(r *http.Request) error {
 		return errAuthentication
 	}
 
-	if claims.Audience != r.URL.Query().Encode() {
+	if claims.Audience != r.URL.RawQuery {
 		return errAuthentication
 	}
 
@@ -152,7 +154,7 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 		info.Error = err.Error()
 	}
 	defer w.(http.Flusher).Flush()
-	gob.NewEncoder(w).Encode(info)
+	logger.LogIf(r.Context(), msgp.Encode(w, &info))
 }
 
 func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r *http.Request) {
@@ -217,8 +219,8 @@ func (s *storageRESTServer) ListVolsHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, err)
 		return
 	}
-	gob.NewEncoder(w).Encode(&infos)
-	w.(http.Flusher).Flush()
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(r.Context(), msgp.Encode(w, VolsInfo(infos)))
 }
 
 // StatVolHandler - stat a volume.
@@ -233,8 +235,8 @@ func (s *storageRESTServer) StatVolHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
-	gob.NewEncoder(w).Encode(info)
-	w.(http.Flusher).Flush()
+	defer w.(http.Flusher).Flush()
+	logger.LogIf(r.Context(), msgp.Encode(w, &info))
 }
 
 // DeleteVolumeHandler - delete a volume.
@@ -308,7 +310,7 @@ func (s *storageRESTServer) DeleteVersionHandler(w http.ResponseWriter, r *http.
 	}
 
 	var fi FileInfo
-	if err := gob.NewDecoder(r.Body).Decode(&fi); err != nil {
+	if err := msgp.Decode(r.Body, &fi); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -339,9 +341,7 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
-
-	gob.NewEncoder(w).Encode(fi)
-	w.(http.Flusher).Flush()
+	logger.LogIf(r.Context(), msgp.Encode(w, &fi))
 }
 
 // WriteMetadata write new updated metadata.
@@ -359,13 +359,12 @@ func (s *storageRESTServer) WriteMetadataHandler(w http.ResponseWriter, r *http.
 	}
 
 	var fi FileInfo
-	err := gob.NewDecoder(r.Body).Decode(&fi)
-	if err != nil {
+	if err := msgp.Decode(r.Body, &fi); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	err = s.storage.WriteMetadata(r.Context(), volume, filePath, fi)
+	err := s.storage.WriteMetadata(r.Context(), volume, filePath, fi)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -384,8 +383,13 @@ func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Reque
 		s.writeErrorResponse(w, errInvalidArgument)
 		return
 	}
-
-	err := s.storage.WriteAll(r.Context(), volume, filePath, io.LimitReader(r.Body, r.ContentLength))
+	tmp := make([]byte, r.ContentLength)
+	_, err := io.ReadFull(r.Body, tmp)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	err = s.storage.WriteAll(r.Context(), volume, filePath, tmp)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 	}
@@ -406,7 +410,7 @@ func (s *storageRESTServer) CheckPartsHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	var fi FileInfo
-	if err := gob.NewDecoder(r.Body).Decode(&fi); err != nil {
+	if err := msgp.Decode(r.Body, &fi); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -525,29 +529,6 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	w.(http.Flusher).Flush()
 }
 
-// WalkHandler - remote caller to start walking at a requested directory path.
-func (s *storageRESTServer) WalkSplunkHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	dirPath := vars[storageRESTDirPath]
-	markerPath := vars[storageRESTMarkerPath]
-
-	setEventStreamHeaders(w)
-	encoder := gob.NewEncoder(w)
-
-	fch, err := s.storage.WalkSplunk(r.Context(), volume, dirPath, markerPath, r.Context().Done())
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	for fi := range fch {
-		encoder.Encode(&fi)
-	}
-}
-
 // WalkVersionsHandler - remote caller to start walking at a requested directory path.
 func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -564,44 +545,17 @@ func (s *storageRESTServer) WalkVersionsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	setEventStreamHeaders(w)
-	encoder := gob.NewEncoder(w)
 
 	fch, err := s.storage.WalkVersions(r.Context(), volume, dirPath, markerPath, recursive, r.Context().Done())
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
+	encoder := msgp.NewWriter(w)
 	for fi := range fch {
-		logger.LogIf(r.Context(), encoder.Encode(&fi))
+		logger.LogIf(r.Context(), fi.EncodeMsg(encoder))
 	}
-}
-
-// WalkHandler - remote caller to start walking at a requested directory path.
-func (s *storageRESTServer) WalkHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	vars := mux.Vars(r)
-	volume := vars[storageRESTVolume]
-	dirPath := vars[storageRESTDirPath]
-	markerPath := vars[storageRESTMarkerPath]
-	recursive, err := strconv.ParseBool(vars[storageRESTRecursive])
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	setEventStreamHeaders(w)
-	encoder := gob.NewEncoder(w)
-
-	fch, err := s.storage.Walk(r.Context(), volume, dirPath, markerPath, recursive, r.Context().Done())
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	for fi := range fch {
-		logger.LogIf(r.Context(), encoder.Encode(&fi))
-	}
+	logger.LogIf(r.Context(), encoder.Flush())
 }
 
 // ListDirHandler - list a directory.
@@ -669,9 +623,10 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	}
 
 	versions := make([]FileInfo, totalVersions)
-	decoder := gob.NewDecoder(r.Body)
+	decoder := msgp.NewReader(r.Body)
 	for i := 0; i < totalVersions; i++ {
-		if err := decoder.Decode(&versions[i]); err != nil {
+		dst := &versions[i]
+		if err := dst.DecodeMsg(decoder); err != nil {
 			s.writeErrorResponse(w, err)
 			return
 		}
@@ -826,6 +781,10 @@ type httpStreamResponse struct {
 // Write part of the the streaming response.
 // Note that upstream errors are currently not forwarded, but may be in the future.
 func (h *httpStreamResponse) Write(b []byte) (int, error) {
+	if len(b) == 0 || h.err != nil {
+		// Ignore 0 length blocks
+		return 0, h.err
+	}
 	tmp := make([]byte, len(b))
 	copy(tmp, b)
 	h.block <- tmp
@@ -974,8 +933,7 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	var fi FileInfo
-	err := gob.NewDecoder(r.Body).Decode(&fi)
-	if err != nil {
+	if err := msgp.Decode(r.Body, &fi); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
@@ -983,7 +941,7 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
-	err = s.storage.VerifyFile(r.Context(), volume, filePath, fi)
+	err := s.storage.VerifyFile(r.Context(), volume, filePath, fi)
 	done(nil)
 	vresp := &VerifyFileResp{}
 	if err != nil {
@@ -1112,10 +1070,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerSets Endpoint
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath, storageRESTOffset, storageRESTLength)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListDir).HandlerFunc(httpTraceHdrs(server.ListDirHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTCount)...)
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalk).HandlerFunc(httpTraceHdrs(server.WalkHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive)...)
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkSplunk).HandlerFunc(httpTraceHdrs(server.WalkSplunkHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkVersions).HandlerFunc(httpTraceHdrs(server.WalkVersionsHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTMarkerPath, storageRESTRecursive)...)
 

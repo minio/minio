@@ -31,11 +31,9 @@ import (
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/dsync"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -81,7 +79,6 @@ type erasureSets struct {
 
 	// Total number of sets and the number of disks per set.
 	setCount, setDriveCount int
-	listTolerancePerSet     int
 
 	disksConnectEvent chan diskConnectInfo
 
@@ -90,11 +87,6 @@ type erasureSets struct {
 	deploymentID     [16]byte
 
 	disksStorageInfoCache timedValue
-
-	// Merge tree walk
-	pool         *MergeWalkPool
-	poolSplunk   *MergeWalkPool
-	poolVersions *MergeWalkVersionsPool
 
 	mrfMU         sync.Mutex
 	mrfOperations map[healSource]int
@@ -345,31 +337,21 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	endpointStrings := make([]string, len(endpoints))
 
-	listTolerancePerSet := 3
-	// By default this is off
-	if env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOn) == config.EnableOn {
-		listTolerancePerSet = -1
-	}
-
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
-		sets:                make([]*erasureObjects, setCount),
-		erasureDisks:        make([][]StorageAPI, setCount),
-		erasureLockers:      make([][]dsync.NetLocker, setCount),
-		erasureLockOwner:    GetLocalPeer(globalEndpoints),
-		endpoints:           endpoints,
-		endpointStrings:     endpointStrings,
-		setCount:            setCount,
-		setDriveCount:       setDriveCount,
-		listTolerancePerSet: listTolerancePerSet,
-		format:              format,
-		disksConnectEvent:   make(chan diskConnectInfo),
-		distributionAlgo:    format.Erasure.DistributionAlgo,
-		deploymentID:        uuid.MustParse(format.ID),
-		pool:                NewMergeWalkPool(globalMergeLookupTimeout),
-		poolSplunk:          NewMergeWalkPool(globalMergeLookupTimeout),
-		poolVersions:        NewMergeWalkVersionsPool(globalMergeLookupTimeout),
-		mrfOperations:       make(map[healSource]int),
+		sets:              make([]*erasureObjects, setCount),
+		erasureDisks:      make([][]StorageAPI, setCount),
+		erasureLockers:    make([][]dsync.NetLocker, setCount),
+		erasureLockOwner:  GetLocalPeer(globalEndpoints),
+		endpoints:         endpoints,
+		endpointStrings:   endpointStrings,
+		setCount:          setCount,
+		setDriveCount:     setDriveCount,
+		format:            format,
+		disksConnectEvent: make(chan diskConnectInfo),
+		distributionAlgo:  format.Erasure.DistributionAlgo,
+		deploymentID:      uuid.MustParse(format.ID),
+		mrfOperations:     make(map[healSource]int),
 	}
 
 	mutex := newNSLock(globalIsDistErasure)
@@ -427,11 +409,11 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
-func (s *erasureSets) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
+func (s *erasureSets) NewNSLock(bucket string, objects ...string) RWLocker {
 	if len(objects) == 1 {
-		return s.getHashedSet(objects[0]).NewNSLock(ctx, bucket, objects...)
+		return s.getHashedSet(objects[0]).NewNSLock(bucket, objects...)
 	}
-	return s.getHashedSet("").NewNSLock(ctx, bucket, objects...)
+	return s.getHashedSet("").NewNSLock(bucket, objects...)
 }
 
 // SetDriveCount returns the current drives per set.
@@ -936,10 +918,6 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 	return lentry, lexicallySortedEntryCount, isTruncated
 }
 
-func (s *erasureSets) startMergeWalks(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoCh {
-	return s.startMergeWalksN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1, false)
-}
-
 func (s *erasureSets) startMergeWalksVersions(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}) []FileInfoVersionsCh {
 	return s.startMergeWalksVersionsN(ctx, bucket, prefix, marker, recursive, endWalkCh, -1)
 }
@@ -964,42 +942,6 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 
 				mutex.Lock()
 				entryChs = append(entryChs, FileInfoVersionsCh{
-					Ch: entryCh,
-				})
-				mutex.Unlock()
-			}(disk)
-		}
-	}
-	wg.Wait()
-	return entryChs
-}
-
-// Starts a walk channel across n number of disks and returns a slice of
-// FileInfoCh which can be read from.
-func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, marker string, recursive bool, endWalkCh <-chan struct{}, ndisks int, splunk bool) []FileInfoCh {
-	var entryChs []FileInfoCh
-	var wg sync.WaitGroup
-	var mutex sync.Mutex
-	for _, set := range s.sets {
-		// Reset for the next erasure set.
-		for _, disk := range set.getLoadBalancedNDisks(ndisks) {
-			wg.Add(1)
-			go func(disk StorageAPI) {
-				defer wg.Done()
-
-				var entryCh chan FileInfo
-				var err error
-				if splunk {
-					entryCh, err = disk.WalkSplunk(GlobalContext, bucket, prefix, marker, endWalkCh)
-				} else {
-					entryCh, err = disk.Walk(GlobalContext, bucket, prefix, marker, recursive, endWalkCh)
-				}
-				if err != nil {
-					// Disk walk returned error, ignore it.
-					return
-				}
-				mutex.Lock()
-				entryChs = append(entryChs, FileInfoCh{
 					Ch: entryCh,
 				})
 				mutex.Unlock()

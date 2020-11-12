@@ -383,6 +383,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
+	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
+	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
+
 	// Before proceeding validate if bucket exists.
 	_, err := objectAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
@@ -400,6 +404,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	if api.CacheAPI() != nil {
 		getObjectInfoFn = api.CacheAPI().GetObjectInfo
 	}
+	replicateDeletes := hasReplicationRules(ctx, bucket, deleteObjects.Objects)
 
 	dErrs := make([]DeleteError, len(deleteObjects.Objects))
 	for index, object := range deleteObjects.Objects {
@@ -435,6 +440,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 		// Avoid duplicate objects, we use map to filter them out.
 		if _, ok := objectsToDelete[object]; !ok {
+			if replicateDeletes {
+				if delMarker, replicate := checkReplicateDelete(ctx, getObjectInfoFn, bucket, ObjectToDelete{ObjectName: object.ObjectName, VersionID: object.VersionID}); replicate {
+					if object.VersionID != "" {
+						object.VersionPurgeStatus = Pending
+						if delMarker {
+							object.DeleteMarkerVersionID = object.VersionID
+						}
+					} else {
+						object.DeleteMarkerReplicationStatus = string(replication.Pending)
+					}
+				}
+			}
 			objectsToDelete[object] = index
 		}
 	}
@@ -457,9 +474,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[deleteList[i]]
+		dindex := objectsToDelete[ObjectToDelete{
+			ObjectName: dObjects[i].ObjectName,
+			VersionID:  dObjects[i].VersionID,
+		}]
 		apiErr := toAPIError(ctx, errs[i])
 		if apiErr.Code == "" || apiErr.Code == "NoSuchKey" || apiErr.Code == "InvalidArgument" {
+			dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
+			dObjects[i].VersionPurgeStatus = deleteList[i].VersionPurgeStatus
 			deletedObjects[dindex] = dObjects[i]
 			continue
 		}
@@ -484,7 +506,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
-
+	for _, dobj := range deletedObjects {
+		if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
+			globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+				DeletedObject: dobj,
+				Bucket:        bucket,
+			})
+		}
+	}
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
@@ -1291,7 +1320,6 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
 	if err = globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

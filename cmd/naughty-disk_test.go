@@ -150,25 +150,11 @@ func (d *naughtyDisk) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Wr
 	return d.disk.WalkDir(ctx, opts, wr)
 }
 
-func (d *naughtyDisk) WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	if err := d.calcError(); err != nil {
-		return nil, err
-	}
-	return d.disk.WalkSplunk(ctx, volume, dirPath, marker, endWalkCh)
-}
-
 func (d *naughtyDisk) WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err
 	}
 	return d.disk.WalkVersions(ctx, volume, dirPath, marker, recursive, endWalkCh)
-}
-
-func (d *naughtyDisk) Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error) {
-	if err := d.calcError(); err != nil {
-		return nil, err
-	}
-	return d.disk.Walk(ctx, volume, dirPath, marker, recursive, endWalkCh)
 }
 
 func (d *naughtyDisk) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
@@ -273,11 +259,11 @@ func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID s
 	return d.disk.ReadVersion(ctx, volume, path, versionID, checkDataDir)
 }
 
-func (d *naughtyDisk) WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error) {
+func (d *naughtyDisk) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.WriteAll(ctx, volume, path, reader)
+	return d.disk.WriteAll(ctx, volume, path, b)
 }
 
 func (d *naughtyDisk) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {

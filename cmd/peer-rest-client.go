@@ -872,16 +872,17 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	}
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	// Use a separate client to avoid recursive calls.
+	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	healthClient.ExpectTimeouts = true
+
 	// Construct a new health function.
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
+		defer cancel()
+		respBody, err := healthClient.Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
-		cancel()
-		var ne *rest.NetworkError
-		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
+		return !xnet.IsNetworkOrHostDown(err, false)
 	}
 
 	return &peerRESTClient{host: peer, restClient: restClient}

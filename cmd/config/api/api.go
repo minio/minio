@@ -34,12 +34,17 @@ const (
 	apiClusterDeadline         = "cluster_deadline"
 	apiCorsAllowOrigin         = "cors_allow_origin"
 	apiRemoteTransportDeadline = "remote_transport_deadline"
+	apiListQuorum              = "list_quorum"
+	apiExtendListCacheLife     = "extend_list_cache_life"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
+	EnvAPIExtendListCacheLife     = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
+	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS"
 )
 
 // Deprecated key and ENVs
@@ -71,6 +76,14 @@ var (
 			Key:   apiRemoteTransportDeadline,
 			Value: "2h",
 		},
+		config.KV{
+			Key:   apiListQuorum,
+			Value: "optimal",
+		},
+		config.KV{
+			Key:   apiExtendListCacheLife,
+			Value: "0s",
+		},
 	}
 )
 
@@ -81,6 +94,8 @@ type Config struct {
 	ClusterDeadline         time.Duration `json:"cluster_deadline"`
 	CorsAllowOrigin         []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
+	ListQuorum              string        `json:"list_strict_quorum"`
+	ExtendListLife          time.Duration `json:"extend_list_cache_life"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -92,6 +107,24 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 		Alias: (*Alias)(sCfg),
 	}
 	return json.Unmarshal(data, &aux)
+}
+
+// GetListQuorum interprets list quorum values and returns appropriate
+// acceptable quorum expected for list operations
+func (sCfg Config) GetListQuorum() int {
+	switch sCfg.ListQuorum {
+	case "optimal":
+		return 3
+	case "reduced":
+		return 2
+	case "disk":
+		// smallest possible value, generally meant for testing.
+		return 1
+	case "strict":
+		return -1
+	}
+	// Defaults to 3 drives per set.
+	return 3
 }
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
@@ -130,11 +163,25 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 
+	listQuorum := env.Get(EnvAPIListQuorum, kvs.Get(apiListQuorum))
+	switch listQuorum {
+	case "strict", "optimal", "reduced", "disk":
+	default:
+		return cfg, errors.New("invalid value for list strict quorum")
+	}
+
+	listLife, err := time.ParseDuration(env.Get(EnvAPIExtendListCacheLife, kvs.Get(apiExtendListCacheLife)))
+	if err != nil {
+		return cfg, err
+	}
+
 	return Config{
 		RequestsMax:             requestsMax,
 		RequestsDeadline:        requestsDeadline,
 		ClusterDeadline:         clusterDeadline,
 		CorsAllowOrigin:         corsAllowOrigin,
 		RemoteTransportDeadline: remoteTransportDeadline,
+		ListQuorum:              listQuorum,
+		ExtendListLife:          listLife,
 	}, nil
 }

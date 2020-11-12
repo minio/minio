@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -38,7 +39,6 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
-	"github.com/minio/minio/pkg/retry"
 )
 
 // ServerFlags - server command specific flags
@@ -206,24 +206,12 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
-	// Initialize IAM store
-	globalIAMSys.InitStore(newObject)
-
-	// Create cancel context to control 'newRetryTimer' go routine.
-	retryCtx, cancel := context.WithCancel(ctx)
-
-	// Indicate to our routine to exit cleanly upon return.
-	defer cancel()
-
 	// Make sure to hold lock for entire migration to avoid
 	// such that only one server should migrate the entire config
 	// at a given time, this big transaction lock ensures this
 	// appropriately. This is also true for rotation of encrypted
 	// content.
-	txnLk := newObject.NewNSLock(retryCtx, minioMetaBucket, minioConfigPrefix+"/transaction.lock")
-
-	// allocate dynamic timeout once before the loop
-	configLockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
+	txnLk := newObject.NewNSLock(minioMetaBucket, minioConfigPrefix+"/transaction.lock")
 
 	// ****  WARNING ****
 	// Migrating to encrypted backend should happen before initialization of any
@@ -238,12 +226,25 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
 
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	lockTimeout := newDynamicTimeout(5*time.Second, 3*time.Second)
+
 	var err error
-	for range retry.NewTimerWithJitter(retryCtx, 500*time.Millisecond, time.Second, retry.MaxJitter) {
+	for {
+		select {
+		case <-ctx.Done():
+			// Retry was canceled successfully.
+			return fmt.Errorf("Initializing sub-systems stopped gracefully %w", ctx.Err())
+		default:
+		}
+
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(configLockTimeout); err != nil {
+		if err = txnLk.GetLock(ctx, lockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. trying to acquire lock")
+
+			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue
 		}
 
@@ -279,20 +280,13 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 			errors.As(err, &wquorum) ||
 			isErrBucketNotFound(err) {
 			logger.Info("Waiting for all MinIO sub-systems to be initialized.. possible cause (%v)", err)
+			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue
 		}
 
 		// Any other unhandled return right here.
 		return fmt.Errorf("Unable to initialize sub-systems: %w", err)
 	}
-
-	// Return an error when retry is canceled or deadlined
-	if err = retryCtx.Err(); err != nil {
-		return err
-	}
-
-	// Retry was canceled successfully.
-	return errors.New("Initializing sub-systems stopped gracefully")
 }
 
 func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
@@ -345,21 +339,13 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
 
+	// Initialize IAM store
+	globalIAMSys.InitStore(newObject)
+
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
 		// Background this operation.
 		go initFederatorBackend(buckets, newObject)
-	}
-
-	if globalCacheConfig.Enabled {
-		// initialize the new disk cache objects.
-		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(ctx, globalCacheConfig)
-		logger.FatalIf(err, "Unable to initialize disk caching")
-
-		globalObjLayerMutex.Lock()
-		globalCacheObjectAPI = cacheAPI
-		globalObjLayerMutex.Unlock()
 	}
 
 	// Initialize bucket metadata sub-system.
@@ -507,6 +493,17 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+	}
+
+	if globalCacheConfig.Enabled {
+		// initialize the new disk cache objects.
+		var cacheAPI CacheObjectLayer
+		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
+		logger.FatalIf(err, "Unable to initialize disk caching")
+
+		globalObjLayerMutex.Lock()
+		globalCacheObjectAPI = cacheAPI
+		globalObjLayerMutex.Unlock()
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
