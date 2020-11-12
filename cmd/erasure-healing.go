@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"sync"
 	"time"
 
@@ -528,7 +527,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 				}(index, disk)
 			}
 			wg.Wait()
-			ObjectPathUpdated(path.Join(bucket, object))
+			ObjectPathUpdated(pathJoin(bucket, object))
 		}
 	}
 

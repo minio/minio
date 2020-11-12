@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"path"
 	"time"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -95,9 +94,6 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 				res, err = objAPI.HealBucket(ctx, task.bucket, task.opts.DryRun, task.opts.Remove)
 			case task.bucket != "" && task.object != "":
 				res, err = objAPI.HealObject(ctx, task.bucket, task.object, task.versionID, task.opts)
-			}
-			if task.bucket != "" && task.object != "" {
-				ObjectPathUpdated(path.Join(task.bucket, task.object))
 			}
 			task.responseCh <- healResult{result: res, err: err}
 
