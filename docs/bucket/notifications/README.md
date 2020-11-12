@@ -1,6 +1,10 @@
 # MinIO Bucket Notification Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Events occurring on objects in a bucket can be monitored using bucket event notifications. Event types supported by MinIO server are
+Events occurring on objects in a bucket can be monitored using bucket event notifications. 
+
+NOTE: gateway mode does not support bucket notifications (except NAS gateway).
+
+Event types supported by MinIO server are
 
 | Supported Event Types   |                                            |                                       |
 | :---------------------- | ------------------------------------------ | ------------------------------------- |
