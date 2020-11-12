@@ -112,6 +112,10 @@ type FileInfo struct {
 	// a deleted marker for a versioned bucket.
 	Deleted bool
 
+	// TransitionStatus is set to Pending/Complete for transitioned
+	// entries based on state of transition
+	TransitionStatus string
+
 	// DataDir of the file
 	DataDir string
 

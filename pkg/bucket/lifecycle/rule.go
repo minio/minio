@@ -100,6 +100,10 @@ func (r Rule) validateFilter() error {
 	return r.Filter.Validate()
 }
 
+func (r Rule) validateTransition() error {
+	return r.Transition.Validate()
+}
+
 // Prefix - a rule can either have prefix under <filter></filter> or under
 // <filter><and></and></filter>. This method returns the prefix from the
 // location where it is available
@@ -145,6 +149,9 @@ func (r Rule) Validate() error {
 		return err
 	}
 	if err := r.validateFilter(); err != nil {
+		return err
+	}
+	if err := r.validateTransition(); err != nil {
 		return err
 	}
 	return nil
