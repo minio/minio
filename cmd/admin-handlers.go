@@ -1428,6 +1428,9 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 // Get bandwidth consumption information
 func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "BandwidthMonitor")
+
+	defer logger.AuditLog(w, r, "BandwidthMonitor", mustGetClaimsFromToken(r))
+
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.BandwidthMonitorAction, "")
 	if adminAPIErr != ErrNone {
