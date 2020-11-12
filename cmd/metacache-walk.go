@@ -96,9 +96,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Forward some errors?
 			return nil
 		}
-
+		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
 			if strings.HasSuffix(entry, slashSeparator) {
+				if strings.HasSuffix(entry, globalDirSuffixWithSlash) {
+					// Add without extension so it is sorted correctly.
+					entry = strings.TrimSuffix(entry, globalDirSuffixWithSlash) + slashSeparator
+					dirObjects[entry] = struct{}{}
+					entries[i] = entry
+					continue
+				}
 				// Trim slash, maybe compiler is clever?
 				entries[i] = entries[i][:len(entry)-1]
 				continue
@@ -116,6 +123,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = decodeDirObject(meta.name)
 				out <- meta
 				return nil
 			}
@@ -147,6 +155,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If directory entry on stack before this, pop it now.
 			for len(dirStack) > 0 && dirStack[len(dirStack)-1] < meta.name {
 				pop := dirStack[len(dirStack)-1]
+				if _, ok := dirObjects[pop]; ok {
+					// Trim slash and add suffix.
+					pop = pop[:len(pop)-1] + globalDirSuffixWithSlash
+				}
 				out <- metaCacheEntry{name: pop}
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
@@ -158,10 +170,15 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 			// All objects will be returned as directories, there has been no object check yet.
 			// Check it by attempting to read metadata.
+			if _, ok := dirObjects[meta.name]; ok {
+				meta.name = meta.name[:len(meta.name)-1] + globalDirSuffixWithSlash
+			}
+
 			meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
 			switch {
 			case err == nil:
 				// It was an object
+				meta.name = decodeDirObject(meta.name)
 				out <- meta
 			case os.IsNotExist(err):
 				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
@@ -174,6 +191,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 
 				// NOT an object, append to stack (with slash)
+				// If dirObject, but no metadata (which is unexpected),
+				// we add it as a directory with the escaped name.
 				dirStack = append(dirStack, meta.name+slashSeparator)
 			default:
 				logger.LogIf(ctx, err)
@@ -185,6 +204,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			out <- metaCacheEntry{name: pop}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
+				if _, ok := dirObjects[pop]; ok {
+					pop = pop + globalDirSuffixWithSlash
+				}
 				err := scanDir(pop)
 				logger.LogIf(ctx, err)
 			}
