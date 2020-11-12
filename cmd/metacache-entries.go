@@ -300,6 +300,7 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 	versions = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
 	for _, entry := range m.o {
+		entry.name = decodeDirObject(entry.name)
 		if entry.isObject() {
 			if delimiter != "" {
 				idx := strings.Index(strings.TrimPrefix(entry.name, prefix), delimiter)
@@ -357,6 +358,7 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 	objects = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
 	for _, entry := range m.o {
+		entry.name = decodeDirObject(entry.name)
 		if entry.isObject() {
 			if delimiter != "" {
 				idx := strings.Index(strings.TrimPrefix(entry.name, prefix), delimiter)
