@@ -775,13 +775,16 @@ func (i *crawlItem) objectPath() string {
 	return path.Join(i.prefix, i.objectName)
 }
 
-// sleepDuration multiplies the duration d by x and sleeps if is more than 100 micro seconds.
-// sleep is limited to max 1 second.
+// sleepDuration multiplies the duration d by x
+// and sleeps if is more than 100 micro seconds.
+// Sleep is limited to max 15 seconds.
 func sleepDuration(d time.Duration, x float64) {
+	const maxWait = 15 * time.Second
+	const minWait = 100 * time.Microsecond
 	// Don't sleep for really small amount of time
-	if d := time.Duration(float64(d) * x); d > time.Microsecond*100 {
-		if d > time.Second {
-			d = time.Second
+	if d := time.Duration(float64(d) * x); d > minWait {
+		if d > maxWait {
+			d = maxWait
 		}
 		time.Sleep(d)
 	}
