@@ -139,9 +139,8 @@ func (e ChecksumAlgo) valid() bool {
 
 // xlMetaV2DeleteMarker defines the data struct for the delete marker journal type
 type xlMetaV2DeleteMarker struct {
-	VersionID [16]byte          `json:"ID" msg:"ID"`                               // Version ID for delete marker
-	ModTime   int64             `json:"MTime" msg:"MTime"`                         // Object delete marker modified time
-	MetaSys   map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,omitempty"` // Delete marker internal metadata
+	VersionID [16]byte `json:"ID" msg:"ID"`       // Version ID for delete marker
+	ModTime   int64    `json:"MTime" msg:"MTime"` // Object delete marker modified time
 }
 
 // xlMetaV2Object defines the data struct for object journal type
@@ -355,13 +354,11 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		versionID = uuid.UUID(j.VersionID).String()
 	}
 	fi := FileInfo{
-		Volume:                        volume,
-		Name:                          path,
-		ModTime:                       time.Unix(0, j.ModTime).UTC(),
-		VersionID:                     versionID,
-		Deleted:                       true,
-		DeleteMarkerReplicationStatus: string(j.MetaSys[xhttp.AmzBucketReplicationStatus]),
-		VersionPurgeStatus:            VersionPurgeStatusType(string(j.MetaSys[VersionPurgeStatusKey])),
+		Volume:    volume,
+		Name:      path,
+		ModTime:   time.Unix(0, j.ModTime).UTC(),
+		VersionID: versionID,
+		Deleted:   true,
 	}
 	return fi, nil
 }
@@ -411,9 +408,6 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			fi.Metadata[k] = string(v)
 		}
-		if strings.EqualFold(k, VersionPurgeStatusKey) {
-			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
-		}
 	}
 	fi.Erasure.Algorithm = j.ErasureAlgorithm.String()
 	fi.Erasure.Index = j.ErasureIndex
@@ -452,34 +446,10 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			DeleteMarker: &xlMetaV2DeleteMarker{
 				VersionID: uv,
 				ModTime:   fi.ModTime.UnixNano(),
-				MetaSys:   make(map[string][]byte),
 			},
 		}
 		if !ventry.Valid() {
 			return "", false, errors.New("internal error: invalid version entry generated")
-		}
-	}
-	updateVersion := false
-	if fi.VersionPurgeStatus.Empty() && (fi.DeleteMarkerReplicationStatus == "REPLICA" || fi.DeleteMarkerReplicationStatus == "") {
-		updateVersion = fi.MarkDeleted
-	} else {
-		// for replication scenario
-		if fi.Deleted && fi.VersionPurgeStatus != Complete {
-			if !fi.VersionPurgeStatus.Empty() || fi.DeleteMarkerReplicationStatus != "" {
-				updateVersion = true
-			}
-		}
-		// object or delete-marker versioned delete is not complete
-		if !fi.VersionPurgeStatus.Empty() && fi.VersionPurgeStatus != Complete {
-			updateVersion = true
-		}
-	}
-	if fi.Deleted {
-		if fi.DeleteMarkerReplicationStatus != "" {
-			ventry.DeleteMarker.MetaSys[xhttp.AmzBucketReplicationStatus] = []byte(fi.DeleteMarkerReplicationStatus)
-		}
-		if !fi.VersionPurgeStatus.Empty() {
-			ventry.DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
 		}
 	}
 
@@ -498,26 +468,10 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			}
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
-				if updateVersion {
-					delete(z.Versions[i].DeleteMarker.MetaSys, xhttp.AmzBucketReplicationStatus)
-					delete(z.Versions[i].DeleteMarker.MetaSys, VersionPurgeStatusKey)
-					if fi.DeleteMarkerReplicationStatus != "" {
-						z.Versions[i].DeleteMarker.MetaSys[xhttp.AmzBucketReplicationStatus] = []byte(fi.DeleteMarkerReplicationStatus)
-					}
-					if !fi.VersionPurgeStatus.Empty() {
-						z.Versions[i].DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
-					}
-				} else {
-					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-					if fi.MarkDeleted && (fi.VersionPurgeStatus.Empty() || (fi.VersionPurgeStatus != Complete)) {
-						z.Versions = append(z.Versions, ventry)
-					}
+				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
+				if fi.Deleted {
+					z.Versions = append(z.Versions, ventry)
 				}
-				return "", len(z.Versions) == 0, nil
-			}
-		case ObjectType:
-			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) && updateVersion {
-				z.Versions[i].ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
 				return "", len(z.Versions) == 0, nil
 			}
 		}
@@ -564,6 +518,7 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		z.Versions = append(z.Versions, ventry)
 		return "", false, nil
 	}
+
 	return "", false, errFileVersionNotFound
 }
 
@@ -583,9 +538,7 @@ func (z xlMetaV2) TotalSize() int64 {
 
 // ListVersions lists current versions, and current deleted
 // versions returns error for unexpected entries.
-// showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
-// but waiting to be replicated
-func (z xlMetaV2) ListVersions(volume, path string, showPendingDeletes bool) (versions []FileInfo, modTime time.Time, err error) {
+func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
 	var latestModTime time.Time
 	var latestVersionID string
 	for _, version := range z.Versions {
@@ -598,9 +551,6 @@ func (z xlMetaV2) ListVersions(volume, path string, showPendingDeletes bool) (ve
 			fi, err = version.ObjectV2.ToFileInfo(volume, path)
 		case DeleteType:
 			fi, err = version.DeleteMarker.ToFileInfo(volume, path)
-			if !fi.VersionPurgeStatus.Empty() && !showPendingDeletes {
-				continue
-			}
 		case LegacyType:
 			fi, err = version.ObjectV1.ToFileInfo(volume, path)
 		}

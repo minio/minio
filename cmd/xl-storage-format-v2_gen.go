@@ -338,36 +338,6 @@ func (z *xlMetaV2DeleteMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ModTime")
 				return
 			}
-		case "MetaSys":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys")
-				return
-			}
-			if z.MetaSys == nil {
-				z.MetaSys = make(map[string][]byte, zb0002)
-			} else if len(z.MetaSys) > 0 {
-				for key := range z.MetaSys {
-					delete(z.MetaSys, key)
-				}
-			}
-			for zb0002 > 0 {
-				zb0002--
-				var za0002 string
-				var za0003 []byte
-				za0002, err = dc.ReadString()
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys")
-					return
-				}
-				za0003, err = dc.ReadBytes(za0003)
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys", za0002)
-					return
-				}
-				z.MetaSys[za0002] = za0003
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -381,23 +351,9 @@ func (z *xlMetaV2DeleteMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2DeleteMarker) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 3 bits */
-	if z.MetaSys == nil {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
-	// variable map header, size zb0001Len
-	err = en.Append(0x80 | uint8(zb0001Len))
-	if err != nil {
-		return
-	}
-	if zb0001Len == 0 {
-		return
-	}
+	// map header, size 2
 	// write "ID"
-	err = en.Append(0xa2, 0x49, 0x44)
+	err = en.Append(0x82, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -416,63 +372,19 @@ func (z *xlMetaV2DeleteMarker) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ModTime")
 		return
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// write "MetaSys"
-		err = en.Append(0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
-		if err != nil {
-			return
-		}
-		err = en.WriteMapHeader(uint32(len(z.MetaSys)))
-		if err != nil {
-			err = msgp.WrapError(err, "MetaSys")
-			return
-		}
-		for za0002, za0003 := range z.MetaSys {
-			err = en.WriteString(za0002)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys")
-				return
-			}
-			err = en.WriteBytes(za0003)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys", za0002)
-				return
-			}
-		}
-	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaV2DeleteMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0001Len := uint32(3)
-	var zb0001Mask uint8 /* 3 bits */
-	if z.MetaSys == nil {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
+	// map header, size 2
 	// string "ID"
-	o = append(o, 0xa2, 0x49, 0x44)
+	o = append(o, 0x82, 0xa2, 0x49, 0x44)
 	o = msgp.AppendBytes(o, (z.VersionID)[:])
 	// string "MTime"
 	o = append(o, 0xa5, 0x4d, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.ModTime)
-	if (zb0001Mask & 0x4) == 0 { // if not empty
-		// string "MetaSys"
-		o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
-		o = msgp.AppendMapHeader(o, uint32(len(z.MetaSys)))
-		for za0002, za0003 := range z.MetaSys {
-			o = msgp.AppendString(o, za0002)
-			o = msgp.AppendBytes(o, za0003)
-		}
-	}
 	return
 }
 
@@ -506,36 +418,6 @@ func (z *xlMetaV2DeleteMarker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ModTime")
 				return
 			}
-		case "MetaSys":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "MetaSys")
-				return
-			}
-			if z.MetaSys == nil {
-				z.MetaSys = make(map[string][]byte, zb0002)
-			} else if len(z.MetaSys) > 0 {
-				for key := range z.MetaSys {
-					delete(z.MetaSys, key)
-				}
-			}
-			for zb0002 > 0 {
-				var za0002 string
-				var za0003 []byte
-				zb0002--
-				za0002, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys")
-					return
-				}
-				za0003, bts, err = msgp.ReadBytesBytes(bts, za0003)
-				if err != nil {
-					err = msgp.WrapError(err, "MetaSys", za0002)
-					return
-				}
-				z.MetaSys[za0002] = za0003
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -550,13 +432,7 @@ func (z *xlMetaV2DeleteMarker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *xlMetaV2DeleteMarker) Msgsize() (s int) {
-	s = 1 + 3 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + 6 + msgp.Int64Size + 8 + msgp.MapHeaderSize
-	if z.MetaSys != nil {
-		for za0002, za0003 := range z.MetaSys {
-			_ = za0003
-			s += msgp.StringPrefixSize + len(za0002) + msgp.BytesPrefixSize + len(za0003)
-		}
-	}
+	s = 1 + 3 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + 6 + msgp.Int64Size
 	return
 }
 
@@ -1533,10 +1409,39 @@ func (z *xlMetaV2Version) DecodeMsg(dc *msgp.Reader) (err error) {
 				if z.DeleteMarker == nil {
 					z.DeleteMarker = new(xlMetaV2DeleteMarker)
 				}
-				err = z.DeleteMarker.DecodeMsg(dc)
+				var zb0003 uint32
+				zb0003, err = dc.ReadMapHeader()
 				if err != nil {
 					err = msgp.WrapError(err, "DeleteMarker")
 					return
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "DeleteMarker")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ID":
+						err = dc.ReadExactBytes((z.DeleteMarker.VersionID)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "DeleteMarker", "VersionID")
+							return
+						}
+					case "MTime":
+						z.DeleteMarker.ModTime, err = dc.ReadInt64()
+						if err != nil {
+							err = msgp.WrapError(err, "DeleteMarker", "ModTime")
+							return
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "DeleteMarker")
+							return
+						}
+					}
 				}
 			}
 		default:
@@ -1635,9 +1540,25 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 				return
 			}
 		} else {
-			err = z.DeleteMarker.EncodeMsg(en)
+			// map header, size 2
+			// write "ID"
+			err = en.Append(0x82, 0xa2, 0x49, 0x44)
 			if err != nil {
-				err = msgp.WrapError(err, "DeleteMarker")
+				return
+			}
+			err = en.WriteBytes((z.DeleteMarker.VersionID)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "DeleteMarker", "VersionID")
+				return
+			}
+			// write "MTime"
+			err = en.Append(0xa5, 0x4d, 0x54, 0x69, 0x6d, 0x65)
+			if err != nil {
+				return
+			}
+			err = en.WriteInt64(z.DeleteMarker.ModTime)
+			if err != nil {
+				err = msgp.WrapError(err, "DeleteMarker", "ModTime")
 				return
 			}
 		}
@@ -1703,11 +1624,13 @@ func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 		if z.DeleteMarker == nil {
 			o = msgp.AppendNil(o)
 		} else {
-			o, err = z.DeleteMarker.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "DeleteMarker")
-				return
-			}
+			// map header, size 2
+			// string "ID"
+			o = append(o, 0x82, 0xa2, 0x49, 0x44)
+			o = msgp.AppendBytes(o, (z.DeleteMarker.VersionID)[:])
+			// string "MTime"
+			o = append(o, 0xa5, 0x4d, 0x54, 0x69, 0x6d, 0x65)
+			o = msgp.AppendInt64(o, z.DeleteMarker.ModTime)
 		}
 	}
 	return
@@ -1786,10 +1709,39 @@ func (z *xlMetaV2Version) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if z.DeleteMarker == nil {
 					z.DeleteMarker = new(xlMetaV2DeleteMarker)
 				}
-				bts, err = z.DeleteMarker.UnmarshalMsg(bts)
+				var zb0003 uint32
+				zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "DeleteMarker")
 					return
+				}
+				for zb0003 > 0 {
+					zb0003--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "DeleteMarker")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ID":
+						bts, err = msgp.ReadExactBytes(bts, (z.DeleteMarker.VersionID)[:])
+						if err != nil {
+							err = msgp.WrapError(err, "DeleteMarker", "VersionID")
+							return
+						}
+					case "MTime":
+						z.DeleteMarker.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "DeleteMarker", "ModTime")
+							return
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "DeleteMarker")
+							return
+						}
+					}
 				}
 			}
 		default:
@@ -1822,7 +1774,7 @@ func (z *xlMetaV2Version) Msgsize() (s int) {
 	if z.DeleteMarker == nil {
 		s += msgp.NilSize
 	} else {
-		s += z.DeleteMarker.Msgsize()
+		s += 1 + 3 + msgp.ArrayHeaderSize + (16 * (msgp.ByteSize)) + 6 + msgp.Int64Size
 	}
 	return
 }

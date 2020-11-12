@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/xml"
-	"time"
 )
 
 // DeletedObject objects deleted
@@ -27,24 +26,12 @@ type DeletedObject struct {
 	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId,omitempty"`
 	ObjectName            string `xml:"Key,omitempty"`
 	VersionID             string `xml:"VersionId,omitempty"`
-	// Replication status of DeleteMarker
-	DeleteMarkerReplicationStatus string
-	// MTime of DeleteMarker on source that needs to be propagated to replica
-	DeleteMarkerMTime time.Time
-	// Status of versioned delete (of object or DeleteMarker)
-	VersionPurgeStatus VersionPurgeStatusType
 }
 
 // ObjectToDelete carries key name for the object to delete.
 type ObjectToDelete struct {
 	ObjectName string `xml:"Key"`
 	VersionID  string `xml:"VersionId"`
-	// Replication status of DeleteMarker
-	DeleteMarkerReplicationStatus string
-	// Status of versioned delete (of object or DeleteMarker)
-	VersionPurgeStatus VersionPurgeStatusType
-	// Version ID of delete marker
-	DeleteMarkerVersionID string
 }
 
 // createBucketConfiguration container for bucket configuration request from client.

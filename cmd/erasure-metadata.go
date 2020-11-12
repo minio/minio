@@ -139,9 +139,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 
 	// Add replication status to the object info
 	objInfo.ReplicationStatus = replication.StatusType(fi.Metadata[xhttp.AmzBucketReplicationStatus])
-	if fi.Deleted {
-		objInfo.ReplicationStatus = replication.StatusType(fi.DeleteMarkerReplicationStatus)
-	}
+
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
 	// response headers. e.g, X-Minio-* or X-Amz-*.
@@ -157,7 +155,6 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
-	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus
 	// Success.
 	return objInfo
 }
