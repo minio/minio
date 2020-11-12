@@ -155,10 +155,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If directory entry on stack before this, pop it now.
 			for len(dirStack) > 0 && dirStack[len(dirStack)-1] < meta.name {
 				pop := dirStack[len(dirStack)-1]
-				if _, ok := dirObjects[pop]; ok {
-					// Trim slash and add suffix.
-					pop = pop[:len(pop)-1] + globalDirSuffixWithSlash
-				}
 				out <- metaCacheEntry{name: pop}
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
@@ -170,7 +166,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 			// All objects will be returned as directories, there has been no object check yet.
 			// Check it by attempting to read metadata.
-			if _, ok := dirObjects[meta.name]; ok {
+			_, isDirObj := dirObjects[entry]
+			if isDirObj {
 				meta.name = meta.name[:len(meta.name)-1] + globalDirSuffixWithSlash
 			}
 
@@ -178,7 +175,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			switch {
 			case err == nil:
 				// It was an object
-				meta.name = decodeDirObject(meta.name)
+				if isDirObj {
+					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
+				}
 				out <- meta
 			case os.IsNotExist(err):
 				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
@@ -191,9 +190,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 
 				// NOT an object, append to stack (with slash)
-				// If dirObject, but no metadata (which is unexpected),
-				// we add it as a directory with the escaped name.
-				dirStack = append(dirStack, meta.name+slashSeparator)
+				// If dirObject, but no metadata (which is unexpected) we skip it.
+				if !isDirObj {
+					dirStack = append(dirStack, meta.name+slashSeparator)
+				}
 			default:
 				logger.LogIf(ctx, err)
 			}
@@ -204,9 +204,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			out <- metaCacheEntry{name: pop}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
-				if _, ok := dirObjects[pop]; ok {
-					pop = pop + globalDirSuffixWithSlash
-				}
 				err := scanDir(pop)
 				logger.LogIf(ctx, err)
 			}
