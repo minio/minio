@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -29,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config/storageclass"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
@@ -386,16 +383,22 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		// Read metadata associated with the object from all disks.
 		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{})
 		if err != nil {
-			if err == errFileNotFound || errors.Is(err, errErasureReadQuorum) || errors.Is(err, InsufficientReadQuorum{}) {
+			switch toObjectErr(err, minioMetaBucket, o.objectPath(0)).(type) {
+			case ObjectNotFound:
 				retries++
 				time.Sleep(retryDelay)
 				continue
+			case InsufficientReadQuorum:
+				retries++
+				time.Sleep(retryDelay)
+				continue
+			default:
+				if debugPrint {
+					console.Infoln("first getObjectFileInfo", o.objectPath(0), "returned err:", err)
+					console.Infof("err type: %T\n", err)
+				}
+				return entries, err
 			}
-			if debugPrint {
-				console.Infoln("first getObjectFileInfo", o.objectPath(0), "returned err:", err)
-				console.Infof("err type: %T\n", err)
-			}
-			return entries, err
 		}
 		if fi.Deleted {
 			return entries, errFileNotFound
@@ -404,7 +407,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		partN, err := o.findFirstPart(fi)
 		switch err {
 		case nil:
-		case io.ErrUnexpectedEOF, errErasureReadQuorum, InsufficientReadQuorum{}:
+		case io.ErrUnexpectedEOF:
 			if retries == 10 {
 				err := o.checkMetacacheState(ctx, rpc)
 				if debugPrint {
@@ -462,23 +465,17 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				}
 				// Load first part metadata...
 				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{})
-				switch err {
-				case errFileNotFound, errErasureReadQuorum, InsufficientReadQuorum{}:
+				if err != nil {
 					time.Sleep(retryDelay)
 					retries++
 					continue
-				default:
-					time.Sleep(retryDelay)
-					retries++
-					continue
-				case nil:
-					loadedPart = partN
-					bi, err := getMetacacheBlockInfo(fi, partN)
-					logger.LogIf(ctx, err)
-					if err == nil {
-						if bi.pastPrefix(o.Prefix) {
-							return entries, io.EOF
-						}
+				}
+				loadedPart = partN
+				bi, err := getMetacacheBlockInfo(fi, partN)
+				logger.LogIf(ctx, err)
+				if err == nil {
+					if bi.pastPrefix(o.Prefix) {
+						return entries, io.EOF
 					}
 				}
 				if fi.Deleted {
@@ -487,15 +484,20 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}
 			buf.Reset()
 			err := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0, fi.Size, &buf, fi, metaArr, onlineDisks)
-			switch err {
-			case errFileNotFound, errErasureReadQuorum, InsufficientReadQuorum{}:
-				time.Sleep(retryDelay)
-				retries++
-				continue
-			default:
-				logger.LogIf(ctx, err)
-				return entries, err
-			case nil:
+			if err != nil {
+				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
+				case ObjectNotFound:
+					retries++
+					time.Sleep(retryDelay)
+					continue
+				case InsufficientReadQuorum:
+					retries++
+					time.Sleep(retryDelay)
+					continue
+				default:
+					logger.LogIf(ctx, err)
+					return entries, err
+				}
 			}
 			tmp, err := newMetacacheReader(&buf)
 			if err != nil {
@@ -666,7 +668,6 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			r, err := hash.NewReader(bytes.NewBuffer(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
 			logger.LogIf(ctx, err)
 			custom := b.headerKV()
-			custom[xhttp.AmzStorageClass] = storageclass.RRS
 			_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{UserDefined: custom})
 			if err != nil {
 				metaMu.Lock()
