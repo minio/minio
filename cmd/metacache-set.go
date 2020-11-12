@@ -539,7 +539,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	const debugPrint = false
 	if debugPrint {
-		console.Printf("listPath with options: %#v", o)
+		console.Printf("listPath with options: %#v\n", o)
 	}
 	// See if we have the listing stored.
 	if !o.Create {
