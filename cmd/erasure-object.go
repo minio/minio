@@ -23,11 +23,13 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -168,13 +170,18 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 			ObjInfo: objInfo,
 		}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
-
+	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
+		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
+		restoreHdr, ok := objInfo.UserDefined[xhttp.AmzRestore]
+		if !ok || !strings.HasPrefix(restoreHdr, "ongoing-request=false") || (!objInfo.RestoreExpires.IsZero() && time.Now().After(objInfo.RestoreExpires)) {
+			return getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
+		}
+	}
 	unlockOnDefer = false
 	fn, off, length, nErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker)
 	if nErr != nil {
 		return nil, nErr
 	}
-
 	pr, pw := io.Pipe()
 	go func() {
 		err := er.getObjectWithFileInfo(ctx, bucket, object, off, length, pw, fi, metaArr, onlineDisks)
@@ -256,8 +263,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
-
 	var healOnce sync.Once
+
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -313,12 +320,10 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 		}
 		// Track total bytes read from disk and written to the client.
 		totalBytesRead += partLength
-
 		// partOffset will be valid only for the first part, hence reset it to 0 for
 		// the remaining parts.
 		partOffset = 0
 	} // End of read all parts loop.
-
 	// Return success.
 	return nil
 }
@@ -990,6 +995,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					fi.VersionID = opts.VersionID
 				}
 			}
+			fi.TransitionStatus = opts.TransitionStatus
+
 			// versioning suspended means we add `null`
 			// version as delete marker
 			// Add delete marker, since we don't have any version specified explicitly.
@@ -1010,6 +1017,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ModTime:                       modTime,
 		DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
+		TransitionStatus:              opts.TransitionStatus,
 	}); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}

@@ -168,9 +168,6 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		}
 		meta.ReplicationConfigXML = configData
 	case bucketTargetsFile:
-		if !globalIsErasure && !globalIsDistErasure {
-			return NotImplemented{}
-		}
 		meta.BucketTargetsConfigJSON = configData
 	default:
 		return fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)

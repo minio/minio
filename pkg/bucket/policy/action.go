@@ -169,6 +169,9 @@ const (
 
 	// GetObjectVersionForReplicationAction  - GetObjectVersionForReplication REST API action
 	GetObjectVersionForReplicationAction = "s3:GetObjectVersionForReplication"
+
+	// RestoreObjectAction - RestoreObject REST API action
+	RestoreObjectAction = "s3:RestoreObject"
 )
 
 // List of all supported object actions.
@@ -195,6 +198,7 @@ var supportedObjectActions = map[Action]struct{}{
 	ReplicateDeleteAction:                {},
 	ReplicateTagsAction:                  {},
 	GetObjectVersionForReplicationAction: {},
+	RestoreObjectAction:                  {},
 }
 
 // isObjectAction - returns whether action is object type or not.
@@ -255,6 +259,7 @@ var supportedActions = map[Action]struct{}{
 	ReplicateDeleteAction:                  {},
 	ReplicateTagsAction:                    {},
 	GetObjectVersionForReplicationAction:   {},
+	RestoreObjectAction:                    {},
 }
 
 // IsValid - checks if action is valid or not.
@@ -410,4 +415,5 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	ReplicateDeleteAction:                condition.NewKeySet(condition.CommonKeys...),
 	ReplicateTagsAction:                  condition.NewKeySet(condition.CommonKeys...),
 	GetObjectVersionForReplicationAction: condition.NewKeySet(condition.CommonKeys...),
+	RestoreObjectAction:                  condition.NewKeySet(condition.CommonKeys...),
 }

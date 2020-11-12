@@ -425,6 +425,10 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		fi.Erasure.Distribution[i] = int(j.ErasureDist[i])
 	}
 	fi.DataDir = uuid.UUID(j.DataDir).String()
+
+	if st, ok := j.MetaSys[ReservedMetadataPrefixLower+"transition-status"]; ok {
+		fi.TransitionStatus = string(st)
+	}
 	return fi, nil
 }
 
@@ -490,6 +494,11 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		switch version.Type {
 		case LegacyType:
 			if version.ObjectV1.VersionID == fi.VersionID {
+				if fi.TransitionStatus != "" {
+					z.Versions[i].ObjectV1.Meta[ReservedMetadataPrefixLower+"transition-status"] = fi.TransitionStatus
+					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
+				}
+
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				if fi.Deleted {
 					z.Versions = append(z.Versions, ventry)
@@ -543,6 +552,10 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		switch version.Type {
 		case ObjectType:
 			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
+				if fi.TransitionStatus != "" {
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+"transition-status"] = []byte(fi.TransitionStatus)
+					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
+				}
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
 					if fi.Deleted {

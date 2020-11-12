@@ -182,7 +182,11 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	if !m.valid() {
 		return FileInfo{}, errFileCorrupt
 	}
-	return FileInfo{
+	var transitionStatus string
+	if st, ok := m.Meta[ReservedMetadataPrefixLower+"transition-status"]; ok {
+		transitionStatus = st
+	}
+	fi := FileInfo{
 		Volume:    volume,
 		Name:      path,
 		ModTime:   m.Stat.ModTime,
@@ -192,7 +196,11 @@ func (m *xlMetaV1Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		Erasure:   m.Erasure,
 		VersionID: m.VersionID,
 		DataDir:   m.DataDir,
-	}, nil
+	}
+	if transitionStatus != "" {
+		fi.TransitionStatus = transitionStatus
+	}
+	return fi, nil
 }
 
 // XL metadata constants.

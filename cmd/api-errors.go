@@ -121,6 +121,7 @@ const (
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
 	ErrBucketReplicationDisabledError
+	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
 	ErrNoSuchUpload
 	ErrNoSuchVersion
@@ -915,6 +916,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidRequest",
 		Description:    "x-amz-object-lock-retain-until-date and x-amz-object-lock-mode must both be supplied",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrObjectRestoreAlreadyInProgress: {
+		Code:           "RestoreAlreadyInProgress",
+		Description:    "Object restore is already in progress",
+		HTTPStatusCode: http.StatusConflict,
 	},
 	/// Bucket notification related errors.
 	ErrEventNotification: {

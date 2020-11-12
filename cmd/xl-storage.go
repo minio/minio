@@ -44,6 +44,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
@@ -1008,8 +1009,10 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	// when data-dir is specified.
-	if dataDir != "" {
+	// when data-dir is specified. Transition leverages existing DeleteObject
+	// api call to mark object as deleted.When object is pending transition,
+	// just update the metadata and avoid deleting data dir.
+	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
 		filePath := pathJoin(volumeDir, path, dataDir)
 		if err = checkPathLength(filePath); err != nil {
 			return err
@@ -1019,8 +1022,9 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return err
 		}
 	}
-
-	if !lastVersion {
+	// transitioned objects maintains metadata on the source cluster. When transition
+	// status is set, update the metadata to disk.
+	if !lastVersion || fi.TransitionStatus != "" {
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
@@ -1164,7 +1168,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if err != nil {
 		return fi, err
 	}
-
+	// skip checking data dir when object is transitioned - after transition, data dir will
+	// be empty with just the metadata left behind.
+	if fi.TransitionStatus != "" {
+		checkDataDir = false
+	}
 	if fi.DataDir != "" && checkDataDir {
 		if _, err = s.StatVol(ctx, pathJoin(volume, path, fi.DataDir, slashSeparator)); err != nil {
 			if err == errVolumeNotFound {
