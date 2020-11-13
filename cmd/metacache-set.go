@@ -87,6 +87,9 @@ type listPathOptions struct {
 	// This means the cache metadata will not be persisted on disk.
 	// A transient result will never be returned from the cache so knowing the list id is required.
 	Transient bool
+
+	// singleObject will assume that prefix refers to an exact single object.
+	singleObject bool
 }
 
 func init() {
