@@ -137,7 +137,14 @@ func cleanupDir(ctx context.Context, storage StorageAPI, volume, dirPath string)
 		}
 		return nil
 	}
+
 	err := delFunc(retainSlash(pathJoin(dirPath)))
+	if IsErrIgnored(err, []error{
+		errVolumeNotFound,
+		errVolumeAccessDenied,
+	}...) {
+		return nil
+	}
 	return err
 }
 
