@@ -612,10 +612,6 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if web.CacheAPI() != nil {
 		deleteObjects = web.CacheAPI().DeleteObjects
 	}
-	getObjectInfoFn := objectAPI.GetObjectInfo
-	if web.CacheAPI() != nil {
-		getObjectInfoFn = web.CacheAPI().GetObjectInfo
-	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
@@ -718,27 +714,8 @@ next:
 					return toJSONError(ctx, errAccessDenied)
 				}
 			}
-			_, replicateDel := checkReplicateDelete(ctx, getObjectInfoFn, args.BucketName, ObjectToDelete{ObjectName: objectName})
-			if replicateDel {
-				opts.DeleteMarkerReplicationStatus = string(replication.Pending)
-				opts.DeleteMarker = true
-			}
 
-			oi, err := deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
-			if replicateDel {
-				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
-					DeletedObject: DeletedObject{
-						ObjectName:                    objectName,
-						DeleteMarkerVersionID:         oi.VersionID,
-						DeleteMarkerReplicationStatus: string(oi.ReplicationStatus),
-						DeleteMarkerMTime:             oi.ModTime,
-						DeleteMarker:                  oi.DeleteMarker,
-						VersionPurgeStatus:            oi.VersionPurgeStatus,
-					},
-					Bucket: args.BucketName,
-				})
-			}
-
+			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
 			logger.LogIf(ctx, err)
 			continue
 		}
@@ -783,40 +760,9 @@ next:
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
-				if obj.ReplicationStatus == replication.Replica {
-					if authErr == errNoAuthToken {
-						// Check if object is allowed to be deleted anonymously
-						if !globalPolicySys.IsAllowed(policy.Args{
-							Action:          iampolicy.ReplicateDeleteAction,
-							BucketName:      args.BucketName,
-							ConditionValues: getConditionValues(r, "", "", nil),
-							IsOwner:         false,
-							ObjectName:      objectName,
-						}) {
-							return toJSONError(ctx, errAccessDenied)
-						}
-					} else {
-						if !globalIAMSys.IsAllowed(iampolicy.Args{
-							AccountName:     claims.AccessKey,
-							Action:          iampolicy.ReplicateDeleteAction,
-							BucketName:      args.BucketName,
-							ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
-							IsOwner:         owner,
-							ObjectName:      objectName,
-							Claims:          claims.Map(),
-						}) {
-							return toJSONError(ctx, errAccessDenied)
-						}
-					}
-				}
-				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
-				_, replicateDel := checkReplicateDelete(ctx, getObjectInfoFn, args.BucketName, ObjectToDelete{ObjectName: obj.Name})
-				objToDel := ObjectToDelete{ObjectName: obj.Name}
-				if replicateDel {
-					objToDel.DeleteMarkerReplicationStatus = string(replication.Pending)
-				}
-
-				objects = append(objects, objToDel)
+				objects = append(objects, ObjectToDelete{
+					ObjectName: obj.Name,
+				})
 			}
 
 			// Nothing to do.
@@ -826,11 +772,7 @@ next:
 
 			// Deletes a list of objects.
 			deletedObjects, errs := deleteObjects(ctx, args.BucketName, objects, opts)
-			for i, err := range errs {
-				if err != nil && !isErrObjectNotFound(err) {
-					deletedObjects[i].DeleteMarkerReplicationStatus = objects[i].DeleteMarkerReplicationStatus
-					deletedObjects[i].VersionPurgeStatus = objects[i].VersionPurgeStatus
-				}
+			for _, err := range errs {
 				if err != nil {
 					logger.LogIf(ctx, err)
 					break next
@@ -857,12 +799,6 @@ next:
 					UserAgent:  r.UserAgent(),
 					Host:       handlers.GetSourceIP(r),
 				})
-				if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
-					globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
-						DeletedObject: dobj,
-						Bucket:        args.BucketName,
-					})
-				}
 			}
 		}
 	}

@@ -151,7 +151,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 			},
 		}, nil
 	}
-	return getFileInfoVersions(e.metadata, bucket, e.name, false)
+	return getFileInfoVersions(e.metadata, bucket, e.name)
 }
 
 // metaCacheEntries is a slice of metacache entries.
