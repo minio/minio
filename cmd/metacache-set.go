@@ -656,7 +656,13 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 					exit = true
 				}
 				metaMu.Unlock()
-				logger.LogIf(ctx, err)
+				// Do not log expected errors.
+				if !IsErrIgnored(err, []error{
+					errVolumeNotFound,
+					errFileNotFound,
+				}...) {
+					logger.LogIf(ctx, err)
+				}
 			}
 		}()
 
