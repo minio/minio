@@ -116,7 +116,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, opts.BaseDir, meta.name, xlStorageFormatFile))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, opts.BaseDir, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
@@ -131,12 +131,12 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Check legacy.
 			if HasSuffix(entry, xlStorageFormatFileV1) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, opts.BaseDir, meta.name, xlStorageFormatFileV1))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, opts.BaseDir, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFileV1)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(opts.BaseDir, meta.name)
 				out <- meta

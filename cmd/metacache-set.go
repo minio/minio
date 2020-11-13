@@ -545,7 +545,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		console.Printf("listPath with options: %#v\n", o)
 	}
 	// See if we have the listing stored.
-	if !o.Create {
+	if !o.Create && !o.singleObject {
 		entries, err := er.streamMetadataParts(ctx, o)
 		switch err {
 		case nil, io.EOF, context.Canceled, context.DeadlineExceeded:
@@ -665,6 +665,10 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 
 		// Write results to disk.
 		bw := newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
+			if o.singleObject {
+				// Don't save single object listings.
+				return nil
+			}
 			if debugPrint {
 				console.Println("listPath: saving block", b.n, "to", o.objectPath(b.n))
 			}
