@@ -42,6 +42,9 @@ type WalkDirOptions struct {
 
 	// Do a full recursive scan.
 	Recursive bool
+
+	// ReportNotFound will return errFileNotFound if all disks reports the BaseDir cannot be found.
+	ReportNotFound bool
 }
 
 // WalkDir will traverse a directory and return all entries found.
@@ -93,6 +96,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			if err != errVolumeNotFound && err != errFileNotFound {
 				logger.LogIf(ctx, err)
 			}
+			if opts.ReportNotFound && err == errFileNotFound && current == opts.BaseDir {
+				return errFileNotFound
+			}
 			// Forward some errors?
 			return nil
 		}
@@ -109,26 +115,29 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFile)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = pathJoin(current, meta.name)
+				meta.name = decodeDirObject(meta.name)
 				out <- meta
 				return nil
 			}
 			// Check legacy.
 			if HasSuffix(entry, xlStorageFormatFileV1) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFileV1)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = pathJoin(current, meta.name)
 				out <- meta
 				return nil
 			}

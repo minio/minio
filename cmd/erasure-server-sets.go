@@ -92,6 +92,26 @@ func (z *erasureServerSets) NewNSLock(bucket string, objects ...string) RWLocker
 	return z.serverSets[0].NewNSLock(bucket, objects...)
 }
 
+// GetDisksID will return disks by their ID.
+func (z *erasureServerSets) GetDisksID(ids ...string) []StorageAPI {
+	idMap := make(map[string]struct{})
+	for _, id := range ids {
+		idMap[id] = struct{}{}
+	}
+	res := make([]StorageAPI, 0, len(idMap))
+	for _, ss := range z.serverSets {
+		for _, disks := range ss.erasureDisks {
+			for _, disk := range disks {
+				id, _ := disk.GetDiskID()
+				if _, ok := idMap[id]; ok {
+					res = append(res, disk)
+				}
+			}
+		}
+	}
+	return res
+}
+
 func (z *erasureServerSets) GetAllLockers() []dsync.NetLocker {
 	return z.serverSets[0].GetAllLockers()
 }

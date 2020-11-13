@@ -177,7 +177,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		logger.LogIf(ctx, err)
 		delayMult = dataCrawlSleepDefMult
 	}
-
 	s := folderScanner{
 		root:                basePath,
 		getSize:             getSize,
@@ -189,6 +188,18 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
 		healFolderInclude:   0,
 		healObjectSelect:    0,
+	}
+
+	// Add disks for set healing.
+	if len(cache.Disks) > 0 {
+		objAPI, ok := newObjectLayerFn().(*erasureServerSets)
+		if ok {
+			s.disks = objAPI.GetDisksID(cache.Disks...)
+			if len(s.disks) != len(cache.Disks) {
+				logger.Info(logPrefix+"Missing disks, want %d, found %d. Cannot heal."+logSuffix, len(cache.Disks), len(s.disks))
+				s.disks = s.disks[:0]
+			}
+		}
 	}
 
 	// Enable healing in XL mode.
@@ -461,7 +472,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		}
 
 		objAPI, ok := newObjectLayerFn().(*erasureServerSets)
-		if !ok {
+		if !ok || len(f.disks) == 0 {
 			continue
 		}
 
@@ -498,20 +509,29 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			t := UTCNow()
 			resolver.bucket = bucket
 
-			var foundObjs, foundDirs bool
+			foundObjs := false
+			dangling := true
 			ctx, cancel := context.WithCancel(ctx)
 			err := listPathRaw(ctx, listPathRawOptions{
 				disks:     f.disks,
 				bucket:    bucket,
-				path:      prefix + slashSeparator,
+				path:      prefix,
 				recursive: true,
-				minDisks:  getWriteQuorum(len(f.disks)),
+				minDisks:  len(f.disks), // We want full consistency.
 				// Weird, maybe transient error.
 				agreed: func(entry metaCacheEntry) {
-					foundObjs = true
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" got agreement: %v", entry.name)
+					}
+					if entry.isObject() {
+						dangling = false
+					}
 				},
 				// Some disks have data for this.
 				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" got partial, %d agreed, errs: %v", nAgreed, errs)
+					}
 					// Sleep and reset.
 					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
 					t = UTCNow()
@@ -520,22 +540,27 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						for _, err := range errs {
 							if err != nil {
 								// Not all disks are ready, do nothing for now.
+								dangling = false
 								return
 							}
 						}
 
 						// If no errors and we have less than read quorum, delete it.
 						first, n := entries.firstFound()
-						if n < getReadQuorum(n) {
+						if n < getReadQuorum(n) && first.name != "" {
 							// If too few disks have the object to read, delete it.
 							objAPI.deleteAll(ctx, bucket, first.name)
 						}
 						return
 					}
+
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" resolved to: %v, dir: %v", entry.name, entry.isDir())
+					}
 					if entry.isDir() {
-						foundDirs = true
 						return
 					}
+					dangling = false
 					// We got an entry which we should be able to heal.
 					fiv, err := entry.fileInfoVersions(bucket)
 					if err != nil {
@@ -544,6 +569,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    entry.name,
 							versionID: "",
 						}, madmin.HealItemObject)
+						logger.LogIf(ctx, err)
 						foundObjs = foundObjs || err == nil
 						return
 					}
@@ -553,20 +579,29 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
+						logger.LogIf(ctx, err)
 						foundObjs = foundObjs || err == nil
 					}
 				},
 				// Too many disks failed.
 				finished: func(errs []error) {
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" too many errors: %v", errs)
+					}
+					dangling = false
 					cancel()
 				},
 			})
 
-			if f.dataUsageCrawlDebug && err != nil {
-				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
+			if f.dataUsageCrawlDebug && err != nil && err != errFileNotFound {
+				logger.Info(color.Green("healObjects:")+" checking returned value %v (%T)", err, err)
 			}
 
-			if err == nil && foundDirs && !foundObjs {
+			// If we found one or more disks with this folder, delete it.
+			if err == nil && dangling {
+				if f.dataUsageCrawlDebug {
+					logger.Info(color.Green("healObjects:")+" deleting dangling directory %s", prefix)
+				}
 				// If we have quorum, found directories, but no objects, delete the folder
 				// (we know the folder doesn't exist on this disk)
 				objAPI.deleteAll(ctx, bucket, prefix+slashSeparator)

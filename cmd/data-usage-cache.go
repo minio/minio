@@ -56,6 +56,7 @@ type dataUsageEntry struct {
 // dataUsageCache contains a cache of data usage entries.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
+	Disks []string
 	Cache map[string]dataUsageEntry
 }
 

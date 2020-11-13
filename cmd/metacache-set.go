@@ -744,8 +744,9 @@ type listPathRawOptions struct {
 	bucket, path string
 	recursive    bool
 	// Minimum number of good disks to continue.
-	// An error will be returned.
-	minDisks int
+	// An error will be returned if this many disks returned an error.
+	minDisks       int
+	reportNotFound bool
 
 	// Callbacks with results:
 	// If set to nil, it will not be called.
@@ -771,6 +772,9 @@ type listPathRawOptions struct {
 // Context cancellation will be respected but may take a while to effectuate.
 func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	disks := opts.disks
+	if len(disks) == 0 {
+		return fmt.Errorf("listPathRaw: 0 drives provided")
+	}
 
 	// Disconnect from call above, but cancel on exit.
 	ctx, cancel := context.WithCancel(GlobalContext)
@@ -788,7 +792,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		}
 		// Send request to each disk.
 		go func() {
-			err := d.WalkDir(ctx, WalkDirOptions{Bucket: opts.bucket, BaseDir: opts.path, Recursive: opts.recursive}, w)
+			err := d.WalkDir(ctx, WalkDirOptions{Bucket: opts.bucket, BaseDir: opts.path, Recursive: opts.recursive, ReportNotFound: opts.reportNotFound}, w)
 			w.CloseWithError(err)
 			if err != io.EOF {
 				logger.LogIf(ctx, err)
@@ -801,7 +805,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	for {
 		// Get the top entry from each
 		var current metaCacheEntry
-		var atEOF, hasErr, agree int
+		var atEOF, fnf, hasErr, agree int
 		for i := range topEntries {
 			topEntries[i] = metaCacheEntry{}
 		}
@@ -811,7 +815,6 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		default:
 		}
 		for i, r := range readers {
-
 			if errs[i] != nil {
 				hasErr++
 				continue
@@ -823,6 +826,12 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				continue
 			case nil:
 			default:
+				if err.Error() == errFileNotFound.Error() {
+					atEOF++
+					fnf++
+					continue
+				}
+
 				hasErr++
 				errs[i] = err
 				continue
@@ -860,7 +869,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		}
 
 		// Stop if we exceed number of bad disks
-		if hasErr > len(disks)-opts.minDisks {
+		if hasErr > len(disks)-opts.minDisks && hasErr > 0 {
 			if opts.finished != nil {
 				opts.finished(errs)
 			}
@@ -879,6 +888,9 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				opts.finished(errs)
 			}
 			break
+		}
+		if fnf == len(readers) {
+			return errFileNotFound
 		}
 		if agree == len(readers) {
 			// Everybody agreed
