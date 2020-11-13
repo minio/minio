@@ -680,7 +680,6 @@ func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, pref
 	// more objects matching the prefix.
 	ri := logger.GetReqInfo(ctx)
 	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
-		logger.Info("Veeam shortcut for %s", prefix)
 		opts.singleObject = true
 		opts.Transient = true
 	}
