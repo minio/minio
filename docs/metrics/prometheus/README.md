@@ -165,13 +165,13 @@ Apart from above metrics, MinIO also exposes below mode specific metrics
 ### Bucket usage specific metrics
 All metrics are labeled by `bucket`, each metric is displayed per bucket. `buckets_objects_histogram` is additionally labeled by `object_size` string which is represented by any of the following values
 
-- *LESS_THAN_1024_B*
-- *BETWEEN_1024_B_AND_1_MB*
-- *BETWEEN_1_MB_AND_10_MB*
-- *BETWEEN_10_MB_AND_64_MB*
-- *BETWEEN_64_MB_AND_128_MB*
-- *BETWEEN_128_MB_AND_512_MB*
-- *GREATER_THAN_512_MB*
+- *< 1024B*
+- *> 1024B*
+- *> 1MB*
+- *> 10MB*
+- *> 64MB*
+- *> 128MB*
+- *> 512MB*
 
 
 Units defintions:
