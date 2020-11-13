@@ -2716,7 +2716,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 		}
 	}
-
+	replicaDel := false
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 		// check if replica has permission to be deleted.
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); apiErrCode != ErrNone {
@@ -2724,14 +2724,19 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 		opts.DeleteMarkerReplicationStatus = replication.Replica.String()
+		replicaDel = true
 	}
-
+	vID := opts.VersionID
+	if replicaDel && opts.VersionPurgeStatus.Empty() {
+		// opts.VersionID holds delete marker version ID to replicate and not yet present on disk
+		vID = ""
+	}
 	apiErr := ErrNone
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
-		if opts.VersionID != "" {
+		if vID != "" {
 			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
 				ObjectName: object,
-				VersionID:  opts.VersionID,
+				VersionID:  vID,
 			}, getObjectInfo)
 			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL, guessIsBrowserReq(r))
