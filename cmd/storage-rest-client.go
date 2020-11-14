@@ -323,7 +323,10 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 		return err
 	}
 
-	respBody, err := client.call(ctx, storageRESTMethodDeleteVersion, values, &buffer, -1)
+	tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	respBody, err := client.call(tctx, storageRESTMethodDeleteVersion, values, &buffer, -1)
 	defer http.DrainBody(respBody)
 	return err
 }
@@ -503,7 +506,9 @@ func (client *storageRESTClient) Delete(ctx context.Context, volume string, path
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTRecursive, strconv.FormatBool(recursive))
-	respBody, err := client.call(ctx, storageRESTMethodDeleteFile, values, nil, -1)
+	tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	respBody, err := client.call(tctx, storageRESTMethodDeleteFile, values, nil, -1)
 	defer http.DrainBody(respBody)
 	return err
 }

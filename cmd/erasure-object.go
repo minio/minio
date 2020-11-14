@@ -25,7 +25,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -785,13 +784,7 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			err := cleanupDir(tctx, disks[index], minioMetaTmpBucket, tmpObj)
-			if err != nil && err != errVolumeNotFound {
-				return err
-			}
-			return nil
+			return cleanupDir(ctx, disks[index], minioMetaTmpBucket, tmpObj)
 		}, index)
 	}
 
