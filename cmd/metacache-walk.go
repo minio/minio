@@ -116,13 +116,14 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFile)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = pathJoin(current, meta.name)
 				meta.name = decodeDirObject(meta.name)
 				out <- meta
 				return nil
@@ -130,13 +131,14 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Check legacy.
 			if HasSuffix(entry, xlStorageFormatFileV1) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFileV1)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = pathJoin(current, meta.name)
 				out <- meta
 				return nil
 			}
