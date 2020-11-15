@@ -574,6 +574,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						return
 					}
 					for _, ver := range fiv.Versions {
+						// Sleep and reset.
+						sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+						t = UTCNow()
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    fiv.Name,
