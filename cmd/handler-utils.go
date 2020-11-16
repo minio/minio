@@ -212,7 +212,7 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 			return globalActiveCred
 		}
 		if claims != nil {
-			cred, _ = globalIAMSys.GetUser(claims.AccessKey)
+			cred, _ = globalIAMSys.GetUser(r.Context(), claims.AccessKey)
 		}
 	}
 	return cred

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"testing"
@@ -41,6 +42,7 @@ func testAuthenticate(authType string, t *testing.T) {
 	}
 
 	globalActiveCred = cred
+	ctx := context.Background()
 
 	// Define test cases.
 	testCases := []struct {
@@ -64,9 +66,9 @@ func testAuthenticate(authType string, t *testing.T) {
 	for _, testCase := range testCases {
 		var err error
 		if authType == "web" {
-			_, err = authenticateWeb(testCase.accessKey, testCase.secretKey)
+			_, err = authenticateWeb(ctx, testCase.accessKey, testCase.secretKey)
 		} else if authType == "url" {
-			_, err = authenticateURL(testCase.accessKey, testCase.secretKey)
+			_, err = authenticateURL(ctx, testCase.accessKey, testCase.secretKey)
 		}
 
 		if testCase.expectedErr != nil {
@@ -193,7 +195,7 @@ func BenchmarkParseJWTMapClaims(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			err = xjwt.ParseWithClaims(token, xjwt.NewMapClaims(), func(*xjwt.MapClaims) ([]byte, error) {
+			err = xjwt.ParseWithClaims(context.Background(), token, xjwt.NewMapClaims(), func(context.Context, *xjwt.MapClaims) ([]byte, error) {
 				return []byte(creds.SecretKey), nil
 			})
 			if err != nil {
@@ -235,6 +237,6 @@ func BenchmarkAuthenticateWeb(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		authenticateWeb(creds.AccessKey, creds.SecretKey)
+		authenticateWeb(context.Background(), creds.AccessKey, creds.SecretKey)
 	}
 }

@@ -195,7 +195,7 @@ func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, 
 		return claims.Map(), nil
 	}
 
-	stsTokenCallback := func(claims *xjwt.MapClaims) ([]byte, error) {
+	stsTokenCallback := func(ctx context.Context, claims *xjwt.MapClaims) ([]byte, error) {
 		// JWT token for x-amz-security-token is signed with admin
 		// secret key, temporary credentials become invalid if
 		// server admin credentials change. This is done to ensure
@@ -207,7 +207,7 @@ func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, 
 		return []byte(globalActiveCred.SecretKey), nil
 	}
 
-	if err := xjwt.ParseWithClaims(token, claims, stsTokenCallback); err != nil {
+	if err := xjwt.ParseWithClaims(r.Context(), token, claims, stsTokenCallback); err != nil {
 		return nil, errAuthentication
 	}
 

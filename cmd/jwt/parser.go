@@ -22,6 +22,7 @@ package jwt
 // borrowed under MIT License https://github.com/dgrijalva/jwt-go/blob/master/LICENSE
 
 import (
+	"context"
 	"crypto"
 	"crypto/hmac"
 	"encoding/base64"
@@ -274,7 +275,7 @@ func ParseUnverifiedStandardClaims(tokenString string, claims *StandardClaims, b
 }
 
 // ParseWithClaims - parse the token string, valid methods.
-func ParseWithClaims(tokenStr string, claims *MapClaims, fn func(*MapClaims) ([]byte, error)) error {
+func ParseWithClaims(ctx context.Context, tokenStr string, claims *MapClaims, fn func(context.Context, *MapClaims) ([]byte, error)) error {
 	// Key lookup function has to be provided.
 	if fn == nil {
 		// keyFunc was not provided, return error.
@@ -311,7 +312,7 @@ func ParseWithClaims(tokenStr string, claims *MapClaims, fn func(*MapClaims) ([]
 
 	// Lookup key from claims, claims may not be valid and may return
 	// invalid key which is okay as the signature verification will fail.
-	key, err := fn(claims)
+	key, err := fn(ctx, claims)
 	if err != nil {
 		return err
 	}

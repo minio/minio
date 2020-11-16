@@ -103,7 +103,7 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	}
 
 	if !owner {
-		creds, ok := globalIAMSys.GetUser(claims.AccessKey)
+		creds, ok := globalIAMSys.GetUser(r.Context(), claims.AccessKey)
 		if ok && creds.SessionToken != "" {
 			reply.MinioUserInfo["isTempUser"] = true
 		}
@@ -826,7 +826,7 @@ type LoginRep struct {
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
 	ctx := newWebContext(r, args, "WebLogin")
-	token, err := authenticateWeb(args.Username, args.Password)
+	token, err := authenticateWeb(r.Context(), args.Username, args.Password)
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
@@ -892,7 +892,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 	// for IAM users, access key cannot be updated
 	// claims.AccessKey is used instead of accesskey from args
-	prevCred, ok := globalIAMSys.GetUser(claims.AccessKey)
+	prevCred, ok := globalIAMSys.GetUser(r.Context(), claims.AccessKey)
 	if !ok {
 		return errInvalidAccessKeyID
 	}
@@ -912,7 +912,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(ctx, err)
 	}
 
-	reply.Token, err = authenticateWeb(creds.AccessKey, creds.SecretKey)
+	reply.Token, err = authenticateWeb(r.Context(), creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
@@ -939,7 +939,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 	creds := globalActiveCred
 	if !owner {
 		var ok bool
-		creds, ok = globalIAMSys.GetUser(claims.AccessKey)
+		creds, ok = globalIAMSys.GetUser(r.Context(), claims.AccessKey)
 		if !ok {
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}
@@ -949,7 +949,7 @@ func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs,
 		// Use the same session token for URL token.
 		reply.Token = creds.SessionToken
 	} else {
-		token, err := authenticateURL(creds.AccessKey, creds.SecretKey)
+		token, err := authenticateURL(r.Context(), creds.AccessKey, creds.SecretKey)
 		if err != nil {
 			return toJSONError(ctx, err)
 		}
@@ -1209,7 +1209,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 
-	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
+	claims, owner, authErr := webTokenAuthenticate(r.Context(), r.URL.Query().Get("token"))
 	defer logger.AuditLog(w, r, "WebDownload", claims.Map())
 
 	objectAPI := web.ObjectAPI()
@@ -1404,7 +1404,7 @@ type DownloadZipArgs struct {
 func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	host := handlers.GetSourceIP(r)
 
-	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
+	claims, owner, authErr := webTokenAuthenticate(r.Context(), r.URL.Query().Get("token"))
 
 	ctx := newContext(r, w, "WebDownloadZip")
 	defer logger.AuditLog(w, r, "WebDownloadZip", claims.Map())
@@ -1986,7 +1986,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 	var creds auth.Credentials
 	if !owner {
 		var ok bool
-		creds, ok = globalIAMSys.GetUser(claims.AccessKey)
+		creds, ok = globalIAMSys.GetUser(r.Context(), claims.AccessKey)
 		if !ok {
 			return toJSONError(ctx, errInvalidAccessKeyID)
 		}

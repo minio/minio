@@ -62,7 +62,7 @@ func getReqAccessKeyV4(r *http.Request, region string, stype serviceType) (auth.
 			return auth.Credentials{}, false, s3Err
 		}
 	}
-	return checkKeyValid(ch.accessKey)
+	return checkKeyValid(r.Context(), ch.accessKey)
 }
 
 // parse credentialHeader string into its structured form.

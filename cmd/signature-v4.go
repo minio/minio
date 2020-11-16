@@ -26,6 +26,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
@@ -148,12 +149,12 @@ func getSignature(signingKey []byte, stringToSign string) string {
 }
 
 // Check to see if Policy is signed correctly.
-func doesPolicySignatureMatch(formValues http.Header) APIErrorCode {
+func doesPolicySignatureMatch(ctx context.Context, formValues http.Header) APIErrorCode {
 	// For SignV2 - Signature field will be valid
 	if _, ok := formValues["Signature"]; ok {
-		return doesPolicySignatureV2Match(formValues)
+		return doesPolicySignatureV2Match(ctx, formValues)
 	}
-	return doesPolicySignatureV4Match(formValues)
+	return doesPolicySignatureV4Match(ctx, formValues)
 }
 
 // compareSignatureV4 returns true if and only if both signatures
@@ -168,7 +169,7 @@ func compareSignatureV4(sig1, sig2 string) bool {
 // doesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns ErrNone if the signature matches.
-func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
+func doesPolicySignatureV4Match(ctx context.Context, formValues http.Header) APIErrorCode {
 	// Server region.
 	region := globalServerRegion
 
@@ -178,7 +179,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 		return s3Err
 	}
 
-	cred, _, s3Err := checkKeyValid(credHeader.accessKey)
+	cred, _, s3Err := checkKeyValid(ctx, credHeader.accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -211,7 +212,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return err
 	}
 
-	cred, _, s3Err := checkKeyValid(pSignValues.Credential.accessKey)
+	cred, _, s3Err := checkKeyValid(r.Context(), pSignValues.Credential.accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -349,7 +350,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string, st
 		return errCode
 	}
 
-	cred, _, s3Err := checkKeyValid(signV4Values.Credential.accessKey)
+	cred, _, s3Err := checkKeyValid(r.Context(), signV4Values.Credential.accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}

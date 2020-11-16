@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"crypto/subtle"
@@ -76,10 +77,10 @@ const (
 // AWS S3 Signature V2 calculation rule is give here:
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
 
-func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
+func doesPolicySignatureV2Match(ctx context.Context, formValues http.Header) APIErrorCode {
 	cred := globalActiveCred
 	accessKey := formValues.Get(xhttp.AmzAccessKeyID)
-	cred, _, s3Err := checkKeyValid(accessKey)
+	cred, _, s3Err := checkKeyValid(ctx, accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -154,7 +155,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrInvalidQueryParams
 	}
 
-	cred, _, s3Err := checkKeyValid(accessKey)
+	cred, _, s3Err := checkKeyValid(r.Context(), accessKey)
 	if s3Err != ErrNone {
 		return s3Err
 	}
@@ -185,7 +186,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 
 func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
 	if accessKey := r.URL.Query().Get(xhttp.AmzAccessKeyID); accessKey != "" {
-		return checkKeyValid(accessKey)
+		return checkKeyValid(r.Context(), accessKey)
 	}
 
 	// below is V2 Signed Auth header format, splitting on `space` (after the `AWS` string).
@@ -201,7 +202,7 @@ func getReqAccessKeyV2(r *http.Request) (auth.Credentials, bool, APIErrorCode) {
 		return auth.Credentials{}, false, ErrMissingFields
 	}
 
-	return checkKeyValid(keySignFields[0])
+	return checkKeyValid(r.Context(), keySignFields[0])
 }
 
 // Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature;

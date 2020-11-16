@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -50,20 +51,20 @@ var (
 	errPresignedNotAllowed  = errors.New("Unable to generate shareable URL due to lack of read permissions")
 )
 
-func authenticateJWTUsers(accessKey, secretKey string, expiry time.Duration) (string, error) {
+func authenticateJWTUsers(ctx context.Context, accessKey, secretKey string, expiry time.Duration) (string, error) {
 	passedCredential, err := auth.CreateCredentials(accessKey, secretKey)
 	if err != nil {
 		return "", err
 	}
 	expiresAt := UTCNow().Add(expiry)
-	return authenticateJWTUsersWithCredentials(passedCredential, expiresAt)
+	return authenticateJWTUsersWithCredentials(ctx, passedCredential, expiresAt)
 }
 
-func authenticateJWTUsersWithCredentials(credentials auth.Credentials, expiresAt time.Time) (string, error) {
+func authenticateJWTUsersWithCredentials(ctx context.Context, credentials auth.Credentials, expiresAt time.Time) (string, error) {
 	serverCred := globalActiveCred
 	if serverCred.AccessKey != credentials.AccessKey {
 		var ok bool
-		serverCred, ok = globalIAMSys.GetUser(credentials.AccessKey)
+		serverCred, ok = globalIAMSys.GetUser(ctx, credentials.AccessKey)
 		if !ok {
 			return "", errInvalidAccessKeyID
 		}
@@ -91,16 +92,16 @@ func authenticateNode(accessKey, secretKey, audience string) (string, error) {
 	return jwt.SignedString([]byte(secretKey))
 }
 
-func authenticateWeb(accessKey, secretKey string) (string, error) {
-	return authenticateJWTUsers(accessKey, secretKey, defaultJWTExpiry)
+func authenticateWeb(ctx context.Context, accessKey, secretKey string) (string, error) {
+	return authenticateJWTUsers(ctx, accessKey, secretKey, defaultJWTExpiry)
 }
 
-func authenticateURL(accessKey, secretKey string) (string, error) {
-	return authenticateJWTUsers(accessKey, secretKey, defaultURLJWTExpiry)
+func authenticateURL(ctx context.Context, accessKey, secretKey string) (string, error) {
+	return authenticateJWTUsers(ctx, accessKey, secretKey, defaultURLJWTExpiry)
 }
 
 // Callback function used for parsing
-func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
+func webTokenCallback(ctx context.Context, claims *xjwt.MapClaims) ([]byte, error) {
 	if claims.AccessKey == globalActiveCred.AccessKey {
 		return []byte(globalActiveCred.SecretKey), nil
 	}
@@ -114,7 +115,7 @@ func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
 	if ok {
 		return []byte(globalActiveCred.SecretKey), nil
 	}
-	cred, ok := globalIAMSys.GetUser(claims.AccessKey)
+	cred, ok := globalIAMSys.GetUser(ctx, claims.AccessKey)
 	if !ok {
 		return nil, errInvalidAccessKeyID
 	}
@@ -122,17 +123,17 @@ func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
 
 }
 
-func isAuthTokenValid(token string) bool {
-	_, _, err := webTokenAuthenticate(token)
+func isAuthTokenValid(ctx context.Context, token string) bool {
+	_, _, err := webTokenAuthenticate(ctx, token)
 	return err == nil
 }
 
-func webTokenAuthenticate(token string) (*xjwt.MapClaims, bool, error) {
+func webTokenAuthenticate(ctx context.Context, token string) (*xjwt.MapClaims, bool, error) {
 	if token == "" {
 		return nil, false, errNoAuthToken
 	}
 	claims := xjwt.NewMapClaims()
-	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
+	if err := xjwt.ParseWithClaims(ctx, token, claims, webTokenCallback); err != nil {
 		return claims, false, errAuthentication
 	}
 	owner := claims.AccessKey == globalActiveCred.AccessKey
@@ -151,7 +152,7 @@ func webRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, bool, error) {
 		return nil, false, err
 	}
 	claims := xjwt.NewMapClaims()
-	if err := xjwt.ParseWithClaims(token, claims, webTokenCallback); err != nil {
+	if err := xjwt.ParseWithClaims(req.Context(), token, claims, webTokenCallback); err != nil {
 		return claims, false, errAuthentication
 	}
 	owner := claims.AccessKey == globalActiveCred.AccessKey

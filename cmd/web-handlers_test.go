@@ -126,7 +126,7 @@ func TestWriteWebErrorResponse(t *testing.T) {
 
 // Authenticate and get JWT token - will be called before every webrpc handler invocation
 func getWebRPCToken(apiRouter http.Handler, accessKey, secretKey string) (token string, err error) {
-	return authenticateWeb(accessKey, secretKey)
+	return authenticateWeb(context.Background(), accessKey, secretKey)
 }
 
 // Wrapper for calling Login Web Handler
@@ -683,6 +683,7 @@ func getTokenString(accessKey, secretKey string) (string, error) {
 func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
+	ctx := context.Background()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -710,12 +711,12 @@ func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) 
 	}
 
 	// Ensure the token is valid now. It will expire later.
-	if !isAuthTokenValid(tokenReply.Token) {
+	if !isAuthTokenValid(ctx, tokenReply.Token) {
 		t.Fatalf("token is not valid")
 	}
 
 	// Token is invalid.
-	if isAuthTokenValid("") {
+	if isAuthTokenValid(ctx, "") {
 		t.Fatalf("token shouldn't be valid, but it is")
 	}
 
@@ -725,7 +726,7 @@ func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) 
 	}
 
 	// Token has invalid access key.
-	if isAuthTokenValid(token) {
+	if isAuthTokenValid(ctx, token) {
 		t.Fatalf("token shouldn't be valid, but it is")
 	}
 }
@@ -822,6 +823,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	// Register the API end points with Erasure/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := globalActiveCred
+	ctx := context.Background()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
@@ -851,7 +853,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	// Create bucket.
-	err = obj.MakeBucketWithLocation(context.Background(), bucketName, BucketOptions{})
+	err = obj.MakeBucketWithLocation(ctx, bucketName, BucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -859,7 +861,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	content := []byte("temporary file's content")
 	metadata := map[string]string{"etag": "01ce59706106fe5e02e7f55fffda7f34"}
-	_, err = obj.PutObject(context.Background(), bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader(content), int64(len(content)), metadata["etag"], ""), ObjectOptions{UserDefined: metadata})
+	_, err = obj.PutObject(ctx, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader(content), int64(len(content)), metadata["etag"], ""), ObjectOptions{UserDefined: metadata})
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -876,7 +878,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	// Temporary token should succeed.
-	tmpToken, err := authenticateURL(credentials.AccessKey, credentials.SecretKey)
+	tmpToken, err := authenticateURL(ctx, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -918,7 +920,7 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 	credentials := globalActiveCred
 	var opts ObjectOptions
 
-	authorization, err := authenticateURL(credentials.AccessKey, credentials.SecretKey)
+	authorization, err := authenticateURL(context.Background(), credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}

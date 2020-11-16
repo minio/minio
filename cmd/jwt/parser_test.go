@@ -22,6 +22,7 @@ package jwt
 // borrowed under MIT License https://github.com/dgrijalva/jwt-go/blob/master/LICENSE
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -30,15 +31,17 @@ import (
 )
 
 var (
-	defaultKeyFunc = func(claim *MapClaims) ([]byte, error) { return []byte("HelloSecret"), nil }
-	emptyKeyFunc   = func(claim *MapClaims) ([]byte, error) { return nil, nil }
-	errorKeyFunc   = func(claim *MapClaims) ([]byte, error) { return nil, fmt.Errorf("error loading key") }
+	defaultKeyFunc = func(ctx context.Context, claim *MapClaims) ([]byte, error) { return []byte("HelloSecret"), nil }
+	emptyKeyFunc   = func(ctx context.Context, claim *MapClaims) ([]byte, error) { return nil, nil }
+	errorKeyFunc   = func(ctx context.Context, claim *MapClaims) ([]byte, error) {
+		return nil, fmt.Errorf("error loading key")
+	}
 )
 
 var jwtTestData = []struct {
 	name        string
 	tokenString string
-	keyfunc     func(*MapClaims) ([]byte, error)
+	keyfunc     func(context.Context, *MapClaims) ([]byte, error)
 	claims      jwt.Claims
 	valid       bool
 	errors      int32
@@ -186,7 +189,7 @@ func TestParserParse(t *testing.T) {
 				if data.tokenString == "" {
 					data.tokenString = mapClaimsToken(claims)
 				}
-				err = ParseWithClaims(data.tokenString, &MapClaims{}, data.keyfunc)
+				err = ParseWithClaims(context.Background(), data.tokenString, &MapClaims{}, data.keyfunc)
 			case *StandardClaims:
 				if data.tokenString == "" {
 					data.tokenString = standardClaimsToken(claims)

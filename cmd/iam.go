@@ -369,7 +369,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 }
 
 // LoadUser - reloads a specific user from backend disks or etcd.
-func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUserType) error {
+func (sys *IAMSys) LoadUser(ctx context.Context, objAPI ObjectLayer, accessKey string, userType IAMUserType) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -378,7 +378,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	defer sys.store.unlock()
 
 	if globalEtcdClient == nil {
-		err := sys.store.loadUser(context.Background(), accessKey, userType, sys.iamUsersMap)
+		err := sys.store.loadUser(ctx, accessKey, userType, sys.iamUsersMap)
 		if err != nil {
 			return err
 		}
@@ -393,7 +393,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 }
 
 // LoadServiceAccount - reloads a specific service account from backend disks or etcd.
-func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
+func (sys *IAMSys) LoadServiceAccount(ctx context.Context, accessKey string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
 	}
@@ -402,7 +402,7 @@ func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
 	defer sys.store.unlock()
 
 	if globalEtcdClient == nil {
-		err := sys.store.loadUser(context.Background(), accessKey, srvAccUser, sys.iamUsersMap)
+		err := sys.store.loadUser(ctx, accessKey, srvAccUser, sys.iamUsersMap)
 		if err != nil {
 			return err
 		}
@@ -1142,7 +1142,7 @@ func (sys *IAMSys) SetUserSecretKey(accessKey string, secretKey string) error {
 }
 
 // GetUser - get user credentials
-func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
+func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (cred auth.Credentials, ok bool) {
 	if !sys.Initialized() {
 		return cred, false
 	}
@@ -1154,21 +1154,21 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		sys.store.lock()
 		// If user is already found proceed.
 		if _, found := sys.iamUsersMap[accessKey]; !found {
-			sys.store.loadUser(context.Background(), accessKey, regularUser, sys.iamUsersMap)
+			sys.store.loadUser(ctx, accessKey, regularUser, sys.iamUsersMap)
 			if _, found = sys.iamUsersMap[accessKey]; found {
 				// found user, load its mapped policies
 				sys.store.loadMappedPolicy(context.Background(), accessKey, regularUser, false, sys.iamUserPolicyMap)
 			} else {
-				sys.store.loadUser(context.Background(), accessKey, srvAccUser, sys.iamUsersMap)
+				sys.store.loadUser(ctx, accessKey, srvAccUser, sys.iamUsersMap)
 				if svc, found := sys.iamUsersMap[accessKey]; found {
 					// Found service account, load its parent user and its mapped policies.
 					if sys.usersSysType == MinIOUsersSysType {
-						sys.store.loadUser(context.Background(), svc.ParentUser, regularUser, sys.iamUsersMap)
+						sys.store.loadUser(ctx, svc.ParentUser, regularUser, sys.iamUsersMap)
 					}
 					sys.store.loadMappedPolicy(context.Background(), svc.ParentUser, regularUser, false, sys.iamUserPolicyMap)
 				} else {
 					// None found fall back to STS users.
-					sys.store.loadUser(context.Background(), accessKey, stsUser, sys.iamUsersMap)
+					sys.store.loadUser(ctx, accessKey, stsUser, sys.iamUsersMap)
 					if _, found = sys.iamUsersMap[accessKey]; found {
 						// STS user found, load its mapped policy.
 						sys.store.loadMappedPolicy(context.Background(), accessKey, stsUser, false, sys.iamUserPolicyMap)

@@ -638,7 +638,7 @@ func (ies *IAMEtcdStore) watch(ctx context.Context, sys *IAMSys) {
 				}
 				for _, event := range watchResp.Events {
 					ies.lock()
-					ies.reloadFromEvent(sys, event)
+					ies.reloadFromEvent(ctx, sys, event)
 					ies.unlock()
 				}
 			}
@@ -647,7 +647,7 @@ func (ies *IAMEtcdStore) watch(ctx context.Context, sys *IAMSys) {
 }
 
 // sys.RLock is held by caller.
-func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
+func (ies *IAMEtcdStore) reloadFromEvent(ctx context.Context, sys *IAMSys, event *etcd.Event) {
 	eventCreate := event.IsModify() || event.IsCreate()
 	eventDelete := event.Type == etcd.EventTypeDelete
 	usersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigUsersPrefix)
