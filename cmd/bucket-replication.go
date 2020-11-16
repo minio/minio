@@ -382,15 +382,16 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	// - event.ObjectReplicationNotTracked
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
+	var eventName = event.ObjectReplicationComplete
 	if replicationStatus == replication.Failed {
-		sendEvent(eventArgs{
-			EventName:  event.ObjectReplicationFailed,
-			BucketName: bucket,
-			Object:     objInfo,
-			Host:       "Internal: [Replication]",
-		})
+		eventName = event.ObjectReplicationFailed
 	}
-
+	sendEvent(eventArgs{
+		EventName:  eventName,
+		BucketName: bucket,
+		Object:     objInfo,
+		Host:       "Internal: [Replication]",
+	})
 	objInfo.metadataOnly = true // Perform only metadata updates.
 	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: objInfo.VersionID,

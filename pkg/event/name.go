@@ -24,6 +24,7 @@ import (
 // Name - event type enum.
 // Refer http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#notification-how-to-event-types-and-destinations
 // for most basic values we have since extend this and its not really much applicable other than a reference point.
+// "s3:Replication:OperationCompletedReplication" is a MinIO extension.
 type Name int
 
 // Values of event Name
@@ -47,6 +48,7 @@ const (
 	BucketRemoved
 	ObjectReplicationAll
 	ObjectReplicationFailed
+	ObjectReplicationComplete
 	ObjectReplicationMissedThreshold
 	ObjectReplicationReplicatedAfterThreshold
 	ObjectReplicationNotTracked
@@ -72,6 +74,7 @@ func (name Name) Expand() []Name {
 			ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy,
 			ObjectCreatedPost, ObjectCreatedPut,
 			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold,
+			ObjectReplicationComplete, ObjectReplicationFailed,
 		}
 	case ObjectRemovedAll:
 		return []Name{
@@ -81,6 +84,7 @@ func (name Name) Expand() []Name {
 	case ObjectReplicationAll:
 		return []Name{
 			ObjectReplicationFailed,
+			ObjectReplicationComplete,
 			ObjectReplicationNotTracked,
 			ObjectReplicationMissedThreshold,
 			ObjectReplicationReplicatedAfterThreshold,
@@ -132,8 +136,12 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:Delete"
 	case ObjectRemovedDeleteMarkerCreated:
 		return "s3:ObjectRemoved:DeleteMarkerCreated"
+	case ObjectReplicationAll:
+		return "s3:Replication:*"
 	case ObjectReplicationFailed:
 		return "s3:Replication:OperationFailedReplication"
+	case ObjectReplicationComplete:
+		return "s3:Replication:OperationCompletedReplication"
 	case ObjectReplicationNotTracked:
 		return "s3:Replication:OperationNotTracked"
 	case ObjectReplicationMissedThreshold:
@@ -232,6 +240,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectReplicationAll, nil
 	case "s3:Replication:OperationFailedReplication":
 		return ObjectReplicationFailed, nil
+	case "s3:Replication:OperationCompletedReplication":
+		return ObjectReplicationComplete, nil
 	case "s3:Replication:OperationMissedThreshold":
 		return ObjectReplicationMissedThreshold, nil
 	case "s3:Replication:OperationReplicatedAfterThreshold":
