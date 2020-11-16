@@ -1,4 +1,4 @@
-// +build openbsd freebsd dragonfly
+// +build netbsd
 
 /*
  * MinIO Cloud Storage, (C) 2016,2017 MinIO, Inc.
@@ -24,7 +24,7 @@ import (
 )
 
 func getHwPhysmem() (uint64, error) {
-    totalString, err := syscall.Sysctl("hw.physmem")
+    totalString, err := syscall.Sysctl("hw.physmem64")
     if err != nil {
         return 0, err
     }
