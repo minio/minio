@@ -46,11 +46,6 @@ func (s StatusType) String() string {
 	return string(s)
 }
 
-// Empty returns true if this status is not set
-func (s StatusType) Empty() bool {
-	return string(s) == ""
-}
-
 var (
 	errReplicationTooManyRules        = Errorf("Replication configuration allows a maximum of 1000 rules")
 	errReplicationNoRule              = Errorf("Replication configuration should have at least one rule")
@@ -161,16 +156,16 @@ func (c Config) GetDestination() Destination {
 func (c Config) Replicate(obj ObjectOpts) bool {
 
 	for _, rule := range c.FilterActionableRules(obj) {
-		// check MinIO extension for versioned deletes
-		if !obj.DeleteMarker && obj.VersionID != "" && rule.DeleteReplication.Status == Disabled {
-			return false
-		}
-		if obj.DeleteMarker && rule.DeleteMarkerReplication.Status == Disabled {
+
+		if obj.DeleteMarker {
 			// Indicates whether MinIO will remove a delete marker. By default, delete markers
 			// are not replicated.
 			return false
 		}
 		if obj.SSEC {
+			return false
+		}
+		if obj.VersionID != "" && !obj.IsLatest {
 			return false
 		}
 		if rule.Status == Disabled {

@@ -205,9 +205,9 @@ func (c *diskCache) diskUsageLow() bool {
 		logger.LogIf(ctx, err)
 		return false
 	}
-	usedPercent := (di.Used / di.Total) * 100
+	usedPercent := float64(di.Used) * 100 / float64(di.Total)
 	low := int(usedPercent) < gcStopPct
-	atomic.StoreUint64(&c.stats.UsagePercent, usedPercent)
+	atomic.StoreUint64(&c.stats.UsagePercent, uint64(usedPercent))
 	if low {
 		atomic.StoreInt32(&c.stats.UsageState, 0)
 	}

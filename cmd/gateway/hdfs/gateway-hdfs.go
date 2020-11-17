@@ -323,7 +323,7 @@ func (n *hdfsObjects) GetBucketInfo(ctx context.Context, bucket string) (bi mini
 }
 
 func (n *hdfsObjects) ListBuckets(ctx context.Context) (buckets []minio.BucketInfo, err error) {
-	entries, err := n.clnt.ReadDir(hdfsSeparator)
+	entries, err := n.clnt.ReadDir(n.hdfsPathJoin())
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return nil, hdfsToObjectErr(ctx, err)

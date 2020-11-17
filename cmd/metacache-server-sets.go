@@ -83,6 +83,10 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		o.ID = mustGetUUID()
 	}
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
+	if o.singleObject {
+		// Override for single object.
+		o.BaseDir = o.Prefix
+	}
 
 	var cache metacache
 	// If we don't have a list id we must ask the server if it has a cache or create a new.

@@ -96,9 +96,16 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Forward some errors?
 			return nil
 		}
-
+		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
 			if strings.HasSuffix(entry, slashSeparator) {
+				if strings.HasSuffix(entry, globalDirSuffixWithSlash) {
+					// Add without extension so it is sorted correctly.
+					entry = strings.TrimSuffix(entry, globalDirSuffixWithSlash) + slashSeparator
+					dirObjects[entry] = struct{}{}
+					entries[i] = entry
+					continue
+				}
 				// Trim slash, maybe compiler is clever?
 				entries[i] = entries[i][:len(entry)-1]
 				continue
@@ -109,26 +116,29 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If root was an object return it as such.
 			if HasSuffix(entry, xlStorageFormatFile) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFile)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = pathJoin(current, meta.name)
+				meta.name = decodeDirObject(meta.name)
 				out <- meta
 				return nil
 			}
 			// Check legacy.
 			if HasSuffix(entry, xlStorageFormatFileV1) {
 				var meta metaCacheEntry
-				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
+				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
 					logger.LogIf(ctx, err)
 					continue
 				}
-				meta.name = strings.TrimSuffix(meta.name, xlStorageFormatFileV1)
+				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
+				meta.name = pathJoin(current, meta.name)
 				out <- meta
 				return nil
 			}
@@ -158,10 +168,18 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 
 			// All objects will be returned as directories, there has been no object check yet.
 			// Check it by attempting to read metadata.
+			_, isDirObj := dirObjects[entry]
+			if isDirObj {
+				meta.name = meta.name[:len(meta.name)-1] + globalDirSuffixWithSlash
+			}
+
 			meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFile))
 			switch {
 			case err == nil:
 				// It was an object
+				if isDirObj {
+					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
+				}
 				out <- meta
 			case os.IsNotExist(err):
 				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
@@ -174,7 +192,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				}
 
 				// NOT an object, append to stack (with slash)
-				dirStack = append(dirStack, meta.name+slashSeparator)
+				// If dirObject, but no metadata (which is unexpected) we skip it.
+				if !isDirObj {
+					dirStack = append(dirStack, meta.name+slashSeparator)
+				}
 			default:
 				logger.LogIf(ctx, err)
 			}

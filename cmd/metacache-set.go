@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -29,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config/storageclass"
-	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
@@ -90,6 +87,9 @@ type listPathOptions struct {
 	// This means the cache metadata will not be persisted on disk.
 	// A transient result will never be returned from the cache so knowing the list id is required.
 	Transient bool
+
+	// singleObject will assume that prefix refers to an exact single object.
+	singleObject bool
 }
 
 func init() {
@@ -382,12 +382,18 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		// Read metadata associated with the object from all disks.
 		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{})
 		if err != nil {
-			if err == errFileNotFound || errors.Is(err, errErasureReadQuorum) || errors.Is(err, InsufficientReadQuorum{}) {
+			switch toObjectErr(err, minioMetaBucket, o.objectPath(0)).(type) {
+			case ObjectNotFound:
 				retries++
 				time.Sleep(retryDelay)
 				continue
+			case InsufficientReadQuorum:
+				retries++
+				time.Sleep(retryDelay)
+				continue
+			default:
+				return entries, fmt.Errorf("reading first part metadata: %w", err)
 			}
-			return entries, fmt.Errorf("reading first part metadata: %w", err)
 		}
 		if fi.Deleted {
 			return entries, errFileNotFound
@@ -396,7 +402,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		partN, err := o.findFirstPart(fi)
 		switch err {
 		case nil:
-		case io.ErrUnexpectedEOF, errErasureReadQuorum, InsufficientReadQuorum{}:
+		case io.ErrUnexpectedEOF:
 			if retries == 10 {
 				err := o.checkMetacacheState(ctx, rpc)
 				if err != nil {
@@ -448,23 +454,17 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				}
 				// Load first part metadata...
 				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{})
-				switch err {
-				case errFileNotFound, errErasureReadQuorum, InsufficientReadQuorum{}:
+				if err != nil {
 					time.Sleep(retryDelay)
 					retries++
 					continue
-				default:
-					time.Sleep(retryDelay)
-					retries++
-					continue
-				case nil:
-					loadedPart = partN
-					bi, err := getMetacacheBlockInfo(fi, partN)
-					logger.LogIf(ctx, err)
-					if err == nil {
-						if bi.pastPrefix(o.Prefix) {
-							return entries, io.EOF
-						}
+				}
+				loadedPart = partN
+				bi, err := getMetacacheBlockInfo(fi, partN)
+				logger.LogIf(ctx, err)
+				if err == nil {
+					if bi.pastPrefix(o.Prefix) {
+						return entries, io.EOF
 					}
 				}
 				if fi.Deleted {
@@ -473,15 +473,20 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}
 			buf.Reset()
 			err := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0, fi.Size, &buf, fi, metaArr, onlineDisks)
-			switch err {
-			case errFileNotFound, errErasureReadQuorum, InsufficientReadQuorum{}:
-				time.Sleep(retryDelay)
-				retries++
-				continue
-			default:
-				logger.LogIf(ctx, err)
-				return entries, err
-			case nil:
+			if err != nil {
+				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
+				case ObjectNotFound:
+					retries++
+					time.Sleep(retryDelay)
+					continue
+				case InsufficientReadQuorum:
+					retries++
+					time.Sleep(retryDelay)
+					continue
+				default:
+					logger.LogIf(ctx, err)
+					return entries, err
+				}
 			}
 			tmp, err := newMetacacheReader(&buf)
 			if err != nil {
@@ -524,10 +529,10 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	const debugPrint = false
 	if debugPrint {
-		console.Printf("listPath with options: %#v", o)
+		console.Printf("listPath with options: %#v\n", o)
 	}
 	// See if we have the listing stored.
-	if !o.Create {
+	if !o.Create && !o.singleObject {
 		entries, err := er.streamMetadataParts(ctx, o)
 		switch err {
 		case nil, io.EOF, context.Canceled, context.DeadlineExceeded:
@@ -647,13 +652,16 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 
 		// Write results to disk.
 		bw := newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
+			if o.singleObject {
+				// Don't save single object listings.
+				return nil
+			}
 			if debugPrint {
 				console.Println("listPath: saving block", b.n, "to", o.objectPath(b.n))
 			}
 			r, err := hash.NewReader(bytes.NewBuffer(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
 			logger.LogIf(ctx, err)
 			custom := b.headerKV()
-			custom[xhttp.AmzStorageClass] = storageclass.RRS
 			_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{UserDefined: custom})
 			if err != nil {
 				metaMu.Lock()

@@ -2705,23 +2705,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	_, replicateDel := checkReplicateDelete(ctx, getObjectInfo, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID})
-	if replicateDel {
-		if opts.VersionID != "" {
-			opts.VersionPurgeStatus = Pending
-		} else {
-			opts.DeleteMarkerReplicationStatus = string(replication.Pending)
-		}
-	}
-
-	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
-		// check if replica has permission to be deleted.
-		if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); apiErrCode != ErrNone {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-		opts.DeleteMarkerReplicationStatus = replication.Replica.String()
-	}
 
 	apiErr := ErrNone
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
@@ -2753,29 +2736,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		}
 		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
 	}
-
-	if replicateDel {
-		dmVersionID := ""
-		versionID := ""
-		if objInfo.DeleteMarker {
-			dmVersionID = objInfo.VersionID
-		} else {
-			versionID = objInfo.VersionID
-		}
-		globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
-			DeletedObject: DeletedObject{
-				ObjectName:                    object,
-				VersionID:                     versionID,
-				DeleteMarkerVersionID:         dmVersionID,
-				DeleteMarkerReplicationStatus: string(objInfo.ReplicationStatus),
-				DeleteMarkerMTime:             objInfo.ModTime,
-				DeleteMarker:                  objInfo.DeleteMarker,
-				VersionPurgeStatus:            objInfo.VersionPurgeStatus,
-			},
-			Bucket: bucket,
-		})
-	}
 	setPutObjHeaders(w, objInfo, true)
+
 	writeSuccessNoContent(w)
 }
 
