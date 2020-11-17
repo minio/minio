@@ -165,6 +165,23 @@ func validateTransitionDestination(ctx context.Context, bucket string, targetLab
 	return sameTarget, arn.Bucket, nil
 }
 
+// transitionSC returns storage class label for this bucket
+func transitionSC(ctx context.Context, bucket string) string {
+	cfg, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
+	if err != nil {
+		return ""
+	}
+	for _, rule := range cfg.Rules {
+		if rule.Status == Disabled {
+			continue
+		}
+		if rule.Transition.StorageClass != "" {
+			return rule.Transition.StorageClass
+		}
+	}
+	return ""
+}
+
 // return true if ARN representing transition storage class is present in a active rule
 // for the lifecycle configured on this bucket
 func transitionSCInUse(ctx context.Context, lfc *lifecycle.Lifecycle, bucket, arnStr string) bool {
