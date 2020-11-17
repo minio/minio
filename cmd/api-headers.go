@@ -200,6 +200,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 				fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, expiryTime.Format(http.TimeFormat), ruleID),
 			}
 		}
+		if objInfo.TransitionStatus == lifecycle.TransitionComplete {
+			w.Header()[xhttp.AmzStorageClass] = []string{objInfo.StorageClass}
+		}
 	}
 
 	return nil

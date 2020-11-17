@@ -424,8 +424,14 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 		// Make sure to return object info to provide extra information.
 		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
-
-	return fi.ToObjectInfo(bucket, object), nil
+	oi := fi.ToObjectInfo(bucket, object)
+	if oi.TransitionStatus == lifecycle.TransitionComplete {
+		// overlay storage class for transitioned objects with transition tier SC Label
+		if sc := transitionSC(ctx, bucket); sc != "" {
+			oi.StorageClass = sc
+		}
+	}
+	return oi, nil
 }
 
 func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
