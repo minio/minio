@@ -169,6 +169,9 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
+	if !target.Secure && port == "80" || target.Secure && port == "443" {
+		target.Endpoint = host
+	}
 	sameTarget, _ := isLocalHost(host, port, globalMinioPort)
 	if sameTarget && bucket == target.TargetBucket {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketRemoteIdenticalToSource), r.URL)
