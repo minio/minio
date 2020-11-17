@@ -796,7 +796,6 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		d := disks[i]
 		readers[i], err = newMetacacheReader(r)
 		if err != nil {
-			cancel()
 			return err
 		}
 		// Send request to each disk.
