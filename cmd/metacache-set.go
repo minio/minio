@@ -342,7 +342,6 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
-	const debugPrint = false
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	for {
 		select {
@@ -354,11 +353,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		// If many failures, check the cache state.
 		if retries > 10 {
 			err := o.checkMetacacheState(ctx, rpc)
-			if debugPrint {
-				logger.Info("waiting for first part (%s), err: %v", o.objectPath(0), err)
-			}
 			if err != nil {
-				return entries, err
+				return entries, fmt.Errorf("remote listing canceled: %w", err)
 			}
 			retries = 1
 		}
@@ -396,11 +392,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				time.Sleep(retryDelay)
 				continue
 			default:
-				if debugPrint {
-					console.Infoln("first getObjectFileInfo", o.objectPath(0), "returned err:", err)
-					console.Infof("err type: %T\n", err)
-				}
-				return entries, err
+				return entries, fmt.Errorf("reading first part metadata: %w", err)
 			}
 		}
 		if fi.Deleted {
@@ -413,11 +405,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		case io.ErrUnexpectedEOF:
 			if retries == 10 {
 				err := o.checkMetacacheState(ctx, rpc)
-				if debugPrint {
-					logger.Info("waiting for metadata, err: %v", err)
-				}
 				if err != nil {
-					return entries, err
+					return entries, fmt.Errorf("remote listing canceled: %w", err)
 				}
 				retries = -1
 			}
@@ -441,11 +430,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			if partN != loadedPart {
 				if retries > 10 {
 					err := o.checkMetacacheState(ctx, rpc)
-					if debugPrint {
-						logger.Info("waiting for part data (%v), err: %v", o.objectPath(partN), err)
-					}
 					if err != nil {
-						return entries, err
+						return entries, fmt.Errorf("waiting for next part %d: %w", partN, err)
 					}
 					retries = 1
 				}
@@ -532,6 +518,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				// We stopped within the listing, we are done for now...
 				return entries, nil
 			default:
+				logger.LogIf(ctx, err)
 				return entries, err
 			}
 		}
