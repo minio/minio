@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -343,6 +344,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -395,6 +397,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				return entries, fmt.Errorf("reading first part metadata: %w", err)
 			}
 		}
+
 		if fi.Deleted {
 			return entries, errFileNotFound
 		}
@@ -531,14 +534,24 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	if debugPrint {
 		console.Printf("listPath with options: %#v\n", o)
 	}
+
 	// See if we have the listing stored.
 	if !o.Create && !o.singleObject {
 		entries, err := er.streamMetadataParts(ctx, o)
-		switch err {
-		case nil, io.EOF, context.Canceled, context.DeadlineExceeded:
-			return entries, err
+		if IsErr(err, []error{
+			nil,
+			context.Canceled,
+			context.DeadlineExceeded,
+		}...) {
+			// Expected good errors we don't need to return error.
+			return entries, nil
 		}
-		logger.LogIf(ctx, err)
+
+		if !errors.Is(err, io.EOF) { // io.EOF is expected and should be returned but no need to log it.
+			// Log an return errors on unexpected errors.
+			logger.LogIf(ctx, err)
+		}
+
 		return entries, err
 	}
 
@@ -559,7 +572,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		if debugPrint {
 			console.Println("listPath returning:", entries.len(), "err:", err)
 		}
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			go func(err string) {
 				metaMu.Lock()
 				if meta.status != scanStateError {
