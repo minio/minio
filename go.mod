@@ -11,7 +11,7 @@ require (
 	github.com/Shopify/sarama v1.24.1
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
-	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
+	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v0.3.0
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/cheggaaa/pb v1.0.28
@@ -75,7 +75,6 @@ require (
 	github.com/tidwall/gjson v1.3.5
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
