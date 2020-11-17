@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -682,7 +683,8 @@ func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, pref
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-	merged, err := z.listPath(ctx, listPathOptions{
+
+	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
@@ -690,7 +692,19 @@ func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, pref
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
-	})
+	}
+
+	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
+	// It requests unique blocks with a specific prefix.
+	// We skip scanning the parent directory for
+	// more objects matching the prefix.
+	ri := logger.GetReqInfo(ctx)
+	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
+		opts.singleObject = true
+		opts.Transient = true
+	}
+
+	merged, err := z.listPath(ctx, opts)
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
