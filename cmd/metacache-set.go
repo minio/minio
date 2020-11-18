@@ -560,13 +560,15 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			console.Println("listPath returning:", entries.len(), "err:", err)
 		}
 		if err != nil && err != io.EOF {
-			metaMu.Lock()
-			if meta.status != scanStateError {
-				meta.error = err.Error()
-				meta.status = scanStateError
-			}
-			meta, _ = o.updateMetacacheListing(meta, rpc)
-			metaMu.Unlock()
+			go func(err string) {
+				metaMu.Lock()
+				if meta.status != scanStateError {
+					meta.error = err
+					meta.status = scanStateError
+				}
+				meta, _ = o.updateMetacacheListing(meta, rpc)
+				metaMu.Unlock()
+			}(err.Error())
 			cancel()
 		}
 	}()

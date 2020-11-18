@@ -22,6 +22,7 @@ import (
 	"io"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/minio/minio/cmd/logger"
 )
@@ -103,14 +104,18 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 			// Local
 			cache = localMetacacheMgr.findCache(ctx, o)
 		} else {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
 			c, err := rpc.GetMetacacheListing(ctx, o)
 			if err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				if errors.Is(err, context.Canceled) {
 					// Context is canceled, return at once.
 					// request canceled, no entries to return
 					return entries, io.EOF
 				}
-				logger.LogIf(ctx, err)
+				if !errors.Is(err, context.DeadlineExceeded) {
+					logger.LogIf(ctx, err)
+				}
 				o.Transient = true
 				cache = localMetacacheMgr.findCache(ctx, o)
 			} else {
@@ -176,11 +181,12 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 
 	if isAllNotFound(errs) {
 		// All sets returned not found.
-		// Update master cache with that information.
-		cache.status = scanStateSuccess
-		cache.fileNotFound = true
-		_, err := o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
-		logger.LogIf(ctx, err)
+		go func() {
+			// Update master cache with that information.
+			cache.status = scanStateSuccess
+			cache.fileNotFound = true
+			o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
+		}()
 		// cache returned not found, entries truncated.
 		return entries, io.EOF
 	}
