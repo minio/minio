@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
