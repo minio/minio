@@ -228,6 +228,10 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 			debugPrint("cache %s prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
 			continue
 		}
+		if cached.filter != "" && strings.HasPrefix(cached.filter, o.FilterPrefix) {
+			debugPrint("cache %s cannot be used because of filter %s", cached.id, cached.filter)
+			continue
+		}
 		// If the existing listing wasn't recursive root must match.
 		if !cached.recursive && o.BaseDir != cached.root {
 			debugPrint("cache %s  non rec prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)

@@ -99,6 +99,8 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 			rpc = nil
 			o.Transient = true
 		}
+		// Apply prefix filter if enabled.
+		o.SetFilter()
 		if rpc == nil || o.Transient {
 			// Local
 			cache = localMetacacheMgr.findCache(ctx, o)

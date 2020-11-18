@@ -47,6 +47,11 @@ type listPathOptions struct {
 	// Scan/return only content with prefix.
 	Prefix string
 
+	// FilterPrefix will return only results with this prefix when scanning.
+	// Should never contain a slash.
+	// Prefix should still be set.
+	FilterPrefix string
+
 	// Marker to resume listing.
 	// The response will be the first entry AFTER this object name.
 	Marker string
@@ -112,6 +117,7 @@ func (o listPathOptions) newMetacache() metacache {
 		startedCycle: o.CurrentCycle,
 		endedCycle:   0,
 		dataVersion:  metacacheStreamVersion,
+		filter:       o.FilterPrefix,
 	}
 }
 
@@ -277,6 +283,28 @@ func metacachePrefixForID(bucket, id string) string {
 // objectPath returns the object path of the cache.
 func (o *listPathOptions) objectPath(block int) string {
 	return pathJoin(metacachePrefixForID(o.Bucket, o.ID), "block-"+strconv.Itoa(block)+".s2")
+}
+
+func (o *listPathOptions) SetFilter() {
+	switch {
+	case metacacheSharePrefix:
+		return
+	case o.CurrentCycle != o.OldestCycle:
+		// We have a clean bloom filter
+		return
+	case o.Prefix == o.BaseDir:
+		// No additional prefix
+		return
+	}
+	// Remove basedir.
+	o.FilterPrefix = strings.TrimPrefix(o.Prefix, o.BaseDir)
+	// Remove leading and trailing slashes.
+	o.FilterPrefix = strings.Trim(o.FilterPrefix, slashSeparator)
+
+	if strings.Contains(o.FilterPrefix, slashSeparator) {
+		// Sanity check, should not happen.
+		o.FilterPrefix = ""
+	}
 }
 
 // filter will apply the options and return the number of objects requested by the limit.
@@ -602,7 +630,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		}
 		// Send request to each disk.
 		go func() {
-			err := d.WalkDir(ctx, WalkDirOptions{Bucket: o.Bucket, BaseDir: o.BaseDir, Recursive: o.Recursive || o.Separator != SlashSeparator}, w)
+			err := d.WalkDir(ctx, WalkDirOptions{
+				Bucket:       o.Bucket,
+				BaseDir:      o.BaseDir,
+				Recursive:    o.Recursive || o.Separator != SlashSeparator,
+				FilterPrefix: o.FilterPrefix}, w)
 			w.CloseWithError(err)
 			if err != io.EOF {
 				logger.LogIf(ctx, err)
