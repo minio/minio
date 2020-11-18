@@ -258,12 +258,12 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	volume := vars[storageRESTVolume]
 	dirPath := vars[storageRESTDirPath]
-	prefix := vars[storageRESTPrefixFilter]
 	recursive, err := strconv.ParseBool(vars[storageRESTRecursive])
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
+	prefix := r.URL.Query().Get(storageRESTPrefixFilter)
 	writer := streamHTTPResponse(w)
 	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
 		Bucket:       volume,

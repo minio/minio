@@ -1083,7 +1083,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerSets Endpoint
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(httpTraceHdrs(server.VerifyFileHandler)).
 				Queries(restQueries(storageRESTVolume, storageRESTFilePath)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWalkDir).HandlerFunc(httpTraceHdrs(server.WalkDirHandler)).
-				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTRecursive, storageRESTPrefixFilter)...)
+				Queries(restQueries(storageRESTVolume, storageRESTDirPath, storageRESTRecursive)...)
 		}
 	}
 }
