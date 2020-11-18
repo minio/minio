@@ -40,6 +40,12 @@ const (
 
 	// metacacheBlockSize is the number of file/directory entries to have in each block.
 	metacacheBlockSize = 5000
+
+	// metacacheSharePrefix controls whether prefixes on dirty paths are always shared.
+	// This will make `test/a` and `test/b` share listings if they are concurrent.
+	// Enabling this will make cache sharing more likely and cause less IO,
+	// but may cause additional latency to some calls.
+	metacacheSharePrefix = false
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -50,6 +56,7 @@ type metacache struct {
 	bucket       string     `msg:"b"`
 	root         string     `msg:"root"`
 	recursive    bool       `msg:"rec"`
+	filter       string     `msg:"flt"`
 	status       scanStatus `msg:"stat"`
 	fileNotFound bool       `msg:"fnf"`
 	error        string     `msg:"err"`
@@ -114,16 +121,16 @@ func (m *metacache) canBeReplacedBy(other *metacache) bool {
 	switch {
 	case !m.recursive && !other.recursive:
 		// If both not recursive root must match.
-		return m.root == other.root
+		return m.root == other.root && strings.HasPrefix(m.filter, other.filter)
 	case m.recursive && !other.recursive:
 		// A recursive can never be replaced by a non-recursive
 		return false
 	case !m.recursive && other.recursive:
 		// If other is recursive it must contain this root
-		return strings.HasPrefix(m.root, other.root)
+		return strings.HasPrefix(m.root, other.root) && other.filter == ""
 	case m.recursive && other.recursive:
 		// Similar if both are recursive
-		return strings.HasPrefix(m.root, other.root)
+		return strings.HasPrefix(m.root, other.root) && other.filter == ""
 	}
 	panic("should be unreachable")
 }
