@@ -568,8 +568,8 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				}
 				meta, _ = o.updateMetacacheListing(meta, rpc)
 				metaMu.Unlock()
-				cancel()
 			}(err.Error())
+			cancel()
 		}
 	}()
 
