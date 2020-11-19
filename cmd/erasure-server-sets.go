@@ -632,6 +632,7 @@ func (z *erasureServerSets) CopyObject(ctx context.Context, srcBucket, srcObject
 		UserDefined:          srcInfo.UserDefined,
 		Versioned:            dstOpts.Versioned,
 		VersionID:            dstOpts.VersionID,
+		MTime:                dstOpts.MTime,
 	}
 
 	return z.serverSets[zoneIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
