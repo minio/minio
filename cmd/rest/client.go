@@ -19,6 +19,7 @@ package rest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -118,7 +119,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			logger.Info("Marking %s temporary offline; caused by %v", c.url.String(), err)
+			logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -141,7 +142,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
-			logger.Info("Marking %s temporary offline; caused by PreconditionFailed.", c.url.String())
+			logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by PreconditionFailed with disk ID mismatch", c.url.String()))
 			c.MarkOffline()
 		}
 		defer xhttp.DrainBody(resp.Body)
@@ -149,7 +150,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-				logger.Info("Marking %s temporary offline; caused by %v", c.url.String(), err)
+				logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
 				c.MarkOffline()
 			}
 			return nil, err

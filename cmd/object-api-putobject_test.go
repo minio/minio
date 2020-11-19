@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path"
@@ -296,7 +297,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		int64(len("mnop")),
 		false,
 		"",
-		InsufficientWriteQuorum{},
+		errErasureWriteQuorum,
 	}
 
 	_, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), ObjectOptions{UserDefined: testCase.inputMeta})
@@ -305,7 +306,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 	}
 	// Failed as expected, but does it fail for the expected reason.
 	if actualErr != nil && !testCase.shouldPass {
-		if testCase.expectedError.Error() != actualErr.Error() {
+		if !errors.Is(actualErr, testCase.expectedError) {
 			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", len(testCases)+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
 		}
 	}

@@ -118,6 +118,7 @@ type HealResultItem struct {
 	Type         HealItemType `json:"type"`
 	Bucket       string       `json:"bucket"`
 	Object       string       `json:"object"`
+	VersionID    string       `json:"versionId"`
 	Detail       string       `json:"detail"`
 	ParityBlocks int          `json:"parityBlocks,omitempty"`
 	DataBlocks   int          `json:"dataBlocks,omitempty"`

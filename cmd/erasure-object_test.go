@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -257,7 +258,7 @@ func TestErasureDeleteObjectDiskNotFound(t *testing.T) {
 	z.serverSets[0].erasureDisksMu.Unlock()
 	_, err = obj.DeleteObject(ctx, bucket, object, ObjectOptions{})
 	// since majority of disks are not available, metaquorum is not achieved and hence errErasureWriteQuorum error
-	if err != toObjectErr(errErasureWriteQuorum, bucket, object) {
+	if !errors.Is(err, errErasureWriteQuorum) {
 		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
 	}
 }
@@ -381,7 +382,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		z.serverSets[0].erasureDisksMu.Unlock()
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), opts)
-		if err != toObjectErr(errErasureWriteQuorum, bucket, object) {
+		if !errors.Is(err, errErasureWriteQuorum) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errErasureWriteQuorum, bucket, object), err)
 		}
 	}
