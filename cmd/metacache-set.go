@@ -48,6 +48,11 @@ type listPathOptions struct {
 	// Scan/return only content with prefix.
 	Prefix string
 
+	// FilterPrefix will return only results with this prefix when scanning.
+	// Should never contain a slash.
+	// Prefix should still be set.
+	FilterPrefix string
+
 	// Marker to resume listing.
 	// The response will be the first entry AFTER this object name.
 	Marker string
@@ -113,6 +118,7 @@ func (o listPathOptions) newMetacache() metacache {
 		startedCycle: o.CurrentCycle,
 		endedCycle:   0,
 		dataVersion:  metacacheStreamVersion,
+		filter:       o.FilterPrefix,
 	}
 }
 
@@ -280,6 +286,28 @@ func (o *listPathOptions) objectPath(block int) string {
 	return pathJoin(metacachePrefixForID(o.Bucket, o.ID), "block-"+strconv.Itoa(block)+".s2")
 }
 
+func (o *listPathOptions) SetFilter() {
+	switch {
+	case metacacheSharePrefix:
+		return
+	case o.CurrentCycle != o.OldestCycle:
+		// We have a clean bloom filter
+		return
+	case o.Prefix == o.BaseDir:
+		// No additional prefix
+		return
+	}
+	// Remove basedir.
+	o.FilterPrefix = strings.TrimPrefix(o.Prefix, o.BaseDir)
+	// Remove leading and trailing slashes.
+	o.FilterPrefix = strings.Trim(o.FilterPrefix, slashSeparator)
+
+	if strings.Contains(o.FilterPrefix, slashSeparator) {
+		// Sanity check, should not happen.
+		o.FilterPrefix = ""
+	}
+}
+
 // filter will apply the options and return the number of objects requested by the limit.
 // Will return io.EOF if there are no more entries with the same filter.
 // The last entry can be used as a marker to resume the listing.
@@ -343,7 +371,6 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 
 func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	retries := 0
-	const debugPrint = false
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	for {
 		select {
@@ -355,11 +382,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		// If many failures, check the cache state.
 		if retries > 10 {
 			err := o.checkMetacacheState(ctx, rpc)
-			if debugPrint {
-				logger.Info("waiting for first part (%s), err: %v", o.objectPath(0), err)
-			}
 			if err != nil {
-				return entries, err
+				return entries, fmt.Errorf("remote listing canceled: %w", err)
 			}
 			retries = 1
 		}
@@ -397,11 +421,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				time.Sleep(retryDelay)
 				continue
 			default:
-				if debugPrint {
-					console.Infoln("first getObjectFileInfo", o.objectPath(0), "returned err:", err)
-					console.Infof("err type: %T\n", err)
-				}
-				return entries, err
+				return entries, fmt.Errorf("reading first part metadata: %w", err)
 			}
 		}
 		if fi.Deleted {
@@ -414,11 +434,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		case io.ErrUnexpectedEOF:
 			if retries == 10 {
 				err := o.checkMetacacheState(ctx, rpc)
-				if debugPrint {
-					logger.Info("waiting for metadata, err: %v", err)
-				}
 				if err != nil {
-					return entries, err
+					return entries, fmt.Errorf("remote listing canceled: %w", err)
 				}
 				retries = -1
 			}
@@ -442,11 +459,8 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			if partN != loadedPart {
 				if retries > 10 {
 					err := o.checkMetacacheState(ctx, rpc)
-					if debugPrint {
-						logger.Info("waiting for part data (%v), err: %v", o.objectPath(partN), err)
-					}
 					if err != nil {
-						return entries, err
+						return entries, fmt.Errorf("waiting for next part %d: %w", partN, err)
 					}
 					retries = 1
 				}
@@ -533,6 +547,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				// We stopped within the listing, we are done for now...
 				return entries, nil
 			default:
+				logger.LogIf(ctx, err)
 				return entries, err
 			}
 		}
@@ -574,13 +589,15 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			console.Println("listPath returning:", entries.len(), "err:", err)
 		}
 		if err != nil && err != io.EOF {
-			metaMu.Lock()
-			if meta.status != scanStateError {
-				meta.error = err.Error()
-				meta.status = scanStateError
-			}
-			meta, _ = o.updateMetacacheListing(meta, rpc)
-			metaMu.Unlock()
+			go func(err string) {
+				metaMu.Lock()
+				if meta.status != scanStateError {
+					meta.error = err
+					meta.status = scanStateError
+				}
+				meta, _ = o.updateMetacacheListing(meta, rpc)
+				metaMu.Unlock()
+			}(err.Error())
 			cancel()
 		}
 	}()
@@ -702,11 +719,12 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		}
 
 		err := listPathRaw(ctx, listPathRawOptions{
-			disks:     disks,
-			bucket:    o.Bucket,
-			path:      o.BaseDir,
-			recursive: o.Recursive,
-			minDisks:  askDisks - 1,
+			disks:        disks,
+			bucket:       o.Bucket,
+			path:         o.BaseDir,
+			recursive:    o.Recursive,
+			filterPrefix: o.FilterPrefix,
+			minDisks:     askDisks - 1,
 			agreed: func(entry metaCacheEntry) {
 				cacheCh <- entry
 				filterCh <- entry
@@ -752,6 +770,7 @@ type listPathRawOptions struct {
 	disks        []StorageAPI
 	bucket, path string
 	recursive    bool
+	filterPrefix string
 	// Minimum number of good disks to continue.
 	// An error will be returned if this many disks returned an error.
 	minDisks       int
@@ -800,7 +819,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		}
 		// Send request to each disk.
 		go func() {
-			err := d.WalkDir(ctx, WalkDirOptions{Bucket: opts.bucket, BaseDir: opts.path, Recursive: opts.recursive, ReportNotFound: opts.reportNotFound}, w)
+			err := d.WalkDir(ctx, WalkDirOptions{
+				Bucket:       opts.bucket,
+				BaseDir:      opts.path,
+				Recursive:    opts.recursive,
+				FilterPrefix: opts.filterPrefix}, w)
 			w.CloseWithError(err)
 			if err != io.EOF {
 				logger.LogIf(ctx, err)

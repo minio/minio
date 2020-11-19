@@ -45,6 +45,10 @@ type WalkDirOptions struct {
 
 	// ReportNotFound will return errFileNotFound if all disks reports the BaseDir cannot be found.
 	ReportNotFound bool
+
+	// FilterPrefix will only return results with given prefix within folder.
+	// Should never contain a slash.
+	FilterPrefix string
 }
 
 // WalkDir will traverse a directory and return all entries found.
@@ -88,6 +92,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	}
 	defer close(out)
 
+	prefix := opts.FilterPrefix
 	var scanDir func(path string) error
 	scanDir = func(current string) error {
 		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
@@ -104,6 +109,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
+			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
+				continue
+			}
 			if strings.HasSuffix(entry, slashSeparator) {
 				if strings.HasSuffix(entry, globalDirSuffixWithSlash) {
 					// Add without extension so it is sorted correctly.
@@ -154,6 +162,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		// Process in sort order.
 		sort.Strings(entries)
 		dirStack := make([]string, 0, 5)
+		prefix = "" // Remove prefix after first level.
 		for _, entry := range entries {
 			if entry == "" {
 				continue
@@ -238,6 +247,7 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 	values.Set(storageRESTVolume, opts.Bucket)
 	values.Set(storageRESTDirPath, opts.BaseDir)
 	values.Set(storageRESTRecursive, strconv.FormatBool(opts.Recursive))
+	values.Set(storageRESTPrefixFilter, opts.FilterPrefix)
 	respBody, err := client.call(ctx, storageRESTMethodWalkDir, values, nil, -1)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -259,6 +269,12 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
+	prefix := r.URL.Query().Get(storageRESTPrefixFilter)
 	writer := streamHTTPResponse(w)
-	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{Bucket: volume, BaseDir: dirPath, Recursive: recursive}, writer))
+	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
+		Bucket:       volume,
+		BaseDir:      dirPath,
+		Recursive:    recursive,
+		FilterPrefix: prefix,
+	}, writer))
 }
