@@ -47,7 +47,9 @@ func setEventStreamHeaders(w http.ResponseWriter) {
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
-	w.Header().Set(xhttp.ServerInfo, "MinIO/"+ReleaseTag)
+	// Set the "Server" http header.
+	w.Header().Set(xhttp.ServerInfo, "MinIO")
+
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
 	if region := globalServerRegion; region != "" {
