@@ -154,6 +154,9 @@ func validateTransitionDestination(ctx context.Context, bucket string, targetLab
 	if err != nil {
 		return false, "", BucketRemoteTargetNotFound{Bucket: bucket}
 	}
+	if arn.Type != madmin.ILMService {
+		return false, "", BucketRemoteArnTypeInvalid{}
+	}
 	clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, tgt.Arn)
 	if clnt == nil {
 		return false, "", BucketRemoteTargetNotFound{Bucket: bucket}
