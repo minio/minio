@@ -205,6 +205,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				if !isDirObj {
 					dirStack = append(dirStack, meta.name+slashSeparator)
 				}
+			case isSysErrNotDir(err):
+				// skip
 			default:
 				logger.LogIf(ctx, err)
 			}
