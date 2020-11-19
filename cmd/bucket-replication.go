@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/event"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // gets replication config associated to a given bucket name.
@@ -53,6 +54,13 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
 func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config) (bool, error) {
+	arn, err := madmin.ParseARN(rCfg.RoleArn)
+	if err != nil {
+		return false, BucketRemoteArnInvalid{}
+	}
+	if arn.Type != madmin.ReplicationService {
+		return false, BucketRemoteArnTypeInvalid{}
+	}
 	clnt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rCfg.RoleArn)
 	if clnt == nil {
 		return false, BucketRemoteTargetNotFound{Bucket: bucket}

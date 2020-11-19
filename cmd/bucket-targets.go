@@ -125,8 +125,10 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 
 	tgts := sys.targetsMap[bucket]
 	newtgts := make([]madmin.BucketTarget, len(tgts))
+	labels := make(map[string]struct{})
 	found := false
 	for idx, t := range tgts {
+		labels[t.Label] = struct{}{}
 		if t.Type == tgt.Type {
 			if t.Arn == tgt.Arn {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
@@ -139,6 +141,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			continue
 		}
 		newtgts[idx] = t
+	}
+	if _, ok := labels[tgt.Label]; ok {
+		return BucketRemoteLabelInUse{Bucket: tgt.TargetBucket}
 	}
 	if !found {
 		newtgts = append(newtgts, *tgt)
