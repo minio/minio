@@ -35,6 +35,8 @@ type DeletedObject struct {
 	DeleteMarkerMTime time.Time `xml:"DeleteMarkerMTime,omitempty"`
 	// Status of versioned delete (of object or DeleteMarker)
 	VersionPurgeStatus VersionPurgeStatusType `xml:"VersionPurgeStatus,omitempty"`
+	// PurgeTransitioned is nonempty if object is in transition tier
+	PurgeTransitioned string `xml:"PurgeTransitioned,omitempty"`
 }
 
 // ObjectToDelete carries key name for the object to delete.
@@ -47,6 +49,8 @@ type ObjectToDelete struct {
 	VersionPurgeStatus VersionPurgeStatusType `xml:"VersionPurgeStatus"`
 	// Version ID of delete marker
 	DeleteMarkerVersionID string `xml:"DeleteMarkerVersionId"`
+	// PurgeTransitioned is nonempty if object is in transition tier
+	PurgeTransitioned string `xml:"PurgeTransitioned"`
 }
 
 // createBucketConfiguration container for bucket configuration request from client.

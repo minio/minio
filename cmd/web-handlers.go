@@ -47,6 +47,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -737,14 +738,24 @@ next:
 					return toJSONError(ctx, errAccessDenied)
 				}
 			}
-			_, replicateDel := checkReplicateDelete(ctx, getObjectInfoFn, args.BucketName, ObjectToDelete{ObjectName: objectName})
-			if replicateDel {
-				opts.DeleteMarkerReplicationStatus = string(replication.Pending)
-				opts.DeleteMarker = true
+			var (
+				replicateDel, hasLifecycleConfig bool
+				goi                              ObjectInfo
+				gerr                             error
+			)
+			if _, err := globalBucketMetadataSys.GetLifecycleConfig(args.BucketName); err == nil {
+				hasLifecycleConfig = true
+			}
+			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
+				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
+				if _, replicateDel = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName}, goi, gerr); replicateDel {
+					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
+					opts.DeleteMarker = true
+				}
 			}
 
 			oi, err := deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
-			if replicateDel {
+			if replicateDel && err == nil {
 				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
 					DeletedObject: DeletedObject{
 						ObjectName:                    objectName,
@@ -756,6 +767,19 @@ next:
 					},
 					Bucket: args.BucketName,
 				})
+			}
+			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
+				action := lifecycle.DeleteAction
+				if goi.VersionID != "" {
+					action = lifecycle.DeleteVersionAction
+				}
+				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
+					Name:         objectName,
+					UserTags:     goi.UserTags,
+					VersionID:    goi.VersionID,
+					DeleteMarker: goi.DeleteMarker,
+					IsLatest:     goi.IsLatest,
+				}, action, true)
 			}
 
 			logger.LogIf(ctx, err)
@@ -829,7 +853,7 @@ next:
 					}
 				}
 				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
-				_, replicateDel := checkReplicateDelete(ctx, getObjectInfoFn, args.BucketName, ObjectToDelete{ObjectName: obj.Name})
+				_, replicateDel := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name}, obj, nil)
 				objToDel := ObjectToDelete{ObjectName: obj.Name}
 				if replicateDel {
 					objToDel.DeleteMarkerReplicationStatus = string(replication.Pending)

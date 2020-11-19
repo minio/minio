@@ -905,6 +905,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
 					ObjectName:                    versions[objIndex].Name,
 					VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
+					PurgeTransitioned:             objects[objIndex].PurgeTransitioned,
 				}
 			} else {
 				dobjects[objIndex] = DeletedObject{
@@ -912,6 +913,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					VersionID:                     versions[objIndex].VersionID,
 					VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
 					DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
+					PurgeTransitioned:             objects[objIndex].PurgeTransitioned,
 				}
 			}
 		}

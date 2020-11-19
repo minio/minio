@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/madmin"
+	sha256 "github.com/minio/sha256-simd"
 )
 
 // BucketTargetSys represents bucket targets subsystem
@@ -371,11 +373,21 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	if !madmin.ServiceType(target.Type).IsValid() {
 		return ""
 	}
+	return generateARN(target)
+}
+
+// generate ARN that is unique to this target type
+func generateARN(t *madmin.BucketTarget) string {
+	hash := sha256.New()
+	hash.Write([]byte(t.Type))
+	hash.Write([]byte(t.Region))
+	hash.Write([]byte(t.TargetBucket))
+	hashSum := hex.EncodeToString(hash.Sum(nil))
 	arn := madmin.ARN{
-		Type:   target.Type,
-		ID:     mustGetUUID(),
-		Region: target.Region,
-		Bucket: target.TargetBucket,
+		Type:   t.Type,
+		ID:     hashSum,
+		Region: t.Region,
+		Bucket: t.TargetBucket,
 	}
 	return arn.String()
 }

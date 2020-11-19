@@ -144,15 +144,14 @@ func hasReplicationRules(ctx context.Context, bucket string, objects []ObjectToD
 }
 
 // returns whether object version is a deletemarker and if object qualifies for replication
-func checkReplicateDelete(ctx context.Context, getObjectInfoFn GetObjectInfoFn, bucket string, dobj ObjectToDelete) (dm, replicate bool) {
+func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, gerr error) (dm, replicate bool) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
 		return false, false
 	}
-	oi, err := getObjectInfoFn(ctx, bucket, dobj.ObjectName, ObjectOptions{VersionID: dobj.VersionID})
 	// when incoming delete is removal of a delete marker( a.k.a versioned delete),
 	// GetObjectInfo returns extra information even though it returns errFileNotFound
-	if err != nil {
+	if gerr != nil {
 		validReplStatus := false
 		switch oi.ReplicationStatus {
 		case replication.Pending, replication.Complete, replication.Failed:
@@ -469,6 +468,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
 		_, err = tgt.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts)
 	}
+
 	r.Close()
 	if err != nil {
 		replicationStatus = replication.Failed
