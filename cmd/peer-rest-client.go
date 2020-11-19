@@ -882,7 +882,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		defer cancel()
 		respBody, err := healthClient.Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
-		return !xnet.IsNetworkOrHostDown(err, false)
+		return !isNetworkError(err)
 	}
 
 	return &peerRESTClient{host: peer, restClient: restClient}

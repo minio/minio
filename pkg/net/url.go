@@ -147,12 +147,15 @@ func IsNetworkOrHostDown(err error, expectTimeouts bool) bool {
 	if err == nil {
 		return false
 	}
+
 	if errors.Is(err, context.Canceled) {
 		return false
 	}
+
 	if expectTimeouts && errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
+
 	// We need to figure if the error either a timeout
 	// or a non-temporary error.
 	e, ok := err.(net.Error)
