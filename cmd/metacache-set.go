@@ -820,10 +820,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		// Send request to each disk.
 		go func() {
 			err := d.WalkDir(ctx, WalkDirOptions{
-				Bucket:       opts.bucket,
-				BaseDir:      opts.path,
-				Recursive:    opts.recursive,
-				FilterPrefix: opts.filterPrefix}, w)
+				Bucket:         opts.bucket,
+				BaseDir:        opts.path,
+				Recursive:      opts.recursive,
+				ReportNotFound: opts.reportNotFound,
+				FilterPrefix:   opts.filterPrefix}, w)
 			w.CloseWithError(err)
 			if err != io.EOF {
 				logger.LogIf(ctx, err)

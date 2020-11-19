@@ -513,11 +513,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			dangling := true
 			ctx, cancel := context.WithCancel(ctx)
 			err := listPathRaw(ctx, listPathRawOptions{
-				disks:     f.disks,
-				bucket:    bucket,
-				path:      prefix,
-				recursive: true,
-				minDisks:  len(f.disks), // We want full consistency.
+				disks:          f.disks,
+				bucket:         bucket,
+				path:           prefix,
+				recursive:      true,
+				reportNotFound: true,
+				minDisks:       len(f.disks), // We want full consistency.
 				// Weird, maybe transient error.
 				agreed: func(entry metaCacheEntry) {
 					if f.dataUsageCrawlDebug {
