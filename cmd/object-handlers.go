@@ -902,7 +902,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
@@ -1164,7 +1163,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	srcInfo.UserDefined = objectlock.FilterObjectLockMetadata(srcInfo.UserDefined, true, true)
 	retPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectRetentionAction)
 	holdPerms := isPutActionAllowed(ctx, getRequestAuthType(r), dstBucket, dstObject, r, iampolicy.PutObjectLegalHoldAction)
-
 	getObjectInfo := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
 		getObjectInfo = api.CacheAPI().GetObjectInfo
@@ -1183,10 +1181,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	if rs := r.Header.Get(xhttp.AmzBucketReplicationStatus); rs != "" {
+		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = rs
+	}
 	if mustReplicate(ctx, r, dstBucket, dstObject, srcInfo.UserDefined, srcInfo.ReplicationStatus.String()) {
 		srcInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
-
 	// Store the preserved compression metadata.
 	for k, v := range compressMetadata {
 		srcInfo.UserDefined[k] = v
@@ -1261,7 +1261,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
-
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
@@ -2853,16 +2852,24 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
+	replicate := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
+	if replicate {
+		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
+	}
+
 	objInfo.metadataOnly = true
 	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: opts.VersionID,
 	}, ObjectOptions{
 		VersionID: opts.VersionID,
+		MTime:     opts.MTime,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	if replicate {
+		globalReplicationState.queueReplicaTask(objInfo)
+	}
 	writeSuccessResponseHeadersOnly(w)
 	// Notify object  event.
 	sendEvent(eventArgs{
@@ -3018,14 +3025,22 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 	if objInfo.UserTags != "" {
 		objInfo.UserDefined[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}
+	replicate := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, "")
+	if replicate {
+		objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
+	}
 	objInfo.metadataOnly = true // Perform only metadata updates.
 	if _, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: opts.VersionID,
 	}, ObjectOptions{
 		VersionID: opts.VersionID,
+		MTime:     opts.MTime,
 	}); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
+	}
+	if replicate {
+		globalReplicationState.queueReplicaTask(objInfo)
 	}
 
 	writeSuccessNoContent(w)
@@ -3192,11 +3207,23 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	replicate := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: tags.String()}, "")
+	if replicate {
+		opts.UserDefined = make(map[string]string)
+		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
+	}
+
 	// Put object tags
 	err = objAPI.PutObjectTags(ctx, bucket, object, tags.String(), opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	if replicate {
+		if objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
+			globalReplicationState.queueReplicaTask(objInfo)
+		}
 	}
 
 	if opts.VersionID != "" {
@@ -3240,7 +3267,16 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
+	oi, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+	replicate := mustReplicate(ctx, r, bucket, object, map[string]string{xhttp.AmzObjectTagging: oi.UserTags}, "")
+	if replicate {
+		opts.UserDefined = make(map[string]string)
+		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
+	}
 	// Delete object tags
 	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -3249,6 +3285,10 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 
 	if opts.VersionID != "" {
 		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
+	}
+
+	if replicate {
+		globalReplicationState.queueReplicaTask(oi)
 	}
 
 	writeSuccessNoContent(w)

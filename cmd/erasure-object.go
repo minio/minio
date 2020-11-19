@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -93,9 +94,12 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		}
 		modTime = UTCNow()
 	}
-
 	fi.VersionID = versionID // set any new versionID we might have created
 	fi.ModTime = modTime     // set modTime for the new versionID
+	if !dstOpts.MTime.IsZero() {
+		modTime = dstOpts.MTime
+		fi.ModTime = dstOpts.MTime
+	}
 
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 
@@ -1088,6 +1092,9 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		// Don't update for empty tags
 		if tags != "" {
 			fi.Metadata[xhttp.AmzObjectTagging] = tags
+		}
+		for k, v := range opts.UserDefined {
+			fi.Metadata[k] = v
 		}
 		metaArr[i].Metadata = fi.Metadata
 	}

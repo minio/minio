@@ -14,7 +14,7 @@ require (
 	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v0.3.0
 	github.com/cespare/xxhash/v2 v2.1.1
-	github.com/cheggaaa/pb v1.0.28
+	github.com/cheggaaa/pb v1.0.29
 	github.com/colinmarc/hdfs/v2 v2.1.1
 	github.com/coredns/coredns v1.4.0
 	github.com/dchest/siphash v1.2.1
@@ -24,7 +24,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/elazarl/go-bindata-assetfs v1.0.0
-	github.com/fatih/color v1.7.0
+	github.com/fatih/color v1.9.0
 	github.com/fatih/structs v1.1.0
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
@@ -44,11 +44,11 @@ require (
 	github.com/lib/pq v1.8.0
 	github.com/mattn/go-colorable v0.1.4
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
-	github.com/mattn/go-isatty v0.0.8
+	github.com/mattn/go-isatty v0.0.11
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/minio-go/v7 v7.0.6-0.20201013215222-14baba9e61ac
+	github.com/minio/minio-go/v7 v7.0.6-0.20201118225257-f6869a5e2a6a
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.1.5

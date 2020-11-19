@@ -21,10 +21,12 @@ import (
 	"math"
 	"net/http"
 
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/replication"
 )
 
 // BucketObjectLockSys - map of bucket and retention configuration.
@@ -245,13 +247,13 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, bucket, 
 // For objects in "Compliance" mode, retention date cannot be shortened, and mode cannot be altered.
 // For objects with legal hold header set, the s3:PutObjectLegalHold permission is expected to be set
 // Both legal hold and retention can be applied independently on an object
-func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, retentionPermErr, legalHoldPermErr APIErrorCode) (objectlock.RetMode, objectlock.RetentionDate, objectlock.ObjectLegalHold, APIErrorCode) {
+func checkPutObjectLockAllowed(ctx context.Context, rq *http.Request, bucket, object string, getObjectInfoFn GetObjectInfoFn, retentionPermErr, legalHoldPermErr APIErrorCode) (objectlock.RetMode, objectlock.RetentionDate, objectlock.ObjectLegalHold, APIErrorCode) {
 	var mode objectlock.RetMode
 	var retainDate objectlock.RetentionDate
 	var legalHold objectlock.ObjectLegalHold
 
-	retentionRequested := objectlock.IsObjectLockRetentionRequested(r.Header)
-	legalHoldRequested := objectlock.IsObjectLockLegalHoldRequested(r.Header)
+	retentionRequested := objectlock.IsObjectLockRetentionRequested(rq.Header)
+	legalHoldRequested := objectlock.IsObjectLockLegalHoldRequested(rq.Header)
 
 	retentionCfg, err := globalBucketObjectLockSys.Get(bucket)
 	if err != nil {
@@ -267,25 +269,24 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		return mode, retainDate, legalHold, ErrNone
 	}
 
-	opts, err := getOpts(ctx, r, bucket, object)
+	opts, err := getOpts(ctx, rq, bucket, object)
 	if err != nil {
 		return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 	}
 
-	if opts.VersionID != "" {
+	replica := rq.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String()
+
+	if opts.VersionID != "" && !replica {
 		if objInfo, err := getObjectInfoFn(ctx, bucket, object, opts); err == nil {
 			r := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
-
 			t, err := objectlock.UTCNowNTP()
 			if err != nil {
 				logger.LogIf(ctx, err)
 				return mode, retainDate, legalHold, ErrObjectLocked
 			}
-
 			if r.Mode == objectlock.RetCompliance && r.RetainUntilDate.After(t) {
 				return mode, retainDate, legalHold, ErrObjectLocked
 			}
-
 			mode = r.Mode
 			retainDate = r.RetainUntilDate
 			legalHold = objectlock.GetObjectLegalHoldMeta(objInfo.UserDefined)
@@ -298,17 +299,17 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 
 	if legalHoldRequested {
 		var lerr error
-		if legalHold, lerr = objectlock.ParseObjectLockLegalHoldHeaders(r.Header); lerr != nil {
+		if legalHold, lerr = objectlock.ParseObjectLockLegalHoldHeaders(rq.Header); lerr != nil {
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
 	}
 
 	if retentionRequested {
-		legalHold, err := objectlock.ParseObjectLockLegalHoldHeaders(r.Header)
+		legalHold, err := objectlock.ParseObjectLockLegalHoldHeaders(rq.Header)
 		if err != nil {
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
-		rMode, rDate, err := objectlock.ParseObjectLockRetentionHeaders(r.Header)
+		rMode, rDate, err := objectlock.ParseObjectLockRetentionHeaders(rq.Header)
 		if err != nil {
 			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
 		}
@@ -317,7 +318,9 @@ func checkPutObjectLockAllowed(ctx context.Context, r *http.Request, bucket, obj
 		}
 		return rMode, rDate, legalHold, ErrNone
 	}
-
+	if replica { // replica inherits retention metadata only from source
+		return "", objectlock.RetentionDate{}, legalHold, ErrNone
+	}
 	if !retentionRequested && retentionCfg.Validity > 0 {
 		if retentionPermErr != ErrNone {
 			return mode, retainDate, legalHold, retentionPermErr
