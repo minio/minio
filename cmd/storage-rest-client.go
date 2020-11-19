@@ -626,7 +626,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 			respBody, err := healthClient.Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 			xhttp.DrainBody(respBody)
 			cancel()
-			return !xnet.IsNetworkOrHostDown(err, false) && toStorageErr(err) != errDiskNotFound
+			return toStorageErr(err) != errDiskNotFound
 		}
 	}
 
