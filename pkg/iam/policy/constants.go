@@ -75,7 +75,7 @@ var AdminDiagnostics = Policy{
 			Actions: NewActionSet(ProfilingAdminAction,
 				TraceAdminAction, ConsoleLogAdminAction,
 				ServerInfoAdminAction, TopLocksAdminAction,
-				OBDInfoAdminAction, BandwidthMonitorAction),
+				HealthInfoAdminAction, BandwidthMonitorAction),
 			Resources: NewResourceSet(NewResource("*", "")),
 		},
 	},

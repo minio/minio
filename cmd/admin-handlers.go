@@ -1235,26 +1235,26 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseJSON(w, resp)
 }
 
-// OBDInfoHandler - GET /minio/admin/v3/obdinfo
+// HealthInfoHandler - GET /minio/admin/v3/healthinfo
 // ----------
-// Get server on-board diagnostics
-func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "OBDInfo")
+// Get server health info
+func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HealthInfo")
 
-	defer logger.AuditLog(w, r, "OBDInfo", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "HealthInfo", mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.OBDInfoAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
 	}
 
 	query := r.URL.Query()
-	obdInfo := madmin.OBDInfo{}
-	obdInfoCh := make(chan madmin.OBDInfo)
+	healthInfo := madmin.HealthInfo{}
+	healthInfoCh := make(chan madmin.HealthInfo)
 
 	enc := json.NewEncoder(w)
-	partialWrite := func(oinfo madmin.OBDInfo) {
-		obdInfoCh <- oinfo
+	partialWrite := func(oinfo madmin.HealthInfo) {
+		healthInfoCh <- oinfo
 	}
 
 	setCommonHeaders(w)
@@ -1267,8 +1267,8 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 		errorResponse := getAPIErrorResponse(ctx, toAdminAPIErr(ctx, err), r.URL.String(),
 			w.Header().Get(xhttp.AmzRequestID), globalDeploymentID)
 		encodedErrorResponse := encodeResponse(errorResponse)
-		obdInfo.Error = string(encodedErrorResponse)
-		logger.LogIf(ctx, enc.Encode(obdInfo))
+		healthInfo.Error = string(encodedErrorResponse)
+		logger.LogIf(ctx, enc.Encode(healthInfo))
 	}
 
 	deadline := 3600 * time.Second
@@ -1284,7 +1284,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
-	nsLock := objectAPI.NewNSLock(minioMetaBucket, "obd-in-progress")
+	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
 	if err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
 		errResp(err)
 		return
@@ -1292,99 +1292,99 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 	defer nsLock.Unlock()
 
 	go func() {
-		defer close(obdInfoCh)
+		defer close(healthInfoCh)
 
 		if cpu := query.Get("syscpu"); cpu == "true" {
-			cpuInfo := getLocalCPUOBDInfo(deadlinedCtx, r)
+			cpuInfo := getLocalCPUInfo(deadlinedCtx, r)
 
-			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, cpuInfo)
-			obdInfo.Sys.CPUInfo = append(obdInfo.Sys.CPUInfo, globalNotificationSys.CPUOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
+			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, cpuInfo)
+			healthInfo.Sys.CPUInfo = append(healthInfo.Sys.CPUInfo, globalNotificationSys.CPUInfo(deadlinedCtx)...)
+			partialWrite(healthInfo)
 		}
 
 		if diskHw := query.Get("sysdiskhw"); diskHw == "true" {
-			diskHwInfo := getLocalDiskHwOBD(deadlinedCtx, r)
+			diskHwInfo := getLocalDiskHwInfo(deadlinedCtx, r)
 
-			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, diskHwInfo)
-			obdInfo.Sys.DiskHwInfo = append(obdInfo.Sys.DiskHwInfo, globalNotificationSys.DiskHwOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
+			healthInfo.Sys.DiskHwInfo = append(healthInfo.Sys.DiskHwInfo, diskHwInfo)
+			healthInfo.Sys.DiskHwInfo = append(healthInfo.Sys.DiskHwInfo, globalNotificationSys.DiskHwInfo(deadlinedCtx)...)
+			partialWrite(healthInfo)
 		}
 
 		if osInfo := query.Get("sysosinfo"); osInfo == "true" {
-			osInfo := getLocalOsInfoOBD(deadlinedCtx, r)
+			osInfo := getLocalOsInfo(deadlinedCtx, r)
 
-			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, osInfo)
-			obdInfo.Sys.OsInfo = append(obdInfo.Sys.OsInfo, globalNotificationSys.OsOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
+			healthInfo.Sys.OsInfo = append(healthInfo.Sys.OsInfo, osInfo)
+			healthInfo.Sys.OsInfo = append(healthInfo.Sys.OsInfo, globalNotificationSys.OsInfo(deadlinedCtx)...)
+			partialWrite(healthInfo)
 		}
 
 		if mem := query.Get("sysmem"); mem == "true" {
-			memInfo := getLocalMemOBD(deadlinedCtx, r)
+			memInfo := getLocalMemInfo(deadlinedCtx, r)
 
-			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, memInfo)
-			obdInfo.Sys.MemInfo = append(obdInfo.Sys.MemInfo, globalNotificationSys.MemOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
+			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, memInfo)
+			healthInfo.Sys.MemInfo = append(healthInfo.Sys.MemInfo, globalNotificationSys.MemInfo(deadlinedCtx)...)
+			partialWrite(healthInfo)
 		}
 
 		if proc := query.Get("sysprocess"); proc == "true" {
-			procInfo := getLocalProcOBD(deadlinedCtx, r)
+			procInfo := getLocalProcInfo(deadlinedCtx, r)
 
-			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, procInfo)
-			obdInfo.Sys.ProcInfo = append(obdInfo.Sys.ProcInfo, globalNotificationSys.ProcOBDInfo(deadlinedCtx)...)
-			partialWrite(obdInfo)
+			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, procInfo)
+			healthInfo.Sys.ProcInfo = append(healthInfo.Sys.ProcInfo, globalNotificationSys.ProcInfo(deadlinedCtx)...)
+			partialWrite(healthInfo)
 		}
 
 		if config := query.Get("minioconfig"); config == "true" {
 			cfg, err := readServerConfig(ctx, objectAPI)
 			logger.LogIf(ctx, err)
-			obdInfo.Minio.Config = cfg
-			partialWrite(obdInfo)
+			healthInfo.Minio.Config = cfg
+			partialWrite(healthInfo)
 		}
 
 		if drive := query.Get("perfdrive"); drive == "true" {
-			// Get drive obd details from local server's drive(s)
-			driveOBDSerial := getLocalDrivesOBD(deadlinedCtx, false, globalEndpoints, r)
-			driveOBDParallel := getLocalDrivesOBD(deadlinedCtx, true, globalEndpoints, r)
+			// Get drive perf details from local server's drive(s)
+			drivePerfSerial := getLocalDrives(deadlinedCtx, false, globalEndpoints, r)
+			drivePerfParallel := getLocalDrives(deadlinedCtx, true, globalEndpoints, r)
 
 			errStr := ""
-			if driveOBDSerial.Error != "" {
-				errStr = "serial: " + driveOBDSerial.Error
+			if drivePerfSerial.Error != "" {
+				errStr = "serial: " + drivePerfSerial.Error
 			}
-			if driveOBDParallel.Error != "" {
-				errStr = errStr + " parallel: " + driveOBDParallel.Error
+			if drivePerfParallel.Error != "" {
+				errStr = errStr + " parallel: " + drivePerfParallel.Error
 			}
 
-			driveOBD := madmin.ServerDrivesOBDInfo{
-				Addr:     driveOBDSerial.Addr,
-				Serial:   driveOBDSerial.Serial,
-				Parallel: driveOBDParallel.Parallel,
+			driveInfo := madmin.ServerDrivesInfo{
+				Addr:     drivePerfSerial.Addr,
+				Serial:   drivePerfSerial.Serial,
+				Parallel: drivePerfParallel.Parallel,
 				Error:    errStr,
 			}
-			obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, driveOBD)
-			partialWrite(obdInfo)
+			healthInfo.Perf.DriveInfo = append(healthInfo.Perf.DriveInfo, driveInfo)
+			partialWrite(healthInfo)
 
-			// Notify all other MinIO peers to report drive obd numbers
-			driveOBDs := globalNotificationSys.DriveOBDInfoChan(deadlinedCtx)
-			for obd := range driveOBDs {
-				obdInfo.Perf.DriveInfo = append(obdInfo.Perf.DriveInfo, obd)
-				partialWrite(obdInfo)
+			// Notify all other MinIO peers to report drive perf numbers
+			driveInfos := globalNotificationSys.DrivePerfInfoChan(deadlinedCtx)
+			for obd := range driveInfos {
+				healthInfo.Perf.DriveInfo = append(healthInfo.Perf.DriveInfo, obd)
+				partialWrite(healthInfo)
 			}
-			partialWrite(obdInfo)
+			partialWrite(healthInfo)
 		}
 
 		if net := query.Get("perfnet"); net == "true" && globalIsDistErasure {
-			obdInfo.Perf.Net = append(obdInfo.Perf.Net, globalNotificationSys.NetOBDInfo(deadlinedCtx))
-			partialWrite(obdInfo)
+			healthInfo.Perf.Net = append(healthInfo.Perf.Net, globalNotificationSys.NetInfo(deadlinedCtx))
+			partialWrite(healthInfo)
 
-			netOBDs := globalNotificationSys.DispatchNetOBDChan(deadlinedCtx)
-			for obd := range netOBDs {
-				obdInfo.Perf.Net = append(obdInfo.Perf.Net, obd)
-				partialWrite(obdInfo)
+			netInfos := globalNotificationSys.DispatchNetPerfChan(deadlinedCtx)
+			for netInfo := range netInfos {
+				healthInfo.Perf.Net = append(healthInfo.Perf.Net, netInfo)
+				partialWrite(healthInfo)
 			}
-			partialWrite(obdInfo)
+			partialWrite(healthInfo)
 
-			obdInfo.Perf.NetParallel = globalNotificationSys.NetOBDParallelInfo(deadlinedCtx)
-			partialWrite(obdInfo)
+			healthInfo.Perf.NetParallel = globalNotificationSys.NetPerfParallelInfo(deadlinedCtx)
+			partialWrite(healthInfo)
 		}
 
 	}()
@@ -1394,7 +1394,7 @@ func (a adminAPIHandlers) OBDInfoHandler(w http.ResponseWriter, r *http.Request)
 
 	for {
 		select {
-		case oinfo, ok := <-obdInfoCh:
+		case oinfo, ok := <-healthInfoCh:
 			if !ok {
 				return
 			}

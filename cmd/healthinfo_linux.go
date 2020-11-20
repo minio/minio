@@ -31,7 +31,7 @@ import (
 	"github.com/shirou/gopsutil/host"
 )
 
-func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
+func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
@@ -39,7 +39,7 @@ func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDI
 
 	info, err := host.InfoWithContext(ctx)
 	if err != nil {
-		return madmin.ServerOsOBDInfo{
+		return madmin.ServerOsInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -47,7 +47,7 @@ func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDI
 
 	sensors, err := host.SensorsTemperaturesWithContext(ctx)
 	if err != nil {
-		return madmin.ServerOsOBDInfo{
+		return madmin.ServerOsInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -56,7 +56,7 @@ func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDI
 	// ignore user err, as it cannot be obtained reliably inside containers
 	users, _ := host.UsersWithContext(ctx)
 
-	return madmin.ServerOsOBDInfo{
+	return madmin.ServerOsInfo{
 		Addr:    addr,
 		Info:    info,
 		Sensors: sensors,
@@ -64,7 +64,7 @@ func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDI
 	}
 }
 
-func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHwOBDInfo {
+func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskHwInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
@@ -72,7 +72,7 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 
 	parts, err := diskhw.PartitionsWithContext(ctx, true)
 	if err != nil {
-		return madmin.ServerDiskHwOBDInfo{
+		return madmin.ServerDiskHwInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -101,7 +101,7 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 				if syscall.EACCES == err {
 					smartInfo.Error = err.Error()
 				} else {
-					return madmin.ServerDiskHwOBDInfo{
+					return madmin.ServerDiskHwInfo{
 						Addr:  addr,
 						Error: err.Error(),
 					}
@@ -120,7 +120,7 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 
 	ioCounters, err := diskhw.IOCountersWithContext(ctx, drives...)
 	if err != nil {
-		return madmin.ServerDiskHwOBDInfo{
+		return madmin.ServerDiskHwInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -129,7 +129,7 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 	for _, path := range paths {
 		usage, err := diskhw.UsageWithContext(ctx, path)
 		if err != nil {
-			return madmin.ServerDiskHwOBDInfo{
+			return madmin.ServerDiskHwInfo{
 				Addr:  addr,
 				Error: err.Error(),
 			}
@@ -137,7 +137,7 @@ func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHw
 		usages = append(usages, usage)
 	}
 
-	return madmin.ServerDiskHwOBDInfo{
+	return madmin.ServerDiskHwInfo{
 		Addr:       addr,
 		Usage:      usages,
 		Partitions: partitions,

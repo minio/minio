@@ -27,25 +27,25 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 )
 
-func getLocalDiskHwOBD(ctx context.Context, r *http.Request) madmin.ServerDiskHwOBDInfo {
+func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskHwInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
-	return madmin.ServerDiskHwOBDInfo{
+	return madmin.ServerDiskHwInfo{
 		Addr:  addr,
 		Error: "unsupported platform: " + runtime.GOOS,
 	}
 }
 
-func getLocalOsInfoOBD(ctx context.Context, r *http.Request) madmin.ServerOsOBDInfo {
+func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
-	return madmin.ServerOsOBDInfo{
+	return madmin.ServerOsInfo{
 		Addr:  addr,
 		Error: "unsupported platform: " + runtime.GOOS,
 	}

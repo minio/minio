@@ -47,8 +47,8 @@ const (
 	KMSKeyStatusAdminAction = "admin:KMSKeyStatus"
 	// ServerInfoAdminAction - allow listing server info
 	ServerInfoAdminAction = "admin:ServerInfo"
-	// OBDInfoAdminAction - allow obtaining cluster on-board diagnostics
-	OBDInfoAdminAction = "admin:OBDInfo"
+	// HealthInfoAdminAction - allow obtaining cluster health information
+	HealthInfoAdminAction = "admin:OBDInfo"
 	// BandwidthMonitorAction - allow monitoring bandwidth usage
 	BandwidthMonitorAction = "admin:BandwidthMonitor"
 
@@ -132,7 +132,7 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	ConsoleLogAdminAction:          {},
 	KMSKeyStatusAdminAction:        {},
 	ServerInfoAdminAction:          {},
-	OBDInfoAdminAction:             {},
+	HealthInfoAdminAction:          {},
 	BandwidthMonitorAction:         {},
 	ServerUpdateAdminAction:        {},
 	ServiceRestartAdminAction:      {},
@@ -175,7 +175,7 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	StorageInfoAdminAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ServerInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	DataUsageInfoAdminAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
-	OBDInfoAdminAction:             condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	HealthInfoAdminAction:          condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	BandwidthMonitorAction:         condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	TopLocksAdminAction:            condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	ProfilingAdminAction:           condition.NewKeySet(condition.AllSupportedAdminKeys...),
