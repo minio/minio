@@ -379,7 +379,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
+		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), true)
 		if err != nil {
 			return 0, errSkipFile
 		}
@@ -423,7 +423,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 				}
 				totalSize += size
 			}
-			item.healReplication(ctx, objAPI, actionMeta{oi: oi})
+			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
 		}
 		return totalSize, nil
 	})
@@ -897,7 +897,7 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 					continue
 				}
 
-				fiv, err = getFileInfoVersions(xlMetaBuf, volume, walkResult.entry)
+				fiv, err = getFileInfoVersions(xlMetaBuf, volume, walkResult.entry, false)
 				if err != nil {
 					continue
 				}

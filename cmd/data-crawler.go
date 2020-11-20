@@ -792,8 +792,43 @@ func sleepDuration(d time.Duration, x float64) {
 
 // healReplication will heal a scanned item that has failed replication.
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
+	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
+		//heal delete marker replication failure or versioned delete replication failure
+		if meta.oi.ReplicationStatus == replication.Pending ||
+			meta.oi.ReplicationStatus == replication.Failed ||
+			meta.oi.VersionPurgeStatus == Failed || meta.oi.VersionPurgeStatus == Pending {
+			i.healReplicationDeletes(ctx, o, meta)
+			return
+		}
+	}
 	if meta.oi.ReplicationStatus == replication.Pending ||
 		meta.oi.ReplicationStatus == replication.Failed {
 		globalReplicationState.queueReplicaTask(meta.oi)
+	}
+}
+
+// healReplicationDeletes will heal a scanned deleted item that failed to replicate deletes.
+func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, meta actionMeta) {
+	// handle soft delete and permanent delete failures here.
+	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
+		versionID := ""
+		dmVersionID := ""
+		if meta.oi.VersionPurgeStatus.Empty() {
+			dmVersionID = meta.oi.VersionID
+		} else {
+			versionID = meta.oi.VersionID
+		}
+		globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+			DeletedObject: DeletedObject{
+				ObjectName:                    meta.oi.Name,
+				DeleteMarkerVersionID:         dmVersionID,
+				VersionID:                     versionID,
+				DeleteMarkerReplicationStatus: string(meta.oi.ReplicationStatus),
+				DeleteMarkerMTime:             meta.oi.ModTime,
+				DeleteMarker:                  meta.oi.DeleteMarker,
+				VersionPurgeStatus:            meta.oi.VersionPurgeStatus,
+			},
+			Bucket: meta.oi.Bucket,
+		})
 	}
 }
