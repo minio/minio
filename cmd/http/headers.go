@@ -144,6 +144,11 @@ const (
 
 	// Header indicates if the delete marker version needs to be purged.
 	MinIOSourceDeleteMarkerDelete = "x-minio-source-deletemarker-delete"
+
+	// Header indicates permanent delete replication status.
+	MinIODeleteReplicationStatus = "X-Minio-Replication-Delete-Status"
+	// Header indicates delete-marker replication status.
+	MinIODeleteMarkerReplicationStatus = "X-Minio-Replication-DeleteMarker-Status"
 )
 
 // Common http query params S3 API

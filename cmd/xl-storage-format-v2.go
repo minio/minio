@@ -598,7 +598,7 @@ func (z xlMetaV2) TotalSize() int64 {
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (z xlMetaV2) ListVersions(volume, path string, showPendingDeletes bool) (versions []FileInfo, modTime time.Time, err error) {
+func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
 	var latestModTime time.Time
 	var latestVersionID string
 	for _, version := range z.Versions {
@@ -611,9 +611,6 @@ func (z xlMetaV2) ListVersions(volume, path string, showPendingDeletes bool) (ve
 			fi, err = version.ObjectV2.ToFileInfo(volume, path)
 		case DeleteType:
 			fi, err = version.DeleteMarker.ToFileInfo(volume, path)
-			if !fi.VersionPurgeStatus.Empty() && !showPendingDeletes {
-				continue
-			}
 		case LegacyType:
 			fi, err = version.ObjectV1.ToFileInfo(volume, path)
 		}

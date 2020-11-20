@@ -415,23 +415,26 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 	if err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
-
+	objInfo = fi.ToObjectInfo(bucket, object)
+	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
+		// overlay storage class for transitioned objects with transition tier SC Label
+		if sc := transitionSC(ctx, bucket); sc != "" {
+			objInfo.StorageClass = sc
+		}
+	}
+	if !fi.VersionPurgeStatus.Empty() {
+		// Make sure to return object info to provide extra information.
+		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
+	}
 	if fi.Deleted {
-		objInfo = fi.ToObjectInfo(bucket, object)
 		if opts.VersionID == "" || opts.DeleteMarker {
 			return objInfo, toObjectErr(errFileNotFound, bucket, object)
 		}
 		// Make sure to return object info to provide extra information.
 		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
-	oi := fi.ToObjectInfo(bucket, object)
-	if oi.TransitionStatus == lifecycle.TransitionComplete {
-		// overlay storage class for transitioned objects with transition tier SC Label
-		if sc := transitionSC(ctx, bucket); sc != "" {
-			oi.StorageClass = sc
-		}
-	}
-	return oi, nil
+
+	return objInfo, nil
 }
 
 func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
