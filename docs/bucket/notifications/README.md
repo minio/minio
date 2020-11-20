@@ -1,18 +1,36 @@
 # MinIO Bucket Notification Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-Events occurring on objects in a bucket can be monitored using bucket event notifications. 
+Events occurring on objects in a bucket can be monitored using bucket event notifications.
 
-NOTE: gateway mode does not support bucket notifications (except NAS gateway).
+> NOTE: Gateway mode does not support bucket notifications (except NAS gateway).
 
-Event types supported by MinIO server are
+Various event types supported by MinIO server are
 
-| Supported Event Types   |                                            |                                       |
-| :---------------------- | ------------------------------------------ | ------------------------------------- |
-| `s3:ObjectCreated:Put`                      | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head`               |                                  |
-| `s3:ObjectCreated:Post`                     | `s3:ObjectRemoved:Delete`                  | `s3:ObjectRemoved:DeleteMarkerCreated` |                                  |
-| `s3:ObjectCreated:Copy`                     | `s3:ObjectAccessed:Get`                    | `s3:ObjectAccessed:GetLegalHold`       |                                  |
-| `s3:ObjectCreated:PutRetention`             | `s3:ObjectAccessed:Get`                    | `s3:ObjectCreated:PutLegalHold`        | `s3:ObjectAccessed:GetRetention` |
-| `s3:Replication:OperationFailedReplication` | `s3:BucketCreated`                         | `s3:BucketRemoved`                     |                                  |
+| Supported Object Event Types     |                                            |                                        |
+| :----------------------          | ------------------------------------------ | -------------------------------------  |
+| `s3:ObjectCreated:Put`           | `s3:ObjectCreated:CompleteMultipartUpload` | `s3:ObjectAccessed:Head`               |
+| `s3:ObjectCreated:Post`          | `s3:ObjectRemoved:Delete`                  | `s3:ObjectRemoved:DeleteMarkerCreated` |
+| `s3:ObjectCreated:Copy`          | `s3:ObjectAccessed:Get`                    |                                        |
+| `s3:ObjectCreated:PutRetention`  | `s3:ObjectCreated:PutLegalHold`            |                                        |
+| `s3:ObjectAccessed:GetRetention` | `s3:ObjectAccessed:GetLegalHold`           |                                        |
+
+| Supported Replication Event Types                  |
+| :------------                                      |
+| `s3:Replication:OperationFailedReplication`        |
+| `s3:Replication:OperationCompletedReplication`     |
+| `s3:Replication:OperationNotTracked`               |
+| `s3:Replication:OperationMissedThreshold`          |
+| `s3:Replication:OperationReplicatedAfterThreshold` |
+
+| Supported ILM Transition Event Types |
+| :-----                               |
+| `s3:ObjectRestore:Post`              |
+| `s3:ObjectRestore:Completed`         |
+
+| Supported Global Event Types (Only supported through ListenNotification API) |
+| :-----                                                                       |
+| `s3:BucketCreated`                                                           |
+| `s3:BucketRemoved`                                                           |
 
 
 Use client tools like `mc` to set and listen for event notifications using the [`event` sub-command](https://docs.min.io/docs/minio-client-complete-guide#events). MinIO SDK's [`BucketNotification` APIs](https://docs.min.io/docs/golang-client-api-reference#SetBucketNotification) can also be used. The notification message MinIO sends to publish an event is a JSON message with the following [structure](https://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html).
