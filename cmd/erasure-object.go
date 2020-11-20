@@ -75,15 +75,14 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
-
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
-
 	if fi.Deleted {
 		if srcOpts.VersionID == "" {
 			return oi, toObjectErr(errFileNotFound, srcBucket, srcObject)
 		}
 		return fi.ToObjectInfo(srcBucket, srcObject), toObjectErr(errMethodNotAllowed, srcBucket, srcObject)
 	}
+
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
 
 	versionID := srcInfo.VersionID
 	if srcInfo.versionOnly {
@@ -105,9 +104,11 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	// Update `xl.meta` content on each disks.
 	for index := range metaArr {
-		metaArr[index].ModTime = modTime
-		metaArr[index].VersionID = versionID
-		metaArr[index].Metadata = srcInfo.UserDefined
+		if metaArr[index].IsValid() {
+			metaArr[index].ModTime = modTime
+			metaArr[index].VersionID = versionID
+			metaArr[index].Metadata = srcInfo.UserDefined
+		}
 	}
 
 	tempObj := mustGetUUID()
@@ -291,6 +292,9 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 		prefer := make([]bool, len(onlineDisks))
 		for index, disk := range onlineDisks {
 			if disk == OfflineDisk {
+				continue
+			}
+			if !metaArr[index].IsValid() {
 				continue
 			}
 			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partNumber)
@@ -1071,9 +1075,6 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
-
-	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
-
 	if fi.Deleted {
 		if opts.VersionID == "" {
 			return toObjectErr(errFileNotFound, bucket, object)
@@ -1081,22 +1082,20 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 		return toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
-	for i, fi := range metaArr {
-		if errs[i] != nil {
-			// Avoid disks where loading metadata fail
-			continue
+	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
+	for i, metaFi := range metaArr {
+		if metaFi.IsValid() {
+			// clean fi.Meta of tag key, before updating the new tags
+			delete(metaFi.Metadata, xhttp.AmzObjectTagging)
+			// Don't update for empty tags
+			if tags != "" {
+				metaFi.Metadata[xhttp.AmzObjectTagging] = tags
+			}
+			for k, v := range opts.UserDefined {
+				metaFi.Metadata[k] = v
+			}
+			metaArr[i].Metadata = metaFi.Metadata
 		}
-
-		// clean fi.Meta of tag key, before updating the new tags
-		delete(fi.Metadata, xhttp.AmzObjectTagging)
-		// Don't update for empty tags
-		if tags != "" {
-			fi.Metadata[xhttp.AmzObjectTagging] = tags
-		}
-		for k, v := range opts.UserDefined {
-			fi.Metadata[k] = v
-		}
-		metaArr[i].Metadata = fi.Metadata
 	}
 
 	tempObj := mustGetUUID()
