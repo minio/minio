@@ -20,24 +20,45 @@ require 'securerandom'
 require 'net/http'
 require 'multipart_body'
 
+# For aws-sdk ruby tests to run the following environment variables are
+# mandatory.
+# SERVER_ENDPOINT
+# ACCESS_KEY
+# SECRET_KEY
+# SERVER_REGION
+# ENABLE_HTTPS
+# MINT_DATA_DIR
+
 class AwsSdkRubyTest
   # Set variables necessary to create an s3 client instance.
   # Get them from the environment variables
 
   # Region information, eg. "us-east-1"
-  region = ENV['SERVER_REGION'] ||= 'SERVER_REGION is not set'
+  @@region = ENV['SERVER_REGION'] ||= 'SERVER_REGION is not set'
   # Minio server, eg. "play.minio.io:9000"
-  endpoint = ENV['SERVER_ENDPOINT'] ||= 'SERVER_ENDPOINT is not set'
-  access_key_id = ENV['ACCESS_KEY'] ||= 'ACCESS_KEY is not set'
-  secret_access_key = ENV['SECRET_KEY'] ||= 'SECRET_KEY is not set'
+  @@access_key_id = ENV['ACCESS_KEY'] ||= 'ACCESS_KEY is not set'
+  @@secret_access_key = ENV['SECRET_KEY'] ||= 'SECRET_KEY is not set'
   enable_https = ENV['ENABLE_HTTPS']
-  endpoint = enable_https == '1' ? 'https://' + endpoint : 'http://' + endpoint
-  # Create s3 client instances, "s3Resource" and "s3Client"
-  @@s3 = Aws::S3::Resource.new(region: region,
-                               endpoint: endpoint,
-                               access_key_id: access_key_id,
-                               secret_access_key: secret_access_key,
-                               force_path_style: true)
+  end_point = ENV['SERVER_ENDPOINT'] ||= 'SERVER_ENDPOINT is not set'
+  @@endpoint = enable_https == '1' ? 'https://' + end_point : 'http://' + end_point
+
+  attr_reader :region, :endpoint, :access_key_id
+
+  # Create s3 resource instance,"s3"
+  @@s3 = Aws::S3::Resource.new(
+    region: @@region,
+    endpoint: @@endpoint,
+    access_key_id: @@access_key_id,
+    secret_access_key: @@secret_access_key,
+    force_path_style: true
+  )
+  # Instance of Sigv4 signer
+  @@sigv4_signer = Aws::Sigv4::Signer.new(
+    service: @@endpoint,
+    region: @@region,
+    access_key_id: @@access_key_id,
+    secret_access_key: @@secret_access_key
+  )
 
   def initialize_log_output(meth, alert = nil)
     # Initialize and return log content in log_output hash table
@@ -94,7 +115,7 @@ class AwsSdkRubyTest
   #
   def makeBucket(bucket_name)
     # Creates a bucket, "bucket_name"
-    # on S3 client , "s3".
+    # on S3 client , "@@s3".
     # Returns bucket_name if already exists
     @@s3.bucket(bucket_name).exists? ? @@s3.bucket(bucket_name) : @@s3.create_bucket(bucket: bucket_name)
   rescue => e
@@ -110,7 +131,7 @@ class AwsSdkRubyTest
   end
 
   def removeBucket(bucket_name)
-    # Deletes/removes bucket, "bucket_name" on S3 client, "s3"
+    # Deletes/removes bucket, "bucket_name" on S3 client, "@@s3"
     @@s3.bucket(bucket_name).delete
   rescue => e
     raise e
@@ -126,7 +147,7 @@ class AwsSdkRubyTest
 
   def putObject(bucket_name, file)
     # Creates "file" (full path) in bucket, "bucket_name",
-    # on S3 client, "s3"
+    # on S3 client, "@@s3"
     file_name = File.basename(file)
     @@s3.bucket(bucket_name).object(file_name).upload_file(file)
   rescue => e
@@ -144,7 +165,7 @@ class AwsSdkRubyTest
 
   def getObject(bucket_name, file, destination)
     # Gets/Downloads file, "file",
-    # from bucket, "bucket_name", of S3 client, "s3"
+    # from bucket, "bucket_name", of S3 client, "@@s3"
     file_name = File.basename(file)
     dest = File.join(destination, file_name)
     @@s3.bucket(bucket_name).object(file_name).get(response_target: dest)
@@ -165,7 +186,7 @@ class AwsSdkRubyTest
   def copyObject(source_bucket_name, target_bucket_name, source_file_name, target_file_name = '')
     # Copies file, "file_name", from source bucket,
     # "source_bucket_name", to target bucket,
-    # "target_bucket_name", on S3 client, "s3"
+    # "target_bucket_name", on S3 client, "@@s3"
     target_file_name = source_file_name if target_file_name.empty?
     source = @@s3.bucket(source_bucket_name)
     target = @@s3.bucket(target_bucket_name)
@@ -189,7 +210,7 @@ class AwsSdkRubyTest
 
   def removeObject(bucket_name, file)
     # Deletes file in bucket,
-    # "bucket_name", on S3 client, "s3".
+    # "bucket_name", on S3 client, "@@s3".
     # If file, "file_name" does not exist,
     # it quietly returns without any error message
     @@s3.bucket(bucket_name).object(file).delete
@@ -208,7 +229,7 @@ class AwsSdkRubyTest
 
   def removeObjects(bucket_name)
     # Deletes all files in bucket, "bucket_name"
-    # on S3 client, "s3"
+    # on S3 client, "@@s3"
     file_name = ''
     @@s3.bucket(bucket_name).objects.each do |obj|
       file_name = obj.key
@@ -227,7 +248,7 @@ class AwsSdkRubyTest
   end
 
   def listBuckets
-    # Returns an array of bucket names on S3 client, "s3"
+    # Returns an array of bucket names on S3 client, "@@s3"
     bucket_name_list = []
     @@s3.buckets.each do |b|
       bucket_name_list.push(b.name)
@@ -247,7 +268,7 @@ class AwsSdkRubyTest
 
   def listObjects(bucket_name)
     # Returns an array of object/file names
-    # in bucket, "bucket_name", on S3 client, "s3"
+    # in bucket, "bucket_name", on S3 client, "@@s3"
     object_list = []
     @@s3.bucket(bucket_name).objects.each do |obj|
       object_list.push(obj.key)
@@ -296,11 +317,37 @@ class AwsSdkRubyTest
     raise e
   end
 
+  def presigned_sigv4_get(bucket_name, file_name, ep)
+    # Returns presigned url to download the bucket_name/file_name
+    @@sigv4_signer.presign_url(
+      http_method: 'GET',
+      url: File.join(ep, bucket_name, file_name),
+      headers: {
+        'X-Amz-Meta-Custom' => 'metadata',
+        'x-amz-user-agent' => 'aws-sdk-js-v3-@aws-sdk/client-s3/1.0.0-gamma.8 Mozilla/5.0 (X11%3B Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.198 Safari/537.36',
+        'x-id' => 'GetObject'
+      },
+      expires_in: 600
+    )
+  rescue => e
+    raise e
+  end
+
   def presignedGet(bucket_name, file_name)
     # Returns download/get url
     obj = @@s3.bucket(bucket_name).object(file_name)
     return obj.presigned_url(:get, expires_in: 600)
   rescue => e
+    raise e
+  end
+
+  def presigned_sigv4_get_wrapper(bucket_name, file_name, log_output, ep)
+    presigned_sigv4_get(bucket_name, file_name, ep)
+  rescue => e
+    log_output[:function] = 'presigned_sigv4_get(bucket_name, file_name, ep)'
+    log_output[:args] = { 'bucket_name': bucket_name,
+                          'file_name': file_name
+                        }
     raise e
   end
 
@@ -353,7 +400,7 @@ class AwsSdkRubyTest
   # To be addressed. S3 API 'get_bucket_policy' does not work!
   # def getBucketPolicy(bucket_name)
   #   # Returns bucket policy
-  #   return @@s3.bucket(bucket_name).get_bucket_policy
+  #   return s3.bucket(bucket_name).get_bucket_policy
   # rescue => e
   #   raise e
   # end
@@ -402,7 +449,7 @@ class AwsSdkRubyTest
     # Tests makeBucket api command.
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = get_random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('makeBucket')
     # Prepare arg/value hash table and set it in log_output
@@ -653,13 +700,17 @@ class AwsSdkRubyTest
     print_log(log_output, start_time)
   end
 
-  def presignedGetObjectTest(data_dir, file_name)
+  def presignedGetObjectTest(data_dir, file_name, ep = '')
     # Tests presignedGetObject api command
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = get_random_bucket_name
     # Initialize hash table, 'log_output'
-    log_output = initialize_log_output('presignedGet')
+    log_output = if ep.to_s.strip.empty?
+                   initialize_log_output('presignedGet')
+                 else
+                   initialize_log_output('presigned_sigv4_get')
+                 end
     # Prepare arg/value hash table and set it in log_output
     arg_value_hash = {}
     log_output[:args].each { |x| arg_value_hash[:"#{x}"] = eval x.to_s }
@@ -672,7 +723,12 @@ class AwsSdkRubyTest
       # Get check sum value without the file name
       cksum_orig = `cksum #{file}`.split[0..1]
       putObjectWrapper(bucket_name, file, log_output)
-      get_url = presignedGetWrapper(bucket_name, file_name, log_output)
+      get_url = if ep.to_s.strip.empty?
+                  presignedGetWrapper(bucket_name, file_name, log_output)
+                else
+                  presigned_sigv4_get_wrapper(bucket_name, file_name, log_output, ep)
+                end
+      puts("\nget_url = #{get_url}")
       # Download the file using the URL
       # generated by presignedGet api command
       `wget -O /tmp/#{file_name}, '#{get_url}' > /dev/null 2>&1`
@@ -830,26 +886,24 @@ end
 
 # Create test Class instance and call the tests
 aws = AwsSdkRubyTest.new
+endpoint = AwsSdkRubyTest.class_variable_get(:@@endpoint)
 file_name1 = 'datafile-1-kB'
-file_new_name = 'datafile-1-kB-copy'
-file_name_list = ['datafile-1-kB', 'datafile-1-b', 'datafile-6-MB']
 # Add data_dir in front of each file name in file_name_list
 # The location where the bucket and file
 # objects are going to be created.
 data_dir = ENV['MINT_DATA_DIR'] ||= 'MINT_DATA_DIR is not set'
-file_list = file_name_list.map { |f| File.join(data_dir, f) }
-destination = '/tmp'
 
-aws.listBucketsTest()
-aws.listObjectsTest(file_list)
-aws.makeBucketTest()
-aws.bucketExistsNegativeTest()
-aws.removeBucketTest()
-aws.putObjectTest(File.join(data_dir, file_name1))
-aws.removeObjectTest(File.join(data_dir, file_name1))
-aws.getObjectTest(File.join(data_dir, file_name1), destination)
-aws.copyObjectTest(data_dir, file_name1)
-aws.copyObjectTest(data_dir, file_name1, file_new_name)
-aws.presignedGetObjectTest(data_dir, file_name1)
-aws.presignedPutObjectTest(data_dir, file_name1)
-aws.presignedPostObjectTest(data_dir, file_name1, 60, 3*1024*1024)
+# aws.listBucketsTest()
+# aws.listObjectsTest(file_list)
+# aws.makeBucketTest()
+# aws.bucketExistsNegativeTest()
+# aws.removeBucketTest()
+# aws.putObjectTest(File.join(data_dir, file_name1))
+# aws.removeObjectTest(File.join(data_dir, file_name1))
+# aws.getObjectTest(File.join(data_dir, file_name1), destination)
+# aws.copyObjectTest(data_dir, file_name1)
+# aws.copyObjectTest(data_dir, file_name1, file_new_name)
+aws.presignedGetObjectTest(data_dir, file_name1) # without Sigv4
+aws.presignedGetObjectTest(data_dir, file_name1, endpoint) # with Sigv4
+# aws.presignedPutObjectTest(data_dir, file_name1)
+# aws.presignedPostObjectTest(data_dir, file_name1, 60, 3*1024*1024)
