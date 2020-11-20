@@ -48,6 +48,12 @@ func (z *metacache) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "recursive")
 				return
 			}
+		case "flt":
+			z.filter, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "filter")
+				return
+			}
 		case "stat":
 			{
 				var zb0002 uint8
@@ -125,9 +131,9 @@ func (z *metacache) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 14
+	// map header, size 15
 	// write "id"
-	err = en.Append(0x8e, 0xa2, 0x69, 0x64)
+	err = en.Append(0x8f, 0xa2, 0x69, 0x64)
 	if err != nil {
 		return
 	}
@@ -164,6 +170,16 @@ func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteBool(z.recursive)
 	if err != nil {
 		err = msgp.WrapError(err, "recursive")
+		return
+	}
+	// write "flt"
+	err = en.Append(0xa3, 0x66, 0x6c, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.filter)
+	if err != nil {
+		err = msgp.WrapError(err, "filter")
 		return
 	}
 	// write "stat"
@@ -272,9 +288,9 @@ func (z *metacache) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *metacache) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 14
+	// map header, size 15
 	// string "id"
-	o = append(o, 0x8e, 0xa2, 0x69, 0x64)
+	o = append(o, 0x8f, 0xa2, 0x69, 0x64)
 	o = msgp.AppendString(o, z.id)
 	// string "b"
 	o = append(o, 0xa1, 0x62)
@@ -285,6 +301,9 @@ func (z *metacache) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "rec"
 	o = append(o, 0xa3, 0x72, 0x65, 0x63)
 	o = msgp.AppendBool(o, z.recursive)
+	// string "flt"
+	o = append(o, 0xa3, 0x66, 0x6c, 0x74)
+	o = msgp.AppendString(o, z.filter)
 	// string "stat"
 	o = append(o, 0xa4, 0x73, 0x74, 0x61, 0x74)
 	o = msgp.AppendUint8(o, uint8(z.status))
@@ -358,6 +377,12 @@ func (z *metacache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.recursive, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "recursive")
+				return
+			}
+		case "flt":
+			z.filter, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "filter")
 				return
 			}
 		case "stat":
@@ -438,7 +463,7 @@ func (z *metacache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *metacache) Msgsize() (s int) {
-	s = 1 + 3 + msgp.StringPrefixSize + len(z.id) + 2 + msgp.StringPrefixSize + len(z.bucket) + 5 + msgp.StringPrefixSize + len(z.root) + 4 + msgp.BoolSize + 5 + msgp.Uint8Size + 4 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.error) + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 2 + msgp.TimeSize + 3 + msgp.TimeSize + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 2 + msgp.Uint8Size
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.id) + 2 + msgp.StringPrefixSize + len(z.bucket) + 5 + msgp.StringPrefixSize + len(z.root) + 4 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.filter) + 5 + msgp.Uint8Size + 4 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.error) + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 2 + msgp.TimeSize + 3 + msgp.TimeSize + 4 + msgp.Uint64Size + 5 + msgp.Uint64Size + 2 + msgp.Uint8Size
 	return
 }
 

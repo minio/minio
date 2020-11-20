@@ -479,7 +479,6 @@ var supportedDummyObjectAPIs = map[string][]string{
 
 // List of not implemented object APIs
 var notImplementedObjectResourceNames = map[string]struct{}{
-	"restore": {},
 	"torrent": {},
 }
 

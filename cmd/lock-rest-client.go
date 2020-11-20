@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"net/url"
 	"strconv"
@@ -153,15 +152,15 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 	restClient.ExpectTimeouts = true
+	// Use a separate client to avoid recursive calls.
+	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	healthClient.ExpectTimeouts = true
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken).Call(ctx, lockRESTMethodHealth, nil, nil, -1)
+		defer cancel()
+		respBody, err := healthClient.Call(ctx, lockRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
-		cancel()
-		var ne *rest.NetworkError
-		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
+		return !isNetworkError(err)
 	}
 
 	return &lockRESTClient{endpoint: endpoint, restClient: restClient}

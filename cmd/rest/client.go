@@ -117,7 +117,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+		if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
 			logger.Info("Marking %s temporary offline; caused by %v", c.url.String(), err)
 			c.MarkOffline()
 		}
@@ -140,7 +140,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// with the caller to take the client offline purpose
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
-		if resp.StatusCode == http.StatusPreconditionFailed {
+		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
 			logger.Info("Marking %s temporary offline; caused by PreconditionFailed.", c.url.String())
 			c.MarkOffline()
 		}
@@ -148,7 +148,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
 				logger.Info("Marking %s temporary offline; caused by %v", c.url.String(), err)
 				c.MarkOffline()
 			}

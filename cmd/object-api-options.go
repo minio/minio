@@ -123,6 +123,23 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	}
 	opts.PartNumber = partNumber
 	opts.VersionID = vid
+	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
+	if delMarker != "" {
+		switch delMarker {
+		case "true":
+			opts.DeleteMarker = true
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false"))
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    err,
+			}
+		}
+
+	}
 	return opts, nil
 }
 
@@ -134,6 +151,53 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 	}
 	opts.Versioned = versioned
 	opts.VersionSuspended = globalBucketVersioningSys.Suspended(bucket)
+	delMarker := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarker))
+	if delMarker != "" {
+		switch delMarker {
+		case "true":
+			opts.DeleteMarker = true
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarker, fmt.Errorf("DeleteMarker should be true or false"))
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    err,
+			}
+		}
+	}
+
+	purgeVersion := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceDeleteMarkerDelete))
+	if purgeVersion != "" {
+		switch purgeVersion {
+		case "true":
+			opts.VersionPurgeStatus = Complete
+		case "false":
+		default:
+			err = fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceDeleteMarkerDelete, fmt.Errorf("DeleteMarkerPurge should be true or false"))
+			logger.LogIf(ctx, err)
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    err,
+			}
+		}
+	}
+
+	mtime := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
+	if mtime != "" {
+		opts.MTime, err = time.Parse(time.RFC3339, mtime)
+		if err != nil {
+			return opts, InvalidArgument{
+				Bucket: bucket,
+				Object: object,
+				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
+			}
+		}
+	} else {
+		opts.MTime = UTCNow()
+	}
 	return opts, nil
 }
 
@@ -160,7 +224,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		}
 	}
 	mtimeStr := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
-	var mtime time.Time
+	mtime := UTCNow()
 	if mtimeStr != "" {
 		mtime, err = time.Parse(time.RFC3339, mtimeStr)
 		if err != nil {
@@ -170,8 +234,6 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 				Err:    fmt.Errorf("Unable to parse %s, failed with %w", xhttp.MinIOSourceMTime, err),
 			}
 		}
-	} else {
-		mtime = UTCNow()
 	}
 	etag := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceETag))
 	if etag != "" {
@@ -180,6 +242,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		}
 		metadata["etag"] = etag
 	}
+
 	// In the case of multipart custom format, the metadata needs to be checked in addition to header to see if it
 	// is SSE-S3 encrypted, primarily because S3 protocol does not require SSE-S3 headers in PutObjectPart calls
 	if GlobalGatewaySSE.SSES3() && (crypto.S3.IsRequested(r.Header) || crypto.S3.IsEncrypted(metadata)) {

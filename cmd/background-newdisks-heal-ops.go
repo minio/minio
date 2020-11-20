@@ -64,12 +64,21 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 			drivesToHeal, defaultMonitorNewDiskInterval))
 
 		// Heal any disk format and metadata early, if possible.
-		if err := bgSeq.healDiskMeta(); err != nil {
+		// Start with format healing
+		if err := bgSeq.healDiskFormat(); err != nil {
 			if newObjectLayerFn() != nil {
 				// log only in situations, when object layer
 				// has fully initialized.
 				logger.LogIf(bgSeq.ctx, err)
 			}
+		}
+	}
+
+	if err := bgSeq.healDiskMeta(objAPI); err != nil {
+		if newObjectLayerFn() != nil {
+			// log only in situations, when object layer
+			// has fully initialized.
+			logger.LogIf(bgSeq.ctx, err)
 		}
 	}
 
@@ -101,7 +110,7 @@ func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 	globalBackgroundHealRoutine = newHealRoutine()
 	go globalBackgroundHealRoutine.run(ctx, objAPI)
 
-	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence())
+	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence(), objAPI)
 }
 
 // monitorLocalDisksAndHeal - ensures that detected new disks are healed
@@ -109,6 +118,7 @@ func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerSets, bgSeq *healSequence) {
 	// Perform automatic disk healing when a disk is replaced locally.
+wait:
 	for {
 		select {
 		case <-ctx.Done():
@@ -166,6 +176,26 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerSets, bgSeq *
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {
 						logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
+
+						// So someone changed the drives underneath, healing tracker missing.
+						if !disk.Healing() {
+							logger.Info("Healing tracker missing on '%s', disk was swapped again on %s zone", disk, humanize.Ordinal(i+1))
+							diskID, err := disk.GetDiskID()
+							if err != nil {
+								logger.LogIf(ctx, err)
+								// reading format.json failed or not found, proceed to look
+								// for new disks to be healed again, we cannot proceed further.
+								goto wait
+							}
+
+							if err := saveHealingTracker(disk, diskID); err != nil {
+								logger.LogIf(ctx, err)
+								// Unable to write healing tracker, permission denied or some
+								// other unexpected error occurred. Proceed to look for new
+								// disks to be healed again, we cannot proceed further.
+								goto wait
+							}
+						}
 
 						lbDisks := z.serverSets[i].sets[setIndex].getOnlineDisks()
 						if err := healErasureSet(ctx, setIndex, buckets, lbDisks); err != nil {

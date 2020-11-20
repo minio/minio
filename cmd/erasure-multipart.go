@@ -707,7 +707,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
-	defer ObjectPathUpdated(path.Join(bucket, object))
+	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5 := getCompleteMultipartMD5(parts)
@@ -819,10 +819,12 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// Update all erasure metadata, make sure to not modify fields like
 	// checksum which are different on each disks.
 	for index := range partsMetadata {
-		partsMetadata[index].Size = fi.Size
-		partsMetadata[index].ModTime = fi.ModTime
-		partsMetadata[index].Metadata = fi.Metadata
-		partsMetadata[index].Parts = fi.Parts
+		if partsMetadata[index].IsValid() {
+			partsMetadata[index].Size = fi.Size
+			partsMetadata[index].ModTime = fi.ModTime
+			partsMetadata[index].Metadata = fi.Metadata
+			partsMetadata[index].Parts = fi.Parts
+		}
 	}
 
 	// Write final `xl.meta` at uploadID location

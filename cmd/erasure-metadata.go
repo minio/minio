@@ -139,6 +139,11 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 
 	// Add replication status to the object info
 	objInfo.ReplicationStatus = replication.StatusType(fi.Metadata[xhttp.AmzBucketReplicationStatus])
+	if fi.Deleted {
+		objInfo.ReplicationStatus = replication.StatusType(fi.DeleteMarkerReplicationStatus)
+	}
+
+	objInfo.TransitionStatus = fi.TransitionStatus
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
@@ -154,6 +159,12 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 		objInfo.StorageClass = sc
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
+	}
+	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus
+	// set restore status for transitioned object
+	if ongoing, exp, err := parseRestoreHeaderFromMeta(fi.Metadata); err == nil {
+		objInfo.RestoreOngoing = ongoing
+		objInfo.RestoreExpires = exp
 	}
 	// Success.
 	return objInfo

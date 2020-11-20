@@ -66,6 +66,12 @@ const (
 	AmzTagCount      = "x-amz-tagging-count"
 	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
+	// S3 transition restore
+	AmzRestore            = "x-amz-restore"
+	AmzRestoreExpiryDays  = "X-Amz-Restore-Expiry-Days"
+	AmzRestoreRequestDate = "X-Amz-Restore-Request-Date"
+	AmzRestoreOutputPath  = "x-amz-restore-output-path"
+
 	// S3 extensions
 	AmzCopySourceIfModifiedSince   = "x-amz-copy-source-if-modified-since"
 	AmzCopySourceIfUnmodifiedSince = "x-amz-copy-source-if-unmodified-since"
@@ -132,6 +138,12 @@ const (
 
 	// Reports number of drives currently healing
 	MinIOHealingDrives = "x-minio-healing-drives"
+
+	// Header indicates if the delete marker should be preserved by client
+	MinIOSourceDeleteMarker = "x-minio-source-deletemarker"
+
+	// Header indicates if the delete marker version needs to be purged.
+	MinIOSourceDeleteMarkerDelete = "x-minio-source-deletemarker-delete"
 )
 
 // Common http query params S3 API

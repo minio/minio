@@ -126,7 +126,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if lrTime.Sub(crTime) < 0 {
+	if lrTime.Sub(crTime) <= 0 {
 		updateStatus := madmin.ServerUpdateStatus{
 			CurrentVersion: Version,
 			UpdatedVersion: Version,
@@ -794,7 +794,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	case hip.clientToken == "":
 		nh := newHealSequence(GlobalContext, hip.bucket, hip.objPrefix, handlers.GetSourceIP(r), hip.hs, hip.forceStart)
 		go func() {
-			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh)
+			respBytes, apiErr, errMsg := globalAllHealState.LaunchNewHealSequence(nh, objectAPI)
 			hr := healResp{respBytes, apiErr, errMsg}
 			respCh <- hr
 		}()

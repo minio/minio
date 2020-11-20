@@ -240,7 +240,7 @@ func TestExpectedExpiryTime(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
-			got := expectedExpiryTime(tc.modTime, tc.days)
+			got := ExpectedExpiryTime(tc.modTime, int(tc.days))
 			if !got.Equal(tc.expected) {
 				t.Fatalf("Expected %v to be equal to %v", got, tc.expected)
 			}

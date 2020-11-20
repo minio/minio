@@ -30,6 +30,13 @@ var (
 	errXMLNotWellFormed      = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
 )
 
+const (
+	// TransitionComplete marks completed transition
+	TransitionComplete = "complete"
+	// TransitionPending - transition is yet to be attempted
+	TransitionPending = "pending"
+)
+
 // Action represents a delete action or other transition
 // actions that will be implemented later.
 type Action int
@@ -39,10 +46,18 @@ type Action int
 const (
 	// NoneAction means no action required after evaluting lifecycle rules
 	NoneAction Action = iota
-	// DeleteAction means the object needs to be removed after evaluting lifecycle rules
+	// DeleteAction means the object needs to be removed after evaluating lifecycle rules
 	DeleteAction
 	// DeleteVersionAction deletes a particular version
 	DeleteVersionAction
+	// TransitionAction transitions a particular object after evaluating lifecycle transition rules
+	TransitionAction
+	//TransitionVersionAction transitions a particular object version after evaluating lifecycle transition rules
+	TransitionVersionAction
+	// DeleteRestoredAction means the temporarily restored object needs to be removed after evaluating lifecycle rules
+	DeleteRestoredAction
+	// DeleteRestoredVersionAction deletes a particular version that was temporarily restored
+	DeleteRestoredVersionAction
 )
 
 // Lifecycle - Configuration for bucket lifecycle.
@@ -85,13 +100,18 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 		if rule.NoncurrentVersionTransition.NoncurrentDays > 0 {
 			return true
 		}
-		if rule.Expiration.IsNull() {
+		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
 			continue
 		}
-		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.After(time.Now()) {
-			continue
+		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now()) {
+			return true
 		}
-		return true
+		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now()) {
+			return true
+		}
+		if !rule.Expiration.IsDaysNull() || !rule.Transition.IsDaysNull() {
+			return true
+		}
 	}
 	return false
 }
@@ -160,13 +180,24 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 			continue
 		}
 		// The NoncurrentVersionExpiration action requests MinIO to expire
-		// noncurrent versions of objects 100 days after the objects become
+		// noncurrent versions of objects x days after the objects become
 		// noncurrent.
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() {
 			rules = append(rules, rule)
 			continue
 		}
+		// The NoncurrentVersionTransition action requests MinIO to transition
+		// noncurrent versions of objects x days after the objects become
+		// noncurrent.
+		if !rule.NoncurrentVersionTransition.IsDaysNull() {
+			rules = append(rules, rule)
+			continue
+		}
+
 		if rule.Filter.TestTags(strings.Split(obj.UserTags, "&")) {
+			rules = append(rules, rule)
+		}
+		if !rule.Transition.IsNull() {
 			rules = append(rules, rule)
 		}
 	}
@@ -184,6 +215,9 @@ type ObjectOpts struct {
 	DeleteMarker     bool
 	NumVersions      int
 	SuccessorModTime time.Time
+	TransitionStatus string
+	RestoreOngoing   bool
+	RestoreExpires   time.Time
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
@@ -207,8 +241,17 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() {
 				// Non current versions should be deleted if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-				if time.Now().After(expectedExpiryTime(obj.SuccessorModTime, rule.NoncurrentVersionExpiration.NoncurrentDays)) {
+				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))) {
 					return DeleteVersionAction
+				}
+			}
+		}
+		if !rule.NoncurrentVersionTransition.IsDaysNull() {
+			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() && obj.TransitionStatus != TransitionComplete {
+				// Non current versions should be deleted if their age exceeds non current days configuration
+				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
+				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionTransition.NoncurrentDays))) {
+					return TransitionVersionAction
 				}
 			}
 		}
@@ -221,22 +264,42 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					action = DeleteAction
 				}
 			case !rule.Expiration.IsDaysNull():
-				if time.Now().UTC().After(expectedExpiryTime(obj.ModTime, rule.Expiration.Days)) {
+				if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))) {
 					action = DeleteAction
+				}
+			}
+			if action == NoneAction {
+				if obj.TransitionStatus != TransitionComplete {
+					switch {
+					case !rule.Transition.IsDateNull():
+						if time.Now().UTC().After(rule.Transition.Date.Time) {
+							action = TransitionAction
+						}
+					case !rule.Transition.IsDaysNull():
+						if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
+							action = TransitionAction
+						}
+					}
+				}
+				if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {
+					if obj.VersionID != "" {
+						action = DeleteRestoredVersionAction
+					} else {
+						action = DeleteRestoredAction
+					}
 				}
 			}
 		}
 	}
-
 	return action
 }
 
-// expectedExpiryTime calculates the expiry date/time based on a object modtime.
-// The expected expiry time is always a midnight time following the the object
-// modification time plus the number of expiration days.
+// ExpectedExpiryTime calculates the expiry, transition or restore date/time based on a object modtime.
+// The expected transition or restore time is always a midnight time following the the object
+// modification time plus the number of transition/restore days.
 //   e.g. If the object modtime is `Thu May 21 13:42:50 GMT 2020` and the object should
-//        expire in 1 day, then the expected expiry time is `Fri, 23 May 2020 00:00:00 GMT`
-func expectedExpiryTime(modTime time.Time, days ExpirationDays) time.Time {
+//       transition in 1 day, then the expected transition time is `Fri, 23 May 2020 00:00:00 GMT`
+func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 	t := modTime.UTC().Add(time.Duration(days+1) * 24 * time.Hour)
 	return t.Truncate(24 * time.Hour)
 }
@@ -256,7 +319,7 @@ func (lc Lifecycle) PredictExpiryTime(obj ObjectOpts) (string, time.Time) {
 	// expiration date and its associated rule ID.
 	for _, rule := range lc.FilterActionableRules(obj) {
 		if !rule.NoncurrentVersionExpiration.IsDaysNull() && !obj.IsLatest && obj.VersionID != "" {
-			return rule.ID, expectedExpiryTime(time.Now(), ExpirationDays(rule.NoncurrentVersionExpiration.NoncurrentDays))
+			return rule.ID, ExpectedExpiryTime(time.Now(), int(rule.NoncurrentVersionExpiration.NoncurrentDays))
 		}
 
 		if !rule.Expiration.IsDateNull() {
@@ -266,7 +329,7 @@ func (lc Lifecycle) PredictExpiryTime(obj ObjectOpts) (string, time.Time) {
 			}
 		}
 		if !rule.Expiration.IsDaysNull() {
-			expectedExpiry := expectedExpiryTime(obj.ModTime, rule.Expiration.Days)
+			expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
 			if finalExpiryDate.IsZero() || finalExpiryDate.After(expectedExpiry) {
 				finalExpiryRuleID = rule.ID
 				finalExpiryDate = expectedExpiry

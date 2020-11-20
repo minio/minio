@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,6 +89,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
 	}
 	if tgt.Type == madmin.ReplicationService {
+		if !globalIsErasure {
+			return NotImplemented{}
+		}
 		if !globalBucketVersioningSys.Enabled(bucket) {
 			return BucketReplicationSourceNotVersioned{Bucket: bucket}
 		}
@@ -102,13 +106,29 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
+	if tgt.Type == madmin.ILMService {
+		if globalBucketVersioningSys.Enabled(bucket) {
+			vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
+			if err != nil {
+				if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
+					return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+				}
+				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
+			}
+			if vcfg.Status != string(versioning.Enabled) {
+				return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
+			}
+		}
+	}
 	sys.Lock()
 	defer sys.Unlock()
 
 	tgts := sys.targetsMap[bucket]
 	newtgts := make([]madmin.BucketTarget, len(tgts))
+	labels := make(map[string]struct{})
 	found := false
 	for idx, t := range tgts {
+		labels[t.Label] = struct{}{}
 		if t.Type == tgt.Type {
 			if t.Arn == tgt.Arn {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
@@ -121,6 +141,9 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			continue
 		}
 		newtgts[idx] = t
+	}
+	if _, ok := labels[tgt.Label]; ok {
+		return BucketRemoteLabelInUse{Bucket: tgt.TargetBucket}
 	}
 	if !found {
 		newtgts = append(newtgts, *tgt)
@@ -147,6 +170,9 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 		return BucketRemoteArnInvalid{Bucket: bucket}
 	}
 	if arn.Type == madmin.ReplicationService {
+		if !globalIsErasure {
+			return NotImplemented{}
+		}
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
 		if err == nil && rcfg.RoleArn == arnStr {
@@ -155,6 +181,16 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 			}
 		}
 	}
+	if arn.Type == madmin.ILMService {
+		// reject removal of remote target if lifecycle transition uses this arn
+		config, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
+		if err == nil && transitionSCInUse(ctx, config, bucket, arnStr) {
+			if _, ok := sys.arnRemotesMap[arnStr]; ok {
+				return BucketRemoteRemoveDisallowed{Bucket: bucket}
+			}
+		}
+	}
+
 	// delete ARN type from list of matching targets
 	sys.Lock()
 	defer sys.Unlock()
@@ -181,6 +217,44 @@ func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn strin
 	sys.RLock()
 	defer sys.RUnlock()
 	return sys.arnRemotesMap[arn]
+}
+
+// GetRemoteTargetWithLabel returns bucket target given a target label
+func (sys *BucketTargetSys) GetRemoteTargetWithLabel(ctx context.Context, bucket, targetLabel string) *madmin.BucketTarget {
+	sys.RLock()
+	defer sys.RUnlock()
+	for _, t := range sys.targetsMap[bucket] {
+		if strings.ToUpper(t.Label) == strings.ToUpper(targetLabel) {
+			tgt := t.Clone()
+			return &tgt
+		}
+	}
+	return nil
+}
+
+// GetRemoteArnWithLabel returns bucket target's ARN given its target label
+func (sys *BucketTargetSys) GetRemoteArnWithLabel(ctx context.Context, bucket, tgtLabel string) *madmin.ARN {
+	tgt := sys.GetRemoteTargetWithLabel(ctx, bucket, tgtLabel)
+	if tgt == nil {
+		return nil
+	}
+	arn, err := madmin.ParseARN(tgt.Arn)
+	if err != nil {
+		return nil
+	}
+	return arn
+}
+
+// GetRemoteLabelWithArn returns a bucket target's label given its ARN
+func (sys *BucketTargetSys) GetRemoteLabelWithArn(ctx context.Context, bucket, arnStr string) string {
+	sys.RLock()
+	defer sys.RUnlock()
+	for _, t := range sys.targetsMap[bucket] {
+		if t.Arn == arnStr {
+			return t.Label
+		}
+	}
+	return ""
 }
 
 // NewBucketTargetSys - creates new replication system.
