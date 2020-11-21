@@ -21,7 +21,7 @@ import storage from 'local-storage-fallback'
 
 class Web {
   constructor(endpoint) {
-    const namespace = 'Web'
+    const namespace = 'web'
     this.JSONrpc = new JSONrpc({
       endpoint,
       namespace

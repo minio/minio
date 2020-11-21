@@ -28,8 +28,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
+	jsonrpc "github.com/minio/minio/pkg/rpc"
 	trace "github.com/minio/minio/pkg/trace"
 )
 
@@ -83,8 +85,8 @@ func getOpName(name string) (op string) {
 	op = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
 	op = strings.TrimSuffix(op, "Handler-fm")
 	op = strings.Replace(op, "objectAPIHandlers", "s3", 1)
-	op = strings.Replace(op, "webAPIHandlers", "webui", 1)
 	op = strings.Replace(op, "adminAPIHandlers", "admin", 1)
+	op = strings.Replace(op, "(*webAPIHandlers)", "web", 1)
 	op = strings.Replace(op, "(*storageRESTServer)", "internal", 1)
 	op = strings.Replace(op, "(*peerRESTServer)", "internal", 1)
 	op = strings.Replace(op, "(*lockRESTServer)", "internal", 1)
@@ -93,6 +95,69 @@ func getOpName(name string) (op string) {
 	op = strings.Replace(op, "ReadinessCheckHandler", "healthcheck", 1)
 	op = strings.Replace(op, "-fm", "", 1)
 	return op
+}
+
+// WebTrace gets trace of web request
+func WebTrace(ri *jsonrpc.RequestInfo) trace.Info {
+	r := ri.Request
+	w := ri.ResponseWriter
+
+	name := ri.Method
+	// Setup a http request body recorder
+	reqHeaders := r.Header.Clone()
+	reqHeaders.Set("Host", r.Host)
+	if len(r.TransferEncoding) == 0 {
+		reqHeaders.Set("Content-Length", strconv.Itoa(int(r.ContentLength)))
+	} else {
+		reqHeaders.Set("Transfer-Encoding", strings.Join(r.TransferEncoding, ","))
+	}
+
+	t := trace.Info{FuncName: name}
+	t.NodeName = r.Host
+	if globalIsDistErasure {
+		t.NodeName = GetLocalPeer(globalEndpoints)
+	}
+
+	// strip port from the host address
+	if host, _, err := net.SplitHostPort(t.NodeName); err == nil {
+		t.NodeName = host
+	}
+
+	vars := mux.Vars(r)
+	rq := trace.RequestInfo{
+		Time:     time.Now().UTC(),
+		Proto:    r.Proto,
+		Method:   r.Method,
+		Path:     SlashSeparator + pathJoin(vars["bucket"], vars["object"]),
+		RawQuery: r.URL.RawQuery,
+		Client:   handlers.GetSourceIP(r),
+		Headers:  reqHeaders,
+	}
+
+	rw, ok := w.(*logger.ResponseWriter)
+	if ok {
+		rs := trace.ResponseInfo{
+			Time:       time.Now().UTC(),
+			Headers:    rw.Header().Clone(),
+			StatusCode: rw.StatusCode,
+			Body:       logger.BodyPlaceHolder,
+		}
+
+		if rs.StatusCode == 0 {
+			rs.StatusCode = http.StatusOK
+		}
+
+		t.RespInfo = rs
+		t.CallStats = trace.CallStats{
+			Latency:         rs.Time.Sub(rw.StartTime),
+			InputBytes:      int(r.ContentLength),
+			OutputBytes:     rw.Size(),
+			TimeToFirstByte: rw.TimeToFirstByte,
+		}
+	}
+
+	t.ReqInfo = rq
+	return t
 }
 
 // Trace gets trace of http request

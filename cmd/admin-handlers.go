@@ -1006,6 +1006,15 @@ func mustTrace(entry interface{}, trcAll, errOnly bool) bool {
 	if !ok {
 		return false
 	}
+
+	// Handle browser requests separately filter them and return.
+	if HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+"/upload") {
+		if errOnly {
+			return trcInfo.RespInfo.StatusCode >= http.StatusBadRequest
+		}
+		return true
+	}
+
 	trace := trcAll || !HasPrefix(trcInfo.ReqInfo.Path, minioReservedBucketPath+SlashSeparator)
 	if errOnly {
 		return trace && trcInfo.RespInfo.StatusCode >= http.StatusBadRequest

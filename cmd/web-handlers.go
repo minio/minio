@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -55,6 +56,24 @@ import (
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 )
+
+func extractBucketObject(args reflect.Value) (bucketName, objectName string) {
+	switch args.Kind() {
+	case reflect.Ptr:
+		a := args.Elem()
+		for i := 0; i < a.NumField(); i++ {
+			switch a.Type().Field(i).Name {
+			case "BucketName":
+				bucketName = a.Field(i).String()
+			case "Prefix":
+				objectName = a.Field(i).String()
+			case "ObjectName":
+				objectName = a.Field(i).String()
+			}
+		}
+	}
+	return bucketName, objectName
+}
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
 // for ex. ServerInfo, GenerateAuth
