@@ -28,7 +28,9 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/net"
 
+	smart "github.com/minio/minio/pkg/smart"
 	"github.com/shirou/gopsutil/cpu"
+	diskhw "github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	nethw "github.com/shirou/gopsutil/net"
@@ -125,6 +127,24 @@ type MinioHealthInfo struct {
 	Info   InfoMessage `json:"info,omitempty"`
 	Config interface{} `json:"config,omitempty"`
 	Error  string      `json:"error,omitempty"`
+}
+
+// ServerDiskHwInfo - Includes usage counters, disk counters and partitions
+type ServerDiskHwInfo struct {
+	Addr       string                           `json:"addr"`
+	Usage      []*diskhw.UsageStat              `json:"usages,omitempty"`
+	Partitions []PartitionStat                  `json:"partitions,omitempty"`
+	Counters   map[string]diskhw.IOCountersStat `json:"counters,omitempty"`
+	Error      string                           `json:"error,omitempty"`
+}
+
+// PartitionStat - includes data from both shirou/psutil.diskHw.PartitionStat as well as SMART data
+type PartitionStat struct {
+	Device     string     `json:"device"`
+	Mountpoint string     `json:"mountpoint,omitempty"`
+	Fstype     string     `json:"fstype,omitempty"`
+	Opts       string     `json:"opts,omitempty"`
+	SmartInfo  smart.Info `json:"smartInfo,omitempty"`
 }
 
 // PerfInfo - Includes Drive and Net perf info for the entire MinIO cluster

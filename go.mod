@@ -69,7 +69,7 @@ require (
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.0
-	github.com/shirou/gopsutil v2.20.3-0.20200314133625-53cec6b37e6a+incompatible
+	github.com/shirou/gopsutil v2.20.9+incompatible
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/tidwall/gjson v1.3.5
