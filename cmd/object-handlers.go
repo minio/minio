@@ -575,6 +575,13 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		if globalBucketVersioningSys.Enabled(bucket) {
+			if !objInfo.VersionPurgeStatus.Empty() {
+				// Shows the replication status of a permanent delete of a version
+				w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
+			}
+			if !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker {
+				w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
+			}
 			// Versioning enabled quite possibly object is deleted might be delete-marker
 			// if present set the headers, no idea why AWS S3 sets these headers.
 			if objInfo.VersionID != "" && objInfo.DeleteMarker {

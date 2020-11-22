@@ -34,13 +34,13 @@ func (v versionsSorter) Less(i, j int) bool {
 	return v[i].ModTime.After(v[j].ModTime)
 }
 
-func getFileInfoVersions(xlMetaBuf []byte, volume, path string, showPendingDeletes bool) (FileInfoVersions, error) {
+func getFileInfoVersions(xlMetaBuf []byte, volume, path string) (FileInfoVersions, error) {
 	if isXL2V1Format(xlMetaBuf) {
 		var xlMeta xlMetaV2
 		if err := xlMeta.Load(xlMetaBuf); err != nil {
 			return FileInfoVersions{}, err
 		}
-		versions, latestModTime, err := xlMeta.ListVersions(volume, path, showPendingDeletes)
+		versions, latestModTime, err := xlMeta.ListVersions(volume, path)
 		if err != nil {
 			return FileInfoVersions{}, err
 		}

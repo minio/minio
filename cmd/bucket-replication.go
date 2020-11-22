@@ -222,21 +222,26 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 			versionPurgeStatus = Complete
 		}
 	}
+	var eventName = event.ObjectReplicationComplete
 	if replicationStatus == string(replication.Failed) || versionPurgeStatus == Failed {
-		objInfo := ObjectInfo{
-			Name:              dobj.ObjectName,
-			DeleteMarker:      dobj.DeleteMarker,
-			VersionID:         versionID,
-			ReplicationStatus: replication.StatusType(dobj.DeleteMarkerReplicationStatus),
-		}
-		eventArg := &eventArgs{
-			BucketName: bucket,
-			Object:     objInfo,
-			Host:       "Internal: [Replication]",
-			EventName:  event.ObjectReplicationFailed,
-		}
-		sendEvent(*eventArg)
+		eventName = event.ObjectReplicationFailed
 	}
+	objInfo := ObjectInfo{
+		Name:               dobj.ObjectName,
+		DeleteMarker:       dobj.DeleteMarker,
+		VersionID:          versionID,
+		ReplicationStatus:  replication.StatusType(dobj.DeleteMarkerReplicationStatus),
+		VersionPurgeStatus: versionPurgeStatus,
+	}
+
+	eventArg := &eventArgs{
+		BucketName: bucket,
+		Object:     objInfo,
+		Host:       "Internal: [Replication]",
+		EventName:  eventName,
+	}
+	sendEvent(*eventArg)
+
 	// Update metadata on the delete marker or purge permanent delete if replication success.
 	if _, err = objectAPI.DeleteObject(ctx, bucket, dobj.ObjectName, ObjectOptions{
 		VersionID:                     versionID,
