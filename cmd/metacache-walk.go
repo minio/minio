@@ -65,7 +65,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	// Stat a volume entry.
 	_, err = os.Stat(volumeDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if osIsNotExist(err) {
 			return errVolumeNotFound
 		} else if isSysErrIO(err) {
 			return errFaultyDisk
@@ -190,7 +190,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					meta.name = strings.TrimSuffix(meta.name, globalDirSuffixWithSlash) + slashSeparator
 				}
 				out <- meta
-			case os.IsNotExist(err):
+			case osIsNotExist(err):
 				meta.metadata, err = ioutil.ReadFile(pathJoin(volumeDir, meta.name, xlStorageFormatFileV1))
 				if err == nil {
 					// Maybe rename? Would make it inconsistent across disks though.

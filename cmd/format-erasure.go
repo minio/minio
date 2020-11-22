@@ -167,7 +167,7 @@ func formatGetBackendErasureVersion(formatPath string) (string, error) {
 		return "", fmt.Errorf(`format.Version expected: %s, got: %s`, formatMetaVersionV1, meta.Version)
 	}
 	if meta.Format != formatBackendErasure {
-		return "", fmt.Errorf(`found backend %s, expected %s`, meta.Format, formatBackendErasure)
+		return "", fmt.Errorf(`found backend type %s, expected %s`, meta.Format, formatBackendErasure)
 	}
 	// Erasure backend found, proceed to detect version.
 	format := &formatErasureVersionDetect{}
@@ -179,24 +179,24 @@ func formatGetBackendErasureVersion(formatPath string) (string, error) {
 
 // Migrates all previous versions to latest version of `format.json`,
 // this code calls migration in sequence, such as V1 is migrated to V2
-// first before it V2 migrates to V3.
+// first before it V2 migrates to V3.n
 func formatErasureMigrate(export string) error {
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 	version, err := formatGetBackendErasureVersion(formatPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("Disk %s: %w", export, err)
 	}
 	switch version {
 	case formatErasureVersionV1:
 		if err = formatErasureMigrateV1ToV2(export, version); err != nil {
-			return err
+			return fmt.Errorf("Disk %s: %w", export, err)
 		}
 		// Migrate successful v1 => v2, proceed to v2 => v3
 		version = formatErasureVersionV2
 		fallthrough
 	case formatErasureVersionV2:
 		if err = formatErasureMigrateV2ToV3(export, version); err != nil {
-			return err
+			return fmt.Errorf("Disk %s: %w", export, err)
 		}
 		// Migrate successful v2 => v3, v3 is latest
 		// version = formatXLVersionV3
@@ -205,14 +205,14 @@ func formatErasureMigrate(export string) error {
 		// v3 is the latest version, return.
 		return nil
 	}
-	return fmt.Errorf(`%s: unknown format version %s`, export, version)
+	return fmt.Errorf(`Disk %s: unknown format version %s`, export, version)
 }
 
 // Migrates version V1 of format.json to version V2 of format.json,
 // migration fails upon any error.
 func formatErasureMigrateV1ToV2(export, version string) error {
 	if version != formatErasureVersionV1 {
-		return fmt.Errorf(`Disk %s: format version expected %s, found %s`, export, formatErasureVersionV1, version)
+		return fmt.Errorf(`format version expected %s, found %s`, formatErasureVersionV1, version)
 	}
 
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
@@ -246,7 +246,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 // Migrates V2 for format.json to V3 (Flat hierarchy for multipart)
 func formatErasureMigrateV2ToV3(export, version string) error {
 	if version != formatErasureVersionV2 {
-		return fmt.Errorf(`Disk %s: format version expected %s, found %s`, export, formatErasureVersionV2, version)
+		return fmt.Errorf(`format version expected %s, found %s`, formatErasureVersionV2, version)
 	}
 
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)

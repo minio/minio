@@ -235,7 +235,7 @@ func (d *dataUpdateTracker) load(ctx context.Context, drives ...string) {
 		cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 		f, err := os.Open(cacheFormatPath)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if osIsNotExist(err) {
 				continue
 			}
 			logger.LogIf(ctx, err)
@@ -300,7 +300,7 @@ func (d *dataUpdateTracker) startSaver(ctx context.Context, interval time.Durati
 			cacheFormatPath := pathJoin(drive, dataUpdateTrackerFilename)
 			err := ioutil.WriteFile(cacheFormatPath, buf.Bytes(), os.ModePerm)
 			if err != nil {
-				if os.IsNotExist(err) {
+				if osIsNotExist(err) {
 					continue
 				}
 				logger.LogIf(ctx, err)

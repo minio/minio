@@ -19,7 +19,7 @@ var errSkipFile = errors.New("fastwalk: skip this file")
 func readDirFn(dirName string, fn func(entName string, typ os.FileMode) error) error {
 	fis, err := readDir(dirName)
 	if err != nil {
-		if os.IsNotExist(err) || err == errFileNotFound {
+		if osIsNotExist(err) || err == errFileNotFound {
 			return nil
 		}
 		return err
