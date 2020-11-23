@@ -361,23 +361,18 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		return endpointServerSets, setupType, nil
 	}
 
-	var prevSetupType SetupType
 	var foundPrevLocal bool
 	for _, arg := range args {
 		setArgs, err := GetAllSets(uint64(setDriveCount), arg)
 		if err != nil {
 			return nil, -1, err
 		}
-		var endpointList Endpoints
-		endpointList, setupType, err = CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
+		endpointList, gotSetupType, err := CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
 		if err != nil {
 			return nil, -1, err
 		}
 		if setDriveCount != 0 && setDriveCount != len(setArgs[0]) {
 			return nil, -1, fmt.Errorf("All serverSets should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
-		}
-		if prevSetupType != UnknownSetupType && prevSetupType != setupType {
-			return nil, -1, fmt.Errorf("All serverSets should be of the same setup-type to maintain the original SLA expectations - expected %s, got %s", prevSetupType, setupType)
 		}
 		if err = endpointServerSets.Add(ZoneEndpoints{
 			SetCount:     len(setArgs),
@@ -390,7 +385,12 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if setDriveCount == 0 {
 			setDriveCount = len(setArgs[0])
 		}
-		prevSetupType = setupType
+		if setupType == UnknownSetupType {
+			setupType = gotSetupType
+		}
+		if setupType == ErasureSetupType && gotSetupType == DistErasureSetupType {
+			setupType = DistErasureSetupType
+		}
 	}
 
 	return endpointServerSets, setupType, nil

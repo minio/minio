@@ -689,14 +689,14 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, Just treat it as distErasure setup
+		// If all endpoints have same port number, Just treat it as local erasure setup
 		// using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			return endpoints, DistErasureSetupType, nil
+			return endpoints, ErasureSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.
