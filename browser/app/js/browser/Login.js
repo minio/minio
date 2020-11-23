@@ -53,10 +53,10 @@ export class Login extends React.Component {
     const { showAlert, clearAlert, history } = this.props
     let message = ""
     if (this.state.accessKey === "") {
-      message = "Access Key cannot be empty"
+      message = "用户访问密钥不能为空"
     }
     if (this.state.secretKey === "") {
-      message = "Secret Key cannot be empty"
+      message = "密码密钥不能为空"
     }
     if (message) {
       showAlert("danger", message)
@@ -117,7 +117,7 @@ export class Login extends React.Component {
               value={this.state.accessKey}
               onChange={this.accessKeyChange.bind(this)}
               className="ig-dark"
-              label="Access Key"
+              label="访问密钥"
               id="accessKey"
               name="username"
               type="text"
@@ -129,7 +129,7 @@ export class Login extends React.Component {
               value={this.state.secretKey}
               onChange={this.secretKeyChange.bind(this)}
               className="ig-dark"
-              label="Secret Key"
+              label="密码密钥"
               id="secretKey"
               name="password"
               type="password"
