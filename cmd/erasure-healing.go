@@ -796,8 +796,12 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID)
 
 	if isAllNotFound(errs) {
-		// Nothing to do, file is already gone.
-		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), nil
+		if versionID != "" {
+			err = errFileVersionNotFound
+		} else {
+			err = errFileNotFound
+		}
+		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), toObjectErr(err, bucket, object, versionID)
 	}
 
 	fi, err := getLatestFileInfo(healCtx, partsMetadata, errs)
