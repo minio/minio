@@ -426,14 +426,10 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			}
 		}
 
-		if fi.Deleted {
-			return entries, errFileNotFound
-		}
-
 		partN, err := o.findFirstPart(fi)
-		switch err {
-		case nil:
-		case io.ErrUnexpectedEOF:
+		switch {
+		case err == nil:
+		case errors.Is(err, io.ErrUnexpectedEOF):
 			if retries == 10 {
 				err := o.checkMetacacheState(ctx, rpc)
 				if err != nil {
@@ -444,7 +440,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			retries++
 			time.Sleep(retryDelay)
 			continue
-		case io.EOF:
+		case errors.Is(err, io.EOF):
 			return entries, io.EOF
 		}
 
@@ -498,9 +494,6 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						return entries, io.EOF
 					}
 				}
-				if fi.Deleted {
-					return entries, io.ErrUnexpectedEOF
-				}
 			}
 			buf.Reset()
 			err := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0, fi.Size, &buf, fi, metaArr, onlineDisks)
@@ -529,29 +522,29 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				entries.truncate(o.Limit)
 				return entries, nil
 			}
-			switch err {
-			case io.EOF:
-				// We finished at the end of the block.
-				// And should not expect any more results.
-				bi, err := getMetacacheBlockInfo(fi, partN)
-				logger.LogIf(ctx, err)
-				if err != nil || bi.EOS {
-					// We are done and there are no more parts.
-					return entries, io.EOF
-				}
-				if bi.endedPrefix(o.Prefix) {
-					// Nothing more for prefix.
-					return entries, io.EOF
-				}
-				partN++
-				retries = 0
-			case nil:
+			if err == nil {
 				// We stopped within the listing, we are done for now...
 				return entries, nil
-			default:
+			}
+			if !errors.Is(err, io.EOF) {
 				logger.LogIf(ctx, err)
 				return entries, err
 			}
+
+			// We finished at the end of the block.
+			// And should not expect any more results.
+			bi, err := getMetacacheBlockInfo(fi, partN)
+			logger.LogIf(ctx, err)
+			if err != nil || bi.EOS {
+				// We are done and there are no more parts.
+				return entries, io.EOF
+			}
+			if bi.endedPrefix(o.Prefix) {
+				// Nothing more for prefix.
+				return entries, io.EOF
+			}
+			partN++
+			retries = 0
 		}
 	}
 }
