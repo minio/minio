@@ -16,8 +16,6 @@
 
 package cmd
 
-import "os"
-
 // errUnexpected - unexpected error, requires manual intervention.
 var errUnexpected = StorageErr("unexpected error, please report this issue at https://github.com/minio/minio/issues")
 
@@ -127,10 +125,10 @@ func osErrToFileErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	if os.IsNotExist(err) {
+	if osIsNotExist(err) {
 		return errFileNotFound
 	}
-	if os.IsPermission(err) {
+	if osIsPermission(err) {
 		return errFileAccessDenied
 	}
 	if isSysErrNotDir(err) {

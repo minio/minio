@@ -181,7 +181,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
 				// file/directory.
-				if os.IsNotExist(err) || isSysErrPathNotFound(err) ||
+				if osIsNotExist(err) || isSysErrPathNotFound(err) ||
 					isSysErrTooManySymlinks(err) {
 					continue
 				}

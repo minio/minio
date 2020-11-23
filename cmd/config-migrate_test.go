@@ -60,7 +60,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Check if config v1 is removed from filesystem
-	if _, err := os.Stat(configPath); err == nil || !os.IsNotExist(err) {
+	if _, err := os.Stat(configPath); err == nil || !osIsNotExist(err) {
 		t.Fatal("Config V1 file is not purged")
 	}
 

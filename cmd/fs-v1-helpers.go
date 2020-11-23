@@ -64,7 +64,7 @@ func fsRemoveAll(ctx context.Context, dirPath string) (err error) {
 	}
 
 	if err = removeAll(dirPath); err != nil {
-		if os.IsPermission(err) {
+		if osIsPermission(err) {
 			logger.LogIf(ctx, errVolumeAccessDenied)
 			return errVolumeAccessDenied
 		} else if isSysErrNotEmpty(err) {
@@ -92,7 +92,7 @@ func fsRemoveDir(ctx context.Context, dirPath string) (err error) {
 	}
 
 	if err = os.Remove((dirPath)); err != nil {
-		if os.IsNotExist(err) {
+		if osIsNotExist(err) {
 			return errVolumeNotFound
 		} else if isSysErrNotEmpty(err) {
 			return errVolumeNotEmpty
@@ -121,9 +121,9 @@ func fsMkdir(ctx context.Context, dirPath string) (err error) {
 
 	if err = os.Mkdir((dirPath), 0777); err != nil {
 		switch {
-		case os.IsExist(err):
+		case osIsExist(err):
 			return errVolumeExists
-		case os.IsPermission(err):
+		case osIsPermission(err):
 			logger.LogIf(ctx, errDiskAccessDenied)
 			return errDiskAccessDenied
 		case isSysErrNotDir(err):
@@ -170,9 +170,9 @@ func fsStat(ctx context.Context, statLoc string) (os.FileInfo, error) {
 func fsStatVolume(ctx context.Context, volume string) (os.FileInfo, error) {
 	fi, err := fsStat(ctx, volume)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if osIsNotExist(err) {
 			return nil, errVolumeNotFound
-		} else if os.IsPermission(err) {
+		} else if osIsPermission(err) {
 			return nil, errVolumeAccessDenied
 		}
 		return nil, err
@@ -285,9 +285,9 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 
 	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
 		switch {
-		case os.IsPermission(err):
+		case osIsPermission(err):
 			return 0, errFileAccessDenied
-		case os.IsExist(err):
+		case osIsExist(err):
 			return 0, errFileAccessDenied
 		case isSysErrIO(err):
 			return 0, errFaultyDisk

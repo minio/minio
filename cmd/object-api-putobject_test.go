@@ -409,7 +409,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 		files, err := ioutil.ReadDir(tmpMetaDir)
 		if err != nil {
 			// Its OK to have non-existen tmpMetaDir.
-			if os.IsNotExist(err) {
+			if osIsNotExist(err) {
 				continue
 			}
 

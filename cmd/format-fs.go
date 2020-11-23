@@ -211,7 +211,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 			}
 			isEmpty = fi.Size() == 0
 		}
-		if os.IsNotExist(err) || isEmpty {
+		if osIsNotExist(err) || isEmpty {
 			if err == nil {
 				rlk.Close()
 			}
@@ -306,7 +306,7 @@ func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 			return nil
 		}
 	}
-	if os.IsNotExist(err) {
+	if osIsNotExist(err) {
 		return nil
 	}
 	if err != nil {

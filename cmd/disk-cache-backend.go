@@ -704,7 +704,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 
 	meta, _, numHits, err := c.statCache(ctx, cachePath)
 	// Case where object not yet cached
-	if os.IsNotExist(err) && c.after >= 1 {
+	if osIsNotExist(err) && c.after >= 1 {
 		return oi, c.saveMetadata(ctx, bucket, object, opts.UserDefined, size, nil, "", false)
 	}
 	// Case where object already has a cache metadata entry but not yet cached
