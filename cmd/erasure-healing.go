@@ -303,8 +303,12 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	}
 
 	if isAllNotFound(errs) {
+		err = toObjectErr(errFileNotFound, bucket, object)
+		if versionID != "" {
+			err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
+		}
 		// File is fully gone, fileInfo is empty.
-		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), nil
+		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
 	}
 
 	// If less than read quorum number of disks have all the parts
@@ -535,7 +539,8 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 		}
 	}
 	if dryRun || danglingObject || isAllNotFound(errs) {
-		return hr, nil
+		// Nothing to do, file is already gone.
+		return hr, toObjectErr(errFileNotFound, bucket, object)
 	}
 	for i, err := range errs {
 		if err == errVolumeNotFound || err == errFileNotFound {
@@ -688,6 +693,7 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 			writeQuorum = getWriteQuorum(len(storageDisks))
 		}
 		var err error
+		var returnNotFound bool
 		if !opts.DryRun && opts.Remove {
 			if versionID == "" {
 				err = er.deleteObject(ctx, bucket, object, writeQuorum)
@@ -705,6 +711,18 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 				// Dangling object successfully purged, size is '0'
 				m.Size = 0
 			}
+
+			// Delete successfully purged dangling content, return ObjectNotFound/VersionNotFound instead.
+			if countErrs(errs, nil) == len(errs) {
+				returnNotFound = true
+			}
+		}
+		if returnNotFound {
+			err = toObjectErr(errFileNotFound, bucket, object)
+			if versionID != "" {
+				err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
+			}
+			return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
 		}
 		return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID), toObjectErr(err, bucket, object, versionID)
 	}
@@ -796,8 +814,12 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID)
 
 	if isAllNotFound(errs) {
+		err = toObjectErr(errFileNotFound, bucket, object)
+		if versionID != "" {
+			err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
+		}
 		// Nothing to do, file is already gone.
-		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), nil
+		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
 	}
 
 	fi, err := getLatestFileInfo(healCtx, partsMetadata, errs)
