@@ -247,7 +247,9 @@ type metacacheReader struct {
 func newMetacacheReader(r io.Reader) (*metacacheReader, error) {
 	dec := s2DecPool.Get().(*s2.Reader)
 	dec.Reset(r)
-	mr := msgp.NewReader(dec)
+	// TODO: Go back to default size when this fix is available:
+	// https://github.com/philhofer/fwd/issues/20
+	mr := msgp.NewReaderSize(dec, 64<<10)
 	m := metacacheReader{
 		mr: mr,
 		closer: func() {
@@ -429,8 +431,8 @@ func (r *metacacheReader) forwardTo(s string) error {
 		}
 		if string(tmp) >= s {
 			r.current.name = string(tmp)
-			r.current.metadata, err = r.mr.ReadBytes(nil)
-			return err
+			r.current.metadata, r.err = r.mr.ReadBytes(nil)
+			return r.err
 		}
 		// Skip metadata
 		err = r.mr.Skip()
