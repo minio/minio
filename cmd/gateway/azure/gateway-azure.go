@@ -173,6 +173,16 @@ func (g *Azure) Name() string {
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
 func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+	var err error
+
+	// Override credentials from the Azure storage environment variables if specified
+	if acc, key := env.Get("AZURE_STORAGE_ACCOUNT", creds.AccessKey), env.Get("AZURE_STORAGE_KEY", creds.SecretKey); acc != "" && key != "" {
+		creds, err = auth.CreateCredentials(acc, key)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	endpointURL, err := parseStorageEndpoint(g.host, creds.AccessKey)
 	if err != nil {
 		return nil, err
