@@ -508,6 +508,9 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
 				if updateVersion {
+					if len(z.Versions[i].DeleteMarker.MetaSys) == 0 {
+						z.Versions[i].DeleteMarker.MetaSys = make(map[string][]byte)
+					}
 					delete(z.Versions[i].DeleteMarker.MetaSys, xhttp.AmzBucketReplicationStatus)
 					delete(z.Versions[i].DeleteMarker.MetaSys, VersionPurgeStatusKey)
 					if fi.DeleteMarkerReplicationStatus != "" {

@@ -111,7 +111,9 @@ func (t *transitionState) addWorker(ctx context.Context, objectAPI ObjectLayer) 
 				if !ok {
 					return
 				}
-				transitionObject(ctx, objectAPI, oi)
+				if err := transitionObject(ctx, objectAPI, oi); err != nil {
+					logger.LogIf(ctx, err)
+				}
 			}
 		}
 	}()
@@ -244,8 +246,9 @@ func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 // handle deletes of transitioned objects or object versions when one of the following is true:
 // 1. temporarily restored copies of objects (restored with the PostRestoreObject API) expired.
 // 2. life cycle expiry date is met on the object.
-func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, objInfo ObjectInfo, lcOpts lifecycle.ObjectOpts, action lifecycle.Action) error {
-	if objInfo.TransitionStatus == "" {
+// 3. Object is removed through DELETE api call
+func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, action lifecycle.Action, isDeleteTierOnly bool) error {
+	if lcOpts.TransitionStatus == "" && !isDeleteTierOnly {
 		return nil
 	}
 	lc, err := globalLifecycleSys.Get(bucket)
@@ -263,28 +266,37 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.Enabled(bucket)
-	opts.VersionID = objInfo.VersionID
+	opts.VersionID = lcOpts.VersionID
 	switch action {
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 		// delete locally restored copy of object or object version
 		// from the source, while leaving metadata behind. The data on
 		// transitioned tier lies untouched and still accessible
-		opts.TransitionStatus = objInfo.TransitionStatus
+		opts.TransitionStatus = lcOpts.TransitionStatus
 		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
 		return err
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
 		// When an object is past expiry, delete the data from transitioned tier and
 		// metadata from source
-		if err := tgt.RemoveObject(ctx, arn.Bucket, object, miniogo.RemoveObjectOptions{VersionID: objInfo.VersionID}); err != nil {
+		if err := tgt.RemoveObject(context.Background(), arn.Bucket, object, miniogo.RemoveObjectOptions{VersionID: lcOpts.VersionID}); err != nil {
 			logger.LogIf(ctx, err)
+		}
+
+		if isDeleteTierOnly {
+			return nil
 		}
 		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
 		if err != nil {
 			return err
 		}
 		eventName := event.ObjectRemovedDelete
-		if objInfo.DeleteMarker {
+		if lcOpts.DeleteMarker {
 			eventName = event.ObjectRemovedDeleteMarkerCreated
+		}
+		objInfo := ObjectInfo{
+			Name:         object,
+			VersionID:    lcOpts.VersionID,
+			DeleteMarker: lcOpts.DeleteMarker,
 		}
 		// Notify object deleted event.
 		sendEvent(eventArgs{

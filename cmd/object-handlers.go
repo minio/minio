@@ -2714,7 +2714,24 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	_, replicateDel := checkReplicateDelete(ctx, getObjectInfo, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID})
+	var (
+		hasLockEnabled, hasLifecycleConfig bool
+		goi                                ObjectInfo
+		gerr                               error
+	)
+	replicateDeletes := hasReplicationRules(ctx, bucket, []ObjectToDelete{{ObjectName: object, VersionID: opts.VersionID}})
+	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+		hasLockEnabled = true
+	}
+	if _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket); err == nil {
+		hasLifecycleConfig = true
+	}
+	if replicateDeletes || hasLockEnabled || hasLifecycleConfig {
+		goi, gerr = getObjectInfo(ctx, bucket, object, ObjectOptions{
+			VersionID: opts.VersionID,
+		})
+	}
+	_, replicateDel := checkReplicateDelete(ctx, bucket, ObjectToDelete{ObjectName: object, VersionID: opts.VersionID}, goi, gerr)
 	if replicateDel {
 		if opts.VersionID != "" {
 			opts.VersionPurgeStatus = Pending
@@ -2722,7 +2739,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 		}
 	}
-	replicaDel := false
+	vID := opts.VersionID
 	if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 		// check if replica has permission to be deleted.
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object); apiErrCode != ErrNone {
@@ -2730,20 +2747,19 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 		opts.DeleteMarkerReplicationStatus = replication.Replica.String()
-		replicaDel = true
+		if opts.VersionPurgeStatus.Empty() {
+			// opts.VersionID holds delete marker version ID to replicate and not yet present on disk
+			vID = ""
+		}
 	}
-	vID := opts.VersionID
-	if replicaDel && opts.VersionPurgeStatus.Empty() {
-		// opts.VersionID holds delete marker version ID to replicate and not yet present on disk
-		vID = ""
-	}
+
 	apiErr := ErrNone
 	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
 		if vID != "" {
 			apiErr = enforceRetentionBypassForDelete(ctx, r, bucket, ObjectToDelete{
 				ObjectName: object,
 				VersionID:  vID,
-			}, getObjectInfo)
+			}, goi, gerr)
 			if apiErr != ErrNone && apiErr != ErrNoSuchKey {
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErr), r.URL, guessIsBrowserReq(r))
 				return
@@ -2788,6 +2804,20 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			},
 			Bucket: bucket,
 		})
+	}
+	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
+		action := lifecycle.DeleteAction
+		if goi.VersionID != "" {
+			action = lifecycle.DeleteVersionAction
+		}
+		deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, object, lifecycle.ObjectOpts{
+			Name:             object,
+			UserTags:         goi.UserTags,
+			VersionID:        goi.VersionID,
+			DeleteMarker:     goi.DeleteMarker,
+			TransitionStatus: goi.TransitionStatus,
+			IsLatest:         goi.IsLatest,
+		}, action, true)
 	}
 	setPutObjHeaders(w, objInfo, true)
 	writeSuccessNoContent(w)
