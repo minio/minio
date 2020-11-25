@@ -370,6 +370,7 @@ func Test_newMetacacheStream(t *testing.T) {
 	r := loadMetacacheSample(t)
 	var buf bytes.Buffer
 	w := newMetacacheWriter(&buf, 1<<20)
+	defer w.Close()
 	err := r.readFn(func(object metaCacheEntry) bool {
 		err := w.write(object)
 		if err != nil {
