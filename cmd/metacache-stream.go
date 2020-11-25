@@ -76,7 +76,7 @@ func newMetacacheWriter(out io.Writer, blockSize int) *metacacheWriter {
 		blockSize: blockSize,
 	}
 	w.creator = func() error {
-		s2w := s2.NewWriter(out, s2.WriterBlockSize(blockSize))
+		s2w := s2.NewWriter(out, s2.WriterBlockSize(blockSize), s2.WriterConcurrency(2))
 		w.mw = msgp.NewWriter(s2w)
 		w.creator = nil
 		if err := w.mw.WriteByte(metacacheStreamVersion); err != nil {
@@ -206,7 +206,7 @@ func (w *metacacheWriter) Close() error {
 func (w *metacacheWriter) Reset(out io.Writer) {
 	w.streamErr = nil
 	w.creator = func() error {
-		s2w := s2.NewWriter(out, s2.WriterBlockSize(w.blockSize))
+		s2w := s2.NewWriter(out, s2.WriterBlockSize(w.blockSize), s2.WriterConcurrency(2))
 		w.mw = msgp.NewWriter(s2w)
 		w.creator = nil
 		if err := w.mw.WriteByte(metacacheStreamVersion); err != nil {
@@ -757,6 +757,7 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 		var n int
 		var buf bytes.Buffer
 		block := newMetacacheWriter(&buf, 1<<20)
+		defer block.Close()
 		finishBlock := func() {
 			err := block.Close()
 			if err != nil {
