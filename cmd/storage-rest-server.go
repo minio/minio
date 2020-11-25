@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"encoding/gob"
 	"encoding/hex"
@@ -828,15 +827,8 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				ticker.Stop()
 				defer close(doneCh)
 				if err != nil {
-					var buf bytes.Buffer
-					enc := gob.NewEncoder(&buf)
-					if ee := enc.Encode(err); ee == nil {
-						w.Write([]byte{3})
-						w.Write(buf.Bytes())
-					} else {
-						w.Write([]byte{1})
-						w.Write([]byte(err.Error()))
-					}
+					w.Write([]byte{1})
+					w.Write([]byte(err.Error()))
 				} else {
 					w.Write([]byte{0})
 				}
@@ -882,7 +874,8 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 			respBody.Close()
 			return errors.New(string(errorText))
 		case 3:
-			// Typed error
+			// gob style is already deprecated, we can remove this when
+			// storage API version will be greater or equal to 23.
 			defer respBody.Close()
 			dec := gob.NewDecoder(respBody)
 			var err error
