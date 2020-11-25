@@ -188,7 +188,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 				// SetRemoteTargetHandler
 				adminRouter.Methods(http.MethodPut).Path(adminVersion+"/set-remote-target").HandlerFunc(
 					httpTraceHdrs(adminAPI.SetRemoteTargetHandler)).Queries("bucket", "{bucket:.*}")
-				// SetRemoteTargetHandler
+				// RemoveRemoteTargetHandler
 				adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-remote-target").HandlerFunc(
 					httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler)).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
 			}

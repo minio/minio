@@ -35,7 +35,6 @@ type BucketTargetSys struct {
 	sync.RWMutex
 	arnRemotesMap map[string]*miniogo.Core
 	targetsMap    map[string][]madmin.BucketTarget
-	clientsCache  map[string]*miniogo.Core
 }
 
 // ListTargets lists bucket targets across tenant or for individual bucket, and returns
@@ -77,16 +76,23 @@ func (sys *BucketTargetSys) ListBucketTargets(ctx context.Context, bucket string
 }
 
 // SetTarget - sets a new minio-go client target for this bucket.
-func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *madmin.BucketTarget) error {
+func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *madmin.BucketTarget, update bool) error {
 	if globalIsGateway {
 		return nil
 	}
-	if !tgt.Type.IsValid() {
+	if !tgt.Type.IsValid() && !update {
 		return BucketRemoteArnTypeInvalid{Bucket: bucket}
 	}
 	clnt, err := sys.getRemoteTargetClient(tgt)
 	if err != nil {
 		return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+	}
+	// validate if target credentials are ok
+	if _, err = clnt.BucketExists(ctx, tgt.TargetBucket); err != nil {
+		if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
+			return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
+		}
+		return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
 	}
 	if tgt.Type == madmin.ReplicationService {
 		if !globalIsErasure {
@@ -97,9 +103,6 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		}
 		vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
 		if err != nil {
-			if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
-				return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
-			}
 			return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
 		}
 		if vcfg.Status != string(versioning.Enabled) {
@@ -130,10 +133,10 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	for idx, t := range tgts {
 		labels[t.Label] = struct{}{}
 		if t.Type == tgt.Type {
-			if t.Arn == tgt.Arn {
+			if t.Arn == tgt.Arn && !update {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
 			}
-			if t.Label == tgt.Label {
+			if t.Label == tgt.Label && !update {
 				return BucketRemoteLabelInUse{Bucket: t.TargetBucket}
 			}
 			newtgts[idx] = *tgt
@@ -142,18 +145,15 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		}
 		newtgts[idx] = t
 	}
-	if _, ok := labels[tgt.Label]; ok {
+	if _, ok := labels[tgt.Label]; ok && !update {
 		return BucketRemoteLabelInUse{Bucket: tgt.TargetBucket}
 	}
-	if !found {
+	if !found && !update {
 		newtgts = append(newtgts, *tgt)
 	}
 
 	sys.targetsMap[bucket] = newtgts
 	sys.arnRemotesMap[tgt.Arn] = clnt
-	if _, ok := sys.clientsCache[clnt.EndpointURL().String()]; !ok {
-		sys.clientsCache[clnt.EndpointURL().String()] = clnt
-	}
 	return nil
 }
 
@@ -262,7 +262,6 @@ func NewBucketTargetSys() *BucketTargetSys {
 	return &BucketTargetSys{
 		arnRemotesMap: make(map[string]*miniogo.Core),
 		targetsMap:    make(map[string][]madmin.BucketTarget),
-		clientsCache:  make(map[string]*miniogo.Core),
 	}
 }
 
@@ -309,9 +308,6 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 			continue
 		}
 		sys.arnRemotesMap[tgt.Arn] = tgtClient
-		if _, ok := sys.clientsCache[tgtClient.EndpointURL().String()]; !ok {
-			sys.clientsCache[tgtClient.EndpointURL().String()] = tgtClient
-		}
 	}
 	sys.targetsMap[bucket] = tgts.Targets
 }
@@ -335,9 +331,6 @@ func (sys *BucketTargetSys) load(ctx context.Context, buckets []BucketInfo, objA
 				continue
 			}
 			sys.arnRemotesMap[tgt.Arn] = tgtClient
-			if _, ok := sys.clientsCache[tgtClient.EndpointURL().String()]; !ok {
-				sys.clientsCache[tgtClient.EndpointURL().String()] = tgtClient
-			}
 		}
 		sys.targetsMap[bucket.Name] = cfg.Targets
 	}
@@ -349,9 +342,6 @@ var getRemoteTargetInstanceTransportOnce sync.Once
 
 // Returns a minio-go Client configured to access remote host described in replication target config.
 func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*miniogo.Core, error) {
-	if clnt, ok := sys.clientsCache[tcfg.Endpoint]; ok {
-		return clnt, nil
-	}
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 

@@ -236,6 +236,51 @@ func (adm *AdminClient) SetRemoteTarget(ctx context.Context, bucket string, targ
 	return arn, nil
 }
 
+// UpdateRemoteTarget updates credentials for a remote bucket target
+func (adm *AdminClient) UpdateRemoteTarget(ctx context.Context, target *BucketTarget) (string, error) {
+	if target == nil {
+		return "", fmt.Errorf("target cannot be nil")
+	}
+	data, err := json.Marshal(target)
+	if err != nil {
+		return "", err
+	}
+	encData, err := EncryptData(adm.getSecretKey(), data)
+	if err != nil {
+		return "", err
+	}
+	queryValues := url.Values{}
+	queryValues.Set("bucket", target.SourceBucket)
+	queryValues.Set("update", "true")
+
+	reqData := requestData{
+		relPath:     adminAPIPrefix + "/set-remote-target",
+		queryValues: queryValues,
+		content:     encData,
+	}
+
+	// Execute PUT on /minio/admin/v3/set-remote-target to set a target for this bucket of specific arn type.
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", httpRespToErrorResponse(resp)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	var arn string
+	if err = json.Unmarshal(b, &arn); err != nil {
+		return "", err
+	}
+	return arn, nil
+}
+
 // RemoveRemoteTarget removes a remote target associated with particular ARN for this bucket
 func (adm *AdminClient) RemoveRemoteTarget(ctx context.Context, bucket, arn string) error {
 	queryValues := url.Values{}

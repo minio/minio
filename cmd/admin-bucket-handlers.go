@@ -128,6 +128,7 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	defer logger.AuditLog(w, r, "SetBucketTarget", mustGetClaimsFromToken(r))
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+	update := r.URL.Query().Get("update") == "true"
 
 	if !globalIsErasure {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
@@ -174,13 +175,17 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketRemoteIdenticalToSource), r.URL)
 		return
 	}
+
 	target.SourceBucket = bucket
-	target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
+	if !update {
+		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)
+	}
 	if target.Arn == "" {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
 		return
 	}
-	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target); err != nil {
+
+	if err = globalBucketTargetSys.SetTarget(ctx, bucket, &target, update); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -188,7 +193,6 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
-
 	}
 	tgtBytes, err := json.Marshal(&targets)
 	if err != nil {
