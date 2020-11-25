@@ -189,6 +189,12 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 				Filter:     Filter{Prefix: "prefix-1"},
 				Expiration: Expiration{Date: ExpirationDate(midnightTS)},
 			},
+			{
+				Status:                      "Enabled",
+				Filter:                      Filter{Prefix: "prefix-1"},
+				Expiration:                  Expiration{Date: ExpirationDate(midnightTS)},
+				NoncurrentVersionTransition: NoncurrentVersionTransition{NoncurrentDays: 2, StorageClass: "TEST"},
+			},
 		},
 	}
 	b, err := xml.MarshalIndent(&lc, "", "\t")

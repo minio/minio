@@ -52,7 +52,8 @@ func (n NoncurrentVersionTransition) MarshalXML(e *xml.Encoder, start xml.StartE
 	if n.NoncurrentDays == ExpirationDays(0) {
 		return nil
 	}
-	return e.EncodeElement(&n, start)
+	type noncurrentVersionTransitionWrapper NoncurrentVersionTransition
+	return e.EncodeElement(noncurrentVersionTransitionWrapper(n), start)
 }
 
 // IsDaysNull returns true if days field is null
