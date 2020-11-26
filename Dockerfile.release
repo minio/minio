@@ -1,5 +1,7 @@
 FROM alpine:3.12
 
+ARG TARGETARCH
+
 LABEL maintainer="MinIO Inc <dev@min.io>"
 
 ENV MINIO_ACCESS_KEY_FILE=access_key \
@@ -8,15 +10,18 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_SSE_MASTER_KEY_FILE=sse_master_key \
     MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
 
+COPY dockerscripts/verify-minio.sh /usr/bin/verify-minio.sh
+COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
+COPY CREDITS /licenses/CREDITS
+COPY LICENSE /licenses/LICENSE
+
 RUN \
      echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories && \
      apk update && apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' minisign && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
-     curl -s -q https://dl.min.io/server/minio/release/linux-amd64/minio -o /usr/bin/minio && \
-     curl -s -q https://dl.min.io/server/minio/release/linux-amd64/minio.sha256sum -o /usr/bin/minio.sha256sum && \
-     curl -s -q https://dl.min.io/server/minio/release/linux-amd64/minio.minisig -o /usr/bin/minio.minisig && \
-     curl -s -q https://raw.githubusercontent.com/minio/minio/master/dockerscripts/verify-minio.sh -o /usr/bin/verify-minio.sh && \
-     curl -s -q https://raw.githubusercontent.com/minio/minio/master/dockerscripts/docker-entrypoint.sh -o /usr/bin/docker-entrypoint.sh && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio -o /usr/bin/minio && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.sha256sum -o /usr/bin/minio.sha256sum && \
+     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.minisig -o /usr/bin/minio.minisig && \
      chmod +x /usr/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/verify-minio.sh && \
