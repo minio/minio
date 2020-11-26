@@ -28,6 +28,10 @@ verify_sha256sum() {
 }
 
 verify_signature() {
+    if [ "${TARGETARCH}" = "arm" ]; then
+        echo "ignoring verification of binary signature"
+        return
+    fi
     echo "verifying binary signature"
     minisign -VQm /usr/bin/minio -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav
 }
