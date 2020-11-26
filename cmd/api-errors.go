@@ -363,6 +363,7 @@ const (
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
 	ErrAdminAccountNotEligible
+	ErrAccountNotEligible
 	ErrServiceAccountNotFound
 	ErrPostPolicyConditionInvalidFormat
 )
@@ -1726,12 +1727,17 @@ var errorCodes = errorCodeMap{
 	ErrAddUserInvalidArgument: {
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "User is not allowed to be same as admin access key",
-		HTTPStatusCode: http.StatusConflict,
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrAdminAccountNotEligible: {
 		Code:           "XMinioInvalidIAMCredentials",
 		Description:    "The administrator key is not eligible for this operation",
-		HTTPStatusCode: http.StatusConflict,
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrAccountNotEligible: {
+		Code:           "XMinioInvalidIAMCredentials",
+		Description:    "The account key is not eligible for this operation",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrServiceAccountNotFound: {
 		Code:           "XMinioInvalidIAMCredentials",
