@@ -88,14 +88,13 @@ var (
 // StorageClass - holds storage class information
 type StorageClass struct {
 	Parity int
-	DMA    string
 }
 
 // Config storage class configuration
 type Config struct {
 	Standard StorageClass `json:"standard"`
 	RRS      StorageClass `json:"rrs"`
-	DMA      StorageClass `json:"dma"`
+	DMA      string       `json:"dma"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -112,7 +111,7 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 // IsValid - returns true if input string is a valid
 // storage class kind supported.
 func IsValid(sc string) bool {
-	return sc == RRS || sc == STANDARD || sc == DMA
+	return sc == RRS || sc == STANDARD
 }
 
 // UnmarshalText unmarshals storage class from its textual form into
@@ -120,14 +119,6 @@ func IsValid(sc string) bool {
 func (sc *StorageClass) UnmarshalText(b []byte) error {
 	scStr := string(b)
 	if scStr == "" {
-		return nil
-	}
-	if scStr == DMAWrite {
-		sc.DMA = DMAWrite
-		return nil
-	}
-	if scStr == DMAReadWrite {
-		sc.DMA = DMAReadWrite
 		return nil
 	}
 	s, err := parseStorageClass(scStr)
@@ -143,14 +134,14 @@ func (sc *StorageClass) MarshalText() ([]byte, error) {
 	if sc.Parity != 0 {
 		return []byte(fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)), nil
 	}
-	return []byte(sc.DMA), nil
+	return []byte{}, nil
 }
 
 func (sc *StorageClass) String() string {
 	if sc.Parity != 0 {
 		return fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)
 	}
-	return sc.DMA
+	return ""
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.
@@ -222,8 +213,10 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 // or config.json fields
 // -- corresponding values are returned
 // If storage class is not set during startup, default values are returned
-// -- Default for Reduced Redundancy Storage class is, parity = 2 and data = N-Parity
-// -- Default for Standard Storage class is, parity = N/2, data = N/2
+// -- Default for Reduced Redundancy Storage class is, parity = 2
+// -- Default for Standard Storage class is, parity = 2 - disks 4, 5
+// -- Default for Standard Storage class is, parity = 3 - disks 6, 7
+// -- Default for Standard Storage class is, parity = 4 - disks 8 to 16
 // If storage class is empty
 // -- standard storage class is assumed and corresponding data and parity is returned
 func (sCfg Config) GetParityForSC(sc string) (parity int) {
@@ -241,7 +234,7 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 
 // GetDMA - returns DMA configuration.
 func (sCfg Config) GetDMA() string {
-	return sCfg.DMA.DMA
+	return sCfg.DMA
 }
 
 // Enabled returns if etcd is enabled.
@@ -252,9 +245,23 @@ func Enabled(kvs config.KVS) bool {
 }
 
 // LookupConfig - lookup storage class config and override with valid environment settings if any.
-func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
+func LookupConfig(kvs config.KVS, setDriveCount int, freshConfig bool) (cfg Config, err error) {
 	cfg = Config{}
-	cfg.Standard.Parity = setDriveCount / 2
+	var defaultStdParity int
+	if freshConfig {
+		switch setDriveCount {
+		case 4, 5:
+			defaultStdParity = 2
+		case 6, 7:
+			defaultStdParity = 3
+		default:
+			defaultStdParity = 4
+		}
+	} else {
+		defaultStdParity = setDriveCount / 2
+	}
+
+	cfg.Standard.Parity = defaultStdParity
 	cfg.RRS.Parity = defaultRRSParity
 
 	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
@@ -272,7 +279,7 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 		}
 	}
 	if cfg.Standard.Parity == 0 {
-		cfg.Standard.Parity = setDriveCount / 2
+		cfg.Standard.Parity = defaultStdParity
 	}
 
 	if rrsc != "" {
@@ -291,7 +298,7 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	if dma != DMAReadWrite && dma != DMAWrite {
 		return Config{}, errors.New(`valid dma values are "read-write" and "write"`)
 	}
-	cfg.DMA.DMA = dma
+	cfg.DMA = dma
 
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.
