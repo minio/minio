@@ -445,8 +445,12 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 	}
 
 	var uv uuid.UUID
+	var err error
 	if fi.VersionID != "" {
-		uv, _ = uuid.Parse(fi.VersionID)
+		uv, err = uuid.Parse(fi.VersionID)
+		if err != nil {
+			return "", false, errFileVersionNotFound
+		}
 	}
 
 	var ventry xlMetaV2Version
@@ -645,8 +649,11 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 // for consumption across callers.
 func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
 	var uv uuid.UUID
-	if versionID != "" {
-		uv, _ = uuid.Parse(versionID)
+	if versionID != "" && versionID != nullVersionID {
+		uv, err = uuid.Parse(versionID)
+		if err != nil {
+			return FileInfo{}, errFileVersionNotFound
+		}
 	}
 
 	var latestModTime time.Time

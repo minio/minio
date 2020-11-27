@@ -585,17 +585,17 @@ func (z *erasureServerSets) DeleteObjects(ctx context.Context, bucket string, ob
 	}
 	defer multiDeleteLock.Unlock()
 
+	if z.SingleZone() {
+		return z.serverSets[0].DeleteObjects(ctx, bucket, objects, opts)
+	}
+
 	for _, zone := range z.serverSets {
 		deletedObjects, errs := zone.DeleteObjects(ctx, bucket, objects, opts)
 		for i, derr := range errs {
-			if derrs[i] == nil {
-				if derr != nil && !isErrObjectNotFound(derr) && !isErrVersionNotFound(derr) {
-					derrs[i] = derr
-				}
+			if derr != nil {
+				derrs[i] = derr
 			}
-			if derrs[i] == nil {
-				dobjects[i] = deletedObjects[i]
-			}
+			dobjects[i] = deletedObjects[i]
 		}
 	}
 	return dobjects, derrs

@@ -32,11 +32,25 @@ type DeletedObject struct {
 	// Replication status of DeleteMarker
 	DeleteMarkerReplicationStatus string `xml:"DeleteMarkerReplicationStatus,omitempty"`
 	// MTime of DeleteMarker on source that needs to be propagated to replica
-	DeleteMarkerMTime time.Time `xml:"DeleteMarkerMTime,omitempty"`
+	DeleteMarkerMTime DeleteMarkerMTime `xml:"DeleteMarkerMTime,omitempty"`
 	// Status of versioned delete (of object or DeleteMarker)
 	VersionPurgeStatus VersionPurgeStatusType `xml:"VersionPurgeStatus,omitempty"`
 	// PurgeTransitioned is nonempty if object is in transition tier
 	PurgeTransitioned string `xml:"PurgeTransitioned,omitempty"`
+}
+
+// DeleteMarkerMTime is an embedded type containing time.Time for XML marshal
+type DeleteMarkerMTime struct {
+	time.Time
+}
+
+// MarshalXML encodes expiration date if it is non-zero and encodes
+// empty string otherwise
+func (t DeleteMarkerMTime) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
+	if t.Time.IsZero() {
+		return nil
+	}
+	return e.EncodeElement(t.Time.Format(time.RFC3339), startElement)
 }
 
 // ObjectToDelete carries key name for the object to delete.

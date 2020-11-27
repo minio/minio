@@ -759,9 +759,7 @@ func (s *erasureSets) DeleteObjects(ctx context.Context, bucket string, objects 
 		dobjects, errs := s.getHashedSet(objsGroup[0].object.ObjectName).DeleteObjects(ctx, bucket, toNames(objsGroup), opts)
 		for i, obj := range objsGroup {
 			delErrs[obj.origIndex] = errs[i]
-			if delErrs[obj.origIndex] == nil {
-				delObjects[obj.origIndex] = dobjects[i]
-			}
+			delObjects[obj.origIndex] = dobjects[i]
 		}
 	}
 

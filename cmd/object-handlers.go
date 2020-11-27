@@ -2798,13 +2798,14 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				VersionID:                     versionID,
 				DeleteMarkerVersionID:         dmVersionID,
 				DeleteMarkerReplicationStatus: string(objInfo.ReplicationStatus),
-				DeleteMarkerMTime:             objInfo.ModTime,
+				DeleteMarkerMTime:             DeleteMarkerMTime{objInfo.ModTime},
 				DeleteMarker:                  objInfo.DeleteMarker,
 				VersionPurgeStatus:            objInfo.VersionPurgeStatus,
 			},
 			Bucket: bucket,
 		})
 	}
+
 	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
 		action := lifecycle.DeleteAction
 		if goi.VersionID != "" {
@@ -2819,6 +2820,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			IsLatest:         goi.IsLatest,
 		}, action, true)
 	}
+
 	setPutObjHeaders(w, objInfo, true)
 	writeSuccessNoContent(w)
 }

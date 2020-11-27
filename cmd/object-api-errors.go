@@ -255,7 +255,14 @@ func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
-// VersionNotFound object does not exist.
+// InvalidVersionID invalid version id
+type InvalidVersionID GenericError
+
+func (e InvalidVersionID) Error() string {
+	return "Invalid version id: " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
+}
+
+// VersionNotFound version does not exist.
 type VersionNotFound GenericError
 
 func (e VersionNotFound) Error() string {
