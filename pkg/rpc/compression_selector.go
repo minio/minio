@@ -10,12 +10,13 @@
 package rpc
 
 import (
-	"compress/flate"
-	"compress/gzip"
 	"io"
 	"net/http"
 	"strings"
 	"unicode"
+
+	"github.com/klauspost/compress/flate"
+	"github.com/klauspost/compress/gzip"
 )
 
 // gzipWriter writes and closes the gzip writer.
