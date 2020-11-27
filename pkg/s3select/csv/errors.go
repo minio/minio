@@ -57,7 +57,7 @@ func errCSVParsingError(err error) *s3Error {
 func errInvalidTextEncodingError() *s3Error {
 	return &s3Error{
 		code:       "InvalidTextEncoding",
-		message:    "Encountered an error parsing the CSV file. Check the file and try again.",
+		message:    "UTF-8 encoding is required.",
 		statusCode: 400,
 		cause:      errors.New("invalid utf8 encoding"),
 	}
