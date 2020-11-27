@@ -16,6 +16,8 @@
 
 package csv
 
+import "errors"
+
 type s3Error struct {
 	code       string
 	message    string
@@ -49,5 +51,14 @@ func errCSVParsingError(err error) *s3Error {
 		message:    "Encountered an error parsing the CSV file. Check the file and try again.",
 		statusCode: 400,
 		cause:      err,
+	}
+}
+
+func errInvalidTextEncodingError() *s3Error {
+	return &s3Error{
+		code:       "InvalidTextEncoding",
+		message:    "Encountered an error parsing the CSV file. Check the file and try again.",
+		statusCode: 400,
+		cause:      errors.New("invalid utf8 encoding"),
 	}
 }
