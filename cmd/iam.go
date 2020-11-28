@@ -1827,6 +1827,33 @@ func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
 	return combinedPolicy.IsAllowed(args)
 }
 
+// GetCombinedPolicy returns a combined policy combining all policies
+func (sys *IAMSys) GetCombinedPolicy(policies ...string) iampolicy.Policy {
+	// Policies were found, evaluate all of them.
+	sys.store.rlock()
+	defer sys.store.runlock()
+
+	var availablePolicies []iampolicy.Policy
+	for _, pname := range policies {
+		p, found := sys.iamPolicyDocsMap[pname]
+		if found {
+			availablePolicies = append(availablePolicies, p)
+		}
+	}
+
+	if len(availablePolicies) == 0 {
+		return iampolicy.Policy{}
+	}
+
+	combinedPolicy := availablePolicies[0]
+	for i := 1; i < len(availablePolicies); i++ {
+		combinedPolicy.Statements = append(combinedPolicy.Statements,
+			availablePolicies[i].Statements...)
+	}
+
+	return combinedPolicy
+}
+
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
@@ -1873,25 +1900,7 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	}
 
 	// Policies were found, evaluate all of them.
-	sys.store.rlock()
-	defer sys.store.runlock()
-
-	var availablePolicies []iampolicy.Policy
-	for _, pname := range policies {
-		p, found := sys.iamPolicyDocsMap[pname]
-		if found {
-			availablePolicies = append(availablePolicies, p)
-		}
-	}
-	if len(availablePolicies) == 0 {
-		return false
-	}
-	combinedPolicy := availablePolicies[0]
-	for i := 1; i < len(availablePolicies); i++ {
-		combinedPolicy.Statements = append(combinedPolicy.Statements,
-			availablePolicies[i].Statements...)
-	}
-	return combinedPolicy.IsAllowed(args)
+	return sys.GetCombinedPolicy(policies...).IsAllowed(args)
 }
 
 // Set default canned policies only if not already overridden by users.

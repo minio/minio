@@ -116,7 +116,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 
 			// Add user IAM
 
-			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountusageinfo").HandlerFunc(httpTraceAll(adminAPI.AccountUsageInfoHandler))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/accountinfo").HandlerFunc(httpTraceAll(adminAPI.AccountInfoHandler))
 
 			adminRouter.Methods(http.MethodPut).Path(adminVersion+"/add-user").HandlerFunc(httpTraceHdrs(adminAPI.AddUser)).Queries("accessKey", "{accessKey:.*}")
 

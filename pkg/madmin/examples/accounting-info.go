@@ -37,10 +37,10 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	accountUsageInfo, err := madmClnt.AccountUsageInfo(context.Background())
+	accountInfo, err := madmClnt.AccountInfo(context.Background())
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	log.Println(accountUsageInfo)
+	log.Println(accountInfo)
 }

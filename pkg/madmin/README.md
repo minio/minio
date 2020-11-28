@@ -47,7 +47,7 @@ func main() {
 |:------------------------------------|:-----------------------------------------|:-------------------|:--------------------------|
 | [`ServiceTrace`](#ServiceTrace)     | [`ServerInfo`](#ServerInfo)              | [`Heal`](#Heal)    | [`GetConfig`](#GetConfig) |
 | [`ServiceStop`](#ServiceStop)       | [`StorageInfo`](#StorageInfo)            |                    | [`SetConfig`](#SetConfig) |
-| [`ServiceRestart`](#ServiceRestart) | [`AccountUsageInfo`](#AccountUsageInfo)  |                    |                           |
+| [`ServiceRestart`](#ServiceRestart) | [`AccountInfo`](#AccountInfo)  |                    |                           |
 
 
 
@@ -251,16 +251,16 @@ __Example__
 
  ```
 
-<a name="AccountUsageInfo"></a>
+<a name="AccountInfo"></a>
 
-### AccountUsageInfo(ctx context.Context) (AccountUsageInfo, error)
+### AccountInfo(ctx context.Context) (AccountInfo, error)
 
 Fetches accounting usage information for the current authenticated user
 
 | Param                          | Type                 | Description             |
 |--------------------------------|----------------------|-------------------------|
-| `AccountUsageInfo.AccountName` | _string_             | Account name.           |
-| `AccountUsageInfo.Buckets`     | _[]BucketUsageInfo_  | Bucket usage info.      |
+| `AccountInfo.AccountName` | _string_             | Account name.           |
+| `AccountInfo.Buckets`     | _[]BucketUsageInfo_  | Bucket usage info.      |
 
 
 | Param                      | Type            | Description                             |
@@ -281,12 +281,12 @@ __Example__
 
 ```go
 
-   accountUsageInfo, err := madmClnt.AccountUsageInfo(context.Background())
+   accountInfo, err := madmClnt.AccountInfo(context.Background())
    if err != nil {
 	log.Fatalln(err)
    }
 
-   log.Println(accountUsageInfo)
+   log.Println(accountInfo)
 
 ```
 
