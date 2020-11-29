@@ -971,10 +971,16 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
+		if err == errFileNotFound && fi.VersionID != "" {
+			err = errFileVersionNotFound
+		}
 		return err
 	}
 
 	if len(buf) == 0 {
+		if fi.VersionID != "" {
+			return errFileVersionNotFound
+		}
 		return errFileNotFound
 	}
 
@@ -1146,10 +1152,22 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	if err != nil {
 		if err == errFileNotFound {
 			if err = s.renameLegacyMetadata(volume, path); err != nil {
+				if err == errFileNotFound {
+					if versionID != "" {
+						return fi, errFileVersionNotFound
+					}
+					return fi, errFileNotFound
+				}
 				return fi, err
 			}
 			buf, err = s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 			if err != nil {
+				if err == errFileNotFound {
+					if versionID != "" {
+						return fi, errFileVersionNotFound
+					}
+					return fi, errFileNotFound
+				}
 				return fi, err
 			}
 		} else {

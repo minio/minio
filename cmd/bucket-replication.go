@@ -200,7 +200,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		VersionID: versionID,
 		Internal: miniogo.AdvancedRemoveOptions{
 			ReplicationDeleteMarker: dobj.DeleteMarkerVersionID != "",
-			ReplicationMTime:        dobj.DeleteMarkerMTime,
+			ReplicationMTime:        dobj.DeleteMarkerMTime.Time,
 			ReplicationStatus:       miniogo.ReplicationStatusReplica,
 		},
 	})

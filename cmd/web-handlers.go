@@ -761,7 +761,7 @@ next:
 						ObjectName:                    objectName,
 						DeleteMarkerVersionID:         oi.VersionID,
 						DeleteMarkerReplicationStatus: string(oi.ReplicationStatus),
-						DeleteMarkerMTime:             oi.ModTime,
+						DeleteMarkerMTime:             DeleteMarkerMTime{oi.ModTime},
 						DeleteMarker:                  oi.DeleteMarker,
 						VersionPurgeStatus:            oi.VersionPurgeStatus,
 					},

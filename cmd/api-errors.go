@@ -124,6 +124,7 @@ const (
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
 	ErrNoSuchUpload
+	ErrInvalidVersionID
 	ErrNoSuchVersion
 	ErrNotImplemented
 	ErrPreconditionFailed
@@ -558,10 +559,15 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified multipart upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
-	ErrNoSuchVersion: {
+	ErrInvalidVersionID: {
 		Code:           "InvalidArgument",
 		Description:    "Invalid version id specified",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNoSuchVersion: {
+		Code:           "NoSuchVersion",
+		Description:    "The specified version does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNotImplemented: {
 		Code:           "NotImplemented",
@@ -1886,6 +1892,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchKey
 	case MethodNotAllowed:
 		apiErr = ErrMethodNotAllowed
+	case InvalidVersionID:
+		apiErr = ErrInvalidVersionID
 	case VersionNotFound:
 		apiErr = ErrNoSuchVersion
 	case ObjectAlreadyExists:

@@ -93,7 +93,7 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 		_, err := uuid.Parse(vid)
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return opts, VersionNotFound{
+			return opts, InvalidVersionID{
 				Bucket:    bucket,
 				Object:    object,
 				VersionID: vid,
@@ -209,7 +209,7 @@ func putOpts(ctx context.Context, r *http.Request, bucket, object string, metada
 		_, err := uuid.Parse(vid)
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return opts, VersionNotFound{
+			return opts, InvalidVersionID{
 				Bucket:    bucket,
 				Object:    object,
 				VersionID: vid,

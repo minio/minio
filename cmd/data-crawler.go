@@ -854,7 +854,7 @@ func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, m
 				DeleteMarkerVersionID:         dmVersionID,
 				VersionID:                     versionID,
 				DeleteMarkerReplicationStatus: string(meta.oi.ReplicationStatus),
-				DeleteMarkerMTime:             meta.oi.ModTime,
+				DeleteMarkerMTime:             DeleteMarkerMTime{meta.oi.ModTime},
 				DeleteMarker:                  meta.oi.DeleteMarker,
 				VersionPurgeStatus:            meta.oi.VersionPurgeStatus,
 			},

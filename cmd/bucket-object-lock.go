@@ -89,16 +89,15 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 	}
 
 	opts.VersionID = object.VersionID
-
 	if gerr != nil { // error from GetObjectInfo
-		switch err.(type) {
+		switch gerr.(type) {
 		case MethodNotAllowed: // This happens usually for a delete marker
 			if oi.DeleteMarker {
 				// Delete marker should be present and valid.
 				return ErrNone
 			}
 		}
-		return toAPIErrorCode(ctx, err)
+		return toAPIErrorCode(ctx, gerr)
 	}
 
 	lhold := objectlock.GetObjectLegalHoldMeta(oi.UserDefined)
