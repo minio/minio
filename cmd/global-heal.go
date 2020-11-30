@@ -186,7 +186,10 @@ func deepHealObject(bucket, object, versionID string) {
 			bucket:    bucket,
 			object:    object,
 			versionID: versionID,
-			opts:      &madmin.HealOpts{ScanMode: madmin.HealDeepScan},
+			opts: &madmin.HealOpts{
+				Remove:   true, // if found dangling purge it.
+				ScanMode: madmin.HealDeepScan,
+			},
 		}
 	}
 }

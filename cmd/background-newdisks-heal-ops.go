@@ -124,8 +124,6 @@ wait:
 		case <-ctx.Done():
 			return
 		case <-time.After(defaultMonitorNewDiskInterval):
-			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
-
 			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
