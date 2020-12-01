@@ -379,7 +379,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Not allowed to add a user with same access key as root credential
-	if owner {
+	if owner && accessKey == cred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
 		return
 	}
