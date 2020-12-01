@@ -15,8 +15,7 @@
 #  limitations under the License.
 #
 
-# MINT_DATA_DIR="$MINT_ROOT_DIR/data"
-MINT_DATA_DIR=${MINT_DATA_DIR:-/mint/data}
+MINT_DATA_DIR="$MINT_ROOT_DIR/data"
 
 declare -A data_file_map
 data_file_map["datafile-0-b"]="0"

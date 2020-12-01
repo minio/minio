@@ -377,9 +377,7 @@ class AwsSdkRubyTest
     # new buckets from bucket_name_list
 
     # get 2 different random bucket names and create a list
-    bucket_name1 = random_bucket_name
-    bucket_name2 = random_bucket_name
-    bucket_name_list = [bucket_name1, bucket_name2]
+    bucket_name_list = [random_bucket_name, random_bucket_name]
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('listBuckets')
     # Prepare arg/value hash table and set it in log_output

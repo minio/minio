@@ -35,8 +35,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AchievementNetwork/stringset"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/stringset"
 	xhttp "github.com/minio/minio/cmd/http"
 	sha256 "github.com/minio/sha256-simd"
 )
