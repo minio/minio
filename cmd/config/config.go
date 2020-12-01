@@ -77,6 +77,7 @@ const (
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
 	HealSubSys           = "heal"
+	CrawlerSubSys        = "crawler"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -189,8 +190,9 @@ func RegisterHelpSubSys(helpKVSMap map[string]HelpKVS) {
 
 // KV - is a shorthand of each key value.
 type KV struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key     string `json:"key"`
+	Value   string `json:"value"`
+	Dynamic bool   `json:"dynamic,omitempty"`
 }
 
 // KVS - is a shorthand for some wrapper functions

@@ -113,6 +113,10 @@ func initHelp() {
 			Description: "manage object healing frequency and bitrot verification checks",
 		},
 		config.HelpKV{
+			Key:         config.CrawlerSubSys,
+			Description: "manage crawling for usage calculation, lifecycle, healing and more",
+		},
+		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
 			Description:     "send server logs to webhook endpoints",
 			MultipleTargets: true,

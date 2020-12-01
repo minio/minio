@@ -24,8 +24,8 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/config"
@@ -55,10 +55,13 @@ const (
 var (
 	globalHealConfig             heal.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
+	crawlerSleeper               *dynamicSleeper
 )
 
 // initDataCrawler will start the crawler unless disabled.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
+	// TODO: Get from config
+	crawlerSleeper = newDynamicSleeper(10, 15*time.Second)
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
 		go runDataCrawler(ctx, objAPI)
 	}
@@ -169,12 +172,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
-	}
-
-	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		delayMult = dataCrawlSleepDefMult
 	}
 
 	s := folderScanner{
@@ -861,4 +858,91 @@ func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, m
 			Bucket: meta.oi.Bucket,
 		})
 	}
+}
+
+type dynamicSleeper struct {
+	mu sync.RWMutex
+
+	// Sleep factor
+	factor float64
+
+	// maximum sleep cap,
+	// set to <= 0 to disable.
+	maxSleep time.Duration
+
+	// Don't sleep at all, if time taken is below this value.
+	// This is to avoid too small costly sleeps.
+	minSleep time.Duration
+
+	// cycle will be closed
+	cycle chan struct{}
+}
+
+// newDynamicSleeper
+func newDynamicSleeper(factor float64, maxWait time.Duration) *dynamicSleeper {
+	return &dynamicSleeper{
+		factor:   factor,
+		cycle:    make(chan struct{}, 0),
+		maxSleep: maxWait,
+		minSleep: 100 * time.Microsecond,
+	}
+}
+
+type DynamicSleepFn func(ctx context.Context) func()
+
+// Timer returns a timer that has started.
+// When the returned function is called it will wait.
+func (d *dynamicSleeper) Timer(ctx context.Context) func() {
+	t := time.Now()
+	return func() {
+		doneAt := time.Now()
+		for {
+			// Grab current values
+			d.mu.RLock()
+			minWait, maxWait := d.minSleep, d.maxSleep
+			factor := d.factor
+			cycle := d.cycle
+			d.mu.RUnlock()
+			elapsed := doneAt.Sub(t)
+			// Don't sleep for really small amount of time
+			wantSleep := time.Duration(float64(elapsed) * factor)
+			if wantSleep <= minWait {
+				return
+			}
+			if maxWait > 0 && wantSleep > maxWait {
+				wantSleep = maxWait
+			}
+			timer := time.NewTimer(wantSleep)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			case <-timer.C:
+				return
+			case <-cycle:
+				if !timer.Stop() {
+					// We expired.
+					<-timer.C
+					return
+				}
+			}
+		}
+	}
+}
+
+// Update the current settings and cycle all waiting.
+// Parameters are the same as in the contructor.
+func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.factor == factor && d.maxSleep == maxWait {
+		return
+	}
+	// Update values and cycle waiting.
+	close(d.cycle)
+	d.factor = factor
+	d.maxSleep = maxWait
+	d.cycle = make(chan struct{})
 }
