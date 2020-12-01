@@ -28,7 +28,7 @@ func EscapeStringJSON(dst *bytes.Buffer, s string) {
 	start := 0
 	for i := 0; i < len(s); {
 		if b := s[i]; b < utf8.RuneSelf {
-			if safeSet[b] {
+			if htmlSafeSet[b] {
 				i++
 				continue
 			}
@@ -93,20 +93,21 @@ func EscapeStringJSON(dst *bytes.Buffer, s string) {
 	}
 }
 
-// safeSet holds the value true if the ASCII character with the given array
-// position can be represented inside a JSON string without any further
-// escaping.
+// htmlSafeSet holds the value true if the ASCII character with the given
+// array position can be safely represented inside a JSON string, embedded
+// inside of HTML <script> tags, without any additional escaping.
 //
 // All values are true except for the ASCII control characters (0-31), the
-// double quote ("), and the backslash character ("\").
-var safeSet = [utf8.RuneSelf]bool{
+// double quote ("), the backslash character ("\"), HTML opening and closing
+// tags ("<" and ">"), and the ampersand ("&").
+var htmlSafeSet = [utf8.RuneSelf]bool{
 	' ':      true,
 	'!':      true,
 	'"':      false,
 	'#':      true,
 	'$':      true,
 	'%':      true,
-	'&':      true,
+	'&':      false,
 	'\'':     true,
 	'(':      true,
 	')':      true,
@@ -128,9 +129,9 @@ var safeSet = [utf8.RuneSelf]bool{
 	'9':      true,
 	':':      true,
 	';':      true,
-	'<':      true,
+	'<':      false,
 	'=':      true,
-	'>':      true,
+	'>':      false,
 	'?':      true,
 	'@':      true,
 	'A':      true,
