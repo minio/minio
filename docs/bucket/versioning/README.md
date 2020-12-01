@@ -22,11 +22,11 @@ Now the delete marker becomes the current version of the object. GET requests by
 
 ![get](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/versioning_GET_versionEnabled.png)
 
-GET requests by specifying a version ID as shown below, you can retrieve the specific object version `fae684da`.
+GET requests by specifying a verison ID as shown below, you can retrieve the specific object version `fae684da`.
 
 ![get_version_id](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/versioning_GET_versionEnabled_id.png)
 
-To permanently delete an object you need to specify the version you want to delete, only the user with appropriate permissions can permanently delete a version.  As shown below DELETE request called with a specific version id permanently deletes an object from a bucket. Delete marker is not added for DELETE requests with version id.
+To permanently delete an object you need to specify the version you want to delete, only the user with appropriate permissions can permanently delete a version.  As shown below DELETE request called with a specific version id permenantly deletes an object from a bucket. Delete marker is not added for DELETE requests with version id.
 
 ![delete_version_id](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/versioning_DELETE_versionEnabled_id.png)
 
