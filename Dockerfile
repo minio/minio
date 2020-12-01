@@ -11,7 +11,7 @@ RUN  \
      git clone https://github.com/minio/minio && cd minio && \
      git checkout master && go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)"
 
-FROM alpine:3.12
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
 
 ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_SECRET_KEY_FILE=secret_key \
@@ -22,11 +22,14 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 EXPOSE 9000
 
 COPY --from=builder /go/bin/minio /usr/bin/minio
-COPY --from=builder /go/minio/CREDITS /third_party/
+COPY --from=builder /go/minio/CREDITS /licenses/CREDITS
+COPY --from=builder /go/minio/LICENSE /licenses/LICENSE
 COPY --from=builder /go/minio/dockerscripts/docker-entrypoint.sh /usr/bin/
 
 RUN  \
-     apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' && \
+     microdnf update --nodocs && \
+     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
+     microdnf clean all && \
      echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]

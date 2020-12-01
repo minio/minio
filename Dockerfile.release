@@ -1,14 +1,20 @@
-FROM alpine:3.12
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
 
 ARG TARGETARCH
 
-LABEL maintainer="MinIO Inc <dev@min.io>"
+LABEL name="MinIO" \
+      vendor="MinIO Inc <dev@min.io>" \
+      maintainer="MinIO Inc <dev@min.io>" \
+      version="RELEASE.2020-11-25T22-36-25Z" \
+      release="RELEASE.2020-11-25T22-36-25Z" \
+      summary="MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service." \
+      description="MinIO object storage is fundamentally different. Designed for performance and the S3 API, it is 100% open-source. MinIO is ideal for large, private cloud environments with stringent security requirements and delivers mission-critical availability across a diverse range of workloads."
 
 ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_SECRET_KEY_FILE=secret_key \
     MINIO_KMS_MASTER_KEY_FILE=kms_master_key \
     MINIO_SSE_MASTER_KEY_FILE=sse_master_key \
-    MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
+    MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav" 
 
 COPY dockerscripts/verify-minio.sh /usr/bin/verify-minio.sh
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
@@ -16,16 +22,17 @@ COPY CREDITS /licenses/CREDITS
 COPY LICENSE /licenses/LICENSE
 
 RUN \
-     echo "http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories && \
-     apk update && apk add --no-cache ca-certificates 'curl>7.61.0' 'su-exec>=0.2' minisign && \
-     echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
+     microdnf update --nodocs && \
+     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
+     rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+     microdnf install minisign --nodocs && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio -o /usr/bin/minio && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.sha256sum -o /usr/bin/minio.sha256sum && \
      curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/minio.minisig -o /usr/bin/minio.minisig && \
+     microdnf clean all && \
      chmod +x /usr/bin/minio && \
      chmod +x /usr/bin/docker-entrypoint.sh && \
      chmod +x /usr/bin/verify-minio.sh && \
-     curl -s -q -O https://raw.githubusercontent.com/minio/minio/master/CREDITS && \
      /usr/bin/verify-minio.sh
 
 EXPOSE 9000
