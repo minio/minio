@@ -77,7 +77,7 @@ Auto-Encryption is useful when MinIO administrator wants to ensure that all data
 ### Using `mc encrypt` (recommended)
 MinIO automatically encrypts all objects on buckets if KMS is successfully configured and bucket encryption configuration is enabled for each bucket as shown below:
 ```
-mc encrypt sse-s3 myminio/bucket/
+mc encrypt set sse-s3 myminio/bucket/
 ```
 
 Verify if MinIO has `sse-s3` enabled
