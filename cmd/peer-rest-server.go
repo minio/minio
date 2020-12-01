@@ -674,11 +674,11 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 }
 
 // Return disk IDs of all the local disks.
-func getLocalDiskIDs(z *erasureServerSets) []string {
+func getLocalDiskIDs(z *erasureServerPools) []string {
 	var ids []string
 
-	for zoneIdx := range z.serverSets {
-		for _, set := range z.serverSets[zoneIdx].sets {
+	for zoneIdx := range z.serverPools {
+		for _, set := range z.serverPools[zoneIdx].sets {
 			disks := set.getDisks()
 			for _, disk := range disks {
 				if disk == nil {
@@ -723,7 +723,7 @@ func (s *peerRESTServer) GetLocalDiskIDs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	z, ok := objLayer.(*erasureServerSets)
+	z, ok := objLayer.(*erasureServerPools)
 	if !ok {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return

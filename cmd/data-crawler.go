@@ -192,7 +192,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 
 	// Add disks for set healing.
 	if len(cache.Disks) > 0 {
-		objAPI, ok := newObjectLayerFn().(*erasureServerSets)
+		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
 		if ok {
 			s.disks = objAPI.GetDisksID(cache.Disks...)
 			if len(s.disks) != len(cache.Disks) {
@@ -471,7 +471,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
-		objAPI, ok := newObjectLayerFn().(*erasureServerSets)
+		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
 		if !ok || len(f.disks) == 0 {
 			continue
 		}

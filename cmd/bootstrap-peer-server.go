@@ -52,7 +52,7 @@ type bootstrapRESTServer struct{}
 type ServerSystemConfig struct {
 	MinioPlatform  string
 	MinioRuntime   string
-	MinioEndpoints EndpointServerSets
+	MinioEndpoints EndpointServerPools
 }
 
 // Diff - returns error on first difference found in two configs.
@@ -159,9 +159,9 @@ func (client *bootstrapRESTClient) Verify(ctx context.Context, srcCfg ServerSyst
 	return srcCfg.Diff(recvCfg)
 }
 
-func verifyServerSystemConfig(ctx context.Context, endpointServerSets EndpointServerSets) error {
+func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointServerPools) error {
 	srcCfg := getServerSystemCfg()
-	clnts := newBootstrapRESTClients(endpointServerSets)
+	clnts := newBootstrapRESTClients(endpointServerPools)
 	var onlineServers int
 	var offlineEndpoints []string
 	var retries int
@@ -196,10 +196,10 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerSets EndpointSe
 	return nil
 }
 
-func newBootstrapRESTClients(endpointServerSets EndpointServerSets) []*bootstrapRESTClient {
+func newBootstrapRESTClients(endpointServerPools EndpointServerPools) []*bootstrapRESTClient {
 	seenHosts := set.NewStringSet()
 	var clnts []*bootstrapRESTClient
-	for _, ep := range endpointServerSets {
+	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
 			if seenHosts.Contains(endpoint.Host) {
 				continue

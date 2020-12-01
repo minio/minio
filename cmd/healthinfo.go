@@ -61,10 +61,10 @@ func getLocalCPUInfo(ctx context.Context, r *http.Request) madmin.ServerCPUInfo 
 
 }
 
-func getLocalDrives(ctx context.Context, parallel bool, endpointServerSets EndpointServerSets, r *http.Request) madmin.ServerDrivesInfo {
+func getLocalDrives(ctx context.Context, parallel bool, endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerDrivesInfo {
 	var drivesPerfInfo []madmin.DrivePerfInfo
 	var wg sync.WaitGroup
-	for _, ep := range endpointServerSets {
+	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
 			// Only proceed for local endpoints
 			if endpoint.IsLocal {
@@ -105,7 +105,7 @@ func getLocalDrives(ctx context.Context, parallel bool, endpointServerSets Endpo
 
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(endpointServerSets)
+		addr = GetLocalPeer(endpointServerPools)
 	}
 	if parallel {
 		return madmin.ServerDrivesInfo{

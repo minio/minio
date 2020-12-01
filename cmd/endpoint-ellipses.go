@@ -329,7 +329,7 @@ var (
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports
 // both ellipses and without ellipses transparently.
 func createServerEndpoints(serverAddr string, args ...string) (
-	endpointServerSets EndpointServerSets, setupType SetupType, err error) {
+	endpointServerPools EndpointServerPools, setupType SetupType, err error) {
 
 	if len(args) == 0 {
 		return nil, -1, errInvalidArgument
@@ -352,13 +352,13 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if err != nil {
 			return nil, -1, err
 		}
-		endpointServerSets = append(endpointServerSets, ZoneEndpoints{
+		endpointServerPools = append(endpointServerPools, ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
 		})
 		setupType = newSetupType
-		return endpointServerSets, setupType, nil
+		return endpointServerPools, setupType, nil
 	}
 
 	var foundPrevLocal bool
@@ -372,9 +372,9 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		if setDriveCount != 0 && setDriveCount != len(setArgs[0]) {
-			return nil, -1, fmt.Errorf("All serverSets should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
+			return nil, -1, fmt.Errorf("All serverPools should have same drive per set ratio - expected %d, got %d", setDriveCount, len(setArgs[0]))
 		}
-		if err = endpointServerSets.Add(ZoneEndpoints{
+		if err = endpointServerPools.Add(ZoneEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
@@ -393,5 +393,5 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		}
 	}
 
-	return endpointServerSets, setupType, nil
+	return endpointServerPools, setupType, nil
 }

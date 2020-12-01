@@ -42,8 +42,8 @@ func TestHealing(t *testing.T) {
 	defer obj.Shutdown(context.Background())
 	defer removeRoots(fsDirs)
 
-	z := obj.(*erasureServerSets)
-	er := z.serverSets[0].sets[0]
+	z := obj.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
@@ -197,8 +197,8 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	// Test 1: Remove the object backend files from the first disk.
-	z := objLayer.(*erasureServerSets)
-	er := z.serverSets[0].sets[0]
+	z := objLayer.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
 	erasureDisks := er.getDisks()
 	firstDisk := erasureDisks[0]
 	err = firstDisk.Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
@@ -342,8 +342,8 @@ func TestHealObjectErasure(t *testing.T) {
 	}
 
 	// Remove the object backend files from the first disk.
-	z := obj.(*erasureServerSets)
-	er := z.serverSets[0].sets[0]
+	z := obj.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
 	firstDisk := er.getDisks()[0]
 
 	_, err = obj.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, ObjectOptions{})
@@ -366,7 +366,7 @@ func TestHealObjectErasure(t *testing.T) {
 	}
 
 	erasureDisks := er.getDisks()
-	z.serverSets[0].erasureDisksMu.Lock()
+	z.serverPools[0].erasureDisksMu.Lock()
 	er.getDisks = func() []StorageAPI {
 		// Nil more than half the disks, to remove write quorum.
 		for i := 0; i <= len(erasureDisks)/2; i++ {
@@ -374,7 +374,7 @@ func TestHealObjectErasure(t *testing.T) {
 		}
 		return erasureDisks
 	}
-	z.serverSets[0].erasureDisksMu.Unlock()
+	z.serverPools[0].erasureDisksMu.Unlock()
 
 	// Try healing now, expect to receive errDiskNotFound.
 	_, err = obj.HealObject(ctx, bucket, object, "", madmin.HealOpts{ScanMode: madmin.HealDeepScan})
@@ -419,8 +419,8 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	}
 
 	// Remove the object backend files from the first disk.
-	z := obj.(*erasureServerSets)
-	er := z.serverSets[0].sets[0]
+	z := obj.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
 	firstDisk := er.getDisks()[0]
 	err = firstDisk.DeleteVol(context.Background(), pathJoin(bucket, encodeDirObject(object)), true)
 	if err != nil {
