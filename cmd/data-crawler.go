@@ -546,13 +546,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							}
 						}
 
-						// If no errors and we have less than read quorum, delete it.
-						first, n := entries.firstFound()
-						if n < getReadQuorum(len(f.disks)) && first.name != "" {
-							// If too few disks have the object to read, delete it.
-							objAPI.deleteAll(ctx, bucket, first.name)
-							return
-						}
+						// If no errors, queue it for healing.
+						first, _ := entries.firstFound()
 						if first.isDir() {
 							// If we only get a dir, don't do anything for now.
 							return
