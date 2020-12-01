@@ -20,18 +20,23 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
+
+const unavailable = "offline"
 
 // ClusterCheckHandler returns if the server is ready for requests.
 func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ClusterCheckHandler")
 
-	objLayer := newObjectLayerFn()
-	// Service not initialized yet
-	if objLayer == nil {
+	if shouldProxy() {
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
 		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
 		return
 	}
+
+	objLayer := newObjectLayerFn()
 
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
@@ -39,12 +44,12 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}
 	result := objLayer.Health(ctx, opts)
 	if result.WriteQuorum > 0 {
-		w.Header().Set("X-Minio-Write-Quorum", strconv.Itoa(result.WriteQuorum))
+		w.Header().Set(xhttp.MinIOWriteQuorum, strconv.Itoa(result.WriteQuorum))
 	}
 	if !result.Healthy {
 		// return how many drives are being healed if any
 		if result.HealingDrives > 0 {
-			w.Header().Set("X-Minio-Healing-Drives", strconv.Itoa(result.HealingDrives))
+			w.Header().Set(xhttp.MinIOHealingDrives, strconv.Itoa(result.HealingDrives))
 		}
 		// As a maintenance call we are purposefully asked to be taken
 		// down, this is for orchestrators to know if we can safely
@@ -61,12 +66,19 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // ReadinessCheckHandler Checks if the process is up. Always returns success.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: only implement this function to notify that this pod is
-	// busy, at a local scope in future, for now '200 OK'.
+	if shouldProxy() {
+		// Service not initialized yet
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+	}
+
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
 // LivenessCheckHandler - Checks if the process is up. Always returns success.
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if shouldProxy() {
+		// Service not initialized yet
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+	}
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }

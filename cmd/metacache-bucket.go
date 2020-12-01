@@ -51,7 +51,17 @@ type bucketMetacache struct {
 }
 
 // newBucketMetacache creates a new bucketMetacache.
-func newBucketMetacache(bucket string) *bucketMetacache {
+// Optionally remove all existing caches.
+func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
+	if cleanup {
+		// Recursively delete all caches.
+		objAPI := newObjectLayerFn()
+		ez, ok := objAPI.(*erasureServerSets)
+		if ok {
+			ctx := context.Background()
+			ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(bucket, slashSeparator))
+		}
+	}
 	return &bucketMetacache{
 		bucket: bucket,
 		caches: make(map[string]metacache, 10),
@@ -92,24 +102,31 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 	err := objAPI.GetObject(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), 0, -1, w, "", ObjectOptions{})
 	logger.LogIf(ctx, w.CloseWithError(err))
 	if err != nil {
-		if isErrObjectNotFound(err) {
+		switch err.(type) {
+		case ObjectNotFound:
 			err = nil
-		} else {
+		case InsufficientReadQuorum:
+			// Cache is likely lost. Clean up and return new.
+			return newBucketMetacache(bucket, true), nil
+		default:
 			logger.LogIf(ctx, err)
 		}
-		return newBucketMetacache(bucket), err
+		return newBucketMetacache(bucket, false), err
 	}
 	wg.Wait()
 	if decErr != nil {
+		if errors.Is(err, context.Canceled) {
+			return newBucketMetacache(bucket, false), err
+		}
 		// Log the error, but assume the data is lost and return a fresh bucket.
 		// Otherwise a broken cache will never recover.
 		logger.LogIf(ctx, decErr)
-		return newBucketMetacache(bucket), nil
+		return newBucketMetacache(bucket, true), nil
 	}
 	// Sanity check...
 	if meta.bucket != bucket {
 		logger.Info("loadBucketMetaCache: loaded cache name mismatch, want %s, got %s. Discarding.", bucket, meta.bucket)
-		return newBucketMetacache(bucket), nil
+		return newBucketMetacache(bucket, true), nil
 	}
 	return &meta, nil
 }
@@ -187,16 +204,18 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 
 	// Check if exists already.
 	if c, ok := b.caches[o.ID]; ok {
+		debugPrint("returning existing %v", o.ID)
 		return c
 	}
 
 	var best metacache
+	extend := globalAPIConfig.getExtendListLife()
 	for _, cached := range b.caches {
 		// Never return transient caches if there is no id.
 		if b.transient {
 			break
 		}
-		if cached.status == scanStateError || cached.dataVersion != metacacheStreamVersion {
+		if cached.status == scanStateError || cached.status == scanStateNone || cached.dataVersion != metacacheStreamVersion {
 			debugPrint("cache %s state or stream version mismatch", cached.id)
 			continue
 		}
@@ -207,6 +226,10 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		// Root of what we are looking for must at least have
 		if !strings.HasPrefix(o.BaseDir, cached.root) {
 			debugPrint("cache %s prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
+			continue
+		}
+		if cached.filter != "" && strings.HasPrefix(cached.filter, o.FilterPrefix) {
+			debugPrint("cache %s cannot be used because of filter %s", cached.id, cached.filter)
 			continue
 		}
 		// If the existing listing wasn't recursive root must match.
@@ -224,15 +247,23 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 			// Non slash separator requires recursive.
 			continue
 		}
-		if cached.ended.IsZero() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
+		if !cached.finished() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
 			debugPrint("cache %s not running, time: %v", cached.id, time.Since(cached.lastUpdate))
 			// Abandoned
 			continue
 		}
-		if !cached.ended.IsZero() && cached.endedCycle <= o.OldestCycle {
-			debugPrint("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
-			// If scan has ended the oldest requested must be less.
-			continue
+
+		if cached.finished() && cached.endedCycle <= o.OldestCycle {
+			if extend <= 0 {
+				// If scan has ended the oldest requested must be less.
+				debugPrint("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
+				continue
+			}
+			if time.Since(cached.lastUpdate) > metacacheMaxRunningAge+extend {
+				// Cache ended within bloom cycle, but we can extend the life.
+				debugPrint("cache %s ended (%v) and beyond extended life (%v)", cached.id, cached.lastUpdate, extend+metacacheMaxRunningAge)
+				continue
+			}
 		}
 		if cached.started.Before(best.started) {
 			debugPrint("cache %s disregarded - we have a better", cached.id)
@@ -247,7 +278,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 			b.caches[best.id] = best
 			b.updated = true
 		}
-		debugPrint("returning cached")
+		debugPrint("returning cached %s, status: %v, ended: %v", best.id, best.status, best.ended)
 		return best
 	}
 	if !o.Create {
@@ -262,6 +293,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 	best = o.newMetacache()
 	b.caches[o.ID] = best
 	b.updated = true
+	debugPrint("returning new cache %s, bucket: %v", best.id, best.bucket)
 	return best
 }
 
@@ -278,27 +310,34 @@ func (b *bucketMetacache) cleanup() {
 
 	b.mu.RLock()
 	for id, cache := range b.caches {
-		if b.transient && time.Since(cache.started) > time.Hour {
+		if b.transient && time.Since(cache.lastUpdate) > 15*time.Minute && time.Since(cache.lastHandout) > 15*time.Minute {
 			// Keep transient caches only for 1 hour.
 			remove[id] = struct{}{}
+			continue
 		}
 		if !cache.worthKeeping(currentCycle) {
 			debugPrint("cache %s not worth keeping", id)
 			remove[id] = struct{}{}
+			continue
 		}
 		if cache.id != id {
 			logger.Info("cache ID mismatch %s != %s", id, cache.id)
 			remove[id] = struct{}{}
+			continue
 		}
 		if cache.bucket != b.bucket && !b.transient {
 			logger.Info("cache bucket mismatch %s != %s", b.bucket, cache.bucket)
 			remove[id] = struct{}{}
+			continue
 		}
 	}
 
 	// Check all non-deleted against eachother.
 	// O(n*n), but should still be rather quick.
 	for id, cache := range b.caches {
+		if b.transient {
+			break
+		}
 		if _, ok := remove[id]; ok {
 			continue
 		}
@@ -346,20 +385,7 @@ func (b *bucketMetacache) updateCacheEntry(update metacache) (metacache, error) 
 		logger.Info("updateCacheEntry: bucket %s list id %v not found", b.bucket, update.id)
 		return update, errFileNotFound
 	}
-
-	existing.lastUpdate = UTCNow()
-	if existing.status == scanStateStarted && update.status != scanStateStarted {
-		existing.status = update.status
-	}
-	if existing.status == scanStateSuccess && update.status == scanStateSuccess {
-		existing.ended = UTCNow()
-		existing.endedCycle = update.endedCycle
-	}
-	if existing.error == "" && update.error != "" {
-		existing.error = update.error
-		existing.status = scanStateError
-	}
-	existing.fileNotFound = existing.fileNotFound || update.fileNotFound
+	existing.update(update)
 	b.caches[update.id] = existing
 	b.updated = true
 	return existing, nil
@@ -389,16 +415,26 @@ func (b *bucketMetacache) deleteAll() {
 		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasureZones"))
 		return
 	}
+
+	b.updated = true
+	if !b.transient {
+		// Delete all.
+		ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(b.bucket, slashSeparator))
+		b.caches = make(map[string]metacache, 10)
+		return
+	}
+
+	// Transient are in different buckets.
 	var wg sync.WaitGroup
 	for id := range b.caches {
 		wg.Add(1)
 		go func(cache metacache) {
 			defer wg.Done()
-			logger.LogIf(ctx, ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(cache.bucket, cache.id)))
+			ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(cache.bucket, cache.id))
 		}(b.caches[id])
-		delete(b.caches, id)
 	}
 	wg.Wait()
+	b.caches = make(map[string]metacache, 10)
 }
 
 // deleteCache will delete a specific cache and all files related to it across the cluster.
@@ -411,17 +447,6 @@ func (b *bucketMetacache) deleteCache(id string) {
 	}
 	b.mu.Unlock()
 	if ok {
-		ctx := context.Background()
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
-			logger.LogIf(ctx, errors.New("bucketMetacache: no object layer"))
-			return
-		}
-		ez, ok := objAPI.(*erasureServerSets)
-		if !ok {
-			logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasureServerSets"))
-			return
-		}
-		logger.LogIf(ctx, ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(c.bucket, c.id)))
+		c.delete(context.Background())
 	}
 }

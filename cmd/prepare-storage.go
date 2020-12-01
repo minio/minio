@@ -19,11 +19,11 @@ package cmd
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"sync"
 	"time"
 
@@ -81,14 +81,11 @@ func formatErasureMigrateLocalEndpoints(endpoints Endpoints) error {
 		index := index
 		g.Go(func() error {
 			epPath := endpoints[index].Path
-			formatPath := pathJoin(epPath, minioMetaBucket, formatConfigFile)
-			if _, err := os.Stat(formatPath); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return fmt.Errorf("unable to access (%s) %w", formatPath, err)
+			err := formatErasureMigrate(epPath)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
 			}
-			return formatErasureMigrate(epPath)
+			return nil
 		}, index)
 	}
 	for _, err := range g.Wait() {
@@ -109,22 +106,6 @@ func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 		index := index
 		g.Go(func() error {
 			epPath := endpoints[index].Path
-			// If disk is not formatted there is nothing to be cleaned up.
-			formatPath := pathJoin(epPath, minioMetaBucket, formatConfigFile)
-			if _, err := os.Stat(formatPath); err != nil {
-				if os.IsNotExist(err) {
-					return nil
-				}
-				return fmt.Errorf("unable to access (%s) %w", formatPath, err)
-			}
-			if _, err := os.Stat(pathJoin(epPath, minioMetaTmpBucket+"-old")); err != nil {
-				if !os.IsNotExist(err) {
-					return fmt.Errorf("unable to access (%s) %w",
-						pathJoin(epPath, minioMetaTmpBucket+"-old"),
-						err)
-				}
-			}
-
 			// Need to move temporary objects left behind from previous run of minio
 			// server to a unique directory under `minioMetaTmpBucket-old` to clean
 			// up `minioMetaTmpBucket` for the current run.
@@ -177,7 +158,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
-		Path:   path.Join(healthCheckPathPrefix, healthCheckLivenessPath),
+		Path:   pathJoin(healthCheckPathPrefix, healthCheckLivenessPath),
 	}
 
 	var tlsConfig *tls.Config
@@ -195,9 +176,9 @@ func IsServerResolvable(endpoint Endpoint) error {
 		&http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			DialContext:           xhttp.NewCustomDialContext(3 * time.Second),
-			ResponseHeaderTimeout: 5 * time.Second,
-			TLSHandshakeTimeout:   5 * time.Second,
-			ExpectContinueTimeout: 5 * time.Second,
+			ResponseHeaderTimeout: 3 * time.Second,
+			TLSHandshakeTimeout:   3 * time.Second,
+			ExpectContinueTimeout: 3 * time.Second,
 			TLSClientConfig:       tlsConfig,
 			// Go net/http automatically unzip if content-type is
 			// gzip disable this feature, as we are always interested
@@ -207,23 +188,29 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
-	defer cancel()
+	ctx, cancel := context.WithTimeout(GlobalContext, 3*time.Second)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL.String(), nil)
 	if err != nil {
+		cancel()
 		return err
 	}
 
 	resp, err := httpClient.Do(req)
+	cancel()
 	if err != nil {
 		return err
 	}
-	defer xhttp.DrainBody(resp.Body)
+	xhttp.DrainBody(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return StorageErr(resp.Status)
 	}
+
+	if resp.Header.Get(xhttp.MinIOServerStatus) == unavailable {
+		return StorageErr(unavailable)
+	}
+
 	return nil
 }
 

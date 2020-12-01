@@ -66,6 +66,12 @@ const (
 	AmzTagCount      = "x-amz-tagging-count"
 	AmzTagDirective  = "X-Amz-Tagging-Directive"
 
+	// S3 transition restore
+	AmzRestore            = "x-amz-restore"
+	AmzRestoreExpiryDays  = "X-Amz-Restore-Expiry-Days"
+	AmzRestoreRequestDate = "X-Amz-Restore-Request-Date"
+	AmzRestoreOutputPath  = "x-amz-restore-output-path"
+
 	// S3 extensions
 	AmzCopySourceIfModifiedSince   = "x-amz-copy-source-if-modified-since"
 	AmzCopySourceIfUnmodifiedSince = "x-amz-copy-source-if-unmodified-since"
@@ -126,6 +132,23 @@ const (
 
 	// Header indicates if the etag should be preserved by client
 	MinIOSourceETag = "x-minio-source-etag"
+
+	// Writes expected write quorum
+	MinIOWriteQuorum = "x-minio-write-quorum"
+
+	// Reports number of drives currently healing
+	MinIOHealingDrives = "x-minio-healing-drives"
+
+	// Header indicates if the delete marker should be preserved by client
+	MinIOSourceDeleteMarker = "x-minio-source-deletemarker"
+
+	// Header indicates if the delete marker version needs to be purged.
+	MinIOSourceDeleteMarkerDelete = "x-minio-source-deletemarker-delete"
+
+	// Header indicates permanent delete replication status.
+	MinIODeleteReplicationStatus = "X-Minio-Replication-Delete-Status"
+	// Header indicates delete-marker replication status.
+	MinIODeleteMarkerReplicationStatus = "X-Minio-Replication-DeleteMarker-Status"
 )
 
 // Common http query params S3 API

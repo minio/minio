@@ -246,7 +246,7 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost", Path: "/d2"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost", Path: "/d3"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost", Path: "/d4"}, IsLocal: true},
-		}, DistErasureSetupType, nil},
+		}, ErasureSetupType, nil},
 		// DistErasure Setup with URLEndpointType having mixed naming to local host.
 		{"127.0.0.1:10000", [][]string{{"http://localhost/d1", "http://localhost/d2", "http://127.0.0.1/d3", "http://127.0.0.1/d4"}}, "", Endpoints{}, -1, fmt.Errorf("all local endpoints should not have different hostnames/ips")},
 

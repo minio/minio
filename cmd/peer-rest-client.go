@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -124,7 +123,7 @@ func (r *nullReader) Read(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.NetOBDInfo, err error) {
+func (client *peerRESTClient) doNetTest(ctx context.Context, dataSize int64, threadCount uint) (info madmin.NetPerfInfo, err error) {
 	var mu sync.Mutex // mutex used to protect these slices in go-routines
 	latencies := []float64{}
 	throughputs := []float64{}
@@ -179,11 +178,11 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 
 				progress := io.LimitReader(&nullReader{}, dataSize)
 
-				// Turn off healthCheckFn for OBD tests to cater for higher load on the peers.
+				// Turn off healthCheckFn for health tests to cater for higher load on the peers.
 				clnt := newPeerRESTClient(client.host)
 				clnt.restClient.HealthCheckFn = nil
 
-				respBody, err := clnt.callWithContext(ctx, peerRESTMethodNetOBDInfo, nil, progress, dataSize)
+				respBody, err := clnt.callWithContext(ctx, peerRESTMethodNetInfo, nil, progress, dataSize)
 				if err != nil {
 					if errors.Is(err, context.DeadlineExceeded) {
 						slowSample()
@@ -226,8 +225,8 @@ func (client *peerRESTClient) doNetOBDTest(ctx context.Context, dataSize int64, 
 		return info, err
 	}
 
-	latency, throughput, err := xnet.ComputeOBDStats(latencies, throughputs)
-	info = madmin.NetOBDInfo{
+	latency, throughput, err := xnet.ComputePerfStats(latencies, throughputs)
+	info = madmin.NetPerfInfo{
 		Latency:    latency,
 		Throughput: throughput,
 	}
@@ -274,8 +273,8 @@ func maxLatencyForSizeThreads(size int64, threadCount uint) float64 {
 	return math.MaxFloat64
 }
 
-// NetOBDInfo - fetch Net OBD information for a remote node.
-func (client *peerRESTClient) NetOBDInfo(ctx context.Context) (info madmin.NetOBDInfo, err error) {
+// NetInfo - fetch Net information for a remote node.
+func (client *peerRESTClient) NetInfo(ctx context.Context) (info madmin.NetPerfInfo, err error) {
 
 	// 100 Gbit ->  256 MiB  *  50 threads
 	// 40 Gbit  ->  256 MiB  *  20 threads
@@ -314,7 +313,7 @@ func (client *peerRESTClient) NetOBDInfo(ctx context.Context) (info madmin.NetOB
 		size := steps[i].size
 		threads := steps[i].threads
 
-		if info, err = client.doNetOBDTest(ctx, size, threads); err != nil {
+		if info, err = client.doNetTest(ctx, size, threads); err != nil {
 			if err == networkOverloaded {
 				continue
 			}
@@ -328,9 +327,9 @@ func (client *peerRESTClient) NetOBDInfo(ctx context.Context) (info madmin.NetOB
 	return info, err
 }
 
-// DispatchNetOBDInfo - dispatch other nodes to run Net OBD.
-func (client *peerRESTClient) DispatchNetOBDInfo(ctx context.Context) (info madmin.ServerNetOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodDispatchNetOBDInfo, nil, nil, -1)
+// DispatchNetInfo - dispatch other nodes to run Net info.
+func (client *peerRESTClient) DispatchNetInfo(ctx context.Context) (info madmin.ServerNetHealthInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDispatchNetInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -343,9 +342,9 @@ func (client *peerRESTClient) DispatchNetOBDInfo(ctx context.Context) (info madm
 	return
 }
 
-// DriveOBDInfo - fetch Drive OBD information for a remote node.
-func (client *peerRESTClient) DriveOBDInfo(ctx context.Context) (info madmin.ServerDrivesOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodDriveOBDInfo, nil, nil, -1)
+// DriveInfo - fetch Drive information for a remote node.
+func (client *peerRESTClient) DriveInfo(ctx context.Context) (info madmin.ServerDrivesInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDriveInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -354,9 +353,9 @@ func (client *peerRESTClient) DriveOBDInfo(ctx context.Context) (info madmin.Ser
 	return info, err
 }
 
-// CPUOBDInfo - fetch CPU OBD information for a remote node.
-func (client *peerRESTClient) CPUOBDInfo(ctx context.Context) (info madmin.ServerCPUOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodCPUOBDInfo, nil, nil, -1)
+// CPUInfo - fetch CPU information for a remote node.
+func (client *peerRESTClient) CPUInfo(ctx context.Context) (info madmin.ServerCPUInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodCPUInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -365,9 +364,9 @@ func (client *peerRESTClient) CPUOBDInfo(ctx context.Context) (info madmin.Serve
 	return info, err
 }
 
-// DiskHwOBDInfo - fetch Disk HW OBD information for a remote node.
-func (client *peerRESTClient) DiskHwOBDInfo(ctx context.Context) (info madmin.ServerDiskHwOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodDiskHwOBDInfo, nil, nil, -1)
+// DiskHwInfo - fetch Disk HW information for a remote node.
+func (client *peerRESTClient) DiskHwInfo(ctx context.Context) (info madmin.ServerDiskHwInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDiskHwInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -376,9 +375,9 @@ func (client *peerRESTClient) DiskHwOBDInfo(ctx context.Context) (info madmin.Se
 	return info, err
 }
 
-// OsOBDInfo - fetch OsInfo OBD information for a remote node.
-func (client *peerRESTClient) OsOBDInfo(ctx context.Context) (info madmin.ServerOsOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodOsInfoOBDInfo, nil, nil, -1)
+// OsInfo - fetch OS information for a remote node.
+func (client *peerRESTClient) OsInfo(ctx context.Context) (info madmin.ServerOsInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodOsInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -387,9 +386,9 @@ func (client *peerRESTClient) OsOBDInfo(ctx context.Context) (info madmin.Server
 	return info, err
 }
 
-// MemOBDInfo - fetch MemInfo OBD information for a remote node.
-func (client *peerRESTClient) MemOBDInfo(ctx context.Context) (info madmin.ServerMemOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodMemOBDInfo, nil, nil, -1)
+// MemInfo - fetch Memory information for a remote node.
+func (client *peerRESTClient) MemInfo(ctx context.Context) (info madmin.ServerMemInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodMemInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -398,9 +397,9 @@ func (client *peerRESTClient) MemOBDInfo(ctx context.Context) (info madmin.Serve
 	return info, err
 }
 
-// ProcOBDInfo - fetch ProcInfo OBD information for a remote node.
-func (client *peerRESTClient) ProcOBDInfo(ctx context.Context) (info madmin.ServerProcOBDInfo, err error) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodProcOBDInfo, nil, nil, -1)
+// ProcInfo - fetch Process information for a remote node.
+func (client *peerRESTClient) ProcInfo(ctx context.Context) (info madmin.ServerProcInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodProcInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -449,19 +448,6 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	values := make(url.Values)
 	values.Set(peerRESTBucket, bucket)
 	respBody, err := client.call(peerRESTMethodDeleteBucketMetadata, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer http.DrainBody(respBody)
-	return nil
-}
-
-// ReloadFormat - reload format on the peer node.
-func (client *peerRESTClient) ReloadFormat(dryRun bool) error {
-	values := make(url.Values)
-	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
-
-	respBody, err := client.call(peerRESTMethodReloadFormat, values, nil, -1)
 	if err != nil {
 		return err
 	}
@@ -885,27 +871,18 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 		Path:   peerRESTPath,
 	}
 
-	var tlsConfig *tls.Config
-	if globalIsSSL {
-		tlsConfig = &tls.Config{
-			ServerName: peer.Name,
-			RootCAs:    globalRootCAs,
-		}
-	}
-
-	trFn := newInternodeHTTPTransport(tlsConfig, rest.DefaultTimeout)
-	restClient := rest.NewClient(serverURL, trFn, newAuthToken)
+	restClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	// Use a separate client to avoid recursive calls.
+	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
+	healthClient.ExpectTimeouts = true
 
 	// Construct a new health function.
 	restClient.HealthCheckFn = func() bool {
 		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
-		// Instantiate a new rest client for healthcheck
-		// to avoid recursive healthCheckFn()
-		respBody, err := rest.NewClient(serverURL, trFn, newAuthToken).Call(ctx, peerRESTMethodHealth, nil, nil, -1)
+		defer cancel()
+		respBody, err := healthClient.Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
-		cancel()
-		var ne *rest.NetworkError
-		return !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &ne)
+		return !isNetworkError(err)
 	}
 
 	return &peerRESTClient{host: peer, restClient: restClient}

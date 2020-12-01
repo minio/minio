@@ -31,7 +31,7 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOBDInfo {
+func getLocalCPUInfo(ctx context.Context, r *http.Request) madmin.ServerCPUInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
@@ -39,7 +39,7 @@ func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOB
 
 	info, err := cpuhw.InfoWithContext(ctx)
 	if err != nil {
-		return madmin.ServerCPUOBDInfo{
+		return madmin.ServerCPUInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -47,13 +47,13 @@ func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOB
 
 	time, err := cpuhw.TimesWithContext(ctx, false)
 	if err != nil {
-		return madmin.ServerCPUOBDInfo{
+		return madmin.ServerCPUInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
 	}
 
-	return madmin.ServerCPUOBDInfo{
+	return madmin.ServerCPUInfo{
 		Addr:     addr,
 		CPUStat:  info,
 		TimeStat: time,
@@ -61,8 +61,8 @@ func getLocalCPUOBDInfo(ctx context.Context, r *http.Request) madmin.ServerCPUOB
 
 }
 
-func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointServerSets EndpointServerSets, r *http.Request) madmin.ServerDrivesOBDInfo {
-	var drivesOBDInfo []madmin.DriveOBDInfo
+func getLocalDrives(ctx context.Context, parallel bool, endpointServerSets EndpointServerSets, r *http.Request) madmin.ServerDrivesInfo {
+	var drivesPerfInfo []madmin.DrivePerfInfo
 	var wg sync.WaitGroup
 	for _, ep := range endpointServerSets {
 		for _, endpoint := range ep.Endpoints {
@@ -70,7 +70,7 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointServerSets En
 			if endpoint.IsLocal {
 				if _, err := os.Stat(endpoint.Path); err != nil {
 					// Since this drive is not available, add relevant details and proceed
-					drivesOBDInfo = append(drivesOBDInfo, madmin.DriveOBDInfo{
+					drivesPerfInfo = append(drivesPerfInfo, madmin.DrivePerfInfo{
 						Path:  endpoint.Path,
 						Error: err.Error(),
 					})
@@ -79,17 +79,17 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointServerSets En
 				measurePath := pathJoin(minioMetaTmpBucket, mustGetUUID())
 				measure := func(path string) {
 					defer wg.Done()
-					driveOBDInfo := madmin.DriveOBDInfo{
+					driveInfo := madmin.DrivePerfInfo{
 						Path: path,
 					}
-					latency, throughput, err := disk.GetOBDInfo(ctx, path, pathJoin(path, measurePath))
+					latency, throughput, err := disk.GetHealthInfo(ctx, path, pathJoin(path, measurePath))
 					if err != nil {
-						driveOBDInfo.Error = err.Error()
+						driveInfo.Error = err.Error()
 					} else {
-						driveOBDInfo.Latency = latency
-						driveOBDInfo.Throughput = throughput
+						driveInfo.Latency = latency
+						driveInfo.Throughput = throughput
 					}
-					drivesOBDInfo = append(drivesOBDInfo, driveOBDInfo)
+					drivesPerfInfo = append(drivesPerfInfo, driveInfo)
 				}
 				wg.Add(1)
 
@@ -108,18 +108,18 @@ func getLocalDrivesOBD(ctx context.Context, parallel bool, endpointServerSets En
 		addr = GetLocalPeer(endpointServerSets)
 	}
 	if parallel {
-		return madmin.ServerDrivesOBDInfo{
+		return madmin.ServerDrivesInfo{
 			Addr:     addr,
-			Parallel: drivesOBDInfo,
+			Parallel: drivesPerfInfo,
 		}
 	}
-	return madmin.ServerDrivesOBDInfo{
+	return madmin.ServerDrivesInfo{
 		Addr:   addr,
-		Serial: drivesOBDInfo,
+		Serial: drivesPerfInfo,
 	}
 }
 
-func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInfo {
+func getLocalMemInfo(ctx context.Context, r *http.Request) madmin.ServerMemInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
@@ -127,7 +127,7 @@ func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInf
 
 	swap, err := memhw.SwapMemoryWithContext(ctx)
 	if err != nil {
-		return madmin.ServerMemOBDInfo{
+		return madmin.ServerMemInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -135,27 +135,27 @@ func getLocalMemOBD(ctx context.Context, r *http.Request) madmin.ServerMemOBDInf
 
 	vm, err := memhw.VirtualMemoryWithContext(ctx)
 	if err != nil {
-		return madmin.ServerMemOBDInfo{
+		return madmin.ServerMemInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
 	}
 
-	return madmin.ServerMemOBDInfo{
+	return madmin.ServerMemInfo{
 		Addr:       addr,
 		SwapMem:    swap,
 		VirtualMem: vm,
 	}
 }
 
-func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDInfo {
+func getLocalProcInfo(ctx context.Context, r *http.Request) madmin.ServerProcInfo {
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
-	errProcInfo := func(err error) madmin.ServerProcOBDInfo {
-		return madmin.ServerProcOBDInfo{
+	errProcInfo := func(err error) madmin.ServerProcInfo {
+		return madmin.ServerProcInfo{
 			Addr:  addr,
 			Error: err.Error(),
 		}
@@ -172,9 +172,9 @@ func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDI
 		return errProcInfo(err)
 	}
 
-	sysProcs := []madmin.SysOBDProcess{}
+	sysProcs := []madmin.SysProcess{}
 	for _, proc := range processes {
-		sysProc := madmin.SysOBDProcess{}
+		sysProc := madmin.SysProcess{}
 		sysProc.Pid = proc.Pid
 
 		bg, err := proc.BackgroundWithContext(ctx)
@@ -296,12 +296,6 @@ func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDI
 		}
 		sysProc.NumThreads = numThreads
 
-		openFiles, err := proc.OpenFilesWithContext(ctx)
-		if err != nil {
-			return errProcInfo(err)
-		}
-		sysProc.OpenFiles = openFiles
-
 		pageFaults, err := proc.PageFaultsWithContext(ctx)
 		if err != nil {
 			return errProcInfo(err)
@@ -336,12 +330,6 @@ func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDI
 		}
 		sysProc.Tgid = tgid
 
-		threads, err := proc.ThreadsWithContext(ctx)
-		if err != nil {
-			return errProcInfo(err)
-		}
-		sysProc.Threads = threads
-
 		times, err := proc.TimesWithContext(ctx)
 		if err != nil {
 			return errProcInfo(err)
@@ -363,7 +351,7 @@ func getLocalProcOBD(ctx context.Context, r *http.Request) madmin.ServerProcOBDI
 		sysProcs = append(sysProcs, sysProc)
 	}
 
-	return madmin.ServerProcOBDInfo{
+	return madmin.ServerProcInfo{
 		Addr:      addr,
 		Processes: sysProcs,
 	}

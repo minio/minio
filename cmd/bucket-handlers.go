@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -383,6 +384,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
+	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
+	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
+	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
+
 	// Before proceeding validate if bucket exists.
 	_, err := objectAPI.GetBucketInfo(ctx, bucket)
 	if err != nil {
@@ -400,7 +405,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	if api.CacheAPI() != nil {
 		getObjectInfoFn = api.CacheAPI().GetObjectInfo
 	}
-
+	var (
+		hasLockEnabled, hasLifecycleConfig bool
+		goi                                ObjectInfo
+		gerr                               error
+	)
+	replicateDeletes := hasReplicationRules(ctx, bucket, deleteObjects.Objects)
+	if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
+		hasLockEnabled = true
+	}
+	if _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket); err == nil {
+		hasLifecycleConfig = true
+	}
 	dErrs := make([]DeleteError, len(deleteObjects.Objects))
 	for index, object := range deleteObjects.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
@@ -417,10 +433,33 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
-
+		if replicateDeletes || hasLockEnabled || hasLifecycleConfig {
+			goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, ObjectOptions{
+				VersionID: object.VersionID,
+			})
+		}
+		if hasLifecycleConfig && gerr == nil {
+			object.PurgeTransitioned = goi.TransitionStatus
+		}
+		if replicateDeletes {
+			delMarker, replicate := checkReplicateDelete(ctx, bucket, ObjectToDelete{
+				ObjectName: object.ObjectName,
+				VersionID:  object.VersionID,
+			}, goi, gerr)
+			if replicate {
+				if object.VersionID != "" {
+					object.VersionPurgeStatus = Pending
+					if delMarker {
+						object.DeleteMarkerVersionID = object.VersionID
+					}
+				} else {
+					object.DeleteMarkerReplicationStatus = string(replication.Pending)
+				}
+			}
+		}
 		if object.VersionID != "" {
-			if rcfg, _ := globalBucketObjectLockSys.Get(bucket); rcfg.LockEnabled {
-				if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, getObjectInfoFn); apiErrCode != ErrNone {
+			if hasLockEnabled {
+				if apiErrCode := enforceRetentionBypassForDelete(ctx, r, bucket, object, goi, gerr); apiErrCode != ErrNone {
 					apiErr := errorCodes.ToAPIErr(apiErrCode)
 					dErrs[index] = DeleteError{
 						Code:      apiErr.Code,
@@ -454,15 +493,25 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		Versioned:        globalBucketVersioningSys.Enabled(bucket),
 		VersionSuspended: globalBucketVersioningSys.Suspended(bucket),
 	})
-
 	deletedObjects := make([]DeletedObject, len(deleteObjects.Objects))
 	for i := range errs {
-		dindex := objectsToDelete[deleteList[i]]
-		apiErr := toAPIError(ctx, errs[i])
-		if apiErr.Code == "" || apiErr.Code == "NoSuchKey" || apiErr.Code == "InvalidArgument" {
+		dindex := objectsToDelete[ObjectToDelete{
+			ObjectName:                    dObjects[i].ObjectName,
+			VersionID:                     dObjects[i].VersionID,
+			DeleteMarkerVersionID:         dObjects[i].DeleteMarkerVersionID,
+			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
+			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
+			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
+		}]
+		if errs[i] == nil || isErrObjectNotFound(errs[i]) {
+			if replicateDeletes {
+				dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
+				dObjects[i].VersionPurgeStatus = deleteList[i].VersionPurgeStatus
+			}
 			deletedObjects[dindex] = dObjects[i]
 			continue
 		}
+		apiErr := toAPIError(ctx, errs[i])
 		dErrs[dindex] = DeleteError{
 			Code:      apiErr.Code,
 			Message:   apiErr.Description,
@@ -484,7 +533,29 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
+	for _, dobj := range deletedObjects {
+		if replicateDeletes {
+			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
+				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+					DeletedObject: dobj,
+					Bucket:        bucket,
+				})
+			}
+		}
 
+		if hasLifecycleConfig && dobj.PurgeTransitioned == lifecycle.TransitionComplete { // clean up transitioned tier
+			action := lifecycle.DeleteAction
+			if dobj.VersionID != "" {
+				action = lifecycle.DeleteVersionAction
+			}
+			deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, dobj.ObjectName, lifecycle.ObjectOpts{
+				Name:         dobj.ObjectName,
+				VersionID:    dobj.VersionID,
+				DeleteMarker: dobj.DeleteMarker,
+			}, action, true)
+		}
+
+	}
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
@@ -1291,7 +1362,6 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
 	if err = globalBucketMetadataSys.Update(bucket, bucketReplicationConfig, configData); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return

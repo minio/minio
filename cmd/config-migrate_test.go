@@ -60,12 +60,12 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Check if config v1 is removed from filesystem
-	if _, err := os.Stat(configPath); err == nil || !os.IsNotExist(err) {
+	if _, err := os.Stat(configPath); err == nil || !osIsNotExist(err) {
 		t.Fatal("Config V1 file is not purged")
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, true); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -202,7 +202,8 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	if err := migrateConfigToMinioSys(objLayer); err != nil {
+	freshConfig, err := migrateConfigToMinioSys(objLayer)
+	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -215,7 +216,7 @@ func TestServerConfigMigrateV2toV33(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(objLayer); err != nil {
+	if err := loadConfig(objLayer, freshConfig); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 

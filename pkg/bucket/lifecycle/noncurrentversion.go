@@ -32,10 +32,6 @@ type NoncurrentVersionTransition struct {
 	StorageClass   string         `xml:"StorageClass"`
 }
 
-var (
-	errNoncurrentVersionTransitionUnsupported = Errorf("Specifying <NoncurrentVersionTransition></NoncurrentVersionTransition> is not supported")
-)
-
 // MarshalXML if non-current days not set to non zero value
 func (n NoncurrentVersionExpiration) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if n.IsDaysNull() {
@@ -50,18 +46,17 @@ func (n NoncurrentVersionExpiration) IsDaysNull() bool {
 	return n.NoncurrentDays == ExpirationDays(0)
 }
 
-// UnmarshalXML is extended to indicate lack of support for
-// NoncurrentVersionTransition xml tag in object lifecycle
-// configuration
-func (n NoncurrentVersionTransition) UnmarshalXML(d *xml.Decoder, startElement xml.StartElement) error {
-	return errNoncurrentVersionTransitionUnsupported
-}
-
 // MarshalXML is extended to leave out
 // <NoncurrentVersionTransition></NoncurrentVersionTransition> tags
 func (n NoncurrentVersionTransition) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	if n.NoncurrentDays == ExpirationDays(0) {
 		return nil
 	}
-	return e.EncodeElement(&n, start)
+	type noncurrentVersionTransitionWrapper NoncurrentVersionTransition
+	return e.EncodeElement(noncurrentVersionTransitionWrapper(n), start)
+}
+
+// IsDaysNull returns true if days field is null
+func (n NoncurrentVersionTransition) IsDaysNull() bool {
+	return n.NoncurrentDays == ExpirationDays(0)
 }

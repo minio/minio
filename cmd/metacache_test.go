@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var metaCacheTestsetTimestamp, _ = time.Parse(time.RFC822Z, time.RFC822Z)
+var metaCacheTestsetTimestamp = time.Now()
 
 var metaCacheTestset = []metacache{
 	0: {
@@ -80,10 +80,10 @@ var metaCacheTestset = []metacache{
 		status:       scanStateError,
 		fileNotFound: false,
 		error:        "an error lol",
-		started:      metaCacheTestsetTimestamp.Add(time.Minute),
-		ended:        metaCacheTestsetTimestamp.Add(2 * time.Minute),
-		lastUpdate:   metaCacheTestsetTimestamp.Add(2 * time.Minute),
-		lastHandout:  metaCacheTestsetTimestamp,
+		started:      metaCacheTestsetTimestamp.Add(-20 * time.Minute),
+		ended:        metaCacheTestsetTimestamp.Add(-20 * time.Minute),
+		lastUpdate:   metaCacheTestsetTimestamp.Add(-20 * time.Minute),
+		lastHandout:  metaCacheTestsetTimestamp.Add(-20 * time.Minute),
 		startedCycle: 10,
 		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
@@ -150,6 +150,22 @@ var metaCacheTestset = []metacache{
 		lastHandout:  metaCacheTestsetTimestamp,
 		startedCycle: 10,
 		endedCycle:   0,
+		dataVersion:  metacacheStreamVersion,
+	},
+	8: {
+		id:           "case-8-finished-a-week-ago",
+		bucket:       "bucket",
+		root:         "folder/finished",
+		recursive:    false,
+		status:       scanStateSuccess,
+		fileNotFound: false,
+		error:        "",
+		started:      metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
+		ended:        metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
+		lastUpdate:   metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
+		lastHandout:  metaCacheTestsetTimestamp.Add(-7 * 24 * time.Hour),
+		startedCycle: 10,
+		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	},
 }
@@ -222,7 +238,7 @@ func Test_metacache_canBeReplacedBy(t *testing.T) {
 		endedCycle:   10,
 		dataVersion:  metacacheStreamVersion,
 	}
-	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: true, 5: false, 6: true, 7: false}
+	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: true, 5: false, 6: true, 7: false, 8: false}
 
 	for i, tt := range metaCacheTestset {
 		t.Run(tt.id, func(t *testing.T) {
@@ -234,7 +250,8 @@ func Test_metacache_canBeReplacedBy(t *testing.T) {
 			}
 			// Add an hour, otherwise it will never be replaced.
 			// We operated on a copy.
-			tt.lastHandout.Add(-2 * time.Hour)
+			tt.lastHandout = tt.lastHandout.Add(-2 * time.Hour)
+			tt.lastUpdate = tt.lastHandout.Add(-2 * time.Hour)
 			got := tt.canBeReplacedBy(&testAgainst)
 			if got != want {
 				t.Errorf("#%d: want %v, got %v", i, want, got)
@@ -244,7 +261,7 @@ func Test_metacache_canBeReplacedBy(t *testing.T) {
 }
 
 func Test_metacache_finished(t *testing.T) {
-	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: false, 5: true, 6: true, 7: false}
+	wantResults := []bool{0: true, 1: true, 2: true, 3: true, 4: false, 5: true, 6: true, 7: false, 8: true}
 
 	for i, tt := range metaCacheTestset {
 		t.Run(tt.id, func(t *testing.T) {
@@ -264,7 +281,7 @@ func Test_metacache_finished(t *testing.T) {
 }
 
 func Test_metacache_worthKeeping(t *testing.T) {
-	wantResults := []bool{0: true, 1: true, 2: true, 3: false, 4: false, 5: true, 6: false, 7: false}
+	wantResults := []bool{0: true, 1: true, 2: true, 3: false, 4: false, 5: true, 6: false, 7: false, 8: false}
 
 	for i, tt := range metaCacheTestset {
 		t.Run(tt.id, func(t *testing.T) {

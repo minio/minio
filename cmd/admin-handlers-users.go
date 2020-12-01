@@ -129,13 +129,40 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 
 	defer logger.AuditLog(w, r, "GetUserInfo", mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.GetUserAdminAction)
-	if objectAPI == nil {
+	vars := mux.Vars(r)
+	name := vars["accessKey"]
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
-	vars := mux.Vars(r)
-	name := vars["accessKey"]
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	accessKey := cred.AccessKey
+	if cred.ParentUser != "" {
+		accessKey = cred.ParentUser
+	}
+
+	implicitPerm := name == accessKey
+	if !implicitPerm {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     accessKey,
+			Action:          iampolicy.GetUserAdminAction,
+			ConditionValues: getConditionValues(r, "", accessKey, claims),
+			IsOwner:         owner,
+			Claims:          claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	}
 
 	userInfo, err := globalIAMSys.GetUserInfo(name)
 	if err != nil {
@@ -304,7 +331,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 	accessKey := vars["accessKey"]
 	status := vars["status"]
 
-	// Custom IAM policies not allowed for admin user.
+	// This API is not allowed to lookup accessKey user status
 	if accessKey == globalActiveCred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
@@ -330,18 +357,45 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 
 	defer logger.AuditLog(w, r, "AddUser", mustGetClaimsFromToken(r))
 
-	objectAPI, cred := validateAdminUsersReq(ctx, w, r, iampolicy.CreateUserAdminAction)
-	if objectAPI == nil {
-		return
-	}
-
 	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
 
-	// Custom IAM policies not allowed for admin user.
-	if accessKey == globalActiveCred.AccessKey {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	if cred.IsTemp() || cred.IsServiceAccount() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccountNotEligible), r.URL)
+		return
+	}
+
+	// Not allowed to add a user with same access key as root credential
+	if owner && accessKey == cred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
 		return
+	}
+
+	implicitPerm := accessKey == cred.AccessKey
+	if !implicitPerm {
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     accessKey,
+			Action:          iampolicy.CreateUserAdminAction,
+			ConditionValues: getConditionValues(r, "", accessKey, claims),
+			IsOwner:         owner,
+			Claims:          claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
 	}
 
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
@@ -398,6 +452,12 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Disallow creating service accounts by root user.
+	if owner {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
+		return
+	}
+
 	password := cred.SecretKey
 	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
@@ -408,12 +468,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	var createReq madmin.AddServiceAccountReq
 	if err = json.Unmarshal(reqBytes, &createReq); err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err), r.URL)
-		return
-	}
-
-	// Disallow creating service accounts by root user.
-	if owner {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminAccountNotEligible), r.URL)
 		return
 	}
 
@@ -572,11 +626,11 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	writeSuccessNoContent(w)
 }
 
-// AccountUsageInfoHandler returns usage
-func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "AccountUsageInfo")
+// AccountInfoHandler returns usage
+func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "AccountInfo")
 
-	defer logger.AuditLog(w, r, "AccountUsageInfo", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, "AccountInfo", mustGetClaimsFromToken(r))
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
@@ -645,8 +699,16 @@ func (a adminAPIHandlers) AccountUsageInfoHandler(w http.ResponseWriter, r *http
 		accountName = cred.ParentUser
 	}
 
-	acctInfo := madmin.AccountUsageInfo{
+	policies, err := globalIAMSys.PolicyDBGet(accountName, false)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	acctInfo := madmin.AccountInfo{
 		AccountName: accountName,
+		Policy:      globalIAMSys.GetCombinedPolicy(policies...),
 	}
 
 	for _, bucket := range buckets {

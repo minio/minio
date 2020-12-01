@@ -24,6 +24,7 @@ import (
 // Name - event type enum.
 // Refer http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#notification-how-to-event-types-and-destinations
 // for most basic values we have since extend this and its not really much applicable other than a reference point.
+// "s3:Replication:OperationCompletedReplication" is a MinIO extension.
 type Name int
 
 // Values of event Name
@@ -47,9 +48,13 @@ const (
 	BucketRemoved
 	ObjectReplicationAll
 	ObjectReplicationFailed
+	ObjectReplicationComplete
 	ObjectReplicationMissedThreshold
 	ObjectReplicationReplicatedAfterThreshold
 	ObjectReplicationNotTracked
+	ObjectRestorePostInitiated
+	ObjectRestorePostCompleted
+	ObjectRestorePostAll
 )
 
 // Expand - returns expanded values of abbreviated event type.
@@ -69,6 +74,7 @@ func (name Name) Expand() []Name {
 			ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy,
 			ObjectCreatedPost, ObjectCreatedPut,
 			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold,
+			ObjectReplicationComplete, ObjectReplicationFailed,
 		}
 	case ObjectRemovedAll:
 		return []Name{
@@ -78,9 +84,15 @@ func (name Name) Expand() []Name {
 	case ObjectReplicationAll:
 		return []Name{
 			ObjectReplicationFailed,
+			ObjectReplicationComplete,
 			ObjectReplicationNotTracked,
 			ObjectReplicationMissedThreshold,
 			ObjectReplicationReplicatedAfterThreshold,
+		}
+	case ObjectRestorePostAll:
+		return []Name{
+			ObjectRestorePostInitiated,
+			ObjectRestorePostCompleted,
 		}
 	default:
 		return []Name{name}
@@ -124,14 +136,22 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:Delete"
 	case ObjectRemovedDeleteMarkerCreated:
 		return "s3:ObjectRemoved:DeleteMarkerCreated"
+	case ObjectReplicationAll:
+		return "s3:Replication:*"
 	case ObjectReplicationFailed:
 		return "s3:Replication:OperationFailedReplication"
+	case ObjectReplicationComplete:
+		return "s3:Replication:OperationCompletedReplication"
 	case ObjectReplicationNotTracked:
 		return "s3:Replication:OperationNotTracked"
 	case ObjectReplicationMissedThreshold:
 		return "s3:Replication:OperationMissedThreshold"
 	case ObjectReplicationReplicatedAfterThreshold:
 		return "s3:Replication:OperationReplicatedAfterThreshold"
+	case ObjectRestorePostInitiated:
+		return "s3:ObjectRestore:Post"
+	case ObjectRestorePostCompleted:
+		return "s3:ObjectRestore:Completed"
 	}
 
 	return ""
@@ -220,12 +240,21 @@ func ParseName(s string) (Name, error) {
 		return ObjectReplicationAll, nil
 	case "s3:Replication:OperationFailedReplication":
 		return ObjectReplicationFailed, nil
+	case "s3:Replication:OperationCompletedReplication":
+		return ObjectReplicationComplete, nil
 	case "s3:Replication:OperationMissedThreshold":
 		return ObjectReplicationMissedThreshold, nil
 	case "s3:Replication:OperationReplicatedAfterThreshold":
 		return ObjectReplicationReplicatedAfterThreshold, nil
 	case "s3:Replication:OperationNotTracked":
 		return ObjectReplicationNotTracked, nil
+	case "s3:ObjectRestore:*":
+		return ObjectRestorePostAll, nil
+	case "s3:ObjectRestore:Post":
+		return ObjectRestorePostInitiated, nil
+	case "s3:ObjectRestore:Completed":
+		return ObjectRestorePostCompleted, nil
+
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

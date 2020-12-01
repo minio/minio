@@ -76,6 +76,7 @@ func newErasureServerSets(ctx context.Context, endpointServerSets EndpointServer
 			return nil, err
 		}
 		if deploymentID == "" {
+			// all zones should have same deployment ID
 			deploymentID = formats[i].ID
 		}
 		z.serverSets[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
@@ -88,8 +89,8 @@ func newErasureServerSets(ctx context.Context, endpointServerSets EndpointServer
 	return z, nil
 }
 
-func (z *erasureServerSets) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return z.serverSets[0].NewNSLock(ctx, bucket, objects...)
+func (z *erasureServerSets) NewNSLock(bucket string, objects ...string) RWLocker {
+	return z.serverSets[0].NewNSLock(bucket, objects...)
 }
 
 func (z *erasureServerSets) GetAllLockers() []dsync.NetLocker {
@@ -97,7 +98,13 @@ func (z *erasureServerSets) GetAllLockers() []dsync.NetLocker {
 }
 
 func (z *erasureServerSets) SetDriveCount() int {
-	return z.serverSets[0].SetDriveCount()
+	minSetDriveCount := z.serverSets[0].SetDriveCount()
+	for _, serverSet := range z.serverSets {
+		if minSetDriveCount > serverSet.setDriveCount {
+			minSetDriveCount = serverSet.setDriveCount
+		}
+	}
+	return minSetDriveCount
 }
 
 type serverSetsAvailableSpace []zoneAvailableSpace
@@ -272,7 +279,7 @@ func (z *erasureServerSets) StorageInfo(ctx context.Context, local bool) (Storag
 
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity == 0 {
-		scParity = z.SetDriveCount() / 2
+		scParity = getDefaultParityBlocks(z.SetDriveCount())
 	}
 
 	storageInfo.Backend.StandardSCData = z.SetDriveCount() - scParity
@@ -569,26 +576,26 @@ func (z *erasureServerSets) DeleteObjects(ctx context.Context, bucket string, ob
 	}
 
 	// Acquire a bulk write lock across 'objects'
-	multiDeleteLock := z.NewNSLock(ctx, bucket, objSets.ToSlice()...)
-	if err := multiDeleteLock.GetLock(globalOperationTimeout); err != nil {
+	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
+	if err := multiDeleteLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		for i := range derrs {
 			derrs[i] = err
 		}
-		return nil, derrs
+		return dobjects, derrs
 	}
 	defer multiDeleteLock.Unlock()
+
+	if z.SingleZone() {
+		return z.serverSets[0].DeleteObjects(ctx, bucket, objects, opts)
+	}
 
 	for _, zone := range z.serverSets {
 		deletedObjects, errs := zone.DeleteObjects(ctx, bucket, objects, opts)
 		for i, derr := range errs {
-			if derrs[i] == nil {
-				if derr != nil && !isErrObjectNotFound(derr) && !isErrVersionNotFound(derr) {
-					derrs[i] = derr
-				}
+			if derr != nil {
+				derrs[i] = derr
 			}
-			if derrs[i] == nil {
-				dobjects[i] = deletedObjects[i]
-			}
+			dobjects[i] = deletedObjects[i]
 		}
 	}
 	return dobjects, derrs
@@ -632,6 +639,7 @@ func (z *erasureServerSets) CopyObject(ctx context.Context, srcBucket, srcObject
 		UserDefined:          srcInfo.UserDefined,
 		Versioned:            dstOpts.Versioned,
 		VersionID:            dstOpts.VersionID,
+		MTime:                dstOpts.MTime,
 	}
 
 	return z.serverSets[zoneIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
@@ -658,203 +666,33 @@ func (z *erasureServerSets) ListObjectsV2(ctx context.Context, bucket, prefix, c
 	return listObjectsV2Info, err
 }
 
-// Calculate least entry across zones and across multiple FileInfo
-// channels, returns the least common entry and the total number of times
-// we found this entry. Additionally also returns a boolean
-// to indicate if the caller needs to call this function
-// again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call lexicallySortedEntry
-// N times until this boolean is 'false'.
-func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, int, int, bool) {
-	for i, entryChs := range zoneEntryChs {
-		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-		}
-	}
-
-	var isTruncated = false
-	for _, entriesValid := range zoneEntriesValid {
-		for _, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-			isTruncated = true
-			break
-		}
-		if isTruncated {
-			break
-		}
-	}
-
-	var lentry FileInfo
-	var found bool
-	var zoneIndex = -1
-	// TODO: following loop can be merged with above
-	// loop, explore this possibility.
-	for i, entriesValid := range zoneEntriesValid {
-		for j, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-			if !found {
-				lentry = zoneEntries[i][j]
-				found = true
-				zoneIndex = i
-				continue
-			}
-			str1 := zoneEntries[i][j].Name
-			str2 := lentry.Name
-			if HasSuffix(str1, globalDirSuffix) {
-				str1 = strings.TrimSuffix(str1, globalDirSuffix) + slashSeparator
-			}
-			if HasSuffix(str2, globalDirSuffix) {
-				str2 = strings.TrimSuffix(str2, globalDirSuffix) + slashSeparator
-			}
-
-			if str1 < str2 {
-				lentry = zoneEntries[i][j]
-				zoneIndex = i
-			}
-		}
-	}
-
-	// We haven't been able to find any least entry,
-	// this would mean that we don't have valid entry.
-	if !found {
-		return lentry, 0, zoneIndex, isTruncated
-	}
-
-	lexicallySortedEntryCount := 0
-	for i, entriesValid := range zoneEntriesValid {
-		for j, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-
-			// Entries are duplicated across disks,
-			// we should simply skip such entries.
-			if lentry.Name == zoneEntries[i][j].Name && lentry.ModTime.Equal(zoneEntries[i][j].ModTime) {
-				lexicallySortedEntryCount++
-				continue
-			}
-
-			// Push all entries which are lexically higher
-			// and will be returned later in Pop()
-			zoneEntryChs[i][j].Push(zoneEntries[i][j])
-		}
-	}
-
-	if HasSuffix(lentry.Name, globalDirSuffix) {
-		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
-	}
-
-	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
-}
-
-// Calculate least entry across serverSets and across multiple FileInfoVersions
-// channels, returns the least common entry and the total number of times
-// we found this entry. Additionally also returns a boolean
-// to indicate if the caller needs to call this function
-// again to list the next entry. It is callers responsibility
-// if the caller wishes to list N entries to call lexicallySortedEntry
-// N times until this boolean is 'false'.
-func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, int, int, bool) {
-	for i, entryChs := range zoneEntryChs {
-		for j := range entryChs {
-			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
-		}
-	}
-
-	var isTruncated = false
-	for _, entriesValid := range zoneEntriesValid {
-		for _, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-			isTruncated = true
-			break
-		}
-		if isTruncated {
-			break
-		}
-	}
-
-	var lentry FileInfoVersions
-	var found bool
-	var zoneIndex = -1
-	for i, entriesValid := range zoneEntriesValid {
-		for j, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-			if !found {
-				lentry = zoneEntries[i][j]
-				found = true
-				zoneIndex = i
-				continue
-			}
-			str1 := zoneEntries[i][j].Name
-			str2 := lentry.Name
-			if HasSuffix(str1, globalDirSuffix) {
-				str1 = strings.TrimSuffix(str1, globalDirSuffix) + slashSeparator
-			}
-			if HasSuffix(str2, globalDirSuffix) {
-				str2 = strings.TrimSuffix(str2, globalDirSuffix) + slashSeparator
-			}
-
-			if str1 < str2 {
-				lentry = zoneEntries[i][j]
-				zoneIndex = i
-			}
-		}
-	}
-
-	// We haven't been able to find any least entry,
-	// this would mean that we don't have valid entry.
-	if !found {
-		return lentry, 0, zoneIndex, isTruncated
-	}
-
-	lexicallySortedEntryCount := 0
-	for i, entriesValid := range zoneEntriesValid {
-		for j, valid := range entriesValid {
-			if !valid {
-				continue
-			}
-
-			// Entries are duplicated across disks,
-			// we should simply skip such entries.
-			if lentry.Name == zoneEntries[i][j].Name && lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) {
-				lexicallySortedEntryCount++
-				continue
-			}
-
-			// Push all entries which are lexically higher
-			// and will be returned later in Pop()
-			zoneEntryChs[i][j].Push(zoneEntries[i][j])
-		}
-	}
-
-	if HasSuffix(lentry.Name, globalDirSuffix) {
-		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
-	}
-
-	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
-}
-
 func (z *erasureServerSets) ListObjectVersions(ctx context.Context, bucket, prefix, marker, versionMarker, delimiter string, maxKeys int) (ListObjectVersionsInfo, error) {
 	loi := ListObjectVersionsInfo{}
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-	merged, err := z.listPath(ctx, listPathOptions{
+
+	opts := listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
 		Limit:       maxKeys,
 		Marker:      marker,
 		InclDeleted: true,
-	})
+		AskDisks:    globalAPIConfig.getListQuorum(),
+	}
+
+	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
+	// It requests unique blocks with a specific prefix.
+	// We skip scanning the parent directory for
+	// more objects matching the prefix.
+	ri := logger.GetReqInfo(ctx)
+	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
+		opts.singleObject = true
+		opts.Transient = true
+	}
+
+	merged, err := z.listPath(ctx, opts)
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
@@ -881,6 +719,7 @@ func (z *erasureServerSets) ListObjects(ctx context.Context, bucket, prefix, mar
 		Limit:       maxKeys,
 		Marker:      marker,
 		InclDeleted: false,
+		AskDisks:    globalAPIConfig.getListQuorum(),
 	})
 	if err != nil && err != io.EOF {
 		logger.LogIf(ctx, err)
@@ -1191,7 +1030,7 @@ func (z *erasureServerSets) DeleteBucket(ctx context.Context, bucket string, for
 // Note that set distribution is ignored so it should only be used in cases where
 // data is not distributed across sets.
 // Errors are logged but individual disk failures are not returned.
-func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) error {
+func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string) {
 	var wg sync.WaitGroup
 	for _, servers := range z.serverSets {
 		for _, set := range servers.sets {
@@ -1202,13 +1041,12 @@ func (z *erasureServerSets) deleteAll(ctx context.Context, bucket, prefix string
 				wg.Add(1)
 				go func(disk StorageAPI) {
 					defer wg.Done()
-					logger.LogIf(ctx, disk.Delete(ctx, bucket, prefix, true))
+					disk.Delete(ctx, bucket, prefix, true)
 				}(disk)
 			}
 		}
 	}
 	wg.Wait()
-	return nil
 }
 
 // This function is used to undo a successful DeleteBucket operation.
@@ -1257,21 +1095,10 @@ func (z *erasureServerSets) ListBuckets(ctx context.Context) (buckets []BucketIn
 	return buckets, nil
 }
 
-func (z *erasureServerSets) ReloadFormat(ctx context.Context, dryRun bool) error {
-	// No locks needed since reload happens in HealFormat under
-	// write lock across all nodes.
-	for _, zone := range z.serverSets {
-		if err := zone.ReloadFormat(ctx, dryRun); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
 	// Acquire lock on format.json
-	formatLock := z.NewNSLock(ctx, minioMetaBucket, formatConfigFile)
-	if err := formatLock.GetLock(globalOperationTimeout); err != nil {
+	formatLock := z.NewNSLock(minioMetaBucket, formatConfigFile)
+	if err := formatLock.GetLock(ctx, globalOperationTimeout); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 	defer formatLock.Unlock()
@@ -1297,15 +1124,6 @@ func (z *erasureServerSets) HealFormat(ctx context.Context, dryRun bool) (madmin
 		r.SetCount += result.SetCount
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
-	}
-
-	// Healing succeeded notify the peers to reload format and re-initialize disks.
-	// We will not notify peers if healing is not required.
-	for _, nerr := range globalNotificationSys.ReloadFormat(dryRun) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
-		}
 	}
 
 	// No heal returned by all serverSets, return errNoHealRequired
@@ -1351,74 +1169,51 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 		return err
 	}
 
-	serverSetsListTolerancePerSet := make([]int, 0, len(z.serverSets))
-	for _, zone := range z.serverSets {
-		if zone.listTolerancePerSet == -1 {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.setDriveCount/2)
-		} else {
-			serverSetsListTolerancePerSet = append(serverSetsListTolerancePerSet, zone.listTolerancePerSet-2)
-		}
-	}
-
 	if opts.WalkVersions {
-		var serverSetsEntryChs [][]FileInfoVersionsCh
-		for _, zone := range z.serverSets {
-			serverSetsEntryChs = append(serverSetsEntryChs, zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, ctx.Done()))
-		}
-
-		var serverSetsEntriesInfos [][]FileInfoVersions
-		var serverSetsEntriesValid [][]bool
-		for _, entryChs := range serverSetsEntryChs {
-			serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-			serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
-		}
-
 		go func() {
 			defer close(results)
 
+			var marker, versionIDMarker string
 			for {
-				entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-				if !ok {
-					// We have reached EOF across all entryChs, break the loop.
-					return
+				loi, err := z.ListObjectVersions(ctx, bucket, prefix, marker, versionIDMarker, "", 1000)
+				if err != nil {
+					break
 				}
 
-				if quorumCount >= serverSetsListTolerancePerSet[zoneIdx] {
-					for _, version := range entry.Versions {
-						results <- version.ToObjectInfo(bucket, version.Name)
-					}
+				for _, obj := range loi.Objects {
+					results <- obj
 				}
+
+				if !loi.IsTruncated {
+					break
+				}
+
+				marker = loi.NextMarker
+				versionIDMarker = loi.NextVersionIDMarker
 			}
 		}()
-
 		return nil
-	}
-
-	serverSetsEntryChs := make([][]FileInfoCh, 0, len(z.serverSets))
-	for _, zone := range z.serverSets {
-		serverSetsEntryChs = append(serverSetsEntryChs, zone.startMergeWalks(ctx, bucket, prefix, "", true, ctx.Done()))
-	}
-
-	serverSetsEntriesInfos := make([][]FileInfo, 0, len(serverSetsEntryChs))
-	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
-	for _, entryChs := range serverSetsEntryChs {
-		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
-		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
 	go func() {
 		defer close(results)
 
+		var marker string
 		for {
-			entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-			if !ok {
-				// We have reached EOF across all entryChs, break the loop.
-				return
+			loi, err := z.ListObjects(ctx, bucket, prefix, marker, "", 1000)
+			if err != nil {
+				break
 			}
 
-			if quorumCount >= serverSetsListTolerancePerSet[zoneIdx] {
-				results <- entry.ToObjectInfo(bucket, entry.Name)
+			for _, obj := range loi.Objects {
+				results <- obj
 			}
+
+			if !loi.IsTruncated {
+				break
+			}
+
+			marker = loi.NextMarker
 		}
 	}()
 
@@ -1429,51 +1224,56 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 type HealObjectFn func(bucket, object, versionID string) error
 
 func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	endWalkCh := make(chan struct{})
-	defer close(endWalkCh)
-
-	serverSetsEntryChs := make([][]FileInfoVersionsCh, 0, len(z.serverSets))
-	zoneDrivesPerSet := make([]int, 0, len(z.serverSets))
-
-	for _, zone := range z.serverSets {
-		serverSetsEntryChs = append(serverSetsEntryChs,
-			zone.startMergeWalksVersions(ctx, bucket, prefix, "", true, endWalkCh))
-		zoneDrivesPerSet = append(zoneDrivesPerSet, zone.setDriveCount)
-	}
-
-	serverSetsEntriesInfos := make([][]FileInfoVersions, 0, len(serverSetsEntryChs))
-	serverSetsEntriesValid := make([][]bool, 0, len(serverSetsEntryChs))
-	for _, entryChs := range serverSetsEntryChs {
-		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfoVersions, len(entryChs)))
-		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
-	}
-
 	// If listing did not return any entries upon first attempt, we
 	// return `ObjectNotFound`, to indicate the caller for any
 	// actions they may want to take as if `prefix` is missing.
 	err := toObjectErr(errFileNotFound, bucket, prefix)
-	for {
-		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
-		if !ok {
-			break
-		}
+	for _, erasureSet := range z.serverSets {
+		for _, set := range erasureSet.sets {
+			var entryChs []FileInfoVersionsCh
+			var mu sync.Mutex
+			var wg sync.WaitGroup
+			for _, disk := range set.getOnlineDisks() {
+				disk := disk
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					entryCh, err := disk.WalkVersions(ctx, bucket, prefix, "", true, ctx.Done())
+					if err != nil {
+						// Disk walk returned error, ignore it.
+						return
+					}
+					mu.Lock()
+					entryChs = append(entryChs, FileInfoVersionsCh{
+						Ch: entryCh,
+					})
+					mu.Unlock()
+				}()
+			}
+			wg.Wait()
 
-		// Indicate that first attempt was a success and subsequent loop
-		// knows that its not our first attempt at 'prefix'
-		err = nil
+			entriesValid := make([]bool, len(entryChs))
+			entries := make([]FileInfoVersions, len(entryChs))
 
-		if zoneIndex >= len(zoneDrivesPerSet) || zoneIndex < 0 {
-			return fmt.Errorf("invalid zone index returned: %d", zoneIndex)
-		}
+			for {
+				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
+				if !ok {
+					break
+				}
 
-		if quorumCount == zoneDrivesPerSet[zoneIndex] && opts.ScanMode == madmin.HealNormalScan {
-			// Skip good entries.
-			continue
-		}
+				// Indicate that first attempt was a success and subsequent loop
+				// knows that its not our first attempt at 'prefix'
+				err = nil
 
-		for _, version := range entry.Versions {
-			if err := healObject(bucket, version.Name, version.VersionID); err != nil {
-				return toObjectErr(err, bucket, version.Name)
+				if quorumCount == z.SetDriveCount() && opts.ScanMode == madmin.HealNormalScan {
+					continue
+				}
+
+				for _, version := range entry.Versions {
+					if err := healObject(bucket, version.Name, version.VersionID); err != nil {
+						return toObjectErr(err, bucket, version.Name)
+					}
+				}
 			}
 		}
 	}
@@ -1484,17 +1284,17 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 func (z *erasureServerSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	object = encodeDirObject(object)
 
-	lk := z.NewNSLock(ctx, bucket, object)
+	lk := z.NewNSLock(bucket, object)
 	if bucket == minioMetaBucket {
 		// For .minio.sys bucket heals we should hold write locks.
-		if err := lk.GetLock(globalOperationTimeout); err != nil {
+		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 		defer lk.Unlock()
 	} else {
 		// Lock the object before healing. Use read lock since healing
 		// will only regenerate parts & xl.meta of outdated disks.
-		if err := lk.GetRLock(globalOperationTimeout); err != nil {
+		if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
 			return madmin.HealResultItem{}, err
 		}
 		defer lk.RUnlock()
@@ -1608,7 +1408,6 @@ func (z *erasureServerSets) Health(ctx context.Context, opts HealthOptions) Heal
 
 	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	diskCount := z.SetDriveCount()
-
 	if parityDrives == 0 {
 		parityDrives = getDefaultParityBlocks(diskCount)
 	}

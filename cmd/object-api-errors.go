@@ -130,9 +130,27 @@ func toObjectErr(err error, params ...string) error {
 			}
 		}
 	case errErasureReadQuorum:
-		err = InsufficientReadQuorum{}
+		if len(params) == 1 {
+			err = InsufficientReadQuorum{
+				Bucket: params[0],
+			}
+		} else if len(params) >= 2 {
+			err = InsufficientReadQuorum{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case errErasureWriteQuorum:
-		err = InsufficientWriteQuorum{}
+		if len(params) == 1 {
+			err = InsufficientWriteQuorum{
+				Bucket: params[0],
+			}
+		} else if len(params) >= 2 {
+			err = InsufficientWriteQuorum{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		err = IncompleteBody{}
 	case context.Canceled, context.DeadlineExceeded:
@@ -163,10 +181,10 @@ func (e SlowDown) Error() string {
 }
 
 // InsufficientReadQuorum storage cannot satisfy quorum for read operation.
-type InsufficientReadQuorum struct{}
+type InsufficientReadQuorum GenericError
 
 func (e InsufficientReadQuorum) Error() string {
-	return "Storage resources are insufficient for the read operation."
+	return "Storage resources are insufficient for the read operation " + e.Bucket + "/" + e.Object
 }
 
 // Unwrap the error.
@@ -175,10 +193,10 @@ func (e InsufficientReadQuorum) Unwrap() error {
 }
 
 // InsufficientWriteQuorum storage cannot satisfy quorum for write operation.
-type InsufficientWriteQuorum struct{}
+type InsufficientWriteQuorum GenericError
 
 func (e InsufficientWriteQuorum) Error() string {
-	return "Storage resources are insufficient for the write operation."
+	return "Storage resources are insufficient for the write operation " + e.Bucket + "/" + e.Object
 }
 
 // Unwrap the error.
@@ -192,6 +210,11 @@ type GenericError struct {
 	Object    string
 	VersionID string
 	Err       error
+}
+
+// Unwrap the error to its underlying error.
+func (e GenericError) Unwrap() error {
+	return e.Err
 }
 
 // InvalidArgument incorrect input argument
@@ -232,7 +255,14 @@ func (e BucketNotEmpty) Error() string {
 	return "Bucket not empty: " + e.Bucket
 }
 
-// VersionNotFound object does not exist.
+// InvalidVersionID invalid version id
+type InvalidVersionID GenericError
+
+func (e InvalidVersionID) Error() string {
+	return "Invalid version id: " + e.Bucket + "/" + e.Object + "(" + e.VersionID + ")"
+}
+
+// VersionNotFound version does not exist.
 type VersionNotFound GenericError
 
 func (e VersionNotFound) Error() string {

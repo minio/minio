@@ -44,37 +44,38 @@ type BucketUsageInfo struct {
 	Access  AccountAccess `json:"access"`
 }
 
-// AccountUsageInfo represents the account usage info of an
+// AccountInfo represents the account usage info of an
 // account across buckets.
-type AccountUsageInfo struct {
+type AccountInfo struct {
 	AccountName string
+	Policy      iampolicy.Policy
 	Buckets     []BucketUsageInfo
 }
 
-// AccountUsageInfo returns the usage info for the authenticating account.
-func (adm *AdminClient) AccountUsageInfo(ctx context.Context) (AccountUsageInfo, error) {
-	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountusageinfo"})
+// AccountInfo returns the usage info for the authenticating account.
+func (adm *AdminClient) AccountInfo(ctx context.Context) (AccountInfo, error) {
+	resp, err := adm.executeMethod(ctx, http.MethodGet, requestData{relPath: adminAPIPrefix + "/accountinfo"})
 	defer closeResponse(resp)
 	if err != nil {
-		return AccountUsageInfo{}, err
+		return AccountInfo{}, err
 	}
 
 	// Check response http status code
 	if resp.StatusCode != http.StatusOK {
-		return AccountUsageInfo{}, httpRespToErrorResponse(resp)
+		return AccountInfo{}, httpRespToErrorResponse(resp)
 	}
 
 	// Unmarshal the server's json response
-	var accountInfo AccountUsageInfo
+	var accountInfo AccountInfo
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return AccountUsageInfo{}, err
+		return AccountInfo{}, err
 	}
 
 	err = json.Unmarshal(respBytes, &accountInfo)
 	if err != nil {
-		return AccountUsageInfo{}, err
+		return AccountInfo{}, err
 	}
 
 	return accountInfo, nil

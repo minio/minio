@@ -173,6 +173,16 @@ func (g *Azure) Name() string {
 
 // NewGatewayLayer initializes azure blob storage client and returns AzureObjects.
 func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error) {
+	var err error
+
+	// Override credentials from the Azure storage environment variables if specified
+	if acc, key := env.Get("AZURE_STORAGE_ACCOUNT", creds.AccessKey), env.Get("AZURE_STORAGE_KEY", creds.SecretKey); acc != "" && key != "" {
+		creds, err = auth.CreateCredentials(acc, key)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	endpointURL, err := parseStorageEndpoint(g.host, creds.AccessKey)
 	if err != nil {
 		return nil, err
@@ -212,7 +222,7 @@ func (g *Azure) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, erro
 	client := azblob.NewServiceURL(*endpointURL, pipeline)
 
 	return &azureObjects{
-		endpoint:   endpointURL.String(),
+		endpoint:   endpointURL,
 		httpClient: httpClient,
 		client:     client,
 		metrics:    metrics,
@@ -424,7 +434,7 @@ func azurePropertiesToS3Meta(meta azblob.Metadata, props azblob.BlobHTTPHeaders,
 // azureObjects - Implements Object layer for Azure blob storage.
 type azureObjects struct {
 	minio.GatewayUnsupported
-	endpoint   string
+	endpoint   *url.URL
 	httpClient *http.Client
 	metrics    *minio.Metrics
 	client     azblob.ServiceURL // Azure sdk client
@@ -553,7 +563,11 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 // StorageInfo - Not relevant to Azure backend.
 func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
-	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, a.httpClient, a.endpoint)
+	host := a.endpoint.Host
+	if a.endpoint.Port() == "" {
+		host = a.endpoint.Host + ":" + a.endpoint.Scheme
+	}
+	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, host)
 	return si, nil
 }
 

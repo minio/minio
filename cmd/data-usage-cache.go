@@ -440,7 +440,11 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	var buf bytes.Buffer
 	err := store.GetObject(ctx, dataUsageBucket, name, 0, -1, &buf, "", ObjectOptions{})
 	if err != nil {
-		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) && !errors.Is(err, InsufficientReadQuorum{}) {
+		switch err.(type) {
+		case ObjectNotFound:
+		case BucketNotFound:
+		case InsufficientReadQuorum:
+		default:
 			return toObjectErr(err, dataUsageBucket, name)
 		}
 		*d = dataUsageCache{}

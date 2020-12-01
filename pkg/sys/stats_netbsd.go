@@ -1,4 +1,4 @@
-// +build !linux
+// +build netbsd
 
 /*
  * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
@@ -14,13 +14,32 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package madmin
+package sys
 
-// ServerDiskHwOBDInfo - Includes usage counters, disk counters and partitions
-type ServerDiskHwOBDInfo struct {
-	Addr  string `json:"addr"`
-	Error string `json:"error,omitempty"`
+import (
+	"encoding/binary"
+	"syscall"
+)
+
+func getHwPhysmem() (uint64, error) {
+	totalString, err := syscall.Sysctl("hw.physmem64")
+	if err != nil {
+		return 0, err
+	}
+
+	// syscall.sysctl() helpfully assumes the result is a null-terminated string and
+	// removes the last byte of the result if it's 0 :/
+	totalString += "\x00"
+
+	total := uint64(binary.LittleEndian.Uint64([]byte(totalString)))
+
+	return total, nil
+}
+
+// GetStats - return system statistics for bsd.
+func GetStats() (stats Stats, err error) {
+	stats.TotalRAM, err = getHwPhysmem()
+	return stats, err
 }

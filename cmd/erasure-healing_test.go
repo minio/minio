@@ -226,7 +226,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Failure during deleting part.1 - %v", err)
 	}
 
-	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bytes.NewReader([]byte{}))
+	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), []byte{})
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
@@ -252,7 +252,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	}
 
 	bdata := bytes.Repeat([]byte("b"), int(nfi.Size))
-	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bytes.NewReader(bdata))
+	err = firstDisk.WriteAll(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), bdata)
 	if err != nil {
 		t.Errorf("Failure during creating part.1 - %v", err)
 	}
@@ -274,8 +274,8 @@ func TestHealObjectCorrupted(t *testing.T) {
 
 	// Test 4: checks if HealObject returns an error when xl.meta is not found
 	// in more than read quorum number of disks, to create a corrupted situation.
-	for i := 0; i <= len(er.getDisks())/2; i++ {
-		er.getDisks()[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
+	for i := 0; i <= nfi.Erasure.DataBlocks; i++ {
+		erasureDisks[i].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
 	}
 
 	// Try healing now, expect to receive errFileNotFound.

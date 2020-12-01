@@ -131,7 +131,7 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 func IsDocker() bool {
 	if env.Get("MINIO_CI_CD", "") == "" {
 		_, err := os.Stat("/.dockerenv")
-		if os.IsNotExist(err) {
+		if osIsNotExist(err) {
 			return false
 		}
 
@@ -174,7 +174,7 @@ func IsKubernetes() bool {
 func IsBOSH() bool {
 	// "/var/vcap/bosh" exists in BOSH deployed instance.
 	_, err := os.Stat("/var/vcap/bosh")
-	if os.IsNotExist(err) {
+	if osIsNotExist(err) {
 		return false
 	}
 
@@ -193,7 +193,7 @@ func getHelmVersion(helmInfoFilePath string) string {
 	if err != nil {
 		// Log errors and return "" as MinIO can be deployed
 		// without Helm charts as well.
-		if !os.IsNotExist(err) {
+		if !osIsNotExist(err) {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("helmInfoFilePath", helmInfoFilePath)
 			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
 			logger.LogIf(ctx, err)

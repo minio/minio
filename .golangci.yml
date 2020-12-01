@@ -23,5 +23,10 @@ issues:
   exclude:
       - should have a package comment
       - error strings should not be capitalized or end with punctuation or a newline
+
+run:
+  skip-dirs:
+    - pkg/rpc
+
 service:
   golangci-lint-version: 1.20.0 # use the fixed version to not introduce new linters unexpectedly

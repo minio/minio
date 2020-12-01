@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"go/build"
 	"hash"
+	"net/http"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -299,9 +300,15 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 		return
 	}
 
-	if !errors.Is(err, context.Canceled) {
-		logIf(ctx, err, errKind...)
+	if errors.Is(err, context.Canceled) {
+		return
 	}
+
+	if err.Error() == http.ErrServerClosed.Error() || err.Error() == "disk not found" {
+		return
+	}
+
+	logIf(ctx, err, errKind...)
 }
 
 // logIf prints a detailed error message during

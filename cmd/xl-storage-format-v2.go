@@ -139,8 +139,9 @@ func (e ChecksumAlgo) valid() bool {
 
 // xlMetaV2DeleteMarker defines the data struct for the delete marker journal type
 type xlMetaV2DeleteMarker struct {
-	VersionID [16]byte `json:"ID" msg:"ID"`       // Version ID for delete marker
-	ModTime   int64    `json:"MTime" msg:"MTime"` // Object delete marker modified time
+	VersionID [16]byte          `json:"ID" msg:"ID"`                               // Version ID for delete marker
+	ModTime   int64             `json:"MTime" msg:"MTime"`                         // Object delete marker modified time
+	MetaSys   map[string][]byte `json:"MetaSys,omitempty" msg:"MetaSys,omitempty"` // Delete marker internal metadata
 }
 
 // xlMetaV2Object defines the data struct for object journal type
@@ -354,11 +355,13 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		versionID = uuid.UUID(j.VersionID).String()
 	}
 	fi := FileInfo{
-		Volume:    volume,
-		Name:      path,
-		ModTime:   time.Unix(0, j.ModTime).UTC(),
-		VersionID: versionID,
-		Deleted:   true,
+		Volume:                        volume,
+		Name:                          path,
+		ModTime:                       time.Unix(0, j.ModTime).UTC(),
+		VersionID:                     versionID,
+		Deleted:                       true,
+		DeleteMarkerReplicationStatus: string(j.MetaSys[xhttp.AmzBucketReplicationStatus]),
+		VersionPurgeStatus:            VersionPurgeStatusType(string(j.MetaSys[VersionPurgeStatusKey])),
 	}
 	return fi, nil
 }
@@ -408,6 +411,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			fi.Metadata[k] = string(v)
 		}
+		if strings.EqualFold(k, VersionPurgeStatusKey) {
+			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
+		}
 	}
 	fi.Erasure.Algorithm = j.ErasureAlgorithm.String()
 	fi.Erasure.Index = j.ErasureIndex
@@ -419,6 +425,10 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		fi.Erasure.Distribution[i] = int(j.ErasureDist[i])
 	}
 	fi.DataDir = uuid.UUID(j.DataDir).String()
+
+	if st, ok := j.MetaSys[ReservedMetadataPrefixLower+"transition-status"]; ok {
+		fi.TransitionStatus = string(st)
+	}
 	return fi, nil
 }
 
@@ -435,8 +445,12 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 	}
 
 	var uv uuid.UUID
+	var err error
 	if fi.VersionID != "" {
-		uv, _ = uuid.Parse(fi.VersionID)
+		uv, err = uuid.Parse(fi.VersionID)
+		if err != nil {
+			return "", false, errFileVersionNotFound
+		}
 	}
 
 	var ventry xlMetaV2Version
@@ -446,10 +460,34 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			DeleteMarker: &xlMetaV2DeleteMarker{
 				VersionID: uv,
 				ModTime:   fi.ModTime.UnixNano(),
+				MetaSys:   make(map[string][]byte),
 			},
 		}
 		if !ventry.Valid() {
 			return "", false, errors.New("internal error: invalid version entry generated")
+		}
+	}
+	updateVersion := false
+	if fi.VersionPurgeStatus.Empty() && (fi.DeleteMarkerReplicationStatus == "REPLICA" || fi.DeleteMarkerReplicationStatus == "") {
+		updateVersion = fi.MarkDeleted
+	} else {
+		// for replication scenario
+		if fi.Deleted && fi.VersionPurgeStatus != Complete {
+			if !fi.VersionPurgeStatus.Empty() || fi.DeleteMarkerReplicationStatus != "" {
+				updateVersion = true
+			}
+		}
+		// object or delete-marker versioned delete is not complete
+		if !fi.VersionPurgeStatus.Empty() && fi.VersionPurgeStatus != Complete {
+			updateVersion = true
+		}
+	}
+	if fi.Deleted {
+		if fi.DeleteMarkerReplicationStatus != "" {
+			ventry.DeleteMarker.MetaSys[xhttp.AmzBucketReplicationStatus] = []byte(fi.DeleteMarkerReplicationStatus)
+		}
+		if !fi.VersionPurgeStatus.Empty() {
+			ventry.DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
 		}
 	}
 
@@ -460,6 +498,11 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		switch version.Type {
 		case LegacyType:
 			if version.ObjectV1.VersionID == fi.VersionID {
+				if fi.TransitionStatus != "" {
+					z.Versions[i].ObjectV1.Meta[ReservedMetadataPrefixLower+"transition-status"] = fi.TransitionStatus
+					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
+				}
+
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				if fi.Deleted {
 					z.Versions = append(z.Versions, ventry)
@@ -468,10 +511,29 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 			}
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
-				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
-				if fi.Deleted {
-					z.Versions = append(z.Versions, ventry)
+				if updateVersion {
+					if len(z.Versions[i].DeleteMarker.MetaSys) == 0 {
+						z.Versions[i].DeleteMarker.MetaSys = make(map[string][]byte)
+					}
+					delete(z.Versions[i].DeleteMarker.MetaSys, xhttp.AmzBucketReplicationStatus)
+					delete(z.Versions[i].DeleteMarker.MetaSys, VersionPurgeStatusKey)
+					if fi.DeleteMarkerReplicationStatus != "" {
+						z.Versions[i].DeleteMarker.MetaSys[xhttp.AmzBucketReplicationStatus] = []byte(fi.DeleteMarkerReplicationStatus)
+					}
+					if !fi.VersionPurgeStatus.Empty() {
+						z.Versions[i].DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
+					}
+				} else {
+					z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
+					if fi.MarkDeleted && (fi.VersionPurgeStatus.Empty() || (fi.VersionPurgeStatus != Complete)) {
+						z.Versions = append(z.Versions, ventry)
+					}
 				}
+				return "", len(z.Versions) == 0, nil
+			}
+		case ObjectType:
+			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) && updateVersion {
+				z.Versions[i].ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.VersionPurgeStatus)
 				return "", len(z.Versions) == 0, nil
 			}
 		}
@@ -497,6 +559,10 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		switch version.Type {
 		case ObjectType:
 			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
+				if fi.TransitionStatus != "" {
+					z.Versions[i].ObjectV2.MetaSys[ReservedMetadataPrefixLower+"transition-status"] = []byte(fi.TransitionStatus)
+					return uuid.UUID(version.ObjectV2.DataDir).String(), len(z.Versions) == 0, nil
+				}
 				z.Versions = append(z.Versions[:i], z.Versions[i+1:]...)
 				if findDataDir(version.ObjectV2.DataDir, z.Versions) > 0 {
 					if fi.Deleted {
@@ -518,7 +584,6 @@ func (z *xlMetaV2) DeleteVersion(fi FileInfo) (string, bool, error) {
 		z.Versions = append(z.Versions, ventry)
 		return "", false, nil
 	}
-
 	return "", false, errFileVersionNotFound
 }
 
@@ -538,6 +603,8 @@ func (z xlMetaV2) TotalSize() int64 {
 
 // ListVersions lists current versions, and current deleted
 // versions returns error for unexpected entries.
+// showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
+// but waiting to be replicated
 func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
 	var latestModTime time.Time
 	var latestVersionID string
@@ -582,8 +649,11 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 // for consumption across callers.
 func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
 	var uv uuid.UUID
-	if versionID != "" {
-		uv, _ = uuid.Parse(versionID)
+	if versionID != "" && versionID != nullVersionID {
+		uv, err = uuid.Parse(versionID)
+		if err != nil {
+			return FileInfo{}, errFileVersionNotFound
+		}
 	}
 
 	var latestModTime time.Time

@@ -189,6 +189,12 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 				Filter:     Filter{Prefix: "prefix-1"},
 				Expiration: Expiration{Date: ExpirationDate(midnightTS)},
 			},
+			{
+				Status:                      "Enabled",
+				Filter:                      Filter{Prefix: "prefix-1"},
+				Expiration:                  Expiration{Date: ExpirationDate(midnightTS)},
+				NoncurrentVersionTransition: NoncurrentVersionTransition{NoncurrentDays: 2, StorageClass: "TEST"},
+			},
 		},
 	}
 	b, err := xml.MarshalIndent(&lc, "", "\t")
@@ -240,7 +246,7 @@ func TestExpectedExpiryTime(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
-			got := expectedExpiryTime(tc.modTime, tc.days)
+			got := ExpectedExpiryTime(tc.modTime, int(tc.days))
 			if !got.Equal(tc.expected) {
 				t.Fatalf("Expected %v to be equal to %v", got, tc.expected)
 			}

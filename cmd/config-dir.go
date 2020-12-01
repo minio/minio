@@ -87,7 +87,7 @@ func mkdirAllIgnorePerm(path string) error {
 	if err != nil {
 		// It is possible in kubernetes like deployments this directory
 		// is already mounted and is not writable, ignore any write errors.
-		if os.IsPermission(err) {
+		if osIsPermission(err) {
 			err = nil
 		}
 	}

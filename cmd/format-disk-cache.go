@@ -157,7 +157,7 @@ func loadFormatCache(ctx context.Context, drives []string) ([]*formatCacheV2, bo
 		f, err := os.OpenFile(cacheFormatPath, os.O_RDWR, 0)
 
 		if err != nil {
-			if os.IsNotExist(err) {
+			if osIsNotExist(err) {
 				continue
 			}
 			logger.LogIf(ctx, err)
@@ -318,7 +318,7 @@ func cacheDrivesUnformatted(drives []string) bool {
 	count := 0
 	for _, drive := range drives {
 		cacheFormatPath := pathJoin(drive, minioMetaBucket, formatConfigFile)
-		if _, err := os.Stat(cacheFormatPath); os.IsNotExist(err) {
+		if _, err := os.Stat(cacheFormatPath); osIsNotExist(err) {
 			count++
 		}
 	}
@@ -365,7 +365,7 @@ func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile
 		}
 		actualSize, _ = sio.EncryptedSize(uint64(st.Size()))
 	}
-	_, err = c.bitrotWriteToCache(destDir, cacheDataFile, reader, actualSize)
+	_, _, err = c.bitrotWriteToCache(destDir, cacheDataFile, reader, actualSize)
 	return err
 }
 

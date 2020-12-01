@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/minio/pkg/retry"
 )
 
 // FS format version strings.
@@ -211,7 +211,7 @@ func initFormatFS(ctx context.Context, fsPath string) (rlk *lock.RLockedFile, er
 			}
 			isEmpty = fi.Size() == 0
 		}
-		if os.IsNotExist(err) || isEmpty {
+		if osIsNotExist(err) || isEmpty {
 			if err == nil {
 				rlk.Close()
 			}
@@ -306,7 +306,7 @@ func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 			return nil
 		}
 	}
-	if os.IsNotExist(err) {
+	if osIsNotExist(err) {
 		return nil
 	}
 	if err != nil {
@@ -340,31 +340,28 @@ func formatFSFixDeploymentID(ctx context.Context, fsFormatPath string) error {
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	retryCtx, cancel := context.WithCancel(ctx)
-	// Indicate to our routine to exit cleanly upon return.
-	defer cancel()
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	var wlk *lock.LockedFile
-	retryCh := retry.NewTimerWithJitter(retryCtx, time.Second, 30*time.Second, retry.MaxJitter)
 	var stop bool
 	for !stop {
 		select {
-		case <-retryCh:
+		case <-ctx.Done():
+			return fmt.Errorf("Initializing FS format stopped gracefully")
+		default:
 			wlk, err = lock.TryLockedOpenFile(fsFormatPath, os.O_RDWR, 0)
 			if err == lock.ErrAlreadyLocked {
 				// Lock already present, sleep and attempt again
 				logger.Info("Another minio process(es) might be holding a lock to the file %s. Please kill that minio process(es) (elapsed %s)\n", fsFormatPath, getElapsedTime())
+				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 				continue
 			}
 			if err != nil {
 				return err
 			}
-			stop = true
-		case <-ctx.Done():
-			return fmt.Errorf("Initializing FS format stopped gracefully")
 		}
+		stop = true
 	}
-
 	defer wlk.Close()
 
 	if err = jsonLoad(wlk, format); err != nil {

@@ -18,13 +18,13 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"path"
 	"sync"
+	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
 )
 
 // listPath will return the requested entries.
@@ -84,6 +84,10 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		o.ID = mustGetUUID()
 	}
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
+	if o.singleObject {
+		// Override for single object.
+		o.BaseDir = o.Prefix
+	}
 
 	var cache metacache
 	// If we don't have a list id we must ask the server if it has a cache or create a new.
@@ -92,42 +96,41 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 		o.OldestCycle = globalNotificationSys.findEarliestCleanBloomFilter(ctx, path.Join(o.Bucket, o.BaseDir))
 		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
-		if rpc == nil {
+		if isReservedOrInvalidBucket(o.Bucket, false) {
+			rpc = nil
+			o.Transient = true
+		}
+		// Apply prefix filter if enabled.
+		o.SetFilter()
+		if rpc == nil || o.Transient {
 			// Local
-			cache = localMetacacheMgr.getBucket(ctx, o.Bucket).findCache(o)
+			cache = localMetacacheMgr.findCache(ctx, o)
 		} else {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
 			c, err := rpc.GetMetacacheListing(ctx, o)
 			if err != nil {
-				logger.LogIf(ctx, err)
-				cache = localMetacacheMgr.getTransient().findCache(o)
+				if errors.Is(err, context.Canceled) {
+					// Context is canceled, return at once.
+					// request canceled, no entries to return
+					return entries, io.EOF
+				}
+				if !errors.Is(err, context.DeadlineExceeded) {
+					logger.LogIf(ctx, err)
+				}
 				o.Transient = true
+				cache = localMetacacheMgr.findCache(ctx, o)
 			} else {
 				cache = *c
 			}
 		}
 		if cache.fileNotFound {
-			return entries, errFileNotFound
+			// No cache found, no entries found.
+			return entries, io.EOF
 		}
 		// Only create if we created a new.
 		o.Create = o.ID == cache.id
 		o.ID = cache.id
-	}
-
-	if o.AskDisks == 0 {
-		switch env.Get("MINIO_API_LIST_STRICT_QUORUM", config.EnableOff) {
-		case config.EnableOn:
-			// If strict, ask at least 50%.
-			o.AskDisks = -1
-		case "reduced":
-			// Reduced safety.
-			o.AskDisks = 2
-		case "disk":
-			// Ask single disk.
-			o.AskDisks = 1
-		default:
-			// By default asks at max 3 disks.
-			o.AskDisks = 3
-		}
 	}
 
 	var mu sync.Mutex
@@ -180,19 +183,14 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 
 	if isAllNotFound(errs) {
 		// All sets returned not found.
-		// Update master cache with that information.
-		cache.status = scanStateSuccess
-		cache.fileNotFound = true
-		client := globalNotificationSys.restClientFromHash(o.Bucket)
-		if o.Transient {
-			cache, err = localMetacacheMgr.getTransient().updateCacheEntry(cache)
-		} else if client == nil {
-			cache, err = localMetacacheMgr.getBucket(GlobalContext, o.Bucket).updateCacheEntry(cache)
-		} else {
-			cache, err = client.UpdateMetacacheListing(context.Background(), cache)
-		}
-		logger.LogIf(ctx, err)
-		return entries, errFileNotFound
+		go func() {
+			// Update master cache with that information.
+			cache.status = scanStateSuccess
+			cache.fileNotFound = true
+			o.updateMetacacheListing(cache, globalNotificationSys.restClientFromHash(o.Bucket))
+		}()
+		// cache returned not found, entries truncated.
+		return entries, io.EOF
 	}
 
 	for _, err := range errs {

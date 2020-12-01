@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -34,6 +36,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/config"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
@@ -686,14 +689,14 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 
 	// All endpoints are pointing to local host
 	if len(endpoints) == localEndpointCount {
-		// If all endpoints have same port number, Just treat it as distErasure setup
+		// If all endpoints have same port number, Just treat it as local erasure setup
 		// using URL style endpoints.
 		if len(localPortSet) == 1 {
 			if len(localServerHostSet) > 1 {
 				return endpoints, setupType,
 					config.ErrInvalidErasureEndpoints(nil).Msg("all local endpoints should not have different hostnames/ips")
 			}
-			return endpoints, DistErasureSetupType, nil
+			return endpoints, ErasureSetupType, nil
 		}
 
 		// Even though all endpoints are local, but those endpoints use different ports.
@@ -770,8 +773,74 @@ func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
 	return -1
 }
 
+func httpDo(clnt *http.Client, req *http.Request, f func(*http.Response, error) error) error {
+	ctx, cancel := context.WithTimeout(GlobalContext, 200*time.Millisecond)
+	defer cancel()
+
+	// Run the HTTP request in a goroutine and pass the response to f.
+	c := make(chan error, 1)
+	req = req.WithContext(ctx)
+	go func() { c <- f(clnt.Do(req)) }()
+	select {
+	case <-ctx.Done():
+		<-c // Wait for f to return.
+		return ctx.Err()
+	case err := <-c:
+		return err
+	}
+}
+
+func getOnlineProxyEndpointIdx() int {
+	type reqIndex struct {
+		Request *http.Request
+		Idx     int
+	}
+
+	proxyRequests := make(map[*http.Client]reqIndex, len(globalProxyEndpoints))
+	for i, proxyEp := range globalProxyEndpoints {
+		proxyEp := proxyEp
+		serverURL := &url.URL{
+			Scheme: proxyEp.Scheme,
+			Host:   proxyEp.Host,
+			Path:   pathJoin(healthCheckPathPrefix, healthCheckLivenessPath),
+		}
+
+		req, err := http.NewRequest(http.MethodGet, serverURL.String(), nil)
+		if err != nil {
+			continue
+		}
+
+		proxyRequests[&http.Client{
+			Transport: proxyEp.Transport,
+		}] = reqIndex{
+			Request: req,
+			Idx:     i,
+		}
+	}
+
+	for c, r := range proxyRequests {
+		if err := httpDo(c, r.Request, func(resp *http.Response, err error) error {
+			if err != nil {
+				return err
+			}
+			xhttp.DrainBody(resp.Body)
+			if resp.StatusCode != http.StatusOK {
+				return errors.New(resp.Status)
+			}
+			if v := resp.Header.Get(xhttp.MinIOServerStatus); v == unavailable {
+				return errors.New(v)
+			}
+			return nil
+		}); err != nil {
+			continue
+		}
+		return r.Idx
+	}
+	return -1
+}
+
 // GetProxyEndpoints - get all endpoints that can be used to proxy list request.
-func GetProxyEndpoints(endpointServerSets EndpointServerSets) ([]ProxyEndpoint, error) {
+func GetProxyEndpoints(endpointServerSets EndpointServerSets) []ProxyEndpoint {
 	var proxyEps []ProxyEndpoint
 
 	proxyEpSet := set.NewStringSet()
@@ -805,7 +874,7 @@ func GetProxyEndpoints(endpointServerSets EndpointServerSets) ([]ProxyEndpoint, 
 			})
 		}
 	}
-	return proxyEps, nil
+	return proxyEps
 }
 
 func updateDomainIPs(endPoints set.StringSet) {

@@ -136,3 +136,15 @@ func isSysErrCrossDevice(err error) bool {
 func isSysErrTooManyFiles(err error) bool {
 	return errors.Is(err, syscall.ENFILE) || errors.Is(err, syscall.EMFILE)
 }
+
+func osIsNotExist(err error) bool {
+	return errors.Is(err, os.ErrNotExist)
+}
+
+func osIsPermission(err error) bool {
+	return errors.Is(err, os.ErrPermission)
+}
+
+func osIsExist(err error) bool {
+	return errors.Is(err, os.ErrExist)
+}

@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -46,6 +47,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -55,6 +57,24 @@ import (
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
 )
+
+func extractBucketObject(args reflect.Value) (bucketName, objectName string) {
+	switch args.Kind() {
+	case reflect.Ptr:
+		a := args.Elem()
+		for i := 0; i < a.NumField(); i++ {
+			switch a.Type().Field(i).Name {
+			case "BucketName":
+				bucketName = a.Field(i).String()
+			case "Prefix":
+				objectName = a.Field(i).String()
+			case "ObjectName":
+				objectName = a.Field(i).String()
+			}
+		}
+	}
+	return bucketName, objectName
+}
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
 // for ex. ServerInfo, GenerateAuth
@@ -612,6 +632,10 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if web.CacheAPI() != nil {
 		deleteObjects = web.CacheAPI().DeleteObjects
 	}
+	getObjectInfoFn := objectAPI.GetObjectInfo
+	if web.CacheAPI() != nil {
+		getObjectInfoFn = web.CacheAPI().GetObjectInfo
+	}
 
 	claims, owner, authErr := webRequestAuthenticate(r)
 	if authErr != nil {
@@ -714,8 +738,50 @@ next:
 					return toJSONError(ctx, errAccessDenied)
 				}
 			}
+			var (
+				replicateDel, hasLifecycleConfig bool
+				goi                              ObjectInfo
+				gerr                             error
+			)
+			if _, err := globalBucketMetadataSys.GetLifecycleConfig(args.BucketName); err == nil {
+				hasLifecycleConfig = true
+			}
+			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
+				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
+				if _, replicateDel = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName}, goi, gerr); replicateDel {
+					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
+					opts.DeleteMarker = true
+				}
+			}
 
-			_, err = deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
+			oi, err := deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
+			if replicateDel && err == nil {
+				globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+					DeletedObject: DeletedObject{
+						ObjectName:                    objectName,
+						DeleteMarkerVersionID:         oi.VersionID,
+						DeleteMarkerReplicationStatus: string(oi.ReplicationStatus),
+						DeleteMarkerMTime:             DeleteMarkerMTime{oi.ModTime},
+						DeleteMarker:                  oi.DeleteMarker,
+						VersionPurgeStatus:            oi.VersionPurgeStatus,
+					},
+					Bucket: args.BucketName,
+				})
+			}
+			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
+				action := lifecycle.DeleteAction
+				if goi.VersionID != "" {
+					action = lifecycle.DeleteVersionAction
+				}
+				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
+					Name:         objectName,
+					UserTags:     goi.UserTags,
+					VersionID:    goi.VersionID,
+					DeleteMarker: goi.DeleteMarker,
+					IsLatest:     goi.IsLatest,
+				}, action, true)
+			}
+
 			logger.LogIf(ctx, err)
 			continue
 		}
@@ -760,9 +826,40 @@ next:
 					// Reached maximum delete requests, attempt a delete for now.
 					break
 				}
-				objects = append(objects, ObjectToDelete{
-					ObjectName: obj.Name,
-				})
+				if obj.ReplicationStatus == replication.Replica {
+					if authErr == errNoAuthToken {
+						// Check if object is allowed to be deleted anonymously
+						if !globalPolicySys.IsAllowed(policy.Args{
+							Action:          iampolicy.ReplicateDeleteAction,
+							BucketName:      args.BucketName,
+							ConditionValues: getConditionValues(r, "", "", nil),
+							IsOwner:         false,
+							ObjectName:      objectName,
+						}) {
+							return toJSONError(ctx, errAccessDenied)
+						}
+					} else {
+						if !globalIAMSys.IsAllowed(iampolicy.Args{
+							AccountName:     claims.AccessKey,
+							Action:          iampolicy.ReplicateDeleteAction,
+							BucketName:      args.BucketName,
+							ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+							IsOwner:         owner,
+							ObjectName:      objectName,
+							Claims:          claims.Map(),
+						}) {
+							return toJSONError(ctx, errAccessDenied)
+						}
+					}
+				}
+				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
+				_, replicateDel := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name}, obj, nil)
+				objToDel := ObjectToDelete{ObjectName: obj.Name}
+				if replicateDel {
+					objToDel.DeleteMarkerReplicationStatus = string(replication.Pending)
+				}
+
+				objects = append(objects, objToDel)
 			}
 
 			// Nothing to do.
@@ -772,7 +869,11 @@ next:
 
 			// Deletes a list of objects.
 			deletedObjects, errs := deleteObjects(ctx, args.BucketName, objects, opts)
-			for _, err := range errs {
+			for i, err := range errs {
+				if err != nil && !isErrObjectNotFound(err) {
+					deletedObjects[i].DeleteMarkerReplicationStatus = objects[i].DeleteMarkerReplicationStatus
+					deletedObjects[i].VersionPurgeStatus = objects[i].VersionPurgeStatus
+				}
 				if err != nil {
 					logger.LogIf(ctx, err)
 					break next
@@ -799,6 +900,12 @@ next:
 					UserAgent:  r.UserAgent(),
 					Host:       handlers.GetSourceIP(r),
 				})
+				if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
+					globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
+						DeletedObject: dobj,
+						Bucket:        args.BucketName,
+					})
+				}
 			}
 		}
 	}

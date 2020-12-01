@@ -19,6 +19,7 @@ package rest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -27,9 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio/cmd/logger"
-
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/cmd/logger"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -111,15 +111,15 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	if err != nil {
 		return nil, &NetworkError{err}
 	}
-	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.Query().Encode()))
+	req.Header.Set("Authorization", "Bearer "+c.newAuthToken(req.URL.RawQuery))
 	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
 	if length > 0 {
 		req.ContentLength = length
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			logger.LogIf(ctx, err, "marking disk offline")
+		if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+			logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
 			c.MarkOffline()
 		}
 		return nil, &NetworkError{err}
@@ -141,15 +141,16 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// with the caller to take the client offline purpose
 		// fully it should make sure to respond with '412'
 		// instead, see cmd/storage-rest-server.go for ideas.
-		if resp.StatusCode == http.StatusPreconditionFailed {
+		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
+			logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by PreconditionFailed with disk ID mismatch", c.url.String()))
 			c.MarkOffline()
 		}
 		defer xhttp.DrainBody(resp.Body)
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-				logger.LogIf(ctx, err, "marking disk offline")
+			if c.HealthCheckFn != nil && xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
+				logger.LogIf(ctx, fmt.Errorf("Marking %s temporary offline; caused by %w", c.url.String(), err))
 				c.MarkOffline()
 			}
 			return nil, err
@@ -168,10 +169,9 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(url *url.URL, newCustomTransport func() *http.Transport, newAuthToken func(aud string) string) *Client {
+func NewClient(url *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
-	tr := newCustomTransport()
 	return &Client{
 		httpClient:          &http.Client{Transport: tr},
 		url:                 url,
@@ -202,6 +202,7 @@ func (c *Client) MarkOffline() {
 				}
 				if c.HealthCheckFn() {
 					atomic.CompareAndSwapInt32(&c.connected, offline, online)
+					logger.Info("Client %s online", c.url.String())
 					return
 				}
 				time.Sleep(time.Duration(r.Float64() * float64(c.HealthCheckInterval)))

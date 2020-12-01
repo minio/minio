@@ -17,9 +17,28 @@
 package cmd
 
 import (
-	"os"
 	"time"
 )
+
+//go:generate msgp -file=$GOFILE
+
+// DiskInfo is an extended type which returns current
+// disk usage per path.
+type DiskInfo struct {
+	Total     uint64
+	Free      uint64
+	Used      uint64
+	FSType    string
+	RootDisk  bool
+	Healing   bool
+	Endpoint  string
+	MountPath string
+	ID        string
+	Error     string // carries the error over the network
+}
+
+// VolsInfo is a collection of volume(bucket) information
+type VolsInfo []VolInfo
 
 // VolInfo - represents volume stat information.
 type VolInfo struct {
@@ -74,6 +93,8 @@ func (f *FileInfoVersions) forwardPastVersion(v string) {
 }
 
 // FileInfo - represents file stat information.
+//msgp:tuple FileInfo
+// The above means that any added/deleted fields are incompatible.
 type FileInfo struct {
 	// Name of the volume.
 	Volume string
@@ -91,6 +112,10 @@ type FileInfo struct {
 	// a deleted marker for a versioned bucket.
 	Deleted bool
 
+	// TransitionStatus is set to Pending/Complete for transitioned
+	// entries based on state of transition
+	TransitionStatus string
+
 	// DataDir of the file
 	DataDir string
 
@@ -105,7 +130,7 @@ type FileInfo struct {
 	Size int64
 
 	// File mode bits.
-	Mode os.FileMode
+	Mode uint32
 
 	// File metadata
 	Metadata map[string]string
@@ -115,6 +140,39 @@ type FileInfo struct {
 
 	// Erasure info for all objects.
 	Erasure ErasureInfo
+
+	// DeleteMarkerReplicationStatus is set when this FileInfo represents
+	// replication on a DeleteMarker
+	MarkDeleted                   bool // mark this version as deleted
+	DeleteMarkerReplicationStatus string
+	VersionPurgeStatus            VersionPurgeStatusType
+}
+
+// VersionPurgeStatusKey denotes purge status in metadata
+const VersionPurgeStatusKey = "purgestatus"
+
+// VersionPurgeStatusType represents status of a versioned delete or permanent delete w.r.t bucket replication
+type VersionPurgeStatusType string
+
+const (
+	// Pending - versioned delete replication is pending.
+	Pending VersionPurgeStatusType = "PENDING"
+
+	// Complete - versioned delete replication is now complete, erase version on disk.
+	Complete VersionPurgeStatusType = "COMPLETE"
+
+	// Failed - versioned delete replication failed.
+	Failed VersionPurgeStatusType = "FAILED"
+)
+
+// Empty returns true if purge status was not set.
+func (v VersionPurgeStatusType) Empty() bool {
+	return string(v) == ""
+}
+
+// Pending returns true if the version is pending purge.
+func (v VersionPurgeStatusType) Pending() bool {
+	return v == Pending || v == Failed
 }
 
 // newFileInfo - initializes new FileInfo, allocates a fresh erasure info.

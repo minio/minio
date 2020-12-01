@@ -51,8 +51,8 @@ type GatewayLocker struct {
 }
 
 // NewNSLock - implements gateway level locker
-func (l *GatewayLocker) NewNSLock(ctx context.Context, bucket string, objects ...string) RWLocker {
-	return l.nsMutex.NewNSLock(ctx, nil, bucket, objects...)
+func (l *GatewayLocker) NewNSLock(bucket string, objects ...string) RWLocker {
+	return l.nsMutex.NewNSLock(nil, bucket, objects...)
 }
 
 // Walk - implements common gateway level Walker, to walk on all objects recursively at a prefix
@@ -233,7 +233,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	srvCfg := newServerConfig()
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg, 0)
+	lookupConfigs(srvCfg, 0, false)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

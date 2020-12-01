@@ -333,6 +333,9 @@ func checkRequestAuthTypeToAccessKey(ctx context.Context, r *http.Request, actio
 		// Populate payload again to handle it in HTTP handler.
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
 	}
+	if cred.AccessKey != "" {
+		logger.GetReqInfo(ctx).AccessKey = cred.AccessKey
+	}
 
 	if action != policy.ListAllMyBucketsAction && cred.AccessKey == "" {
 		// Anonymous checks are not meant for ListBuckets action
@@ -616,7 +619,7 @@ func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate t
 // isPutActionAllowed - check if PUT operation is allowed on the resource, this
 // call verifies bucket policies and IAM policies, supports multi user
 // checks etc.
-func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.Request, action iampolicy.Action) (s3Err APIErrorCode) {
+func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectName string, r *http.Request, action iampolicy.Action) (s3Err APIErrorCode) {
 	var cred auth.Credentials
 	var owner bool
 	switch atype {
@@ -635,6 +638,10 @@ func isPutActionAllowed(atype authType, bucketName, objectName string, r *http.R
 	claims, s3Err := checkClaimsFromToken(r, cred)
 	if s3Err != ErrNone {
 		return s3Err
+	}
+
+	if cred.AccessKey != "" {
+		logger.GetReqInfo(ctx).AccessKey = cred.AccessKey
 	}
 
 	// Do not check for PutObjectRetentionAction permission,

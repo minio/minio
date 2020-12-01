@@ -163,6 +163,15 @@ type ObjectInfo struct {
 	// to a delete marker on an object.
 	DeleteMarker bool
 
+	// TransitionStatus indicates if transition is complete/pending
+	TransitionStatus string
+
+	// RestoreExpires indicates date a restored object expires
+	RestoreExpires time.Time
+
+	// RestoreOngoing indicates if a restore is in progress
+	RestoreOngoing bool
+
 	// A standard MIME type describing the format of the object.
 	ContentType string
 
@@ -207,7 +216,8 @@ type ObjectInfo struct {
 	Legacy bool // indicates object on disk is in legacy data format
 
 	// backendType indicates which backend filled this structure
-	backendType BackendType
+	backendType        BackendType
+	VersionPurgeStatus VersionPurgeStatusType
 }
 
 // MultipartInfo captures metadata information about the uploadId

@@ -78,6 +78,12 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	// Validate the transition storage ARNs
+	if err = validateLifecycleTransition(ctx, bucket, bucketLifecycle); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	configData, err := xml.Marshal(bucketLifecycle)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))

@@ -36,6 +36,10 @@ mc ls myazure
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
+### Use custom access/secret keys
+
+If you do not want to share the credentials of the Azure blob storage with your users/applications, you can set the original credentials in the shell environment using `AZURE_STORAGE_ACCOUNT` and `AZURE_STORAGE_KEY` variables and assign different access/secret keys to `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`.
+
 ### Known limitations
 Gateway inherits the following Azure limitations:
 

@@ -19,14 +19,13 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/tinylib/msgp/msgp"
@@ -77,63 +76,27 @@ func newMetacacheWriter(out io.Writer, blockSize int) *metacacheWriter {
 		blockSize: blockSize,
 	}
 	w.creator = func() error {
-		s2w := s2.NewWriter(out, s2.WriterBlockSize(blockSize))
+		s2w := s2.NewWriter(out, s2.WriterBlockSize(blockSize), s2.WriterConcurrency(2))
 		w.mw = msgp.NewWriter(s2w)
 		w.creator = nil
 		if err := w.mw.WriteByte(metacacheStreamVersion); err != nil {
 			return err
 		}
 
-		w.closer = func() error {
+		w.closer = func() (err error) {
+			defer func() {
+				cerr := s2w.Close()
+				if err == nil && cerr != nil {
+					err = cerr
+				}
+			}()
 			if w.streamErr != nil {
 				return w.streamErr
 			}
-			if err := w.mw.WriteBool(false); err != nil {
+			if err = w.mw.WriteBool(false); err != nil {
 				return err
 			}
-			if err := w.mw.Flush(); err != nil {
-				return err
-			}
-			return s2w.Close()
-		}
-		return nil
-	}
-	return &w
-}
-
-func newMetacacheFile(file string) *metacacheWriter {
-	w := metacacheWriter{
-		mw: nil,
-	}
-	w.creator = func() error {
-		fw, err := os.Create(file)
-		if err != nil {
-			return err
-		}
-		s2w := s2.NewWriter(fw, s2.WriterBlockSize(1<<20))
-		w.mw = msgp.NewWriter(s2w)
-		w.creator = nil
-		if err := w.mw.WriteByte(metacacheStreamVersion); err != nil {
-			return err
-		}
-		w.closer = func() error {
-			if w.streamErr != nil {
-				fw.Close()
-				return w.streamErr
-			}
-			// Indicate EOS
-			if err := w.mw.WriteBool(false); err != nil {
-				return err
-			}
-			if err := w.mw.Flush(); err != nil {
-				fw.Close()
-				return err
-			}
-			if err := s2w.Close(); err != nil {
-				fw.Close()
-				return err
-			}
-			return fw.Close()
+			return w.mw.Flush()
 		}
 		return nil
 	}
@@ -243,7 +206,7 @@ func (w *metacacheWriter) Close() error {
 func (w *metacacheWriter) Reset(out io.Writer) {
 	w.streamErr = nil
 	w.creator = func() error {
-		s2w := s2.NewWriter(out, s2.WriterBlockSize(w.blockSize))
+		s2w := s2.NewWriter(out, s2.WriterBlockSize(w.blockSize), s2.WriterConcurrency(2))
 		w.mw = msgp.NewWriter(s2w)
 		w.creator = nil
 		if err := w.mw.WriteByte(metacacheStreamVersion); err != nil {
@@ -466,8 +429,8 @@ func (r *metacacheReader) forwardTo(s string) error {
 		}
 		if string(tmp) >= s {
 			r.current.name = string(tmp)
-			r.current.metadata, err = r.mr.ReadBytes(nil)
-			return err
+			r.current.metadata, r.err = r.mr.ReadBytes(nil)
+			return r.err
 		}
 		// Skip metadata
 		err = r.mr.Skip()
@@ -794,6 +757,7 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 		var n int
 		var buf bytes.Buffer
 		block := newMetacacheWriter(&buf, 1<<20)
+		defer block.Close()
 		finishBlock := func() {
 			err := block.Close()
 			if err != nil {
@@ -853,6 +817,7 @@ type metacacheBlock struct {
 }
 
 func (b metacacheBlock) headerKV() map[string]string {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	v, err := json.Marshal(b)
 	if err != nil {
 		logger.LogIf(context.Background(), err) // Unlikely

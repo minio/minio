@@ -61,6 +61,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/hash"
@@ -69,6 +70,7 @@ import (
 // TestMain to set up global env.
 func TestMain(m *testing.M) {
 	flag.Parse()
+
 	globalActiveCred = auth.Credentials{
 		AccessKey: auth.DefaultAccessKey,
 		SecretKey: auth.DefaultSecretKey,
@@ -106,6 +108,8 @@ func TestMain(m *testing.M) {
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
 	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
+
+	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
 
 	initHelp()
 
@@ -1879,6 +1883,9 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
 	defer setObjectLayer(newObjectLayerFn())
 
 	objLayer, fsDir, err := prepareFS()
@@ -1900,6 +1907,11 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, FSTestStr, t)
 
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
+	defer setObjectLayer(newObjectLayerFn())
+
 	newAllSubsystems()
 	objLayer, fsDirs, err := prepareErasureSets32(ctx)
 	if err != nil {
@@ -1914,6 +1926,10 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	defer removeRoots(append(fsDirs, fsDir))
 	// Executing the object layer tests for Erasure.
 	objTest(objLayer, ErasureTestStr, t)
+
+	if localMetacacheMgr != nil {
+		localMetacacheMgr.deleteAll()
+	}
 }
 
 // ExecObjectLayerTestWithDirs - executes object layer tests.
@@ -2226,9 +2242,15 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 
 func mustGetZoneEndpoints(args ...string) EndpointServerSets {
 	endpoints := mustGetNewEndpoints(args...)
+	drivesPerSet := len(args)
+	setCount := 1
+	if len(args) >= 16 {
+		drivesPerSet = 16
+		setCount = len(args) / 16
+	}
 	return []ZoneEndpoints{{
-		SetCount:     1,
-		DrivesPerSet: len(args),
+		SetCount:     setCount,
+		DrivesPerSet: drivesPerSet,
 		Endpoints:    endpoints,
 	}}
 }

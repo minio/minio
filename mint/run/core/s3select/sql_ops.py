@@ -18,9 +18,12 @@
 import io
 from datetime import datetime
 
-from minio.select.options import (CSVInput, CSVOutput, InputSerialization,
-                                  JSONInput, JSONOutput, OutputSerialization,
-                                  RequestProgress, SelectObjectOptions)
+from minio.selectrequest import (FILE_HEADER_INFO_NONE, JSON_TYPE_DOCUMENT,
+                                 QUOTE_FIELDS_ASNEEDED, CSVInputSerialization,
+                                 CSVOutputSerialization,
+                                 JSONInputSerialization,
+                                 JSONOutputSerialization, SelectRequest)
+
 from utils import generate_bucket_name, generate_object_name
 
 
@@ -42,17 +45,15 @@ def test_sql_expressions_custom_input_output(client, input_bytes, sql_input,
                 continue
             try:
                 log_output.args['total_tests'] += 1
-                options = SelectObjectOptions(
-                    expression=select_expression,
-                    input_serialization=sql_input,
-                    output_serialization=sql_output,
-                    request_progress=RequestProgress(
-                        enabled="False"
-                    )
+                sreq = SelectRequest(
+                    select_expression,
+                    sql_input,
+                    sql_output,
+                    request_progress=False
                 )
 
                 data = client.select_object_content(
-                    bucket_name, object_name, options)
+                    bucket_name, object_name, sreq)
 
                 # Get the records
                 records = io.BytesIO()
@@ -79,14 +80,13 @@ def test_sql_expressions_custom_input_output(client, input_bytes, sql_input,
 
 
 def test_sql_expressions(client, input_json_bytes, tests, log_output):
-    input_serialization = InputSerialization(
+    input_serialization = JSONInputSerialization(
         compression_type="NONE",
-        json=JSONInput(json_type="DOCUMENT"),
+        json_type=JSON_TYPE_DOCUMENT,
     )
 
-    output_serialization = OutputSerialization(
-        csv=CSVOutput(quote_fields="ASNEEDED")
-    )
+    output_serialization = CSVOutputSerialization(
+        quote_fields=QUOTE_FIELDS_ASNEEDED)
 
     test_sql_expressions_custom_input_output(client, input_json_bytes,
                                              input_serialization, output_serialization, tests, log_output)
@@ -392,8 +392,8 @@ def test_sql_select_json(client, log_output):
             "Select s.rules[1].expr from S3Object s", b'{"expr":"y > x"}\n{}\n'),
     ]
 
-    input_serialization = InputSerialization(json=JSONInput(json_type="DOCUMENT"))
-    output_serialization = OutputSerialization(json=JSONOutput())
+    input_serialization = JSONInputSerialization(json_type=JSON_TYPE_DOCUMENT)
+    output_serialization = JSONOutputSerialization()
     try:
         test_sql_expressions_custom_input_output(client, json_testcontent,
                                                  input_serialization, output_serialization, tests, log_output)
@@ -414,14 +414,11 @@ val4,val5,val6
         ("select_1", "SELECT s._2 FROM S3Object as s", b'val2\nval5\n'),
     ]
 
-    input_serialization = InputSerialization(
-        csv=CSVInput(
-            file_header_info="NONE",
-            allow_quoted_record_delimiter="FALSE",
-        ),
+    input_serialization = CSVInputSerialization(
+        file_header_info=FILE_HEADER_INFO_NONE,
+        allow_quoted_record_delimiter="FALSE",
     )
-
-    output_serialization = OutputSerialization(csv=CSVOutput())
+    output_serialization = CSVOutputSerialization()
     try:
         test_sql_expressions_custom_input_output(client, json_testcontent,
                                                  input_serialization, output_serialization, tests, log_output)

@@ -220,7 +220,7 @@ var (
 	globalServerConfigMu sync.RWMutex
 )
 
-func validateConfig(s config.Config, setDriveCount int) error {
+func validateConfig(s config.Config, minSetDriveCount int) error {
 	// Disable merging env values with config for validation.
 	env.SetEnvOff()
 
@@ -240,7 +240,7 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	}
 
 	if globalIsErasure {
-		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
+		if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], minSetDriveCount, false); err != nil {
 			return err
 		}
 	}
@@ -320,7 +320,7 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
 }
 
-func lookupConfigs(s config.Config, setDriveCount int) {
+func lookupConfigs(s config.Config, minSetDriveCount int, freshConfig bool) {
 	ctx := GlobalContext
 
 	var err error
@@ -407,7 +407,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	globalAPIConfig.init(apiConfig, setDriveCount)
+	globalAPIConfig.init(apiConfig, minSetDriveCount)
 
 	// Initialize remote instance transport once.
 	getRemoteInstanceTransportOnce.Do(func() {
@@ -415,7 +415,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	})
 
 	if globalIsErasure {
-		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
+		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], minSetDriveCount, freshConfig)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 		}
@@ -641,14 +641,19 @@ func getValidConfig(objAPI ObjectLayer) (config.Config, error) {
 
 // loadConfig - loads a new config from disk, overrides params
 // from env if found and valid
-func loadConfig(objAPI ObjectLayer) error {
-	srvCfg, err := getValidConfig(objAPI)
-	if err != nil {
-		return err
+func loadConfig(objAPI ObjectLayer, freshConfig bool) (err error) {
+	var srvCfg config.Config
+	if !freshConfig {
+		srvCfg, err = getValidConfig(objAPI)
+		if err != nil {
+			return err
+		}
+	} else {
+		srvCfg = globalServerConfig
 	}
 
 	// Override any values from ENVs.
-	lookupConfigs(srvCfg, objAPI.SetDriveCount())
+	lookupConfigs(srvCfg, objAPI.SetDriveCount(), freshConfig)
 
 	// hold the mutex lock before a new config is assigned.
 	globalServerConfigMu.Lock()

@@ -53,10 +53,6 @@ type StorageAPI interface {
 
 	// WalkVersions in sorted order directly on disk.
 	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
-	// Walk in sorted order directly on disk.
-	Walk(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfo, error)
-	// Walk in sorted order directly on disk.
-	WalkSplunk(ctx context.Context, volume, dirPath, marker string, endWalkCh <-chan struct{}) (chan FileInfo, error)
 
 	// Metadata operations
 	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error
@@ -78,7 +74,8 @@ type StorageAPI interface {
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 
 	// Write all data, syncs the data to disk.
-	WriteAll(ctx context.Context, volume string, path string, reader io.Reader) (err error)
+	// Should be used for smaller payloads.
+	WriteAll(ctx context.Context, volume string, path string, b []byte) (err error)
 
 	// Read all.
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)
