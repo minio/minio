@@ -547,12 +547,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						}
 
 						// If no errors, queue it for healing.
-						first, _ := entries.firstFound()
-						if first.isDir() {
-							// If we only get a dir, don't do anything for now.
-							return
-						}
-						entry = first
+						entry, _ = entries.firstFound()
 					}
 
 					if f.dataUsageCrawlDebug {
