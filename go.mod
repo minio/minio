@@ -5,6 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.39.0
 	git.apache.org/thrift.git v0.13.0
+	github.com/AchievementNetwork/stringset v1.1.0
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-autorest/autorest/adal v0.9.1 // indirect

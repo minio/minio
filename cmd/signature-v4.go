@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AchievementNetwork/stringset"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	xhttp "github.com/minio/minio/cmd/http"
 	sha256 "github.com/minio/sha256-simd"
@@ -256,7 +257,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
 	query.Set(xhttp.AmzCredential, cred.AccessKey+SlashSeparator+pSignValues.Credential.getScope())
 
-	excludeParams := []string{
+	defaultSigParams := stringset.New().Add(
 		xhttp.AmzContentSha256,
 		xhttp.AmzSecurityToken,
 		xhttp.AmzAlgorithm,
@@ -265,20 +266,13 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		xhttp.AmzSignedHeaders,
 		xhttp.AmzCredential,
 		xhttp.AmzSignature,
-	}
-	rquery := make(url.Values)
+	)
+
+	// Add missing query parameters if any provided in the request URL
 	for k, v := range req.URL.Query() {
-		rquery[k] = v
-	}
-	// Remove all excluded params.
-	for _, k := range excludeParams {
-		if rquery.Get(k) != "" {
-			rquery.Del(k)
+		if !defaultSigParams.Contains(k) {
+			query[k] = v
 		}
-	}
-	// Save other headers available in the request parameters.
-	for k, v := range rquery {
-		query[k] = v
 	}
 
 	// Get the encoded query.
