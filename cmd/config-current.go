@@ -25,6 +25,7 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/heal"
@@ -196,6 +197,7 @@ func initHelp() {
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
 		config.HealSubSys:           heal.Help,
+		config.CrawlerSubSys:        crawler.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -442,6 +444,12 @@ func lookupConfigs(s config.Config, minSetDriveCount int, freshConfig bool) {
 			}
 		}
 	}
+
+	globalCrawlerConfig, err = crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to read crawler config: %w", err))
+	}
+
 	globalHealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to read heal config: %w", err))

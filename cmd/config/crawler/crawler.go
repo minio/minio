@@ -18,19 +18,23 @@ package crawler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/minio/minio/cmd/config"
 )
 
 // Compression environment variables
 const (
-	Delay = "delay"
+	Delay   = "delay"
+	MaxWait = "max_wait"
 )
 
 // Config represents the heal settings.
 type Config struct {
-	// Bitrot will perform bitrot scan on local disk when checking objects.
+	// Delay is the sleep multiplier.
 	Delay float64 `json:"delay"`
+	// MaxWait is maximum wait time between operations
+	MaxWait time.Duration
 }
 
 var (
@@ -39,6 +43,11 @@ var (
 		config.KV{
 			Key:     Delay,
 			Value:   "10",
+			Dynamic: true,
+		},
+		config.KV{
+			Key:     MaxWait,
+			Value:   "15s",
 			Dynamic: true,
 		},
 	}
@@ -50,6 +59,12 @@ var (
 			Description: `crawler delay multiplier, default 10`,
 			Optional:    true,
 			Type:        "float",
+		},
+		config.HelpKV{
+			Key:         MaxWait,
+			Description: `maximum wait time between operations, default 15s`,
+			Optional:    true,
+			Type:        "duration",
 		},
 	}
 )
@@ -64,6 +79,10 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
-
+	wait := kvs.Get(MaxWait)
+	cfg.MaxWait, err = time.ParseDuration(wait)
+	if err != nil {
+		return cfg, err
+	}
 	return cfg, nil
 }

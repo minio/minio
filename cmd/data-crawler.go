@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/cmd/config/crawler"
+
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
@@ -53,6 +55,7 @@ const (
 )
 
 var (
+	globalCrawlerConfig          crawler.Config
 	globalHealConfig             heal.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	crawlerSleeper               *dynamicSleeper
@@ -60,8 +63,7 @@ var (
 
 // initDataCrawler will start the crawler unless disabled.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
-	// TODO: Get from config
-	crawlerSleeper = newDynamicSleeper(10, 15*time.Second)
+	crawlerSleeper = newDynamicSleeper(globalCrawlerConfig.Delay, globalCrawlerConfig.MaxWait)
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
 		go runDataCrawler(ctx, objAPI)
 	}
@@ -144,7 +146,6 @@ type folderScanner struct {
 	newCache   dataUsageCache
 	withFilter *bloomFilter
 
-	dataUsageCrawlMult  float64
 	dataUsageCrawlDebug bool
 	healFolderInclude   uint32 // Include a clean folder one in n cycles.
 	healObjectSelect    uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
@@ -181,7 +182,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		newCache:            dataUsageCache{Info: cache.Info},
 		newFolders:          nil,
 		existingFolders:     nil,
-		dataUsageCrawlMult:  delayMult,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
 		healFolderInclude:   0,
 		healObjectSelect:    0,
@@ -371,7 +371,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 			}
 		}
-		sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
+		crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 
 		cache := dataUsageEntry{}
 
@@ -420,7 +420,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			t := UTCNow()
+			wait := crawlerSleeper.Timer(ctx)
 
 			// Get file size, ignore errors.
 			item := crawlItem{
@@ -435,7 +435,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 			size, err := f.getSize(item)
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+			wait()
 			if err == errSkipFile {
 				return nil
 			}
@@ -484,16 +484,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			t := UTCNow()
+			wait := crawlerSleeper.Timer(ctx)
 
 			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
 				func(bucket, object, versionID string) error {
 					// Wait for each heal as per crawler frequency.
-					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-
-					defer func() {
-						t = UTCNow()
-					}()
+					wait()
+					wait = crawlerSleeper.Timer(ctx)
 					return bgSeq.queueHealTask(healSource{
 						bucket:    bucket,
 						object:    object,
@@ -501,7 +498,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					}, madmin.HealItemObject)
 				})
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+			wait()
 
 			if f.dataUsageCrawlDebug && err != nil {
 				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
@@ -543,12 +540,12 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
-			sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
+			crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 			return err
 		}
 
 		// Dynamic time delay.
-		t := UTCNow()
+		wait := crawlerSleeper.Timer(ctx)
 
 		// Get file size, ignore errors.
 		dirStack = append(dirStack, entName)
@@ -578,8 +575,8 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
 			})
 
-		// Don't sleep for really small amount of time
-		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+		// Wait to throttle IO
+		wait()
 
 		if err == errSkipFile {
 			return nil
@@ -802,21 +799,6 @@ func (i *crawlItem) objectPath() string {
 	return path.Join(i.prefix, i.objectName)
 }
 
-// sleepDuration multiplies the duration d by x
-// and sleeps if is more than 100 micro seconds.
-// Sleep is limited to max 15 seconds.
-func sleepDuration(d time.Duration, x float64) {
-	const maxWait = 15 * time.Second
-	const minWait = 100 * time.Microsecond
-	// Don't sleep for really small amount of time
-	if d := time.Duration(float64(d) * x); d > minWait {
-		if d > maxWait {
-			d = maxWait
-		}
-		time.Sleep(d)
-	}
-}
-
 // healReplication will heal a scanned item that has failed replication.
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
 	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
@@ -927,6 +909,43 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 					<-timer.C
 					return
 				}
+			}
+		}
+	}
+}
+
+// Sleep sleeps the specified time multiplied by the sleep factor.
+// If the factor is updated the sleep will be done again with the new factor.
+func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
+	for {
+		// Grab current values
+		d.mu.RLock()
+		minWait, maxWait := d.minSleep, d.maxSleep
+		factor := d.factor
+		cycle := d.cycle
+		d.mu.RUnlock()
+		// Don't sleep for really small amount of time
+		wantSleep := time.Duration(float64(base) * factor)
+		if wantSleep <= minWait {
+			return
+		}
+		if maxWait > 0 && wantSleep > maxWait {
+			wantSleep = maxWait
+		}
+		timer := time.NewTimer(wantSleep)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		case <-timer.C:
+			return
+		case <-cycle:
+			if !timer.Stop() {
+				// We expired.
+				<-timer.C
+				return
 			}
 		}
 	}
