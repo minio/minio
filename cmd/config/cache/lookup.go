@@ -222,6 +222,10 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
+		if cfg.After > 0 && cfg.CommitWriteback {
+			err := errors.New("cache after cannot be used with commit writeback")
+			return cfg, config.ErrInvalidCacheSetting(err)
+		}
 	}
 
 	return cfg, nil
