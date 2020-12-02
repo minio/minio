@@ -172,7 +172,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddTarget(globalConsoleSys)
+	logger.Targets.Add(globalConsoleSys)
 
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
@@ -198,7 +198,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	initHelp()
 
 	// Get port to listen on from gateway address
-	globalMinioHost, globalMinioPort = mustSplitHostPort(globalCLIContext.Addr)
+	globalMinioHost, globalMinioPort = mustSplitHostPort(srvCtx.Flags.Addr)
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
@@ -245,12 +245,12 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	// avoid URL path encoding minio/minio#8950
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
-	if globalEtcdClient != nil {
+	if srvCtx.EtcdClient != nil {
 		// Enable STS router if etcd is enabled.
 		registerSTSRouter(router)
 	}
 
-	enableIAMOps := globalEtcdClient != nil
+	enableIAMOps := srvCtx.EtcdClient != nil
 
 	// Enable IAM admin APIs if etcd is enabled, if not just enable basic
 	// operations such as profiling, server info etc.
@@ -278,7 +278,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	httpServer := xhttp.NewServer([]string{globalCLIContext.Addr},
+	httpServer := xhttp.NewServer([]string{srvCtx.Flags.Addr},
 		criticalErrorHandler{corsHandler(router)}, getCert)
 	httpServer.BaseContext = func(listener net.Listener) context.Context {
 		return GlobalContext
@@ -316,11 +316,11 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		logger.FatalIf(globalNotificationSys.Init(GlobalContext, buckets, newObject), "Unable to initialize notification system")
 	}
 
-	if globalEtcdClient != nil {
+	if srvCtx.EtcdClient != nil {
 		// ****  WARNING ****
 		// Migrating to encrypted backend on etcd should happen before initialization of
 		// IAM sub-systems, make sure that we do not move the above codeblock elsewhere.
-		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(GlobalContext, globalEtcdClient),
+		logger.FatalIf(migrateIAMConfigsEtcdToEncrypted(GlobalContext, srvCtx.EtcdClient),
 			"Unable to handle encrypted backend for iam and policies")
 	}
 
@@ -331,10 +331,10 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 		go globalIAMSys.Init(GlobalContext, newObject)
 	}
 
-	if globalCacheConfig.Enabled {
+	if srvCtx.CacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
+		cacheAPI, err = newServerCacheObjects(GlobalContext, srvCtx.CacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 
 		globalObjLayerMutex.Lock()
@@ -343,7 +343,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	}
 
 	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
+	if srvCtx.DNSConfig != nil {
 		buckets, err := newObject.ListBuckets(GlobalContext)
 		if err != nil {
 			logger.Fatal(err, "Unable to list buckets")
@@ -357,7 +357,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	verifyObjectLayerFeatures("gateway "+gatewayName, newObject)
 
 	// Prints the formatted startup message once object layer is initialized.
-	if !globalCLIContext.Quiet {
+	if !srvCtx.Flags.Quiet {
 		mode := globalMinioModeGatewayPrefix + gatewayName
 		// Check update mode.
 		checkUpdate(mode)

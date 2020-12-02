@@ -286,12 +286,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	ctx = newContext(r, w, action)
 	defer logger.AuditLog(w, r, action, nil)
 
-	if globalOpenIDValidators == nil {
+	if srvCtx.OpenIDValidators == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSNotInitialized, errServerNotInitialized)
 		return
 	}
 
-	v, err := globalOpenIDValidators.Get("jwt")
+	v, err := srvCtx.OpenIDValidators.Get("jwt")
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
@@ -331,7 +331,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		policyName = globalIAMSys.CurrentPolicies(strings.Join(policySet.ToSlice(), ","))
 	}
 
-	if policyName == "" && globalPolicyOPA == nil {
+	if policyName == "" && srvCtx.PolicyOPA == nil {
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue,
 			fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
 		return
@@ -490,14 +490,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
-	groups, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
+	groups, err := srvCtx.LDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
 		err = fmt.Errorf("LDAP server connection failure: %w", err)
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}
 
-	expiryDur := globalLDAPConfig.GetExpiryDuration()
+	expiryDur := srvCtx.LDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
 		expClaim: UTCNow().Add(expiryDur).Unix(),
 		ldapUser: ldapUsername,

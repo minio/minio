@@ -59,7 +59,7 @@ func deleteConfig(ctx context.Context, objAPI objectDeleter, configFile string) 
 }
 
 func saveConfig(ctx context.Context, objAPI ObjectLayer, configFile string, data []byte) error {
-	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)), globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(bytes.NewReader(data), int64(len(data)), "", getSHA256Hash(data), int64(len(data)), srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		return err
 	}

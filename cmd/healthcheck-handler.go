@@ -38,7 +38,7 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	objLayer := newObjectLayerFn()
 
-	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
+	ctx, cancel := context.WithTimeout(ctx, srvCtx.APIConfig.getClusterDeadline())
 	defer cancel()
 
 	opts := HealthOptions{Maintenance: r.URL.Query().Get("maintenance") == "true"}

@@ -694,7 +694,7 @@ func getMinioMode() string {
 }
 
 func iamPolicyClaimNameOpenID() string {
-	return globalOpenIDConfig.ClaimPrefix + globalOpenIDConfig.ClaimName
+	return srvCtx.OpenIDConfig.ClaimPrefix + srvCtx.OpenIDConfig.ClaimName
 }
 
 func iamPolicyClaimNameSA() string {

@@ -29,6 +29,7 @@ import (
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
 	"github.com/minio/minio/cmd/config/dns"
+	"github.com/minio/minio/cmd/config/heal"
 	xldap "github.com/minio/minio/cmd/config/identity/ldap"
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/policy/opa"
@@ -104,11 +105,59 @@ const (
 	diskFillFraction = 0.95
 )
 
-var globalCLIContext = struct {
-	JSON, Quiet    bool
-	Anonymous      bool
-	Addr           string
-	StrictS3Compat bool
+var srvCtx = struct {
+	Flags struct {
+		JSON, Quiet    bool
+		Anonymous      bool
+		Addr           string
+		StrictS3Compat bool
+	}
+
+	// srvCtx.NotificationEnvTargetList has list of targets configured via config and env.
+	NotificationConfigTargetList *event.TargetList
+
+	// srvCtx.NotificationEnvTargetList has list of targets configured via env.
+	NotificationEnvTargetList *event.TargetList
+
+	// APIConfig controls S3 API requests throttling,
+	// healthcheck readiness deadlines and cors settings.
+	APIConfig apiConfig
+
+	HealConfig   heal.Config
+	StorageClass storageclass.Config
+	LDAPConfig   xldap.Config
+	OpenIDConfig openid.Config
+
+	// Disk cache drives
+	CacheConfig cache.Config
+	CacheKMS    crypto.KMS
+
+	// Allocated etcd endpoint for config and bucket DNS.
+	EtcdClient *etcd.Client
+
+	// Is set to true when Bucket federation is requested
+	// and is 'true' when etcdConfig.PathPrefix is empty
+	BucketFederation bool
+
+	// Allocated DNS config wrapper over etcd client.
+	DNSConfig dns.Store
+
+	// GlobalKMS initialized KMS configuration
+	KMS crypto.KMS
+
+	// Auto-Encryption, if enabled, turns any non-SSE-C request
+	// into an SSE-S3 request. If enabled a valid, non-empty KMS
+	// configuration must be present.
+	AutoEncryption bool
+
+	// Is compression enabled?
+	CompressConfig compress.Config
+
+	// Authorization validators list.
+	OpenIDValidators *openid.Validators
+
+	// OPA policy system.
+	PolicyOPA *opa.Opa
 }{}
 
 var (
@@ -141,30 +190,6 @@ var (
 	globalMinioHost = ""
 	// Holds the possible host endpoint.
 	globalMinioEndpoint = ""
-
-	// globalConfigSys server config system.
-	globalConfigSys *ConfigSys
-
-	globalNotificationSys  *NotificationSys
-	globalConfigTargetList *event.TargetList
-	// globalEnvTargetList has list of targets configured via env.
-	globalEnvTargetList *event.TargetList
-
-	globalBucketMetadataSys *BucketMetadataSys
-	globalBucketMonitor     *bandwidth.Monitor
-	globalPolicySys         *PolicySys
-	globalIAMSys            *IAMSys
-
-	globalLifecycleSys       *LifecycleSys
-	globalBucketSSEConfigSys *BucketSSEConfigSys
-	globalBucketTargetSys    *BucketTargetSys
-	// globalAPIConfig controls S3 API requests throttling,
-	// healthcheck readiness deadlines and cors settings.
-	globalAPIConfig = apiConfig{listQuorum: 3}
-
-	globalStorageClass storageclass.Config
-	globalLDAPConfig   xldap.Config
-	globalOpenIDConfig openid.Config
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
@@ -216,48 +241,25 @@ var (
 	globalOperationTimeout       = newDynamicTimeout(10*time.Minute, 5*time.Minute) // default timeout for general ops
 	globalDeleteOperationTimeout = newDynamicTimeout(5*time.Minute, 1*time.Minute)  // default time for delete ops
 
-	globalBucketObjectLockSys *BucketObjectLockSys
-	globalBucketQuotaSys      *BucketQuotaSys
-	globalBucketVersioningSys *BucketVersioningSys
-
-	// Disk cache drives
-	globalCacheConfig cache.Config
-
-	// Initialized KMS configuration for disk cache
-	globalCacheKMS crypto.KMS
-
-	// Allocated etcd endpoint for config and bucket DNS.
-	globalEtcdClient *etcd.Client
-
-	// Is set to true when Bucket federation is requested
-	// and is 'true' when etcdConfig.PathPrefix is empty
-	globalBucketFederation bool
-
-	// Allocated DNS config wrapper over etcd client.
-	globalDNSConfig dns.Store
-
-	// GlobalKMS initialized KMS configuration
-	GlobalKMS crypto.KMS
-
-	// Auto-Encryption, if enabled, turns any non-SSE-C request
-	// into an SSE-S3 request. If enabled a valid, non-empty KMS
-	// configuration must be present.
-	globalAutoEncryption bool
-
-	// Is compression enabled?
-	globalCompressConfig compress.Config
-
 	// Some standard object extensions which we strictly dis-allow for compression.
 	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}
 
 	// Some standard content-types which we strictly dis-allow for compression.
 	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
 
-	// Authorization validators list.
-	globalOpenIDValidators *openid.Validators
-
-	// OPA policy system.
-	globalPolicyOPA *opa.Opa
+	// Various sub-systems
+	globalConfigSys           *ConfigSys
+	globalNotificationSys     *NotificationSys
+	globalBucketMetadataSys   *BucketMetadataSys
+	globalBucketMonitor       *bandwidth.Monitor
+	globalPolicySys           *PolicySys
+	globalIAMSys              *IAMSys
+	globalLifecycleSys        *LifecycleSys
+	globalBucketSSEConfigSys  *BucketSSEConfigSys
+	globalBucketTargetSys     *BucketTargetSys
+	globalBucketObjectLockSys *BucketObjectLockSys
+	globalBucketQuotaSys      *BucketQuotaSys
+	globalBucketVersioningSys *BucketVersioningSys
 
 	// Deployment ID - unique per deployment
 	globalDeploymentID string

@@ -77,7 +77,7 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	}
 
 	// Return error if KMS is not initialized
-	if GlobalKMS == nil {
+	if srvCtx.KMS == nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL, guessIsBrowserReq(r))
 		return
 	}

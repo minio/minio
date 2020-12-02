@@ -624,17 +624,17 @@ type bucketForwardingHandler struct {
 }
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if globalDNSConfig == nil || len(globalDomainNames) == 0 ||
+	if srvCtx.DNSConfig == nil || len(globalDomainNames) == 0 ||
 		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
 		guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) ||
-		!globalBucketFederation {
+		!srvCtx.BucketFederation {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
 
 	// For browser requests, when federation is setup we need to
 	// specifically handle download and upload for browser requests.
-	if guessIsBrowserReq(r) && globalDNSConfig != nil && len(globalDomainNames) > 0 {
+	if guessIsBrowserReq(r) && srvCtx.DNSConfig != nil && len(globalDomainNames) > 0 {
 		var bucket, _ string
 		switch r.Method {
 		case http.MethodPut:
@@ -652,7 +652,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			f.handler.ServeHTTP(w, r)
 			return
 		}
-		sr, err := globalDNSConfig.Get(bucket)
+		sr, err := srvCtx.DNSConfig.Get(bucket)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket),
@@ -704,7 +704,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	sr, err := globalDNSConfig.Get(bucket)
+	sr, err := srvCtx.DNSConfig.Get(bucket)
 	if err != nil {
 		if err == dns.ErrNoEntriesFound {
 			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrNoSuchBucket), r.URL, guessIsBrowserReq(r))

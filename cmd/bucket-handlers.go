@@ -72,7 +72,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	}
 
 	// Get buckets in the DNS
-	dnsBuckets, err := globalDNSConfig.List()
+	dnsBuckets, err := srvCtx.DNSConfig.List()
 	if err != nil && err != dns.ErrNoEntriesFound && err != dns.ErrNotImplemented {
 		logger.LogIf(GlobalContext, err)
 		return
@@ -118,7 +118,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	for index := range bucketsToBeUpdatedSlice {
 		index := index
 		g.Go(func() error {
-			return globalDNSConfig.Put(bucketsToBeUpdatedSlice[index])
+			return srvCtx.DNSConfig.Put(bucketsToBeUpdatedSlice[index])
 		}, index)
 	}
 
@@ -145,7 +145,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 		// We go to here, so we know the bucket no longer exists,
 		// but is registered in DNS to this server
-		if err = globalDNSConfig.Delete(bucket); err != nil {
+		if err = srvCtx.DNSConfig.Delete(bucket); err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("Failed to remove DNS entry for %s due to %w",
 				bucket, err))
 		}
@@ -279,8 +279,8 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var bucketsInfo []BucketInfo
-	if globalDNSConfig != nil && globalBucketFederation {
-		dnsBuckets, err := globalDNSConfig.List()
+	if srvCtx.DNSConfig != nil && srvCtx.BucketFederation {
+		dnsBuckets, err := srvCtx.DNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -634,8 +634,8 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		LockEnabled: objectLockEnabled,
 	}
 
-	if globalDNSConfig != nil {
-		sr, err := globalDNSConfig.Get(bucket)
+	if srvCtx.DNSConfig != nil {
+		sr, err := srvCtx.DNSConfig.Get(bucket)
 		if err != nil {
 			// ErrNotImplemented indicates a DNS backend that doesn't need to check if bucket already
 			// exists elsewhere
@@ -646,7 +646,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 					return
 				}
 
-				if err = globalDNSConfig.Put(bucket); err != nil {
+				if err = srvCtx.DNSConfig.Put(bucket); err != nil {
 					objectAPI.DeleteBucket(ctx, bucket, false)
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
@@ -866,7 +866,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(fileBody, fileSize, "", "", fileSize, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -877,7 +877,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
-	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || globalAutoEncryption {
+	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || srvCtx.AutoEncryption {
 		// This request header needs to be set prior to setting ObjectOptions
 		if !crypto.SSEC.IsRequested(r.Header) {
 			r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
@@ -913,7 +913,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			}
 			info := ObjectInfo{Size: fileSize}
 			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize, globalCLIContext.StrictS3Compat)
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", fileSize, srvCtx.Flags.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1073,8 +1073,8 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
 
-	if globalDNSConfig != nil {
-		if err := globalDNSConfig.Delete(bucket); err != nil {
+	if srvCtx.DNSConfig != nil {
+		if err := srvCtx.DNSConfig.Delete(bucket); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return

@@ -209,7 +209,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 	}
 
 	var best metacache
-	extend := globalAPIConfig.getExtendListLife()
+	extend := srvCtx.APIConfig.getExtendListLife()
 	for _, cached := range b.caches {
 		// Never return transient caches if there is no id.
 		if b.transient {

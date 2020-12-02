@@ -728,7 +728,7 @@ func (sys *NotificationSys) Init(ctx context.Context, buckets []BucketInfo, objA
 		return nil
 	}
 
-	logger.LogIf(ctx, sys.targetList.Add(globalConfigTargetList.Targets()...))
+	logger.LogIf(ctx, sys.targetList.Add(srvCtx.NotificationConfigTargetList.Targets()...))
 
 	go func() {
 		for res := range sys.targetResCh {
@@ -796,7 +796,7 @@ func (sys *NotificationSys) ConfiguredTargetIDs() []event.TargetID {
 	// Filter out targets configured via env
 	var tIDs []event.TargetID
 	for _, targetID := range targetIDs {
-		if !globalEnvTargetList.Exists(targetID) {
+		if !srvCtx.NotificationEnvTargetList.Exists(targetID) {
 			tIDs = append(tIDs, targetID)
 		}
 	}

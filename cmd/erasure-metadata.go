@@ -342,7 +342,7 @@ func objectQuorumFromMeta(ctx context.Context, er erasureObjects, partsMetaData 
 	}
 
 	dataBlocks := latestFileInfo.Erasure.DataBlocks
-	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
+	parityBlocks := srvCtx.StorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
 	if parityBlocks == 0 {
 		parityBlocks = dataBlocks
 	}

@@ -126,11 +126,11 @@ func (lrw *ResponseWriter) Size() int {
 
 // AuditLog - logs audit logs to all audit targets.
 func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}, filterKeys ...string) {
-	// Fast exit if there is not audit target configured
-	if len(AuditTargets) == 0 {
+	if !AuditTargets.Available() {
 		return
 	}
 
+	// Fast exit if there is not audit target configured
 	var (
 		statusCode      int
 		timeToResponse  time.Duration
@@ -158,6 +158,7 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 		delete(entry.ReqHeader, filterKey)
 		delete(entry.RespHeader, filterKey)
 	}
+
 	entry.API.Name = api
 	entry.API.Bucket = bucket
 	entry.API.Object = object
@@ -170,7 +171,5 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 	}
 
 	// Send audit logs only to http targets.
-	for _, t := range AuditTargets {
-		_ = t.Send(entry, string(All))
-	}
+	AuditTargets.Send(entry, string(All))
 }

@@ -112,7 +112,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
-	logger.FatalIf(CheckLocalServerAddr(globalCLIContext.Addr), "Unable to validate passed arguments")
+	logger.FatalIf(CheckLocalServerAddr(srvCtx.Flags.Addr), "Unable to validate passed arguments")
 
 	var err error
 	var setupType SetupType
@@ -133,10 +133,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Register root CAs for remote ENVs
 	env.RegisterGlobalCAs(globalRootCAs)
 
-	globalMinioAddr = globalCLIContext.Addr
+	globalMinioAddr = srvCtx.Flags.Addr
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
-	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+	globalEndpoints, setupType, err = createServerEndpoints(srvCtx.Flags.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
@@ -343,7 +343,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	globalIAMSys.InitStore(newObject)
 
 	// Populate existing buckets to the etcd backend
-	if globalDNSConfig != nil {
+	if srvCtx.DNSConfig != nil {
 		// Background this operation.
 		go initFederatorBackend(buckets, newObject)
 	}
@@ -372,7 +372,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(GlobalContext)
-	logger.AddTarget(globalConsoleSys)
+	logger.Targets.Add(globalConsoleSys)
 
 	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
@@ -407,7 +407,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if !globalCLIContext.Quiet && !globalInplaceUpdateDisabled {
+	if !srvCtx.Flags.Quiet && !globalInplaceUpdateDisabled {
 		// Check for new updates from dl.min.io.
 		checkUpdate(getMinioMode())
 	}
@@ -498,10 +498,10 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
-	if globalCacheConfig.Enabled {
+	if srvCtx.CacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer
-		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
+		cacheAPI, err = newServerCacheObjects(GlobalContext, srvCtx.CacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 
 		globalObjLayerMutex.Lock()

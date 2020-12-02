@@ -393,9 +393,9 @@ func TestObjectQuorumFromMeta(t *testing.T) {
 }
 
 func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []string, t TestErrHandler) {
-	restoreGlobalStorageClass := globalStorageClass
+	restoreGlobalStorageClass := srvCtx.StorageClass
 	defer func() {
-		globalStorageClass = restoreGlobalStorageClass
+		srvCtx.StorageClass = restoreGlobalStorageClass
 	}()
 
 	bucket := getRandomBucketName()
@@ -426,7 +426,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 
 	parts1, errs1 := readAllFileInfo(ctx, erasureDisks, bucket, object1, "")
 
-	parts1SC := globalStorageClass
+	parts1SC := srvCtx.StorageClass
 
 	// Object for test case 2 - No StorageClass defined, MetaData in PutObject requesting RRS Class
 	object2 := "object2"
@@ -438,7 +438,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	}
 
 	parts2, errs2 := readAllFileInfo(ctx, erasureDisks, bucket, object2, "")
-	parts2SC := globalStorageClass
+	parts2SC := srvCtx.StorageClass
 
 	// Object for test case 3 - No StorageClass defined, MetaData in PutObject requesting Standard Storage Class
 	object3 := "object3"
@@ -450,13 +450,13 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	}
 
 	parts3, errs3 := readAllFileInfo(ctx, erasureDisks, bucket, object3, "")
-	parts3SC := globalStorageClass
+	parts3SC := srvCtx.StorageClass
 
 	// Object for test case 4 - Standard StorageClass defined as Parity 6, MetaData in PutObject requesting Standard Storage Class
 	object4 := "object4"
 	metadata4 := make(map[string]string)
 	metadata4["x-amz-storage-class"] = storageclass.STANDARD
-	globalStorageClass = storageclass.Config{
+	srvCtx.StorageClass = storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 6,
 		},
@@ -479,7 +479,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object5 := "object5"
 	metadata5 := make(map[string]string)
 	metadata5["x-amz-storage-class"] = storageclass.RRS
-	globalStorageClass = storageclass.Config{
+	srvCtx.StorageClass = storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
@@ -501,7 +501,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object6 := "object6"
 	metadata6 := make(map[string]string)
 	metadata6["x-amz-storage-class"] = storageclass.STANDARD
-	globalStorageClass = storageclass.Config{
+	srvCtx.StorageClass = storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
 		},
@@ -524,7 +524,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	object7 := "object7"
 	metadata7 := make(map[string]string)
 	metadata7["x-amz-storage-class"] = storageclass.RRS
-	globalStorageClass = storageclass.Config{
+	srvCtx.StorageClass = storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 5,
 		},
@@ -561,7 +561,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 	for _, tt := range tests {
 		tt := tt
 		t.(*testing.T).Run("", func(t *testing.T) {
-			globalStorageClass = tt.storageClassCfg
+			srvCtx.StorageClass = tt.storageClassCfg
 			actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(ctx, *xl, tt.parts, tt.errs)
 			if tt.expectedError != nil && err == nil {
 				t.Errorf("Expected %s, got %s", tt.expectedError, err)

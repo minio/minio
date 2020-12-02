@@ -362,7 +362,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if objAPI == nil {
 		return cache, errServerNotInitialized
 	}
-	opts := globalHealConfig
+	opts := srvCtx.HealConfig
 
 	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (int64, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
@@ -1506,7 +1506,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
-	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
+	if offset == 0 && srvCtx.StorageClass.GetDMA() == storageclass.DMAReadWrite {
 		file, err := disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
 		if err != nil {
 			switch {

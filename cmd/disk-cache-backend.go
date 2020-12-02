@@ -50,7 +50,7 @@ const (
 	cacheMetaVersion  = "1.0.0"
 	cacheExpiryDays   = 90 * time.Hour * 24 // defaults to 90 days
 	// SSECacheEncrypted is the metadata key indicating that the object
-	// is a cache entry encrypted with cache KMS master key in globalCacheKMS.
+	// is a cache entry encrypted with cache KMS master key in srvCtx.CacheKMS.
 	SSECacheEncrypted = "X-Minio-Internal-Encrypted-Cache"
 )
 
@@ -473,7 +473,7 @@ func (c *diskCache) statRange(ctx context.Context, bucket, object string, rs *HT
 	}
 
 	actualRngSize := uint64(length)
-	if globalCacheKMS != nil {
+	if srvCtx.CacheKMS != nil {
 		actualRngSize, _ = sio.EncryptedSize(uint64(length))
 	}
 
@@ -670,17 +670,17 @@ func newCacheEncryptReader(content io.Reader, bucket, object string, metadata ma
 }
 func newCacheEncryptMetadata(bucket, object string, metadata map[string]string) ([]byte, error) {
 	var sealedKey crypto.SealedKey
-	if globalCacheKMS == nil {
+	if srvCtx.CacheKMS == nil {
 		return nil, errKMSNotConfigured
 	}
-	key, encKey, err := globalCacheKMS.GenerateKey(globalCacheKMS.DefaultKeyID(), crypto.Context{bucket: pathJoin(bucket, object)})
+	key, encKey, err := srvCtx.CacheKMS.GenerateKey(srvCtx.CacheKMS.DefaultKeyID(), crypto.Context{bucket: pathJoin(bucket, object)})
 	if err != nil {
 		return nil, err
 	}
 
 	objectKey := crypto.GenerateKey(key, rand.Reader)
 	sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-	crypto.S3.CreateMetadata(metadata, globalCacheKMS.DefaultKeyID(), encKey, sealedKey)
+	crypto.S3.CreateMetadata(metadata, srvCtx.CacheKMS.DefaultKeyID(), encKey, sealedKey)
 
 	if etag, ok := metadata["etag"]; ok {
 		metadata["etag"] = hex.EncodeToString(objectKey.SealETag([]byte(etag)))
@@ -729,7 +729,7 @@ func (c *diskCache) Put(ctx context.Context, bucket, object string, data io.Read
 	var metadata = cloneMSS(opts.UserDefined)
 	var reader = data
 	var actualSize = uint64(size)
-	if globalCacheKMS != nil {
+	if srvCtx.CacheKMS != nil {
 		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
 		if err != nil {
 			return oi, err
@@ -785,7 +785,7 @@ func (c *diskCache) putRange(ctx context.Context, bucket, object string, data io
 	var actualSize = uint64(rlen)
 	// objSize is the actual size of object (with encryption overhead if any)
 	var objSize = uint64(size)
-	if globalCacheKMS != nil {
+	if srvCtx.CacheKMS != nil {
 		reader, err = newCacheEncryptReader(data, bucket, object, metadata)
 		if err != nil {
 			return err
@@ -960,7 +960,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	if gerr != nil {
 		return gr, numHits, gerr
 	}
-	if globalCacheKMS != nil {
+	if srvCtx.CacheKMS != nil {
 		// clean up internal SSE cache metadata
 		delete(gr.ObjInfo.UserDefined, crypto.SSEHeader)
 	}

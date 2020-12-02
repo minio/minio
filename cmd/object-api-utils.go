@@ -436,7 +436,7 @@ func (o ObjectInfo) GetActualSize() (int64, error) {
 // Using compression and encryption together enables room for side channel attacks.
 // Eliminate non-compressible objects by extensions/content-types.
 func isCompressible(header http.Header, object string) bool {
-	if crypto.IsRequested(header) || excludeForCompression(header, object, globalCompressConfig) {
+	if crypto.IsRequested(header) || excludeForCompression(header, object, srvCtx.CompressConfig) {
 		return false
 	}
 	return true

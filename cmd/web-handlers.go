@@ -197,15 +197,15 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		LockEnabled: false,
 	}
 
-	if globalDNSConfig != nil {
-		if _, err := globalDNSConfig.Get(args.BucketName); err != nil {
+	if srvCtx.DNSConfig != nil {
+		if _, err := srvCtx.DNSConfig.Get(args.BucketName); err != nil {
 			if err == dns.ErrNoEntriesFound || err == dns.ErrNotImplemented {
 				// Proceed to creating a bucket.
 				if err = objectAPI.MakeBucketWithLocation(ctx, args.BucketName, opts); err != nil {
 					return toJSONError(ctx, err)
 				}
 
-				if err = globalDNSConfig.Put(args.BucketName); err != nil {
+				if err = srvCtx.DNSConfig.Put(args.BucketName); err != nil {
 					objectAPI.DeleteBucket(ctx, args.BucketName, false)
 					return toJSONError(ctx, err)
 				}
@@ -272,7 +272,7 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 	reply.UIVersion = browser.UIVersion
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := srvCtx.DNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -299,8 +299,8 @@ func (web *webAPIHandlers) DeleteBucket(r *http.Request, args *RemoveBucketArgs,
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, args.BucketName)
 
-	if globalDNSConfig != nil {
-		if err := globalDNSConfig.Delete(args.BucketName); err != nil {
+	if srvCtx.DNSConfig != nil {
+		if err := srvCtx.DNSConfig.Delete(args.BucketName); err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually", err))
 			return toJSONError(ctx, err)
 		}
@@ -352,8 +352,8 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	r.Header.Set("delimiter", SlashSeparator)
 
 	// If etcd, dns federation configured list buckets from etcd.
-	if globalDNSConfig != nil && globalBucketFederation {
-		dnsBuckets, err := globalDNSConfig.List()
+	if srvCtx.DNSConfig != nil && srvCtx.BucketFederation {
+		dnsBuckets, err := srvCtx.DNSConfig.List()
 		if err != nil && err != dns.ErrNoEntriesFound {
 			return toJSONError(ctx, err)
 		}
@@ -438,7 +438,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	listObjects := objectAPI.ListObjects
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := srvCtx.DNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -668,7 +668,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 
 	reply.UIVersion = browser.UIVersion
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := srvCtx.DNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -1169,7 +1169,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
+	if (srvCtx.AutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1196,7 +1196,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	var reader io.Reader = r.Body
 	actualSize := size
 
-	hashReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(reader, size, "", "", actualSize, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1207,7 +1207,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		actualReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, size, "", "", actualSize, srvCtx.Flags.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -1218,7 +1218,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		s2c := newS2CompressReader(actualReader)
 		defer s2c.Close()
 		reader = s2c
-		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, srvCtx.Flags.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -1248,7 +1248,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 			}
 			info := ObjectInfo{Size: size}
 			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, srvCtx.Flags.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1775,7 +1775,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	var policyInfo = &miniogopolicy.BucketAccessPolicy{Version: "2012-10-17"}
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := srvCtx.DNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -1872,7 +1872,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	var policyInfo = new(miniogopolicy.BucketAccessPolicy)
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := srvCtx.DNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -1969,7 +1969,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	if isRemoteCallRequired(ctx, args.BucketName, objectAPI) {
-		sr, err := globalDNSConfig.Get(args.BucketName)
+		sr, err := srvCtx.DNSConfig.Get(args.BucketName)
 		if err != nil {
 			if err == dns.ErrNoEntriesFound {
 				return toJSONError(ctx, BucketNotFound{
@@ -2181,9 +2181,9 @@ type DiscoveryDocResp struct {
 
 // GetDiscoveryDoc - returns parsed value of OpenID discovery document
 func (web *webAPIHandlers) GetDiscoveryDoc(r *http.Request, args *WebGenericArgs, reply *DiscoveryDocResp) error {
-	if globalOpenIDConfig.DiscoveryDoc.AuthEndpoint != "" {
-		reply.DiscoveryDoc = globalOpenIDConfig.DiscoveryDoc
-		reply.ClientID = globalOpenIDConfig.ClientID
+	if srvCtx.OpenIDConfig.DiscoveryDoc.AuthEndpoint != "" {
+		reply.DiscoveryDoc = srvCtx.OpenIDConfig.DiscoveryDoc
+		reply.ClientID = srvCtx.OpenIDConfig.ClientID
 	}
 	reply.UIVersion = browser.UIVersion
 	return nil

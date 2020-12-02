@@ -289,7 +289,7 @@ func (sys *IAMSys) LoadGroup(objAPI ObjectLayer, group string) error {
 		return errServerNotInitialized
 	}
 
-	if globalEtcdClient != nil {
+	if srvCtx.EtcdClient != nil {
 		// Watch APIs cover this case, so nothing to do.
 		return nil
 	}
@@ -333,7 +333,7 @@ func (sys *IAMSys) LoadPolicy(objAPI ObjectLayer, policyName string) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if srvCtx.EtcdClient == nil {
 		return sys.store.loadPolicyDoc(context.Background(), policyName, sys.iamPolicyDocsMap)
 	}
 
@@ -351,7 +351,7 @@ func (sys *IAMSys) LoadPolicyMapping(objAPI ObjectLayer, userOrGroup string, isG
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if srvCtx.EtcdClient == nil {
 		var err error
 		if isGroup {
 			err = sys.store.loadMappedPolicy(context.Background(), userOrGroup, regularUser, isGroup, sys.iamGroupPolicyMap)
@@ -377,7 +377,7 @@ func (sys *IAMSys) LoadUser(objAPI ObjectLayer, accessKey string, userType IAMUs
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if srvCtx.EtcdClient == nil {
 		err := sys.store.loadUser(context.Background(), accessKey, userType, sys.iamUsersMap)
 		if err != nil {
 			return err
@@ -401,7 +401,7 @@ func (sys *IAMSys) LoadServiceAccount(accessKey string) error {
 	sys.store.lock()
 	defer sys.store.unlock()
 
-	if globalEtcdClient == nil {
+	if srvCtx.EtcdClient == nil {
 		err := sys.store.loadUser(context.Background(), accessKey, srvAccUser, sys.iamUsersMap)
 		if err != nil {
 			return err
@@ -421,13 +421,13 @@ func (sys *IAMSys) InitStore(objAPI ObjectLayer) {
 	sys.Lock()
 	defer sys.Unlock()
 
-	if globalEtcdClient == nil {
+	if srvCtx.EtcdClient == nil {
 		sys.store = newIAMObjectStore(objAPI)
 	} else {
 		sys.store = newIAMEtcdStore()
 	}
 
-	if globalLDAPConfig.Enabled {
+	if srvCtx.LDAPConfig.Enabled {
 		sys.EnableLDAPSys()
 	}
 }
@@ -476,11 +476,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			continue
 		}
 
-		if globalEtcdClient != nil {
+		if srvCtx.EtcdClient != nil {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err = migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
+			if err = migrateIAMConfigsEtcdToEncrypted(ctx, srvCtx.EtcdClient); err != nil {
 				txnLk.Unlock()
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
@@ -730,7 +730,7 @@ func (sys *IAMSys) SetTempUser(accessKey string, cred auth.Credentials, policyNa
 	// If OPA is not set we honor any policy claims for this
 	// temporary user which match with pre-configured canned
 	// policies for this server.
-	if globalPolicyOPA == nil && policyName != "" {
+	if srvCtx.PolicyOPA == nil && policyName != "" {
 		var availablePolicies []iampolicy.Policy
 		mp := newMappedPolicy(policyName)
 		for _, policy := range mp.toSlice() {
@@ -1857,8 +1857,8 @@ func (sys *IAMSys) GetCombinedPolicy(policies ...string) iampolicy.Policy {
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	// If opa is configured, use OPA always.
-	if globalPolicyOPA != nil {
-		ok, err := globalPolicyOPA.IsAllowed(args)
+	if srvCtx.PolicyOPA != nil {
+		ok, err := srvCtx.PolicyOPA.IsAllowed(args)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 		}

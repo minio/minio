@@ -762,7 +762,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 }
 
 // Check if the destination bucket is on a remote site, this code only gets executed
-// when federation is enabled, ie when globalDNSConfig is non 'nil'.
+// when federation is enabled, ie when srvCtx.DNSConfig is non 'nil'.
 //
 // This function is similar to isRemoteCallRequired but specifically for COPY object API
 // if destination and source are same we do not need to check for destination bucket
@@ -776,10 +776,10 @@ func isRemoteCopyRequired(ctx context.Context, srcBucket, dstBucket string, objA
 
 // Check if the bucket is on a remote site, this code only gets executed when federation is enabled.
 func isRemoteCallRequired(ctx context.Context, bucket string, objAPI ObjectLayer) bool {
-	if globalDNSConfig == nil {
+	if srvCtx.DNSConfig == nil {
 		return false
 	}
-	if globalBucketFederation {
+	if srvCtx.BucketFederation {
 		_, err := objAPI.GetBucketInfo(ctx, bucket)
 		return err == toObjectErr(errVolumeNotFound, bucket)
 	}
@@ -883,7 +883,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(dstBucket)
 	// This request header needs to be set prior to setting ObjectOptions
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
+	if (srvCtx.AutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1020,7 +1020,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize, globalCLIContext.StrictS3Compat)
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1129,7 +1129,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			// do not try to verify encrypted content
-			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize, globalCLIContext.StrictS3Compat)
+			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize, srvCtx.Flags.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1224,7 +1224,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		var dstRecords []dns.SrvRecord
-		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		dstRecords, err = srvCtx.DNSConfig.Get(dstBucket)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1450,7 +1450,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
+	if (srvCtx.AutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1461,7 +1461,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, srvCtx.Flags.StrictS3Compat)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1476,7 +1476,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		sha256hex = ""
 	}
 
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1542,7 +1542,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			info := ObjectInfo{Size: size}
 
 			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
+			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, srvCtx.Flags.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1644,7 +1644,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
-	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
+	if (srvCtx.AutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
 		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
 	}
 
@@ -1923,7 +1923,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	if isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) {
 		var dstRecords []dns.SrvRecord
-		dstRecords, err = globalDNSConfig.Get(dstBucket)
+		dstRecords, err = srvCtx.DNSConfig.Get(dstBucket)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1972,7 +1972,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize, globalCLIContext.StrictS3Compat)
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -2021,7 +2021,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 
 		info := ObjectInfo{Size: length}
-		srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length, globalCLIContext.StrictS3Compat)
+		srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length, srvCtx.Flags.StrictS3Compat)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2199,7 +2199,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 
 	if objectAPI.IsCompressionSupported() && isCompressed {
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, srvCtx.Flags.StrictS3Compat)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2214,7 +2214,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		sha256hex = ""
 	}
 
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -2267,7 +2267,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 		info := ObjectInfo{Size: size}
 		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
+		hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, srvCtx.Flags.StrictS3Compat)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2701,8 +2701,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		getObjectInfo = api.CacheAPI().GetObjectInfo
 	}
 
-	if globalDNSConfig != nil {
-		_, err := globalDNSConfig.Get(bucket)
+	if srvCtx.DNSConfig != nil {
+		_, err := srvCtx.DNSConfig.Get(bucket)
 		if err != nil && err != dns.ErrNotImplemented {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return

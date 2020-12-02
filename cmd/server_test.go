@@ -131,7 +131,7 @@ func TestServerSuite(t *testing.T) {
 		// Init and run test on ErasureSet backend.
 		{serverType: "ErasureSet", signer: signerV4},
 	}
-	globalCLIContext.StrictS3Compat = true
+	srvCtx.Flags.StrictS3Compat = true
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
 			runAllTests(testCase, &check{t, testCase.serverType})

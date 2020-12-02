@@ -211,7 +211,7 @@ func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, 
 		return nil, errAuthentication
 	}
 
-	if globalPolicyOPA == nil {
+	if srvCtx.PolicyOPA == nil {
 		// If OPA is not set and if ldap claim key is set, allow the claim.
 		if _, ok := claims.MapClaims[ldapUser]; ok {
 			return claims.Map(), nil
@@ -459,7 +459,7 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 	// Verify 'Content-Md5' and/or 'X-Amz-Content-Sha256' if present.
 	// The verification happens implicit during reading.
 	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5),
-		hex.EncodeToString(contentSHA256), -1, globalCLIContext.StrictS3Compat)
+		hex.EncodeToString(contentSHA256), -1, srvCtx.Flags.StrictS3Compat)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}

@@ -256,7 +256,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (string, error) {
 
 	onlineDisks := er.getDisks()
-	parityBlocks := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
+	parityBlocks := srvCtx.StorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
 	if parityBlocks == 0 {
 		parityBlocks = len(onlineDisks) / 2
 	}

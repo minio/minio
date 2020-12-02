@@ -111,7 +111,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		w.Header().Set(xhttp.Expires, objInfo.Expires.UTC().Format(http.TimeFormat))
 	}
 
-	if globalCacheConfig.Enabled {
+	if srvCtx.CacheConfig.Enabled {
 		w.Header().Set(xhttp.XCache, objInfo.CacheStatus.String())
 		w.Header().Set(xhttp.XCacheLookup, objInfo.CacheLookupStatus.String())
 	}

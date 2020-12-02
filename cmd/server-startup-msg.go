@@ -84,7 +84,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
-	if color.IsTerminal() && !globalCLIContext.Anonymous {
+	if color.IsTerminal() && !srvCtx.Flags.Anonymous {
 		if globalIsSSL {
 			printCertificateMsg(globalPublicCerts)
 		}
@@ -136,7 +136,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 	// Colorize the message and print.
 	logStartupMessage(color.Blue("Endpoint: ") + color.Bold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	if color.IsTerminal() && !globalCLIContext.Anonymous {
+	if color.IsTerminal() && !srvCtx.Flags.Anonymous {
 		logStartupMessage(color.Blue("AccessKey: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
 		logStartupMessage(color.Blue("SecretKey: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 		if region != "" {
@@ -177,7 +177,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	cred := globalActiveCred
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	if color.IsTerminal() && !globalCLIContext.Anonymous {
+	if color.IsTerminal() && !srvCtx.Flags.Anonymous {
 		logStartupMessage(color.Blue("\nCommand-line Access: ") + mcQuickStartGuide)
 		if runtime.GOOS == globalWindowsOSName {
 			mcMessage := fmt.Sprintf("$ mc.exe alias set %s %s %s %s", alias,
@@ -222,7 +222,7 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
 	if msg := getStorageInfoMsg(storageInfo); msg != "" {
-		if globalCLIContext.Quiet {
+		if srvCtx.Flags.Quiet {
 			logger.Info(msg)
 		}
 		logStartupMessage(msg)

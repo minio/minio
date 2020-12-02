@@ -142,14 +142,14 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 		crypto.SSEC.CreateMetadata(metadata, sealedKey)
 		return nil
 	case crypto.S3.IsEncrypted(metadata):
-		if GlobalKMS == nil {
+		if srvCtx.KMS == nil {
 			return errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
 		if err != nil {
 			return err
 		}
-		oldKey, err := GlobalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		oldKey, err := srvCtx.KMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
@@ -158,12 +158,12 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 			return err
 		}
 
-		newKey, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), crypto.Context{bucket: path.Join(bucket, object)})
+		newKey, encKey, err := srvCtx.KMS.GenerateKey(srvCtx.KMS.DefaultKeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return err
 		}
 		sealedKey = objectKey.Seal(newKey, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encKey, sealedKey)
+		crypto.S3.CreateMetadata(metadata, srvCtx.KMS.DefaultKeyID(), encKey, sealedKey)
 		return nil
 	}
 }
@@ -171,17 +171,17 @@ func rotateKey(oldKey []byte, newKey []byte, bucket, object string, metadata map
 func newEncryptMetadata(key []byte, bucket, object string, metadata map[string]string, sseS3 bool) (crypto.ObjectKey, error) {
 	var sealedKey crypto.SealedKey
 	if sseS3 {
-		if GlobalKMS == nil {
+		if srvCtx.KMS == nil {
 			return crypto.ObjectKey{}, errKMSNotConfigured
 		}
-		key, encKey, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), crypto.Context{bucket: path.Join(bucket, object)})
+		key, encKey, err := srvCtx.KMS.GenerateKey(srvCtx.KMS.DefaultKeyID(), crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return crypto.ObjectKey{}, err
 		}
 
 		objectKey := crypto.GenerateKey(key, rand.Reader)
 		sealedKey = objectKey.Seal(key, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encKey, sealedKey)
+		crypto.S3.CreateMetadata(metadata, srvCtx.KMS.DefaultKeyID(), encKey, sealedKey)
 		return objectKey, nil
 	}
 	var extKey [32]byte
@@ -251,14 +251,14 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 	default:
 		return nil, errObjectTampered
 	case crypto.S3.IsEncrypted(metadata) && isCacheEncrypted(metadata):
-		if globalCacheKMS == nil {
+		if srvCtx.CacheKMS == nil {
 			return nil, errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
 		if err != nil {
 			return nil, err
 		}
-		extKey, err := globalCacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		extKey, err := srvCtx.CacheKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return nil, err
 		}
@@ -268,7 +268,7 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 		}
 		return objectKey[:], nil
 	case crypto.S3.IsEncrypted(metadata):
-		if GlobalKMS == nil {
+		if srvCtx.KMS == nil {
 			return nil, errKMSNotConfigured
 		}
 		keyID, kmsKey, sealedKey, err := crypto.S3.ParseMetadata(metadata)
@@ -276,7 +276,7 @@ func decryptObjectInfo(key []byte, bucket, object string, metadata map[string]st
 		if err != nil {
 			return nil, err
 		}
-		extKey, err := GlobalKMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
+		extKey, err := srvCtx.KMS.UnsealKey(keyID, kmsKey, crypto.Context{bucket: path.Join(bucket, object)})
 		if err != nil {
 			return nil, err
 		}

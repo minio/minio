@@ -333,7 +333,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	}
 
 	if dnsURL, dnsUser, dnsPass, ok := env.LookupEnv(config.EnvDNSWebhook); ok {
-		globalDNSConfig, err = dns.NewOperatorDNS(dnsURL,
+		srvCtx.DNSConfig, err = dns.NewOperatorDNS(dnsURL,
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
 		if err != nil {
@@ -355,8 +355,8 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	}
 
 	if etcdCfg.Enabled {
-		if globalEtcdClient == nil {
-			globalEtcdClient, err = etcd.New(etcdCfg)
+		if srvCtx.EtcdClient == nil {
+			srvCtx.EtcdClient, err = etcd.New(etcdCfg)
 			if err != nil {
 				if globalIsGateway {
 					logger.FatalIf(err, "Unable to initialize etcd config")
@@ -366,13 +366,13 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 
-		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
-			if globalDNSConfig != nil {
+		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && srvCtx.EtcdClient != nil {
+			if srvCtx.DNSConfig != nil {
 				// if global DNS is already configured, indicate with a warning, incase
 				// users are confused.
-				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", globalDNSConfig))
+				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, not using etcd for DNS store", srvCtx.DNSConfig))
 			} else {
-				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
+				srvCtx.DNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 					dns.DomainNames(globalDomainNames),
 					dns.DomainIPs(globalDomainIPs),
 					dns.DomainPort(globalMinioPort),
@@ -395,7 +395,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	// if namespace was requested such as specifying etcdPathPrefix then
 	// we assume that users are interested in global bucket support
 	// but not federation.
-	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
+	srvCtx.BucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
 
 	globalServerRegion, err = config.LookupRegion(s[config.RegionSubSys][config.Default])
 	if err != nil {
@@ -407,7 +407,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	globalAPIConfig.init(apiConfig, setDriveCount)
+	srvCtx.APIConfig.init(apiConfig, setDriveCount)
 
 	// Initialize remote instance transport once.
 	getRemoteInstanceTransportOnce.Do(func() {
@@ -415,13 +415,13 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	})
 
 	if globalIsErasure {
-		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
+		srvCtx.StorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 		}
 	}
 
-	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
+	srvCtx.CacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
 	if err != nil {
 		if globalIsGateway {
 			logger.FatalIf(err, "Unable to setup cache")
@@ -430,15 +430,16 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
-	if globalCacheConfig.Enabled {
+	if srvCtx.CacheConfig.Enabled {
 		if cacheEncKey := env.Get(cache.EnvCacheEncryptionMasterKey, ""); cacheEncKey != "" {
-			globalCacheKMS, err = crypto.ParseMasterKey(cacheEncKey)
+			srvCtx.CacheKMS, err = crypto.ParseMasterKey(cacheEncKey)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to setup encryption cache: %w", err))
 			}
 		}
 	}
-	globalHealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
+
+	srvCtx.HealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to read heal config: %w", err))
 	}
@@ -448,23 +449,22 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS config: %w", err))
 	}
 
-	GlobalKMS, err = crypto.NewKMS(kmsCfg)
+	srvCtx.KMS, err = crypto.NewKMS(kmsCfg)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS with current KMS config: %w", err))
 	}
 
-	// Enable auto-encryption if enabled
-	globalAutoEncryption = kmsCfg.AutoEncryption
-	if globalAutoEncryption && !globalIsGateway {
+	srvCtx.AutoEncryption = kmsCfg.AutoEncryption
+	if kmsCfg.AutoEncryption && !globalIsGateway {
 		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
 	}
 
-	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+	srvCtx.CompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup Compression: %w", err))
 	}
 
-	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+	srvCtx.OpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewGatewayHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err))
@@ -476,10 +476,10 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize OPA: %w", err))
 	}
 
-	globalOpenIDValidators = getOpenIDValidators(globalOpenIDConfig)
-	globalPolicyOPA = opa.New(opaCfg)
+	srvCtx.OpenIDValidators = getOpenIDValidators(srvCtx.OpenIDConfig)
+	srvCtx.PolicyOPA = opa.New(opaCfg)
 
-	globalLDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
+	srvCtx.LDAPConfig, err = xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
 		globalRootCAs)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
@@ -496,7 +496,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	for k, l := range loggerCfg.HTTP {
 		if l.Enabled {
 			// Enable http logging
-			if err = logger.AddTarget(
+			if err = logger.Targets.Add(
 				http.New(
 					http.WithTargetName(k),
 					http.WithEndpoint(l.Endpoint),
@@ -514,7 +514,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	for k, l := range loggerCfg.Audit {
 		if l.Enabled {
 			// Enable http audit logging
-			if err = logger.AddAuditTarget(
+			if err = logger.AuditTargets.Add(
 				http.New(
 					http.WithTargetName(k),
 					http.WithEndpoint(l.Endpoint),
@@ -529,12 +529,12 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
-	globalConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), false)
+	srvCtx.NotificationConfigTargetList, err = notify.GetNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), false)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
-	globalEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), NewGatewayHTTPTransport(), true)
+	srvCtx.NotificationEnvTargetList, err = notify.GetNotificationTargets(GlobalContext, newServerConfig(), NewGatewayHTTPTransport(), true)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}

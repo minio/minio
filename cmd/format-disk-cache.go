@@ -358,7 +358,7 @@ func migrateCacheData(ctx context.Context, c *diskCache, bucket, object, oldfile
 	var reader io.Reader = readCloser
 
 	actualSize := uint64(st.Size())
-	if globalCacheKMS != nil {
+	if srvCtx.CacheKMS != nil {
 		reader, err = newCacheEncryptReader(readCloser, bucket, object, metadata)
 		if err != nil {
 			return err

@@ -359,7 +359,7 @@ func corsHandler(handler http.Handler) http.Handler {
 
 	return cors.New(cors.Options{
 		AllowOriginFunc: func(origin string) bool {
-			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
+			for _, allowedOrigin := range srvCtx.APIConfig.getCorsAllowOrigins() {
 				if wildcard.MatchSimple(allowedOrigin, origin) {
 					return true
 				}

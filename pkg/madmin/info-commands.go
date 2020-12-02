@@ -178,11 +178,11 @@ type InfoMessage struct {
 
 // Services contains different services information
 type Services struct {
-	Vault         Vault                         `json:"vault,omitempty"`
-	LDAP          LDAP                          `json:"ldap,omitempty"`
-	Logger        []Logger                      `json:"logger,omitempty"`
-	Audit         []Audit                       `json:"audit,omitempty"`
-	Notifications []map[string][]TargetIDStatus `json:"notifications,omitempty"`
+	Vault         Vault                       `json:"vault,omitempty"`
+	LDAP          Status                      `json:"ldap,omitempty"`
+	Logger        []TargetStatus              `json:"logger,omitempty"`
+	Audit         []TargetStatus              `json:"audit,omitempty"`
+	Notifications []map[string][]TargetStatus `json:"notifications,omitempty"`
 }
 
 // Buckets contains the number of buckets
@@ -202,14 +202,9 @@ type Usage struct {
 
 // Vault - Fetches the Vault status
 type Vault struct {
-	Status  string `json:"status,omitempty"`
+	Status
 	Encrypt string `json:"encrypt,omitempty"`
 	Decrypt string `json:"decrypt,omitempty"`
-}
-
-// LDAP contains ldap status
-type LDAP struct {
-	Status string `json:"status,omitempty"`
 }
 
 // Status of endpoint
@@ -217,14 +212,8 @@ type Status struct {
 	Status string `json:"status,omitempty"`
 }
 
-// Audit contains audit logger status
-type Audit map[string]Status
-
-// Logger contains logger status
-type Logger map[string]Status
-
-// TargetIDStatus containsid and status
-type TargetIDStatus map[string]Status
+// TargetStatus contains audit/logger target status
+type TargetStatus map[string]Status
 
 // backendType - indicates the type of backend storage
 type backendType string

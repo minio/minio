@@ -1161,12 +1161,12 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if GlobalKMS == nil {
+	if srvCtx.KMS == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
 
-	if err := GlobalKMS.CreateKey(r.URL.Query().Get("key-id")); err != nil {
+	if err := srvCtx.KMS.CreateKey(r.URL.Query().Get("key-id")); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -1184,14 +1184,14 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if GlobalKMS == nil {
+	if srvCtx.KMS == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
 
 	keyID := r.URL.Query().Get("key-id")
 	if keyID == "" {
-		keyID = GlobalKMS.DefaultKeyID()
+		keyID = srvCtx.KMS.DefaultKeyID()
 	}
 	var response = madmin.KMSKeyStatus{
 		KeyID: keyID,
@@ -1199,7 +1199,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	kmsContext := crypto.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+	key, sealedKey, err := srvCtx.KMS.GenerateKey(keyID, kmsContext)
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1212,7 +1212,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+	decryptedKey, err := srvCtx.KMS.UnsealKey(keyID, sealedKey, kmsContext)
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -1473,17 +1473,17 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	vault := fetchVaultStatus()
 
-	ldap := madmin.LDAP{}
-	if globalLDAPConfig.Enabled {
-		ldapConn, err := globalLDAPConfig.Connect()
+	ldap := madmin.Status{}
+	if srvCtx.LDAPConfig.Enabled {
+		ldapConn, err := srvCtx.LDAPConfig.Connect()
 		if err != nil {
-			ldap.Status = "offline"
+			ldap.Status = config.EnableOff
 		} else if ldapConn == nil {
-			ldap.Status = "Not Configured"
+			ldap.Status = "un-configured"
 		} else {
 			// Close ldap connection to avoid leaks.
 			ldapConn.Close()
-			ldap.Status = "online"
+			ldap.Status = config.EnableOn
 		}
 	}
 
@@ -1512,7 +1512,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	mode := "online"
+	mode := config.EnableOn
 	server := getLocalServerProperty(globalEndpoints, r)
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)
@@ -1571,42 +1571,42 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
+func fetchLambdaInfo() []map[string][]madmin.TargetStatus {
 
-	lambdaMap := make(map[string][]madmin.TargetIDStatus)
+	lambdaMap := make(map[string][]madmin.TargetStatus)
 
-	for _, tgt := range globalConfigTargetList.Targets() {
+	for _, tgt := range srvCtx.NotificationConfigTargetList.Targets() {
 		targetIDStatus := make(map[string]madmin.Status)
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()
 		if active {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: config.EnableOn}
 		} else {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Offline"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: config.EnableOff}
 		}
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
 		lambdaMap[targetID.Name] = list
 	}
 
-	for _, tgt := range globalEnvTargetList.Targets() {
+	for _, tgt := range srvCtx.NotificationEnvTargetList.Targets() {
 		targetIDStatus := make(map[string]madmin.Status)
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()
 		if active {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: config.EnableOn}
 		} else {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Offline"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: config.EnableOff}
 		}
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
 		lambdaMap[targetID.Name] = list
 	}
 
-	notify := make([]map[string][]madmin.TargetIDStatus, len(lambdaMap))
+	notify := make([]map[string][]madmin.TargetStatus, len(lambdaMap))
 	counter := 0
 	for key, value := range lambdaMap {
-		v := make(map[string][]madmin.TargetIDStatus)
+		v := make(map[string][]madmin.TargetStatus)
 		v[key] = value
 		notify[counter] = v
 		counter++
@@ -1617,26 +1617,26 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 // fetchVaultStatus fetches Vault Info
 func fetchVaultStatus() madmin.Vault {
 	vault := madmin.Vault{}
-	if GlobalKMS == nil {
-		vault.Status = "disabled"
+	if srvCtx.KMS == nil {
+		vault.Status = madmin.Status{Status: "un-configured"}
 		return vault
 	}
-	keyID := GlobalKMS.DefaultKeyID()
-	kmsInfo := GlobalKMS.Info()
+	keyID := srvCtx.KMS.DefaultKeyID()
+	kmsInfo := srvCtx.KMS.Info()
 
 	if len(kmsInfo.Endpoints) == 0 {
-		vault.Status = "KMS configured using master key"
+		vault.Status = madmin.Status{Status: "KMS configured using master key"}
 		return vault
 	}
 
 	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
-		vault.Status = "offline"
+		vault.Status = madmin.Status{Status: config.EnableOff}
 	} else {
-		vault.Status = "online"
+		vault.Status = madmin.Status{Status: config.EnableOn}
 
 		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 		// 1. Generate a new key using the KMS.
-		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
+		key, sealedKey, err := srvCtx.KMS.GenerateKey(keyID, kmsContext)
 		if err != nil {
 			vault.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
@@ -1644,7 +1644,7 @@ func fetchVaultStatus() madmin.Vault {
 		}
 
 		// 2. Verify that we can indeed decrypt the (encrypted) key
-		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
+		decryptedKey, err := srvCtx.KMS.UnsealKey(keyID, sealedKey, kmsContext)
 		switch {
 		case err != nil:
 			vault.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
@@ -1658,42 +1658,13 @@ func fetchVaultStatus() madmin.Vault {
 }
 
 // fetchLoggerDetails return log info
-func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
-	var loggerInfo []madmin.Logger
-	var auditloggerInfo []madmin.Audit
-	for _, target := range logger.Targets {
-		if target.Endpoint() != "" {
-			tgt := target.String()
-			err := checkConnection(target.Endpoint(), 15*time.Second)
-			if err == nil {
-				mapLog := make(map[string]madmin.Status)
-				mapLog[tgt] = madmin.Status{Status: "Online"}
-				loggerInfo = append(loggerInfo, mapLog)
-			} else {
-				mapLog := make(map[string]madmin.Status)
-				mapLog[tgt] = madmin.Status{Status: "offline"}
-				loggerInfo = append(loggerInfo, mapLog)
-			}
-		}
+func fetchLoggerInfo() ([]madmin.TargetStatus, []madmin.TargetStatus) {
+	checkConn := func(ep string) error {
+		return checkConnection(ep, 3*time.Second)
 	}
-
-	for _, target := range logger.AuditTargets {
-		if target.Endpoint() != "" {
-			tgt := target.String()
-			err := checkConnection(target.Endpoint(), 15*time.Second)
-			if err == nil {
-				mapAudit := make(map[string]madmin.Status)
-				mapAudit[tgt] = madmin.Status{Status: "Online"}
-				auditloggerInfo = append(auditloggerInfo, mapAudit)
-			} else {
-				mapAudit := make(map[string]madmin.Status)
-				mapAudit[tgt] = madmin.Status{Status: "Offline"}
-				auditloggerInfo = append(auditloggerInfo, mapAudit)
-			}
-		}
-	}
-
-	return loggerInfo, auditloggerInfo
+	log := logger.Targets.OnlineTargets(checkConn)
+	audit := logger.AuditTargets.OnlineTargets(checkConn)
+	return log, audit
 }
 
 // checkConnection - ping an endpoint , return err in case of no connection

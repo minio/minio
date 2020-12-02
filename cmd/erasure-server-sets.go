@@ -290,14 +290,14 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context, local bool) (Stora
 		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
-	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	scParity := srvCtx.StorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity == 0 {
 		scParity = z.SetDriveCount() / 2
 	}
 
 	storageInfo.Backend.StandardSCData = z.SetDriveCount() - scParity
 	storageInfo.Backend.StandardSCParity = scParity
-	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
+	rrSCParity := srvCtx.StorageClass.GetParityForSC(storageclass.RRS)
 	storageInfo.Backend.RRSCData = z.SetDriveCount() - rrSCParity
 	storageInfo.Backend.RRSCParity = rrSCParity
 
@@ -692,7 +692,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Limit:       maxKeys,
 		Marker:      marker,
 		InclDeleted: true,
-		AskDisks:    globalAPIConfig.getListQuorum(),
+		AskDisks:    srvCtx.APIConfig.getListQuorum(),
 	}
 
 	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0
@@ -732,7 +732,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Limit:       maxKeys,
 		Marker:      marker,
 		InclDeleted: false,
-		AskDisks:    globalAPIConfig.getListQuorum(),
+		AskDisks:    srvCtx.APIConfig.getListQuorum(),
 	})
 	if err != nil && err != io.EOF {
 		logger.LogIf(ctx, err)
@@ -1419,7 +1419,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
-	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	parityDrives := srvCtx.StorageClass.GetParityForSC(storageclass.STANDARD)
 	diskCount := z.SetDriveCount()
 
 	if parityDrives == 0 {

@@ -52,19 +52,19 @@ func init() {
 }
 
 func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
-	if (GlobalKMS != nil) && !objAPI.IsEncryptionSupported() {
+	if (srvCtx.KMS != nil) && !objAPI.IsEncryptionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Encryption support is requested but '%s' does not support encryption", name)
 	}
 
 	if strings.HasPrefix(name, "gateway") {
-		if GlobalGatewaySSE.IsSet() && GlobalKMS == nil {
+		if GlobalGatewaySSE.IsSet() && srvCtx.KMS == nil {
 			uiErr := config.ErrInvalidGWSSEEnvValue(nil).Msg("MINIO_GATEWAY_SSE set but KMS is not configured")
 			logger.Fatal(uiErr, "Unable to start gateway with SSE")
 		}
 	}
 
-	if globalCompressConfig.Enabled && !objAPI.IsCompressionSupported() {
+	if srvCtx.CompressConfig.Enabled && !objAPI.IsCompressionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Compression support is requested but '%s' does not support compression", name)
 	}
@@ -153,33 +153,33 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 	// Get "json" flag from command line argument and
 	// enable json and quite modes if json flag is turned on.
-	globalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
-	if globalCLIContext.JSON {
+	srvCtx.Flags.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
+	if srvCtx.Flags.JSON {
 		logger.EnableJSON()
 	}
 
 	// Get quiet flag from command line argument.
-	globalCLIContext.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
-	if globalCLIContext.Quiet {
+	srvCtx.Flags.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
+	if srvCtx.Flags.Quiet {
 		logger.EnableQuiet()
 	}
 
 	// Get anonymous flag from command line argument.
-	globalCLIContext.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
-	if globalCLIContext.Anonymous {
+	srvCtx.Flags.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
+	if srvCtx.Flags.Anonymous {
 		logger.EnableAnonymous()
 	}
 
 	// Fetch address option
-	globalCLIContext.Addr = ctx.GlobalString("address")
-	if globalCLIContext.Addr == "" || globalCLIContext.Addr == ":"+GlobalMinioDefaultPort {
-		globalCLIContext.Addr = ctx.String("address")
+	srvCtx.Flags.Addr = ctx.GlobalString("address")
+	if srvCtx.Flags.Addr == "" || srvCtx.Flags.Addr == ":"+GlobalMinioDefaultPort {
+		srvCtx.Flags.Addr = ctx.String("address")
 	}
 
 	// Check "no-compat" flag from command line argument.
-	globalCLIContext.StrictS3Compat = true
+	srvCtx.Flags.StrictS3Compat = true
 	if ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat") {
-		globalCLIContext.StrictS3Compat = false
+		srvCtx.Flags.StrictS3Compat = false
 	}
 
 	// Set all config, certs and CAs directories.
