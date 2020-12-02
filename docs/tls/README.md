@@ -93,7 +93,7 @@ Use the following command to generate a private key with RSA:
 
 ```sh
 openssl genrsa -out private.key 2048
-```  
+```
 A response similar to this one should be displayed:
 
 ```
@@ -106,44 +106,24 @@ e is 65537 (0x10001)
 Alternatively, use the following command to generate a private RSA key protected by a password:
 
 ```sh
-openssl genrsa -aes256 -out private.key 2048 -passout pass:PASSWORD
+openssl genrsa -aes256 -passout pass:PASSWORD -out private.key 2048
 ```
 
 **Note:** When using a password-protected private key, the password must be provided through the environment variable `MINIO_CERT_PASSWD` using the following command:
 
 ```sh
 export MINIO_CERT_PASSWD=<PASSWORD>
-``` 
+```
 
 The default OpenSSL format for private encrypted keys is PKCS-8, but MinIO only supports PKCS-1. An RSA key that has been formatted with PKCS-8 can be converted to PKCS-1 using the following command:
 
 ```sh
 openssl rsa -in private-pkcs8-key.key -aes256 -passout pass:PASSWORD -out private.key
-```  
+```
 
 #### <a name="generate-a-self-signed-certificate"></a>3.2.3 Generate a self-signed certificate.
 
-Use the following command to generate a self-signed certificate and enter a passphrase when prompted:
-
-```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<domain.com>"
-```
-
-**Note:** Replace `<domain.com>` with the development domain name.
-
-Alternatively, use the command below to generate a self-signed wildcard certificate that is valid for all subdomains under `<domain.com>`. Wildcard certificates are useful for deploying distributed MinIO instances, where each instance runs on a subdomain under a single parent domain.
-
-```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=<*.domain.com>"
-```
-
-### <a name="using-open-ssl-with-ip"></a>3.3 Use OpenSSL (with IP address) to Generate a Certificate
-
-This section describes how to specify an IP address to `openssl` when generating a certificate.
-
-#### 3.3.1 Create a configuration file.
-
-Create a file named `openssl.conf` with the content below. Change `IP.1` to point to the correct IP address:
+Create a file named `openssl.conf` with the content below. Set `IP.1` and/or `DNS.1` to point to the correct IP/DNS addresses:
 
 ```sh
 [req]
@@ -164,19 +144,20 @@ subjectAltName = @alt_names
 
 [alt_names]
 IP.1 = 127.0.0.1
+DNS.1 = localhost
 ```
 
-#### 3.3.2 Run `openssl` and specify the configuration file:
+Run `openssl` by specifying the configuration file and enter a passphrase if prompted:
 
 ```sh
-openssl req -x509 -nodes -days 730 -newkey rsa:2048 -keyout private.key -out public.crt -config openssl.conf
+openssl req -x509 -nodes -days 730 -key private.key -out public.crt -config openssl.conf
 ```
 
-### <a name="using-gnu-tls"></a>3.4 Use GnuTLS (for Windows) to Generate a Certificate
+### <a name="using-gnu-tls"></a>3.3 Use GnuTLS (for Windows) to Generate a Certificate
 
 This section describes how to use GnuTLS on Windows to generate a certificate.
 
-#### 3.4.1 Install and configure GnuTLS.
+#### 3.3.1 Install and configure GnuTLS.
 Download and decompress the Windows version of GnuTLS from [here](http://www.gnutls.org/download.html).
 
 Use PowerShell to add the path of the extracted GnuTLS binary to the system path:
@@ -187,7 +168,7 @@ setx path "%path%;C:\Users\MyUser\Downloads\gnutls-3.4.9-w64\bin"
 
 **Note:** PowerShell may need to be restarted for this change to take effect.
 
-#### 3.4.2 Generate a private key:
+#### 3.3.2 Generate a private key:
 Run the following command to generate a private `.key` file:
 
 ```
@@ -200,7 +181,7 @@ A response similar to this one should be displayed:
 Generating a 3072 bit RSA private key...
 ```
 
-#### 3.4.3 Generate a public certificate:
+#### 3.3.3 Generate a public certificate:
 
 Create a file called `cert.cnf` with the content below. This file contains all of the information necessary to generate a certificate using `certtool.exe`:
 
