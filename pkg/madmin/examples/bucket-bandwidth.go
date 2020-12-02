@@ -35,16 +35,15 @@ func main() {
 		log.Fatalln(err)
 	}
 	ctx := context.Background()
-	report, err := madminClient.GetBucketBandwidth(ctx)
-	if err != nil {
-		log.Fatalln(err)
-		return
+	reportCh := madminClient.GetBucketBandwidth(ctx)
+
+	for i := 0; i < 10; i++ {
+		report := <-reportCh
+		fmt.Printf("Report: %+v\n", report)
 	}
-	fmt.Printf("Report: %+v\n", report)
-	report, err = madminClient.GetBucketBandwidth(ctx, "sourceBucket", "sourceBucket2")
-	if err != nil {
-		log.Fatalln(err)
-		return
+	reportCh = madminClient.GetBucketBandwidth(ctx, "sourceBucket", "sourceBucket2")
+	for i := 0; i < 10; i++ {
+		report := <-reportCh
+		fmt.Printf("Report: %+v\n", report)
 	}
-	fmt.Printf("Report: %+v\n", report)
 }

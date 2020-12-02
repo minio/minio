@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -1427,7 +1428,6 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 // Get bandwidth consumption information
 func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "BandwidthMonitor")
-
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.BandwidthMonitorAction, "")
 	if adminAPIErr != ErrNone {
@@ -1436,15 +1436,41 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	}
 
 	setEventStreamHeaders(w)
+	reportCh := make(chan bandwidth.Report, 1)
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
 	bucketsRequestedString := r.URL.Query().Get("buckets")
 	bucketsRequested := strings.Split(bucketsRequestedString, ",")
-	consolidatedReport := globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
-	enc := json.NewEncoder(w)
-	err := enc.Encode(consolidatedReport)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+	go func() {
+		for {
+			reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}()
+	for {
+		select {
+		case report := <-reportCh:
+			enc := json.NewEncoder(w)
+			err := enc.Encode(report)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-ctx.Done():
+			return
+		}
 	}
-	w.(http.Flusher).Flush()
 }
 
 // ServerInfoHandler - GET /minio/admin/v3/info

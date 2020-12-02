@@ -20,7 +20,6 @@ package madmin
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -28,10 +27,17 @@ import (
 	"github.com/minio/minio/pkg/bandwidth"
 )
 
-// GetBucketBandwidth - Get a snapshot of the bandwidth measurements for replication buckets. If no buckets
-// generate replication traffic an empty map is returned.
-func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...string) (bandwidth.Report, error) {
+// Report includes the bandwidth report or the error encountered.
+type Report struct {
+	Report bandwidth.Report
+	Err    error
+}
+
+// GetBucketBandwidth - Gets a channel reporting bandwidth measurements for replication buckets. If no buckets
+// generate replication traffic an empty map is returned in the report until traffic is seen.
+func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...string) <-chan Report {
 	queryValues := url.Values{}
+	ch := make(chan Report)
 	if len(buckets) > 0 {
 		queryValues.Set("buckets", strings.Join(buckets, ","))
 	}
@@ -40,22 +46,37 @@ func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...strin
 		relPath:     adminAPIPrefix + "/bandwidth",
 		queryValues: queryValues,
 	}
-
 	resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
-	defer closeResponse(resp)
 	if err != nil {
-		return bandwidth.Report{}, err
+		defer closeResponse(resp)
+		ch <- Report{bandwidth.Report{}, err}
+		return ch
 	}
 	if resp.StatusCode != http.StatusOK {
-		return bandwidth.Report{}, httpRespToErrorResponse(resp)
+		ch <- Report{bandwidth.Report{}, httpRespToErrorResponse(resp)}
+		return ch
 	}
+
 	dec := json.NewDecoder(resp.Body)
-	for {
-		var report bandwidth.Report
-		err = dec.Decode(&report)
-		if err != nil && err != io.EOF {
-			return bandwidth.Report{}, err
+
+	go func(ctx context.Context, ch chan<- Report, resp *http.Response) {
+		defer func() {
+			closeResponse(resp)
+			close(ch)
+		}()
+		for {
+			var report bandwidth.Report
+			err = dec.Decode(&report)
+			if err != nil {
+				ch <- Report{bandwidth.Report{}, err}
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- Report{Report: report, Err: err}:
+			}
 		}
-		return report, nil
-	}
+	}(ctx, ch, resp)
+	return ch
 }
