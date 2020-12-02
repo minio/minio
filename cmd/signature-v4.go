@@ -36,7 +36,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
-	"github.com/minio/minio-go/v7/pkg/stringset"
+	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/cmd/http"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -257,7 +257,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
 	query.Set(xhttp.AmzCredential, cred.AccessKey+SlashSeparator+pSignValues.Credential.getScope())
 
-	defaultSigParams := stringset.New().Add(
+	defaultSigParams := set.CreateStringSet(
 		xhttp.AmzContentSha256,
 		xhttp.AmzSecurityToken,
 		xhttp.AmzAlgorithm,
