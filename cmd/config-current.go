@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -227,6 +228,9 @@ var (
 )
 
 func validateConfig(s config.Config, setDriveCount int) error {
+	// We must have a global lock for this so nobody else modifies env while we do.
+	defer env.LockSetEnv()()
+
 	// Disable merging env values with config for validation.
 	env.SetEnvOff()
 
@@ -260,6 +264,10 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	}
 
 	if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
+		return err
+	}
+
+	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -445,11 +453,6 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
-	globalCrawlerConfig, err = crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to read crawler config: %w", err))
-	}
-
 	globalHealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to read heal config: %w", err))
@@ -550,6 +553,19 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
+
+	// Apply dynamic config values
+	logger.LogIf(ctx, applyDynamicConfig(ctx, s))
+}
+
+// applyDynamicConfig will apply dynamic config values.
+// Dynnic systems should be in config.SubSystemsDynamic as well.
+func applyDynamicConfig(ctx context.Context, s config.Config) error {
+	cfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		return fmt.Errorf("Unable to load crawler config: %w", err)
+	}
+	return crawlerSleeper.Update(cfg.Delay, cfg.MaxWait)
 }
 
 // Help - return sub-system level help

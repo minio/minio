@@ -204,9 +204,10 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	var objectAPI ObjectLayer
-	if serviceSig == serviceRestart {
+	switch serviceSig {
+	case serviceRestart:
 		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceRestartAdminAction)
-	} else {
+	case serviceReloadDynamic:
 		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceStopAdminAction)
 	}
 	if objectAPI == nil {

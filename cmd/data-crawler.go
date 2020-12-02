@@ -58,12 +58,12 @@ var (
 	globalCrawlerConfig          crawler.Config
 	globalHealConfig             heal.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
-	crawlerSleeper               *dynamicSleeper
+	// Sleeper values are updated when config is loaded.
+	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
-	crawlerSleeper = newDynamicSleeper(globalCrawlerConfig.Delay, globalCrawlerConfig.MaxWait)
 	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
 		go runDataCrawler(ctx, objAPI)
 	}
@@ -1064,15 +1064,16 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 
 // Update the current settings and cycle all waiting.
 // Parameters are the same as in the contructor.
-func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) {
+func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.factor == factor && d.maxSleep == maxWait {
-		return
+		return nil
 	}
 	// Update values and cycle waiting.
 	close(d.cycle)
 	d.factor = factor
 	d.maxSleep = maxWait
 	d.cycle = make(chan struct{})
+	return nil
 }

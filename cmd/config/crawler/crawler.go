@@ -41,14 +41,12 @@ var (
 	// DefaultKVS - default KV config for heal settings
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:     Delay,
-			Value:   "10",
-			Dynamic: true,
+			Key:   Delay,
+			Value: "10",
 		},
 		config.KV{
-			Key:     MaxWait,
-			Value:   "15s",
-			Dynamic: true,
+			Key:   MaxWait,
+			Value: "15s",
 		},
 	}
 

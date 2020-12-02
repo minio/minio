@@ -130,8 +130,8 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	if _, err = cfg.ReadFrom(bytes.NewReader(kvBytes)); err != nil {
+	dynamic, err := cfg.ReadFrom(bytes.NewReader(kvBytes))
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -158,6 +158,16 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
+	// Apply dynamic values.
+	if err := applyDynamicConfig(GlobalContext, cfg); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+	}
+	globalNotificationSys.SignalService(serviceReloadDynamic)
+
+	// If all values were dynamic, tell the client.
+	if dynamic {
+		w.Header().Add("x-minio-config-applied", "true")
+	}
 	writeSuccessResponseHeadersOnly(w)
 }
 
