@@ -48,10 +48,13 @@ const (
 	formatErasureVersionV3 = "3"
 
 	// Distribution algorithm used, legacy
-	formatErasureVersionV2DistributionAlgoLegacy = "CRCMOD"
+	formatErasureVersionV2DistributionAlgoV1 = "CRCMOD"
 
-	// Distributed algorithm used, current
-	formatErasureVersionV3DistributionAlgo = "SIPMOD"
+	// Distributed algorithm used, with N/2 default parity
+	formatErasureVersionV3DistributionAlgoV2 = "SIPMOD"
+
+	// Distributed algorithm used, with EC:4 default parity
+	formatErasureVersionV3DistributionAlgoV3 = "SIPMOD+PARITY"
 )
 
 // Offline disk UUID represents an offline disk.
@@ -130,17 +133,13 @@ func (f *formatErasureV3) Clone() *formatErasureV3 {
 }
 
 // Returns formatErasure.Erasure.Version
-func newFormatErasureV3(numSets int, setLen int, distributionAlgo string) *formatErasureV3 {
+func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
 	format := &formatErasureV3{}
 	format.Version = formatMetaVersionV1
 	format.Format = formatBackendErasure
 	format.ID = mustGetUUID()
 	format.Erasure.Version = formatErasureVersionV3
-	if distributionAlgo == "" {
-		format.Erasure.DistributionAlgo = formatErasureVersionV3DistributionAlgo
-	} else {
-		format.Erasure.DistributionAlgo = distributionAlgo
-	}
+	format.Erasure.DistributionAlgo = formatErasureVersionV3DistributionAlgoV3
 	format.Erasure.Sets = make([][]string, numSets)
 
 	for i := 0; i < numSets; i++ {
@@ -230,7 +229,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	formatV2.Version = formatMetaVersionV1
 	formatV2.Format = formatBackendErasure
 	formatV2.Erasure.Version = formatErasureVersionV2
-	formatV2.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoLegacy
+	formatV2.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formatV2.Erasure.This = formatV1.Erasure.Disk
 	formatV2.Erasure.Sets = make([][]string, 1)
 	formatV2.Erasure.Sets[0] = make([]string, len(formatV1.Erasure.JBOD))
@@ -471,9 +470,9 @@ func checkFormatErasureValues(formats []*formatErasureV3, setDriveCount int) err
 			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
 				humanize.Ordinal(i+1), len(formats), humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]))
 		}
-		// Only if custom erasure drive count is set,
-		// we should fail here other proceed to honor what
-		// is present on the disk.
+		// Only if custom erasure drive count is set, verify if the
+		// set_drive_count was manually set - we need to honor what is
+		// present on the drives.
 		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != setDriveCount {
 			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets[0]), setDriveCount)
 		}
@@ -838,8 +837,8 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
-func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, distributionAlgo string, deploymentID string, sErrs []error) (*formatErasureV3, error) {
-	format := newFormatErasureV3(setCount, setDriveCount, distributionAlgo)
+func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
+	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, len(storageDisks))
 	wantAtMost := ecDrivesNoConfig(setDriveCount)
 
@@ -890,18 +889,25 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 	return getFormatErasureInQuorum(formats)
 }
 
+func getDefaultParityBlocks(drive int) int {
+	switch drive {
+	case 3, 2:
+		return 1
+	case 4, 5:
+		return 2
+	case 6, 7:
+		return 3
+	default:
+		return 4
+	}
+}
+
 // ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
 // It will attempt to read it from env variable and fall back to drives/2.
 func ecDrivesNoConfig(setDriveCount int) int {
 	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if ecDrives == 0 {
-		cfg, err := storageclass.LookupConfig(nil, setDriveCount)
-		if err == nil {
-			ecDrives = cfg.Standard.Parity
-		}
-		if ecDrives == 0 {
-			ecDrives = setDriveCount / 2
-		}
+	if ecDrives <= 0 {
+		ecDrives = getDefaultParityBlocks(setDriveCount)
 	}
 	return ecDrives
 }

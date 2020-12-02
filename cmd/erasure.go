@@ -48,7 +48,8 @@ type partialOperation struct {
 type erasureObjects struct {
 	GatewayUnsupported
 
-	setDriveCount int
+	setDriveCount      int
+	defaultParityCount int
 
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI

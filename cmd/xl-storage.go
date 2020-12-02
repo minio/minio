@@ -571,7 +571,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	s.Lock()
 	defer s.Unlock()
 	s.diskID = format.Erasure.This
-	s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoLegacy
+	s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	s.formatFileInfo = fi
 	s.formatLastCheck = time.Now()
 	return s.diskID, nil

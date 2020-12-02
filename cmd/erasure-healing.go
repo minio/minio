@@ -42,7 +42,10 @@ func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts mad
 	storageEndpoints := er.getEndpoints()
 
 	// get write quorum for an object
-	writeQuorum := getWriteQuorum(len(storageDisks))
+	writeQuorum := len(storageDisks) - er.defaultParityCount
+	if writeQuorum == er.defaultParityCount {
+		writeQuorum++
+	}
 
 	// Heal bucket.
 	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, opts)
@@ -308,7 +311,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 			err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
 		}
 		// File is fully gone, fileInfo is empty.
-		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
+		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 	}
 
 	// If less than read quorum number of disks have all the parts
@@ -490,8 +493,8 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 		Bucket:       bucket,
 		Object:       object,
 		DiskCount:    len(storageDisks),
-		ParityBlocks: getDefaultParityBlocks(len(storageDisks)),
-		DataBlocks:   getDefaultDataBlocks(len(storageDisks)),
+		ParityBlocks: er.defaultParityCount,
+		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 		ObjectSize:   0,
 	}
 
@@ -562,7 +565,7 @@ func (er erasureObjects) healObjectDir(ctx context.Context, bucket, object strin
 
 // Populates default heal result item entries with possible values when we are returning prematurely.
 // This is to ensure that in any circumstance we are not returning empty arrays with wrong values.
-func defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints []string, errs []error, bucket, object, versionID string) madmin.HealResultItem {
+func defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints []string, errs []error, bucket, object, versionID string, defaultParityCount int) madmin.HealResultItem {
 	// Initialize heal result object
 	result := madmin.HealResultItem{
 		Type:      madmin.HealItemObject,
@@ -608,8 +611,8 @@ func defaultHealResult(lfi FileInfo, storageDisks []StorageAPI, storageEndpoints
 
 	if !lfi.IsValid() {
 		// Default to most common configuration for erasure blocks.
-		result.ParityBlocks = getDefaultParityBlocks(len(storageDisks))
-		result.DataBlocks = getDefaultDataBlocks(len(storageDisks))
+		result.ParityBlocks = defaultParityCount
+		result.DataBlocks = len(storageDisks) - defaultParityCount
 	} else {
 		result.ParityBlocks = lfi.Erasure.ParityBlocks
 		result.DataBlocks = lfi.Erasure.DataBlocks
@@ -690,7 +693,7 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 	if ok {
 		writeQuorum := m.Erasure.DataBlocks
 		if m.Erasure.DataBlocks == 0 || m.Erasure.DataBlocks == m.Erasure.ParityBlocks {
-			writeQuorum = getWriteQuorum(len(storageDisks))
+			writeQuorum++
 		}
 		var err error
 		var returnNotFound bool
@@ -722,18 +725,15 @@ func (er erasureObjects) purgeObjectDangling(ctx context.Context, bucket, object
 			if versionID != "" {
 				err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
 			}
-			return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
+			return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 		}
-		return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID), toObjectErr(err, bucket, object, versionID)
+		return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), toObjectErr(err, bucket, object, versionID)
 	}
 
-	readQuorum := m.Erasure.DataBlocks
-	if m.Erasure.DataBlocks == 0 || m.Erasure.DataBlocks == m.Erasure.ParityBlocks {
-		readQuorum = getReadQuorum(len(storageDisks))
-	}
+	readQuorum := len(storageDisks) - er.defaultParityCount
 
 	err := toObjectErr(reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum), bucket, object, versionID)
-	return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
+	return defaultHealResult(m, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 }
 
 // Object is considered dangling/corrupted if any only
@@ -819,7 +819,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 			err = toObjectErr(errFileVersionNotFound, bucket, object, versionID)
 		}
 		// Nothing to do, file is already gone.
-		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID), err
+		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 	}
 
 	fi, err := getLatestFileInfo(healCtx, partsMetadata, errs)

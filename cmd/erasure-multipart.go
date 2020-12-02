@@ -48,7 +48,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, minioMetaMultipartBucket, er.getUploadIDDir(bucket, object, uploadID), "", false)
 
-	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
 		return err
 	}
@@ -242,18 +242,18 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	onlineDisks := er.getDisks()
 	parityBlocks := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
-	if parityBlocks == 0 {
-		parityBlocks = len(onlineDisks) / 2
+	if parityBlocks <= 0 {
+		parityBlocks = er.defaultParityCount
 	}
-	dataBlocks := len(onlineDisks) - parityBlocks
 
+	dataBlocks := len(onlineDisks) - parityBlocks
 	fi := newFileInfo(object, dataBlocks, parityBlocks)
 
 	// we now know the number of blocks this object needs for data and parity.
 	// establish the writeQuorum using this data
 	writeQuorum := dataBlocks
 	if dataBlocks == parityBlocks {
-		writeQuorum = dataBlocks + 1
+		writeQuorum++
 	}
 
 	if opts.UserDefined["content-type"] == "" {
@@ -374,7 +374,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		uploadIDPath, "", false)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, er, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -555,7 +555,7 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath, opts.VersionID, false)
 
 	// get Quorum for this object
-	readQuorum, _, err := objectQuorumFromMeta(ctx, er, partsMetadata, errs)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return result, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
@@ -603,7 +603,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath, "", false)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, er, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return result, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
@@ -707,7 +707,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket, uploadIDPath, "", false)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, er, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
@@ -892,7 +892,7 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	partsMetadata, errs := readAllFileInfo(ctx, er.getDisks(), minioMetaMultipartBucket, uploadIDPath, "", false)
 
 	// get Quorum for this object
-	_, writeQuorum, err := objectQuorumFromMeta(ctx, er, partsMetadata, errs)
+	_, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
 		return toObjectErr(err, bucket, object, uploadID)
 	}

@@ -78,6 +78,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, err
 		}
 		if deploymentID == "" {
+			// all zones should have same deployment ID
 			deploymentID = formats[i].ID
 		}
 		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
@@ -277,15 +278,16 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
 	b.Type = BackendErasure
 
+	setDriveCount := z.SetDriveCount()
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity == 0 {
-		scParity = z.SetDriveCount() / 2
+	if scParity <= 0 {
+		scParity = z.serverPools[0].defaultParityCount
 	}
-	b.StandardSCData = z.SetDriveCount() - scParity
+	b.StandardSCData = setDriveCount - scParity
 	b.StandardSCParity = scParity
 
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	b.RRSCData = z.SetDriveCount() - rrSCParity
+	b.RRSCData = setDriveCount - rrSCParity
 	b.RRSCParity = rrSCParity
 	return
 }
@@ -1437,15 +1439,9 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
-	parityDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	diskCount := z.SetDriveCount()
-
-	if parityDrives == 0 {
-		parityDrives = getDefaultParityBlocks(diskCount)
-	}
-	dataDrives := diskCount - parityDrives
-	writeQuorum := dataDrives
-	if dataDrives == parityDrives {
+	b := z.BackendInfo()
+	writeQuorum := b.StandardSCData
+	if b.StandardSCData == b.StandardSCParity {
 		writeQuorum++
 	}
 
