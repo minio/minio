@@ -58,8 +58,6 @@ const (
 	RegionName = "name"
 	AccessKey  = "access_key"
 	SecretKey  = "secret_key"
-
-	Dynamic = "_dynamic"
 )
 
 // Top level config constants.
