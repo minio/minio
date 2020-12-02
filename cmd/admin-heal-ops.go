@@ -657,6 +657,8 @@ func (h *healSequence) healSequenceStart(objAPI ObjectLayer) {
 }
 
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
+	opts := globalHealConfig
+
 	// Send heal request
 	task := healTask{
 		bucket:     source.bucket,
@@ -667,7 +669,14 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
+	} else {
+		if opts.Bitrot {
+			task.opts.ScanMode = madmin.HealDeepScan
+		}
 	}
+
+	// Wait and proceed if there are active requests
+	waitForLowHTTPReq(opts.IOCount, opts.Sleep)
 
 	h.mutex.Lock()
 	h.scannedItemsMap[healType]++

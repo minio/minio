@@ -157,7 +157,7 @@ type folderScanner struct {
 
 // crawlDataFolder will crawl the basepath+cache.Info.Name and return an updated cache.
 // The returned cache will always be valid, but may not be updated from the existing.
-// Before each operation waitForLowActiveIO is called which can be used to temporarily halt the crawler.
+// Before each operation sleepDuration is called which can be used to temporarily halt the crawler.
 // If the supplied context is canceled the function will return at the first chance.
 func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
 	t := UTCNow()
