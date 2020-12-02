@@ -26,10 +26,10 @@ import (
 // GetRootCAs - returns all the root CAs into certPool
 // at the input certsCADir
 func GetRootCAs(certsCAsDir string) (*x509.CertPool, error) {
-	rootCAs, _ := x509.SystemCertPool()
+	rootCAs, _ := loadSystemRoots()
 	if rootCAs == nil {
-		// In some systems (like Windows) system cert pool is
-		// not supported or no certificates are present on the
+		// In some systems system cert pool is not supported
+		// or no certificates are present on the
 		// system - so we create a new cert pool.
 		rootCAs = x509.NewCertPool()
 	}
