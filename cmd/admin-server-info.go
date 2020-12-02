@@ -24,13 +24,13 @@ import (
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
 // local endpoints from given list of endpoints
-func getLocalServerProperty(endpointServerSets EndpointServerSets, r *http.Request) madmin.ServerProperties {
+func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerProperties {
 	addr := r.Host
 	if globalIsDistErasure {
-		addr = GetLocalPeer(endpointServerSets)
+		addr = GetLocalPeer(endpointServerPools)
 	}
 	network := make(map[string]string)
-	for _, ep := range endpointServerSets {
+	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
 			nodeName := endpoint.Host
 			if nodeName == "" {

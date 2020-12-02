@@ -298,7 +298,7 @@ func isSameType(obj1, obj2 interface{}) bool {
 //   defer s.Stop()
 type TestServer struct {
 	Root      string
-	Disks     EndpointServerSets
+	Disks     EndpointServerPools
 	AccessKey string
 	SecretKey string
 	Server    *httptest.Server
@@ -415,7 +415,7 @@ func resetGlobalConfig() {
 }
 
 func resetGlobalEndpoints() {
-	globalEndpoints = EndpointServerSets{}
+	globalEndpoints = EndpointServerPools{}
 }
 
 func resetGlobalIsErasure() {
@@ -1558,14 +1558,14 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newTestObjectLayer(ctx context.Context, endpointServerSets EndpointServerSets) (newObject ObjectLayer, err error) {
+func newTestObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
-	if endpointServerSets.NEndpoints() == 1 {
+	if endpointServerPools.NEndpoints() == 1 {
 		// Initialize new FS object layer.
-		return NewFSObjectLayer(endpointServerSets[0].Endpoints[0].Path)
+		return NewFSObjectLayer(endpointServerPools[0].Endpoints[0].Path)
 	}
 
-	z, err := newErasureServerSets(ctx, endpointServerSets)
+	z, err := newErasureServerPools(ctx, endpointServerPools)
 	if err != nil {
 		return nil, err
 	}
@@ -1578,16 +1578,16 @@ func newTestObjectLayer(ctx context.Context, endpointServerSets EndpointServerSe
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(ctx context.Context, endpointServerSets EndpointServerSets) (ObjectLayer, []StorageAPI, error) {
-	objLayer, err := newTestObjectLayer(ctx, endpointServerSets)
+func initObjectLayer(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, []StorageAPI, error) {
+	objLayer, err := newTestObjectLayer(ctx, endpointServerPools)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var formattedDisks []StorageAPI
 	// Should use the object layer tests for validating cache.
-	if z, ok := objLayer.(*erasureServerSets); ok {
-		formattedDisks = z.serverSets[0].GetDisks(0)()
+	if z, ok := objLayer.(*erasureServerPools); ok {
+		formattedDisks = z.serverPools[0].GetDisks(0)()
 	}
 
 	// Success.
@@ -2240,7 +2240,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 	return certOut.Bytes(), keyOut.Bytes(), nil
 }
 
-func mustGetZoneEndpoints(args ...string) EndpointServerSets {
+func mustGetZoneEndpoints(args ...string) EndpointServerPools {
 	endpoints := mustGetNewEndpoints(args...)
 	drivesPerSet := len(args)
 	setCount := 1
@@ -2261,8 +2261,8 @@ func mustGetNewEndpoints(args ...string) (endpoints Endpoints) {
 	return endpoints
 }
 
-func getEndpointsLocalAddr(endpointServerSets EndpointServerSets) string {
-	for _, endpoints := range endpointServerSets {
+func getEndpointsLocalAddr(endpointServerPools EndpointServerPools) string {
+	for _, endpoints := range endpointServerPools {
 		for _, endpoint := range endpoints.Endpoints {
 			if endpoint.IsLocal && endpoint.Type() == URLEndpointType {
 				return endpoint.Host

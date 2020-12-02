@@ -34,7 +34,7 @@ import (
 // Required important fields are Bucket, Prefix, Separator.
 // Other important fields are Limit, Marker.
 // List ID always derived from the Marker.
-func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
+func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	if err := checkListObjsArgs(ctx, o.Bucket, o.Prefix, o.Marker, z); err != nil {
 		return entries, err
 	}
@@ -140,7 +140,7 @@ func (z *erasureServerSets) listPath(ctx context.Context, o listPathOptions) (en
 	asked := 0
 	mu.Lock()
 	// Ask all sets and merge entries.
-	for _, zone := range z.serverSets {
+	for _, zone := range z.serverPools {
 		for _, set := range zone.sets {
 			wg.Add(1)
 			asked++

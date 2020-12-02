@@ -252,6 +252,14 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		return nil
 	}
 
+	// Collect disks for healing.
+	allDisks := er.getDisks()
+	allDiskIDs := make([]string, len(allDisks))
+	for i, disk := range allDisks {
+		id, _ := disk.GetDiskID()
+		allDiskIDs[i] = id
+	}
+
 	// Load bucket totals
 	oldCache := dataUsageCache{}
 	if err := oldCache.load(ctx, er, dataUsageCacheName); err != nil {
@@ -351,6 +359,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 					cache.Info.Name = bucket.Name
 				}
 				cache.Info.BloomFilter = bloom
+				cache.Disks = allDiskIDs
 				if cache.Info.Name != bucket.Name {
 					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
 					cache.Info = dataUsageCacheInfo{

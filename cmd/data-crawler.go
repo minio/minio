@@ -152,6 +152,7 @@ type folderScanner struct {
 
 	newFolders      []cachedFolder
 	existingFolders []cachedFolder
+	disks           []StorageAPI
 }
 
 // crawlDataFolder will crawl the basepath+cache.Info.Name and return an updated cache.
@@ -185,6 +186,18 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
 		healFolderInclude:   0,
 		healObjectSelect:    0,
+	}
+
+	// Add disks for set healing.
+	if len(cache.Disks) > 0 {
+		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
+		if ok {
+			s.disks = objAPI.GetDisksID(cache.Disks...)
+			if len(s.disks) != len(cache.Disks) {
+				logger.Info(logPrefix+"Missing disks, want %d, found %d. Cannot heal."+logSuffix, len(cache.Disks), len(s.disks))
+				s.disks = s.disks[:0]
+			}
+		}
 	}
 
 	// Enable healing in XL mode.
@@ -456,8 +469,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			continue
 		}
 
-		objAPI := newObjectLayerFn()
-		if objAPI == nil {
+		objAPI, ok := newObjectLayerFn().(*erasureServerPools)
+		if !ok || len(f.disks) == 0 {
 			continue
 		}
 
@@ -477,6 +490,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		// We therefore perform a heal check.
 		// If that doesn't bring it back we remove the folder and assume it was deleted.
 		// This means that the next run will not look for it.
+		// How to resolve results.
+		resolver := metadataResolutionParams{
+			dirQuorum: getReadQuorum(len(f.disks)),
+			objQuorum: getReadQuorum(len(f.disks)),
+			bucket:    "",
+		}
+
 		for k := range existing {
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
@@ -485,27 +505,118 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 			// Dynamic time delay.
 			wait := crawlerSleeper.Timer(ctx)
+			resolver.bucket = bucket
 
-			err = objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: healDeleteDangling},
-				func(bucket, object, versionID string) error {
-					// Wait for each heal as per crawler frequency.
+			foundObjs := false
+			dangling := true
+			ctx, cancel := context.WithCancel(ctx)
+			err := listPathRaw(ctx, listPathRawOptions{
+				disks:          f.disks,
+				bucket:         bucket,
+				path:           prefix,
+				recursive:      true,
+				reportNotFound: true,
+				minDisks:       len(f.disks), // We want full consistency.
+				// Weird, maybe transient error.
+				agreed: func(entry metaCacheEntry) {
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" got agreement: %v", entry.name)
+					}
+					if entry.isObject() {
+						dangling = false
+					}
+				},
+				// Some disks have data for this.
+				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" got partial, %d agreed, errs: %v", nAgreed, errs)
+					}
+					// Sleep and reset.
 					wait()
 					wait = crawlerSleeper.Timer(ctx)
-					return bgSeq.queueHealTask(healSource{
-						bucket:    bucket,
-						object:    object,
-						versionID: versionID,
-					}, madmin.HealItemObject)
-				})
+					entry, ok := entries.resolve(&resolver)
+					if !ok {
+						for _, err := range errs {
+							if err != nil {
+								// Not all disks are ready, do nothing for now.
+								dangling = false
+								return
+							}
+						}
+
+						// If no errors, queue it for healing.
+						entry, _ = entries.firstFound()
+					}
+
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" resolved to: %v, dir: %v", entry.name, entry.isDir())
+					}
+					if entry.isDir() {
+						return
+					}
+					dangling = false
+					// We got an entry which we should be able to heal.
+					fiv, err := entry.fileInfoVersions(bucket)
+					if err != nil {
+						err := bgSeq.queueHealTask(healSource{
+							bucket:    bucket,
+							object:    entry.name,
+							versionID: "",
+						}, madmin.HealItemObject)
+						logger.LogIf(ctx, err)
+						foundObjs = foundObjs || err == nil
+						return
+					}
+					for _, ver := range fiv.Versions {
+						// Sleep and reset.
+						wait()
+						wait = crawlerSleeper.Timer(ctx)
+						err := bgSeq.queueHealTask(healSource{
+							bucket:    bucket,
+							object:    fiv.Name,
+							versionID: ver.VersionID,
+						}, madmin.HealItemObject)
+						logger.LogIf(ctx, err)
+						foundObjs = foundObjs || err == nil
+					}
+				},
+				// Too many disks failed.
+				finished: func(errs []error) {
+					if f.dataUsageCrawlDebug {
+						logger.Info(color.Green("healObjects:")+" too many errors: %v", errs)
+					}
+					dangling = false
+					cancel()
+				},
+			})
+
+			if f.dataUsageCrawlDebug && err != nil && err != errFileNotFound {
+				logger.Info(color.Green("healObjects:")+" checking returned value %v (%T)", err, err)
+			}
+
+			// If we found one or more disks with this folder, delete it.
+			if err == nil && dangling {
+				if f.dataUsageCrawlDebug {
+					logger.Info(color.Green("healObjects:")+" deleting dangling directory %s", prefix)
+				}
+				// If we have quorum, found directories, but no objects, issue heal to delete the dangling.
+				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: true},
+					func(bucket, object, versionID string) error {
+						// Wait for each heal as per crawler frequency.
+						wait()
+						wait = crawlerSleeper.Timer(ctx)
+						return bgSeq.queueHealTask(healSource{
+							bucket:    bucket,
+							object:    object,
+							versionID: versionID,
+						}, madmin.HealItemObject)
+					})
+			}
 
 			wait()
 
-			if f.dataUsageCrawlDebug && err != nil {
-				logger.Info(color.Green("healObjects:")+" checking returned value %v", err)
-			}
-
 			// Add unless healing returned an error.
-			if err == nil {
+			if foundObjs {
 				this := cachedFolder{name: k, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
 				cache.addChild(hashPath(k))
 				if final {

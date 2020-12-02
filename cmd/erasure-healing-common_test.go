@@ -178,8 +178,8 @@ func TestListOnlineDisks(t *testing.T) {
 
 	object := "object"
 	data := bytes.Repeat([]byte("a"), 1024)
-	z := obj.(*erasureServerSets)
-	erasureDisks := z.serverSets[0].sets[0].getDisks()
+	z := obj.(*erasureServerPools)
+	erasureDisks := z.serverPools[0].sets[0].getDisks()
 	for i, test := range testCases {
 		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 		if err != nil {
@@ -274,8 +274,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	// make data with more than one part
 	partCount := 3
 	data := bytes.Repeat([]byte("a"), 6*1024*1024*partCount)
-	z := obj.(*erasureServerSets)
-	s := z.serverSets[0].sets[0]
+	z := obj.(*erasureServerPools)
+	s := z.serverPools[0].sets[0]
 	erasureDisks := s.getDisks()
 	err = obj.MakeBucketWithLocation(ctx, "bucket", BucketOptions{})
 	if err != nil {

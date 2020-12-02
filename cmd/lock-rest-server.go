@@ -254,7 +254,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 		return nil
 	}
 
-	z, ok := objAPI.(*erasureServerSets)
+	z, ok := objAPI.(*erasureServerPools)
 	if !ok {
 		return nil
 	}
@@ -361,8 +361,8 @@ func startLockMaintenance(ctx context.Context) {
 }
 
 // registerLockRESTHandlers - register lock rest router.
-func registerLockRESTHandlers(router *mux.Router, endpointServerSets EndpointServerSets) {
-	for _, ep := range endpointServerSets {
+func registerLockRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools) {
+	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
 			if !endpoint.IsLocal {
 				continue

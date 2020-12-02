@@ -93,14 +93,7 @@ func path2BucketObject(s string) (bucket, prefix string) {
 }
 
 func getDefaultParityBlocks(drive int) int {
-	switch drive {
-	case 4, 5:
-		return 2
-	case 6, 7:
-		return 3
-	default:
-		return 4
-	}
+	return drive / 2
 }
 
 func getDefaultDataBlocks(drive int) int {

@@ -112,19 +112,19 @@ In above example there are two server sets
 MinIO places new objects in server sets based on proportionate free space, per zone. Following pseudo code demonstrates this behavior.
 ```go
 func getAvailableZoneIdx(ctx context.Context) int {
-        serverSets := z.getServerSetsAvailableSpace(ctx)
-        total := serverSets.TotalAvailable()
+        serverPools := z.getServerPoolsAvailableSpace(ctx)
+        total := serverPools.TotalAvailable()
         // choose when we reach this many
         choose := rand.Uint64() % total
         atTotal := uint64(0)
-        for _, zone := range serverSets {
+        for _, zone := range serverPools {
                 atTotal += zone.Available
                 if atTotal > choose && zone.Available > 0 {
                         return zone.Index
                 }
         }
         // Should not happen, but print values just in case.
-        panic(fmt.Errorf("reached end of serverSets (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
+        panic(fmt.Errorf("reached end of serverPools (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
 }
 ```
 

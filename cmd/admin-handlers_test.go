@@ -105,8 +105,8 @@ func initTestErasureObjLayer(ctx context.Context) (ObjectLayer, []string, error)
 	}
 
 	globalPolicySys = NewPolicySys()
-	objLayer := &erasureServerSets{serverSets: make([]*erasureSets, 1)}
-	objLayer.serverSets[0], err = newErasureSets(ctx, endpoints, storageDisks, format)
+	objLayer := &erasureServerPools{serverPools: make([]*erasureSets, 1)}
+	objLayer.serverPools[0], err = newErasureSets(ctx, endpoints, storageDisks, format)
 	if err != nil {
 		return nil, nil, err
 	}
