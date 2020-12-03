@@ -27,6 +27,7 @@ issues:
 run:
   skip-dirs:
     - pkg/rpc
+    - pkg/argon2
 
 service:
   golangci-lint-version: 1.20.0 # use the fixed version to not introduce new linters unexpectedly

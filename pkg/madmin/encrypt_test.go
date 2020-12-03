@@ -43,6 +43,7 @@ func TestEncryptData(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to encrypt data: %v", err)
 			}
+
 			plaintext, err := DecryptData(test.Password, bytes.NewReader(ciphertext))
 			if err != nil {
 				t.Fatalf("Failed to decrypt data: %v", err)
