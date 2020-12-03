@@ -66,8 +66,8 @@ func (adm *AdminClient) GetBucketBandwidth(ctx context.Context, buckets ...strin
 		}()
 		for {
 			var report bandwidth.Report
-			err = dec.Decode(&report)
-			if err != nil {
+
+			if err = dec.Decode(&report); err != nil {
 				ch <- Report{bandwidth.Report{}, err}
 				return
 			}
