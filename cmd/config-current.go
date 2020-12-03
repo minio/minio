@@ -569,7 +569,19 @@ func applyDynamicConfig(ctx context.Context, s config.Config) error {
 	if err != nil {
 		return fmt.Errorf("Unable to apply crawler config: %w", err)
 	}
-	return crawlerSleeper.Update(cfg.Delay, cfg.MaxWait)
+	if err := crawlerSleeper.Update(cfg.Delay, cfg.MaxWait); err != nil {
+		return err
+	}
+
+	// Update all dynamic config values.
+	globalServerConfigMu.Lock()
+	defer globalServerConfigMu.Unlock()
+	if globalServerConfig != nil {
+		for k := range config.SubSystemsDynamic {
+			globalServerConfig[k] = s[k]
+		}
+	}
+	return nil
 }
 
 // Help - return sub-system level help

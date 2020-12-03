@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/pkg/console"
-
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
@@ -1064,7 +1062,6 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 // Update the current settings and cycle all waiting.
 // Parameters are the same as in the contructor.
 func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
-	console.Infoln("dynamicSleeper: Updating to", factor, maxWait)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if math.Abs(d.factor-factor) < 1e-10 && d.maxSleep == maxWait {
