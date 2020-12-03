@@ -130,6 +130,7 @@ var SubSystems = set.CreateStringSet(
 
 // SubSystemsDynamic - all sub-systems that have dynamic config.
 var SubSystemsDynamic = set.CreateStringSet(
+	APISubSys,
 	CompressionSubSys,
 	CrawlerSubSys,
 	HealSubSys,
@@ -150,6 +151,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
 	HealSubSys,
+	CrawlerSubSys,
 }...)
 
 // Constant separators

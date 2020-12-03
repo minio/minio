@@ -559,6 +559,14 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 // applyDynamicConfig will apply dynamic config values.
 // Dynamic systems should be in config.SubSystemsDynamic as well.
 func applyDynamicConfig(ctx context.Context, s config.Config) error {
+	// Read all dynamic configs.
+	// API
+	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
+	}
+
+	// Compression
 	cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 	if err != nil {
 		return fmt.Errorf("Unable to setup Compression: %w", err)
@@ -570,27 +578,33 @@ func applyDynamicConfig(ctx context.Context, s config.Config) error {
 		}
 	}
 
-	globalCompressConfigMu.Lock()
-	globalCompressConfig = cmpCfg
-	globalCompressConfigMu.Unlock()
-
+	// Heal
 	healCfg, err := heal.LookupConfig(s[config.HealSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to apply heal config: %w", err))
 	}
+
+	// Crawler
+	crawlerCfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		return fmt.Errorf("Unable to apply crawler config: %w", err)
+	}
+
+	// Apply configurations.
+	// We should not fail after this.
+	globalAPIConfig.init(apiConfig, globalAPIConfig.setDriveCount)
+
+	globalCompressConfigMu.Lock()
+	globalCompressConfig = cmpCfg
+	globalCompressConfigMu.Unlock()
+
 	globalHealConfigMu.Lock()
 	globalHealConfig = healCfg
 	globalHealConfigMu.Unlock()
 
-	cfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
-	if err != nil {
-		return fmt.Errorf("Unable to apply crawler config: %w", err)
-	}
-	if err := crawlerSleeper.Update(cfg.Delay, cfg.MaxWait); err != nil {
-		return err
-	}
+	logger.LogIf(ctx, crawlerSleeper.Update(crawlerCfg.Delay, crawlerCfg.MaxWait))
 
-	// Update all dynamic config values.
+	// Update all dynamic config values in memory.
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
 	if globalServerConfig != nil {
