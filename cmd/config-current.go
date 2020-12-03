@@ -260,14 +260,14 @@ func validateConfig(s config.Config, setDriveCount int) error {
 		return err
 	}
 
-	if cfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+	compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+	if err != nil {
 		return err
-	} else {
-		objAPI := newObjectLayerFn()
-		if objAPI != nil {
-			if cfg.Enabled && !objAPI.IsCompressionSupported() {
-				return fmt.Errorf("Backend does not support compression")
-			}
+	}
+	objAPI := newObjectLayerFn()
+	if objAPI != nil {
+		if compCfg.Enabled && !objAPI.IsCompressionSupported() {
+			return fmt.Errorf("Backend does not support compression")
 		}
 	}
 
