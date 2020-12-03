@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	etcd "go.etcd.io/etcd/v3/clientv3"
+	etcd "go.etcd.io/etcd/clientv3"
 )
 
 var errEtcdUnreachable = errors.New("etcd is unreachable, please check your endpoints")
