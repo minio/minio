@@ -10,4 +10,3 @@ docker buildx build --push --no-cache -t "minio/minio:${release}-ubi" \
 docker buildx prune -f
 
 sudo sysctl net.ipv6.conf.wlp59s0.disable_ipv6=0
-

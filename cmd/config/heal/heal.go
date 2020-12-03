@@ -17,20 +17,32 @@
 package heal
 
 import (
-	"errors"
+	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 )
 
 // Compression environment variables
 const (
-	Bitrot = "bitrotscan"
+	Bitrot  = "bitrotscan"
+	Sleep   = "max_sleep"
+	IOCount = "max_io"
+
+	EnvBitrot  = "MINIO_HEAL_BITROTSCAN"
+	EnvSleep   = "MINIO_HEAL_MAX_SLEEP"
+	EnvIOCount = "MINIO_HEAL_MAX_IO"
 )
 
 // Config represents the heal settings.
 type Config struct {
 	// Bitrot will perform bitrot scan on local disk when checking objects.
 	Bitrot bool `json:"bitrotscan"`
+	// maximum sleep duration between objects to slow down heal operation.
+	Sleep   time.Duration `json:"sleep"`
+	IOCount int           `json:"iocount"`
 }
 
 var (
@@ -39,6 +51,14 @@ var (
 		config.KV{
 			Key:   Bitrot,
 			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   Sleep,
+			Value: "1s",
+		},
+		config.KV{
+			Key:   IOCount,
+			Value: "10",
 		},
 	}
 
@@ -50,6 +70,18 @@ var (
 			Optional:    true,
 			Type:        "on|off",
 		},
+		config.HelpKV{
+			Key:         Sleep,
+			Description: `maximum sleep duration between objects to slow down heal operation. eg. 2s`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         IOCount,
+			Description: `maximum IO requests allowed between objects to slow down heal operation. eg. 3`,
+			Optional:    true,
+			Type:        "int",
+		},
 	}
 )
 
@@ -58,10 +90,17 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.HealSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
-	bitrot := kvs.Get(Bitrot)
-	if bitrot != config.EnableOn && bitrot != config.EnableOff {
-		return cfg, errors.New(Bitrot + ": must be 'on' or 'off'")
+	cfg.Bitrot, err = config.ParseBool(env.Get(EnvBitrot, kvs.Get(Bitrot)))
+	if err != nil {
+		return cfg, fmt.Errorf("'heal:bitrotscan' value invalid: %w", err)
 	}
-	cfg.Bitrot = bitrot == config.EnableOn
+	cfg.Sleep, err = time.ParseDuration(env.Get(EnvSleep, kvs.Get(Sleep)))
+	if err != nil {
+		return cfg, fmt.Errorf("'heal:max_sleep' value invalid: %w", err)
+	}
+	cfg.IOCount, err = strconv.Atoi(env.Get(EnvIOCount, kvs.Get(IOCount)))
+	if err != nil {
+		return cfg, fmt.Errorf("'heal:max_io' value invalid: %w", err)
+	}
 	return cfg, nil
 }

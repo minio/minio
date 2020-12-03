@@ -206,12 +206,12 @@ type ZoneEndpoints struct {
 	Endpoints    Endpoints
 }
 
-// EndpointServerSets - list of list of endpoints
-type EndpointServerSets []ZoneEndpoints
+// EndpointServerPools - list of list of endpoints
+type EndpointServerPools []ZoneEndpoints
 
 // GetLocalZoneIdx returns the zone which endpoint belongs to locally.
 // if ep is remote this code will return -1 zoneIndex
-func (l EndpointServerSets) GetLocalZoneIdx(ep Endpoint) int {
+func (l EndpointServerPools) GetLocalZoneIdx(ep Endpoint) int {
 	for i, zep := range l {
 		for _, cep := range zep.Endpoints {
 			if cep.IsLocal && ep.IsLocal {
@@ -225,14 +225,14 @@ func (l EndpointServerSets) GetLocalZoneIdx(ep Endpoint) int {
 }
 
 // Add add zone endpoints
-func (l *EndpointServerSets) Add(zeps ZoneEndpoints) error {
+func (l *EndpointServerPools) Add(zeps ZoneEndpoints) error {
 	existSet := set.NewStringSet()
 	for _, zep := range *l {
 		for _, ep := range zep.Endpoints {
 			existSet.Add(ep.String())
 		}
 	}
-	// Validate if there are duplicate endpoints across serverSets
+	// Validate if there are duplicate endpoints across serverPools
 	for _, ep := range zeps.Endpoints {
 		if existSet.Contains(ep.String()) {
 			return fmt.Errorf("duplicate endpoints found")
@@ -243,17 +243,17 @@ func (l *EndpointServerSets) Add(zeps ZoneEndpoints) error {
 }
 
 // FirstLocal returns true if the first endpoint is local.
-func (l EndpointServerSets) FirstLocal() bool {
+func (l EndpointServerPools) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal
 }
 
 // HTTPS - returns true if secure for URLEndpointType.
-func (l EndpointServerSets) HTTPS() bool {
+func (l EndpointServerPools) HTTPS() bool {
 	return l[0].Endpoints.HTTPS()
 }
 
 // NEndpoints - returns all nodes count
-func (l EndpointServerSets) NEndpoints() (count int) {
+func (l EndpointServerPools) NEndpoints() (count int) {
 	for _, ep := range l {
 		count += len(ep.Endpoints)
 	}
@@ -261,7 +261,7 @@ func (l EndpointServerSets) NEndpoints() (count int) {
 }
 
 // Hostnames - returns list of unique hostnames
-func (l EndpointServerSets) Hostnames() []string {
+func (l EndpointServerPools) Hostnames() []string {
 	foundSet := set.NewStringSet()
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
@@ -277,7 +277,7 @@ func (l EndpointServerSets) Hostnames() []string {
 // hostsSorted will return all hosts found.
 // The LOCAL host will be nil, but the indexes of all hosts should
 // remain consistent across the cluster.
-func (l EndpointServerSets) hostsSorted() []*xnet.Host {
+func (l EndpointServerPools) hostsSorted() []*xnet.Host {
 	peers, localPeer := l.peers()
 	sort.Strings(peers)
 	hosts := make([]*xnet.Host, len(peers))
@@ -298,7 +298,7 @@ func (l EndpointServerSets) hostsSorted() []*xnet.Host {
 
 // peers will return all peers, including local.
 // The local peer is returned as a separate string.
-func (l EndpointServerSets) peers() (peers []string, local string) {
+func (l EndpointServerPools) peers() (peers []string, local string) {
 	allSet := set.NewStringSet()
 	for _, ep := range l {
 		for _, endpoint := range ep.Endpoints {
@@ -739,9 +739,9 @@ func CreateEndpoints(serverAddr string, foundLocal bool, args ...[]string) (Endp
 // the first element from the set of peers which indicate that
 // they are local. There is always one entry that is local
 // even with repeated server endpoints.
-func GetLocalPeer(endpointServerSets EndpointServerSets) (localPeer string) {
+func GetLocalPeer(endpointServerPools EndpointServerPools) (localPeer string) {
 	peerSet := set.NewStringSet()
-	for _, ep := range endpointServerSets {
+	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.Type() != URLEndpointType {
 				continue
@@ -840,12 +840,12 @@ func getOnlineProxyEndpointIdx() int {
 }
 
 // GetProxyEndpoints - get all endpoints that can be used to proxy list request.
-func GetProxyEndpoints(endpointServerSets EndpointServerSets) []ProxyEndpoint {
+func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint {
 	var proxyEps []ProxyEndpoint
 
 	proxyEpSet := set.NewStringSet()
 
-	for _, ep := range endpointServerSets {
+	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
 			if endpoint.Type() != URLEndpointType {
 				continue

@@ -837,7 +837,7 @@ func (client *peerRESTClient) ConsoleLog(logCh chan interface{}, doneCh <-chan s
 // The two slices will point to the same clients,
 // but 'all' will contain nil entry for local client.
 // The 'all' slice will be in the same order across the cluster.
-func newPeerRestClients(endpoints EndpointServerSets) (remote, all []*peerRESTClient) {
+func newPeerRestClients(endpoints EndpointServerPools) (remote, all []*peerRESTClient) {
 	if !globalIsDistErasure {
 		// Only useful in distributed setups
 		return nil, nil

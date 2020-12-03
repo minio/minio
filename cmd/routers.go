@@ -23,9 +23,9 @@ import (
 )
 
 // Composed function registering routers for only distributed Erasure setup.
-func registerDistErasureRouters(router *mux.Router, endpointServerSets EndpointServerSets) {
+func registerDistErasureRouters(router *mux.Router, endpointServerPools EndpointServerPools) {
 	// Register storage REST router only if its a distributed setup.
-	registerStorageRESTHandlers(router, endpointServerSets)
+	registerStorageRESTHandlers(router, endpointServerPools)
 
 	// Register peer REST router only if its a distributed setup.
 	registerPeerRESTHandlers(router)
@@ -34,7 +34,7 @@ func registerDistErasureRouters(router *mux.Router, endpointServerSets EndpointS
 	registerBootstrapRESTHandlers(router)
 
 	// Register distributed namespace lock routers.
-	registerLockRESTHandlers(router, endpointServerSets)
+	registerLockRESTHandlers(router, endpointServerPools)
 }
 
 // List of some generic handlers which are applied for all incoming requests.
@@ -83,14 +83,14 @@ var globalHandlers = []MiddlewareFunc{
 }
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(endpointServerSets EndpointServerSets) (http.Handler, error) {
+func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
 	router := mux.NewRouter().SkipClean(true).UseEncodedPath()
 
 	// Initialize distributed NS lock.
 	if globalIsDistErasure {
-		registerDistErasureRouters(router, endpointServerSets)
+		registerDistErasureRouters(router, endpointServerPools)
 	}
 
 	// Add STS router always.

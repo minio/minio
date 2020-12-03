@@ -43,6 +43,9 @@ type WalkDirOptions struct {
 	// Do a full recursive scan.
 	Recursive bool
 
+	// ReportNotFound will return errFileNotFound if all disks reports the BaseDir cannot be found.
+	ReportNotFound bool
+
 	// FilterPrefix will only return results with given prefix within folder.
 	// Should never contain a slash.
 	FilterPrefix string
@@ -97,6 +100,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// Folder could have gone away in-between
 			if err != errVolumeNotFound && err != errFileNotFound {
 				logger.LogIf(ctx, err)
+			}
+			if opts.ReportNotFound && err == errFileNotFound && current == opts.BaseDir {
+				return errFileNotFound
 			}
 			// Forward some errors?
 			return nil

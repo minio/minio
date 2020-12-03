@@ -57,8 +57,8 @@ type Server struct {
 }
 
 // GetRequestCount - returns number of request in progress.
-func (srv *Server) GetRequestCount() int32 {
-	return atomic.LoadInt32(&srv.requestCount)
+func (srv *Server) GetRequestCount() int {
+	return int(atomic.LoadInt32(&srv.requestCount))
 }
 
 // Start - start HTTP server
