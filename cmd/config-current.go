@@ -453,11 +453,6 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		}
 	}
 
-	globalHealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to read heal config: %w", err))
-	}
-
 	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS config: %w", err))
@@ -559,11 +554,19 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 }
 
 // applyDynamicConfig will apply dynamic config values.
-// Dynnic systems should be in config.SubSystemsDynamic as well.
+// Dynamic systems should be in config.SubSystemsDynamic as well.
 func applyDynamicConfig(ctx context.Context, s config.Config) error {
+	healCfg, err := heal.LookupConfig(s[config.HealSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to apply heal config: %w", err))
+	}
+	globalServerConfigMu.Lock()
+	globalHealConfig = healCfg
+	globalServerConfigMu.Unlock()
+
 	cfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
 	if err != nil {
-		return fmt.Errorf("Unable to load crawler config: %w", err)
+		return fmt.Errorf("Unable to apply crawler config: %w", err)
 	}
 	return crawlerSleeper.Update(cfg.Delay, cfg.MaxWait)
 }

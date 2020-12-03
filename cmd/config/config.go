@@ -131,6 +131,7 @@ var SubSystems = set.CreateStringSet(
 // SubSystemsDynamic - all sub-systems that have dynamic config.
 var SubSystemsDynamic = set.CreateStringSet(
 	CrawlerSubSys,
+	HealSubSys,
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.

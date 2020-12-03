@@ -52,7 +52,9 @@ const (
 )
 
 var (
-	globalHealConfig             heal.Config
+	globalHealConfig   heal.Config
+	globalHealConfigMu sync.Mutex
+
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
 	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)

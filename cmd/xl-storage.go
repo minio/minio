@@ -336,7 +336,10 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if objAPI == nil {
 		return cache, errServerNotInitialized
 	}
-	opts := globalHealConfig
+
+	globalServerConfigMu.Lock()
+	healOpts := globalHealConfig
+	globalServerConfigMu.Unlock()
 
 	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (int64, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
@@ -375,7 +378,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			})
 			if !version.Deleted {
 				// Bitrot check local data
-				if size > 0 && item.heal && opts.Bitrot {
+				if size > 0 && item.heal && healOpts.Bitrot {
 					// HealObject verifies bitrot requirement internally
 					res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
 						Remove:   healDeleteDangling,
