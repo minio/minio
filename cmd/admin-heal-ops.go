@@ -676,7 +676,9 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	}
 
 	// Wait and proceed if there are active requests
-	waitForLowHTTPReq(opts.IOCount, opts.Sleep)
+	if opts.IOCount > 0 {
+		waitForLowHTTPReq(opts.IOCount, opts.Sleep)
+	}
 
 	h.mutex.Lock()
 	h.scannedItemsMap[healType]++
