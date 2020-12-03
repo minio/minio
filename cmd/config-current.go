@@ -59,6 +59,7 @@ func initHelp() {
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
 		config.HealSubSys:           heal.DefaultKVS,
+		config.CrawlerSubSys:        crawler.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -560,9 +561,9 @@ func applyDynamicConfig(ctx context.Context, s config.Config) error {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to apply heal config: %w", err))
 	}
-	globalServerConfigMu.Lock()
+	globalHealConfigMu.Lock()
 	globalHealConfig = healCfg
-	globalServerConfigMu.Unlock()
+	globalHealConfigMu.Unlock()
 
 	cfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
 	if err != nil {

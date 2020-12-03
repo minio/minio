@@ -130,7 +130,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	dynamic, err := cfg.ReadFrom(bytes.NewReader(kvBytes))
+	dynamic, err := cfg.ReadConfig(bytes.NewReader(kvBytes))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -277,7 +277,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if _, err = cfg.ReadFrom(bytes.NewReader(kvBytes)); err != nil {
+	if _, err = cfg.ReadConfig(bytes.NewReader(kvBytes)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -389,7 +389,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	cfg := newServerConfig()
-	if _, err = cfg.ReadFrom(bytes.NewReader(kvBytes)); err != nil {
+	if _, err = cfg.ReadConfig(bytes.NewReader(kvBytes)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

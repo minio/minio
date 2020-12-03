@@ -317,9 +317,9 @@ func (c Config) DelFrom(r io.Reader) error {
 	return nil
 }
 
-// ReadFrom - read content from input and write into c.
+// ReadConfig - read content from input and write into c.
 // Returns whether all parameters were dynamic.
-func (c Config) ReadFrom(r io.Reader) (dynOnly bool, err error) {
+func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
 	var n int
 	scanner := bufio.NewScanner(r)
 	dynOnly = true

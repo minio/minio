@@ -973,7 +973,7 @@ type dynamicSleeper struct {
 func newDynamicSleeper(factor float64, maxWait time.Duration) *dynamicSleeper {
 	return &dynamicSleeper{
 		factor:   factor,
-		cycle:    make(chan struct{}, 0),
+		cycle:    make(chan struct{}),
 		maxSleep: maxWait,
 		minSleep: 100 * time.Microsecond,
 	}

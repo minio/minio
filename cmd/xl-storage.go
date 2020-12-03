@@ -337,9 +337,9 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		return cache, errServerNotInitialized
 	}
 
-	globalServerConfigMu.Lock()
+	globalHealConfigMu.Lock()
 	healOpts := globalHealConfig
-	globalServerConfigMu.Unlock()
+	globalHealConfigMu.Unlock()
 
 	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (int64, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
