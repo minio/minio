@@ -161,6 +161,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	// Apply dynamic values.
 	if err := applyDynamicConfig(GlobalContext, cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
 	}
 	globalNotificationSys.SignalService(serviceReloadDynamic)
 

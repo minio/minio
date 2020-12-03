@@ -792,7 +792,7 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 			s.writeErrorResponse(w, err)
 			return
 		}
-		err = applyDynamicConfig(GlobalContext, srvCfg)
+		err = applyDynamicConfig(r.Context(), srvCfg)
 		if err != nil {
 			s.writeErrorResponse(w, err)
 		}
