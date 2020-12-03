@@ -431,6 +431,11 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 			return minio.ErrorRespToObjectError(err, bucket, key)
 		}
 	}
+
+	if etag != "" {
+		opts.SetMatchETag(etag)
+	}
+
 	object, _, _, err := l.Client.GetObject(ctx, bucket, key, opts)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, key)
