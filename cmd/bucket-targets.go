@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/madmin"
 	sha256 "github.com/minio/sha256-simd"
@@ -390,4 +392,33 @@ func generateARN(t *madmin.BucketTarget) string {
 		Bucket: t.TargetBucket,
 	}
 	return arn.String()
+}
+
+// Returns parsed target config. If KMS is configured, remote target is decrypted
+func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.BucketTargets, error) {
+	var (
+		data []byte
+		err  error
+		t    madmin.BucketTargets
+		meta map[string]string
+	)
+	if len(cdata) == 0 {
+		return nil, nil
+	}
+	data = cdata
+	if len(cmetadata) != 0 {
+		if err := json.Unmarshal(cmetadata, &meta); err != nil {
+			return nil, err
+		}
+		if crypto.S3.IsEncrypted(meta) {
+			if data, err = decryptBucketMetadata(cdata, bucket, meta, crypto.Context{bucket: bucket, bucketTargetsFile: bucketTargetsFile}); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if err = json.Unmarshal(data, &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
 }
