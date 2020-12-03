@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config/crawler"
-
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
@@ -45,7 +43,6 @@ import (
 
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
-	dataCrawlSleepDefMult    = 10.0             // Default multiplier for waits between operations.
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
@@ -55,7 +52,6 @@ const (
 )
 
 var (
-	globalCrawlerConfig          crawler.Config
 	globalHealConfig             heal.Config
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
@@ -980,8 +976,6 @@ func newDynamicSleeper(factor float64, maxWait time.Duration) *dynamicSleeper {
 		minSleep: 100 * time.Microsecond,
 	}
 }
-
-type DynamicSleepFn func(ctx context.Context) func()
 
 // Timer returns a timer that has started.
 // When the returned function is called it will wait.
