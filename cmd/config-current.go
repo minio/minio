@@ -260,8 +260,15 @@ func validateConfig(s config.Config, setDriveCount int) error {
 		return err
 	}
 
-	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+	if cfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
 		return err
+	} else {
+		objAPI := newObjectLayerFn()
+		if objAPI != nil {
+			if cfg.Enabled && !objAPI.IsCompressionSupported() {
+				return fmt.Errorf("Backend does not support compression")
+			}
+		}
 	}
 
 	if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
@@ -470,11 +477,6 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
 	}
 
-	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup Compression: %w", err))
-	}
-
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
 		NewGatewayHTTPTransport(), xhttp.DrainBody)
 	if err != nil {
@@ -557,6 +559,21 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 // applyDynamicConfig will apply dynamic config values.
 // Dynamic systems should be in config.SubSystemsDynamic as well.
 func applyDynamicConfig(ctx context.Context, s config.Config) error {
+	cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+	if err != nil {
+		return fmt.Errorf("Unable to setup Compression: %w", err)
+	}
+	objAPI := newObjectLayerFn()
+	if objAPI != nil {
+		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
+			return fmt.Errorf("Backend does not support compression")
+		}
+	}
+
+	globalCompressConfigMu.Lock()
+	globalCompressConfig = cmpCfg
+	globalCompressConfigMu.Unlock()
+
 	healCfg, err := heal.LookupConfig(s[config.HealSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to apply heal config: %w", err))

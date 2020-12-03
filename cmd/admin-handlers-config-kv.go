@@ -167,7 +167,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 	// If all values were dynamic, tell the client.
 	if dynamic {
-		w.Header().Set("x-minio-config-applied", "true")
+		w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 	}
 	writeSuccessResponseHeadersOnly(w)
 }

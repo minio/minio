@@ -64,10 +64,12 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 		}
 	}
 
+	globalCompressConfigMu.Lock()
 	if globalCompressConfig.Enabled && !objAPI.IsCompressionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Compression support is requested but '%s' does not support compression", name)
 	}
+	globalCompressConfigMu.Unlock()
 }
 
 // Check for updates and print a notification message

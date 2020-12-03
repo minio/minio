@@ -130,6 +130,7 @@ var SubSystems = set.CreateStringSet(
 
 // SubSystemsDynamic - all sub-systems that have dynamic config.
 var SubSystemsDynamic = set.CreateStringSet(
+	CompressionSubSys,
 	CrawlerSubSys,
 	HealSubSys,
 )
