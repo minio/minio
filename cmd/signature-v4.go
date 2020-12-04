@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/cmd/http"
 	sha256 "github.com/minio/sha256-simd"
 )
@@ -256,25 +257,22 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set(xhttp.AmzSignedHeaders, getSignedHeaders(extractedSignedHeaders))
 	query.Set(xhttp.AmzCredential, cred.AccessKey+SlashSeparator+pSignValues.Credential.getScope())
 
-	// Save other headers available in the request parameters.
+	defaultSigParams := set.CreateStringSet(
+		xhttp.AmzContentSha256,
+		xhttp.AmzSecurityToken,
+		xhttp.AmzAlgorithm,
+		xhttp.AmzDate,
+		xhttp.AmzExpires,
+		xhttp.AmzSignedHeaders,
+		xhttp.AmzCredential,
+		xhttp.AmzSignature,
+	)
+
+	// Add missing query parameters if any provided in the request URL
 	for k, v := range req.URL.Query() {
-		key := strings.ToLower(k)
-
-		// Handle the metadata in presigned put query string
-		if strings.Contains(key, "x-amz-meta-") {
-			query.Set(k, v[0])
-			continue
+		if !defaultSigParams.Contains(k) {
+			query[k] = v
 		}
-
-		if strings.Contains(key, "x-amz-server-side-") {
-			query.Set(k, v[0])
-			continue
-		}
-
-		if strings.HasPrefix(key, "x-amz") {
-			continue
-		}
-		query[k] = v
 	}
 
 	// Get the encoded query.

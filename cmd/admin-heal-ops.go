@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -657,6 +658,8 @@ func (h *healSequence) healSequenceStart(objAPI ObjectLayer) {
 }
 
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
+	opts := globalHealConfig
+
 	// Send heal request
 	task := healTask{
 		bucket:     source.bucket,
@@ -667,7 +670,14 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
+	} else {
+		if opts.Bitrot {
+			task.opts.ScanMode = madmin.HealDeepScan
+		}
 	}
+
+	// Wait and proceed if there are active requests
+	waitForLowHTTPReq(opts.IOCount, opts.Sleep)
 
 	h.mutex.Lock()
 	h.scannedItemsMap[healType]++
@@ -808,6 +818,11 @@ func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) f
 		return objAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket, object, versionID string) error {
 			if h.isQuitting() {
 				return errHealStopSignalled
+			}
+
+			// Skip metacache entries healing
+			if strings.HasPrefix(object, "buckets/.minio.sys/.metacache/") {
+				return nil
 			}
 
 			err := h.queueHealTask(healSource{

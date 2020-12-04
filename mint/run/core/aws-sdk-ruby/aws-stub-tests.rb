@@ -20,6 +20,16 @@ require 'securerandom'
 require 'net/http'
 require 'multipart_body'
 
+# For aws-sdk ruby tests to run, setting the following
+# environment variables is mandatory.
+# SERVER_ENDPOINT: <ip:port> address of the minio server tests will run against
+# ACCESS_KEY: access key for the minio server
+# SECRET_KEY: secreet key for the minio server
+# SERVER_REGION: region minio server is setup to run
+# ENABLE_HTTPS: (1|0) turn on/off to specify https or
+#                 http services minio server is running on
+# MINT_DATA_DIR: Data directory where test data files are stored
+
 class AwsSdkRubyTest
   # Set variables necessary to create an s3 client instance.
   # Get them from the environment variables
@@ -27,17 +37,19 @@ class AwsSdkRubyTest
   # Region information, eg. "us-east-1"
   region = ENV['SERVER_REGION'] ||= 'SERVER_REGION is not set'
   # Minio server, eg. "play.minio.io:9000"
-  endpoint = ENV['SERVER_ENDPOINT'] ||= 'SERVER_ENDPOINT is not set'
   access_key_id = ENV['ACCESS_KEY'] ||= 'ACCESS_KEY is not set'
   secret_access_key = ENV['SECRET_KEY'] ||= 'SECRET_KEY is not set'
   enable_https = ENV['ENABLE_HTTPS']
-  endpoint = enable_https == '1' ? 'https://' + endpoint : 'http://' + endpoint
-  # Create s3 client instances, "s3Resource" and "s3Client"
-  @@s3 = Aws::S3::Resource.new(region: region,
-                               endpoint: endpoint,
-                               access_key_id: access_key_id,
-                               secret_access_key: secret_access_key,
-                               force_path_style: true)
+  end_point = ENV['SERVER_ENDPOINT'] ||= 'SERVER_ENDPOINT is not set'
+  endpoint = enable_https == '1' ? 'https://' + end_point : 'http://' + end_point
+
+  # Create s3 resource instance,"s3"
+  @@s3 = Aws::S3::Resource.new(
+    region: region,
+    endpoint: endpoint,
+    access_key_id: access_key_id,
+    secret_access_key: secret_access_key,
+    force_path_style: true)
 
   def initialize_log_output(meth, alert = nil)
     # Initialize and return log content in log_output hash table
@@ -56,9 +68,8 @@ class AwsSdkRubyTest
       error: nil }
   end
 
-  def get_random_bucket_name()
-    bucket_name = "aws-sdk-ruby-bucket-"+SecureRandom.hex(6)
-    return bucket_name
+  def random_bucket_name
+    'aws-sdk-ruby-bucket-' + SecureRandom.hex(6)
   end
 
   def calculate_duration(t2, t1)
@@ -361,14 +372,12 @@ class AwsSdkRubyTest
   #
   # Test case methods
   #
-  def listBucketsTest()
+  def listBucketsTest
     # Tests listBuckets api command by creating
     # new buckets from bucket_name_list
 
-    # get random bucket names and create list
-    bucket_name1 = get_random_bucket_name()
-    bucket_name2 = get_random_bucket_name()
-    bucket_name_list = [bucket_name1, bucket_name2]
+    # get 2 different random bucket names and create a list
+    bucket_name_list = [random_bucket_name, random_bucket_name]
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('listBuckets')
     # Prepare arg/value hash table and set it in log_output
@@ -398,11 +407,11 @@ class AwsSdkRubyTest
     print_log(log_output, start_time)
   end
 
-  def makeBucketTest()
+  def makeBucketTest
     # Tests makeBucket api command.
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('makeBucket')
     # Prepare arg/value hash table and set it in log_output
@@ -428,11 +437,11 @@ class AwsSdkRubyTest
     print_log(log_output, start_time)
   end
 
-  def bucketExistsNegativeTest()
+  def bucketExistsNegativeTest
     # Tests bucketExists api command.
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('bucketExists?')
     # Prepare arg/value hash table and set it in log_output
@@ -456,11 +465,11 @@ class AwsSdkRubyTest
     print_log(log_output, start_time)
   end
 
-  def removeBucketTest()
+  def removeBucketTest
     # Tests removeBucket api command.
 
     # get a random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('removeBucket')
     # Prepare arg/value hash table and set it in log_output
@@ -490,7 +499,7 @@ class AwsSdkRubyTest
     # Tests putObject api command by uploading a file
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('putObject')
     # Prepare arg/value hash table and set it in log_output
@@ -520,7 +529,7 @@ class AwsSdkRubyTest
     # Tests removeObject api command by uploading and removing a file
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('removeObject')
     # Prepare arg/value hash table and set it in log_output
@@ -551,7 +560,7 @@ class AwsSdkRubyTest
     # Tests getObject api command
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('getObject')
     # Prepare arg/value hash table and set it in log_output
@@ -582,7 +591,7 @@ class AwsSdkRubyTest
     # Tests listObjects api command
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('listObjects')
     # Prepare arg/value hash table and set it in log_output
@@ -620,8 +629,8 @@ class AwsSdkRubyTest
     # Tests copyObject api command
 
     # get random bucket names
-    source_bucket_name = get_random_bucket_name()
-    target_bucket_name = get_random_bucket_name()
+    source_bucket_name = random_bucket_name
+    target_bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('copyObject')
     # Prepare arg/value hash table and set it in log_output
@@ -657,7 +666,7 @@ class AwsSdkRubyTest
     # Tests presignedGetObject api command
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('presignedGet')
     # Prepare arg/value hash table and set it in log_output
@@ -675,7 +684,7 @@ class AwsSdkRubyTest
       get_url = presignedGetWrapper(bucket_name, file_name, log_output)
       # Download the file using the URL
       # generated by presignedGet api command
-      `wget -O /tmp/#{file_name}, '#{get_url}' > /dev/null 2>&1`
+      `wget -O /tmp/#{file_name} '#{get_url}' > /dev/null 2>&1`
       # Get check sum value for the downloaded file
       # Split to get rid of the file name
       cksum_new = `cksum /tmp/#{file_name}`.split[0..1]
@@ -700,7 +709,7 @@ class AwsSdkRubyTest
     # Tests presignedPutObject api command
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('presignedPut')
     # Prepare arg/value hash table and set it in log_output
@@ -755,7 +764,7 @@ class AwsSdkRubyTest
     # Tests presignedPostObject api command
 
     # get random bucket name
-    bucket_name = get_random_bucket_name()
+    bucket_name = random_bucket_name
     # Initialize hash table, 'log_output'
     log_output = initialize_log_output('presignedPost')
     # Prepare arg/value hash table and set it in log_output
@@ -840,11 +849,11 @@ data_dir = ENV['MINT_DATA_DIR'] ||= 'MINT_DATA_DIR is not set'
 file_list = file_name_list.map { |f| File.join(data_dir, f) }
 destination = '/tmp'
 
-aws.listBucketsTest()
+aws.listBucketsTest
 aws.listObjectsTest(file_list)
-aws.makeBucketTest()
-aws.bucketExistsNegativeTest()
-aws.removeBucketTest()
+aws.makeBucketTest
+aws.bucketExistsNegativeTest
+aws.removeBucketTest
 aws.putObjectTest(File.join(data_dir, file_name1))
 aws.removeObjectTest(File.join(data_dir, file_name1))
 aws.getObjectTest(File.join(data_dir, file_name1), destination)

@@ -63,12 +63,6 @@ const (
 	// Size of each buffer.
 	readAheadBufSize = 1 << 20
 
-	// Wait interval to check if active IO count is low
-	// to proceed crawling to compute data usage.
-	// Wait up to lowActiveIOWaitMaxN times.
-	lowActiveIOWaitTick = 100 * time.Millisecond
-	lowActiveIOWaitMaxN = 10
-
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
 )
@@ -90,8 +84,7 @@ func isValidVolname(volname string) bool {
 
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
-	maxActiveIOCount int32
-	activeIOCount    int32
+	activeIOCount int32
 
 	diskPath string
 	endpoint Endpoint
@@ -262,13 +255,8 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 			},
 		},
 		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
-		// Allow disk usage crawler to run with up to 2 concurrent
-		// I/O ops, if and when activeIOCount reaches this
-		// value disk usage routine suspends the crawler
-		// and waits until activeIOCount reaches below this threshold.
-		maxActiveIOCount: 3,
-		ctx:              GlobalContext,
-		rootDisk:         rootDisk,
+		ctx:        GlobalContext,
+		rootDisk:   rootDisk,
 	}
 
 	// Success.
@@ -336,20 +324,6 @@ func (s *xlStorage) Healing() bool {
 	return err == nil
 }
 
-func (s *xlStorage) waitForLowActiveIO() {
-	max := lowActiveIOWaitMaxN
-	for atomic.LoadInt32(&s.activeIOCount) >= s.maxActiveIOCount {
-		time.Sleep(lowActiveIOWaitTick)
-		max--
-		if max == 0 {
-			if intDataUpdateTracker.debug {
-				logger.Info("waitForLowActiveIO: waited %d times, resuming", lowActiveIOWaitMaxN)
-			}
-			break
-		}
-	}
-}
-
 func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	// Check if the current bucket has a configured lifecycle policy
 	lc, err := globalLifecycleSys.Get(cache.Info.Name)
@@ -402,24 +376,18 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			if !version.Deleted {
 				// Bitrot check local data
 				if size > 0 && item.heal && opts.Bitrot {
-					s.waitForLowActiveIO()
-					err := s.VerifyFile(ctx, item.bucket, item.objectPath(), version)
-					switch err {
-					case errFileCorrupt:
-						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
-							Remove:   healDeleteDangling,
-							ScanMode: madmin.HealDeepScan,
-						})
-						if err != nil {
-							if !errors.Is(err, NotImplemented{}) {
-								logger.LogIf(ctx, err)
-							}
-							size = 0
-						} else {
-							size = res.ObjectSize
+					// HealObject verifies bitrot requirement internally
+					res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
+						Remove:   healDeleteDangling,
+						ScanMode: madmin.HealDeepScan,
+					})
+					if err != nil {
+						if !errors.Is(err, NotImplemented{}) {
+							logger.LogIf(ctx, err)
 						}
-					default:
-						// VerifyFile already logs errors
+						size = 0
+					} else {
+						size = res.ObjectSize
 					}
 				}
 				totalSize += size

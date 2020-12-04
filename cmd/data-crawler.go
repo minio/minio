@@ -153,7 +153,7 @@ type folderScanner struct {
 
 // crawlDataFolder will crawl the basepath+cache.Info.Name and return an updated cache.
 // The returned cache will always be valid, but may not be updated from the existing.
-// Before each operation waitForLowActiveIO is called which can be used to temporarily halt the crawler.
+// Before each operation sleepDuration is called which can be used to temporarily halt the crawler.
 // If the supplied context is canceled the function will return at the first chance.
 func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
 	t := UTCNow()
@@ -507,6 +507,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 			// Dynamic time delay.
 			t := UTCNow()
+
 			resolver.bucket = bucket
 
 			foundObjs := false
@@ -604,12 +605,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				// If we have quorum, found directories, but no objects, issue heal to delete the dangling.
 				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: true},
 					func(bucket, object, versionID string) error {
-						// Wait for each heal as per crawler frequency.
-						sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-
-						defer func() {
-							t = UTCNow()
-						}()
 						return bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    object,
