@@ -31,6 +31,34 @@ var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnform
 // list all errors that can be ignored in a bucket metadata operation.
 var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 
+// MakeMultipleBuckets - create a list of buckets
+func (er erasureObjects) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+	storageDisks := er.getDisks()
+
+	g := errgroup.WithNErrs(len(storageDisks))
+
+	// Make a volume entry on all underlying storage disks.
+	for index := range storageDisks {
+		index := index
+		g.Go(func() error {
+			if storageDisks[index] != nil {
+				if err := storageDisks[index].MakeVolBulk(ctx, buckets...); err != nil {
+					if !errors.Is(err, errVolumeExists) {
+						logger.LogIf(ctx, err)
+					}
+					return err
+				}
+				return nil
+			}
+			return errDiskNotFound
+		}, index)
+	}
+
+	writeQuorum := getWriteQuorum(len(storageDisks))
+	err := reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, writeQuorum)
+	return toObjectErr(err)
+}
+
 /// Bucket operations
 
 // MakeBucket - make a bucket.

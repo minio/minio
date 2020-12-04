@@ -304,18 +304,14 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		if err != nil {
 			return fmt.Errorf("Unable to list buckets to heal: %w", err)
 		}
-		for _, bucket := range buckets {
-			if err = newObject.MakeBucketWithLocation(ctx, bucket.Name, BucketOptions{}); err != nil {
-				if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
-					// Return the error upwards for the caller to retry.
-					return fmt.Errorf("Unable to heal bucket: %w", err)
-				}
-				if _, ok := err.(BucketExists); !ok {
-					// ignore any other error and log for investigation.
-					logger.LogIf(ctx, err)
-					continue
-				}
-				// Bucket already exists, nothing that needs to be done.
+		bucketNames := make([]string, len(buckets))
+		for i := range buckets {
+			bucketNames[i] = buckets[i].Name
+		}
+		if err = newObject.MakeMultipleBuckets(ctx, bucketNames...); err != nil {
+			if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
+				// Return the error upwards for the caller to retry.
+				return fmt.Errorf("Unable to heal buckets: %w", err)
 			}
 		}
 	} else {

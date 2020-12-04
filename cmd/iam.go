@@ -466,11 +466,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	var err error
 	for {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err = txnLk.GetLock(retryCtx, iamLockTimeout); err != nil {
+		if err := txnLk.GetLock(retryCtx, iamLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue
@@ -480,7 +479,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 			// ****  WARNING ****
 			// Migrating to encrypted backend on etcd should happen before initialization of
 			// IAM sub-system, make sure that we do not move the above codeblock elsewhere.
-			if err = migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
+			if err := migrateIAMConfigsEtcdToEncrypted(ctx, globalEtcdClient); err != nil {
 				txnLk.Unlock()
 				logger.LogIf(ctx, fmt.Errorf("Unable to decrypt an encrypted ETCD backend for IAM users and policies: %w", err))
 				logger.LogIf(ctx, errors.New("IAM sub-system is partially initialized, some users may not be available"))
@@ -494,7 +493,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		}
 
 		// Migrate IAM configuration, if necessary.
-		if err = sys.doIAMConfigMigration(ctx); err != nil {
+		if err := sys.doIAMConfigMigration(ctx); err != nil {
 			txnLk.Unlock()
 			if errors.Is(err, errDiskNotFound) ||
 				errors.Is(err, errConfigNotFound) ||
@@ -515,14 +514,27 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 		break
 	}
 
-	err = sys.store.loadAll(ctx, sys)
+	for {
+		if err := sys.store.loadAll(ctx, sys); err != nil {
+			if errors.Is(err, errDiskNotFound) ||
+				errors.Is(err, errConfigNotFound) ||
+				errors.Is(err, context.DeadlineExceeded) ||
+				errors.As(err, &rquorum) ||
+				errors.As(err, &wquorum) ||
+				isErrBucketNotFound(err) {
+				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
+				time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
+				continue
+			}
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available %w", err))
+			}
+		}
+		break
+	}
 
 	// Invalidate the old cred always, even upon error to avoid any leakage.
 	globalOldCred = auth.Credentials{}
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available %w", err))
-	}
-
 	go sys.store.watch(ctx, sys)
 }
 
