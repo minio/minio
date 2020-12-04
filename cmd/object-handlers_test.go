@@ -844,6 +844,131 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 
 }
 
+// Wrapper for calling GetObject API handler tests for both Erasure multiple disks and FS single drive setup.
+func TestAPIGetObjectWithPartNumberHandler(t *testing.T) {
+	globalPolicySys = NewPolicySys()
+	defer func() { globalPolicySys = nil }()
+
+	defer DetectTestLeak(t)()
+	ExecObjectLayerAPITest(t, testAPIGetObjectWithPartNumberHandler, []string{"NewMultipart", "PutObjectPart", "CompleteMultipart", "GetObject", "PutObject"})
+}
+
+func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials auth.Credentials, t *testing.T) {
+
+	// Set SSL to on to do encryption tests
+	globalIsSSL = true
+	defer func() { globalIsSSL = false }()
+
+	var (
+		oneMiB        int64 = 1024 * 1024
+		key32Bytes          = generateBytesData(32 * humanize.Byte)
+		key32BytesMd5       = md5.Sum(key32Bytes)
+		metaWithSSEC        = map[string]string{
+			crypto.SSECAlgorithm: crypto.SSEAlgorithmAES256,
+			crypto.SSECKey:       base64.StdEncoding.EncodeToString(key32Bytes),
+			crypto.SSECKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
+		}
+		mapCopy = func(m map[string]string) map[string]string {
+			r := make(map[string]string, len(m))
+			for k, v := range m {
+				r[k] = v
+			}
+			return r
+		}
+	)
+
+	type ObjectInput struct {
+		objectName  string
+		partLengths []int64
+
+		metaData map[string]string
+	}
+
+	// set of inputs for uploading the objects before tests for
+	// downloading is done. Data bytes are from DummyDataGen.
+	objectInputs := []ObjectInput{
+		// // cases 0-4: small single part objects
+		{"nothing", []int64{0}, make(map[string]string)},
+		{"1byte", []int64{1}, make(map[string]string)},
+		{"small-0", []int64{11}, make(map[string]string)},
+		{"small-1", []int64{509}, make(map[string]string)},
+		{"small-2", []int64{5 * oneMiB}, make(map[string]string)},
+		// // // cases 5-8: multipart part objects
+		{"mp-0", []int64{5 * oneMiB, 1}, make(map[string]string)},
+		{"mp-1", []int64{5*oneMiB + 1, 1}, make(map[string]string)},
+		{"mp-2", []int64{5487701, 5487799, 3}, make(map[string]string)},
+		{"mp-3", []int64{10499807, 10499963, 7}, make(map[string]string)},
+		// cases 9-12: small single part objects with encryption
+		{"enc-nothing", []int64{0}, mapCopy(metaWithSSEC)},
+		{"enc-small-0", []int64{11}, mapCopy(metaWithSSEC)},
+		{"enc-small-1", []int64{509}, mapCopy(metaWithSSEC)},
+		{"enc-small-2", []int64{5 * oneMiB}, mapCopy(metaWithSSEC)},
+		// cases 13-16: multipart part objects with encryption
+		{"enc-mp-0", []int64{5 * oneMiB, 1}, mapCopy(metaWithSSEC)},
+		{"enc-mp-1", []int64{5*oneMiB + 1, 1}, mapCopy(metaWithSSEC)},
+		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
+		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
+	}
+
+	// iterate through the above set of inputs and upload the object.
+	for _, input := range objectInputs {
+		uploadTestObject(t, apiRouter, credentials, bucketName, input.objectName, input.partLengths, input.metaData, false)
+	}
+
+	mkGetReqWithPartNumber := func(oindex int, oi ObjectInput, partNumber int) {
+		object := oi.objectName
+		rec := httptest.NewRecorder()
+
+		queries := url.Values{}
+		queries.Add("partNumber", strconv.Itoa(partNumber))
+		targetURL := makeTestTargetURL("", bucketName, object, queries)
+		req, err := newTestSignedRequestV4(http.MethodGet, targetURL,
+			0, nil, credentials.AccessKey, credentials.SecretKey, oi.metaData)
+		if err != nil {
+			t.Fatalf("Object: %s Object Index %d PartNumber: %d: Failed to create HTTP request for Get Object: <ERROR> %v",
+				object, oindex, partNumber, err)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+
+		// Check response code (we make only valid requests in this test)
+		if rec.Code != http.StatusPartialContent && rec.Code != http.StatusOK {
+			bd, err1 := ioutil.ReadAll(rec.Body)
+			t.Fatalf("%s Object: %s ObjectIndex %d PartNumber: %d: Got response status `%d` and body: %s,%v",
+				instanceType, object, oindex, partNumber, rec.Code, string(bd), err1)
+		}
+
+		oinfo, err := obj.GetObjectInfo(context.Background(), bucketName, object, ObjectOptions{})
+		if err != nil {
+			t.Fatalf("Object: %s Object Index %d: Unexpected err: %v", object, oindex, err)
+		}
+
+		rs := partNumberToRangeSpec(oinfo, partNumber)
+		off, length, err := rs.GetOffsetLength(oinfo.Size)
+		if err != nil {
+			t.Fatalf("Object: %s Object Index %d: Unexpected err: %v", object, oindex, err)
+		}
+
+		readers := []io.Reader{}
+		cumulativeSum := int64(0)
+		for _, p := range oi.partLengths {
+			readers = append(readers, NewDummyDataGen(p, cumulativeSum))
+			cumulativeSum += p
+		}
+		refReader := io.LimitReader(ioutilx.NewSkipReader(io.MultiReader(readers...), off), length)
+		if ok, msg := cmpReaders(refReader, rec.Body); !ok {
+			t.Fatalf("(%s) Object: %s ObjectIndex %d PartNumber: %d --> data mismatch! (msg: %s)", instanceType, oi.objectName, oindex, partNumber, msg)
+		}
+	}
+
+	for idx, oi := range objectInputs {
+		for partNum := 1; partNum <= len(oi.partLengths); partNum++ {
+			mkGetReqWithPartNumber(idx, oi, partNum)
+		}
+	}
+}
+
 // Wrapper for calling PutObject API handler tests using streaming signature v4 for both Erasure multiple disks and FS single drive setup.
 func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
 	defer DetectTestLeak(t)()

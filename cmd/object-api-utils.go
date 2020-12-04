@@ -502,6 +502,21 @@ func getPartFile(entriesTrie *trie.Trie, partNumber int, etag string) (partFile 
 	return partFile
 }
 
+func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
+	if oi.Size == 0 || len(oi.Parts) == 0 {
+		return nil
+	}
+
+	var start int64
+	var end = int64(-1)
+	for i := 0; i < len(oi.Parts) && i < partNumber; i++ {
+		start = end + 1
+		end = start + oi.Parts[i].ActualSize - 1
+	}
+
+	return &HTTPRangeSpec{Start: start, End: end}
+}
+
 // Returns the compressed offset which should be skipped.
 func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (int64, int64) {
 	var compressedOffset int64
@@ -571,12 +586,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 	fn ObjReaderFn, off, length int64, err error) {
 
 	if rs == nil && opts.PartNumber > 0 {
-		var start, end int64
-		for i := 0; i < len(oi.Parts) && i < opts.PartNumber; i++ {
-			start = end
-			end = start + oi.Parts[i].ActualSize - 1
-		}
-		rs = &HTTPRangeSpec{Start: start, End: end}
+		rs = partNumberToRangeSpec(oi, opts.PartNumber)
 	}
 
 	// Call the clean-up functions immediately in case of exit
