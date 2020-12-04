@@ -658,7 +658,9 @@ func (h *healSequence) healSequenceStart(objAPI ObjectLayer) {
 }
 
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
+	globalHealConfigMu.Lock()
 	opts := globalHealConfig
+	globalHealConfigMu.Unlock()
 
 	// Send heal request
 	task := healTask{

@@ -475,7 +475,7 @@ func serverMain(ctx *cli.Context) {
 
 	logger.SetDeploymentID(globalDeploymentID)
 
-	go initDataCrawler(GlobalContext, newObject)
+	initDataCrawler(GlobalContext, newObject)
 
 	// Enable background operations for erasure coding
 	if globalIsErasure {

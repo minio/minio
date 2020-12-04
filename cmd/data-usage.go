@@ -28,7 +28,6 @@ import (
 
 const (
 	envDataUsageCrawlConf  = "MINIO_DISK_USAGE_CRAWL_ENABLE"
-	envDataUsageCrawlDelay = "MINIO_DISK_USAGE_CRAWL_DELAY"
 	envDataUsageCrawlDebug = "MINIO_DISK_USAGE_CRAWL_DEBUG"
 
 	dataUsageRoot   = SlashSeparator

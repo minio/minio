@@ -50,11 +50,19 @@ func (adm *AdminClient) DelConfigKV(ctx context.Context, k string) (err error) {
 	return nil
 }
 
+const (
+	// ConfigAppliedHeader is the header indicating whether the config was applied without requiring a restart.
+	ConfigAppliedHeader = "x-minio-config-applied"
+
+	// ConfigAppliedTrue is the value set in header if the config was applied.
+	ConfigAppliedTrue = "true"
+)
+
 // SetConfigKV - set key value config to server.
-func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (err error) {
+func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (restart bool, err error) {
 	econfigBytes, err := EncryptData(adm.getSecretKey(), []byte(kv))
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	reqData := requestData{
@@ -67,14 +75,14 @@ func (adm *AdminClient) SetConfigKV(ctx context.Context, kv string) (err error) 
 
 	defer closeResponse(resp)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
+		return false, httpRespToErrorResponse(resp)
 	}
 
-	return nil
+	return resp.Header.Get(ConfigAppliedHeader) != ConfigAppliedTrue, nil
 }
 
 // GetConfigKV - returns the key, value of the requested key, incoming data is encrypted.

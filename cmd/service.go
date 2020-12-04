@@ -27,8 +27,9 @@ import (
 type serviceSignal int
 
 const (
-	serviceRestart serviceSignal = iota // Restarts the server.
-	serviceStop                         // Stops the server.
+	serviceRestart       serviceSignal = iota // Restarts the server.
+	serviceStop                               // Stops the server.
+	serviceReloadDynamic                      // Reload dynamic config values.
 	// Add new service requests here.
 )
 
