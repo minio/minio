@@ -103,34 +103,34 @@ func (t *apiConfig) getClusterDeadline() time.Duration {
 	return t.clusterDeadline
 }
 
-func (t *apiConfig) getRequestsPool() (chan struct{}, <-chan time.Time) {
+func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if t.requestsPool == nil {
-		return nil, nil
-	}
-	if t.requestsDeadline <= 0 {
-		return t.requestsPool, nil
+		return nil, time.Duration(0)
 	}
 
-	return t.requestsPool, time.NewTimer(t.requestsDeadline).C
+	return t.requestsPool, t.requestsDeadline
 }
 
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pool, deadlineTimer := globalAPIConfig.getRequestsPool()
+		pool, deadline := globalAPIConfig.getRequestsPool()
 		if pool == nil {
 			f.ServeHTTP(w, r)
 			return
 		}
 
+		deadlineTimer := time.NewTimer(deadline)
+		defer deadlineTimer.Stop()
+
 		select {
 		case pool <- struct{}{}:
 			defer func() { <-pool }()
 			f.ServeHTTP(w, r)
-		case <-deadlineTimer:
+		case <-deadlineTimer.C:
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
 				errorCodes.ToAPIErr(ErrOperationMaxedOut),

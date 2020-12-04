@@ -620,11 +620,9 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 func (iamOS *IAMObjectStore) watch(ctx context.Context, sys *IAMSys) {
 	// Refresh IAMSys.
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.NewTimer(globalRefreshIAMInterval).C:
-			logger.LogIf(ctx, iamOS.loadAll(ctx, sys))
+		time.Sleep(globalRefreshIAMInterval)
+		if err := iamOS.loadAll(ctx, sys); err != nil {
+			logger.LogIf(ctx, err)
 		}
 	}
 }
