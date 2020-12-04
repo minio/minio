@@ -215,7 +215,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	ch := make(chan Granted, len(restClnts))
 	var wg sync.WaitGroup
 
-	// Combined timout for the lock attempt.
+	// Combined timeout for the lock attempt.
 	ctx, cancel := context.WithTimeout(ctx, DRWMutexAcquireTimeout)
 	defer cancel()
 	for index, c := range restClnts {
@@ -282,8 +282,13 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				}
 			}
 		case <-ctx.Done():
-			done = true
-			log("Timeout\n")
+			// Capture timedout locks as failed or took too long
+			locksFailed++
+			if locksFailed > tolerance {
+				// We know that we are not going to get the lock anymore,
+				// so exit out and release any locks that did get acquired
+				done = true
+			}
 		}
 
 		if done {
@@ -291,10 +296,9 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 		}
 	}
 
-	// Count locks in order to determine whether we have quorum or not
 	quorumLocked := checkQuorumLocked(locks, quorum) && locksFailed <= tolerance
 	if !quorumLocked {
-		log("Quorum not met\n")
+		log("Releasing all acquired locks now abandoned after quorum was not met\n")
 		releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, lockNames...)
 	}
 
