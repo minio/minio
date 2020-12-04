@@ -25,12 +25,14 @@
 package main // import "github.com/minio/minio"
 
 import (
+	minio "minio/cmd"
+	_ "minio/cmd/gateway"
 	"os"
-
-	minio "github.com/minio/minio/cmd"
-
-	// Import gateway
-	_ "github.com/minio/minio/cmd/gateway"
+	//"os"
+	//minio "github.com/minio/minio/cmd"
+	//
+	//// Import gateway
+	//_ "github.com/minio/minio/cmd/gateway"
 )
 
 func main() {
