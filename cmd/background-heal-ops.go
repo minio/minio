@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"path"
-	"time"
 
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -54,24 +53,6 @@ func (h *healRoutine) queueHealTask(task healTask) {
 	h.tasks <- task
 }
 
-func waitForLowHTTPReq(tolerance int32, maxWait time.Duration) {
-	const wait = 10 * time.Millisecond
-	waitCount := maxWait / wait
-
-	// Bucket notification and http trace are not costly, it is okay to ignore them
-	// while counting the number of concurrent connections
-	tolerance += int32(globalHTTPListen.NumSubscribers() + globalHTTPTrace.NumSubscribers())
-
-	if httpServer := newHTTPServerFn(); httpServer != nil {
-		// Any requests in progress, delay the heal.
-		for (httpServer.GetRequestCount() >= tolerance) &&
-			waitCount > 0 {
-			waitCount--
-			time.Sleep(wait)
-		}
-	}
-}
-
 // Wait for heal requests and process them
 func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 	for {
@@ -80,9 +61,6 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			if !ok {
 				break
 			}
-
-			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
 
 			var res madmin.HealResultItem
 			var err error

@@ -114,8 +114,6 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerSets, bgSeq *
 		case <-ctx.Done():
 			return
 		case <-time.After(defaultMonitorNewDiskInterval):
-			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
-
 			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
