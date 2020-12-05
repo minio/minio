@@ -387,9 +387,9 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	implicitPerm := accessKey == cred.AccessKey
 	if !implicitPerm {
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     accessKey,
+			AccountName:     cred.AccessKey,
 			Action:          iampolicy.CreateUserAdminAction,
-			ConditionValues: getConditionValues(r, "", accessKey, claims),
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
 			IsOwner:         owner,
 			Claims:          claims,
 		}) {
