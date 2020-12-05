@@ -21,12 +21,16 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/pkg/env"
 )
 
 // Compression environment variables
 const (
 	Delay   = "delay"
 	MaxWait = "max_wait"
+
+	EnvDelay   = "MINIO_CRAWLER_DELAY"
+	EnvMaxWait = "MINIO_CRAWLER_MAX_WAIT"
 )
 
 // Config represents the heal settings.
@@ -54,13 +58,13 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Delay,
-			Description: `crawler delay multiplier, default 10`,
+			Description: `crawler delay multiplier, defaults to '10.0'`,
 			Optional:    true,
 			Type:        "float",
 		},
 		config.HelpKV{
 			Key:         MaxWait,
-			Description: `maximum wait time between operations, default 15s`,
+			Description: `maximum wait time between operations, defaults to '15s'`,
 			Optional:    true,
 			Type:        "duration",
 		},
@@ -72,13 +76,11 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.CrawlerSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
-	delay := kvs.Get(Delay)
-	cfg.Delay, err = strconv.ParseFloat(delay, 64)
+	cfg.Delay, err = strconv.ParseFloat(env.Get(EnvDelay, kvs.Get(Delay)), 64)
 	if err != nil {
 		return cfg, err
 	}
-	wait := kvs.Get(MaxWait)
-	cfg.MaxWait, err = time.ParseDuration(wait)
+	cfg.MaxWait, err = time.ParseDuration(env.Get(EnvMaxWait, kvs.Get(MaxWait)))
 	if err != nil {
 		return cfg, err
 	}
