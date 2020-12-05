@@ -29,44 +29,52 @@ MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server )
 
 function start_minio_3_node() {
-    declare -a minio_pids
-    declare -a ARGS
     export MINIO_ACCESS_KEY=minio
     export MINIO_SECRET_KEY=minio123
     export MINIO_ERASURE_SET_DRIVE_COUNT=6
 
     start_port=$(shuf -i 10000-65000 -n 1)
+    args=""
     for i in $(seq 1 3); do
-        ARGS+=("http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/6/")
+        args="$args http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/1/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/2/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/3/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/4/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/5/ http://127.0.0.1:$[$start_port+$i]${WORK_DIR}/$i/6/"
     done
 
-    "${MINIO[@]}" --address ":$[$start_port+1]" ${ARGS[@]} > "${WORK_DIR}/dist-minio-server1.log" 2>&1 &
-    minio_pids[0]=$!
-    disown "${minio_pids[0]}"
+    "${MINIO[@]}" --address ":$[$start_port+1]" $args > "${WORK_DIR}/dist-minio-server1.log" 2>&1 &
+    disown $!
 
-    "${MINIO[@]}" --address ":$[$start_port+2]" ${ARGS[@]} > "${WORK_DIR}/dist-minio-server2.log" 2>&1 &
-    minio_pids[1]=$!
-    disown "${minio_pids[1]}"
+    "${MINIO[@]}" --address ":$[$start_port+2]" $args > "${WORK_DIR}/dist-minio-server2.log" 2>&1 &
+    disown $!
 
-    "${MINIO[@]}" --address ":$[$start_port+3]" ${ARGS[@]} > "${WORK_DIR}/dist-minio-server3.log" 2>&1 &
-    minio_pids[2]=$!
-    disown "${minio_pids[2]}"
+    "${MINIO[@]}" --address ":$[$start_port+3]" $args > "${WORK_DIR}/dist-minio-server3.log" 2>&1 &
+    disown $!
 
     sleep "$1"
-    for pid in "${minio_pids[@]}"; do
-        if ! kill "$pid"; then
-            for i in $(seq 1 3); do
-                echo "server$i log:"
-                cat "${WORK_DIR}/dist-minio-server$i.log"
-            done
-            echo "FAILED"
-            purge "$WORK_DIR"
-            exit 1
-        fi
+    if [ "$(pgrep -c minio)" -ne 3 ]; then
+        for i in $(seq 1 3); do
+            echo "server$i log:"
+            cat "${WORK_DIR}/dist-minio-server$i.log"
+        done
+        echo "FAILED"
+        purge "$WORK_DIR"
+        exit 1
+    fi
+    if ! pkill minio; then
+        for i in $(seq 1 3); do
+            echo "server$i log:"
+            cat "${WORK_DIR}/dist-minio-server$i.log"
+        done
+        echo "FAILED"
+        purge "$WORK_DIR"
+        exit 1
+    fi
+
+    sleep 1;
+    if pgrep minio; then
         # forcibly killing, to proceed further properly.
-        kill -9 "$pid"
-        sleep 1 # wait 1sec per pid
-    done
+        if ! pkill -9 minio; then
+            echo "no minio process running anymore, proceed."
+        fi
+    fi
 }
 
 
