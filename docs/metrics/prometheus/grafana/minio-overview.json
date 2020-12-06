@@ -3,7 +3,7 @@
     {
       "name": "DS_PROMETHEUS",
       "label": "Prometheus",
-      "description": "Scrape data from MinIO Prometheus Endpoint",
+      "description": "",
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
@@ -71,7 +71,7 @@
   "gnetId": 13502,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1606971558062,
+  "iteration": 1607258286192,
   "links": [
     {
       "icon": "external link",
@@ -613,7 +613,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 3,
+        "h": 6,
         "w": 3,
         "x": 0,
         "y": 7
@@ -639,7 +639,7 @@
       "pluginVersion": "7.2.0",
       "targets": [
         {
-          "expr": "count(count by (instances) (minio_version_info))",
+          "expr": "count by (instances) (minio_version_info)",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -994,86 +994,6 @@
       "timeFrom": null,
       "timeShift": null,
       "title": "Total Open FDs",
-      "type": "stat"
-    },
-    {
-      "cacheTimeout": null,
-      "datasource": "${DS_PROMETHEUS}",
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": null
-          },
-          "mappings": [
-            {
-              "id": 0,
-              "op": "=",
-              "text": "N/A",
-              "type": 1,
-              "value": "null"
-            }
-          ],
-          "nullValueMode": "connected",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 3,
-        "w": 3,
-        "x": 0,
-        "y": 10
-      },
-      "id": 57,
-      "interval": null,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "7.2.0",
-      "targets": [
-        {
-          "expr": "",
-          "format": "table",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "process_start_time_seconds",
-          "refId": "A",
-          "step": 60
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Total Offline Servers",
       "type": "stat"
     },
     {
@@ -1672,20 +1592,6 @@
       }
     },
     {
-      "collapsed": false,
-      "datasource": "${DS_PROMETHEUS}",
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 28
-      },
-      "id": 36,
-      "panels": [],
-      "title": "Disks",
-      "type": "row"
-    },
-    {
       "aliasColors": {
         "10.13.1.25:9000 DELETE": "red",
         "10.13.1.25:9000 GET": "green",
@@ -1707,9 +1613,9 @@
       "fillGradient": 0,
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 24,
         "x": 0,
-        "y": 29
+        "y": 28
       },
       "hiddenSeries": false,
       "id": 17,
@@ -1801,6 +1707,20 @@
       }
     },
     {
+      "collapsed": false,
+      "datasource": "${DS_PROMETHEUS}",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 36,
+      "panels": [],
+      "title": "Disks",
+      "type": "row"
+    },
+    {
       "aliasColors": {
         "Offline 10.13.1.25:9000": "dark-red",
         "Total 10.13.1.25:9000": "blue"
@@ -1821,10 +1741,10 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
-        "x": 12,
-        "y": 29
+        "x": 0,
+        "y": 37
       },
       "hiddenSeries": false,
       "id": 11,
@@ -1931,9 +1851,9 @@
       "fill": 1,
       "fillGradient": 0,
       "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
+        "h": 9,
+        "w": 12,
+        "x": 12,
         "y": 37
       },
       "hiddenSeries": false,
@@ -2055,7 +1975,7 @@
         "hide": 0,
         "includeAll": true,
         "label": "Drive",
-        "multi": false,
+        "multi": true,
         "name": "disk",
         "options": [],
         "query": "label_values(disk_storage_total,disk)",
@@ -2072,7 +1992,7 @@
     ]
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {
@@ -2100,7 +2020,7 @@
     ]
   },
   "timezone": "",
-  "title": "MinIO Dashboard",
+  "title": "MinIO Overview",
   "uid": "pJnnS4hZz",
-  "version": 176
+  "version": 190
 }
