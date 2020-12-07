@@ -51,15 +51,17 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, bucket, files)
 
-	getSize := func(item crawlItem) (i int64, err error) {
+	getSize := func(item crawlItem) (sizeS sizeSummary, err error) {
 		if item.Typ&os.ModeDir == 0 {
-			s, err := os.Stat(item.Path)
+			var s os.FileInfo
+			s, err = os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return
 			}
-			return s.Size(), nil
+			sizeS.totalSize = s.Size()
+			return sizeS, nil
 		}
-		return 0, nil
+		return
 	}
 
 	got, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize)
@@ -345,15 +347,17 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, "", files)
 
-	getSize := func(item crawlItem) (i int64, err error) {
+	getSize := func(item crawlItem) (sizeS sizeSummary, err error) {
 		if item.Typ&os.ModeDir == 0 {
-			s, err := os.Stat(item.Path)
+			var s os.FileInfo
+			s, err = os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return
 			}
-			return s.Size(), nil
+			sizeS.totalSize = s.Size()
+			return
 		}
-		return 0, nil
+		return
 	}
 	got, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: "bucket"}}, getSize)
 	if err != nil {
@@ -642,15 +646,17 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, bucket, files)
 
-	getSize := func(item crawlItem) (i int64, err error) {
+	getSize := func(item crawlItem) (sizeS sizeSummary, err error) {
 		if item.Typ&os.ModeDir == 0 {
-			s, err := os.Stat(item.Path)
+			var s os.FileInfo
+			s, err = os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return
 			}
-			return s.Size(), nil
+			sizeS.totalSize = s.Size()
+			return
 		}
-		return 0, nil
+		return
 	}
 	want, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize)
 	if err != nil {

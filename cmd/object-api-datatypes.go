@@ -93,9 +93,13 @@ var ObjectsHistogramIntervals = []objectHistogramInterval{
 // - total objects in a bucket
 // - object size histogram per bucket
 type BucketUsageInfo struct {
-	Size                 uint64            `json:"size"`
-	ObjectsCount         uint64            `json:"objectsCount"`
-	ObjectSizesHistogram map[string]uint64 `json:"objectsSizesHistogram"`
+	Size                   uint64            `json:"size"`
+	ReplicationPendingSize uint64            `json:"objectsPendingReplicationTotalSize"`
+	ReplicationFailedSize  uint64            `json:"objectsFailedReplicationTotalSize"`
+	ReplicatedSize         uint64            `json:"objectsReplicatedTotalSize"`
+	ReplicaSize            uint64            `json:"objectReplicaTotalSize"`
+	ObjectsCount           uint64            `json:"objectsCount"`
+	ObjectSizesHistogram   map[string]uint64 `json:"objectsSizesHistogram"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
@@ -109,6 +113,18 @@ type DataUsageInfo struct {
 
 	// Objects total size across all buckets
 	ObjectsTotalSize uint64 `json:"objectsTotalSize"`
+
+	// Total Size for objects that have not yet been replicated
+	ReplicationPendingSize uint64 `json:"objectsPendingReplicationTotalSize"`
+
+	// Total size for objects that have witness one or more failures and will be retried
+	ReplicationFailedSize uint64 `json:"objectsFailedReplicationTotalSize"`
+
+	// Total size for objects that have been replicated to destination
+	ReplicatedSize uint64 `json:"objectsReplicatedTotalSize"`
+
+	// Total size for objects that are replicas
+	ReplicaSize uint64 `json:"objectsReplicaTotalSize"`
 
 	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
