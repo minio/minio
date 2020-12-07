@@ -17,42 +17,13 @@ package crypto
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
-	"path"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/sio"
-)
-
-const (
-	// SSEMultipart is the metadata key indicating that the object
-	// was uploaded using the S3 multipart API and stored using
-	// some from of server-side-encryption.
-	SSEMultipart = "X-Minio-Internal-Encrypted-Multipart"
-
-	// SSEIV is the metadata key referencing the random initialization
-	// vector (IV) used for SSE-S3 and SSE-C key derivation.
-	SSEIV = "X-Minio-Internal-Server-Side-Encryption-Iv"
-
-	// SSESealAlgorithm is the metadata key referencing the algorithm
-	// used by SSE-C and SSE-S3 to encrypt the object.
-	SSESealAlgorithm = "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm"
-
-	// SSECSealedKey is the metadata key referencing the sealed object-key for SSE-C.
-	SSECSealedKey = "X-Minio-Internal-Server-Side-Encryption-Sealed-Key"
-
-	// S3SealedKey is the metadata key referencing the sealed object-key for SSE-S3.
-	S3SealedKey = "X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key"
-
-	// S3KMSKeyID is the metadata key referencing the KMS key-id used to
-	// generate/decrypt the S3-KMS-Sealed-Key. It is only used for SSE-S3 + KMS.
-	S3KMSKeyID = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Id"
-
-	// S3KMSSealedKey is the metadata key referencing the encrypted key generated
-	// by KMS. It is only used for SSE-S3 + KMS.
-	S3KMSSealedKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
 )
 
 const (
@@ -67,39 +38,34 @@ const (
 	InsecureSealAlgorithm = "DARE-SHA256"
 )
 
-// String returns the SSE domain as string. For SSE-S3 the
-// domain is "SSE-S3".
-func (s3) String() string { return "SSE-S3" }
+// Type represents an AWS SSE type:
+//  • SSE-C
+//  • SSE-S3
+//  • SSE-KMS
+type Type interface {
+	fmt.Stringer
 
-// UnsealObjectKey extracts and decrypts the sealed object key
-// from the metadata using KMS and returns the decrypted object
-// key.
-func (sse s3) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
-	keyID, kmsKey, sealedKey, err := sse.ParseMetadata(metadata)
-	if err != nil {
-		return
-	}
-	unsealKey, err := kms.UnsealKey(keyID, kmsKey, Context{bucket: path.Join(bucket, object)})
-	if err != nil {
-		return
-	}
-	err = key.Unseal(unsealKey, sealedKey, sse.String(), bucket, object)
-	return
+	IsRequested(http.Header) bool
+
+	IsEncrypted(map[string]string) bool
 }
 
-// String returns the SSE domain as string. For SSE-C the
-// domain is "SSE-C".
-func (ssec) String() string { return "SSE-C" }
-
-// UnsealObjectKey extracts and decrypts the sealed object key
-// from the metadata using the SSE-C client key of the HTTP headers
-// and returns the decrypted object key.
-func (sse ssec) UnsealObjectKey(h http.Header, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
-	clientKey, err := sse.ParseHTTP(h)
-	if err != nil {
-		return
+// IsRequested returns true and the SSE Type if the HTTP headers
+// indicate that some form server-side encryption is requested.
+//
+// If no SSE headers are present then IsRequested returns false
+// and no Type.
+func IsRequested(h http.Header) (Type, bool) {
+	switch {
+	case S3.IsRequested(h):
+		return S3, true
+	case S3KMS.IsRequested(h):
+		return S3KMS, true
+	case SSEC.IsRequested(h):
+		return SSEC, true
+	default:
+		return nil, false
 	}
-	return unsealObjectKey(clientKey, metadata, bucket, object)
 }
 
 // UnsealObjectKey extracts and decrypts the sealed object key

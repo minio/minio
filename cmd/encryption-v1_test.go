@@ -29,6 +29,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/sio"
 )
 
@@ -38,20 +39,20 @@ var encryptRequestTests = []struct {
 }{
 	{
 		header: map[string]string{
-			crypto.SSECAlgorithm: "AES256",
-			crypto.SSECKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
-			crypto.SSECKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: "AES256",
+			xhttp.AmzServerSideEncryptionCustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{},
 	},
 	{
 		header: map[string]string{
-			crypto.SSECAlgorithm: "AES256",
-			crypto.SSECKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
-			crypto.SSECKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: "AES256",
+			xhttp.AmzServerSideEncryptionCustomerKey:       "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    "bY4wkxQejw9mUJfo72k53A==",
 		},
 		metadata: map[string]string{
-			crypto.SSECKey: "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
+			xhttp.AmzServerSideEncryptionCustomerKey: "XAm0dRrJsEsyPb1UuFNezv1bl9hxuYsgUVC/MUctE2k=",
 		},
 	},
 }
@@ -70,13 +71,13 @@ func TestEncryptRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: Failed to encrypt request: %v", i, err)
 		}
-		if kdf, ok := test.metadata[crypto.SSESealAlgorithm]; !ok {
+		if kdf, ok := test.metadata[crypto.MetaAlgorithm]; !ok {
 			t.Errorf("Test %d: ServerSideEncryptionKDF must be part of metadata: %v", i, kdf)
 		}
-		if iv, ok := test.metadata[crypto.SSEIV]; !ok {
+		if iv, ok := test.metadata[crypto.MetaIV]; !ok {
 			t.Errorf("Test %d: crypto.SSEIV must be part of metadata: %v", i, iv)
 		}
-		if mac, ok := test.metadata[crypto.SSECSealedKey]; !ok {
+		if mac, ok := test.metadata[crypto.MetaSealedKeySSEC]; !ok {
 			t.Errorf("Test %d: ServerSideEncryptionKeyMAC must be part of metadata: %v", i, mac)
 		}
 	}
@@ -93,33 +94,33 @@ var decryptObjectInfoTests = []struct {
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
-		request: &http.Request{Header: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}}},
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.MetaAlgorithm: crypto.InsecureSealAlgorithm}},
+		request: &http.Request{Header: http.Header{xhttp.AmzServerSideEncryption: []string{xhttp.AmzEncryptionAES}}},
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
-		request: &http.Request{Header: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}}},
+		info:    ObjectInfo{Size: 0, UserDefined: map[string]string{crypto.MetaAlgorithm: crypto.InsecureSealAlgorithm}},
+		request: &http.Request{Header: http.Header{xhttp.AmzServerSideEncryption: []string{xhttp.AmzEncryptionAES}}},
 		expErr:  nil,
 	},
 	{
-		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.SSECSealedKey: "EAAfAAAAAAD7v1hQq3PFRUHsItalxmrJqrOq6FwnbXNarxOOpb8jTWONPPKyM3Gfjkjyj6NCf+aB/VpHCLCTBA=="}},
+		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{crypto.MetaSealedKeySSEC: "EAAfAAAAAAD7v1hQq3PFRUHsItalxmrJqrOq6FwnbXNarxOOpb8jTWONPPKyM3Gfjkjyj6NCf+aB/VpHCLCTBA=="}},
 		request: &http.Request{Header: http.Header{}},
 		expErr:  errEncryptedObject,
 	},
 	{
 		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{}},
-		request: &http.Request{Method: http.MethodGet, Header: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}}},
+		request: &http.Request{Method: http.MethodGet, Header: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES}}},
 		expErr:  errInvalidEncryptionParameters,
 	},
 	{
 		info:    ObjectInfo{Size: 100, UserDefined: map[string]string{}},
-		request: &http.Request{Method: http.MethodHead, Header: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}}},
+		request: &http.Request{Method: http.MethodHead, Header: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES}}},
 		expErr:  errInvalidEncryptionParameters,
 	},
 	{
-		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm}},
-		request: &http.Request{Header: http.Header{crypto.SSECAlgorithm: []string{crypto.SSEAlgorithmAES256}}},
+		info:    ObjectInfo{Size: 31, UserDefined: map[string]string{crypto.MetaAlgorithm: crypto.InsecureSealAlgorithm}},
+		request: &http.Request{Header: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES}}},
 		expErr:  errObjectTampered,
 	},
 }
@@ -221,10 +222,10 @@ func TestGetDecryptedRange_Issue50(t *testing.T) {
 		Name:   "object",
 		Size:   595160760,
 		UserDefined: map[string]string{
-			crypto.SSEMultipart:                    "",
-			crypto.SSEIV:                           "HTexa=",
-			crypto.SSESealAlgorithm:                "DAREv2-HMAC-SHA256",
-			crypto.SSECSealedKey:                   "IAA8PGAA==",
+			crypto.MetaMultipart:                   "",
+			crypto.MetaIV:                          "HTexa=",
+			crypto.MetaAlgorithm:                   "DAREv2-HMAC-SHA256",
+			crypto.MetaSealedKeySSEC:               "IAA8PGAA==",
 			ReservedMetadataPrefix + "actual-size": "594870264",
 			"content-type":                         "application/octet-stream",
 			"etag":                                 "166b1545b4c1535294ee0686678bea8c-2",
@@ -276,11 +277,11 @@ func TestGetDecryptedRange(t *testing.T) {
 		}
 		udMap = func(isMulti bool) map[string]string {
 			m := map[string]string{
-				crypto.SSESealAlgorithm: crypto.InsecureSealAlgorithm,
-				crypto.SSEMultipart:     "1",
+				crypto.MetaAlgorithm: crypto.InsecureSealAlgorithm,
+				crypto.MetaMultipart: "1",
 			}
 			if !isMulti {
-				delete(m, crypto.SSEMultipart)
+				delete(m, crypto.MetaMultipart)
 			}
 			return m
 		}
@@ -553,56 +554,56 @@ var getDefaultOptsTests = []struct {
 	encryptionType encrypt.Type
 	err            error
 }{
-	{headers: http.Header{crypto.SSECAlgorithm: []string{"AES256"},
-		crypto.SSECKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		crypto.SSECKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+	{headers: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
+		xhttp.AmzServerSideEncryptionCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		xhttp.AmzServerSideEncryptionCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: encrypt.SSEC,
 		err:            nil}, // 0
-	{headers: http.Header{crypto.SSECAlgorithm: []string{"AES256"},
-		crypto.SSECKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		crypto.SSECKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+	{headers: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
+		xhttp.AmzServerSideEncryptionCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		xhttp.AmzServerSideEncryptionCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
 		copySource:     true,
 		metadata:       nil,
 		encryptionType: "",
 		err:            nil}, // 1
-	{headers: http.Header{crypto.SSECAlgorithm: []string{"AES256"},
-		crypto.SSECKey:    []string{"Mz"},
-		crypto.SSECKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+	{headers: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"},
+		xhttp.AmzServerSideEncryptionCustomerKey:    []string{"Mz"},
+		xhttp.AmzServerSideEncryptionCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: "",
 		err:            crypto.ErrInvalidCustomerKey}, // 2
-	{headers: http.Header{crypto.SSEHeader: []string{"AES256"}},
+	{headers: http.Header{xhttp.AmzServerSideEncryption: []string{"AES256"}},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: encrypt.S3,
 		err:            nil}, // 3
 	{headers: http.Header{},
 		copySource: false,
-		metadata: map[string]string{crypto.S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)),
-			crypto.S3KMSKeyID:     "kms-key",
-			crypto.S3KMSSealedKey: "m-key"},
+		metadata: map[string]string{crypto.MetaSealedKeyS3: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+			crypto.MetaKeyID:             "kms-key",
+			crypto.MetaDataEncryptionKey: "m-key"},
 		encryptionType: encrypt.S3,
 		err:            nil}, // 4
 	{headers: http.Header{},
 		copySource: true,
-		metadata: map[string]string{crypto.S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)),
-			crypto.S3KMSKeyID:     "kms-key",
-			crypto.S3KMSSealedKey: "m-key"},
+		metadata: map[string]string{crypto.MetaSealedKeyS3: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+			crypto.MetaKeyID:             "kms-key",
+			crypto.MetaDataEncryptionKey: "m-key"},
 		encryptionType: "",
 		err:            nil}, // 5
-	{headers: http.Header{crypto.SSECopyAlgorithm: []string{"AES256"},
-		crypto.SSECopyKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		crypto.SSECopyKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+	{headers: http.Header{xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{"AES256"},
+		xhttp.AmzServerSideEncryptionCopyCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
 		copySource:     true,
 		metadata:       nil,
 		encryptionType: encrypt.SSEC,
 		err:            nil}, // 6
-	{headers: http.Header{crypto.SSECopyAlgorithm: []string{"AES256"},
-		crypto.SSECopyKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-		crypto.SSECopyKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
+	{headers: http.Header{xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{"AES256"},
+		xhttp.AmzServerSideEncryptionCopyCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+		xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="}},
 		copySource:     false,
 		metadata:       nil,
 		encryptionType: "",

@@ -962,7 +962,7 @@ func (c *diskCache) Get(ctx context.Context, bucket, object string, rs *HTTPRang
 	}
 	if globalCacheKMS != nil {
 		// clean up internal SSE cache metadata
-		delete(gr.ObjInfo.UserDefined, crypto.SSEHeader)
+		delete(gr.ObjInfo.UserDefined, xhttp.AmzServerSideEncryption)
 	}
 	if !rngInfo.Empty() {
 		// overlay Size with actual object size and not the range size

@@ -20,7 +20,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // TestSkipContentSha256Cksum - Test validate the logic which decides whether
@@ -160,7 +160,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}
 	// set headers value through Get parameter
-	inputQuery.Add("x-amz-server-side-encryption", crypto.SSEAlgorithmAES256)
+	inputQuery.Add("x-amz-server-side-encryption", xhttp.AmzEncryptionAES)
 	r.URL.RawQuery = inputQuery.Encode()
 	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {

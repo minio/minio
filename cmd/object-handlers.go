@@ -108,7 +108,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); ok && !objectAPI.IsEncryptionSupported() {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -267,15 +267,15 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
 				// Validate the SSE-C Key set in the header.
 				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}
@@ -313,7 +313,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -446,10 +446,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}
@@ -518,7 +518,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrBadRequest))
 		return
 	}
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -640,15 +640,15 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
 				// Validate the SSE-C Key set in the header.
 				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
 					writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 					return
 				}
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}
@@ -811,7 +811,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -884,7 +884,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	_, err = globalBucketSSEConfigSys.Get(dstBucket)
 	// This request header needs to be set prior to setting ObjectOptions
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 	}
 
 	var srcOpts, dstOpts ObjectOptions
@@ -1030,7 +1030,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	pReader := NewPutObjReader(srcInfo.Reader, nil, nil)
 
 	// Check if either the source is encrypted or the destination will be encrypted.
-	objectEncryption := crypto.IsSourceEncrypted(srcInfo.UserDefined) || crypto.IsRequested(r.Header)
+	_, objectEncryption := crypto.IsRequested(r.Header)
+	objectEncryption = objectEncryption || crypto.IsSourceEncrypted(srcInfo.UserDefined)
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() && !isCompressed {
 		// Encryption parameters not applicable for this object.
@@ -1321,7 +1322,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1451,7 +1452,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 	}
 
 	actualSize := size
@@ -1528,7 +1529,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			if crypto.SSECopy.IsRequested(r.Header) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return
@@ -1569,11 +1570,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	case crypto.IsEncrypted(objInfo.UserDefined):
 		switch {
 		case crypto.S3.IsEncrypted(objInfo.UserDefined):
-			w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			objInfo.ETag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: objInfo.ETag})
 		case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-			w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-			w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 
 			if len(objInfo.ETag) >= 32 && strings.Count(objInfo.ETag, "-") != 1 {
 				objInfo.ETag = objInfo.ETag[len(objInfo.ETag)-32:]
@@ -1623,7 +1624,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -1645,7 +1646,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	// This request header needs to be set prior to setting ObjectOptions
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 	}
 
 	// Validate storage class metadata if present
@@ -1659,7 +1660,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	var encMetadata = map[string]string{}
 
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(r.Header) {
+		if _, ok := crypto.IsRequested(r.Header); ok {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1751,7 +1752,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -2067,7 +2068,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}

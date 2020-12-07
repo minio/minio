@@ -27,9 +27,9 @@ var isMultipartTests = []struct {
 	Metadata  map[string]string
 	Multipart bool
 }{
-	{Multipart: true, Metadata: map[string]string{SSEMultipart: ""}},                           // 0
+	{Multipart: true, Metadata: map[string]string{MetaMultipart: ""}},                          // 0
 	{Multipart: true, Metadata: map[string]string{"X-Minio-Internal-Encrypted-Multipart": ""}}, // 1
-	{Multipart: true, Metadata: map[string]string{SSEMultipart: "some-value"}},                 // 2
+	{Multipart: true, Metadata: map[string]string{MetaMultipart: "some-value"}},                // 2
 	{Multipart: false, Metadata: map[string]string{"": ""}},                                    // 3
 	{Multipart: false, Metadata: map[string]string{"X-Minio-Internal-EncryptedMultipart": ""}}, // 4
 }
@@ -46,13 +46,13 @@ var isEncryptedTests = []struct {
 	Metadata  map[string]string
 	Encrypted bool
 }{
-	{Encrypted: true, Metadata: map[string]string{SSEMultipart: ""}},                               // 0
-	{Encrypted: true, Metadata: map[string]string{SSEIV: ""}},                                      // 1
-	{Encrypted: true, Metadata: map[string]string{SSESealAlgorithm: ""}},                           // 2
-	{Encrypted: true, Metadata: map[string]string{SSECSealedKey: ""}},                              // 3
-	{Encrypted: true, Metadata: map[string]string{S3SealedKey: ""}},                                // 4
-	{Encrypted: true, Metadata: map[string]string{S3KMSKeyID: ""}},                                 // 5
-	{Encrypted: true, Metadata: map[string]string{S3KMSSealedKey: ""}},                             // 6
+	{Encrypted: true, Metadata: map[string]string{MetaMultipart: ""}},                              // 0
+	{Encrypted: true, Metadata: map[string]string{MetaIV: ""}},                                     // 1
+	{Encrypted: true, Metadata: map[string]string{MetaAlgorithm: ""}},                              // 2
+	{Encrypted: true, Metadata: map[string]string{MetaSealedKeySSEC: ""}},                          // 3
+	{Encrypted: true, Metadata: map[string]string{MetaSealedKeyS3: ""}},                            // 4
+	{Encrypted: true, Metadata: map[string]string{MetaKeyID: ""}},                                  // 5
+	{Encrypted: true, Metadata: map[string]string{MetaDataEncryptionKey: ""}},                      // 6
 	{Encrypted: false, Metadata: map[string]string{"": ""}},                                        // 7
 	{Encrypted: false, Metadata: map[string]string{"X-Minio-Internal-Server-Side-Encryption": ""}}, // 8
 }
@@ -69,13 +69,13 @@ var s3IsEncryptedTests = []struct {
 	Metadata  map[string]string
 	Encrypted bool
 }{
-	{Encrypted: false, Metadata: map[string]string{SSEMultipart: ""}},                              // 0
-	{Encrypted: false, Metadata: map[string]string{SSEIV: ""}},                                     // 1
-	{Encrypted: false, Metadata: map[string]string{SSESealAlgorithm: ""}},                          // 2
-	{Encrypted: false, Metadata: map[string]string{SSECSealedKey: ""}},                             // 3
-	{Encrypted: true, Metadata: map[string]string{S3SealedKey: ""}},                                // 4
-	{Encrypted: true, Metadata: map[string]string{S3KMSKeyID: ""}},                                 // 5
-	{Encrypted: true, Metadata: map[string]string{S3KMSSealedKey: ""}},                             // 6
+	{Encrypted: false, Metadata: map[string]string{MetaMultipart: ""}},                             // 0
+	{Encrypted: false, Metadata: map[string]string{MetaIV: ""}},                                    // 1
+	{Encrypted: false, Metadata: map[string]string{MetaAlgorithm: ""}},                             // 2
+	{Encrypted: false, Metadata: map[string]string{MetaSealedKeySSEC: ""}},                         // 3
+	{Encrypted: true, Metadata: map[string]string{MetaSealedKeyS3: ""}},                            // 4
+	{Encrypted: true, Metadata: map[string]string{MetaKeyID: ""}},                                  // 5
+	{Encrypted: true, Metadata: map[string]string{MetaDataEncryptionKey: ""}},                      // 6
 	{Encrypted: false, Metadata: map[string]string{"": ""}},                                        // 7
 	{Encrypted: false, Metadata: map[string]string{"X-Minio-Internal-Server-Side-Encryption": ""}}, // 8
 }
@@ -92,13 +92,13 @@ var ssecIsEncryptedTests = []struct {
 	Metadata  map[string]string
 	Encrypted bool
 }{
-	{Encrypted: false, Metadata: map[string]string{SSEMultipart: ""}},                              // 0
-	{Encrypted: false, Metadata: map[string]string{SSEIV: ""}},                                     // 1
-	{Encrypted: false, Metadata: map[string]string{SSESealAlgorithm: ""}},                          // 2
-	{Encrypted: true, Metadata: map[string]string{SSECSealedKey: ""}},                              // 3
-	{Encrypted: false, Metadata: map[string]string{S3SealedKey: ""}},                               // 4
-	{Encrypted: false, Metadata: map[string]string{S3KMSKeyID: ""}},                                // 5
-	{Encrypted: false, Metadata: map[string]string{S3KMSSealedKey: ""}},                            // 6
+	{Encrypted: false, Metadata: map[string]string{MetaMultipart: ""}},                             // 0
+	{Encrypted: false, Metadata: map[string]string{MetaIV: ""}},                                    // 1
+	{Encrypted: false, Metadata: map[string]string{MetaAlgorithm: ""}},                             // 2
+	{Encrypted: true, Metadata: map[string]string{MetaSealedKeySSEC: ""}},                          // 3
+	{Encrypted: false, Metadata: map[string]string{MetaSealedKeyS3: ""}},                           // 4
+	{Encrypted: false, Metadata: map[string]string{MetaKeyID: ""}},                                 // 5
+	{Encrypted: false, Metadata: map[string]string{MetaDataEncryptionKey: ""}},                     // 6
 	{Encrypted: false, Metadata: map[string]string{"": ""}},                                        // 7
 	{Encrypted: false, Metadata: map[string]string{"X-Minio-Internal-Server-Side-Encryption": ""}}, // 8
 }
@@ -121,65 +121,65 @@ var s3ParseMetadataTests = []struct {
 }{
 	{ExpectedErr: errMissingInternalIV, Metadata: map[string]string{}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{}}, // 0
 	{
-		ExpectedErr: errMissingInternalSealAlgorithm, Metadata: map[string]string{SSEIV: ""},
+		ExpectedErr: errMissingInternalSealAlgorithm, Metadata: map[string]string{MetaIV: ""},
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 1
 	{
 		ExpectedErr: Errorf("The object metadata is missing the internal sealed key for SSE-S3"),
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: ""}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
+		Metadata:    map[string]string{MetaIV: "", MetaAlgorithm: ""}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 2
 	{
 		ExpectedErr: Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3"),
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSSealedKey: "IAAF0b=="}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
+		Metadata:    map[string]string{MetaIV: "", MetaAlgorithm: "", MetaSealedKeyS3: "", MetaDataEncryptionKey: "IAAF0b=="}, DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 3
 	{
 		ExpectedErr: Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3"),
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSKeyID: ""},
+		Metadata:    map[string]string{MetaIV: "", MetaAlgorithm: "", MetaSealedKeyS3: "", MetaKeyID: ""},
 		DataKey:     []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 4
 	{
 		ExpectedErr: errInvalidInternalIV,
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", S3SealedKey: "", S3KMSKeyID: "", S3KMSSealedKey: ""},
+		Metadata:    map[string]string{MetaIV: "", MetaAlgorithm: "", MetaSealedKeyS3: "", MetaKeyID: "", MetaDataEncryptionKey: ""},
 		DataKey:     []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 5
 	{
 		ExpectedErr: errInvalidInternalSealAlgorithm,
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: "", S3SealedKey: "", S3KMSKeyID: "", S3KMSSealedKey: "",
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: "", MetaSealedKeyS3: "", MetaKeyID: "", MetaDataEncryptionKey: "",
 		},
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 6
 	{
 		ExpectedErr: Errorf("The internal sealed key for SSE-S3 is invalid"),
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm, S3SealedKey: "",
-			S3KMSKeyID: "", S3KMSSealedKey: "",
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: SealAlgorithm, MetaSealedKeyS3: "",
+			MetaKeyID: "", MetaDataEncryptionKey: "",
 		},
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{},
 	}, // 7
 	{
 		ExpectedErr: Errorf("The internal sealed KMS data key for SSE-S3 is invalid"),
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm,
-			S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)), S3KMSKeyID: "key-1",
-			S3KMSSealedKey: ".MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ=", // invalid base64
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: SealAlgorithm,
+			MetaSealedKeyS3: base64.StdEncoding.EncodeToString(make([]byte, 64)), MetaKeyID: "key-1",
+			MetaDataEncryptionKey: ".MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ=", // invalid base64
 		},
 		DataKey: []byte{}, KeyID: "key-1", SealedKey: SealedKey{},
 	}, // 8
 	{
 		ExpectedErr: nil,
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm,
-			S3SealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)), S3KMSKeyID: "", S3KMSSealedKey: "",
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: SealAlgorithm,
+			MetaSealedKeyS3: base64.StdEncoding.EncodeToString(make([]byte, 64)), MetaKeyID: "", MetaDataEncryptionKey: "",
 		},
 		DataKey: []byte{}, KeyID: "", SealedKey: SealedKey{Algorithm: SealAlgorithm},
 	}, // 9
 	{
 		ExpectedErr: nil,
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 31)...)), SSESealAlgorithm: SealAlgorithm,
-			S3SealedKey: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 63)...)), S3KMSKeyID: "key-1",
-			S3KMSSealedKey: base64.StdEncoding.EncodeToString(make([]byte, 48)),
+			MetaIV: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 31)...)), MetaAlgorithm: SealAlgorithm,
+			MetaSealedKeyS3: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 63)...)), MetaKeyID: "key-1",
+			MetaDataEncryptionKey: base64.StdEncoding.EncodeToString(make([]byte, 48)),
 		},
 		DataKey: make([]byte, 48), KeyID: "key-1", SealedKey: SealedKey{Algorithm: SealAlgorithm, Key: [64]byte{1}, IV: [32]byte{1}},
 	}, // 10
@@ -223,43 +223,43 @@ var ssecParseMetadataTests = []struct {
 
 	SealedKey SealedKey
 }{
-	{ExpectedErr: errMissingInternalIV, Metadata: map[string]string{}, SealedKey: SealedKey{}},                     // 0
-	{ExpectedErr: errMissingInternalSealAlgorithm, Metadata: map[string]string{SSEIV: ""}, SealedKey: SealedKey{}}, // 1
+	{ExpectedErr: errMissingInternalIV, Metadata: map[string]string{}, SealedKey: SealedKey{}},                      // 0
+	{ExpectedErr: errMissingInternalSealAlgorithm, Metadata: map[string]string{MetaIV: ""}, SealedKey: SealedKey{}}, // 1
 	{
 		ExpectedErr: Errorf("The object metadata is missing the internal sealed key for SSE-C"),
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: ""}, SealedKey: SealedKey{},
+		Metadata:    map[string]string{MetaIV: "", MetaAlgorithm: ""}, SealedKey: SealedKey{},
 	}, // 2
 	{
 		ExpectedErr: errInvalidInternalIV,
-		Metadata:    map[string]string{SSEIV: "", SSESealAlgorithm: "", SSECSealedKey: ""}, SealedKey: SealedKey{},
+		Metadata:    map[string]string{MetaIV: "", MetaAlgorithm: "", MetaSealedKeySSEC: ""}, SealedKey: SealedKey{},
 	}, // 3
 	{
 		ExpectedErr: errInvalidInternalSealAlgorithm,
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: "", SSECSealedKey: "",
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: "", MetaSealedKeySSEC: "",
 		},
 		SealedKey: SealedKey{},
 	}, // 4
 	{
 		ExpectedErr: Errorf("The internal sealed key for SSE-C is invalid"),
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm, SSECSealedKey: "",
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: SealAlgorithm, MetaSealedKeySSEC: "",
 		},
 		SealedKey: SealedKey{},
 	}, // 5
 	{
 		ExpectedErr: nil,
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), SSESealAlgorithm: SealAlgorithm,
-			SSECSealedKey: base64.StdEncoding.EncodeToString(make([]byte, 64)),
+			MetaIV: base64.StdEncoding.EncodeToString(make([]byte, 32)), MetaAlgorithm: SealAlgorithm,
+			MetaSealedKeySSEC: base64.StdEncoding.EncodeToString(make([]byte, 64)),
 		},
 		SealedKey: SealedKey{Algorithm: SealAlgorithm},
 	}, // 6
 	{
 		ExpectedErr: nil,
 		Metadata: map[string]string{
-			SSEIV: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 31)...)), SSESealAlgorithm: InsecureSealAlgorithm,
-			SSECSealedKey: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 63)...)),
+			MetaIV: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 31)...)), MetaAlgorithm: InsecureSealAlgorithm,
+			MetaSealedKeySSEC: base64.StdEncoding.EncodeToString(append([]byte{1}, make([]byte, 63)...)),
 		},
 		SealedKey: SealedKey{Algorithm: InsecureSealAlgorithm, Key: [64]byte{1}, IV: [32]byte{1}},
 	}, // 7
@@ -267,8 +267,8 @@ var ssecParseMetadataTests = []struct {
 
 func TestCreateMultipartMetadata(t *testing.T) {
 	metadata := CreateMultipartMetadata(nil)
-	if v, ok := metadata[SSEMultipart]; !ok || v != "" {
-		t.Errorf("Metadata is missing the correct value for '%s': got '%s' - want '%s'", SSEMultipart, v, "")
+	if v, ok := metadata[MetaMultipart]; !ok || v != "" {
+		t.Errorf("Metadata is missing the correct value for '%s': got '%s' - want '%s'", MetaMultipart, v, "")
 	}
 }
 
@@ -411,20 +411,20 @@ var removeInternalEntriesTests = []struct {
 }{
 	{ // 0
 		Metadata: map[string]string{
-			SSEMultipart:     "",
-			SSEIV:            "",
-			SSESealAlgorithm: "",
-			SSECSealedKey:    "",
-			S3SealedKey:      "",
-			S3KMSKeyID:       "",
-			S3KMSSealedKey:   "",
+			MetaMultipart:         "",
+			MetaIV:                "",
+			MetaAlgorithm:         "",
+			MetaSealedKeySSEC:     "",
+			MetaSealedKeyS3:       "",
+			MetaKeyID:             "",
+			MetaDataEncryptionKey: "",
 		},
 		Expected: map[string]string{},
 	},
 	{ // 1
 		Metadata: map[string]string{
-			SSEMultipart:         "",
-			SSEIV:                "",
+			MetaMultipart:        "",
+			MetaIV:               "",
 			"X-Amz-Meta-A":       "X",
 			"X-Minio-Internal-B": "Y",
 		},
