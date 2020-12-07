@@ -24,10 +24,19 @@ import (
 
 var (
 	privateMutex sync.RWMutex
+	lockEnvMutex sync.Mutex
 	envOff       bool
 )
 
+// LockSetEnv locks modifications to environment.
+// Call returned function to unlock.
+func LockSetEnv() func() {
+	lockEnvMutex.Lock()
+	return lockEnvMutex.Unlock
+}
+
 // SetEnvOff - turns off env lookup
+// A global lock above this MUST ensure that
 func SetEnvOff() {
 	privateMutex.Lock()
 	defer privateMutex.Unlock()

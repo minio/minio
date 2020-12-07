@@ -35,6 +35,7 @@ type apiConfig struct {
 	listQuorum       int
 	extendListLife   time.Duration
 	corsAllowOrigins []string
+	setDriveCount    int
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
@@ -43,6 +44,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 
 	t.clusterDeadline = cfg.ClusterDeadline
 	t.corsAllowOrigins = cfg.CorsAllowOrigin
+	t.setDriveCount = setDriveCount
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
@@ -62,8 +64,14 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 			apiRequestsMaxPerNode /= len(globalEndpoints.Hostnames())
 		}
 	}
-
-	t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
+	if cap(t.requestsPool) < apiRequestsMaxPerNode {
+		// Only replace if needed.
+		// Existing requests will use the previous limit,
+		// but new requests will use the new limit.
+		// There will be a short overlap window,
+		// but this shouldn't last long.
+		t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
+	}
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.GetListQuorum()
 	t.extendListLife = cfg.ExtendListLife
@@ -74,6 +82,13 @@ func (t *apiConfig) getListQuorum() int {
 	defer t.mu.RUnlock()
 
 	return t.listQuorum
+}
+
+func (t *apiConfig) getSetDriveCount() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.setDriveCount
 }
 
 func (t *apiConfig) getExtendListLife() time.Duration {

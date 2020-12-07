@@ -51,6 +51,11 @@ func (a GatewayUnsupported) SetDriveCount() int {
 	return 0
 }
 
+// MakeMultipleBuckets is dummy stub for gateway.
+func (a GatewayUnsupported) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+	return NotImplemented{}
+}
+
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
 	return lmi, NotImplemented{}

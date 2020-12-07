@@ -21,11 +21,12 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/rand"
 	"os"
 	"path"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/config"
@@ -43,7 +44,6 @@ import (
 
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
-	dataCrawlSleepDefMult    = 10.0             // Default multiplier for waits between operations.
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
@@ -53,8 +53,12 @@ const (
 )
 
 var (
-	globalHealConfig             heal.Config
+	globalHealConfig   heal.Config
+	globalHealConfigMu sync.Mutex
+
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
+	// Sleeper values are updated when config is loaded.
+	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -141,7 +145,6 @@ type folderScanner struct {
 	newCache   dataUsageCache
 	withFilter *bloomFilter
 
-	dataUsageCrawlMult  float64
 	dataUsageCrawlDebug bool
 	healFolderInclude   uint32 // Include a clean folder one in n cycles.
 	healObjectSelect    uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
@@ -172,11 +175,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		return cache, errors.New("internal error: root scan attempted")
 	}
 
-	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		delayMult = dataCrawlSleepDefMult
-	}
 	s := folderScanner{
 		root:                basePath,
 		getSize:             getSize,
@@ -184,7 +182,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		newCache:            dataUsageCache{Info: cache.Info},
 		newFolders:          nil,
 		existingFolders:     nil,
-		dataUsageCrawlMult:  delayMult,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
 		healFolderInclude:   0,
 		healObjectSelect:    0,
@@ -386,7 +383,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 			}
 		}
-		sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
+		crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 
 		cache := dataUsageEntry{}
 
@@ -435,7 +432,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			t := UTCNow()
+			wait := crawlerSleeper.Timer(ctx)
 
 			// Get file size, ignore errors.
 			item := crawlItem{
@@ -450,7 +447,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 			size, err := f.getSize(item)
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+			wait()
 			if err == errSkipFile {
 				return nil
 			}
@@ -506,8 +503,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			t := UTCNow()
-
+			wait := crawlerSleeper.Timer(ctx)
 			resolver.bucket = bucket
 
 			foundObjs := false
@@ -535,8 +531,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						logger.Info(color.Green("healObjects:")+" got partial, %d agreed, errs: %v", nAgreed, errs)
 					}
 					// Sleep and reset.
-					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-					t = UTCNow()
+					wait()
+					wait = crawlerSleeper.Timer(ctx)
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						for _, err := range errs {
@@ -572,8 +568,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					}
 					for _, ver := range fiv.Versions {
 						// Sleep and reset.
-						sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-						t = UTCNow()
+						wait()
+						wait = crawlerSleeper.Timer(ctx)
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    fiv.Name,
@@ -605,6 +601,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				// If we have quorum, found directories, but no objects, issue heal to delete the dangling.
 				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: true},
 					func(bucket, object, versionID string) error {
+						// Wait for each heal as per crawler frequency.
+						wait()
+						wait = crawlerSleeper.Timer(ctx)
 						return bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    object,
@@ -613,7 +612,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					})
 			}
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+			wait()
 
 			// Add unless healing returned an error.
 			if foundObjs {
@@ -651,12 +650,12 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
-			sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
+			crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 			return err
 		}
 
 		// Dynamic time delay.
-		t := UTCNow()
+		wait := crawlerSleeper.Timer(ctx)
 
 		// Get file size, ignore errors.
 		dirStack = append(dirStack, entName)
@@ -686,8 +685,8 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
 			})
 
-		// Don't sleep for really small amount of time
-		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+		// Wait to throttle IO
+		wait()
 
 		if err == errSkipFile {
 			return nil
@@ -910,21 +909,6 @@ func (i *crawlItem) objectPath() string {
 	return path.Join(i.prefix, i.objectName)
 }
 
-// sleepDuration multiplies the duration d by x
-// and sleeps if is more than 100 micro seconds.
-// Sleep is limited to max 15 seconds.
-func sleepDuration(d time.Duration, x float64) {
-	const maxWait = 15 * time.Second
-	const minWait = 100 * time.Microsecond
-	// Don't sleep for really small amount of time
-	if d := time.Duration(float64(d) * x); d > minWait {
-		if d > maxWait {
-			d = maxWait
-		}
-		time.Sleep(d)
-	}
-}
-
 // healReplication will heal a scanned item that has failed replication.
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
 	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
@@ -966,4 +950,127 @@ func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, m
 			Bucket: meta.oi.Bucket,
 		})
 	}
+}
+
+type dynamicSleeper struct {
+	mu sync.RWMutex
+
+	// Sleep factor
+	factor float64
+
+	// maximum sleep cap,
+	// set to <= 0 to disable.
+	maxSleep time.Duration
+
+	// Don't sleep at all, if time taken is below this value.
+	// This is to avoid too small costly sleeps.
+	minSleep time.Duration
+
+	// cycle will be closed
+	cycle chan struct{}
+}
+
+// newDynamicSleeper
+func newDynamicSleeper(factor float64, maxWait time.Duration) *dynamicSleeper {
+	return &dynamicSleeper{
+		factor:   factor,
+		cycle:    make(chan struct{}),
+		maxSleep: maxWait,
+		minSleep: 100 * time.Microsecond,
+	}
+}
+
+// Timer returns a timer that has started.
+// When the returned function is called it will wait.
+func (d *dynamicSleeper) Timer(ctx context.Context) func() {
+	t := time.Now()
+	return func() {
+		doneAt := time.Now()
+		for {
+			// Grab current values
+			d.mu.RLock()
+			minWait, maxWait := d.minSleep, d.maxSleep
+			factor := d.factor
+			cycle := d.cycle
+			d.mu.RUnlock()
+			elapsed := doneAt.Sub(t)
+			// Don't sleep for really small amount of time
+			wantSleep := time.Duration(float64(elapsed) * factor)
+			if wantSleep <= minWait {
+				return
+			}
+			if maxWait > 0 && wantSleep > maxWait {
+				wantSleep = maxWait
+			}
+			timer := time.NewTimer(wantSleep)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			case <-timer.C:
+				return
+			case <-cycle:
+				if !timer.Stop() {
+					// We expired.
+					<-timer.C
+					return
+				}
+			}
+		}
+	}
+}
+
+// Sleep sleeps the specified time multiplied by the sleep factor.
+// If the factor is updated the sleep will be done again with the new factor.
+func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
+	for {
+		// Grab current values
+		d.mu.RLock()
+		minWait, maxWait := d.minSleep, d.maxSleep
+		factor := d.factor
+		cycle := d.cycle
+		d.mu.RUnlock()
+		// Don't sleep for really small amount of time
+		wantSleep := time.Duration(float64(base) * factor)
+		if wantSleep <= minWait {
+			return
+		}
+		if maxWait > 0 && wantSleep > maxWait {
+			wantSleep = maxWait
+		}
+		timer := time.NewTimer(wantSleep)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		case <-timer.C:
+			return
+		case <-cycle:
+			if !timer.Stop() {
+				// We expired.
+				<-timer.C
+				return
+			}
+		}
+	}
+}
+
+// Update the current settings and cycle all waiting.
+// Parameters are the same as in the contructor.
+func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if math.Abs(d.factor-factor) < 1e-10 && d.maxSleep == maxWait {
+		return nil
+	}
+	// Update values and cycle waiting.
+	close(d.cycle)
+	d.factor = factor
+	d.maxSleep = maxWait
+	d.cycle = make(chan struct{})
+	return nil
 }
