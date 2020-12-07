@@ -51,8 +51,8 @@ type NotificationSys struct {
 	targetResCh                chan event.TargetIDResult
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-	peerClients                []*peerRESTClient
-	allPeerClients             []*peerRESTClient
+	peerClients                []*peerRESTClient // Excludes self
+	allPeerClients             []*peerRESTClient // Includes nil client for self
 }
 
 // GetARNList - returns available ARNs.
@@ -1292,6 +1292,21 @@ func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 		peerClients:                remote,
 		allPeerClients:             all,
 	}
+}
+
+// GetPeerOnlineCount gets the count of online and offline nodes.
+func GetPeerOnlineCount() (nodesOnline, nodesOffline int) {
+	nodesOnline = 1
+	nodesOffline = 0
+	servers := globalNotificationSys.ServerInfo()
+	for _, s := range servers {
+		if s.State == "online" {
+			nodesOnline++
+			continue
+		}
+		nodesOffline++
+	}
+	return
 }
 
 type eventArgs struct {
