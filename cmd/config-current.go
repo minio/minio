@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/heal"
@@ -57,6 +59,7 @@ func initHelp() {
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
 		config.HealSubSys:           heal.DefaultKVS,
+		config.CrawlerSubSys:        crawler.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -111,6 +114,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.HealSubSys,
 			Description: "manage object healing frequency and bitrot verification checks",
+		},
+		config.HelpKV{
+			Key:         config.CrawlerSubSys,
+			Description: "manage crawling for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -192,6 +199,7 @@ func initHelp() {
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
 		config.HealSubSys:           heal.Help,
+		config.CrawlerSubSys:        crawler.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -221,6 +229,9 @@ var (
 )
 
 func validateConfig(s config.Config, setDriveCount int) error {
+	// We must have a global lock for this so nobody else modifies env while we do.
+	defer env.LockSetEnv()()
+
 	// Disable merging env values with config for validation.
 	env.SetEnvOff()
 
@@ -249,11 +260,22 @@ func validateConfig(s config.Config, setDriveCount int) error {
 		return err
 	}
 
-	if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
+	compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+	if err != nil {
 		return err
+	}
+	objAPI := newObjectLayerFn()
+	if objAPI != nil {
+		if compCfg.Enabled && !objAPI.IsCompressionSupported() {
+			return fmt.Errorf("Backend does not support compression")
+		}
 	}
 
 	if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
+		return err
+	}
+
+	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -438,10 +460,6 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			}
 		}
 	}
-	globalHealConfig, err = heal.LookupConfig(s[config.HealSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to read heal config: %w", err))
-	}
 
 	kmsCfg, err := crypto.LookupConfig(s, globalCertsCADir.Get(), NewGatewayHTTPTransport())
 	if err != nil {
@@ -457,11 +475,6 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	globalAutoEncryption = kmsCfg.AutoEncryption
 	if globalAutoEncryption && !globalIsGateway {
 		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
-	}
-
-	globalCompressConfig, err = compress.LookupConfig(s[config.CompressionSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup Compression: %w", err))
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
@@ -538,6 +551,68 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
+
+	// Apply dynamic config values
+	logger.LogIf(ctx, applyDynamicConfig(ctx, s))
+}
+
+// applyDynamicConfig will apply dynamic config values.
+// Dynamic systems should be in config.SubSystemsDynamic as well.
+func applyDynamicConfig(ctx context.Context, s config.Config) error {
+	// Read all dynamic configs.
+	// API
+	apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
+	}
+
+	// Compression
+	cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+	if err != nil {
+		return fmt.Errorf("Unable to setup Compression: %w", err)
+	}
+	objAPI := newObjectLayerFn()
+	if objAPI != nil {
+		if cmpCfg.Enabled && !objAPI.IsCompressionSupported() {
+			return fmt.Errorf("Backend does not support compression")
+		}
+	}
+
+	// Heal
+	healCfg, err := heal.LookupConfig(s[config.HealSubSys][config.Default])
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to apply heal config: %w", err))
+	}
+
+	// Crawler
+	crawlerCfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	if err != nil {
+		return fmt.Errorf("Unable to apply crawler config: %w", err)
+	}
+
+	// Apply configurations.
+	// We should not fail after this.
+	globalAPIConfig.init(apiConfig, globalAPIConfig.setDriveCount)
+
+	globalCompressConfigMu.Lock()
+	globalCompressConfig = cmpCfg
+	globalCompressConfigMu.Unlock()
+
+	globalHealConfigMu.Lock()
+	globalHealConfig = healCfg
+	globalHealConfigMu.Unlock()
+
+	logger.LogIf(ctx, crawlerSleeper.Update(crawlerCfg.Delay, crawlerCfg.MaxWait))
+
+	// Update all dynamic config values in memory.
+	globalServerConfigMu.Lock()
+	defer globalServerConfigMu.Unlock()
+	if globalServerConfig != nil {
+		for k := range config.SubSystemsDynamic {
+			globalServerConfig[k] = s[k]
+		}
+	}
+	return nil
 }
 
 // Help - return sub-system level help

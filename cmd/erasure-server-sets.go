@@ -424,6 +424,28 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	return firstErr
 }
 
+func (z *erasureServerPools) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+	g := errgroup.WithNErrs(len(z.serverPools))
+
+	// Create buckets in parallel across all sets.
+	for index := range z.serverPools {
+		index := index
+		g.Go(func() error {
+			return z.serverPools[index].MakeMultipleBuckets(ctx, buckets...)
+		}, index)
+	}
+
+	errs := g.Wait()
+	// Return the first encountered error
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // MakeBucketWithLocation - creates a new bucket across all serverPools simultaneously
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.

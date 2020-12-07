@@ -130,8 +130,8 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	if _, err = cfg.ReadFrom(bytes.NewReader(kvBytes)); err != nil {
+	dynamic, err := cfg.ReadConfig(bytes.NewReader(kvBytes))
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -158,6 +158,17 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
+	// Apply dynamic values.
+	if err := applyDynamicConfig(GlobalContext, cfg); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	globalNotificationSys.SignalService(serviceReloadDynamic)
+
+	// If all values were dynamic, tell the client.
+	if dynamic {
+		w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
+	}
 	writeSuccessResponseHeadersOnly(w)
 }
 
@@ -266,7 +277,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if _, err = cfg.ReadFrom(bytes.NewReader(kvBytes)); err != nil {
+	if _, err = cfg.ReadConfig(bytes.NewReader(kvBytes)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -378,7 +389,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	cfg := newServerConfig()
-	if _, err = cfg.ReadFrom(bytes.NewReader(kvBytes)); err != nil {
+	if _, err = cfg.ReadConfig(bytes.NewReader(kvBytes)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

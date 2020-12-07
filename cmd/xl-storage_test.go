@@ -1693,7 +1693,7 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	reader := bytes.NewReader(data)
 	for {
 		// Using io.CopyBuffer instead of this loop will not work for us as io.CopyBuffer
-		// will use bytes.Buffer.ReadFrom() which will not do shardSize'ed writes causing error.
+		// will use bytes.Buffer.ReadConfig() which will not do shardSize'ed writes causing error.
 		n, err := reader.Read(shard)
 		w.Write(shard[:n])
 		if err == nil {
