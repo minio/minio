@@ -68,7 +68,7 @@ var GlobalFlags = []cli.Flag{
 }
 
 // Help template for minio.
-var minioHelpTemplate = `NAME:
+var minioHelpTemplate = `NAME_BOE:
   {{.Name}} - {{.Usage}}
 
 DESCRIPTION:
@@ -79,7 +79,7 @@ USAGE:
 
 COMMANDS:
   {{range .VisibleCommands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-  {{end}}{{if .VisibleFlags}}
+  {{end}}{{if .VisibleFlags}}	
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
