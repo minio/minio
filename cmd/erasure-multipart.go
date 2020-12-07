@@ -382,8 +382,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
+	storageDisks := er.getDisks()
+
 	// Read metadata associated with the object from all disks.
-	partsMetadata, errs = readAllFileInfo(ctx, er.getDisks(), minioMetaMultipartBucket,
+	partsMetadata, errs = readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket,
 		uploadIDPath, "")
 
 	// get Quorum for this object
@@ -398,7 +400,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	// List all online disks.
-	onlineDisks, modTime := listOnlineDisks(er.getDisks(), partsMetadata, errs)
+	onlineDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
 	fi, err := pickValidFileInfo(ctx, partsMetadata, modTime, writeQuorum)
