@@ -25,9 +25,7 @@
 package main // import "github.com/minio/minio"
 
 import (
-	// "fmt"
-	// minio "minio/cmd"
-	// _ "minio/cmd/gateway"
+
 	"fmt"
 	"os"
 

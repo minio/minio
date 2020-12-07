@@ -1,7 +1,5 @@
-// module github.com/dingding7199/minio
-module github.com/minio/minio
 
-// module minio
+module github.com/minio/minio
 
 go 1.14
 
@@ -51,6 +49,7 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
+	github.com/minio/minio v0.0.0-20201204032319-e083471ec4bc
 	github.com/minio/minio-go/v7 v7.0.6
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
