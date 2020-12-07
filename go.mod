@@ -5,8 +5,6 @@ module minio
 go 1.14
 
 require (
-	// github.com/minio/minio/cmd v0.0.0-20201204032319-e083471ec4bc
-	// github.com/minio/minio/cmd/gateway v0.0.0-20201204032319-e083471ec4bc
 	cloud.google.com/go v0.39.0
 	git.apache.org/thrift.git v0.13.0
 	github.com/Azure/azure-pipeline-go v0.2.2
@@ -96,8 +94,7 @@ require (
 	gopkg.in/yaml.v2 v2.3.0
 )
 
-// replace github.com/minio/minio/cmd => /home/james/code/go/minio/cmd
+replace github.com/minio/minio/cmd => /home/james/code/go/minio/cmd 
 
-// replace github.com/minio/minio/cmd/gateway => /home/james/code/go/minio/cmd/gateway
+replace github.com/minio/minio/cmd/gateway => /home/james/code/go/minio/cmd/gateway 
 
-// module github.com/minio/minio
