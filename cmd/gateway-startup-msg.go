@@ -58,7 +58,7 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 
 	// Colorize the message and print.
-	logStartupMessage(color.Blue("Endpoint: ") + color.Bold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	logStartupMessage(color.Blue("Endpoint Test007: ") + color.Bold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
 		logStartupMessage(color.Blue("AccessKey: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
 		logStartupMessage(color.Blue("SecretKey: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
@@ -66,7 +66,7 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 	printEventNotifiers()
 
 	if globalBrowserEnabled {
-		logStartupMessage(color.Blue("\nBrowser Access:"))
+		logStartupMessage(color.Blue("\nBrowser Access Test007:"))
 		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 	}
 }

@@ -1,13 +1,12 @@
-
-
-
-//module github.com/minio/minio
-
+// module github.com/dingding7199/minio
+// module github.com/minio/minio
 module minio
 
 go 1.14
 
 require (
+	// github.com/minio/minio/cmd v0.0.0-20201204032319-e083471ec4bc
+	// github.com/minio/minio/cmd/gateway v0.0.0-20201204032319-e083471ec4bc
 	cloud.google.com/go v0.39.0
 	git.apache.org/thrift.git v0.13.0
 	github.com/Azure/azure-pipeline-go v0.2.2
@@ -53,7 +52,7 @@ require (
 	github.com/miekg/dns v1.1.8
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
-	github.com/minio/minio v0.0.0-20201204032319-e083471ec4bc
+	github.com/minio/minio v0.0.0-20201205210044-9c53cc1b8378
 	github.com/minio/minio-go/v7 v7.0.6
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
@@ -96,3 +95,9 @@ require (
 	gopkg.in/olivere/elastic.v5 v5.0.86
 	gopkg.in/yaml.v2 v2.3.0
 )
+
+// replace github.com/minio/minio/cmd => /home/james/code/go/minio/cmd
+
+// replace github.com/minio/minio/cmd/gateway => /home/james/code/go/minio/cmd/gateway
+
+// module github.com/minio/minio

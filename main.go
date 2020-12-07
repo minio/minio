@@ -25,16 +25,16 @@
 package main // import "github.com/minio/minio"
 
 import (
+	"fmt"
 	minio "minio/cmd"
 	_ "minio/cmd/gateway"
 	"os"
-	//"os"
-	//minio "github.com/minio/minio/cmd"
-	//
-	//// Import gateway
-	//_ "github.com/minio/minio/cmd/gateway"
+	// minio "github.com/minio/minio/cmd"
+	// _ "github.com/minio/minio/cmd/gateway"
+	// Import gateway
 )
 
 func main() {
 	minio.Main(os.Args)
+	fmt.Println("666")
 }
