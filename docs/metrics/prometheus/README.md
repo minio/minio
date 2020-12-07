@@ -179,11 +179,15 @@ Units defintions:
 - 1 KB = 1024 B
 
 
-| name                       | description                                         |
-|:---------------------------|:----------------------------------------------------|
-| `bucket_usage_size`        | Total size of the bucket                            |
-| `bucket_objects_count`     | Total number of objects in a bucket                 |
-| `bucket_objects_histogram` | Total number of objects filtered by different sizes |
+| name                                | description                                         |
+|:------------------------------------|:----------------------------------------------------|
+| `bucket_usage_size`                 | Total size of the bucket                            |
+| `bucket_objects_count`              | Total number of objects in a bucket                 |
+| `bucket_objects_histogram`          | Total number of objects filtered by different sizes |
+| `bucket_replication_pending_size`   | Total capacity not replicated                       |
+| `bucket_replication_failed_size`    | Total capacity failed to replicate at least once    |
+| `bucket_replication_successful_size`| Total capacity successfully replicated              |
+| `bucket_replication_received_size`  | Total capacity received as replicated objects       |
 
 
 ### Cache specific metrics
