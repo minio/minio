@@ -129,7 +129,7 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 		// The duration, in seconds, of the role session.
 		// The value can range from 900 seconds (15 minutes)
 		// up to 7 days.
-		if expirySecs < 900 || expirySecs > 604800 {
+		if expirySecs < 900 || expirySecs > 31536000 {
 			return 0, auth.ErrInvalidDuration
 		}
 

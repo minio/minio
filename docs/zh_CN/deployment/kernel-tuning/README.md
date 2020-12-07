@@ -1,4 +1,4 @@
-# Linux服务器上MinIO生产环境的内核调优 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# Linux服务器上MinIO生产环境的内核调优 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)  [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=31536000)](https://hub.docker.com/r/minio/minio/)
 
 这儿有一份针对MinIO服务器内核调优的建议， 你可以拷贝这个[脚本](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh)到你的服务器上使用。
 

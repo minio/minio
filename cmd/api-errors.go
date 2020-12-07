@@ -1252,7 +1252,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",
-		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
+		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 31536000 seconds",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

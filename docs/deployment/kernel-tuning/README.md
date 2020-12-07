@@ -1,4 +1,4 @@
-# Kernel Tuning for MinIO Production Deployment on Linux Servers [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# Kernel Tuning for MinIO Production Deployment on Linux Servers [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=31536000)](https://hub.docker.com/r/minio/minio/)
 
 List of kernel tuning recommendations for MinIO server deployments, a copy of this [script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/sysctl.sh) is available here that can be applied on the servers.
 

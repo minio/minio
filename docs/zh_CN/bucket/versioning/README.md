@@ -1,4 +1,4 @@
-# 存储桶版本控制指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# 存储桶版本控制指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=31536000)](https://hub.docker.com/r/minio/minio/)
 
 MinIO的版本控制，可以让一个存储通里的某个对象具有多个版本。例如，你可以存储`spark.csv` (版本为 `ede336f2`) 和 `spark.csv` (版本为 `fae684da`)在一个存储通中。版本控制保护你免受意外覆盖、删除、应用保留策略和存档对象的影响。
 

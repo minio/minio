@@ -1,4 +1,4 @@
-# 存储桶配额配置快速入门指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# 存储桶配额配置快速入门指南 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=31536000)](https://hub.docker.com/r/minio/minio/)
 
 ![quota](https://raw.githubusercontent.com/minio/minio/master/docs/zh_CN/bucket/quota/bucketquota.png)
 

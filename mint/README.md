@@ -1,4 +1,4 @@
-# Mint [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/mint.svg?maxAge=604800)](https://hub.docker.com/r/minio/mint/)
+# Mint [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/mint.svg?maxAge=31536000)](https://hub.docker.com/r/minio/mint/)
 
 Mint is a testing framework for Minio object server, available as a docker image. It runs correctness, benchmarking and stress tests. Following are the SDKs/tools used in correctness tests.
 

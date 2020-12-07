@@ -831,7 +831,7 @@ func TestParsePreSignV4(t *testing.T) {
 		},
 
 		// Test case - 9.
-		// Test case with value greater than 604800 in X-Amz-Expires header.
+		// Test case with value greater than 31536000 in X-Amz-Expires header.
 		{
 			inputQueryKeyVals: []string{
 				// valid  "X-Amz-Algorithm" header.
@@ -845,7 +845,7 @@ func TestParsePreSignV4(t *testing.T) {
 					"aws4_request"),
 				// valid "X-Amz-Date" query.
 				"X-Amz-Date", queryTime.UTC().Format(iso8601Format),
-				// Invalid Expiry time greater than 7 days (604800 in seconds).
+				// Invalid Expiry time greater than 7 days (31536000 in seconds).
 				"X-Amz-Expires", getDurationStr(605000),
 				"X-Amz-Signature", "abcd",
 				"X-Amz-SignedHeaders", "host;x-amz-content-sha256;x-amz-date",

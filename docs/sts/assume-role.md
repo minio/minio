@@ -44,7 +44,7 @@ The duration, in seconds. The value can range from 900 seconds (15 minutes) up t
 | Params        | Value                                            |
 | :--           | :--                                              |
 | *Type*        | *Integer*                                        |
-| *Valid Range* | *Minimum value of 900. Maximum value of 604800.* |
+| *Valid Range* | *Minimum value of 900. Maximum value of 31536000.* |
 | *Required*    | *No*                                             |
 
 ### Policy

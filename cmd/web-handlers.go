@@ -2142,8 +2142,8 @@ func presignedGet(host, bucket, object string, expiry int64, creds auth.Credenti
 	dateStr := date.Format(iso8601Format)
 	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
 
-	var expiryStr = "604800" // Default set to be expire in 7days.
-	if expiry < 604800 && expiry > 0 {
+	var expiryStr = "31536000" // Default set to be expire in 7days.
+	if expiry < 31536000 && expiry > 0 {
 		expiryStr = strconv.FormatInt(expiry, 10)
 	}
 
