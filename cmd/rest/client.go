@@ -200,13 +200,22 @@ func (c *Client) MarkOffline() {
 				if atomic.LoadInt32(&c.connected) == closed {
 					return
 				}
-				if c.HealthCheckFn() {
+				if c.CheckOnlineStatus() {
 					atomic.CompareAndSwapInt32(&c.connected, offline, online)
 					logger.Info("Client %s online", c.url.String())
-					return
 				}
 				time.Sleep(time.Duration(r.Float64() * float64(c.HealthCheckInterval)))
 			}
 		}()
 	}
+}
+
+// CheckOnlineStatus checks if a client is online.
+func (c *Client) CheckOnlineStatus() bool {
+	if c.HealthCheckFn != nil {
+		if c.HealthCheckFn() {
+			return true
+		}
+	}
+	return false
 }
