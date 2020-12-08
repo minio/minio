@@ -22,7 +22,7 @@ Now the delete marker becomes the current version of the object. GET requests by
 
 ![get](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/versioning_GET_versionEnabled.png)
 
-GET requests by specifying a versioning ID as shown below, you can retrieve the specific object version `fae684da`.
+GET requests by specifying a version ID as shown below, you can retrieve the specific object version `fae684da`.
 
 ![get_version_id](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/versioning/versioning_GET_versionEnabled_id.png)
 
