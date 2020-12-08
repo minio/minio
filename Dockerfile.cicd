@@ -31,8 +31,7 @@ COPY --from=builder /go/minio/dockerscripts/docker-entrypoint.sh /usr/bin/
 RUN  \
     microdnf update --nodocs && \
     microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
-    microdnf clean all && \
-    echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf
+    microdnf clean all
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
