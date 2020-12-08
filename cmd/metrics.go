@@ -280,6 +280,26 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 			float64(cdStats.UsageState),
 			cdStats.Dir,
 		)
+
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "usage", "size"),
+				"Indicates current cache usage in bytes",
+				[]string{"disk"}, nil),
+			prometheus.GaugeValue,
+			float64(cdStats.UsageSize),
+			cdStats.Dir,
+		)
+
+		ch <- prometheus.MustNewConstMetric(
+			prometheus.NewDesc(
+				prometheus.BuildFQName("cache", "total", "size"),
+				"Indicates total size of cache disk",
+				[]string{"disk"}, nil),
+			prometheus.GaugeValue,
+			float64(cdStats.TotalCapacity),
+			cdStats.Dir,
+		)
 	}
 }
 
