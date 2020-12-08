@@ -256,23 +256,73 @@ MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 
 This behavior is consistent across all keys, each key self documents itself with valid examples.
 
-## Environment only settings (not in config)
+## Dynamic systems without restarting server
 
-#### Usage crawler
-> NOTE: Data usage crawler is not supported under Gateway deployments.
+The following sub-systems are dynamic i.e., configuration parameters for each sub-systems can be changed while the server is running without any restarts.
 
-Data usage crawler is enabled by default, following ENVs allow for more staggered delay in terms of usage calculation.
+```
+api                   manage global HTTP API call specific features, such as throttling, authentication types, etc.
+heal                  manage object healing frequency and bitrot verification checks
+crawler               manage crawling for usage calculation, lifecycle, healing and more
+```
 
-The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `MINIO_DISK_USAGE_CRAWL_DELAY` environment variable. By default the value is `10`. This means the crawler will sleep *10x* the time each operation takes.
+> NOTE: if you set any of the following sub-system configuration using ENVs, dynamic behavior is not supported.
 
-This will in most setups make the crawler slow enough to not impact overall system performance. Setting `MINIO_DISK_USAGE_CRAWL_DELAY` to a *lower* value will make the crawler faster and setting it to 0 will make the crawler run at full speed (not recommended). Setting it to a higher value will make the crawler slower, further consume less resources.
+### Usage crawler
+
+Data usage crawler is enabled by default. The following configuration settings allow for more staggered delay in terms of usage calculation. The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `mc admin config set alias/ delay=15.0`. By default the value is `10.0`. This means the crawler will sleep *10x* the time each operation takes.
+
+In most setups this will keep the crawler slow enough to not impact overall system performance. Setting the `delay` key to a *lower* value will make the crawler faster and setting it to 0 will make the crawler run at full speed (not recommended in production). Setting it to a higher value will make the crawler slower, consuming less resources with the trade off of not collecting metrics for operations like healing and disk usage as fast.
+
+```
+~ mc admin config set alias/ crawler
+KEY:
+crawler  manage crawling for usage calculation, lifecycle, healing and more
+
+ARGS:
+delay     (float)     crawler delay multiplier, defaults to '10.0'
+max_wait  (duration)  maximum wait time between operations, defaults to '15s'
+```
 
 Example: Following setting will decrease the crawler speed by a factor of 3, reducing the system resource use, but increasing the latency of updates being reflected.
 
 ```sh
-export MINIO_DISK_USAGE_CRAWL_DELAY=30
-minio server /data
+~ mc admin config set alias/ crawler delay=30.0
 ```
+
+Once set the crawler settings are automatically applied without the need for server restarts.
+
+> NOTE: Data usage crawler is not supported under Gateway deployments.
+
+### Healing
+
+Healing is enabled by default. The following configuration settings allow for more staggered delay in terms of healing. The healing system by default adapts to the system speed and pauses up to '1sec' per object when the system has `max_io` number of concurrent requests. It is possible to adjust the `max_delay` and `max_io` values thereby increasing the healing speed. The delays between each operation of the healer can be adjusted by the `mc admin config set alias/ max_delay=1s` and maximum concurrent requests allowed before we start slowing things down can be configured with `mc admin config set alias/ max_io=30` . By default the wait delay is `1sec` beyond 10 cocurrent operations. This means the healer will sleep *1 second* at max for each heal operation if there are more than *10* concurrent client requests.
+
+In most setups this is sufficient to heal the content after drive replacements. Setting `max_delay` to a *lower* value and setting `max_io` to a *higher* value would make heal go faster.
+
+```
+~ mc admin config set alias/ heal
+KEY:
+heal  manage object healing frequency and bitrot verification checks
+
+ARGS:
+bitrotscan  (on|off)    perform bitrot scan on disks when checking objects during crawl
+max_sleep   (duration)  maximum sleep duration between objects to slow down heal operation. eg. 2s
+max_io      (int)       maximum IO requests allowed between objects to slow down heal operation. eg. 3
+```
+
+Example: The following settings will increase the heal operation speed by allowing healing operation to run without delay up to `100` concurrent requests, and the maximum delay between each heal operation is set to `300ms`.
+
+```sh
+~ mc admin config set alias/ heal max_delay=300ms max_io=100
+```
+
+Once set the healer settings are automatically applied without the need for server restarts.
+
+> NOTE: Healing is not supported under Gateway deployments.
+
+
+## Environment only settings (not in config)
 
 ### Browser
 
