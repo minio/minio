@@ -258,7 +258,7 @@ This behavior is consistent across all keys, each key self documents itself with
 
 ## Dynamic systems without restarting server
 
-Following sub-systems are dynamic i.e configuration parameters for each sub-systems can be changed while the server is running without any restarts.
+The following sub-systems are dynamic i.e., configuration parameters for each sub-systems can be changed while the server is running without any restarts.
 
 ```
 api                   manage global HTTP API call specific features, such as throttling, authentication types, etc.
@@ -270,9 +270,9 @@ crawler               manage crawling for usage calculation, lifecycle, healing 
 
 ### Usage crawler
 
-Data usage crawler is enabled by default, following config settings allow for more staggered delay in terms of usage calculation. The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `mc admin config set alias/ delay=15.0`. By default the value is `10.0`. This means the crawler will sleep *10x* the time each operation takes.
+Data usage crawler is enabled by default. The following configuration settings allow for more staggered delay in terms of usage calculation. The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `mc admin config set alias/ delay=15.0`. By default the value is `10.0`. This means the crawler will sleep *10x* the time each operation takes.
 
-This will in most setups keeps the crawler slow enough to not impact overall system performance. Setting `delay` key to a *lower* value will make the crawler faster and setting it to 0 will make the crawler run at full speed (not recommended in production). Setting it to a higher value will make the crawler slower, further consume lesser resources.
+In most setups this will keep the crawler slow enough to not impact overall system performance. Setting the `delay` key to a *lower* value will make the crawler faster and setting it to 0 will make the crawler run at full speed (not recommended in production). Setting it to a higher value will make the crawler slower, consuming less resources with the trade off of not collecting metrics for operations like healing and disk usage as fast.
 
 ```
 ~ mc admin config set alias/ crawler
@@ -296,9 +296,9 @@ Once set the crawler settings are automatically applied without the need for ser
 
 ### Healing
 
-Healing is enabled by default, following config settings allow for more staggered delay in terms of healing. The healing system by default adapts to the system speed and pauses upto '1sec' per object when the system has `max_io` number of concurrent requests. It is possible to adjust the `max_delay` and `max_io` values thereby increasing the healing speed. The delays between each operation of the healer can be adjusted by the `mc admin config set alias/ max_delay=1s` and maximum concurrent requests allowed before we start slowing things down can be configured with `mc admin config set alias/ max_io=30` . By default the wait delay is `1sec` beyond 10 cncurrent operations. This means the healer will sleep *1 second* at max for each heal operation if there are more than *10* concurrent client requests.
+Healing is enabled by default. The following configuration settings allow for more staggered delay in terms of healing. The healing system by default adapts to the system speed and pauses up to '1sec' per object when the system has `max_io` number of concurrent requests. It is possible to adjust the `max_delay` and `max_io` values thereby increasing the healing speed. The delays between each operation of the healer can be adjusted by the `mc admin config set alias/ max_delay=1s` and maximum concurrent requests allowed before we start slowing things down can be configured with `mc admin config set alias/ max_io=30` . By default the wait delay is `1sec` beyond 10 cocurrent operations. This means the healer will sleep *1 second* at max for each heal operation if there are more than *10* concurrent client requests.
 
-This is in most setups is sufficient to heal the content after drive replacements. Setting `max_delay` to *lower* value and setting `max_io` to *higher( value would make heal go faster.
+In most setups this is sufficient to heal the content after drive replacements. Setting `max_delay` to a *lower* value and setting `max_io` to a *higher* value would make heal go faster.
 
 ```
 ~ mc admin config set alias/ heal
@@ -311,7 +311,7 @@ max_sleep   (duration)  maximum sleep duration between objects to slow down heal
 max_io      (int)       maximum IO requests allowed between objects to slow down heal operation. eg. 3
 ```
 
-Example: Following settings will increase the heal operation speed by allowing healing operation to run without delay upto `100` concurrent requests, beyond this the maximum delay between each heal operation is set to `300ms`.
+Example: The following settings will increase the heal operation speed by allowing healing operation to run without delay up to `100` concurrent requests, and the maximum delay between each heal operation is set to `300ms`.
 
 ```sh
 ~ mc admin config set alias/ heal max_delay=300ms max_io=100
