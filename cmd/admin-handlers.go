@@ -373,14 +373,12 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 		if peerLock == nil {
 			continue
 		}
-		for _, locks := range peerLock.Locks {
-			for k, v := range locks {
-				for _, lockReqInfo := range v {
-					if val, ok := entryMap[lockReqInfo.UID]; ok {
-						val.ServerList = append(val.ServerList, peerLock.Addr)
-					} else {
-						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
-					}
+		for k, v := range peerLock.Locks {
+			for _, lockReqInfo := range v {
+				if val, ok := entryMap[lockReqInfo.UID]; ok {
+					val.ServerList = append(val.ServerList, peerLock.Addr)
+				} else {
+					entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
 				}
 			}
 		}
@@ -402,7 +400,7 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 // PeerLocks holds server information result of one node
 type PeerLocks struct {
 	Addr  string
-	Locks GetLocksResp
+	Locks map[string][]lockRequesterInfo
 }
 
 // TopLocksHandler Get list of locks in use

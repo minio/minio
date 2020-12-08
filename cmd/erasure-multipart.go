@@ -89,27 +89,12 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 }
 
 // Clean-up the old multipart uploads. Should be run in a Go routine.
-func (er erasureObjects) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			var disk StorageAPI
-			// run multiple cleanup's local to this server.
-			for _, d := range er.getLoadBalancedLocalDisks() {
-				if d != nil {
-					disk = d
-					break
-				}
-			}
-			if disk == nil {
-				continue
-			}
+func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
+	// run multiple cleanup's local to this server.
+	for _, disk := range er.getLoadBalancedLocalDisks() {
+		if disk != nil {
 			er.cleanupStaleUploadsOnDisk(ctx, disk, expiry)
+			return
 		}
 	}
 }

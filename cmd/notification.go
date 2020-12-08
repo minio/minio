@@ -639,15 +639,9 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 		ctx := logger.SetReqInfo(ctx, reqInfo)
 		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
 	}
-	// Once we have received all the locks currently used from peers
-	// add the local peer locks list as well.
-	llockers := make(GetLocksResp, 0, len(globalLockServers))
-	for _, llocker := range globalLockServers {
-		llockers = append(llockers, llocker.DupLockMap())
-	}
 	locksResp = append(locksResp, &PeerLocks{
 		Addr:  getHostName(r),
-		Locks: llockers,
+		Locks: globalLockServer.DupLockMap(),
 	})
 	return locksResp
 }

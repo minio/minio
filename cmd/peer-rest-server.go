@@ -48,12 +48,7 @@ func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	ctx := newContext(r, w, "GetLocks")
-
-	llockers := make(GetLocksResp, 0, len(globalLockServers))
-	for _, llocker := range globalLockServers {
-		llockers = append(llockers, llocker.DupLockMap())
-	}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(llockers))
+	logger.LogIf(ctx, gob.NewEncoder(w).Encode(globalLockServer.DupLockMap()))
 
 	w.(http.Flusher).Flush()
 
