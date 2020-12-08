@@ -173,7 +173,6 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 
 	done := keepHTTPResponseAlive(w)
 	usageInfo, err := s.storage.CrawlAndGetDataUsage(r.Context(), cache)
-
 	done(err)
 	if err != nil {
 		return

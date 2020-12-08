@@ -23,6 +23,10 @@ import (
 // CacheDiskStats represents cache disk statistics
 // such as current disk usage and available.
 type CacheDiskStats struct {
+	// used cache size
+	UsageSize uint64
+	// total cache disk capacity
+	TotalCapacity uint64
 	// indicates if usage is high or low, if high value is '1', if low its '0'
 	UsageState int32
 	// indicates the current usage percentage of this cache disk

@@ -198,6 +198,8 @@ MinIO Gateway instances enabled with Disk-Caching expose caching related metrics
 | `cache_data_served`  | Total number of bytes served from cache           |
 
 #### Per disk cache metrics
+| `cache_usage_size` | Total cache usage in bytes                                                     |
+| `cache_total_capacity` | Total size of cache disk                                                     |
 | `cache_usage_percent` | Total percentage cache usage                                                     |
 | `cache_usage_state`   | Indicates cache usage is high or low, relative to current cache 'quota' settings |
 

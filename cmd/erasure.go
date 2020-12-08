@@ -48,6 +48,8 @@ type partialOperation struct {
 type erasureObjects struct {
 	GatewayUnsupported
 
+	setDriveCount int
+
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 
@@ -70,11 +72,6 @@ type erasureObjects struct {
 // NewNSLock - initialize a new namespace RWLocker instance.
 func (er erasureObjects) NewNSLock(bucket string, objects ...string) RWLocker {
 	return er.nsMutex.NewNSLock(er.getLockers, bucket, objects...)
-}
-
-// SetDriveCount returns the current drives per set.
-func (er erasureObjects) SetDriveCount() int {
-	return len(er.getDisks())
 }
 
 // Shutdown function for object storage interface.

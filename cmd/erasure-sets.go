@@ -388,12 +388,13 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 		// Initialize erasure objects for a given set.
 		s.sets[i] = &erasureObjects{
-			getDisks:     s.GetDisks(i),
-			getLockers:   s.GetLockers(i),
-			getEndpoints: s.GetEndpoints(i),
-			nsMutex:      mutex,
-			bp:           bp,
-			mrfOpCh:      make(chan partialOperation, 10000),
+			setDriveCount: setDriveCount,
+			getDisks:      s.GetDisks(i),
+			getLockers:    s.GetLockers(i),
+			getEndpoints:  s.GetEndpoints(i),
+			nsMutex:       mutex,
+			bp:            bp,
+			mrfOpCh:       make(chan partialOperation, 10000),
 		}
 
 		go s.sets[i].cleanupStaleUploads(ctx,

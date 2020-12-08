@@ -781,6 +781,10 @@ func newServerCacheObjects(ctx context.Context, config cache.Config) (CacheObjec
 			dcache := c.cache[i]
 			cacheDiskStats[i] = CacheDiskStats{}
 			if dcache != nil {
+				info, err := getDiskInfo(dcache.dir)
+				logger.LogIf(ctx, err)
+				cacheDiskStats[i].UsageSize = info.Used
+				cacheDiskStats[i].TotalCapacity = info.Total
 				cacheDiskStats[i].Dir = dcache.stats.Dir
 				atomic.StoreInt32(&cacheDiskStats[i].UsageState, atomic.LoadInt32(&dcache.stats.UsageState))
 				atomic.StoreUint64(&cacheDiskStats[i].UsagePercent, atomic.LoadUint64(&dcache.stats.UsagePercent))

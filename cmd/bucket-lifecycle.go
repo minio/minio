@@ -356,11 +356,23 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 	opts.Versioned = globalBucketVersioningSys.Enabled(oi.Bucket)
 	opts.VersionID = oi.VersionID
 	opts.TransitionStatus = lifecycle.TransitionComplete
+	eventName := event.ObjectTransitionComplete
 
-	if _, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts); err != nil {
-		return err
+	_, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts)
+	if err != nil {
+		eventName = event.ObjectTransitionFailed
 	}
-	return nil
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:  eventName,
+		BucketName: oi.Bucket,
+		Object: ObjectInfo{
+			Name:      oi.Name,
+			VersionID: opts.VersionID,
+		},
+		Host: "Internal: [ILM-Transition]",
+	})
+	return err
 }
 
 // getLifecycleTransitionTargetArn returns transition ARN for storage class specified in the config.
