@@ -549,7 +549,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		return io.ErrUnexpectedEOF
 	}
 	switch b[0] {
-	case 1:
+	case 1, 2:
 		return errors.New("cache version deprecated (will autoupdate)")
 	case dataUsageCacheVer:
 	default:
