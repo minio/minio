@@ -136,8 +136,6 @@ The list of metrics and its definition are as follows. (NOTE: instance here is o
 | `minio_version_info`       | Current MinIO version with its commit-id                                       |
 | `minio_disks_offline`      | Total number of offline disks on current MinIO instance                        |
 | `minio_disks_total`        | Total number of disks on current MinIO instance                                |
-| `minio_nodes_online`       | Total number of MinIO nodes online                                             |
-| `minio_nodes_offline`      | Total number of MinIO nodes offline                                            |
 
 ### Disk metrics are labeled by 'disk' which indentifies each disk
 | name                       | description                                                                    |
