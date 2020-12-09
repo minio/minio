@@ -518,8 +518,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 }
 
 // Returns the compressed offset which should be skipped.
-func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (int64, int64) {
-	var compressedOffset int64
+func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	if len(objectInfo.Parts) > 0 {
@@ -609,9 +608,96 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		isEncrypted = false
 	}
 	var skipLen int64
-	// Calculate range to read (different for
-	// e.g. encrypted/compressed objects)
+	// Calculate range to read (different for encrypted/compressed objects)
 	switch {
+	case isCompressed:
+		// If compressed, we start from the beginning of the part.
+		// Read the decompressed size from the meta.json.
+		actualSize, err := oi.GetActualSize()
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		off, length = int64(0), oi.Size
+		decOff, decLength := int64(0), actualSize
+		if rs != nil {
+			off, length, err = rs.GetOffsetLength(actualSize)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			// In case of range based queries on multiparts, the offset and length are reduced.
+			off, decOff = getCompressedOffsets(oi, off)
+			decLength = length
+			length = oi.Size - off
+
+			// For negative length we read everything.
+			if decLength < 0 {
+				decLength = actualSize - decOff
+			}
+
+			// Reply back invalid range if the input offset and length fall out of range.
+			if decOff > actualSize || decOff+decLength > actualSize {
+				return nil, 0, 0, errInvalidRange
+			}
+		}
+		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
+			cFns = append(cleanUpFns, cFns...)
+			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
+				return nil, PreConditionFailed{}
+			}
+			if isCompressed {
+				copySource := h.Get(crypto.SSECopyAlgorithm) != ""
+
+				cFns = append(cleanUpFns, cFns...)
+				// Attach decrypter on inputReader
+				//var decReader io.Reader
+				inputReader, err = DecryptBlocksRequestR(inputReader, h,
+					off, length, 0, partStart, oi, copySource)
+				if err != nil {
+					// Call the cleanup funcs
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
+					}
+					return nil, err
+				}
+			}
+			// Decompression reader.
+			s2Reader := s2.NewReader(inputReader)
+			// Apply the skipLen and limit on the decompressed stream.
+			err = s2Reader.Skip(decOff)
+			if err != nil {
+				// Call the cleanup funcs
+				for i := len(cFns) - 1; i >= 0; i-- {
+					cFns[i]()
+				}
+				return nil, err
+			}
+
+			decReader := io.LimitReader(s2Reader, decLength)
+			if decLength > compReadAheadSize {
+				rah, err := readahead.NewReaderSize(decReader, compReadAheadBuffers, compReadAheadBufSize)
+				if err == nil {
+					decReader = rah
+					cFns = append(cFns, func() {
+						rah.Close()
+					})
+				}
+			}
+			oi.Size = decLength
+
+			// Assemble the GetObjectReader
+			r = &GetObjectReader{
+				ObjInfo:    oi,
+				pReader:    decReader,
+				cleanUpFns: cFns,
+				opts:       opts,
+			}
+			return r, nil
+		}
+
 	case isEncrypted:
 		var seqNumber uint32
 		var partStart int
@@ -663,76 +749,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			// Apply the skipLen and limit on the
 			// decrypted stream
 			decReader = io.LimitReader(ioutil.NewSkipReader(decReader, skipLen), decRangeLength)
-
-			// Assemble the GetObjectReader
-			r = &GetObjectReader{
-				ObjInfo:    oi,
-				pReader:    decReader,
-				cleanUpFns: cFns,
-				opts:       opts,
-			}
-			return r, nil
-		}
-	case isCompressed:
-		// Read the decompressed size from the meta.json.
-		actualSize, err := oi.GetActualSize()
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		off, length = int64(0), oi.Size
-		decOff, decLength := int64(0), actualSize
-		if rs != nil {
-			off, length, err = rs.GetOffsetLength(actualSize)
-			if err != nil {
-				return nil, 0, 0, err
-			}
-			// In case of range based queries on multiparts, the offset and length are reduced.
-			off, decOff = getCompressedOffsets(oi, off)
-			decLength = length
-			length = oi.Size - off
-
-			// For negative length we read everything.
-			if decLength < 0 {
-				decLength = actualSize - decOff
-			}
-
-			// Reply back invalid range if the input offset and length fall out of range.
-			if decOff > actualSize || decOff+decLength > actualSize {
-				return nil, 0, 0, errInvalidRange
-			}
-		}
-		fn = func(inputReader io.Reader, _ http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			cFns = append(cleanUpFns, cFns...)
-			if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
-				}
-				return nil, PreConditionFailed{}
-			}
-			// Decompression reader.
-			s2Reader := s2.NewReader(inputReader)
-			// Apply the skipLen and limit on the decompressed stream.
-			err = s2Reader.Skip(decOff)
-			if err != nil {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
-				}
-				return nil, err
-			}
-
-			decReader := io.LimitReader(s2Reader, decLength)
-			if decLength > compReadAheadSize {
-				rah, err := readahead.NewReaderSize(decReader, compReadAheadBuffers, compReadAheadBufSize)
-				if err == nil {
-					decReader = rah
-					cFns = append(cFns, func() {
-						rah.Close()
-					})
-				}
-			}
-			oi.Size = decLength
 
 			// Assemble the GetObjectReader
 			r = &GetObjectReader{
