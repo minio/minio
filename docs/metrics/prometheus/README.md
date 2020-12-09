@@ -131,15 +131,19 @@ The list of metrics and its definition are as follows. (NOTE: instance here is o
 | `promhttp_` | all prometheus scrape metrics   |
 
 ### MinIO node specific information
-| name                       | description                                                                    |
-|:---------------------------|:-------------------------------------------------------------------------------|
-| `minio_version_info`       | Current MinIO version with its commit-id                                       |
-| `minio_disks_offline`      | Total number of offline disks on current MinIO instance                        |
-| `minio_disks_total`        | Total number of disks on current MinIO instance                                |
-| `minio_nodes_online`       | Total number of MinIO nodes online                                             |
-| `minio_nodes_offline`      | Total number of MinIO nodes offline                                            |
+| name                        | description                                                                    |
+|:----------------------------|:-------------------------------------------------------------------------------|
+| `minio_version_info`        | Current MinIO version with its commit-id                                       |
+| `minio_disks_offline`       | Total number of offline disks on current MinIO instance                        |
+| `minio_disks_total`         | Total number of disks on current MinIO instance                                |
+| `minio_nodes_online`        | Total number of MinIO nodes online                                             |
+| `minio_nodes_offline`       | Total number of MinIO nodes offline                                            |
+| `minio_capacity_total`      | Total capacity available in the cluster (raw)                                  |
+| `minio_capacity_free`       | Total free capacity in the cluster (raw)                                       |
+| `minio_capacity_usable`     | Total capacity usable in the cluster (post erasure coding)                     |
+| `minio_capacity_usable_free`| Total free capacity usable in the cluster (post erasure coding)                | 
 
-### Disk metrics are labeled by 'disk' which indentifies each disk
+### Disk metrics are labeled by 'disk' which identifies each disk
 | name                       | description                                                                    |
 |:---------------------------|:-------------------------------------------------------------------------------|
 | `disk_storage_total`       | Total size of the disk                                                         |

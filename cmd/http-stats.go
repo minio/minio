@@ -79,10 +79,10 @@ func (s *ConnStats) getS3OutputBytes() uint64 {
 // Return connection stats (total input/output bytes and total s3 input/output bytes)
 func (s *ConnStats) toServerConnStats() ServerConnStats {
 	return ServerConnStats{
-		TotalInputBytes:  s.getTotalInputBytes(),
-		TotalOutputBytes: s.getTotalOutputBytes(),
-		S3InputBytes:     s.getS3InputBytes(),
-		S3OutputBytes:    s.getS3OutputBytes(),
+		TotalInputBytes:  s.getTotalInputBytes(),  // Traffic including reserved bucket
+		TotalOutputBytes: s.getTotalOutputBytes(), // Traffic including reserved bucket
+		S3InputBytes:     s.getS3InputBytes(),     // Traffic for client buckets
+		S3OutputBytes:    s.getS3OutputBytes(),    // Traffic for client buckets
 	}
 }
 

@@ -69,6 +69,13 @@ const (
 	writeLock
 )
 
+// BackendMetrics - represents bytes served from backend
+type BackendMetrics struct {
+	bytesReceived uint64
+	bytesSent     uint64
+	requestStats  RequestStats
+}
+
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
 	SetDriveCount() int // Only implemented by erasure layer
@@ -138,7 +145,7 @@ type ObjectLayer interface {
 	IsCompressionSupported() bool
 
 	// Backend related metrics
-	GetMetrics(ctx context.Context) (*Metrics, error)
+	GetMetrics(ctx context.Context) (*BackendMetrics, error)
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult
