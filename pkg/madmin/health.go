@@ -158,8 +158,8 @@ type PerfInfo struct {
 // ServerDrivesInfo - Drive info about all drives in a single MinIO node
 type ServerDrivesInfo struct {
 	Addr     string          `json:"addr"`
-	Serial   []DrivePerfInfo `json:"serial,omitempty"`
-	Parallel []DrivePerfInfo `json:"parallel,omitempty"`
+	Serial   []DrivePerfInfo `json:"serial,omitempty"`   // Drive perf info collected one drive at a time
+	Parallel []DrivePerfInfo `json:"parallel,omitempty"` // Drive perf info collected in parallel
 	Error    string          `json:"error,omitempty"`
 }
 
@@ -315,4 +315,28 @@ func (adm *AdminClient) ServerHealthInfo(ctx context.Context, healthDataTypes []
 	}()
 	return respChan
 
+}
+
+// GetTotalCapacity gets the total capacity a server holds.
+func (s *ServerDiskHwInfo) GetTotalCapacity() (capacity uint64) {
+	for _, u := range s.Usage {
+		capacity += u.Total
+	}
+	return
+}
+
+// GetTotalFreeCapacity gets the total capacity that is free.
+func (s *ServerDiskHwInfo) GetTotalFreeCapacity() (capacity uint64) {
+	for _, u := range s.Usage {
+		capacity += u.Free
+	}
+	return
+}
+
+// GetTotalUsedCapacity gets the total capacity used.
+func (s *ServerDiskHwInfo) GetTotalUsedCapacity() (capacity uint64) {
+	for _, u := range s.Usage {
+		capacity += u.Used
+	}
+	return
 }
