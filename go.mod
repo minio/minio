@@ -56,9 +56,10 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
 	github.com/montanaflynn/stats v0.5.0
-	github.com/nats-io/nats-server/v2 v2.1.7
-	github.com/nats-io/nats-streaming-server v0.18.0 // indirect
+	github.com/nats-io/nats-server/v2 v2.1.9
+	github.com/nats-io/nats-streaming-server v0.19.0 // indirect
 	github.com/nats-io/nats.go v1.10.0
+	github.com/nats-io/nkeys v0.2.0 // indirect
 	github.com/nats-io/stan.go v0.7.0
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
@@ -69,7 +70,7 @@ require (
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.0
-	github.com/shirou/gopsutil v2.20.9+incompatible
+	github.com/shirou/gopsutil v3.20.11+incompatible
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v0.0.0-20190404075320-75d898a42a94
 	github.com/tidwall/gjson v1.3.5
@@ -82,7 +83,7 @@ require (
 	go.etcd.io/etcd v0.0.0-20201125193152-8a03d2e9614b
 	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
-	golang.org/x/sys v0.0.0-20200915084602-288bc346aa39
+	golang.org/x/sys v0.0.0-20201101102859-da207088b7d1
 	golang.org/x/tools v0.0.0-20200929223013-bf155c11ec6f // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
