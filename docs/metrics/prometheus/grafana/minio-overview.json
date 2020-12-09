@@ -307,7 +307,7 @@
       "pluginVersion": "7.2.0",
       "targets": [
         {
-          "expr": "sum without (bucket,instance) (bucket_usage_size)",
+          "expr": "topk(1, sum(bucket_usage_size) by (instance))",
           "format": "time_series",
           "instant": false,
           "interval": "1m",
@@ -370,7 +370,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "sum without (bucket,instance) (bucket_usage_size)",
+          "expr": "topk(1, sum(bucket_usage_size) by (instance))",
           "interval": "",
           "legendFormat": "Total Storage Used",
           "refId": "A"
@@ -467,7 +467,7 @@
       "pluginVersion": "7.2.0",
       "targets": [
         {
-          "expr": "sum without (instance,bucket) (bucket_objects_histogram)",
+          "expr": "max by (object_size) (bucket_objects_histogram)",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -1136,7 +1136,7 @@
       "pluginVersion": "7.2.0",
       "targets": [
         {
-          "expr": "sum(bucket_objects_count)",
+          "expr": "topk(1, sum(bucket_objects_count) by (instance))",
           "format": "time_series",
           "instant": false,
           "interval": "1m",
