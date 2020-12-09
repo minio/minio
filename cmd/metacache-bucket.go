@@ -230,7 +230,6 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		// Create new
 		best := o.newMetacache()
 		b.caches[o.ID] = best
-		b.cachesRoot[best.root] = append(b.cachesRoot[best.root], best.id)
 		b.updated = true
 		if debugPrint {
 			console.Info("returning new cache %s, bucket: %v", best.id, best.bucket)
