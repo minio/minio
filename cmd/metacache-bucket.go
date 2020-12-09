@@ -45,8 +45,8 @@ type bucketMetacache struct {
 
 	// caches indexed by id.
 	caches map[string]metacache
-	// caches indexed by with root paths
-	cachesRoot map[string][]string
+	// cache ids indexed by root paths
+	cachesRoot map[string][]string `msg:"-"`
 
 	// Internal state
 	mu        sync.RWMutex `msg:"-"`
