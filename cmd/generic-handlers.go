@@ -634,7 +634,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	// For browser requests, when federation is setup we need to
 	// specifically handle download and upload for browser requests.
-	if guessIsBrowserReq(r) && globalDNSConfig != nil && len(globalDomainNames) > 0 {
+	if globalDNSConfig != nil && len(globalDomainNames) > 0 && guessIsBrowserReq(r) {
 		var bucket, _ string
 		switch r.Method {
 		case http.MethodPut:
@@ -689,7 +689,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	// MakeBucket requests should be handled at current endpoint
-	if r.Method == http.MethodPut && bucket != "" && object == "" {
+	if r.Method == http.MethodPut && bucket != "" && object == "" && r.URL.RawQuery == "" {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
