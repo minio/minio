@@ -38,12 +38,15 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/env"
 )
 
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
+
+	console.DebugPrint = env.Get("MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/console"
 )
 
 type scanStatus uint8
@@ -67,6 +68,34 @@ type metacache struct {
 	startedCycle uint64     `msg:"stc"`
 	endedCycle   uint64     `msg:"endc"`
 	dataVersion  uint8      `msg:"v"`
+}
+
+func (m *metacache) matches(o listPathOptions) bool {
+	// Root of what we are looking for we must atleast have
+	if !strings.HasPrefix(o.BaseDir, m.root) {
+		console.Debugf("cache %s prefix mismatch, cached:%v, want:%v\n", m.id, m.root, o.BaseDir)
+		return false
+	}
+	if m.filter != "" && strings.HasPrefix(m.filter, o.FilterPrefix) {
+		console.Debugf("cache %s cannot be used because of filter %s\n", m.id, m.filter)
+		return false
+	}
+	// If the existing listing wasn't recursive root must match.
+	if !m.recursive && o.BaseDir != m.root {
+		console.Debugf("cache %s non rec prefix mismatch, m:%v, want:%v\n", m.id, m.root, o.BaseDir)
+		return false
+	}
+	if o.Recursive && !m.recursive {
+		console.Debugf("cache %s not recursive", m.id)
+		// If this is recursive the m listing must be as well.
+		return false
+	}
+	if o.Separator != slashSeparator && !m.recursive {
+		console.Debugf("cache %s not slashsep and not recursive\n", m.id)
+		// Non slash separator requires recursive.
+		return false
+	}
+	return true
 }
 
 func (m *metacache) finished() bool {

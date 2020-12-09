@@ -146,6 +146,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 			asked++
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()
+
 				e, err := set.listPath(ctx, o)
 				mu.Lock()
 				defer mu.Unlock()

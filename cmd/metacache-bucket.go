@@ -198,8 +198,9 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		return metacache{}
 	}
 
+	// extending list life is a dynamic config, findCache()
+	// results may vary if this value is actively changed by client.
 	extend := globalAPIConfig.getExtendListLife()
-	const debugPrint = false
 
 	// Grab a write lock, since we create one if we cannot find one.
 	if o.Create {
@@ -212,11 +213,10 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 
 	// Check if exists already.
 	if c, ok := b.caches[o.ID]; ok {
-		if debugPrint {
-			console.Info("returning existing %v", o.ID)
-		}
+		console.Debugf("returning existing %v\n", o.ID)
 		return c
 	}
+
 	// No need to do expensive checks on transients.
 	if b.transient {
 		if !o.Create {
@@ -231,9 +231,8 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		best := o.newMetacache()
 		b.caches[o.ID] = best
 		b.updated = true
-		if debugPrint {
-			console.Info("returning new cache %s, bucket: %v", best.id, best.bucket)
-		}
+
+		console.Debugf("returning new cache (transient) %s, bucket: %v\n", best.id, best.bucket)
 		return best
 	}
 
@@ -248,58 +247,26 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 
 		// Never return transient caches if there is no id.
 		if cached.status == scanStateError || cached.status == scanStateNone || cached.dataVersion != metacacheStreamVersion {
-			if debugPrint {
-				console.Info("cache %s state or stream version mismatch", cached.id)
-			}
+			console.Debugf("cache %s state or stream version mismatch\n", cached.id)
 			continue
 		}
 		if cached.startedCycle < o.OldestCycle {
-			if debugPrint {
-				console.Info("cache %s cycle too old", cached.id)
-			}
+			console.Debugf("cache %s cycle too old\n", cached.id)
 			continue
 		}
 
 		// If the existing listing wasn't recursive root must match.
 		if !cached.recursive && o.BaseDir != cached.root {
-			if debugPrint {
-				console.Info("cache %s  non rec prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
-			}
+			console.Debugf("cache %s  non rec prefix mismatch, cached:%v, want:%v\n", cached.id, cached.root, o.BaseDir)
 			continue
 		}
 
-		// Root of what we are looking for must at least have
-		if !strings.HasPrefix(o.BaseDir, cached.root) {
-			if debugPrint {
-				console.Info("cache %s prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
-			}
-			continue
-		}
-		if cached.filter != "" && strings.HasPrefix(cached.filter, o.FilterPrefix) {
-			if debugPrint {
-				console.Info("cache %s cannot be used because of filter %s", cached.id, cached.filter)
-			}
+		if !cached.matches(o) {
 			continue
 		}
 
-		if o.Recursive && !cached.recursive {
-			if debugPrint {
-				console.Info("cache %s not recursive", cached.id)
-			}
-			// If this is recursive the cached listing must be as well.
-			continue
-		}
-		if o.Separator != slashSeparator && !cached.recursive {
-			if debugPrint {
-				console.Info("cache %s not slashsep and not recursive", cached.id)
-			}
-			// Non slash separator requires recursive.
-			continue
-		}
 		if !cached.finished() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
-			if debugPrint {
-				console.Info("cache %s not running, time: %v", cached.id, time.Since(cached.lastUpdate))
-			}
+			console.Debugf("cache %s not running, time: %v\n", cached.id, time.Since(cached.lastUpdate))
 			// Abandoned
 			continue
 		}
@@ -307,39 +274,34 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		if cached.finished() && cached.endedCycle <= o.OldestCycle {
 			if extend <= 0 {
 				// If scan has ended the oldest requested must be less.
-				if debugPrint {
-					console.Info("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
-				}
+				console.Debugf("cache %s ended and cycle (%v) <= oldest allowed (%v)\n", cached.id, cached.endedCycle, o.OldestCycle)
 				continue
 			}
 			if time.Since(cached.lastUpdate) > metacacheMaxRunningAge+extend {
 				// Cache ended within bloom cycle, but we can extend the life.
-				if debugPrint {
-					console.Info("cache %s ended (%v) and beyond extended life (%v)", cached.id, cached.lastUpdate, extend+metacacheMaxRunningAge)
-				}
+				console.Debugf("cache %s ended (%v) and beyond extended life (%v)", cached.id, cached.lastUpdate, extend+metacacheMaxRunningAge)
 				continue
 			}
 		}
 		if cached.started.Before(best.started) {
-			if debugPrint {
-				console.Info("cache %s disregarded - we have a better", cached.id)
-			}
+			console.Debugf("cache %s disregarded - we have a better", cached.id)
 			// If we already have a newer, keep that.
 			continue
 		}
 		best = cached
 	}
+
 	if !best.started.IsZero() {
+		// Grab a write lock, since we are updating an entry.
 		if o.Create {
 			best.lastHandout = UTCNow()
 			b.caches[best.id] = best
 			b.updated = true
 		}
-		if debugPrint {
-			console.Info("returning cached %s, status: %v, ended: %v", best.id, best.status, best.ended)
-		}
+		console.Debugf("returning cached %s, status: %v, ended: %v", best.id, best.status, best.ended)
 		return best
 	}
+
 	if !o.Create {
 		return metacache{
 			id:     o.ID,
@@ -353,9 +315,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 	b.caches[o.ID] = best
 	b.cachesRoot[best.root] = append(b.cachesRoot[best.root], best.id)
 	b.updated = true
-	if debugPrint {
-		console.Info("returning new cache %s, bucket: %v", best.id, best.bucket)
-	}
+	console.Debugf("returning new cache %s, bucket: %v", best.id, best.bucket)
 	return best
 }
 
@@ -364,8 +324,6 @@ func (b *bucketMetacache) cleanup() {
 	// Entries to remove.
 	remove := make(map[string]struct{})
 	currentCycle := intDataUpdateTracker.current()
-
-	const debugPrint = false
 
 	// Test on a copy
 	// cleanup is the only one deleting caches.
@@ -378,19 +336,17 @@ func (b *bucketMetacache) cleanup() {
 			continue
 		}
 		if !cache.worthKeeping(currentCycle) {
-			if debugPrint {
-				logger.Info("cache %s not worth keeping", id)
-			}
+			console.Debugf("cache %s not worth keeping\n", id)
 			remove[id] = struct{}{}
 			continue
 		}
 		if cache.id != id {
-			logger.Info("cache ID mismatch %s != %s", id, cache.id)
+			console.Debugf("cache ID mismatch %s != %s\n", id, cache.id)
 			remove[id] = struct{}{}
 			continue
 		}
 		if cache.bucket != b.bucket && !b.transient {
-			logger.Info("cache bucket mismatch %s != %s", b.bucket, cache.bucket)
+			console.Debugf("cache bucket mismatch %s != %s", b.bucket, cache.bucket)
 			remove[id] = struct{}{}
 			continue
 		}
@@ -418,15 +374,11 @@ func (b *bucketMetacache) cleanup() {
 			}
 
 			if cache.canBeReplacedBy(&cache2) {
-				if debugPrint {
-					logger.Info("cache %s can be replaced by %s", id, cache2.id)
-				}
+				console.Debugf("cache %s can be replaced by %s", id, cache2.id)
 				remove[id] = struct{}{}
 				break
 			} else {
-				if debugPrint {
-					logger.Info("cache %s can be NOT replaced by %s", id, cache2.id)
-				}
+				console.Debugf("cache %s can be NOT replaced by %s", id, cache2.id)
 			}
 		}
 	}
@@ -515,15 +467,15 @@ func (b *bucketMetacache) getCache(id string) *metacache {
 // deleteAll will delete all on disk data for ALL caches.
 // Deletes are performed concurrently.
 func (b *bucketMetacache) deleteAll() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
 	ctx := context.Background()
 	ez, ok := newObjectLayerFn().(*erasureServerPools)
 	if !ok {
 		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasureZones"))
 		return
 	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	b.updated = true
 	if !b.transient {

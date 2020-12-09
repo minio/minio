@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
@@ -126,7 +126,6 @@ func (o listPathOptions) newMetacache() metacache {
 // Caller should close the channel when done.
 // The returned function will return the results once there is enough or input is closed.
 func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCacheEntriesSorted, error) {
-	const debugPrint = false
 	var resultsDone = make(chan metaCacheEntriesSorted)
 	// Copy so we can mutate
 	resCh := resultsDone
@@ -142,32 +141,22 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 			if !o.IncludeDirectories && entry.isDir() {
 				continue
 			}
-			if debugPrint {
-				console.Infoln("gather got:", entry.name)
-			}
+			console.Debug("gather got: %s\n", entry.name)
 			if o.Marker != "" && entry.name <= o.Marker {
-				if debugPrint {
-					console.Infoln("pre marker")
-				}
+				console.Debugln("pre marker")
 				continue
 			}
 			if !strings.HasPrefix(entry.name, o.Prefix) {
-				if debugPrint {
-					console.Infoln("not in prefix")
-				}
+				console.Debugln("not in prefix")
 				continue
 			}
 			if !o.Recursive && !entry.isInDir(o.Prefix, o.Separator) {
-				if debugPrint {
-					console.Infoln("not in dir", o.Prefix, o.Separator)
-				}
+				console.Debug("not in dir %s%s\n", o.Prefix, o.Separator)
 				continue
 			}
 			if !o.InclDeleted && entry.isObject() {
 				if entry.isLatestDeletemarker() {
-					if debugPrint {
-						console.Infoln("latest delete")
-					}
+					console.Debug("latest delete\n")
 					continue
 				}
 			}
@@ -181,9 +170,7 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				}
 				continue
 			}
-			if debugPrint {
-				console.Infoln("adding...")
-			}
+			console.Debug("adding...\n")
 			results.o = append(results.o, entry)
 		}
 		if resCh != nil {
@@ -207,19 +194,17 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 	if search == "" {
 		return 0, nil
 	}
-	const debugPrint = false
-	if debugPrint {
-		console.Infoln("searching for ", search)
-	}
+
+	console.Debugf("searching for %s\n", search)
+
 	var tmp metacacheBlock
 	i := 0
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	for {
 		partKey := fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, i)
 		v, ok := fi.Metadata[partKey]
 		if !ok {
-			if debugPrint {
-				console.Infoln("no match in metadata, waiting")
-			}
+			console.Debugln("no match in metadata, waiting")
 			return -1, io.ErrUnexpectedEOF
 		}
 		err := json.Unmarshal([]byte(v), &tmp)
@@ -231,27 +216,18 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 			return 0, errFileNotFound
 		}
 		if tmp.First >= search {
-			if debugPrint {
-				console.Infoln("First >= search", v)
-			}
+			console.Debugf("First >= search %s", v)
 			return i, nil
 		}
 		if tmp.Last >= search {
-			if debugPrint {
-
-				console.Infoln("Last >= search", v)
-			}
+			console.Debugf("Last >= search %s", v)
 			return i, nil
 		}
 		if tmp.EOS {
-			if debugPrint {
-				console.Infoln("no match, at EOS", v)
-			}
+			console.Debugf("no match, at EOS %s", v)
 			return -3, io.EOF
 		}
-		if debugPrint {
-			console.Infoln("First ", tmp.First, "<", search, " search", i)
-		}
+		console.Debugf("First %s < %s search %d", tmp.First, search, i)
 		i++
 	}
 }
@@ -274,6 +250,7 @@ func getMetacacheBlockInfo(fi FileInfo, block int) (*metacacheBlock, error) {
 	if !ok {
 		return nil, io.ErrUnexpectedEOF
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	return &tmp, json.Unmarshal([]byte(v), &tmp)
 }
 
@@ -312,7 +289,6 @@ func (o *listPathOptions) SetFilter() {
 // Will return io.EOF if there are no more entries with the same filter.
 // The last entry can be used as a marker to resume the listing.
 func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSorted, err error) {
-	const debugPrint = false
 	// Forward to prefix, if any
 	err = r.forwardTo(o.Prefix)
 	if err != nil {
@@ -334,9 +310,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 			}
 		}
 	}
-	if debugPrint {
-		console.Infoln("forwarded to ", o.Prefix, "marker:", o.Marker, "sep:", o.Separator)
-	}
+	console.Debugf("forwarded to %s marker: %s sep: %s\n", o.Prefix, o.Marker, o.Separator)
 	// Filter
 	if !o.Recursive {
 		entries.o = make(metaCacheEntries, 0, o.Limit)
@@ -555,10 +529,7 @@ func (er erasureObjects) SetDriveCount() int {
 
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
-	const debugPrint = false
-	if debugPrint {
-		console.Printf("listPath with options: %#v\n", o)
-	}
+	console.Debugf("listPath with options: %#v\n", o)
 
 	// See if we have the listing stored.
 	if !o.Create && !o.singleObject {
@@ -584,9 +555,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	var metaMu sync.Mutex
 
-	if debugPrint {
-		console.Println("listPath: scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
-	}
+	console.Debugln("listPath: scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
 
 	// Disconnect from call above, but cancel on exit.
 	ctx, cancel := context.WithCancel(GlobalContext)
@@ -594,9 +563,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	disks := er.getOnlineDisks()
 
 	defer func() {
-		if debugPrint {
-			console.Println("listPath returning:", entries.len(), "err:", err)
-		}
+		console.Debugln("listPath returning:", entries.len(), "err:", err)
 		if err != nil && !errors.Is(err, io.EOF) {
 			go func(err string) {
 				metaMu.Lock()
@@ -682,9 +649,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				// Don't save single object listings.
 				return nil
 			}
-			if debugPrint {
-				console.Println("listPath: saving block", b.n, "to", o.objectPath(b.n))
-			}
+			console.Debugln("listPath: saving block", b.n, "to", o.objectPath(b.n))
 			r, err := hash.NewReader(bytes.NewBuffer(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
 			logger.LogIf(ctx, err)
 			custom := b.headerKV()

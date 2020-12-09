@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"path"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
@@ -233,6 +233,7 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		b.replicationConfig = nil
 	}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if len(b.BucketTargetsConfigJSON) != 0 {
 		if err = json.Unmarshal(b.BucketTargetsConfigJSON, b.bucketTargetConfig); err != nil {
 			return err
