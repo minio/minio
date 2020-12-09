@@ -240,7 +240,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		return nil, err
 	}
 
-	rootDisk, err := disk.IsRootDisk(path)
+	rootDisk, err := disk.IsRootDisk(path, "/")
 	if err != nil {
 		return nil, err
 	}

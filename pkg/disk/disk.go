@@ -30,3 +30,21 @@ type Info struct {
 	Ffree  uint64
 	FSType string
 }
+
+// SameDisk reports whether di1 and di2 describe the same disk.
+func SameDisk(di1, di2 Info) bool {
+	if di1.Total != di2.Total {
+		// disk total size different
+		return false
+	}
+
+	if di1.Files != di2.Files {
+		// disk total inodes different
+		return false
+	}
+
+	// returns true only if Used, Free and number of free
+	// inodes are same, then its the same disk.
+	return di1.Used == di2.Used && di1.Free == di2.Free &&
+		di1.Ffree == di2.Ffree
+}
