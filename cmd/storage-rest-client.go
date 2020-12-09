@@ -170,8 +170,12 @@ func (client *storageRESTClient) Healing() bool {
 }
 
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
-	b := cache.serialize()
-	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, bytes.NewBuffer(b), int64(len(b)))
+	pr, pw := io.Pipe()
+	go func() {
+		pw.CloseWithError(cache.serializeTo(pw))
+	}()
+	defer pr.Close()
+	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, pr, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return cache, err

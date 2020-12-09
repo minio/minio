@@ -171,14 +171,13 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 		return
 	}
 
-	done := keepHTTPResponseAlive(w)
+	resp := streamHTTPResponse(w)
 	usageInfo, err := s.storage.CrawlAndGetDataUsage(r.Context(), cache)
-	done(err)
 	if err != nil {
+		resp.CloseWithError(err)
 		return
 	}
-	w.Write(usageInfo.serialize())
-	w.(http.Flusher).Flush()
+	resp.CloseWithError(usageInfo.serializeTo(w))
 }
 
 // MakeVolHandler - make a volume.
