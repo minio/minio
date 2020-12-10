@@ -828,7 +828,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				ReportNotFound: opts.reportNotFound,
 				FilterPrefix:   opts.filterPrefix}, w)
 			w.CloseWithError(err)
-			if err != io.EOF {
+			if err != io.EOF && err != nil && err.Error() != errFileNotFound.Error() {
 				logger.LogIf(ctx, err)
 			}
 		}()

@@ -489,9 +489,12 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 
 // save the content of the cache to minioMetaBackgroundOpsBucket with the provided name.
 func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) error {
-	b := d.serialize()
-	size := int64(len(b))
-	r, err := hash.NewReader(bytes.NewReader(b), size, "", "", size, false)
+	pr, pw := io.Pipe()
+	go func() {
+		pw.CloseWithError(d.serializeTo(pw))
+	}()
+	defer pr.Close()
+	r, err := hash.NewReader(pr, -1, "", "", -1, false)
 	if err != nil {
 		return err
 	}
@@ -513,32 +516,33 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 const dataUsageCacheVer = 3
 
 // serialize the contents of the cache.
-func (d *dataUsageCache) serialize() []byte {
-	// Prepend version and compress.
-	dst := make([]byte, 0, d.Msgsize()+1)
-	dst = append(dst, dataUsageCacheVer)
-	buf := bytes.NewBuffer(dst)
-	enc, err := zstd.NewWriter(buf,
+func (d *dataUsageCache) serializeTo(dst io.Writer) error {
+	// Add version and compress.
+	_, err := dst.Write([]byte{dataUsageCacheVer})
+	if err != nil {
+		return err
+	}
+	enc, err := zstd.NewWriter(dst,
 		zstd.WithEncoderLevel(zstd.SpeedFastest),
 		zstd.WithWindowSize(1<<20),
 		zstd.WithEncoderConcurrency(2))
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil
+		return err
 	}
 	mEnc := msgp.NewWriter(enc)
 	err = d.EncodeMsg(mEnc)
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil
+		return err
 	}
-	mEnc.Flush()
+	err = mEnc.Flush()
+	if err != nil {
+		return err
+	}
 	err = enc.Close()
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil
+		return err
 	}
-	return buf.Bytes()
+	return nil
 }
 
 // deserialize the supplied byte slice into the cache.

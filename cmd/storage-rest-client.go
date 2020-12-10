@@ -28,6 +28,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/http"
@@ -170,18 +171,34 @@ func (client *storageRESTClient) Healing() bool {
 }
 
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
-	b := cache.serialize()
-	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, bytes.NewBuffer(b), int64(len(b)))
+	pr, pw := io.Pipe()
+	go func() {
+		pw.CloseWithError(cache.serializeTo(pw))
+	}()
+	defer pr.Close()
+	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, pr, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		return cache, err
 	}
-	reader, err := waitForHTTPResponse(respBody)
+
+	var wg sync.WaitGroup
+	var newCache dataUsageCache
+	var decErr error
+	pr, pw = io.Pipe()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		decErr = newCache.deserialize(pr)
+		pr.CloseWithError(err)
+	}()
+	err = waitForHTTPStream(respBody, pw)
+	pw.CloseWithError(err)
 	if err != nil {
 		return cache, err
 	}
-	var newCache dataUsageCache
-	return newCache, newCache.deserialize(reader)
+	wg.Wait()
+	return newCache, decErr
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
