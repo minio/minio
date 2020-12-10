@@ -41,11 +41,12 @@ require (
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
 	github.com/klauspost/reedsolomon v1.9.9
+	github.com/kr/pretty v0.2.0 // indirect
 	github.com/lib/pq v1.8.0
 	github.com/mattn/go-colorable v0.1.4
 	github.com/mattn/go-ieproxy v0.0.1 // indirect
 	github.com/mattn/go-isatty v0.0.11
-	github.com/miekg/dns v1.1.8
+	github.com/miekg/dns v1.1.35
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.0
 	github.com/minio/minio-go/v7 v7.0.6
@@ -63,6 +64,7 @@ require (
 	github.com/nats-io/stan.go v0.7.0
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.7
+	github.com/olivere/elastic/v7 v7.0.22
 	github.com/philhofer/fwd v1.1.1 // indirect
 	github.com/pierrec/lz4 v2.4.0+incompatible
 	github.com/pkg/errors v0.9.1
@@ -88,6 +90,5 @@ require (
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
 	gopkg.in/ldap.v3 v3.0.3
-	gopkg.in/olivere/elastic.v5 v5.0.86
 	gopkg.in/yaml.v2 v2.2.8
 )
