@@ -34,7 +34,7 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	registerBootstrapRESTHandlers(router)
 
 	// Register distributed namespace lock routers.
-	registerLockRESTHandlers(router, endpointServerPools)
+	registerLockRESTHandlers(router)
 }
 
 // List of some generic handlers which are applied for all incoming requests.

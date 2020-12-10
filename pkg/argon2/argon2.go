@@ -130,21 +130,21 @@ func NewIDKey(time, memory uint32, threads uint8) func([]byte, []byte, []byte, [
 	pool := sync.Pool{
 		New: func() interface{} {
 			b := make([]block, memory)
-			return b
+			return &b
 		},
 	}
 
 	return func(password, salt, secret, data []byte, keyLen uint32) []byte {
-		B := pool.Get().([]block)
+		B := pool.Get().(*[]block)
 		defer func() {
-			clearBlocks(B)
+			clearBlocks(*B)
 			pool.Put(B)
 		}()
 
 		h0 := initHash(password, salt, secret, data, time, hashMemory, uint32(threads), keyLen, argon2id)
-		B = initBlocks(&h0, B, uint32(threads))
-		processBlocks(B, time, memory, uint32(threads), argon2id)
-		return extractKey(B, memory, uint32(threads), keyLen)
+		B1 := initBlocks(&h0, *B, uint32(threads))
+		processBlocks(B1, time, memory, uint32(threads), argon2id)
+		return extractKey(B1, memory, uint32(threads), keyLen)
 	}
 }
 

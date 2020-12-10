@@ -299,7 +299,9 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	quorumLocked := checkQuorumLocked(locks, quorum) && locksFailed <= tolerance
 	if !quorumLocked {
 		log("Releasing all acquired locks now abandoned after quorum was not met\n")
-		releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, lockNames...)
+		if !releaseAll(ds, tolerance, owner, locks, isReadLock, restClnts, lockNames...) {
+			log("Unable to release acquired locks, stale locks might be present\n")
+		}
 	}
 
 	// We may have some unused results in ch, release them async.
@@ -308,11 +310,10 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 		close(ch)
 		for grantToBeReleased := range ch {
 			if grantToBeReleased.isLocked() {
-				// release lock
+				// release abandoned lock
 				log("Releasing abandoned lock\n")
 				sendRelease(ds, restClnts[grantToBeReleased.index],
-					owner,
-					grantToBeReleased.lockUID, isReadLock, lockNames...)
+					owner, grantToBeReleased.lockUID, isReadLock, lockNames...)
 			}
 		}
 	}()
