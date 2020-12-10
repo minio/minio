@@ -84,18 +84,16 @@ func (client *peerRESTClient) Close() error {
 	return nil
 }
 
-// GetLocksResp stores various info from the client for each lock that is requested.
-type GetLocksResp []map[string][]lockRequesterInfo
-
 // GetLocks - fetch older locks for a remote node.
-func (client *peerRESTClient) GetLocks() (locks GetLocksResp, err error) {
+func (client *peerRESTClient) GetLocks() (lockMap map[string][]lockRequesterInfo, err error) {
 	respBody, err := client.call(peerRESTMethodGetLocks, nil, nil, -1)
 	if err != nil {
 		return
 	}
+	lockMap = map[string][]lockRequesterInfo{}
 	defer http.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&locks)
-	return locks, err
+	err = gob.NewDecoder(respBody).Decode(&lockMap)
+	return lockMap, err
 }
 
 // ServerInfo - fetch server information for a remote node.
