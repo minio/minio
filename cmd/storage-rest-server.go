@@ -177,7 +177,7 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 		resp.CloseWithError(err)
 		return
 	}
-	resp.CloseWithError(usageInfo.serializeTo(w))
+	resp.CloseWithError(usageInfo.serializeTo(resp))
 }
 
 // MakeVolHandler - make a volume.
@@ -888,7 +888,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 			if err != nil {
 				return err
 			}
-
 			length := binary.LittleEndian.Uint32(tmp[:])
 			_, err = io.CopyN(w, respBody, int64(length))
 			if err != nil {

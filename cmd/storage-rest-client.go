@@ -28,6 +28,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/http"
@@ -180,12 +181,24 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	if err != nil {
 		return cache, err
 	}
-	reader, err := waitForHTTPResponse(respBody)
+
+	var wg sync.WaitGroup
+	var newCache dataUsageCache
+	var decErr error
+	pr, pw = io.Pipe()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		decErr = newCache.deserialize(pr)
+		pr.CloseWithError(err)
+	}()
+	err = waitForHTTPStream(respBody, pw)
+	pw.CloseWithError(err)
 	if err != nil {
 		return cache, err
 	}
-	var newCache dataUsageCache
-	return newCache, newCache.deserialize(reader)
+	wg.Wait()
+	return newCache, decErr
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
