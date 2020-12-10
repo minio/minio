@@ -656,14 +656,17 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	b := want.serialize()
-	var got dataUsageCache
-	err = got.deserialize(bytes.NewBuffer(b))
+	var buf bytes.Buffer
+	err = want.serializeTo(&buf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("serialized size:", len(b), "bytes")
+	t.Log("serialized size:", buf.Len(), "bytes")
+	var got dataUsageCache
+	err = got.deserialize(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.Info.LastUpdate.IsZero() {
 		t.Error("lastupdate not set")
 	}
