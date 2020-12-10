@@ -237,17 +237,7 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		return best
 	}
 
-	// Potentially interesting caches.
-	// Will only add root if request is for root.
-	var interesting []string
-	rootSplit := strings.Split(o.BaseDir, slashSeparator)
-	for i := range rootSplit {
-		want := path.Join(rootSplit[:i+1]...)
-		if debugPrint {
-			console.Info("base: %s, want: %s", o.BaseDir, want)
-		}
-		interesting = append(interesting, b.cachesRoot[want]...)
-	}
+	interesting := interestingCaches(o.BaseDir, b.cachesRoot)
 
 	var best metacache
 	for _, id := range interesting {
@@ -375,20 +365,22 @@ func (b *bucketMetacache) cleanup() {
 	remove := make(map[string]struct{})
 	currentCycle := intDataUpdateTracker.current()
 
-	debugPrint := func(msg string, data ...interface{}) {}
-	if false {
-		debugPrint = logger.Info
-	}
+	const debugPrint = false
 
-	b.mu.RLock()
-	for id, cache := range b.caches {
+	// Test on a copy
+	// cleanup is the only one deleting caches.
+	caches, rootIdx := b.cloneCaches()
+
+	for id, cache := range caches {
 		if b.transient && time.Since(cache.lastUpdate) > 15*time.Minute && time.Since(cache.lastHandout) > 15*time.Minute {
 			// Keep transient caches only for 15 minutes.
 			remove[id] = struct{}{}
 			continue
 		}
 		if !cache.worthKeeping(currentCycle) {
-			debugPrint("cache %s not worth keeping", id)
+			if debugPrint {
+				logger.Info("cache %s not worth keeping", id)
+			}
 			remove[id] = struct{}{}
 			continue
 		}
@@ -406,32 +398,54 @@ func (b *bucketMetacache) cleanup() {
 
 	// Check all non-deleted against eachother.
 	// O(n*n), but should still be rather quick.
-	for id, cache := range b.caches {
+	for id, cache := range caches {
 		if b.transient {
 			break
 		}
 		if _, ok := remove[id]; ok {
 			continue
 		}
-		for id2, cache2 := range b.caches {
-			if _, ok := remove[id2]; ok {
+
+		interesting := interestingCaches(cache.root, rootIdx)
+		for _, id2 := range interesting {
+			if _, ok := remove[id2]; ok || id2 == id {
 				// Don't check against one we are already removing
 				continue
 			}
+			cache2, ok := caches[id2]
+			if !ok {
+				continue
+			}
+
 			if cache.canBeReplacedBy(&cache2) {
-				debugPrint("cache %s can be replaced by %s", id, cache2.id)
+				if debugPrint {
+					logger.Info("cache %s can be replaced by %s", id, cache2.id)
+				}
 				remove[id] = struct{}{}
 				break
 			} else {
-				debugPrint("cache %s can be NOT replaced by %s", id, cache2.id)
+				if debugPrint {
+					logger.Info("cache %s can be NOT replaced by %s", id, cache2.id)
+				}
 			}
 		}
 	}
 
-	b.mu.RUnlock()
 	for id := range remove {
 		b.deleteCache(id)
 	}
+}
+
+// Potentially interesting caches.
+// Will only add root if request is for root.
+func interestingCaches(root string, cachesRoot map[string][]string) []string {
+	var interesting []string
+	rootSplit := strings.Split(root, slashSeparator)
+	for i := range rootSplit {
+		want := path.Join(rootSplit[:i+1]...)
+		interesting = append(interesting, cachesRoot[want]...)
+	}
+	return interesting
 }
 
 // updateCache will update a cache by id.
@@ -465,6 +479,25 @@ func (b *bucketMetacache) updateCacheEntry(update metacache) (metacache, error) 
 	b.caches[update.id] = existing
 	b.updated = true
 	return existing, nil
+}
+
+// cloneCaches will return a clone of all current caches.
+func (b *bucketMetacache) cloneCaches() (map[string]metacache, map[string][]string) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	dst := make(map[string]metacache, len(b.caches))
+	for k, v := range b.caches {
+		dst[k] = v
+	}
+	// Copy indexes
+	dst2 := make(map[string][]string, len(b.cachesRoot))
+	for k, v := range b.cachesRoot {
+		tmp := make([]string, len(v))
+		copy(tmp, v)
+		dst2[k] = tmp
+	}
+
+	return dst, dst2
 }
 
 // getCache will return a clone of a specific metacache.
