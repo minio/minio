@@ -58,6 +58,7 @@ var (
 	errReplicationUniquePriority      = Errorf("Replication configuration has duplicate priority")
 	errReplicationDestinationMismatch = Errorf("The destination bucket must be same for all rules")
 	errRoleArnMissing                 = Errorf("Missing required parameter `Role` in ReplicationConfiguration")
+	errInvalidSourceSelectionCriteria = Errorf("Invalid ReplicaModification status")
 )
 
 // Config - replication configuration specified in
@@ -77,6 +78,16 @@ func ParseConfig(reader io.Reader) (*Config, error) {
 	config := Config{}
 	if err := xml.NewDecoder(io.LimitReader(reader, maxReplicationConfigSize)).Decode(&config); err != nil {
 		return nil, err
+	}
+	// By default, set replica modification to enabled if unset.
+	for i := range config.Rules {
+		if len(config.Rules[i].SourceSelectionCriteria.ReplicaModifications.Status) == 0 {
+			config.Rules[i].SourceSelectionCriteria = SourceSelectionCriteria{
+				ReplicaModifications: ReplicaModifications{
+					Status: Enabled,
+				},
+			}
+		}
 	}
 	return &config, nil
 }
@@ -136,6 +147,7 @@ type ObjectOpts struct {
 	DeleteMarker bool
 	SSEC         bool
 	OpType       Type
+	Replica      bool
 }
 
 // FilterActionableRules returns the rules actions that need to be executed
@@ -187,9 +199,11 @@ func (c Config) Replicate(obj ObjectOpts) bool {
 			default:
 				return rule.DeleteMarkerReplication.Status == Enabled
 			}
-		} else { // regular object/metadata replication
+		} // regular object/metadata replication
+		if !obj.Replica {
 			return true
 		}
+		return obj.Replica && rule.SourceSelectionCriteria.ReplicaModifications.Status == Enabled
 	}
 	return false
 }
