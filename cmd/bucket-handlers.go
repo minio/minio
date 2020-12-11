@@ -503,7 +503,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
 		}]
-		if errs[i] == nil || isErrObjectNotFound(errs[i]) {
+		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {
 			if replicateDeletes {
 				dObjects[i].DeleteMarkerReplicationStatus = deleteList[i].DeleteMarkerReplicationStatus
 				dObjects[i].VersionPurgeStatus = deleteList[i].VersionPurgeStatus
