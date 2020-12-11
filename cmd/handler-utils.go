@@ -29,7 +29,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
@@ -379,12 +378,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		f.ServeHTTP(statsWriter, r)
 
-		// Time duration in secs since the call started.
-		// We don't need to do nanosecond precision in this
-		// simply for the fact that it is not human readable.
-		durationSecs := time.Since(statsWriter.StartTime).Seconds()
-
-		globalHTTPStats.updateStats(api, r, statsWriter, durationSecs)
+		globalHTTPStats.updateStats(api, r, statsWriter)
 	}
 }
 
