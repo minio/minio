@@ -648,14 +648,14 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				}
 				return nil, PreConditionFailed{}
 			}
-			if isCompressed {
+			if isEncrypted {
 				copySource := h.Get(crypto.SSECopyAlgorithm) != ""
 
 				cFns = append(cleanUpFns, cFns...)
 				// Attach decrypter on inputReader
 				//var decReader io.Reader
 				inputReader, err = DecryptBlocksRequestR(inputReader, h,
-					off, length, 0, partStart, oi, copySource)
+					off, length, 0, opts.PartNumber, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
