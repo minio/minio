@@ -943,6 +943,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	versionFound := true
+	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {
