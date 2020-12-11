@@ -654,8 +654,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				cFns = append(cleanUpFns, cFns...)
 				// Attach decrypter on inputReader
 				//var decReader io.Reader
-				inputReader, err = DecryptBlocksRequestR(inputReader, h,
-					off, length, 0, opts.PartNumber, oi, copySource)
+				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, opts.PartNumber, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
@@ -726,8 +725,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			cFns = append(cleanUpFns, cFns...)
 			// Attach decrypter on inputReader
 			var decReader io.Reader
-			decReader, err = DecryptBlocksRequestR(inputReader, h,
-				off, length, seqNumber, partStart, oi, copySource)
+			decReader, err = DecryptBlocksRequestR(inputReader, h, seqNumber, partStart, oi, copySource)
 			if err != nil {
 				// Call the cleanup funcs
 				for i := len(cFns) - 1; i >= 0; i-- {
