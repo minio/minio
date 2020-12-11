@@ -394,9 +394,6 @@ func (o ObjectInfo) IsCompressedOK() (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	if crypto.IsEncrypted(o.UserDefined) {
-		return true, fmt.Errorf("compression %q and encryption enabled on same object", scheme)
-	}
 	switch scheme {
 	case compressionAlgorithmV1, compressionAlgorithmV2:
 		return true, nil
@@ -415,9 +412,6 @@ func (o ObjectInfo) GetActualETag(h http.Header) string {
 
 // GetActualSize - returns the actual size of the stored object
 func (o ObjectInfo) GetActualSize() (int64, error) {
-	if crypto.IsEncrypted(o.UserDefined) {
-		return o.DecryptedSize()
-	}
 	if o.IsCompressed() {
 		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
 		if !ok {
@@ -429,6 +423,10 @@ func (o ObjectInfo) GetActualSize() (int64, error) {
 		}
 		return size, nil
 	}
+	if crypto.IsEncrypted(o.UserDefined) {
+		return o.DecryptedSize()
+	}
+
 	return o.Size, nil
 }
 
@@ -439,7 +437,7 @@ func isCompressible(header http.Header, object string) bool {
 	globalCompressConfigMu.Lock()
 	cfg := globalCompressConfig
 	globalCompressConfigMu.Unlock()
-	if !cfg.Enabled || crypto.IsRequested(header) || excludeForCompression(header, object, cfg) {
+	if !cfg.Enabled || (crypto.IsRequested(header) && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
 		return false
 	}
 	return true
@@ -518,19 +516,28 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 }
 
 // Returns the compressed offset which should be skipped.
+// If encrypted offsets are adjusted for encrypted block headers/trailers.
+// Since de-compression is after decryption encryption overhead is only added to compressedOffset.
 func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64) {
 	var skipLength int64
 	var cumulativeActualSize int64
+	var firstPartIdx int
 	if len(objectInfo.Parts) > 0 {
-		for _, part := range objectInfo.Parts {
+		for i, part := range objectInfo.Parts {
 			cumulativeActualSize += part.ActualSize
 			if cumulativeActualSize <= offset {
 				compressedOffset += part.Size
 			} else {
+				firstPartIdx = i
 				skipLength = cumulativeActualSize - part.ActualSize
 				break
 			}
 		}
+	}
+	if isEncryptedMultipart(objectInfo) && firstPartIdx > 0 {
+		off, _, _, _, _, err := objectInfo.GetDecryptedRange(partNumberToRangeSpec(objectInfo, firstPartIdx))
+		logger.LogIf(context.Background(), err)
+		compressedOffset += off
 	}
 	return compressedOffset, offset - skipLength
 }
@@ -650,10 +657,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			}
 			if isEncrypted {
 				copySource := h.Get(crypto.SSECopyAlgorithm) != ""
-
-				cFns = append(cleanUpFns, cFns...)
 				// Attach decrypter on inputReader
-				//var decReader io.Reader
 				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, opts.PartNumber, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
