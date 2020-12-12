@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -433,6 +434,20 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 			continue
 		}
+		if object.VersionID != "" && object.VersionID != nullVersionID {
+			if _, err := uuid.Parse(object.VersionID); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("invalid version-id specified %w", err))
+				apiErr := errorCodes.ToAPIErr(ErrNoSuchVersion)
+				dErrs[index] = DeleteError{
+					Code:      apiErr.Code,
+					Message:   apiErr.Description,
+					Key:       object.ObjectName,
+					VersionID: object.VersionID,
+				}
+				continue
+			}
+		}
+
 		if replicateDeletes || hasLockEnabled || hasLifecycleConfig {
 			goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, ObjectOptions{
 				VersionID: object.VersionID,
