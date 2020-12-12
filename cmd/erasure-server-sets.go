@@ -99,12 +99,18 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 		idMap[id] = struct{}{}
 	}
 	res := make([]StorageAPI, 0, len(idMap))
-	for _, ss := range z.serverPools {
-		for _, disks := range ss.erasureDisks {
+	for _, s := range z.serverPools {
+		s.erasureDisksMu.RLock()
+		defer s.erasureDisksMu.RUnlock()
+		for _, disks := range s.erasureDisks {
 			for _, disk := range disks {
-				id, _ := disk.GetDiskID()
-				if _, ok := idMap[id]; ok {
-					res = append(res, disk)
+				if disk == OfflineDisk {
+					continue
+				}
+				if id, _ := disk.GetDiskID(); id != "" {
+					if _, ok := idMap[id]; ok {
+						res = append(res, disk)
+					}
 				}
 			}
 		}
