@@ -240,9 +240,14 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		return nil, err
 	}
 
-	rootDisk, err := disk.IsRootDisk(path, "/")
-	if err != nil {
-		return nil, err
+	var rootDisk bool
+	if env.Get("MINIO_CI_CD", "") != "" {
+		rootDisk = true
+	} else {
+		rootDisk, err = disk.IsRootDisk(path, "/")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	p := &xlStorage{
