@@ -430,7 +430,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	return firstErr
 }
 
-func (z *erasureServerPools) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+func (z *erasureServerPools) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	// Create buckets in parallel across all sets.
@@ -1175,14 +1175,22 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 	return r, nil
 }
 
-func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error) {
+func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	var r = madmin.HealResultItem{
 		Type:   madmin.HealItemBucket,
 		Bucket: bucket,
 	}
 
+	// Ensure heal opts for bucket metadata be deep healed all the time.
+	opts.ScanMode = madmin.HealDeepScan
+
+	// Ignore the results on purpose.
+	if _, err := z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket), "", opts); err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Healing bucket metadata for %s failed", bucket))
+	}
+
 	for _, zone := range z.serverPools {
-		result, err := zone.HealBucket(ctx, bucket, dryRun, remove)
+		result, err := zone.HealBucket(ctx, bucket, opts)
 		if err != nil {
 			switch err.(type) {
 			case BucketNotFound:

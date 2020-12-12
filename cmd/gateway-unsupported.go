@@ -52,7 +52,7 @@ func (a GatewayUnsupported) SetDriveCount() int {
 }
 
 // MakeMultipleBuckets is dummy stub for gateway.
-func (a GatewayUnsupported) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+func (a GatewayUnsupported) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
 	return NotImplemented{}
 }
 
@@ -171,7 +171,7 @@ func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin
 }
 
 // HealBucket - Not implemented stub
-func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error) {
+func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 

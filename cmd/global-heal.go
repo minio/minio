@@ -96,41 +96,50 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 	}, true
 }
 
-// healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI) error {
+func mustGetHealSequence(ctx context.Context) *healSequence {
 	// Get background heal sequence to send elements to heal
-	var bgSeq *healSequence
-	var ok bool
 	for {
-		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if ok {
-			break
-		}
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Second):
+		globalHealStateLK.RLock()
+		hstate := globalBackgroundHealState
+		globalHealStateLK.RUnlock()
+
+		if hstate == nil {
+			time.Sleep(time.Second)
 			continue
 		}
+
+		bgSeq, ok := hstate.getHealSequenceByToken(bgHealingUUID)
+		if !ok {
+			time.Sleep(time.Second)
+			continue
+		}
+		return bgSeq
 	}
+}
+
+// healErasureSet lists and heals all objects in a specific erasure set
+func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI) error {
+	bgSeq := mustGetHealSequence(ctx)
 
 	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
-	}, BucketInfo{
-		Name: pathJoin(minioMetaBucket, bucketConfigPrefix),
-	}) // add metadata .minio.sys/ bucket prefixes to heal
+	})
 
 	// Try to pro-actively heal backend-encrypted file.
-	bgSeq.sourceCh <- healSource{
+	if err := bgSeq.queueHealTask(healSource{
 		bucket: minioMetaBucket,
 		object: backendEncryptedFile,
+	}, madmin.HealItemMetadata); err != nil {
+		logger.LogIf(ctx, err)
 	}
 
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		// Heal current bucket
-		bgSeq.sourceCh <- healSource{
+		if err := bgSeq.queueHealTask(healSource{
 			bucket: bucket.Name,
+		}, madmin.HealItemBucket); err != nil {
+			logger.LogIf(ctx, err)
 		}
 
 		var entryChs []FileInfoVersionsCh
@@ -165,10 +174,12 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 			}
 
 			for _, version := range entry.Versions {
-				bgSeq.sourceCh <- healSource{
+				if err := bgSeq.queueHealTask(healSource{
 					bucket:    bucket.Name,
 					object:    version.Name,
 					versionID: version.VersionID,
+				}, madmin.HealItemObject); err != nil {
+					logger.LogIf(ctx, err)
 				}
 			}
 		}

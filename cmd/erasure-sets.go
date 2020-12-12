@@ -563,7 +563,7 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 }
 
 // MakeMultipleBuckets - make many buckets at once.
-func (s *erasureSets) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+func (s *erasureSets) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
@@ -1286,7 +1286,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 }
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
-func (s *erasureSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
+func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 	// Initialize heal result info
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
@@ -1297,7 +1297,7 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, dryRun, rem
 
 	for _, s := range s.sets {
 		var healResult madmin.HealResultItem
-		healResult, err = s.HealBucket(ctx, bucket, dryRun, remove)
+		healResult, err = s.HealBucket(ctx, bucket, opts)
 		if err != nil {
 			return result, err
 		}
@@ -1333,6 +1333,11 @@ func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error)
 		listBuckets = append(listBuckets, BucketInfo(v))
 	}
 	sort.Sort(byBucketName(listBuckets))
+
+	if err := s.MakeMultipleBuckets(ctx, listBuckets...); err != nil {
+		return listBuckets, err
+	}
+
 	return listBuckets, nil
 }
 
@@ -1387,19 +1392,7 @@ func (s *erasureSets) maintainMRFList() {
 // to find objects related to the new disk that needs to be healed.
 func (s *erasureSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
-	var bgSeq *healSequence
-	for {
-		if globalBackgroundHealState == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		var ok bool
-		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if ok {
-			break
-		}
-		time.Sleep(time.Second)
-	}
+	bgSeq := mustGetHealSequence(GlobalContext)
 
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the er.set

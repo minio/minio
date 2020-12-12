@@ -48,6 +48,11 @@ func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
 
+	initGlobalContext()
+
+	globalReplicationState = newReplicationState()
+	globalTransitionState = newTransitionState()
+
 	gob.Register(StorageErr(""))
 }
 

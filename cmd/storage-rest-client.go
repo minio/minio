@@ -640,9 +640,9 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		healthClient.ExpectTimeouts = true
 		restClient.HealthCheckFn = func() bool {
 			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+			defer cancel()
 			respBody, err := healthClient.Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 			xhttp.DrainBody(respBody)
-			cancel()
 			return toStorageErr(err) != errDiskNotFound
 		}
 	}
