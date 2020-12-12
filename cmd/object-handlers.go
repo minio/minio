@@ -2711,6 +2711,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	opts, err := delOpts(ctx, r, bucket, object)
 	if err != nil {
+		if isErrInvalidVersionID(err) {
+			writeSuccessNoContent(w)
+			return
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}

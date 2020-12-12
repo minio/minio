@@ -666,6 +666,12 @@ func isErrVersionNotFound(err error) bool {
 	return errors.As(err, &versionNotFound)
 }
 
+// isErrInvalidVersionID - Check if error type is InvalidVersionID.
+func isErrInvalidVersionID(err error) bool {
+	var invalidVersionID InvalidVersionID
+	return errors.As(err, &invalidVersionID)
+}
+
 // PreConditionFailed - Check if copy precondition failed
 type PreConditionFailed struct{}
 
