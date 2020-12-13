@@ -26,7 +26,6 @@ jobs:
         env:
           CGO_ENABLED: 0
           GO111MODULE: on
-          MINIO_CI_CD: 1
         run: |
           go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
           go test -v --timeout 50m ./...
@@ -35,7 +34,6 @@ jobs:
         env:
           CGO_ENABLED: 0
           GO111MODULE: on
-          MINIO_CI_CD: 1
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
