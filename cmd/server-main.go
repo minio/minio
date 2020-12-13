@@ -310,7 +310,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
 
-	buckets, err := newObject.ListBucketsHeal(ctx)
+	buckets, err := newObject.ListBuckets(ctx)
 	if err != nil {
 		return fmt.Errorf("Unable to list buckets to heal: %w", err)
 	}

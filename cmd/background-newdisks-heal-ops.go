@@ -160,7 +160,7 @@ wait:
 				erasureSetInZoneDisksToHeal[zoneIdx][setIndex] = append(erasureSetInZoneDisksToHeal[zoneIdx][setIndex], disk)
 			}
 
-			buckets, _ := z.ListBucketsHeal(ctx)
+			buckets, _ := z.ListBuckets(ctx)
 			for i, setMap := range erasureSetInZoneDisksToHeal {
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {

@@ -1565,11 +1565,6 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, opt
 	return NotImplemented{}
 }
 
-// ListBucketsHeal - list all buckets to be healed. Valid only for Erasure, returns ListBuckets() in single drive mode.
-func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	return fs.ListBuckets(ctx)
-}
-
 // GetMetrics - no op
 func (fs *FSObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
 	logger.LogIf(ctx, NotImplemented{})

@@ -430,28 +430,6 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	return firstErr
 }
 
-func (z *erasureServerPools) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
-	g := errgroup.WithNErrs(len(z.serverPools))
-
-	// Create buckets in parallel across all sets.
-	for index := range z.serverPools {
-		index := index
-		g.Go(func() error {
-			return z.serverPools[index].MakeMultipleBuckets(ctx, buckets...)
-		}, index)
-	}
-
-	errs := g.Wait()
-	// Return the first encountered error
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // MakeBucketWithLocation - creates a new bucket across all serverPools simultaneously
 // even if one of the sets fail to create buckets, we proceed all the successful
 // operations.
@@ -1181,13 +1159,8 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 		Bucket: bucket,
 	}
 
-	// Ensure heal opts for bucket metadata be deep healed all the time.
-	opts.ScanMode = madmin.HealDeepScan
-
-	// Ignore the results on purpose.
-	if _, err := z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket), "", opts); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Healing bucket metadata for %s failed", bucket))
-	}
+	// Attempt heal on the bucket metadata, ignore any failures
+	_, _ = z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket, bucketMetadataFile), "", opts)
 
 	for _, zone := range z.serverPools {
 		result, err := zone.HealBucket(ctx, bucket, opts)
@@ -1203,6 +1176,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
 	}
+
 	return r, nil
 }
 
@@ -1370,26 +1344,6 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		Bucket: bucket,
 		Object: object,
 	}
-}
-
-func (z *erasureServerPools) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	var healBuckets []BucketInfo
-	for _, zone := range z.serverPools {
-		bucketsInfo, err := zone.ListBucketsHeal(ctx)
-		if err != nil {
-			continue
-		}
-		healBuckets = append(healBuckets, bucketsInfo...)
-	}
-
-	for i := range healBuckets {
-		meta, err := globalBucketMetadataSys.Get(healBuckets[i].Name)
-		if err == nil {
-			healBuckets[i].Created = meta.Created
-		}
-	}
-
-	return healBuckets, nil
 }
 
 // GetMetrics - no op
