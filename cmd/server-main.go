@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -162,7 +163,17 @@ func serverHandleEnvVars() {
 	handleCommonEnvVars()
 }
 
+var globalHealStateLK sync.RWMutex
+
 func newAllSubsystems() {
+	if globalIsErasure {
+		globalHealStateLK.Lock()
+		// New global heal state
+		globalAllHealState = newHealState(true)
+		globalBackgroundHealState = newHealState(false)
+		globalHealStateLK.Unlock()
+	}
+
 	// Create new notification system and initialize notification targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
@@ -296,29 +307,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	// you want to add extra context to your error. This
 	// ensures top level retry works accordingly.
 	// List buckets to heal, and be re-used for loading configs.
-	var buckets []BucketInfo
 	rquorum := InsufficientReadQuorum{}
 	wquorum := InsufficientWriteQuorum{}
-	if globalIsErasure {
-		buckets, err = newObject.ListBucketsHeal(ctx)
-		if err != nil {
-			return fmt.Errorf("Unable to list buckets to heal: %w", err)
-		}
-		bucketNames := make([]string, len(buckets))
-		for i := range buckets {
-			bucketNames[i] = buckets[i].Name
-		}
-		if err = newObject.MakeMultipleBuckets(ctx, bucketNames...); err != nil {
-			if errors.As(err, &wquorum) || errors.As(err, &rquorum) {
-				// Return the error upwards for the caller to retry.
-				return fmt.Errorf("Unable to heal buckets: %w", err)
-			}
-		}
-	} else {
-		buckets, err = newObject.ListBuckets(ctx)
-		if err != nil {
-			return fmt.Errorf("Unable to list buckets: %w", err)
-		}
+
+	buckets, err := newObject.ListBucketsHeal(ctx)
+	if err != nil {
+		return fmt.Errorf("Unable to list buckets to heal: %w", err)
 	}
 
 	// Initialize config system.
@@ -416,15 +410,6 @@ func serverMain(ctx *cli.Context) {
 	// Set system resources to maximum.
 	setMaxResources()
 
-	if globalIsErasure {
-		// New global heal state
-		globalAllHealState = newHealState()
-		globalBackgroundHealState = newHealState()
-		globalReplicationState = newReplicationState()
-		globalTransitionState = newTransitionState()
-
-	}
-
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
 	if err != nil {
@@ -471,14 +456,14 @@ func serverMain(ctx *cli.Context) {
 
 	logger.SetDeploymentID(globalDeploymentID)
 
-	initDataCrawler(GlobalContext, newObject)
-
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
 		initBackgroundReplication(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
 	}
+
+	initDataCrawler(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err

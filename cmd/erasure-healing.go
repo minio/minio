@@ -32,9 +32,9 @@ import (
 // Heals a bucket if it doesn't exist on one of the disks, additionally
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
-func (er erasureObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (
+func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	result madmin.HealResultItem, err error) {
-	if !dryRun {
+	if !opts.DryRun {
 		defer ObjectPathUpdated(bucket)
 	}
 
@@ -45,7 +45,7 @@ func (er erasureObjects) HealBucket(ctx context.Context, bucket string, dryRun, 
 	writeQuorum := getWriteQuorum(len(storageDisks))
 
 	// Heal bucket.
-	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, dryRun)
+	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, opts.DryRun)
 }
 
 // Heal bucket - create buckets on disks where it does not exist.

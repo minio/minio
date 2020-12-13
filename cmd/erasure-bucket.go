@@ -32,10 +32,15 @@ var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnform
 var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 
 // MakeMultipleBuckets - create a list of buckets
-func (er erasureObjects) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+func (er erasureObjects) MakeMultipleBuckets(ctx context.Context, bucketsInfo ...BucketInfo) error {
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
+
+	buckets := make([]string, len(bucketsInfo))
+	for i := range bucketsInfo {
+		buckets[i] = bucketsInfo[i].Name
+	}
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range storageDisks {

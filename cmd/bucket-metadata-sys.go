@@ -440,6 +440,11 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	for index := range buckets {
 		index := index
 		g.Go(func() error {
+			if _, err := objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
+				Remove: true,
+			}); err != nil {
+				return err
+			}
 			meta, err := loadBucketMetadata(ctx, objAPI, buckets[index].Name)
 			if err != nil {
 				return err

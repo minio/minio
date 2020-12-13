@@ -130,7 +130,10 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = er.HealBucket(ctx, bucket, false, false)
+	_, err = er.HealBucket(ctx, bucket, madmin.HealOpts{
+		DryRun: false,
+		Remove: false,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

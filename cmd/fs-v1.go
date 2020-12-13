@@ -1540,7 +1540,7 @@ func (fs *FSObjects) HealObject(ctx context.Context, bucket, object, versionID s
 }
 
 // HealBucket - no-op for fs, Valid only for Erasure.
-func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem,
+func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem,
 	error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
@@ -1561,10 +1561,9 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, opt
 	return NotImplemented{}
 }
 
-// ListBucketsHeal - list all buckets to be healed. Valid only for Erasure
+// ListBucketsHeal - list all buckets to be healed. Valid only for Erasure, returns ListBuckets() in single drive mode.
 func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return []BucketInfo{}, NotImplemented{}
+	return fs.ListBuckets(ctx)
 }
 
 // GetMetrics - no op
