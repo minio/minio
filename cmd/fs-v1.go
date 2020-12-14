@@ -321,6 +321,9 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		bucket, object := item.bucket, item.objectPath()
 		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !osIsNotExist(err) {
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("crawlBucket:")+" object return unexpected error: %v/%v: %w", item.bucket, item.objectPath(), err)
+			}
 			return sizeSummary{}, errSkipFile
 		}
 
@@ -339,10 +342,11 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		// Stat the file.
 		fi, fiErr := os.Stat(item.Path)
 		if fiErr != nil {
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("crawlBucket:")+" object path missing: %v: %w", item.Path, fiErr)
+			}
 			return sizeSummary{}, errSkipFile
 		}
-		// We cannot heal in FS mode.
-		item.heal = false
 
 		oi := fsMeta.ToObjectInfo(bucket, object, fi)
 		sz := item.applyActions(ctx, fs, actionMeta{oi: oi})
@@ -1540,7 +1544,7 @@ func (fs *FSObjects) HealObject(ctx context.Context, bucket, object, versionID s
 }
 
 // HealBucket - no-op for fs, Valid only for Erasure.
-func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem,
+func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem,
 	error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
@@ -1561,10 +1565,9 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, opt
 	return NotImplemented{}
 }
 
-// ListBucketsHeal - list all buckets to be healed. Valid only for Erasure
+// ListBucketsHeal - list all buckets to be healed. Valid only for Erasure, returns ListBuckets() in single drive mode.
 func (fs *FSObjects) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	logger.LogIf(ctx, NotImplemented{})
-	return []BucketInfo{}, NotImplemented{}
+	return fs.ListBuckets(ctx)
 }
 
 // GetMetrics - no op

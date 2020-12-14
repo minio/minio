@@ -34,7 +34,7 @@ import (
 )
 
 // local lock servers
-var globalLockServers = make(map[Endpoint]*localLocker)
+var globalLockServer *localLocker
 
 // RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {

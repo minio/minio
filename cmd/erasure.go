@@ -251,10 +251,14 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 
 	// Collect disks for healing.
 	allDisks := er.getDisks()
-	allDiskIDs := make([]string, len(allDisks))
-	for i, disk := range allDisks {
+	allDiskIDs := make([]string, 0, len(allDisks))
+	for _, disk := range allDisks {
+		if disk == OfflineDisk {
+			// its possible that disk is OfflineDisk
+			continue
+		}
 		id, _ := disk.GetDiskID()
-		allDiskIDs[i] = id
+		allDiskIDs = append(allDiskIDs, id)
 	}
 
 	// Load bucket totals

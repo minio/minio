@@ -161,7 +161,7 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter, durationSecs float64) {
+func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter) {
 	// A successful request has a 2xx response code
 	successReq := (w.StatusCode >= 200 && w.StatusCode < 300)
 
@@ -172,10 +172,8 @@ func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.Response
 		}
 	}
 
-	if r.Method == http.MethodGet {
-		// Increment the prometheus http request response histogram with appropriate label
-		httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(durationSecs)
-	}
+	// Increment the prometheus http request response histogram with appropriate label
+	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
 }
 
 // Prepare new HTTPStats structure

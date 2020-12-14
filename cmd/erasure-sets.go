@@ -30,6 +30,7 @@ import (
 
 	"github.com/dchest/siphash"
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
@@ -278,10 +279,20 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 
 // GetAllLockers return a list of all lockers for all sets.
 func (s *erasureSets) GetAllLockers() []dsync.NetLocker {
-	allLockers := make([]dsync.NetLocker, s.setDriveCount*s.setCount)
-	for i, lockers := range s.erasureLockers {
-		for j, locker := range lockers {
-			allLockers[i*s.setDriveCount+j] = locker
+	var allLockers []dsync.NetLocker
+	lockEpSet := set.NewStringSet()
+	for _, lockers := range s.erasureLockers {
+		for _, locker := range lockers {
+			if locker == nil || !locker.IsOnline() {
+				// Skip any offline lockers.
+				continue
+			}
+			if lockEpSet.Contains(locker.String()) {
+				// Skip duplicate lockers.
+				continue
+			}
+			lockEpSet.Add(locker.String())
+			allLockers = append(allLockers, locker)
 		}
 	}
 	return allLockers
@@ -289,15 +300,8 @@ func (s *erasureSets) GetAllLockers() []dsync.NetLocker {
 
 func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string) {
 	return func() ([]dsync.NetLocker, string) {
-		lockers := make([]dsync.NetLocker, s.setDriveCount)
+		lockers := make([]dsync.NetLocker, len(s.erasureLockers[setIndex]))
 		copy(lockers, s.erasureLockers[setIndex])
-		sort.Slice(lockers, func(i, j int) bool {
-			// re-order lockers with affinity for
-			// - non-local lockers
-			// - online lockers
-			// are used first
-			return !lockers[i].IsLocal() && lockers[i].IsOnline()
-		})
 		return lockers, s.erasureLockOwner
 	}
 }
@@ -362,14 +366,24 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
-		s.erasureLockers[i] = make([]dsync.NetLocker, setDriveCount)
+	}
+
+	var erasureLockers = map[string]dsync.NetLocker{}
+	for _, endpoint := range endpoints {
+		if _, ok := erasureLockers[endpoint.Host]; !ok {
+			erasureLockers[endpoint.Host] = newLockAPI(endpoint)
+		}
 	}
 
 	for i := 0; i < setCount; i++ {
+		var lockerEpSet = set.NewStringSet()
 		for j := 0; j < setDriveCount; j++ {
 			endpoint := endpoints[i*setDriveCount+j]
-			// Rely on endpoints list to initialize, init lockers and available disks.
-			s.erasureLockers[i][j] = newLockAPI(endpoint)
+			// Only add lockers only one per endpoint and per erasure set.
+			if locker, ok := erasureLockers[endpoint.Host]; ok && !lockerEpSet.Contains(endpoint.Host) {
+				lockerEpSet.Add(endpoint.Host)
+				s.erasureLockers[i] = append(s.erasureLockers[i], locker)
+			}
 			disk := storageDisks[i*setDriveCount+j]
 			if disk == nil {
 				continue
@@ -396,10 +410,10 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			bp:            bp,
 			mrfOpCh:       make(chan partialOperation, 10000),
 		}
-
-		go s.sets[i].cleanupStaleUploads(ctx,
-			GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 	}
+
+	// start cleanup stale uploads go-routine.
+	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
@@ -407,6 +421,22 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	go s.healMRFRoutine()
 
 	return s, nil
+}
+
+func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for _, set := range s.sets {
+				set.cleanupStaleUploads(ctx, expiry)
+			}
+		}
+	}
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -533,7 +563,7 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 }
 
 // MakeMultipleBuckets - make many buckets at once.
-func (s *erasureSets) MakeMultipleBuckets(ctx context.Context, buckets ...string) error {
+func (s *erasureSets) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	// Create buckets in parallel across all sets.
@@ -1256,7 +1286,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 }
 
 // HealBucket - heals inconsistent buckets and bucket metadata on all sets.
-func (s *erasureSets) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (result madmin.HealResultItem, err error) {
+func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 	// Initialize heal result info
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
@@ -1267,7 +1297,7 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, dryRun, rem
 
 	for _, s := range s.sets {
 		var healResult madmin.HealResultItem
-		healResult, err = s.HealBucket(ctx, bucket, dryRun, remove)
+		healResult, err = s.HealBucket(ctx, bucket, opts)
 		if err != nil {
 			return result, err
 		}
@@ -1303,6 +1333,11 @@ func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error)
 		listBuckets = append(listBuckets, BucketInfo(v))
 	}
 	sort.Sort(byBucketName(listBuckets))
+
+	if err := s.MakeMultipleBuckets(ctx, listBuckets...); err != nil {
+		return listBuckets, err
+	}
+
 	return listBuckets, nil
 }
 
@@ -1357,19 +1392,7 @@ func (s *erasureSets) maintainMRFList() {
 // to find objects related to the new disk that needs to be healed.
 func (s *erasureSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
-	var bgSeq *healSequence
-	for {
-		if globalBackgroundHealState == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		var ok bool
-		bgSeq, ok = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if ok {
-			break
-		}
-		time.Sleep(time.Second)
-	}
+	bgSeq := mustGetHealSequence(GlobalContext)
 
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the er.set

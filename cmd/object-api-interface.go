@@ -82,7 +82,7 @@ type ObjectLayer interface {
 	StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) // local queries only local disks
 
 	// Bucket operations.
-	MakeMultipleBuckets(ctx context.Context, buckets ...string) error
+	MakeMultipleBuckets(ctx context.Context, bucketInfo ...BucketInfo) error
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
@@ -122,7 +122,7 @@ type ObjectLayer interface {
 
 	// Healing operations.
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
-	HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error)
+	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
 	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)

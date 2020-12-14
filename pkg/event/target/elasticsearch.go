@@ -30,7 +30,7 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/pkg/errors"
 
-	"gopkg.in/olivere/elastic.v5"
+	"github.com/olivere/elastic/v7"
 )
 
 // Elastic constants

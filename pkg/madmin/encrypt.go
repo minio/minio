@@ -28,7 +28,11 @@ import (
 	"github.com/secure-io/sio-go/sioutil"
 )
 
-var idKey = argon2.NewIDKey(1, 64*1024, 4)
+var idKey func([]byte, []byte, []byte, []byte, uint32) []byte
+
+func init() {
+	idKey = argon2.NewIDKey(1, 64*1024, 4)
+}
 
 // EncryptData encrypts the data with an unique key
 // derived from password using the Argon2id PBKDF.

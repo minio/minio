@@ -354,16 +354,14 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
+		_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil {
-			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
-			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
-				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
-				}
-				activeLifeCycle = f.oldCache.Info.lifeCycle
-				filter = nil
+		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+			if f.dataUsageCrawlDebug {
+				logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
 			}
+			activeLifeCycle = f.oldCache.Info.lifeCycle
+			filter = nil
 		}
 		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
@@ -443,7 +441,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
-				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
+				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
 			sizeSummary, err := f.getSize(item)
 
@@ -664,13 +662,11 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 
 		bucket, prefix := path2BucketObjectWithBasePath(f.root, fileName)
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil {
-			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
-				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
-				}
-				activeLifeCycle = f.oldCache.Info.lifeCycle
+		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
+			if f.dataUsageCrawlDebug {
+				logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
 			}
+			activeLifeCycle = f.oldCache.Info.lifeCycle
 		}
 
 		sizeSummary, err := f.getSize(
@@ -682,7 +678,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
-				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
+				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			})
 
 		// Wait to throttle IO
@@ -757,7 +753,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	}
 	if i.heal {
 		if i.debug {
-			logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+			if meta.oi.VersionID != "" {
+				logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+			} else {
+				logger.Info(color.Green("applyActions:")+" heal checking: %v/%v", i.bucket, i.objectPath())
+			}
 		}
 		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling})
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -770,6 +770,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		size = res.ObjectSize
 	}
 	if i.lifeCycle == nil {
+		if i.debug {
+			logger.Info(color.Green("applyActions:")+" no lifecycle rules to apply: %q", i.objectPath())
+		}
 		return size
 	}
 
@@ -789,7 +792,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			TransitionStatus: meta.oi.TransitionStatus,
 		})
 	if i.debug {
-		logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
+		if versionID != "" {
+			logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
+		} else {
+			logger.Info(color.Green("applyActions:")+" lifecycle: %q Initial scan: %v", i.objectPath(), action)
+		}
 	}
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
@@ -797,6 +804,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 	default:
 		// No action.
+		if i.debug {
+			logger.Info(color.Green("applyActions:")+" object not expirable: %q", i.objectPath())
+		}
 		return size
 	}
 
@@ -837,7 +847,6 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		TransitionStatus: obj.TransitionStatus,
 	}
 	action = i.lifeCycle.ComputeAction(lcOpts)
-
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
 	}
@@ -861,7 +870,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			locked := enforceRetentionForDeletion(ctx, obj)
 			if locked {
 				if i.debug {
-					logger.Info(color.Green("applyActions:")+" lifecycle: %s is locked, not deleting", i.objectPath())
+					if obj.VersionID != "" {
+						logger.Info(color.Green("applyActions:")+" lifecycle: %s v%s is locked, not deleting", i.objectPath(), obj.VersionID)
+					} else {
+						logger.Info(color.Green("applyActions:")+" lifecycle: %s is locked, not deleting", i.objectPath())
+					}
 				}
 				return size
 			}
@@ -883,18 +896,21 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		globalTransitionState.queueTransitionTask(obj)
 		return 0
 	}
+
 	if obj.TransitionStatus != "" {
 		if err := deleteTransitionedObject(ctx, o, i.bucket, i.objectPath(), lcOpts, action, false); err != nil {
 			logger.LogIf(ctx, err)
 			return size
 		}
-	} else {
-		obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
-		if err != nil {
-			// Assume it is still there.
-			logger.LogIf(ctx, err)
-			return size
-		}
+		// Notification already sent at *deleteTransitionedObject*, return '0' here.
+		return 0
+	}
+
+	obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
+	if err != nil {
+		// Assume it is still there.
+		logger.LogIf(ctx, err)
+		return size
 	}
 
 	eventName := event.ObjectRemovedDelete
@@ -920,7 +936,7 @@ func (i *crawlItem) objectPath() string {
 // healReplication will heal a scanned item that has failed replication.
 func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) {
 	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
-		//heal delete marker replication failure or versioned delete replication failure
+		// heal delete marker replication failure or versioned delete replication failure
 		if meta.oi.ReplicationStatus == replication.Pending ||
 			meta.oi.ReplicationStatus == replication.Failed ||
 			meta.oi.VersionPurgeStatus == Failed || meta.oi.VersionPurgeStatus == Pending {
