@@ -978,16 +978,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var reader io.Reader
 	var length = srcInfo.Size
 
-	// Set the actual size to the decrypted size if encrypted.
-	actualSize := srcInfo.Size
-	if crypto.IsEncrypted(srcInfo.UserDefined) {
-		actualSize, err = srcInfo.DecryptedSize()
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-			return
-		}
-		length = actualSize
+	// Set the actual size to the compressed/decrypted size if encrypted.
+	actualSize, err := srcInfo.GetActualSize()
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
 	}
+	length = actualSize
 
 	if !cpSrcDstSame {
 		if err := enforceBucketQuota(ctx, dstBucket, actualSize); err != nil {
@@ -999,8 +996,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
-	isCompressed := objectAPI.IsCompressionSupported() && isCompressible(r.Header, srcObject) && !isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI)
-	if isCompressed {
+	isDstCompressed := objectAPI.IsCompressionSupported() &&
+		isCompressible(r.Header, srcObject) &&
+		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI)
+	if isDstCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
 		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -1032,7 +1031,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Check if either the source is encrypted or the destination will be encrypted.
 	objectEncryption := crypto.IsSourceEncrypted(srcInfo.UserDefined) || crypto.IsRequested(r.Header)
 	var encMetadata = make(map[string]string)
-	if objectAPI.IsEncryptionSupported() && !isCompressed {
+	if objectAPI.IsEncryptionSupported() {
 		// Encryption parameters not applicable for this object.
 		if !crypto.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
@@ -1103,8 +1102,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			var targetSize int64
 
 			switch {
+			case isDstCompressed:
+				targetSize = -1
 			case !isSourceEncrypted && !isTargetEncrypted:
-				targetSize = srcInfo.Size
+				targetSize, _ = srcInfo.GetActualSize()
 			case isSourceEncrypted && isTargetEncrypted:
 				objInfo := ObjectInfo{Size: actualSize}
 				targetSize = objInfo.EncryptedSize()
@@ -1129,7 +1130,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			// do not try to verify encrypted content
-			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", targetSize, globalCLIContext.StrictS3Compat)
+			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1895,7 +1896,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	actualPartSize := srcInfo.Size
 	if crypto.IsEncrypted(srcInfo.UserDefined) {
-		actualPartSize, err = srcInfo.DecryptedSize()
+		actualPartSize, err = srcInfo.GetActualSize()
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1994,7 +1995,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 	isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
-	if objectAPI.IsEncryptionSupported() && !isCompressed && isEncrypted {
+	if objectAPI.IsEncryptionSupported() && isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL, guessIsBrowserReq(r))
 			return
@@ -2025,8 +2026,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 
-		info := ObjectInfo{Size: length}
-		srcInfo.Reader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", length, globalCLIContext.StrictS3Compat)
+		wantSize := int64(-1)
+		if length >= 0 {
+			info := ObjectInfo{Size: length}
+			wantSize = info.EncryptedSize()
+		}
+
+		srcInfo.Reader, err = hash.NewReader(reader, wantSize, "", "", actualPartSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2040,6 +2046,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	partInfo, err := objectAPI.CopyObjectPart(ctx, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
 		startOffset, length, srcInfo, srcOpts, dstOpts)
 	if err != nil {
+		fmt.Println("cop:", err, srcBucket, srcObject, dstBucket, dstObject, uploadID, partID,
+			startOffset, length, srcInfo, srcOpts, dstOpts)
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
