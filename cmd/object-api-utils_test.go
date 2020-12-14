@@ -317,7 +317,7 @@ func TestIsCompressed(t *testing.T) {
 		result  bool
 		err     bool
 	}{
-		{
+		0: {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{"X-Minio-Internal-compression": compressionAlgorithmV1,
 					"content-type": "application/octet-stream",
@@ -325,7 +325,7 @@ func TestIsCompressed(t *testing.T) {
 			},
 			result: true,
 		},
-		{
+		1: {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{"X-Minio-Internal-compression": compressionAlgorithmV2,
 					"content-type": "application/octet-stream",
@@ -333,7 +333,7 @@ func TestIsCompressed(t *testing.T) {
 			},
 			result: true,
 		},
-		{
+		2: {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{"X-Minio-Internal-compression": "unknown/compression/type",
 					"content-type": "application/octet-stream",
@@ -342,7 +342,7 @@ func TestIsCompressed(t *testing.T) {
 			result: true,
 			err:    true,
 		},
-		{
+		3: {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{"X-Minio-Internal-compression": compressionAlgorithmV2,
 					"content-type": "application/octet-stream",
@@ -351,9 +351,9 @@ func TestIsCompressed(t *testing.T) {
 				},
 			},
 			result: true,
-			err:    true,
+			err:    false,
 		},
-		{
+		4: {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{"X-Minio-Internal-XYZ": "klauspost/compress/s2",
 					"content-type": "application/octet-stream",
@@ -361,7 +361,7 @@ func TestIsCompressed(t *testing.T) {
 			},
 			result: false,
 		},
-		{
+		5: {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{"content-type": "application/octet-stream",
 					"etag": "b3ff3ef3789147152fbfbc50efba4bfd-2"},
