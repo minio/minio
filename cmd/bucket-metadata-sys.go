@@ -191,7 +191,6 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 // This function should only be used with
 // - GetBucketInfo
 // - ListBuckets
-// - ListBucketsHeal (only in case of erasure coding mode)
 // For all other bucket specific metadata, use the relevant
 // calls implemented specifically for each of those features.
 func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
@@ -440,11 +439,10 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	for index := range buckets {
 		index := index
 		g.Go(func() error {
-			if _, err := objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
-				Remove: true,
-			}); err != nil {
-				return err
-			}
+			_, _ = objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
+				// Ensure heal opts for bucket metadata be deep healed all the time.
+				ScanMode: madmin.HealDeepScan,
+			})
 			meta, err := loadBucketMetadata(ctx, objAPI, buckets[index].Name)
 			if err != nil {
 				return err
