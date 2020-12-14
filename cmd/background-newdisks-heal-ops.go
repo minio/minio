@@ -46,16 +46,7 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 
 	initBackgroundHealing(ctx, objAPI) // start quick background healing
 
-	var bgSeq *healSequence
-	var found bool
-
-	for {
-		bgSeq, found = globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-		if found {
-			break
-		}
-		time.Sleep(time.Second)
-	}
+	bgSeq := mustGetHealSequence(ctx)
 
 	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
 

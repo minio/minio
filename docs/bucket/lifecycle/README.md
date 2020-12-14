@@ -127,6 +127,11 @@ aws s3api restore-object --bucket srcbucket \
 --restore-request Days=3
 ```
 
+### 4.1 Monitoring transition events
+`s3:ObjectTransition:Complete` and `s3:ObjectTransition:Failed` events can be used to monitor transition events between the source cluster and transition tier. To watch lifecycle events, you can enable bucket notification on the source bucket with `mc event add`  and specify `--event ilm` flag.
+
+Note that transition event notification is a MinIO extension.
+
 ## Explore Further
 - [MinIO | Golang Client API Reference](https://docs.min.io/docs/golang-client-api-reference.html#SetBucketLifecycle)
 - [Object Lifecycle Management](https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html)

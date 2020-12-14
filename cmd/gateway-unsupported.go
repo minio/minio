@@ -51,6 +51,11 @@ func (a GatewayUnsupported) SetDriveCount() int {
 	return 0
 }
 
+// MakeMultipleBuckets is dummy stub for gateway.
+func (a GatewayUnsupported) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
+	return NotImplemented{}
+}
+
 // ListMultipartUploads lists all multipart uploads.
 func (a GatewayUnsupported) ListMultipartUploads(ctx context.Context, bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, err error) {
 	return lmi, NotImplemented{}
@@ -166,7 +171,7 @@ func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin
 }
 
 // HealBucket - Not implemented stub
-func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, dryRun, remove bool) (madmin.HealResultItem, error) {
+func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 

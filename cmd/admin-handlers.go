@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/message/log"
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/bandwidth"
 	"github.com/minio/minio/pkg/handlers"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/madmin"
@@ -204,9 +205,10 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	var objectAPI ObjectLayer
-	if serviceSig == serviceRestart {
+	switch serviceSig {
+	case serviceRestart:
 		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceRestartAdminAction)
-	} else {
+	case serviceStop:
 		objectAPI, _ = validateAdminReq(ctx, w, r, iampolicy.ServiceStopAdminAction)
 	}
 	if objectAPI == nil {
@@ -371,14 +373,12 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 		if peerLock == nil {
 			continue
 		}
-		for _, locks := range peerLock.Locks {
-			for k, v := range locks {
-				for _, lockReqInfo := range v {
-					if val, ok := entryMap[lockReqInfo.UID]; ok {
-						val.ServerList = append(val.ServerList, peerLock.Addr)
-					} else {
-						entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
-					}
+		for k, v := range peerLock.Locks {
+			for _, lockReqInfo := range v {
+				if val, ok := entryMap[lockReqInfo.UID]; ok {
+					val.ServerList = append(val.ServerList, peerLock.Addr)
+				} else {
+					entryMap[lockReqInfo.UID] = lriToLockEntry(lockReqInfo, k, peerLock.Addr)
 				}
 			}
 		}
@@ -400,7 +400,7 @@ func topLockEntries(peerLocks []*PeerLocks, stale bool) madmin.LockEntries {
 // PeerLocks holds server information result of one node
 type PeerLocks struct {
 	Addr  string
-	Locks GetLocksResp
+	Locks map[string][]lockRequesterInfo
 }
 
 // TopLocksHandler Get list of locks in use
@@ -1428,6 +1428,8 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "BandwidthMonitor")
 
+	defer logger.AuditLog(w, r, "BandwidthMonitor", mustGetClaimsFromToken(r))
+
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.BandwidthMonitorAction, "")
 	if adminAPIErr != ErrNone {
@@ -1436,15 +1438,41 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	}
 
 	setEventStreamHeaders(w)
+	reportCh := make(chan bandwidth.Report, 1)
+	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
+	defer keepAliveTicker.Stop()
 	bucketsRequestedString := r.URL.Query().Get("buckets")
 	bucketsRequested := strings.Split(bucketsRequestedString, ",")
-	consolidatedReport := globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
-	enc := json.NewEncoder(w)
-	err := enc.Encode(consolidatedReport)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+	go func() {
+		for {
+			reportCh <- globalNotificationSys.GetBandwidthReports(ctx, bucketsRequested...)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}()
+	for {
+		select {
+		case report := <-reportCh:
+			enc := json.NewEncoder(w)
+			err := enc.Encode(report)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), r.URL)
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-keepAliveTicker.C:
+			if _, err := w.Write([]byte(" ")); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+		case <-ctx.Done():
+			return
+		}
 	}
-	w.(http.Flusher).Flush()
 }
 
 // ServerInfoHandler - GET /minio/admin/v3/info

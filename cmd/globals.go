@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -36,7 +37,7 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
-	etcd "go.etcd.io/etcd/v3/clientv3"
+	etcd "go.etcd.io/etcd/clientv3"
 
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/event"
@@ -245,7 +246,8 @@ var (
 	globalAutoEncryption bool
 
 	// Is compression enabled?
-	globalCompressConfig compress.Config
+	globalCompressConfigMu sync.Mutex
+	globalCompressConfig   compress.Config
 
 	// Some standard object extensions which we strictly dis-allow for compression.
 	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}

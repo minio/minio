@@ -44,10 +44,21 @@ func releaseTag(version string) string {
 		relPrefix = prefix
 	}
 
+	relSuffix := ""
+	if hotfix := os.Getenv("MINIO_HOTFIX"); hotfix != "" {
+		relSuffix = hotfix
+	}
+
 	relTag := strings.Replace(version, " ", "-", -1)
 	relTag = strings.Replace(relTag, ":", "-", -1)
 	relTag = strings.Replace(relTag, ",", "", -1)
-	return relPrefix + "." + relTag
+	relTag = relPrefix + "." + relTag
+
+	if relSuffix != "" {
+		relTag += "." + relSuffix
+	}
+
+	return relTag
 }
 
 // commitID returns the abbreviated commit-id hash of the last commit.
@@ -68,5 +79,12 @@ func commitID() string {
 }
 
 func main() {
-	fmt.Println(genLDFlags(time.Now().UTC().Format(time.RFC3339)))
+	var version string
+	if len(os.Args) > 1 {
+		version = os.Args[1]
+	} else {
+		version = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	fmt.Println(genLDFlags(version))
 }

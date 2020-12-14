@@ -77,6 +77,7 @@ const (
 	LoggerWebhookSubSys  = "logger_webhook"
 	AuditWebhookSubSys   = "audit_webhook"
 	HealSubSys           = "heal"
+	CrawlerSubSys        = "crawler"
 
 	// Add new constants here if you add new fields to config.
 )
@@ -98,7 +99,7 @@ const (
 )
 
 // SubSystems - all supported sub-systems
-var SubSystems = set.CreateStringSet([]string{
+var SubSystems = set.CreateStringSet(
 	CredentialsSubSys,
 	RegionSubSys,
 	EtcdSubSys,
@@ -113,6 +114,7 @@ var SubSystems = set.CreateStringSet([]string{
 	PolicyOPASubSys,
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
+	CrawlerSubSys,
 	HealSubSys,
 	NotifyAMQPSubSys,
 	NotifyESSubSys,
@@ -124,7 +126,15 @@ var SubSystems = set.CreateStringSet([]string{
 	NotifyPostgresSubSys,
 	NotifyRedisSubSys,
 	NotifyWebhookSubSys,
-}...)
+)
+
+// SubSystemsDynamic - all sub-systems that have dynamic config.
+var SubSystemsDynamic = set.CreateStringSet(
+	APISubSys,
+	CompressionSubSys,
+	CrawlerSubSys,
+	HealSubSys,
+)
 
 // SubSystemsSingleTargets - subsystems which only support single target.
 var SubSystemsSingleTargets = set.CreateStringSet([]string{
@@ -141,6 +151,7 @@ var SubSystemsSingleTargets = set.CreateStringSet([]string{
 	IdentityLDAPSubSys,
 	IdentityOpenIDSubSys,
 	HealSubSys,
+	CrawlerSubSys,
 }...)
 
 // Constant separators
@@ -309,25 +320,29 @@ func (c Config) DelFrom(r io.Reader) error {
 	return nil
 }
 
-// ReadFrom - implements io.ReaderFrom interface
-func (c Config) ReadFrom(r io.Reader) (int64, error) {
+// ReadConfig - read content from input and write into c.
+// Returns whether all parameters were dynamic.
+func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
 	var n int
 	scanner := bufio.NewScanner(r)
+	dynOnly = true
 	for scanner.Scan() {
 		// Skip any empty lines, or comment like characters
 		text := scanner.Text()
 		if text == "" || strings.HasPrefix(text, KvComment) {
 			continue
 		}
-		if err := c.SetKVS(text, DefaultKVS); err != nil {
-			return 0, err
+		dynamic, err := c.SetKVS(text, DefaultKVS)
+		if err != nil {
+			return false, err
 		}
+		dynOnly = dynOnly && dynamic
 		n += len(text)
 	}
 	if err := scanner.Err(); err != nil {
-		return 0, err
+		return false, err
 	}
-	return int64(n), nil
+	return dynOnly, nil
 }
 
 type configWriteTo struct {
@@ -618,26 +633,27 @@ func (c Config) Clone() Config {
 }
 
 // SetKVS - set specific key values per sub-system.
-func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
+func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err error) {
 	if len(s) == 0 {
-		return Errorf("input arguments cannot be empty")
+		return false, Errorf("input arguments cannot be empty")
 	}
 	inputs := strings.SplitN(s, KvSpaceSeparator, 2)
 	if len(inputs) <= 1 {
-		return Errorf("invalid number of arguments '%s'", s)
+		return false, Errorf("invalid number of arguments '%s'", s)
 	}
 	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
-		return Errorf("invalid number of arguments %s", s)
+		return false, Errorf("invalid number of arguments %s", s)
 	}
 
 	if !SubSystems.Contains(subSystemValue[0]) {
-		return Errorf("unknown sub-system %s", s)
+		return false, Errorf("unknown sub-system %s", s)
 	}
 
 	if SubSystemsSingleTargets.Contains(subSystemValue[0]) && len(subSystemValue) == 2 {
-		return Errorf("sub-system '%s' only supports single target", subSystemValue[0])
+		return false, Errorf("sub-system '%s' only supports single target", subSystemValue[0])
 	}
+	dynamic = SubSystemsDynamic.Contains(subSystemValue[0])
 
 	tgt := Default
 	subSys := subSystemValue[0]
@@ -647,7 +663,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 
 	fields := madmin.KvFields(inputs[1], defaultKVS[subSys].Keys())
 	if len(fields) == 0 {
-		return Errorf("sub-system '%s' cannot have empty keys", subSys)
+		return false, Errorf("sub-system '%s' cannot have empty keys", subSys)
 	}
 
 	var kvs = KVS{}
@@ -670,7 +686,7 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 			kvs.Set(prevK, madmin.SanitizeValue(kv[1]))
 			continue
 		}
-		return Errorf("key '%s', cannot have empty value", kv[0])
+		return false, Errorf("key '%s', cannot have empty value", kv[0])
 	}
 
 	_, ok := kvs.Lookup(Enable)
@@ -720,11 +736,11 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) error {
 			// Return error only if the
 			// key is enabled, for state=off
 			// let it be empty.
-			return Errorf(
+			return false, Errorf(
 				"'%s' is not optional for '%s' sub-system, please check '%s' documentation",
 				hkv.Key, subSys, subSys)
 		}
 	}
 	c[subSys][tgt] = currKVS
-	return nil
+	return dynamic, nil
 }

@@ -48,6 +48,11 @@ func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
 
+	initGlobalContext()
+
+	globalReplicationState = newReplicationState()
+	globalTransitionState = newTransitionState()
+
 	gob.Register(StorageErr(""))
 }
 
@@ -64,10 +69,12 @@ func verifyObjectLayerFeatures(name string, objAPI ObjectLayer) {
 		}
 	}
 
+	globalCompressConfigMu.Lock()
 	if globalCompressConfig.Enabled && !objAPI.IsCompressionSupported() {
 		logger.Fatal(errInvalidArgument,
 			"Compression support is requested but '%s' does not support compression", name)
 	}
+	globalCompressConfigMu.Unlock()
 }
 
 // Check for updates and print a notification message

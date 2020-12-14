@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
@@ -240,9 +241,14 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		return nil, err
 	}
 
-	rootDisk, err := disk.IsRootDisk(path)
-	if err != nil {
-		return nil, err
+	var rootDisk bool
+	if env.Get("MINIO_CI_CD", "") != "" {
+		rootDisk = true
+	} else {
+		rootDisk, err = disk.IsRootDisk(path, "/")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	p := &xlStorage{
@@ -329,6 +335,9 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	lc, err := globalLifecycleSys.Get(cache.Info.Name)
 	if err == nil && lc.HasActiveRules("", true) {
 		cache.Info.lifeCycle = lc
+		if intDataUpdateTracker.debug {
+			logger.Info(color.Green("crawlDisk:") + " lifecycle: Active rules found")
+		}
 	}
 
 	// Get object api
@@ -336,19 +345,25 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	if objAPI == nil {
 		return cache, errServerNotInitialized
 	}
-	opts := globalHealConfig
 
-	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (int64, error) {
+	globalHealConfigMu.Lock()
+	healOpts := globalHealConfig
+	globalHealConfigMu.Unlock()
+
+	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (sizeSummary, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFile) &&
 			!strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFileV1) {
 			// if no xl.meta/xl.json found, skip the file.
-			return 0, errSkipFile
+			return sizeSummary{}, errSkipFile
 		}
 
 		buf, err := ioutil.ReadFile(item.Path)
 		if err != nil {
-			return 0, errSkipFile
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("crawlBucket:")+" object path missing: %v: %w", item.Path, err)
+			}
+			return sizeSummary{}, errSkipFile
 		}
 
 		// Remove filename which is the meta file.
@@ -356,12 +371,16 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 
 		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
-			return 0, errSkipFile
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("crawlBucket:")+" reading xl.meta failed: %v: %w", item.Path, err)
+			}
+			return sizeSummary{}, errSkipFile
 		}
 
 		var totalSize int64
 		var numVersions = len(fivs.Versions)
 
+		sizeS := sizeSummary{}
 		for i, version := range fivs.Versions {
 			var successorModTime time.Time
 			if i > 0 {
@@ -375,7 +394,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			})
 			if !version.Deleted {
 				// Bitrot check local data
-				if size > 0 && item.heal && opts.Bitrot {
+				if size > 0 && item.heal && healOpts.Bitrot {
 					// HealObject verifies bitrot requirement internally
 					res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
 						Remove:   healDeleteDangling,
@@ -392,9 +411,10 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 				}
 				totalSize += size
 			}
-			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())})
+			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())}, &sizeS)
 		}
-		return totalSize, nil
+		sizeS.totalSize = totalSize
+		return sizeS, nil
 	})
 
 	if err != nil {

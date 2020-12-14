@@ -173,18 +173,19 @@ All metrics are labeled by `bucket`, each metric is displayed per bucket. `bucke
 - *BETWEEN_128_MB_AND_512_MB*
 - *GREATER_THAN_512_MB*
 
-
 Units defintions:
 - 1 MB = 1024 KB
 - 1 KB = 1024 B
 
-
-| name                       | description                                         |
-|:---------------------------|:----------------------------------------------------|
-| `bucket_usage_size`        | Total size of the bucket                            |
-| `bucket_objects_count`     | Total number of objects in a bucket                 |
-| `bucket_objects_histogram` | Total number of objects filtered by different sizes |
-
+| name                                | description                                         |
+|:------------------------------------|:----------------------------------------------------|
+| `bucket_usage_size`                 | Total size of the bucket                            |
+| `bucket_objects_count`              | Total number of objects in a bucket                 |
+| `bucket_objects_histogram`          | Total number of objects filtered by different sizes |
+| `bucket_replication_pending_size`   | Total capacity not replicated                       |
+| `bucket_replication_failed_size`    | Total capacity failed to replicate at least once    |
+| `bucket_replication_successful_size`| Total capacity successfully replicated              |
+| `bucket_replication_received_size`  | Total capacity received as replicated objects       |
 
 ### Cache specific metrics
 
@@ -198,8 +199,12 @@ MinIO Gateway instances enabled with Disk-Caching expose caching related metrics
 | `cache_data_served`  | Total number of bytes served from cache           |
 
 #### Per disk cache metrics
-| `cache_usage_percent` | Total percentage cache usage                                                     |
-| `cache_usage_state`   | Indicates cache usage is high or low, relative to current cache 'quota' settings |
+| name                   | description                                                                      |
+|:-----------------------|:---------------------------------------------------------------------------------|
+| `cache_usage_size`     | Total cache usage in bytes                                                       |
+| `cache_total_capacity` | Total size of cache disk                                                         |
+| `cache_usage_percent`  | Total percentage cache usage                                                     |
+| `cache_usage_state`    | Indicates cache usage is high or low, relative to current cache 'quota' settings |
 
 `cache_usage_state` holds only two states
 

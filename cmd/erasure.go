@@ -48,6 +48,8 @@ type partialOperation struct {
 type erasureObjects struct {
 	GatewayUnsupported
 
+	setDriveCount int
+
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 
@@ -70,11 +72,6 @@ type erasureObjects struct {
 // NewNSLock - initialize a new namespace RWLocker instance.
 func (er erasureObjects) NewNSLock(bucket string, objects ...string) RWLocker {
 	return er.nsMutex.NewNSLock(er.getLockers, bucket, objects...)
-}
-
-// SetDriveCount returns the current drives per set.
-func (er erasureObjects) SetDriveCount() int {
-	return len(er.getDisks())
 }
 
 // Shutdown function for object storage interface.
@@ -254,10 +251,14 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 
 	// Collect disks for healing.
 	allDisks := er.getDisks()
-	allDiskIDs := make([]string, len(allDisks))
-	for i, disk := range allDisks {
+	allDiskIDs := make([]string, 0, len(allDisks))
+	for _, disk := range allDisks {
+		if disk == OfflineDisk {
+			// its possible that disk is OfflineDisk
+			continue
+		}
 		id, _ := disk.GetDiskID()
-		allDiskIDs[i] = id
+		allDiskIDs = append(allDiskIDs, id)
 	}
 
 	// Load bucket totals

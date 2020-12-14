@@ -46,11 +46,14 @@ type sizeHistogram [dataUsageBucketLen]uint64
 //msgp:tuple dataUsageEntry
 type dataUsageEntry struct {
 	// These fields do no include any children.
-	Size     int64
-	Objects  uint64
-	ObjSizes sizeHistogram
-
-	Children dataUsageHashMap
+	Size                   int64
+	ReplicatedSize         uint64
+	ReplicationPendingSize uint64
+	ReplicationFailedSize  uint64
+	ReplicaSize            uint64
+	Objects                uint64
+	ObjSizes               sizeHistogram
+	Children               dataUsageHashMap
 }
 
 // dataUsageCache contains a cache of data usage entries.
@@ -76,10 +79,23 @@ type dataUsageCacheInfo struct {
 	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
 }
 
+func (e *dataUsageEntry) addSizes(summary sizeSummary) {
+	e.Size += summary.totalSize
+	e.ReplicatedSize += uint64(summary.replicatedSize)
+	e.ReplicationFailedSize += uint64(summary.failedSize)
+	e.ReplicationPendingSize += uint64(summary.pendingSize)
+	e.ReplicaSize += uint64(summary.replicaSize)
+}
+
 // merge other data usage entry into this, excluding children.
 func (e *dataUsageEntry) merge(other dataUsageEntry) {
 	e.Objects += other.Objects
 	e.Size += other.Size
+	e.ReplicationPendingSize += other.ReplicationPendingSize
+	e.ReplicationFailedSize += other.ReplicationFailedSize
+	e.ReplicatedSize += other.ReplicatedSize
+	e.ReplicaSize += other.ReplicaSize
+
 	for i, v := range other.ObjSizes[:] {
 		e.ObjSizes[i] += v
 	}
@@ -213,11 +229,15 @@ func (d *dataUsageCache) dui(path string, buckets []BucketInfo) DataUsageInfo {
 	}
 	flat := d.flatten(*e)
 	return DataUsageInfo{
-		LastUpdate:        d.Info.LastUpdate,
-		ObjectsTotalCount: flat.Objects,
-		ObjectsTotalSize:  uint64(flat.Size),
-		BucketsCount:      uint64(len(e.Children)),
-		BucketsUsage:      d.bucketsUsageInfo(buckets),
+		LastUpdate:             d.Info.LastUpdate,
+		ObjectsTotalCount:      flat.Objects,
+		ObjectsTotalSize:       uint64(flat.Size),
+		ReplicatedSize:         flat.ReplicatedSize,
+		ReplicationFailedSize:  flat.ReplicationFailedSize,
+		ReplicationPendingSize: flat.ReplicationPendingSize,
+		ReplicaSize:            flat.ReplicaSize,
+		BucketsCount:           uint64(len(e.Children)),
+		BucketsUsage:           d.bucketsUsageInfo(buckets),
 	}
 }
 
@@ -343,9 +363,13 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 		}
 		flat := d.flatten(*e)
 		dst[bucket.Name] = BucketUsageInfo{
-			Size:                 uint64(flat.Size),
-			ObjectsCount:         flat.Objects,
-			ObjectSizesHistogram: flat.ObjSizes.toMap(),
+			Size:                   uint64(flat.Size),
+			ObjectsCount:           flat.Objects,
+			ReplicationPendingSize: flat.ReplicationPendingSize,
+			ReplicatedSize:         flat.ReplicatedSize,
+			ReplicationFailedSize:  flat.ReplicationFailedSize,
+			ReplicaSize:            flat.ReplicaSize,
+			ObjectSizesHistogram:   flat.ObjSizes.toMap(),
 		}
 	}
 	return dst
@@ -360,9 +384,13 @@ func (d *dataUsageCache) bucketUsageInfo(bucket string) BucketUsageInfo {
 	}
 	flat := d.flatten(*e)
 	return BucketUsageInfo{
-		Size:                 uint64(flat.Size),
-		ObjectsCount:         flat.Objects,
-		ObjectSizesHistogram: flat.ObjSizes.toMap(),
+		Size:                   uint64(flat.Size),
+		ObjectsCount:           flat.Objects,
+		ReplicationPendingSize: flat.ReplicationPendingSize,
+		ReplicatedSize:         flat.ReplicatedSize,
+		ReplicationFailedSize:  flat.ReplicationFailedSize,
+		ReplicaSize:            flat.ReplicaSize,
+		ObjectSizesHistogram:   flat.ObjSizes.toMap(),
 	}
 }
 
@@ -461,9 +489,12 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 
 // save the content of the cache to minioMetaBackgroundOpsBucket with the provided name.
 func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) error {
-	b := d.serialize()
-	size := int64(len(b))
-	r, err := hash.NewReader(bytes.NewReader(b), size, "", "", size, false)
+	pr, pw := io.Pipe()
+	go func() {
+		pw.CloseWithError(d.serializeTo(pw))
+	}()
+	defer pr.Close()
+	r, err := hash.NewReader(pr, -1, "", "", -1, false)
 	if err != nil {
 		return err
 	}
@@ -482,35 +513,36 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // dataUsageCacheVer indicates the cache version.
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
-const dataUsageCacheVer = 2
+const dataUsageCacheVer = 3
 
 // serialize the contents of the cache.
-func (d *dataUsageCache) serialize() []byte {
-	// Prepend version and compress.
-	dst := make([]byte, 0, d.Msgsize()+1)
-	dst = append(dst, dataUsageCacheVer)
-	buf := bytes.NewBuffer(dst)
-	enc, err := zstd.NewWriter(buf,
+func (d *dataUsageCache) serializeTo(dst io.Writer) error {
+	// Add version and compress.
+	_, err := dst.Write([]byte{dataUsageCacheVer})
+	if err != nil {
+		return err
+	}
+	enc, err := zstd.NewWriter(dst,
 		zstd.WithEncoderLevel(zstd.SpeedFastest),
 		zstd.WithWindowSize(1<<20),
 		zstd.WithEncoderConcurrency(2))
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil
+		return err
 	}
 	mEnc := msgp.NewWriter(enc)
 	err = d.EncodeMsg(mEnc)
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil
+		return err
 	}
-	mEnc.Flush()
+	err = mEnc.Flush()
+	if err != nil {
+		return err
+	}
 	err = enc.Close()
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil
+		return err
 	}
-	return buf.Bytes()
+	return nil
 }
 
 // deserialize the supplied byte slice into the cache.
@@ -521,7 +553,7 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		return io.ErrUnexpectedEOF
 	}
 	switch b[0] {
-	case 1:
+	case 1, 2:
 		return errors.New("cache version deprecated (will autoupdate)")
 	case dataUsageCacheVer:
 	default:

@@ -242,6 +242,22 @@ func (l *EndpointServerPools) Add(zeps ZoneEndpoints) error {
 	return nil
 }
 
+// Localhost - returns the local hostname from list of endpoints
+func (l EndpointServerPools) Localhost() string {
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				u := &url.URL{
+					Scheme: endpoint.Scheme,
+					Host:   endpoint.Host,
+				}
+				return u.String()
+			}
+		}
+	}
+	return ""
+}
+
 // FirstLocal returns true if the first endpoint is local.
 func (l EndpointServerPools) FirstLocal() bool {
 	return l[0].Endpoints[0].IsLocal

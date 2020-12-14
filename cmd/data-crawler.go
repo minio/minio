@@ -21,11 +21,12 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math"
 	"math/rand"
 	"os"
 	"path"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio/cmd/config"
@@ -43,7 +44,6 @@ import (
 
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
-	dataCrawlSleepDefMult    = 10.0             // Default multiplier for waits between operations.
 	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
@@ -53,8 +53,12 @@ const (
 )
 
 var (
-	globalHealConfig             heal.Config
+	globalHealConfig   heal.Config
+	globalHealConfigMu sync.Mutex
+
 	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
+	// Sleeper values are updated when config is loaded.
+	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)
 )
 
 // initDataCrawler will start the crawler unless disabled.
@@ -99,7 +103,7 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.NewTimer(dataCrawlStartDelay).C:
+		case <-time.After(dataCrawlStartDelay):
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
@@ -141,7 +145,6 @@ type folderScanner struct {
 	newCache   dataUsageCache
 	withFilter *bloomFilter
 
-	dataUsageCrawlMult  float64
 	dataUsageCrawlDebug bool
 	healFolderInclude   uint32 // Include a clean folder one in n cycles.
 	healObjectSelect    uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
@@ -172,11 +175,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		return cache, errors.New("internal error: root scan attempted")
 	}
 
-	delayMult, err := strconv.ParseFloat(env.Get(envDataUsageCrawlDelay, "10.0"), 64)
-	if err != nil {
-		logger.LogIf(ctx, err)
-		delayMult = dataCrawlSleepDefMult
-	}
 	s := folderScanner{
 		root:                basePath,
 		getSize:             getSize,
@@ -184,7 +182,6 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		newCache:            dataUsageCache{Info: cache.Info},
 		newFolders:          nil,
 		existingFolders:     nil,
-		dataUsageCrawlMult:  delayMult,
 		dataUsageCrawlDebug: intDataUpdateTracker.debug,
 		healFolderInclude:   0,
 		healObjectSelect:    0,
@@ -357,16 +354,14 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 		// If there are lifecycle rules for the prefix, remove the filter.
 		filter := f.withFilter
+		_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil {
-			_, prefix := path2BucketObjectWithBasePath(f.root, folder.name)
-			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
-				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
-				}
-				activeLifeCycle = f.oldCache.Info.lifeCycle
-				filter = nil
+		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
+			if f.dataUsageCrawlDebug {
+				logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
 			}
+			activeLifeCycle = f.oldCache.Info.lifeCycle
+			filter = nil
 		}
 		if _, ok := f.oldCache.Cache[thisHash.Key()]; filter != nil && ok {
 			// If folder isn't in filter and we have data, skip it completely.
@@ -386,7 +381,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				}
 			}
 		}
-		sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
+		crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 
 		cache := dataUsageEntry{}
 
@@ -435,7 +430,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			t := UTCNow()
+			wait := crawlerSleeper.Timer(ctx)
 
 			// Get file size, ignore errors.
 			item := crawlItem{
@@ -446,18 +441,18 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
-				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
+				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
-			size, err := f.getSize(item)
+			sizeSummary, err := f.getSize(item)
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+			wait()
 			if err == errSkipFile {
 				return nil
 			}
 			logger.LogIf(ctx, err)
-			cache.Size += size
+			cache.addSizes(sizeSummary)
 			cache.Objects++
-			cache.ObjSizes.add(size)
+			cache.ObjSizes.add(sizeSummary.totalSize)
 
 			return nil
 		})
@@ -506,8 +501,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			t := UTCNow()
-
+			wait := crawlerSleeper.Timer(ctx)
 			resolver.bucket = bucket
 
 			foundObjs := false
@@ -535,8 +529,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 						logger.Info(color.Green("healObjects:")+" got partial, %d agreed, errs: %v", nAgreed, errs)
 					}
 					// Sleep and reset.
-					sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-					t = UTCNow()
+					wait()
+					wait = crawlerSleeper.Timer(ctx)
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						for _, err := range errs {
@@ -572,8 +566,8 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					}
 					for _, ver := range fiv.Versions {
 						// Sleep and reset.
-						sleepDuration(time.Since(t), f.dataUsageCrawlMult)
-						t = UTCNow()
+						wait()
+						wait = crawlerSleeper.Timer(ctx)
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    fiv.Name,
@@ -605,6 +599,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				// If we have quorum, found directories, but no objects, issue heal to delete the dangling.
 				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: true},
 					func(bucket, object, versionID string) error {
+						// Wait for each heal as per crawler frequency.
+						wait()
+						wait = crawlerSleeper.Timer(ctx)
 						return bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    object,
@@ -613,7 +610,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					})
 			}
 
-			sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+			wait()
 
 			// Add unless healing returned an error.
 			if foundObjs {
@@ -651,12 +648,12 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
-			sleepDuration(dataCrawlSleepPerFolder, f.dataUsageCrawlMult)
+			crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 			return err
 		}
 
 		// Dynamic time delay.
-		t := UTCNow()
+		wait := crawlerSleeper.Timer(ctx)
 
 		// Get file size, ignore errors.
 		dirStack = append(dirStack, entName)
@@ -665,16 +662,14 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 
 		bucket, prefix := path2BucketObjectWithBasePath(f.root, fileName)
 		var activeLifeCycle *lifecycle.Lifecycle
-		if f.oldCache.Info.lifeCycle != nil {
-			if f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
-				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
-				}
-				activeLifeCycle = f.oldCache.Info.lifeCycle
+		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
+			if f.dataUsageCrawlDebug {
+				logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
 			}
+			activeLifeCycle = f.oldCache.Info.lifeCycle
 		}
 
-		size, err := f.getSize(
+		sizeSummary, err := f.getSize(
 			crawlItem{
 				Path:       fileName,
 				Typ:        typ,
@@ -683,19 +678,19 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				objectName: path.Base(entName),
 				debug:      f.dataUsageCrawlDebug,
 				lifeCycle:  activeLifeCycle,
-				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv),
+				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			})
 
-		// Don't sleep for really small amount of time
-		sleepDuration(time.Since(t), f.dataUsageCrawlMult)
+		// Wait to throttle IO
+		wait()
 
 		if err == errSkipFile {
 			return nil
 		}
 		logger.LogIf(ctx, err)
-		cache.Size += size
+		cache.addSizes(sizeSummary)
 		cache.Objects++
-		cache.ObjSizes.add(size)
+		cache.ObjSizes.add(sizeSummary.totalSize)
 		return nil
 	}
 	err := readDirFn(path.Join(dirStack...), addDir)
@@ -718,7 +713,15 @@ type crawlItem struct {
 	debug      bool
 }
 
-type getSizeFn func(item crawlItem) (int64, error)
+type sizeSummary struct {
+	totalSize      int64
+	replicatedSize int64
+	pendingSize    int64
+	failedSize     int64
+	replicaSize    int64
+}
+
+type getSizeFn func(item crawlItem) (sizeSummary, error)
 
 // transformMetaDir will transform a directory to prefix/file.ext
 func (i *crawlItem) transformMetaDir() {
@@ -750,7 +753,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	}
 	if i.heal {
 		if i.debug {
-			logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+			if meta.oi.VersionID != "" {
+				logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+			} else {
+				logger.Info(color.Green("applyActions:")+" heal checking: %v/%v", i.bucket, i.objectPath())
+			}
 		}
 		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling})
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
@@ -763,6 +770,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		size = res.ObjectSize
 	}
 	if i.lifeCycle == nil {
+		if i.debug {
+			logger.Info(color.Green("applyActions:")+" no lifecycle rules to apply: %q", i.objectPath())
+		}
 		return size
 	}
 
@@ -782,7 +792,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			TransitionStatus: meta.oi.TransitionStatus,
 		})
 	if i.debug {
-		logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
+		if versionID != "" {
+			logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
+		} else {
+			logger.Info(color.Green("applyActions:")+" lifecycle: %q Initial scan: %v", i.objectPath(), action)
+		}
 	}
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
@@ -790,6 +804,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
 	default:
 		// No action.
+		if i.debug {
+			logger.Info(color.Green("applyActions:")+" object not expirable: %q", i.objectPath())
+		}
 		return size
 	}
 
@@ -830,7 +847,6 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		TransitionStatus: obj.TransitionStatus,
 	}
 	action = i.lifeCycle.ComputeAction(lcOpts)
-
 	if i.debug {
 		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
 	}
@@ -854,7 +870,11 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			locked := enforceRetentionForDeletion(ctx, obj)
 			if locked {
 				if i.debug {
-					logger.Info(color.Green("applyActions:")+" lifecycle: %s is locked, not deleting", i.objectPath())
+					if obj.VersionID != "" {
+						logger.Info(color.Green("applyActions:")+" lifecycle: %s v%s is locked, not deleting", i.objectPath(), obj.VersionID)
+					} else {
+						logger.Info(color.Green("applyActions:")+" lifecycle: %s is locked, not deleting", i.objectPath())
+					}
 				}
 				return size
 			}
@@ -876,18 +896,21 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		globalTransitionState.queueTransitionTask(obj)
 		return 0
 	}
+
 	if obj.TransitionStatus != "" {
 		if err := deleteTransitionedObject(ctx, o, i.bucket, i.objectPath(), lcOpts, action, false); err != nil {
 			logger.LogIf(ctx, err)
 			return size
 		}
-	} else {
-		obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
-		if err != nil {
-			// Assume it is still there.
-			logger.LogIf(ctx, err)
-			return size
-		}
+		// Notification already sent at *deleteTransitionedObject*, return '0' here.
+		return 0
+	}
+
+	obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
+	if err != nil {
+		// Assume it is still there.
+		logger.LogIf(ctx, err)
+		return size
 	}
 
 	eventName := event.ObjectRemovedDelete
@@ -910,25 +933,10 @@ func (i *crawlItem) objectPath() string {
 	return path.Join(i.prefix, i.objectName)
 }
 
-// sleepDuration multiplies the duration d by x
-// and sleeps if is more than 100 micro seconds.
-// Sleep is limited to max 15 seconds.
-func sleepDuration(d time.Duration, x float64) {
-	const maxWait = 15 * time.Second
-	const minWait = 100 * time.Microsecond
-	// Don't sleep for really small amount of time
-	if d := time.Duration(float64(d) * x); d > minWait {
-		if d > maxWait {
-			d = maxWait
-		}
-		time.Sleep(d)
-	}
-}
-
 // healReplication will heal a scanned item that has failed replication.
-func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta) {
+func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) {
 	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
-		//heal delete marker replication failure or versioned delete replication failure
+		// heal delete marker replication failure or versioned delete replication failure
 		if meta.oi.ReplicationStatus == replication.Pending ||
 			meta.oi.ReplicationStatus == replication.Failed ||
 			meta.oi.VersionPurgeStatus == Failed || meta.oi.VersionPurgeStatus == Pending {
@@ -936,9 +944,17 @@ func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta act
 			return
 		}
 	}
-	if meta.oi.ReplicationStatus == replication.Pending ||
-		meta.oi.ReplicationStatus == replication.Failed {
+	switch meta.oi.ReplicationStatus {
+	case replication.Pending:
+		sizeS.pendingSize += meta.oi.Size
 		globalReplicationState.queueReplicaTask(meta.oi)
+	case replication.Failed:
+		sizeS.failedSize += meta.oi.Size
+		globalReplicationState.queueReplicaTask(meta.oi)
+	case replication.Complete:
+		sizeS.replicatedSize += meta.oi.Size
+	case replication.Replica:
+		sizeS.replicaSize += meta.oi.Size
 	}
 }
 
@@ -966,4 +982,127 @@ func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, m
 			Bucket: meta.oi.Bucket,
 		})
 	}
+}
+
+type dynamicSleeper struct {
+	mu sync.RWMutex
+
+	// Sleep factor
+	factor float64
+
+	// maximum sleep cap,
+	// set to <= 0 to disable.
+	maxSleep time.Duration
+
+	// Don't sleep at all, if time taken is below this value.
+	// This is to avoid too small costly sleeps.
+	minSleep time.Duration
+
+	// cycle will be closed
+	cycle chan struct{}
+}
+
+// newDynamicSleeper
+func newDynamicSleeper(factor float64, maxWait time.Duration) *dynamicSleeper {
+	return &dynamicSleeper{
+		factor:   factor,
+		cycle:    make(chan struct{}),
+		maxSleep: maxWait,
+		minSleep: 100 * time.Microsecond,
+	}
+}
+
+// Timer returns a timer that has started.
+// When the returned function is called it will wait.
+func (d *dynamicSleeper) Timer(ctx context.Context) func() {
+	t := time.Now()
+	return func() {
+		doneAt := time.Now()
+		for {
+			// Grab current values
+			d.mu.RLock()
+			minWait, maxWait := d.minSleep, d.maxSleep
+			factor := d.factor
+			cycle := d.cycle
+			d.mu.RUnlock()
+			elapsed := doneAt.Sub(t)
+			// Don't sleep for really small amount of time
+			wantSleep := time.Duration(float64(elapsed) * factor)
+			if wantSleep <= minWait {
+				return
+			}
+			if maxWait > 0 && wantSleep > maxWait {
+				wantSleep = maxWait
+			}
+			timer := time.NewTimer(wantSleep)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return
+			case <-timer.C:
+				return
+			case <-cycle:
+				if !timer.Stop() {
+					// We expired.
+					<-timer.C
+					return
+				}
+			}
+		}
+	}
+}
+
+// Sleep sleeps the specified time multiplied by the sleep factor.
+// If the factor is updated the sleep will be done again with the new factor.
+func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
+	for {
+		// Grab current values
+		d.mu.RLock()
+		minWait, maxWait := d.minSleep, d.maxSleep
+		factor := d.factor
+		cycle := d.cycle
+		d.mu.RUnlock()
+		// Don't sleep for really small amount of time
+		wantSleep := time.Duration(float64(base) * factor)
+		if wantSleep <= minWait {
+			return
+		}
+		if maxWait > 0 && wantSleep > maxWait {
+			wantSleep = maxWait
+		}
+		timer := time.NewTimer(wantSleep)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		case <-timer.C:
+			return
+		case <-cycle:
+			if !timer.Stop() {
+				// We expired.
+				<-timer.C
+				return
+			}
+		}
+	}
+}
+
+// Update the current settings and cycle all waiting.
+// Parameters are the same as in the contructor.
+func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if math.Abs(d.factor-factor) < 1e-10 && d.maxSleep == maxWait {
+		return nil
+	}
+	// Update values and cycle waiting.
+	close(d.cycle)
+	d.factor = factor
+	d.maxSleep = maxWait
+	d.cycle = make(chan struct{})
+	return nil
 }

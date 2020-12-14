@@ -94,15 +94,15 @@ type allHealState struct {
 }
 
 // newHealState - initialize global heal state management
-func newHealState() *allHealState {
-	healState := &allHealState{
+func newHealState(cleanup bool) *allHealState {
+	hstate := &allHealState{
 		healSeqMap:     make(map[string]*healSequence),
 		healLocalDisks: map[Endpoint]struct{}{},
 	}
-
-	go healState.periodicHealSeqsClean(GlobalContext)
-
-	return healState
+	if cleanup {
+		go hstate.periodicHealSeqsClean(GlobalContext)
+	}
+	return hstate
 }
 
 func (ahs *allHealState) healDriveCount() int {
@@ -658,7 +658,9 @@ func (h *healSequence) healSequenceStart(objAPI ObjectLayer) {
 }
 
 func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
+	globalHealConfigMu.Lock()
 	opts := globalHealConfig
+	globalHealConfigMu.Unlock()
 
 	// Send heal request
 	task := healTask{
@@ -777,13 +779,18 @@ func (h *healSequence) healFromSourceCh() {
 }
 
 func (h *healSequence) healDiskMeta(objAPI ObjectLayer) error {
-	// Start healing the config prefix.
-	if err := h.healMinioSysMeta(objAPI, minioConfigPrefix)(); err != nil {
-		return err
+	// Try to pro-actively heal backend-encrypted file.
+	if err := h.queueHealTask(healSource{
+		bucket: minioMetaBucket,
+		object: backendEncryptedFile,
+	}, madmin.HealItemBucketMetadata); err != nil {
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			return err
+		}
 	}
 
-	// Start healing the bucket config prefix.
-	return h.healMinioSysMeta(objAPI, bucketConfigPrefix)()
+	// Start healing the config prefix.
+	return h.healMinioSysMeta(objAPI, minioConfigPrefix)()
 }
 
 func (h *healSequence) healItems(objAPI ObjectLayer, bucketsOnly bool) error {

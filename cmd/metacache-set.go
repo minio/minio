@@ -549,6 +549,10 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 	}
 }
 
+func (er erasureObjects) SetDriveCount() int {
+	return er.setDriveCount
+}
+
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	const debugPrint = false
@@ -612,11 +616,16 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		askDisks = getReadQuorum(er.SetDriveCount())
 	}
 
+	listingQuorum := askDisks - 1
+
+	// Special case: ask all disks if the drive count is 4
+	if er.SetDriveCount() == 4 {
+		askDisks = len(disks)
+		listingQuorum = 2
+	}
+
 	if len(disks) < askDisks {
 		err = InsufficientReadQuorum{}
-		if debugPrint {
-			console.Errorf("listPath: Insufficient disks, %d of %d needed are available", len(disks), askDisks)
-		}
 		logger.LogIf(ctx, fmt.Errorf("listPath: Insufficient disks, %d of %d needed are available", len(disks), askDisks))
 		cancel()
 		return
@@ -718,8 +727,8 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 
 		// How to resolve results.
 		resolver := metadataResolutionParams{
-			dirQuorum: askDisks - 1,
-			objQuorum: askDisks - 1,
+			dirQuorum: listingQuorum,
+			objQuorum: listingQuorum,
 			bucket:    o.Bucket,
 		}
 
@@ -729,7 +738,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			path:         o.BaseDir,
 			recursive:    o.Recursive,
 			filterPrefix: o.FilterPrefix,
-			minDisks:     askDisks - 1,
+			minDisks:     listingQuorum,
 			agreed: func(entry metaCacheEntry) {
 				cacheCh <- entry
 				filterCh <- entry
@@ -831,7 +840,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				ReportNotFound: opts.reportNotFound,
 				FilterPrefix:   opts.filterPrefix}, w)
 			w.CloseWithError(err)
-			if err != io.EOF {
+			if err != io.EOF && err != nil && err.Error() != errFileNotFound.Error() {
 				logger.LogIf(ctx, err)
 			}
 		}()

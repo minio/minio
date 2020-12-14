@@ -608,7 +608,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	// Initialize parts metadata
-	partsMetadata := make([]FileInfo, len(er.getDisks()))
+	partsMetadata := make([]FileInfo, len(storageDisks))
 
 	fi := newFileInfo(object, dataDrives, parityDrives)
 
@@ -767,19 +767,18 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 // all the disks in parallel, including `xl.meta` associated with the
 // object.
 func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string, writeQuorum int) error {
-	var disks []StorageAPI
 	var err error
 	defer ObjectPathUpdated(pathJoin(bucket, object))
 
 	tmpObj := mustGetUUID()
+	disks := er.getDisks()
 	if bucket == minioMetaTmpBucket {
 		tmpObj = object
-		disks = er.getDisks()
 	} else {
 		// Rename the current object while requiring write quorum, but also consider
 		// that a non found object in a given disk as a success since it already
 		// confirms that the object doesn't have a part in that disk (already removed)
-		disks, err = rename(ctx, er.getDisks(), bucket, object, minioMetaTmpBucket, tmpObj, true, writeQuorum,
+		disks, err = rename(ctx, disks, bucket, object, minioMetaTmpBucket, tmpObj, true, writeQuorum,
 			[]error{errFileNotFound})
 		if err != nil {
 			return toObjectErr(err, bucket, object)
@@ -787,7 +786,6 @@ func (er erasureObjects) deleteObject(ctx context.Context, bucket, object string
 	}
 
 	g := errgroup.WithNErrs(len(disks))
-
 	for index := range disks {
 		index := index
 		g.Go(func() error {
@@ -945,6 +943,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	versionFound := true
+	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi, gerr := er.GetObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		switch gerr.(type) {

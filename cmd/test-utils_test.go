@@ -115,6 +115,8 @@ func TestMain(m *testing.M) {
 
 	resetTestGlobals()
 
+	os.Setenv("MINIO_CI_CD", "ci")
+
 	os.Exit(m.Run())
 }
 
@@ -426,7 +428,7 @@ func resetGlobalIsErasure() {
 func resetGlobalHealState() {
 	// Init global heal state
 	if globalAllHealState == nil {
-		globalAllHealState = newHealState()
+		globalAllHealState = newHealState(false)
 	} else {
 		globalAllHealState.Lock()
 		for _, v := range globalAllHealState.healSeqMap {
@@ -439,7 +441,7 @@ func resetGlobalHealState() {
 
 	// Init background heal state
 	if globalBackgroundHealState == nil {
-		globalBackgroundHealState = newHealState()
+		globalBackgroundHealState = newHealState(false)
 	} else {
 		globalBackgroundHealState.Lock()
 		for _, v := range globalBackgroundHealState.healSeqMap {

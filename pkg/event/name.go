@@ -55,6 +55,9 @@ const (
 	ObjectRestorePostInitiated
 	ObjectRestorePostCompleted
 	ObjectRestorePostAll
+	ObjectTransitionAll
+	ObjectTransitionFailed
+	ObjectTransitionComplete
 )
 
 // Expand - returns expanded values of abbreviated event type.
@@ -93,6 +96,11 @@ func (name Name) Expand() []Name {
 		return []Name{
 			ObjectRestorePostInitiated,
 			ObjectRestorePostCompleted,
+		}
+	case ObjectTransitionAll:
+		return []Name{
+			ObjectTransitionFailed,
+			ObjectTransitionComplete,
 		}
 	default:
 		return []Name{name}
@@ -152,6 +160,12 @@ func (name Name) String() string {
 		return "s3:ObjectRestore:Post"
 	case ObjectRestorePostCompleted:
 		return "s3:ObjectRestore:Completed"
+	case ObjectTransitionAll:
+		return "s3:ObjectTransition:*"
+	case ObjectTransitionFailed:
+		return "s3:ObjectTransition:Failed"
+	case ObjectTransitionComplete:
+		return "s3:ObjectTransition:Complete"
 	}
 
 	return ""
@@ -254,7 +268,12 @@ func ParseName(s string) (Name, error) {
 		return ObjectRestorePostInitiated, nil
 	case "s3:ObjectRestore:Completed":
 		return ObjectRestorePostCompleted, nil
-
+	case "s3:ObjectTransition:Failed":
+		return ObjectTransitionFailed, nil
+	case "s3:ObjectTransition:Complete":
+		return ObjectTransitionComplete, nil
+	case "s3:ObjectTransition:*":
+		return ObjectTransitionAll, nil
 	default:
 		return 0, &ErrInvalidEventName{s}
 	}

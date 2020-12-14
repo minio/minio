@@ -102,7 +102,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			case task.bucket == SlashSeparator:
 				res, err = healDiskFormat(ctx, objAPI, task.opts)
 			case task.bucket != "" && task.object == "":
-				res, err = objAPI.HealBucket(ctx, task.bucket, task.opts.DryRun, task.opts.Remove)
+				res, err = objAPI.HealBucket(ctx, task.bucket, task.opts)
 			case task.bucket != "" && task.object != "":
 				res, err = objAPI.HealObject(ctx, task.bucket, task.object, task.versionID, task.opts)
 			}

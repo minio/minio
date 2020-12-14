@@ -27,8 +27,9 @@ import (
 type serviceSignal int
 
 const (
-	serviceRestart serviceSignal = iota // Restarts the server.
-	serviceStop                         // Stops the server.
+	serviceRestart       serviceSignal = iota // Restarts the server.
+	serviceStop                               // Stops the server.
+	serviceReloadDynamic                      // Reload dynamic config values.
 	// Add new service requests here.
 )
 
@@ -43,11 +44,6 @@ var GlobalContext context.Context
 
 // cancelGlobalContext can be used to indicate server shutdown.
 var cancelGlobalContext context.CancelFunc
-
-// Initialize service mutex once.
-func init() {
-	initGlobalContext()
-}
 
 func initGlobalContext() {
 	GlobalContext, cancelGlobalContext = context.WithCancel(context.Background())

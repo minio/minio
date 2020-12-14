@@ -1,7 +1,5 @@
-// +build windows
-
 /*
- * MinIO Cloud Storage, (C) 2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +17,21 @@
 
 package disk
 
+import "runtime"
+
 // IsRootDisk returns if diskPath belongs to root-disk, i.e the disk mounted at "/"
-func IsRootDisk(diskPath string) (bool, error) {
-	// On windows a disk can never be mounted on a subpath.
-	return false, nil
+func IsRootDisk(diskPath string, rootDisk string) (bool, error) {
+	if runtime.GOOS == "windows" {
+		// On windows this function is not implemented.
+		return false, nil
+	}
+	info, err := GetInfo(diskPath)
+	if err != nil {
+		return false, err
+	}
+	rootInfo, err := GetInfo(rootDisk)
+	if err != nil {
+		return false, err
+	}
+	return SameDisk(info, rootInfo), nil
 }

@@ -35,6 +35,7 @@ type apiConfig struct {
 	listQuorum       int
 	extendListLife   time.Duration
 	corsAllowOrigins []string
+	setDriveCount    int
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
@@ -43,6 +44,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 
 	t.clusterDeadline = cfg.ClusterDeadline
 	t.corsAllowOrigins = cfg.CorsAllowOrigin
+	t.setDriveCount = setDriveCount
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
@@ -62,8 +64,14 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 			apiRequestsMaxPerNode /= len(globalEndpoints.Hostnames())
 		}
 	}
-
-	t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
+	if cap(t.requestsPool) < apiRequestsMaxPerNode {
+		// Only replace if needed.
+		// Existing requests will use the previous limit,
+		// but new requests will use the new limit.
+		// There will be a short overlap window,
+		// but this shouldn't last long.
+		t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
+	}
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.GetListQuorum()
 	t.extendListLife = cfg.ExtendListLife
@@ -74,6 +82,13 @@ func (t *apiConfig) getListQuorum() int {
 	defer t.mu.RUnlock()
 
 	return t.listQuorum
+}
+
+func (t *apiConfig) getSetDriveCount() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.setDriveCount
 }
 
 func (t *apiConfig) getExtendListLife() time.Duration {
@@ -103,34 +118,34 @@ func (t *apiConfig) getClusterDeadline() time.Duration {
 	return t.clusterDeadline
 }
 
-func (t *apiConfig) getRequestsPool() (chan struct{}, <-chan time.Time) {
+func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if t.requestsPool == nil {
-		return nil, nil
-	}
-	if t.requestsDeadline <= 0 {
-		return t.requestsPool, nil
+		return nil, time.Duration(0)
 	}
 
-	return t.requestsPool, time.NewTimer(t.requestsDeadline).C
+	return t.requestsPool, t.requestsDeadline
 }
 
 // maxClients throttles the S3 API calls
 func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pool, deadlineTimer := globalAPIConfig.getRequestsPool()
+		pool, deadline := globalAPIConfig.getRequestsPool()
 		if pool == nil {
 			f.ServeHTTP(w, r)
 			return
 		}
 
+		deadlineTimer := time.NewTimer(deadline)
+		defer deadlineTimer.Stop()
+
 		select {
 		case pool <- struct{}{}:
 			defer func() { <-pool }()
 			f.ServeHTTP(w, r)
-		case <-deadlineTimer:
+		case <-deadlineTimer.C:
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
 				errorCodes.ToAPIErr(ErrOperationMaxedOut),

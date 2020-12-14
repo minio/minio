@@ -51,15 +51,17 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, bucket, files)
 
-	getSize := func(item crawlItem) (i int64, err error) {
+	getSize := func(item crawlItem) (sizeS sizeSummary, err error) {
 		if item.Typ&os.ModeDir == 0 {
-			s, err := os.Stat(item.Path)
+			var s os.FileInfo
+			s, err = os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return
 			}
-			return s.Size(), nil
+			sizeS.totalSize = s.Size()
+			return sizeS, nil
 		}
-		return 0, nil
+		return
 	}
 
 	got, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize)
@@ -345,15 +347,17 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, "", files)
 
-	getSize := func(item crawlItem) (i int64, err error) {
+	getSize := func(item crawlItem) (sizeS sizeSummary, err error) {
 		if item.Typ&os.ModeDir == 0 {
-			s, err := os.Stat(item.Path)
+			var s os.FileInfo
+			s, err = os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return
 			}
-			return s.Size(), nil
+			sizeS.totalSize = s.Size()
+			return
 		}
-		return 0, nil
+		return
 	}
 	got, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: "bucket"}}, getSize)
 	if err != nil {
@@ -642,28 +646,33 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 	}
 	createUsageTestFiles(t, base, bucket, files)
 
-	getSize := func(item crawlItem) (i int64, err error) {
+	getSize := func(item crawlItem) (sizeS sizeSummary, err error) {
 		if item.Typ&os.ModeDir == 0 {
-			s, err := os.Stat(item.Path)
+			var s os.FileInfo
+			s, err = os.Stat(item.Path)
 			if err != nil {
-				return 0, err
+				return
 			}
-			return s.Size(), nil
+			sizeS.totalSize = s.Size()
+			return
 		}
-		return 0, nil
+		return
 	}
 	want, err := crawlDataFolder(context.Background(), base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	b := want.serialize()
-	var got dataUsageCache
-	err = got.deserialize(bytes.NewBuffer(b))
+	var buf bytes.Buffer
+	err = want.serializeTo(&buf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("serialized size:", len(b), "bytes")
+	t.Log("serialized size:", buf.Len(), "bytes")
+	var got dataUsageCache
+	err = got.deserialize(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got.Info.LastUpdate.IsZero() {
 		t.Error("lastupdate not set")
 	}

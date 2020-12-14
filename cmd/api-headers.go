@@ -157,19 +157,13 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 
 	if opts.PartNumber > 0 {
-		var start, end int64
-		for i := 0; i < len(objInfo.Parts) && i < opts.PartNumber; i++ {
-			start = end
-			end = start + objInfo.Parts[i].ActualSize - 1
-		}
-		rs = &HTTPRangeSpec{Start: start, End: end}
-		rangeLen = end - start + 1
-	} else {
-		// for providing ranged content
-		start, rangeLen, err = rs.GetOffsetLength(totalObjectSize)
-		if err != nil {
-			return err
-		}
+		rs = partNumberToRangeSpec(objInfo, opts.PartNumber)
+	}
+
+	// For providing ranged content
+	start, rangeLen, err = rs.GetOffsetLength(totalObjectSize)
+	if err != nil {
+		return err
 	}
 
 	// Set content length.
