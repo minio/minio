@@ -237,97 +237,100 @@ func (b *bucketMetacache) findCache(o listPathOptions) metacache {
 		return best
 	}
 
-	interesting := interestingCaches(o.BaseDir, b.cachesRoot)
-
 	var best metacache
-	for _, id := range interesting {
-		cached, ok := b.caches[id]
-		if !ok {
-			continue
-		}
+	rootSplit := strings.Split(o.BaseDir, slashSeparator)
+	for i := range rootSplit {
+		interesting := b.cachesRoot[path.Join(rootSplit[:i+1]...)]
 
-		// Never return transient caches if there is no id.
-		if cached.status == scanStateError || cached.status == scanStateNone || cached.dataVersion != metacacheStreamVersion {
-			if debugPrint {
-				console.Info("cache %s state or stream version mismatch", cached.id)
+		for _, id := range interesting {
+			cached, ok := b.caches[id]
+			if !ok {
+				continue
 			}
-			continue
-		}
-		if cached.startedCycle < o.OldestCycle {
-			if debugPrint {
-				console.Info("cache %s cycle too old", cached.id)
-			}
-			continue
-		}
 
-		// If the existing listing wasn't recursive root must match.
-		if !cached.recursive && o.BaseDir != cached.root {
-			if debugPrint {
-				console.Info("cache %s  non rec prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
-			}
-			continue
-		}
-
-		// Root of what we are looking for must at least have
-		if !strings.HasPrefix(o.BaseDir, cached.root) {
-			if debugPrint {
-				console.Info("cache %s prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
-			}
-			continue
-		}
-		if cached.filter != "" && strings.HasPrefix(cached.filter, o.FilterPrefix) {
-			if debugPrint {
-				console.Info("cache %s cannot be used because of filter %s", cached.id, cached.filter)
-			}
-			continue
-		}
-
-		if o.Recursive && !cached.recursive {
-			if debugPrint {
-				console.Info("cache %s not recursive", cached.id)
-			}
-			// If this is recursive the cached listing must be as well.
-			continue
-		}
-		if o.Separator != slashSeparator && !cached.recursive {
-			if debugPrint {
-				console.Info("cache %s not slashsep and not recursive", cached.id)
-			}
-			// Non slash separator requires recursive.
-			continue
-		}
-		if !cached.finished() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
-			if debugPrint {
-				console.Info("cache %s not running, time: %v", cached.id, time.Since(cached.lastUpdate))
-			}
-			// Abandoned
-			continue
-		}
-
-		if cached.finished() && cached.endedCycle <= o.OldestCycle {
-			if extend <= 0 {
-				// If scan has ended the oldest requested must be less.
+			// Never return transient caches if there is no id.
+			if cached.status == scanStateError || cached.status == scanStateNone || cached.dataVersion != metacacheStreamVersion {
 				if debugPrint {
-					console.Info("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
+					console.Info("cache %s state or stream version mismatch", cached.id)
 				}
 				continue
 			}
-			if time.Since(cached.lastUpdate) > metacacheMaxRunningAge+extend {
-				// Cache ended within bloom cycle, but we can extend the life.
+			if cached.startedCycle < o.OldestCycle {
 				if debugPrint {
-					console.Info("cache %s ended (%v) and beyond extended life (%v)", cached.id, cached.lastUpdate, extend+metacacheMaxRunningAge)
+					console.Info("cache %s cycle too old", cached.id)
 				}
 				continue
 			}
-		}
-		if cached.started.Before(best.started) {
-			if debugPrint {
-				console.Info("cache %s disregarded - we have a better", cached.id)
+
+			// If the existing listing wasn't recursive root must match.
+			if !cached.recursive && o.BaseDir != cached.root {
+				if debugPrint {
+					console.Info("cache %s  non rec prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
+				}
+				continue
 			}
-			// If we already have a newer, keep that.
-			continue
+
+			// Root of what we are looking for must at least have
+			if !strings.HasPrefix(o.BaseDir, cached.root) {
+				if debugPrint {
+					console.Info("cache %s prefix mismatch, cached:%v, want:%v", cached.id, cached.root, o.BaseDir)
+				}
+				continue
+			}
+			if cached.filter != "" && strings.HasPrefix(cached.filter, o.FilterPrefix) {
+				if debugPrint {
+					console.Info("cache %s cannot be used because of filter %s", cached.id, cached.filter)
+				}
+				continue
+			}
+
+			if o.Recursive && !cached.recursive {
+				if debugPrint {
+					console.Info("cache %s not recursive", cached.id)
+				}
+				// If this is recursive the cached listing must be as well.
+				continue
+			}
+			if o.Separator != slashSeparator && !cached.recursive {
+				if debugPrint {
+					console.Info("cache %s not slashsep and not recursive", cached.id)
+				}
+				// Non slash separator requires recursive.
+				continue
+			}
+			if !cached.finished() && time.Since(cached.lastUpdate) > metacacheMaxRunningAge {
+				if debugPrint {
+					console.Info("cache %s not running, time: %v", cached.id, time.Since(cached.lastUpdate))
+				}
+				// Abandoned
+				continue
+			}
+
+			if cached.finished() && cached.endedCycle <= o.OldestCycle {
+				if extend <= 0 {
+					// If scan has ended the oldest requested must be less.
+					if debugPrint {
+						console.Info("cache %s ended and cycle (%v) <= oldest allowed (%v)", cached.id, cached.endedCycle, o.OldestCycle)
+					}
+					continue
+				}
+				if time.Since(cached.lastUpdate) > metacacheMaxRunningAge+extend {
+					// Cache ended within bloom cycle, but we can extend the life.
+					if debugPrint {
+						console.Info("cache %s ended (%v) and beyond extended life (%v)", cached.id, cached.lastUpdate, extend+metacacheMaxRunningAge)
+					}
+					continue
+				}
+			}
+			if cached.started.Before(best.started) {
+				if debugPrint {
+					console.Info("cache %s disregarded - we have a better", cached.id)
+				}
+				// If we already have a newer, keep that.
+				continue
+			}
+			best = cached
 		}
-		best = cached
 	}
 	if !best.started.IsZero() {
 		if o.Create {
