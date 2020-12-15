@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/rpc/v2/json2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -56,6 +55,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/rpc/json2"
 )
 
 func extractBucketObject(args reflect.Value) (bucketName, objectName string) {

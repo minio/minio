@@ -30,9 +30,8 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gomodule/redigo v1.8.3
 	github.com/google/uuid v1.1.2
-	github.com/gorilla/handlers v1.4.2
+	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
-	github.com/gorilla/rpc v1.2.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/json-iterator/go v1.1.10
 	github.com/klauspost/compress v1.11.3
