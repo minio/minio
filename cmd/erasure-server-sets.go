@@ -707,7 +707,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	// more objects matching the prefix.
 	ri := logger.GetReqInfo(ctx)
 	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
-		opts.singleObject = true
+		opts.discardResult = true
 		opts.Transient = true
 	}
 
