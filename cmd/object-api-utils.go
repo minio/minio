@@ -457,16 +457,15 @@ func excludeForCompression(header http.Header, object string, cfg compress.Confi
 	}
 
 	// Filter compression includes.
-	if len(cfg.Extensions) == 0 || len(cfg.MimeTypes) == 0 {
-		return false
+	exclude := len(cfg.Extensions) > 0 || len(cfg.MimeTypes) > 0
+	if len(cfg.Extensions) > 0 && hasStringSuffixInSlice(objStr, cfg.Extensions) {
+		exclude = false
 	}
 
-	extensions := cfg.Extensions
-	mimeTypes := cfg.MimeTypes
-	if hasStringSuffixInSlice(objStr, extensions) || hasPattern(mimeTypes, contentType) {
-		return false
+	if len(cfg.MimeTypes) > 0 && hasPattern(cfg.MimeTypes, contentType) {
+		exclude = false
 	}
-	return true
+	return exclude
 }
 
 // Utility which returns if a string is present in the list.
