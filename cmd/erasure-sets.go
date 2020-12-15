@@ -562,31 +562,6 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// MakeMultipleBuckets - make many buckets at once.
-func (s *erasureSets) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
-	g := errgroup.WithNErrs(len(s.sets))
-
-	// Create buckets in parallel across all sets.
-	for index := range s.sets {
-		index := index
-		g.Go(func() error {
-			return s.sets[index].MakeMultipleBuckets(ctx, buckets...)
-		}, index)
-	}
-
-	errs := g.Wait()
-
-	// Return the first encountered error
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	// Success.
-	return nil
-}
-
 // MakeBucketLocation - creates a new bucket across all sets simultaneously,
 // then return the first encountered error
 func (s *erasureSets) MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error {
@@ -739,8 +714,20 @@ func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*erasureObj
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all sets.
 func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
-	// Always lists from the same set signified by the empty string.
-	return s.ListBucketsHeal(ctx)
+	var listBuckets []BucketInfo
+	var healBuckets = map[string]VolInfo{}
+	for _, set := range s.sets {
+		// lists all unique buckets across drives.
+		if err := listAllBuckets(ctx, set.getDisks(), healBuckets); err != nil {
+			return nil, err
+		}
+	}
+	for _, v := range healBuckets {
+		listBuckets = append(listBuckets, BucketInfo(v))
+	}
+	sort.Sort(byBucketName(listBuckets))
+
+	return listBuckets, nil
 }
 
 // --- Object Operations ---
@@ -1317,28 +1304,6 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin
 // HealObject - heals inconsistent object on a hashedSet based on object name.
 func (s *erasureSets) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	return s.getHashedSet(object).HealObject(ctx, bucket, object, versionID, opts)
-}
-
-// Lists all buckets which need healing.
-func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	var listBuckets []BucketInfo
-	var healBuckets = map[string]VolInfo{}
-	for _, set := range s.sets {
-		// lists all unique buckets across drives.
-		if err := listAllBuckets(ctx, set.getDisks(), healBuckets); err != nil {
-			return nil, err
-		}
-	}
-	for _, v := range healBuckets {
-		listBuckets = append(listBuckets, BucketInfo(v))
-	}
-	sort.Sort(byBucketName(listBuckets))
-
-	if err := s.MakeMultipleBuckets(ctx, listBuckets...); err != nil {
-		return listBuckets, err
-	}
-
-	return listBuckets, nil
 }
 
 // PutObjectTags - replace or add tags to an existing object
