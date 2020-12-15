@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -872,6 +873,11 @@ func (h *healSequence) healBuckets(objAPI ObjectLayer, bucketsOnly bool) error {
 	if err != nil {
 		return errFnHealFromAPIErr(h.ctx, err)
 	}
+
+	// Heal latest buckets first.
+	sort.Slice(buckets, func(i, j int) bool {
+		return buckets[i].Created.After(buckets[j].Created)
+	})
 
 	for _, bucket := range buckets {
 		if err = h.healBucket(objAPI, bucket.Name, bucketsOnly); err != nil {

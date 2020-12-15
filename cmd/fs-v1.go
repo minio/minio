@@ -531,7 +531,9 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 	}
 
 	// Sort bucket infos by bucket name.
-	sort.Sort(byBucketName(bucketInfos))
+	sort.Slice(bucketInfos, func(i, j int) bool {
+		return bucketInfos[i].Name < bucketInfos[j].Name
+	})
 
 	// Succes.
 	return bucketInfos, nil

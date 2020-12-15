@@ -722,10 +722,14 @@ func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, er
 			return nil, err
 		}
 	}
+
 	for _, v := range healBuckets {
 		listBuckets = append(listBuckets, BucketInfo(v))
 	}
-	sort.Sort(byBucketName(listBuckets))
+
+	sort.Slice(listBuckets, func(i, j int) bool {
+		return listBuckets[i].Name < listBuckets[j].Name
+	})
 
 	return listBuckets, nil
 }
