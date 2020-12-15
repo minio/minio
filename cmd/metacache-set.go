@@ -95,8 +95,9 @@ type listPathOptions struct {
 	// A transient result will never be returned from the cache so knowing the list id is required.
 	Transient bool
 
-	// singleObject will assume that prefix refers to an exact single object.
-	singleObject bool
+	// discardResult will not persist the cache to storage.
+	// When the initial results are returned listing will be canceled.
+	discardResult bool
 }
 
 func init() {
@@ -545,7 +546,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	o.debugf("listPath with options: %#v\n", o)
 
 	// See if we have the listing stored.
-	if !o.Create && !o.singleObject {
+	if !o.Create && !o.discardResult {
 		entries, err := er.streamMetadataParts(ctx, o)
 		if IsErr(err, []error{
 			nil,
@@ -627,6 +628,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		close(filterCh)
 	}
 
+	// Cancel listing on return if non-saved list.
+	if o.discardResult {
+		defer cancel()
+	}
+
 	go func() {
 		defer cancel()
 		// Save continuous updates
@@ -658,7 +664,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 
 		// Write results to disk.
 		bw := newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
-			if o.singleObject {
+			if o.discardResult {
 				// Don't save single object listings.
 				return nil
 			}
