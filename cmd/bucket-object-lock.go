@@ -97,6 +97,9 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 				return ErrNone
 			}
 		}
+		if isErrObjectNotFound(gerr) || isErrVersionNotFound(gerr) {
+			return ErrNone
+		}
 		return toAPIErrorCode(ctx, gerr)
 	}
 
