@@ -60,7 +60,10 @@ export MINIO_COMPRESS_MIME_TYPES="text/*,application/json,application/xml"
 
 ### 3. Compression + Encryption
 
-Combining encryption and compression is not safe in all setups. 
+Combining encryption and compression is not safe in all setups.
+This is particularly so if the compression ratio of your content reveals information about it.
+See [CRIME TLS](https://en.wikipedia.org/wiki/CRIME) as an example of this.
+
 Therefore, compression is disabled when encrypting by default, and must be enabled separately.
 
 Consult our security experts on [SUBNET](https://min.io/pricing) to help you evaluate if 
