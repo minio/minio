@@ -6,7 +6,8 @@ MinIO uses [`klauspost/compress/s2`](https://github.com/klauspost/compress/tree/
 streaming compression due to its stability and performance.
 
 This algorithm is specifically optimized for machine generated content. 
-Write throughput is typically at least 300MB/s per CPU core. 
+Write throughput is typically at least 500MB/s per CPU core,
+and scales with the number of available CPU cores. 
 Decompression speed is typically at least 1GB/s.
 
 This means that in cases where raw IO is below these numbers 
@@ -25,26 +26,26 @@ Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/docs/minio-quicksta
 Compression can be enabled by updating the `compress` config settings for MinIO server config. 
 Config `compress` settings take extensions and mime-types to be compressed.
 
-```
-$ mc admin config get myminio compression
+```bash
+~ mc admin config get myminio compression
 compression extensions=".txt,.log,.csv,.json,.tar,.xml,.bin" mime_types="text/*,application/json,application/xml"
 ```
 
 Default config includes most common highly compressible content extensions and mime-types.
 
-```
-$ mc admin config set myminio compression extensions=".pdf" mime_types="application/pdf"
+```bash
+~ mc admin config set myminio compression extensions=".pdf" mime_types="application/pdf"
 ```
 
 To show help on setting compression config values.
-```
+```bash
 ~ mc admin config set myminio compression
 ```
 
-To enable compression for all content, no matter the extension and content type, 
-except for the default excluded types set BOTH extensions and mime types to empty.
+To enable compression for all content, no matter the extension and content type 
+(except for the default excluded types) set BOTH extensions and mime types to empty.
 
-```
+```bash
 ~ mc admin config set myminio compression enable="on" extensions="" mime_types=""
 ```
 
@@ -60,12 +61,14 @@ export MINIO_COMPRESS_MIME_TYPES="text/*,application/json,application/xml"
 ### 3. Compression + Encryption
 
 Combining encryption and compression is not safe in all setups. 
-Therefore, compressed is disabled when encrypting by default and must be enabled separately.
+Therefore, compression is disabled when encrypting by default, and must be enabled separately.
 
 Consult our security experts on [SUBNET](https://min.io/pricing) to help you evaluate if 
 your setup can use this feature combination safely.
 
-```
+To enable compression+encryption use:
+
+```bash
 ~ mc admin config set myminio compression allow_encryption=on
 ```
 
@@ -77,8 +80,10 @@ Or alternatively through the environment variable `MINIO_COMPRESS_ALLOW_ENCRYPTI
 Such objects do not produce efficient [`LZ compression`](https://en.wikipedia.org/wiki/LZ77_and_LZ78)
 which is a fitness factor for a lossless data compression.
 
-Pre-compressed input typically compresses in excess of 2GiB/second, so  
-  
+Pre-compressed input typically compresses in excess of 2GiB/s per core, 
+so performance impact should be minimal even if precompressed data is re-compressed.
+Decompressing incompressible data has no significant performance impact.
+
 Below is a list of common files and content-types which are typically not suitable for compression.
 
     - Extensions
@@ -106,6 +111,8 @@ Below is a list of common files and content-types which are typically not suitab
 
 All files with these extensions and mime types are excluded from compression, 
 even if compression is enabled for all types.
+
+### 5. Notes
 
 - MinIO does not support compression for Gateway (Azure/GCS/NAS) implementations.
 
