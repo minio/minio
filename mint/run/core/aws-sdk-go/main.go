@@ -921,13 +921,30 @@ func testListMultipartUploads(s3Client *s3.S3) {
 		return
 	}
 
+	completedParts := make([]*s3.CompletedPart, len(parts))
 	for _, part := range listParts.Parts {
 		if tag, ok := parts[part.PartNumber]; ok {
 			if tag != part.ETag {
 				failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts output mismatch want: %v got: %v", tag, part.ETag), err).Fatal()
 				return
 			}
+			completedParts = append(completedParts, &s3.CompletedPart{
+				ETag:       part.ETag,
+				PartNumber: part.PartNumber,
+			})
 		}
+	}
+
+	_, err = s3Client.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(object),
+		MultipartUpload: &s3.CompletedMultipartUpload{
+			Parts: completedParts},
+		UploadId: multipartUpload.UploadId,
+	})
+	if err != nil {
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go CompleteMultipartUpload failed"), err).Fatal()
+		return
 	}
 
 	successLogger(function, args, startTime).Info()
