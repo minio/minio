@@ -87,7 +87,8 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(250 * time.Millisecond):
+		default:
+			time.Sleep(250 * time.Millisecond)
 		}
 		objAPI = newObjectLayerFn()
 		if objAPI == nil {

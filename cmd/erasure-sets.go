@@ -245,10 +245,13 @@ func (s *erasureSets) connectDisks() {
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			s.erasureDisksMu.Unlock()
 			go func(setIndex int) {
+				idler := time.NewTimer(100 * time.Millisecond)
+				defer idler.Stop()
+
 				// Send a new disk connect event with a timeout
 				select {
 				case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
-				case <-time.After(100 * time.Millisecond):
+				case <-idler.C:
 				}
 			}(setIndex)
 		}(endpoint)
@@ -267,13 +270,22 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	// Pre-emptively connect the disks if possible.
 	s.connectDisks()
 
+	monitor := time.NewTimer(monitorInterval)
+	defer monitor.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(monitorInterval):
+		case <-monitor.C:
 			s.connectDisks()
 		}
+
+		if !monitor.Stop() {
+			<-monitor.C
+		}
+
+		monitor.Reset(monitorInterval)
 	}
 }
 
@@ -1363,6 +1375,9 @@ func (s *erasureSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
 	bgSeq := mustGetHealSequence(GlobalContext)
 
+	idler := time.NewTimer(100 * time.Millisecond)
+	defer idler.Stop()
+
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the er.set
 		// to which the connected disk belongs.
@@ -1380,8 +1395,13 @@ func (s *erasureSets) healMRFRoutine() {
 			// Send an object to be healed with a timeout
 			select {
 			case bgSeq.sourceCh <- u:
-			case <-time.After(100 * time.Millisecond):
+			case <-idler.C:
 			}
+
+			if !idler.Stop() {
+				<-idler.C
+			}
+			idler.Reset(100 * time.Millisecond)
 
 			s.mrfMU.Lock()
 			delete(s.mrfOperations, u)
