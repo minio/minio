@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -322,23 +323,19 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	var mu sync.Mutex
 	var results []dataUsageCache
 	var firstErr error
-	var knownBuckets = make(map[string]struct{}) // used to deduplicate buckets.
-	var allBuckets []BucketInfo
+
+	allBuckets, err := z.ListBuckets(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Crawl latest allBuckets first.
+	sort.Slice(allBuckets, func(i, j int) bool {
+		return allBuckets[i].Created.After(allBuckets[j].Created)
+	})
 
 	// Collect for each set in serverPools.
 	for _, z := range z.serverPools {
-		buckets, err := z.ListBuckets(ctx)
-		if err != nil {
-			return err
-		}
-		// Add new buckets.
-		for _, b := range buckets {
-			if _, ok := knownBuckets[b.Name]; ok {
-				continue
-			}
-			allBuckets = append(allBuckets, b)
-			knownBuckets[b.Name] = struct{}{}
-		}
 		for _, erObj := range z.sets {
 			wg.Add(1)
 			results = append(results, dataUsageCache{})
@@ -355,7 +352,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 					}
 				}()
 				// Start crawler. Blocks until done.
-				err := erObj.crawlAndGetDataUsage(ctx, buckets, bf, updates)
+				err := erObj.crawlAndGetDataUsage(ctx, allBuckets, bf, updates)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()

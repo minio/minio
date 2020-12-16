@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -161,6 +162,12 @@ wait:
 			}
 
 			buckets, _ := z.ListBuckets(ctx)
+
+			// Heal latest buckets first.
+			sort.Slice(buckets, func(i, j int) bool {
+				return buckets[i].Created.After(buckets[j].Created)
+			})
+
 			for i, setMap := range erasureSetInZoneDisksToHeal {
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {
