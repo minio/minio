@@ -99,11 +99,17 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 		}
 	}
 
+	crawlTimer := time.NewTimer(dataCrawlStartDelay)
+	defer crawlTimer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(dataCrawlStartDelay):
+		case <-crawlTimer.C:
+			// Reset the timer for next cycle.
+			crawlTimer.Reset(dataCrawlStartDelay)
+
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
