@@ -278,14 +278,11 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 		case <-ctx.Done():
 			return
 		case <-monitor.C:
+			// Reset the timer once fired for required interval.
+			monitor.Reset(monitorInterval)
+
 			s.connectDisks()
 		}
-
-		if !monitor.Stop() {
-			<-monitor.C
-		}
-
-		monitor.Reset(monitorInterval)
 	}
 }
 
@@ -1369,6 +1366,26 @@ func (s *erasureSets) maintainMRFList() {
 	}
 }
 
+func toSourceChTimed(t *time.Timer, sourceCh chan healSource, u healSource) {
+	t.Reset(100 * time.Millisecond)
+
+	// No defer, as we don't know which
+	// case will be selected
+
+	select {
+	case sourceCh <- u:
+	case <-t.C:
+		return
+	}
+
+	// We still need to check the return value
+	// of Stop, because t could have fired
+	// between the send on sourceCh and this line.
+	if !t.Stop() {
+		<-t.C
+	}
+}
+
 // healMRFRoutine monitors new disks connection, sweep the MRF list
 // to find objects related to the new disk that needs to be healed.
 func (s *erasureSets) healMRFRoutine() {
@@ -1392,16 +1409,8 @@ func (s *erasureSets) healMRFRoutine() {
 
 		// Heal objects
 		for _, u := range mrfOperations {
-			// Send an object to be healed with a timeout
-			select {
-			case bgSeq.sourceCh <- u:
-			case <-idler.C:
-			}
-
-			if !idler.Stop() {
-				<-idler.C
-			}
-			idler.Reset(100 * time.Millisecond)
+			// Send an object to background heal
+			toSourceChTimed(idler, bgSeq.sourceCh, u)
 
 			s.mrfMU.Lock()
 			delete(s.mrfOperations, u)

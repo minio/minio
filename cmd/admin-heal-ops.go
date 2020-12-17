@@ -145,9 +145,13 @@ func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 	// Launch clean-up routine to remove this heal sequence (after
 	// it ends) from the global state after timeout has elapsed.
+	periodicTimer := time.NewTimer(time.Minute * 5)
+	defer periodicTimer.Stop()
+
 	for {
 		select {
-		case <-time.After(time.Minute * 5):
+		case <-periodicTimer.C:
+			periodicTimer.Reset(time.Minute * 5)
 			now := UTCNow()
 			ahs.Lock()
 			for path, h := range ahs.healSeqMap {

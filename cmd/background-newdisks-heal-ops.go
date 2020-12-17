@@ -110,12 +110,17 @@ func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq *healSequence) {
 	// Perform automatic disk healing when a disk is replaced locally.
+	diskCheckTimer := time.NewTimer(defaultMonitorNewDiskInterval)
+	defer diskCheckTimer.Stop()
 wait:
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(defaultMonitorNewDiskInterval):
+		case <-diskCheckTimer.C:
+			// Reset to next interval.
+			diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
+
 			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
