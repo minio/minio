@@ -168,6 +168,9 @@ type ObjectInfo struct {
 	// Hex encoded unique entity tag of the object.
 	ETag string
 
+	// The ETag stored in the gateway backend
+	InnerETag string
+
 	// Version ID of this object.
 	VersionID string
 
