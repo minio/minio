@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -82,13 +83,12 @@ func (iamOS *IAMObjectStore) migrateUsersConfigToV1(ctx context.Context, isSTS b
 		basePrefix = iamConfigSTSPrefix
 	}
 
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix, true) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
 		}
 
-		user := item.Item
-
+		user := path.Dir(item.Item)
 		{
 			// 1. check if there is policy file in old location.
 			oldPolicyPath := pathJoin(basePrefix, user, iamPolicyFile)
@@ -250,12 +250,12 @@ func (iamOS *IAMObjectStore) loadPolicyDoc(ctx context.Context, policy string, m
 }
 
 func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPoliciesPrefix, true) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPoliciesPrefix) {
 		if item.Err != nil {
 			return item.Err
 		}
 
-		policyName := item.Item
+		policyName := path.Dir(item.Item)
 		if err := iamOS.loadPolicyDoc(ctx, policyName, m); err != nil && err != errNoSuchPolicy {
 			return err
 		}
@@ -319,12 +319,12 @@ func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType
 		basePrefix = iamConfigUsersPrefix
 	}
 
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix, true) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePrefix) {
 		if item.Err != nil {
 			return item.Err
 		}
 
-		userName := item.Item
+		userName := path.Dir(item.Item)
 		if err := iamOS.loadUser(ctx, userName, userType, m); err != nil && err != errNoSuchUser {
 			return err
 		}
@@ -346,12 +346,12 @@ func (iamOS *IAMObjectStore) loadGroup(ctx context.Context, group string, m map[
 }
 
 func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupInfo) error {
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigGroupsPrefix, true) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigGroupsPrefix) {
 		if item.Err != nil {
 			return item.Err
 		}
 
-		group := item.Item
+		group := path.Dir(item.Item)
 		if err := iamOS.loadGroup(ctx, group, m); err != nil && err != errNoSuchGroup {
 			return err
 		}
@@ -388,7 +388,7 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 			basePath = iamConfigPolicyDBUsersPrefix
 		}
 	}
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath, false) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath) {
 		if item.Err != nil {
 			return item.Err
 		}
@@ -566,49 +566,29 @@ type itemOrErr struct {
 // prefix. If dirs is true, only directories are listed, otherwise
 // only objects are listed. All returned items have the pathPrefix
 // removed from their names.
-func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix string, dirs bool) <-chan itemOrErr {
+func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix string) <-chan itemOrErr {
 	ch := make(chan itemOrErr)
-
-	dirList := func(lo ListObjectsInfo) []string {
-		return lo.Prefixes
-	}
-	filesList := func(lo ListObjectsInfo) (r []string) {
-		for _, o := range lo.Objects {
-			r = append(r, o.Name)
-		}
-		return r
-	}
 
 	go func() {
 		defer close(ch)
 
-		marker := ""
-		for {
-			lo, err := objAPI.ListObjects(ctx,
-				minioMetaBucket, pathPrefix, marker, SlashSeparator, maxObjectList)
-			if err != nil {
-				select {
-				case ch <- itemOrErr{Err: err}:
-				case <-ctx.Done():
-				}
-				return
-			}
+		// Allocate new results channel to receive ObjectInfo.
+		objInfoCh := make(chan ObjectInfo)
 
-			marker = lo.NextMarker
-			lister := dirList(lo)
-			if !dirs {
-				lister = filesList(lo)
+		if err := objAPI.Walk(ctx, minioMetaBucket, pathPrefix, objInfoCh, ObjectOptions{}); err != nil {
+			select {
+			case ch <- itemOrErr{Err: err}:
+			case <-ctx.Done():
 			}
-			for _, itemPrefix := range lister {
-				item := strings.TrimPrefix(itemPrefix, pathPrefix)
-				item = strings.TrimSuffix(item, SlashSeparator)
-				select {
-				case ch <- itemOrErr{Item: item}:
-				case <-ctx.Done():
-					return
-				}
-			}
-			if !lo.IsTruncated {
+			return
+		}
+
+		for obj := range objInfoCh {
+			item := strings.TrimPrefix(obj.Name, pathPrefix)
+			item = strings.TrimSuffix(item, SlashSeparator)
+			select {
+			case ch <- itemOrErr{Item: item}:
+			case <-ctx.Done():
 				return
 			}
 		}
