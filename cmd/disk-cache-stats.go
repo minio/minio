@@ -34,6 +34,14 @@ type CacheDiskStats struct {
 	Dir          string
 }
 
+// GetUsageLevelString gets the string representation for the usage level.
+func (c *CacheDiskStats) GetUsageLevelString() (u string) {
+	if atomic.LoadInt32(&c.UsageState) == 0 {
+		return "low"
+	}
+	return "high"
+}
+
 // CacheStats - represents bytes served from cache,
 // cache hits and cache misses.
 type CacheStats struct {

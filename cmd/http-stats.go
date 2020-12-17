@@ -163,9 +163,11 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 // Update statistics from http request and response data
 func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter) {
 	// A successful request has a 2xx response code
-	successReq := (w.StatusCode >= 200 && w.StatusCode < 300)
+	successReq := w.StatusCode >= 200 && w.StatusCode < 300
 
-	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPath) {
+	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPathLegacy) ||
+		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
+		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2NodePath) {
 		st.totalS3Requests.Inc(api)
 		if !successReq && w.StatusCode != 0 {
 			st.totalS3Errors.Inc(api)

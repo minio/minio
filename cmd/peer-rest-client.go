@@ -749,7 +749,7 @@ func (client *peerRESTClient) doListen(listenCh chan interface{}, doneCh <-chan 
 	dec := gob.NewDecoder(respBody)
 	for {
 		var ev event.Event
-		if err = dec.Decode(&ev); err != nil {
+		if err := dec.Decode(&ev); err != nil {
 			return
 		}
 		if len(ev.EventVersion) > 0 {
@@ -905,4 +905,25 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 	var bandwidthReport bandwidth.Report
 	err = dec.Decode(&bandwidthReport)
 	return &bandwidthReport, err
+}
+
+func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric, error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodGetPeerMetrics, nil, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan Metric)
+	go func(ch chan<- Metric) {
+		for {
+			var metric Metric
+			if err := dec.Decode(&metric); err != nil {
+				http.DrainBody(respBody)
+				close(ch)
+				return
+			}
+			ch <- metric
+		}
+	}(ch)
+	return ch, nil
 }

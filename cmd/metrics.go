@@ -92,7 +92,7 @@ func (c *minioCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 
 	// Expose MinIO's version information
-	minioVersionInfo.WithLabelValues(Version, CommitID).Set(float64(1.0))
+	minioVersionInfo.WithLabelValues(Version, CommitID).Set(1.0)
 
 	storageMetricsPrometheus(ch)
 	nodeHealthMetricsPrometheus(ch)
@@ -531,7 +531,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// Report total capacity
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(minioNamespace, "capacity", "total"),
+			prometheus.BuildFQName(minioNamespace, "capacity_raw", "total"),
 			"Total capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
@@ -541,18 +541,18 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// Report total capacity free
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(minioNamespace, "capacity", "free"),
+			prometheus.BuildFQName(minioNamespace, "capacity_raw_free", "total"),
 			"Total free capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(GetTotalCapacityFree(GlobalContext)),
 	)
 
-	s, _ := objLayer.StorageInfo(GlobalContext, true)
+	s, _ := objLayer.StorageInfo(GlobalContext)
 	// Report total usable capacity
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(minioNamespace, "capacity", "usable"),
+			prometheus.BuildFQName(minioNamespace, "capacity_usable", "total"),
 			"Total usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,
@@ -561,7 +561,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// Report total usable capacity free
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName(minioNamespace, "capacity", "usable_free"),
+			prometheus.BuildFQName(minioNamespace, "capacity_usable_free", "total"),
 			"Total free usable capacity online in the cluster",
 			nil, nil),
 		prometheus.GaugeValue,

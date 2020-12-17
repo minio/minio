@@ -228,7 +228,9 @@ func guessIsMetricsReq(req *http.Request) bool {
 	}
 	aType := getRequestAuthType(req)
 	return (aType == authTypeAnonymous || aType == authTypeJWT) &&
-		req.URL.Path == minioReservedBucketPath+prometheusMetricsPath
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsPathLegacy ||
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ClusterPath ||
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2NodePath
 }
 
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
