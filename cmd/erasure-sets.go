@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -280,6 +281,10 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 		case <-monitor.C:
 			// Reset the timer once fired for required interval.
 			monitor.Reset(monitorInterval)
+
+			if serverDebugLog {
+				console.Debugln("running disk monitoring")
+			}
 
 			s.connectDisks()
 		}

@@ -25,6 +25,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/console"
 )
 
 const (
@@ -138,6 +139,10 @@ wait:
 				for i := range z.serverPools {
 					erasureSetInZoneDisksToHeal[i] = map[int][]StorageAPI{}
 				}
+			}
+
+			if serverDebugLog {
+				console.Debugf("disk check timer fired, attempting to heal %d drives\n", len(healDisks))
 			}
 
 			// heal only if new disks found.

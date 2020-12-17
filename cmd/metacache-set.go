@@ -125,13 +125,13 @@ func (o listPathOptions) newMetacache() metacache {
 }
 
 func (o *listPathOptions) debugf(format string, data ...interface{}) {
-	if metacacheDebug {
+	if serverDebugLog {
 		console.Debugf(format, data...)
 	}
 }
 
 func (o *listPathOptions) debugln(data ...interface{}) {
-	if metacacheDebug {
+	if serverDebugLog {
 		console.Debugln(data...)
 	}
 }

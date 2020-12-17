@@ -79,7 +79,7 @@ func newDataUpdateTracker() *dataUpdateTracker {
 		Current: dataUpdateFilter{
 			idx: 1,
 		},
-		debug:      env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn,
+		debug:      env.Get(envDataUsageCrawlDebug, config.EnableOff) == config.EnableOn || serverDebugLog,
 		input:      make(chan string, dataUpdateTrackerQueueSize),
 		save:       make(chan struct{}, 1),
 		saveExited: make(chan struct{}),
