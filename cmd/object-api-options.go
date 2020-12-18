@@ -187,7 +187,7 @@ func delOpts(ctx context.Context, r *http.Request, bucket, object string) (opts 
 
 	mtime := strings.TrimSpace(r.Header.Get(xhttp.MinIOSourceMTime))
 	if mtime != "" {
-		opts.MTime, err = time.Parse(time.RFC3339, mtime)
+		opts.MTime, err = time.Parse(time.RFC3339Nano, mtime)
 		if err != nil {
 			return opts, InvalidArgument{
 				Bucket: bucket,
