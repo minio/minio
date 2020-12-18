@@ -49,7 +49,7 @@ func validateAdminReqConfigKV(ctx context.Context, w http.ResponseWriter, r *htt
 	}
 
 	// Validate request signature.
-	cred, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.ConfigUpdateAdminAction, "")
+	cred, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ConfigUpdateAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return cred, nil
