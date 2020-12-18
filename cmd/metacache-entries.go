@@ -309,7 +309,7 @@ func (m *metaCacheEntriesSorted) iterate(fn func(entry metaCacheEntry) (cont boo
 
 // fileInfoVersions converts the metadata to FileInfoVersions where possible.
 // Metadata that cannot be decoded is skipped.
-func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, afterV string) (versions []ObjectInfo, commonPrefixes []string) {
+func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, afterV string) (versions []ObjectInfo) {
 	versions = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
 	for _, entry := range m.o {
@@ -323,7 +323,11 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 						continue
 					}
 					prevPrefix = currPrefix
-					commonPrefixes = append(commonPrefixes, currPrefix)
+					versions = append(versions, ObjectInfo{
+						IsDir:  true,
+						Bucket: bucket,
+						Name:   currPrefix,
+					})
 					continue
 				}
 			}
@@ -356,17 +360,20 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 				continue
 			}
 			prevPrefix = currPrefix
-			commonPrefixes = append(commonPrefixes, currPrefix)
-			continue
+			versions = append(versions, ObjectInfo{
+				IsDir:  true,
+				Bucket: bucket,
+				Name:   currPrefix,
+			})
 		}
 	}
 
-	return versions, commonPrefixes
+	return versions
 }
 
 // fileInfoVersions converts the metadata to FileInfoVersions where possible.
 // Metadata that cannot be decoded is skipped.
-func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (objects []ObjectInfo, commonPrefixes []string) {
+func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (objects []ObjectInfo) {
 	objects = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
 	for _, entry := range m.o {
@@ -380,7 +387,11 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 						continue
 					}
 					prevPrefix = currPrefix
-					commonPrefixes = append(commonPrefixes, currPrefix)
+					objects = append(objects, ObjectInfo{
+						IsDir:  true,
+						Bucket: bucket,
+						Name:   currPrefix,
+					})
 					continue
 				}
 			}
@@ -405,12 +416,15 @@ func (m *metaCacheEntriesSorted) fileInfos(bucket, prefix, delimiter string) (ob
 				continue
 			}
 			prevPrefix = currPrefix
-			commonPrefixes = append(commonPrefixes, currPrefix)
-			continue
+			objects = append(objects, ObjectInfo{
+				IsDir:  true,
+				Bucket: bucket,
+				Name:   currPrefix,
+			})
 		}
 	}
 
-	return objects, commonPrefixes
+	return objects
 }
 
 // forwardTo will truncate m so only entries that are s or after is in the list.
