@@ -491,8 +491,6 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 
 		for _, lstorageInfo := range storageInfos {
 			storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-			storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-			storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 		}
 
 		return storageInfo
@@ -530,8 +528,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 
 	for _, lstorageInfo := range storageInfos {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
 	if local {

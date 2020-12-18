@@ -79,6 +79,8 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown(context.Context) error
 	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
+
+	BackendInfo() BackendInfo
 	StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) // local queries only local disks
 
 	// Bucket operations.

@@ -353,6 +353,14 @@ func (endpoints Endpoints) GetString(i int) string {
 	return endpoints[i].String()
 }
 
+// GetAllStrings - returns allstring of all endpoints
+func (endpoints Endpoints) GetAllStrings() (all []string) {
+	for _, e := range endpoints {
+		all = append(all, e.String())
+	}
+	return
+}
+
 func hostResolveToLocalhost(endpoint Endpoint) bool {
 	hostIPs, err := getHostIP(endpoint.Hostname())
 	if err != nil {
