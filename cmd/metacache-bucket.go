@@ -74,8 +74,8 @@ func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
 }
 
 func (b *bucketMetacache) debugf(format string, data ...interface{}) {
-	if metacacheDebug {
-		console.Debugf(format, data...)
+	if serverDebugLog {
+		console.Debugf(format+"\n", data...)
 	}
 }
 

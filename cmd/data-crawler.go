@@ -35,6 +35,7 @@ import (
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
@@ -109,6 +110,10 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 		case <-crawlTimer.C:
 			// Reset the timer for next cycle.
 			crawlTimer.Reset(dataCrawlStartDelay)
+
+			if intDataUpdateTracker.debug {
+				console.Debugln("starting crawler cycle")
+			}
 
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)

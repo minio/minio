@@ -46,9 +46,6 @@ const (
 	// Enabling this will make cache sharing more likely and cause less IO,
 	// but may cause additional latency to some calls.
 	metacacheSharePrefix = false
-
-	// metacacheDebug will enable debug printing
-	metacacheDebug = false
 )
 
 //go:generate msgp -file $GOFILE -unexported
