@@ -506,7 +506,15 @@ function testMultipartUploadFailure($s3Client, $params) {
             ],
         ],
     ];
-    runExceptionalTests($s3Client, 'completeMultipartUpload', 'getAwsErrorCode', $params);
+     try {
+        runExceptionalTests($s3Client, 'completeMultipartUpload', 'getAwsErrorCode', $params);
+    }finally {
+        $s3Client->abortMultipartUpload([
+            'Bucket' => $bucket,
+            'Key' => $object,
+            'UploadId' => $uploadId
+        ]);
+    }
 }
 
  /**
