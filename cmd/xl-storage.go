@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio/cmd/config"
@@ -1989,6 +1990,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		}
 		return err
 	}
+
 	_, err = os.Stat(dstVolumeDir)
 	if err != nil {
 		if osIsNotExist(err) {
@@ -2043,6 +2045,38 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			dstBuf, err = ioutil.ReadFile(dstFilePath)
 			if err != nil && !osIsNotExist(err) {
 				return osErrToFileErr(err)
+			}
+		}
+		if err == errFileNotFound {
+			// Verification to ensure that we
+			// don't have objects already created
+			// at this location, verify that resultant
+			// directories don't have any unexpected
+			// directories that we do not understand
+			// or expect. If its already there we should
+			// make sure to reject further renames
+			// for such objects.
+			//
+			// This elaborate check is necessary to avoid
+			// scenarios such as these.
+			//
+			// bucket1/name1/obj1/xl.meta
+			// bucket1/name1/xl.meta --> this should never
+			// be allowed.
+			{
+				entries, err := readDirN(path.Dir(dstFilePath), 1)
+				if err != nil && err != errFileNotFound {
+					return err
+				}
+				if len(entries) > 0 {
+					entry := path.Clean(entries[0])
+					if entry != legacyDataDir {
+						_, uerr := uuid.Parse(entry)
+						if uerr != nil {
+							return errFileParentIsFile
+						}
+					}
+				}
 			}
 		}
 	}
