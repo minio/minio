@@ -570,11 +570,13 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		// Limit browser to 1000 batches to be more responsive, scrolling friendly.
-		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
+		// Limit browser to defaults batches to be more responsive, scrolling friendly.
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, -1)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
+
+		nextMarker = lo.NextMarker
 		for i := range lo.Objects {
 			lo.Objects[i].Size, err = lo.Objects[i].GetActualSize()
 			if err != nil {
@@ -595,8 +597,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 				Key: prefix,
 			})
 		}
-
-		nextMarker = lo.NextMarker
 
 		// Return when there are no more objects
 		if !lo.IsTruncated {

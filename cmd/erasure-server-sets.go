@@ -712,14 +712,21 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
-	loi.Objects, loi.Prefixes = merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
-	loi.IsTruncated = err == nil && len(loi.Objects) > 0
-	if maxKeys > 0 && len(loi.Objects) > maxKeys {
-		loi.Objects = loi.Objects[:maxKeys]
+	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
+	loi.IsTruncated = err == nil && len(objects) > 0
+	if maxKeys > 0 && len(objects) > maxKeys {
+		objects = objects[:maxKeys]
 		loi.IsTruncated = true
 	}
+	for _, obj := range objects {
+		if obj.IsDir && delimiter != "" {
+			loi.Prefixes = append(loi.Prefixes, obj.Name)
+		} else {
+			loi.Objects = append(loi.Objects, obj)
+		}
+	}
 	if loi.IsTruncated {
-		last := loi.Objects[len(loi.Objects)-1]
+		last := objects[len(objects)-1]
 		loi.NextMarker = encodeMarker(last.Name, merged.listID)
 		loi.NextVersionIDMarker = last.VersionID
 	}
@@ -728,6 +735,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
+
 	merged, err := z.listPath(ctx, listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -741,11 +749,24 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		logger.LogIf(ctx, err)
 		return loi, err
 	}
+
 	// Default is recursive, if delimiter is set then list non recursive.
-	loi.Objects, loi.Prefixes = merged.fileInfos(bucket, prefix, delimiter)
-	loi.IsTruncated = err == nil && len(loi.Objects) > 0
+	objects := merged.fileInfos(bucket, prefix, delimiter)
+	loi.IsTruncated = err == nil && len(objects) > 0
+	if maxKeys > 0 && len(objects) > maxKeys {
+		objects = objects[:maxKeys]
+		loi.IsTruncated = true
+	}
+	for _, obj := range objects {
+		if obj.IsDir && delimiter != "" {
+			loi.Prefixes = append(loi.Prefixes, obj.Name)
+		} else {
+			loi.Objects = append(loi.Objects, obj)
+		}
+	}
 	if loi.IsTruncated {
-		loi.NextMarker = encodeMarker(loi.Objects[len(loi.Objects)-1].Name, merged.listID)
+		last := objects[len(objects)-1]
+		loi.NextMarker = encodeMarker(last.Name, merged.listID)
 	}
 	return loi, nil
 }
