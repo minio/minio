@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -1005,7 +1006,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// Throw error when wrong secret key is provided
-	if prevCred.SecretKey != args.CurrentSecretKey {
+	if subtle.ConstantTimeCompare([]byte(prevCred.SecretKey), []byte(args.CurrentSecretKey)) != 1 {
 		return errIncorrectCreds
 	}
 
