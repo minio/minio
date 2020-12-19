@@ -19,12 +19,11 @@ import io
 import os
 
 from minio import Minio
-from minio.selectrequest import (COMPRESSION_TYPE_NONE, FILE_HEADER_INFO_NONE,
-                                 JSON_TYPE_DOCUMENT, QUOTE_FIELDS_ALWAYS,
-                                 QUOTE_FIELDS_ASNEEDED, CSVInputSerialization,
-                                 CSVOutputSerialization,
-                                 JSONInputSerialization,
-                                 JSONOutputSerialization, SelectRequest)
+from minio.select import (COMPRESSION_TYPE_NONE, FILE_HEADER_INFO_NONE,
+                          JSON_TYPE_DOCUMENT, QUOTE_FIELDS_ALWAYS,
+                          QUOTE_FIELDS_ASNEEDED, CSVInputSerialization,
+                          CSVOutputSerialization, JSONInputSerialization,
+                          JSONOutputSerialization, SelectRequest)
 
 from utils import *
 
@@ -41,7 +40,7 @@ def test_sql_api(test_name, client, bucket_name, input_data, sql_opts, expected_
         # Get the records
         records = io.BytesIO()
         for d in data.stream(10*1024):
-            records.write(d.encode('utf-8'))
+            records.write(d)
             got_output = records.getvalue()
     except Exception as select_err:
         if not isinstance(expected_output, Exception):

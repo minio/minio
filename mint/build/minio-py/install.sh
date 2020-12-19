@@ -23,5 +23,5 @@ fi
 
 test_run_dir="$MINT_RUN_CORE_DIR/minio-py"
 pip3 install --user faker
-pip3 install git+http://github.com/minio/minio-py
-$WGET --output-document="$test_run_dir/tests.py" "https://raw.githubusercontent.com/minio/minio-py/master/tests/functional/tests.py"
+pip3 install minio=="${MINIO_PY_VERSION}"
+$WGET --output-document="$test_run_dir/tests.py" "https://raw.githubusercontent.com/minio/minio-py/${MINIO_PY_VERSION}/tests/functional/tests.py"

@@ -18,11 +18,10 @@
 import io
 from datetime import datetime
 
-from minio.selectrequest import (FILE_HEADER_INFO_NONE, JSON_TYPE_DOCUMENT,
-                                 QUOTE_FIELDS_ASNEEDED, CSVInputSerialization,
-                                 CSVOutputSerialization,
-                                 JSONInputSerialization,
-                                 JSONOutputSerialization, SelectRequest)
+from minio.select import (FILE_HEADER_INFO_NONE, JSON_TYPE_DOCUMENT,
+                          QUOTE_FIELDS_ASNEEDED, CSVInputSerialization,
+                          CSVOutputSerialization, JSONInputSerialization,
+                          JSONOutputSerialization, SelectRequest)
 
 from utils import generate_bucket_name, generate_object_name
 
@@ -58,7 +57,7 @@ def test_sql_expressions_custom_input_output(client, input_bytes, sql_input,
                 # Get the records
                 records = io.BytesIO()
                 for d in data.stream(10*1024):
-                    records.write(d.encode('utf-8'))
+                    records.write(d)
                 got_output = records.getvalue()
 
                 if got_output != expected_output:

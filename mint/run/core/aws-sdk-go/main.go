@@ -885,7 +885,7 @@ func testListMultipartUploads(s3Client *s3.S3) {
 		failureLog(function, args, startTime, "", "AWS SDK Go createMultipartupload API failed", err).Fatal()
 		return
 	}
-	parts := make(map[*int64]*string)
+	parts := make([]*string, 5)
 	for i := 0; i < 5; i++ {
 		result, errUpload := s3Client.UploadPart(&s3.UploadPartInput{
 			Bucket:     aws.String(bucket),
@@ -903,7 +903,7 @@ func testListMultipartUploads(s3Client *s3.S3) {
 			failureLog(function, args, startTime, "", "AWS SDK Go uploadPart API failed for", errUpload).Fatal()
 			return
 		}
-		parts[aws.Int64(int64(i+1))] = result.ETag
+		parts[i] = result.ETag
 	}
 
 	listParts, errParts := s3Client.ListParts(&s3.ListPartsInput{
@@ -917,21 +917,20 @@ func testListMultipartUploads(s3Client *s3.S3) {
 	}
 
 	if len(parts) != len(listParts.Parts) {
-		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts len mismatch want: %v got: %v", len(parts), len(listParts.Parts)), err).Fatal()
+		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts len mismatch want: %d got: %d", len(parts), len(listParts.Parts)), err).Fatal()
 		return
 	}
 
 	completedParts := make([]*s3.CompletedPart, len(parts))
-	for _, part := range listParts.Parts {
-		if tag, ok := parts[part.PartNumber]; ok {
-			if tag != part.ETag {
-				failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts output mismatch want: %v got: %v", tag, part.ETag), err).Fatal()
-				return
-			}
-			completedParts = append(completedParts, &s3.CompletedPart{
-				ETag:       part.ETag,
-				PartNumber: part.PartNumber,
-			})
+	for i, part := range listParts.Parts {
+		tag := parts[i]
+		if *tag != *part.ETag {
+			failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go ListParts.Parts output mismatch want: %#v got: %#v", tag, part.ETag), err).Fatal()
+			return
+		}
+		completedParts[i] = &s3.CompletedPart{
+			ETag:       part.ETag,
+			PartNumber: part.PartNumber,
 		}
 	}
 
@@ -942,8 +941,13 @@ func testListMultipartUploads(s3Client *s3.S3) {
 			Parts: completedParts},
 		UploadId: multipartUpload.UploadId,
 	})
-	if err != nil {
-		failureLog(function, args, startTime, "", fmt.Sprintf("AWS SDK Go CompleteMultipartUpload failed"), err).Fatal()
+	if err == nil {
+		failureLog(function, args, startTime, "", "AWS SDK Go CompleteMultipartUpload is expected to fail but succeeded", errors.New("expected nil")).Fatal()
+		return
+	}
+
+	if err.(s3.RequestFailure).Code() != "EntityTooSmall" {
+		failureLog(function, args, startTime, "", "AWS SDK Go CompleteMultipartUpload is expected to fail with EntityTooSmall", err).Fatal()
 		return
 	}
 
