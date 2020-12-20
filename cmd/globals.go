@@ -171,7 +171,7 @@ var (
 	globalRootCAs *x509.CertPool
 
 	// IsSSL indicates if the server is configured with SSL.
-	globalIsSSL bool
+	globalIsTLS bool
 
 	globalTLSCerts *certs.Manager
 
@@ -279,6 +279,8 @@ var (
 	globalProxyEndpoints []ProxyEndpoint
 
 	globalInternodeTransport http.RoundTripper
+
+	globalProxyTransport http.RoundTripper
 
 	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.

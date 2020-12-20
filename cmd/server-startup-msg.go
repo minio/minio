@@ -85,7 +85,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		if globalIsSSL {
+		if globalIsTLS {
 			printCertificateMsg(globalPublicCerts)
 		}
 	}

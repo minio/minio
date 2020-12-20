@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -38,7 +37,6 @@ import (
 	"github.com/minio/minio/cmd/config"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/mountinfo"
 	xnet "github.com/minio/minio/pkg/net"
@@ -59,7 +57,7 @@ const (
 // See proxyRequest() for details.
 type ProxyEndpoint struct {
 	Endpoint
-	Transport *http.Transport
+	Transport http.RoundTripper
 }
 
 // Endpoint - any type of endpoint.
@@ -881,20 +879,9 @@ func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint 
 			}
 			proxyEpSet.Add(host)
 
-			var tlsConfig *tls.Config
-			if globalIsSSL {
-				tlsConfig = &tls.Config{
-					ServerName: endpoint.Hostname(),
-					RootCAs:    globalRootCAs,
-				}
-			}
-
-			// allow transport to be HTTP/1.1 for proxying.
-			tr := newCustomHTTPProxyTransport(tlsConfig, rest.DefaultTimeout)()
-
 			proxyEps = append(proxyEps, ProxyEndpoint{
 				Endpoint:  endpoint,
-				Transport: tr,
+				Transport: globalProxyTransport,
 			})
 		}
 	}

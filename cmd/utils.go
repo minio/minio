@@ -463,7 +463,7 @@ func ToS3ETag(etag string) string {
 	return etag
 }
 
-func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
+func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() http.RoundTripper {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
 	tr := &http.Transport{
@@ -481,11 +481,23 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		DisableCompression: true,
 	}
 
-	if tlsConfig != nil {
-		http2.ConfigureTransport(tr)
+	if globalIsTLS {
+		trhttp2, _ := http2.ConfigureTransports(tr)
+		if trhttp2 != nil {
+			// ReadIdleTimeout is the timeout after which a health check using ping
+			// frame will be carried out if no frame is received on the
+			// connection. 5 minutes is sufficient time for any idle connection.
+			trhttp2.ReadIdleTimeout = 5 * time.Minute
+			// PingTimeout is the timeout after which the connection will be closed
+			// if a response to Ping is not received.
+			trhttp2.PingTimeout = dialTimeout
+			// DisableCompression, if true, prevents the Transport from
+			// requesting compression with an "Accept-Encoding: gzip"
+			trhttp2.DisableCompression = true
+		}
 	}
 
-	return func() *http.Transport {
+	return func() http.RoundTripper {
 		return tr
 	}
 }
@@ -532,8 +544,23 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		DisableCompression: true,
 	}
 
-	if tlsConfig != nil {
-		http2.ConfigureTransport(tr)
+	if globalIsTLS {
+		trhttp2, _ := http2.ConfigureTransports(tr)
+		if trhttp2 != nil {
+			// ReadIdleTimeout is the timeout after which a health check using ping
+			// frame will be carried out if no frame is received on the
+			// connection. 5 minutes is above maximum sane scrape interval,
+			// we should not have this small overhead on the scrape connections.
+			// For other cases, this is used to validate that the connection can
+			// still be used.
+			trhttp2.ReadIdleTimeout = 5 * time.Minute
+			// PingTimeout is the timeout after which the connection will be closed
+			// if a response to Ping is not received.
+			trhttp2.PingTimeout = dialTimeout
+			// DisableCompression, if true, prevents the Transport from
+			// requesting compression with an "Accept-Encoding: gzip"
+			trhttp2.DisableCompression = true
+		}
 	}
 
 	return func() *http.Transport {
@@ -543,8 +570,6 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 
 // NewGatewayHTTPTransport returns a new http configuration
 // used while communicating with the cloud backends.
-// This sets the value for MaxIdleConnsPerHost from 2 (go default)
-// to 256.
 func NewGatewayHTTPTransport() *http.Transport {
 	return newGatewayHTTPTransport(1 * time.Minute)
 }

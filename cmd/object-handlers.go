@@ -752,7 +752,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	// and hence expected to have same credentials.
 	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
-		Secure:    globalIsSSL,
+		Secure:    globalIsTLS,
 		Transport: getRemoteInstanceTransport,
 	})
 	if err != nil {
