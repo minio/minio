@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -358,7 +359,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	defer logger.AuditLog(w, r, "AddUser", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
-	accessKey := vars["accessKey"]
+	accessKey := path.Clean(vars["accessKey"])
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
