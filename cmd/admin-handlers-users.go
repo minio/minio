@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -358,7 +359,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	defer logger.AuditLog(w, r, "AddUser", mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
-	accessKey := vars["accessKey"]
+	accessKey := path.Clean(vars["accessKey"])
 
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
@@ -373,23 +374,29 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cred.IsTemp() || cred.IsServiceAccount() {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccountNotEligible), r.URL)
-		return
-	}
-
 	// Not allowed to add a user with same access key as root credential
 	if owner && accessKey == cred.AccessKey {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
 		return
 	}
 
+	if (cred.IsTemp() || cred.IsServiceAccount()) && cred.ParentUser == accessKey {
+		// Incoming access key matches parent user then we should
+		// reject password change requests.
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
+		return
+	}
+
 	implicitPerm := accessKey == cred.AccessKey
 	if !implicitPerm {
+		parentUser := cred.ParentUser
+		if parentUser == "" {
+			parentUser = cred.AccessKey
+		}
 		if !globalIAMSys.IsAllowed(iampolicy.Args{
-			AccountName:     cred.AccessKey,
+			AccountName:     parentUser,
 			Action:          iampolicy.CreateUserAdminAction,
-			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			ConditionValues: getConditionValues(r, "", parentUser, claims),
 			IsOwner:         owner,
 			Claims:          claims,
 		}) {
