@@ -200,6 +200,11 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
+// BackendInfo - returns backend information
+func (fs *FSObjects) BackendInfo() BackendInfo {
+	return BackendInfo{Type: BackendFS}
+}
+
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []error) {
 

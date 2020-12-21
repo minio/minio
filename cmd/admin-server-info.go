@@ -25,6 +25,7 @@ import (
 // getLocalServerProperty - returns madmin.ServerProperties for only the
 // local endpoints from given list of endpoints
 func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerProperties {
+	var localEndpoints Endpoints
 	addr := r.Host
 	if globalIsDistErasure {
 		addr = GetLocalPeer(endpointServerPools)
@@ -39,6 +40,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			if endpoint.IsLocal {
 				// Only proceed for local endpoints
 				network[nodeName] = "online"
+				localEndpoints = append(localEndpoints, endpoint)
 				continue
 			}
 			_, present := network[nodeName]
@@ -52,6 +54,11 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		}
 	}
 
+	localDisks, _ := initStorageDisksWithErrors(localEndpoints)
+	defer closeStorageDisks(localDisks)
+
+	storageInfo, _ := getStorageInfo(localDisks, localEndpoints.GetAllStrings())
+
 	return madmin.ServerProperties{
 		State:    "ok",
 		Endpoint: addr,
@@ -59,5 +66,6 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		Version:  Version,
 		CommitID: CommitID,
 		Network:  network,
+		Disks:    storageInfo.Disks,
 	}
 }
