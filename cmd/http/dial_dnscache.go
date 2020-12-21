@@ -97,8 +97,9 @@ type DNSCache struct {
 	lookupHostFn  func(ctx context.Context, host string) ([]string, error)
 	lookupTimeout time.Duration
 
-	cache  map[string][]string
-	closer func()
+	cache    map[string][]string
+	doneOnce sync.Once
+	doneCh   chan struct{}
 }
 
 // NewDNSCache initializes DNS cache resolver and starts auto refreshing
@@ -113,26 +114,24 @@ func NewDNSCache(freq time.Duration, lookupTimeout time.Duration) *DNSCache {
 		lookupTimeout = defaultLookupTimeout
 	}
 
-	ticker := time.NewTicker(freq)
-	ch := make(chan struct{})
-	closer := func() {
-		ticker.Stop()
-		close(ch)
-	}
-
 	r := &DNSCache{
 		lookupHostFn:  net.DefaultResolver.LookupHost,
 		lookupTimeout: lookupTimeout,
 		cache:         make(map[string][]string, cacheSize),
-		closer:        closer,
+		doneCh:        make(chan struct{}),
 	}
 
+	timer := time.NewTimer(freq)
 	go func() {
+		defer timer.Stop()
+
 		for {
 			select {
-			case <-ticker.C:
+			case <-timer.C:
+				timer.Reset(freq)
+
 				r.Refresh()
-			case <-ch:
+			case <-r.doneCh:
 				return
 			}
 		}
@@ -188,10 +187,7 @@ func (r *DNSCache) Refresh() {
 
 // Stop stops auto refreshing.
 func (r *DNSCache) Stop() {
-	r.Lock()
-	defer r.Unlock()
-	if r.closer != nil {
-		r.closer()
-		r.closer = nil
-	}
+	r.doneOnce.Do(func() {
+		close(r.doneCh)
+	})
 }
