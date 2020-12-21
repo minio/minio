@@ -147,13 +147,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	var wg sync.WaitGroup
 	var errs []error
 	allAtEOF := true
-	asked := 0
 	mu.Lock()
 	// Ask all sets and merge entries.
 	for _, zone := range z.serverPools {
 		for _, set := range zone.sets {
 			wg.Add(1)
-			asked++
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()
 				e, err := set.listPath(ctx, o)

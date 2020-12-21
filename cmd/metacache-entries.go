@@ -73,11 +73,13 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, bucket string) bool {
 	if len(e.metadata) != len(other.metadata) || e.name != other.name {
 		return false
 	}
+
 	eFi, eErr := e.fileInfo(bucket)
-	oFi, oErr := e.fileInfo(bucket)
+	oFi, oErr := other.fileInfo(bucket)
 	if eErr != nil || oErr != nil {
 		return eErr == oErr
 	}
+
 	return eFi.ModTime.Equal(oFi.ModTime) && eFi.Size == oFi.Size && eFi.VersionID == oFi.VersionID
 }
 
@@ -213,11 +215,12 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		}
 
 		// Get new entry metadata
-		objExists++
 		fiv, err := entry.fileInfo(r.bucket)
 		if err != nil {
 			continue
 		}
+
+		objExists++
 		if selFIV == nil {
 			selected = entry
 			selFIV = fiv
@@ -227,14 +230,8 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		if selected.matches(entry, r.bucket) {
 			continue
 		}
-
-		// Select latest modtime.
-		if fiv.ModTime.After(selFIV.ModTime) {
-			selected = entry
-			selFIV = fiv
-			continue
-		}
 	}
+
 	// If directory, we need quorum.
 	if dirExists > 0 && dirExists < r.dirQuorum {
 		return nil, false

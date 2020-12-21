@@ -846,21 +846,21 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	// Check if there is any offline disk and add it to the MRF list
-	for i, disk := range onlineDisks {
-		if disk == nil || storageDisks[i] == nil {
-			er.addPartial(bucket, object, fi.VersionID)
-			break
+	for _, disk := range onlineDisks {
+		if disk != nil && disk.IsOnline() {
+			continue
 		}
+		er.addPartial(bucket, object, fi.VersionID)
+		break
 	}
 
 	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] == nil {
-			continue
+		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+			// Object info is the same in all disks, so we can pick
+			// the first meta from online disk
+			fi = partsMetadata[i]
+			break
 		}
-		// Object info is the same in all disks, so we can pick
-		// the first meta from online disk
-		fi = partsMetadata[i]
-		break
 	}
 
 	// Success, return object info.
