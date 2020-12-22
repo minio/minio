@@ -432,7 +432,11 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 
 		// We got a stream to start at.
 		loadedPart := 0
-		var buf bytes.Buffer
+		buf := bufferPool.Get().(*bytes.Buffer)
+		defer func() {
+			buf.Reset()
+			bufferPool.Put(buf)
+		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -482,7 +486,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				}
 			}
 			buf.Reset()
-			err := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0, fi.Size, &buf, fi, metaArr, onlineDisks)
+			err := er.getObjectWithFileInfo(ctx, minioMetaBucket, o.objectPath(partN), 0, fi.Size, buf, fi, metaArr, onlineDisks)
 			if err != nil {
 				switch toObjectErr(err, minioMetaBucket, o.objectPath(partN)).(type) {
 				case ObjectNotFound:
@@ -498,7 +502,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					return entries, err
 				}
 			}
-			tmp, err := newMetacacheReader(&buf)
+			tmp, err := newMetacacheReader(buf)
 			if err != nil {
 				return entries, err
 			}

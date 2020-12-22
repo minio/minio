@@ -745,6 +745,12 @@ type metacacheBlockWriter struct {
 	blockEntries int
 }
 
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
 // newMetacacheBlockWriter provides a streaming block writer.
 // Each block is the size of the capacity of the input channel.
 // The caller should close to indicate the stream has ended.
@@ -755,12 +761,15 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 		defer w.wg.Done()
 		var current metacacheBlock
 		var n int
-		var buf bytes.Buffer
-		block := newMetacacheWriter(&buf, 1<<20)
+		buf := bufferPool.Get().(*bytes.Buffer)
+		defer func() {
+			buf.Reset()
+			bufferPool.Put(buf)
+		}()
+		block := newMetacacheWriter(buf, 1<<20)
 		defer block.Close()
 		finishBlock := func() {
-			err := block.Close()
-			if err != nil {
+			if err := block.Close(); err != nil {
 				w.streamErr = err
 				return
 			}
@@ -769,7 +778,7 @@ func newMetacacheBlockWriter(in <-chan metaCacheEntry, nextBlock func(b *metacac
 			// Prepare for next
 			current.n++
 			buf.Reset()
-			block.Reset(&buf)
+			block.Reset(buf)
 			current.First = ""
 		}
 		for o := range in {
