@@ -1258,14 +1258,26 @@ func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) (localDiskIDs [
 	return localDiskIDs
 }
 
+// returns all the peers that are currently online.
+func (sys *NotificationSys) getOnlinePeers() []*peerRESTClient {
+	var peerClients []*peerRESTClient
+	for _, peerClient := range sys.allPeerClients {
+		if peerClient != nil && peerClient.IsOnline() {
+			peerClients = append(peerClients, peerClient)
+		}
+	}
+	return peerClients
+}
+
 // restClientFromHash will return a deterministic peerRESTClient based on s.
 // Will return nil if client is local.
 func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient) {
 	if len(sys.peerClients) == 0 {
 		return nil
 	}
-	idx := xxhash.Sum64String(s) % uint64(len(sys.allPeerClients))
-	return sys.allPeerClients[idx]
+	peerClients := sys.getOnlinePeers()
+	idx := xxhash.Sum64String(s) % uint64(len(peerClients))
+	return peerClients[idx]
 }
 
 // NewNotificationSys - creates new notification system object.
