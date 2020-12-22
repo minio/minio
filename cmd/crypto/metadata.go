@@ -15,19 +15,42 @@
 package crypto
 
 import (
-	"context"
-	"encoding/base64"
-	"errors"
-
 	xhttp "github.com/minio/minio/cmd/http"
-	"github.com/minio/minio/cmd/logger"
+)
+
+const (
+	// MetaMultipart indicates that the object has been uploaded
+	// in multiple parts - via the S3 multipart API.
+	MetaMultipart = "X-Minio-Internal-Encrypted-Multipart"
+
+	// MetaIV is the random initialization vector (IV) used for
+	// the MinIO-internal key derivation.
+	MetaIV = "X-Minio-Internal-Server-Side-Encryption-Iv"
+
+	// MetaAlgorithm is the algorithm used to derive internal keys
+	// and encrypt the objects.
+	MetaAlgorithm = "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm"
+
+	// MetaSealedKeySSEC is the sealed object encryption key in case of SSE-C.
+	MetaSealedKeySSEC = "X-Minio-Internal-Server-Side-Encryption-Sealed-Key"
+	// MetaSealedKeyS3 is the sealed object encryption key in case of SSE-S3
+	MetaSealedKeyS3 = "X-Minio-Internal-Server-Side-Encryption-S3-Sealed-Key"
+	// MetaSealedKeyKMS is the sealed object encryption key in case of SSE-KMS
+	MetaSealedKeyKMS = "X-Minio-Internal-Server-Side-Encryption-Kms-Sealed-Key"
+
+	// MetaKeyID is the KMS master key ID used to generate/encrypt the data
+	// encryption key (DEK).
+	MetaKeyID = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Id"
+	// MetaDataEncryptionKey is the sealed data encryption key (DEK) received from
+	// the KMS.
+	MetaDataEncryptionKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
 )
 
 // IsMultiPart returns true if the object metadata indicates
 // that it was uploaded using some form of server-side-encryption
 // and the S3 multipart API.
 func IsMultiPart(metadata map[string]string) bool {
-	if _, ok := metadata[SSEMultipart]; ok {
+	if _, ok := metadata[MetaMultipart]; ok {
 		return true
 	}
 	return false
@@ -37,8 +60,8 @@ func IsMultiPart(metadata map[string]string) bool {
 // information - e.g. the SSE-C key - from the metadata map.
 // It has the same semantics as RemoveSensitiveHeaders.
 func RemoveSensitiveEntries(metadata map[string]string) { // The functions is tested in TestRemoveSensitiveHeaders for compatibility reasons
-	delete(metadata, SSECKey)
-	delete(metadata, SSECopyKey)
+	delete(metadata, xhttp.AmzServerSideEncryptionCustomerKey)
+	delete(metadata, xhttp.AmzServerSideEncryptionCopyCustomerKey)
 	delete(metadata, xhttp.AmzMetaUnencryptedContentLength)
 	delete(metadata, xhttp.AmzMetaUnencryptedContentMD5)
 }
@@ -46,31 +69,36 @@ func RemoveSensitiveEntries(metadata map[string]string) { // The functions is te
 // RemoveSSEHeaders removes all crypto-specific SSE
 // header entries from the metadata map.
 func RemoveSSEHeaders(metadata map[string]string) {
-	delete(metadata, SSEHeader)
-	delete(metadata, SSEKmsID)
-	delete(metadata, SSEKmsContext)
-	delete(metadata, SSECKeyMD5)
-	delete(metadata, SSECAlgorithm)
+	delete(metadata, xhttp.AmzServerSideEncryption)
+	delete(metadata, xhttp.AmzServerSideEncryptionKmsID)
+	delete(metadata, xhttp.AmzServerSideEncryptionKmsContext)
+	delete(metadata, xhttp.AmzServerSideEncryptionCustomerAlgorithm)
+	delete(metadata, xhttp.AmzServerSideEncryptionCustomerKey)
+	delete(metadata, xhttp.AmzServerSideEncryptionCustomerKeyMD5)
+	delete(metadata, xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm)
+	delete(metadata, xhttp.AmzServerSideEncryptionCopyCustomerKey)
+	delete(metadata, xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5)
 }
 
 // RemoveInternalEntries removes all crypto-specific internal
 // metadata entries from the metadata map.
 func RemoveInternalEntries(metadata map[string]string) {
-	delete(metadata, SSEMultipart)
-	delete(metadata, SSEIV)
-	delete(metadata, SSESealAlgorithm)
-	delete(metadata, SSECSealedKey)
-	delete(metadata, S3SealedKey)
-	delete(metadata, S3KMSKeyID)
-	delete(metadata, S3KMSSealedKey)
+	delete(metadata, MetaMultipart)
+	delete(metadata, MetaAlgorithm)
+	delete(metadata, MetaIV)
+	delete(metadata, MetaSealedKeySSEC)
+	delete(metadata, MetaSealedKeyS3)
+	delete(metadata, MetaSealedKeyKMS)
+	delete(metadata, MetaKeyID)
+	delete(metadata, MetaDataEncryptionKey)
 }
 
 // IsSourceEncrypted returns true if the source is encrypted
 func IsSourceEncrypted(metadata map[string]string) bool {
-	if _, ok := metadata[SSECAlgorithm]; ok {
+	if _, ok := metadata[xhttp.AmzServerSideEncryptionCustomerAlgorithm]; ok {
 		return true
 	}
-	if _, ok := metadata[SSEHeader]; ok {
+	if _, ok := metadata[xhttp.AmzServerSideEncryption]; ok {
 		return true
 	}
 	return false
@@ -82,10 +110,10 @@ func IsSourceEncrypted(metadata map[string]string) bool {
 // IsEncrypted only checks whether the metadata contains at least
 // one entry indicating SSE-C or SSE-S3.
 func IsEncrypted(metadata map[string]string) bool {
-	if _, ok := metadata[SSEIV]; ok {
+	if _, ok := metadata[MetaIV]; ok {
 		return true
 	}
-	if _, ok := metadata[SSESealAlgorithm]; ok {
+	if _, ok := metadata[MetaAlgorithm]; ok {
 		return true
 	}
 	if IsMultiPart(metadata) {
@@ -97,28 +125,7 @@ func IsEncrypted(metadata map[string]string) bool {
 	if SSEC.IsEncrypted(metadata) {
 		return true
 	}
-	return false
-}
-
-// IsEncrypted returns true if the object metadata indicates
-// that the object was uploaded using SSE-S3.
-func (s3) IsEncrypted(metadata map[string]string) bool {
-	if _, ok := metadata[S3SealedKey]; ok {
-		return true
-	}
-	if _, ok := metadata[S3KMSKeyID]; ok {
-		return true
-	}
-	if _, ok := metadata[S3KMSSealedKey]; ok {
-		return true
-	}
-	return false
-}
-
-// IsEncrypted returns true if the object metadata indicates
-// that the object was uploaded using SSE-C.
-func (ssec) IsEncrypted(metadata map[string]string) bool {
-	if _, ok := metadata[SSECSealedKey]; ok {
+	if S3KMS.IsEncrypted(metadata) {
 		return true
 	}
 	return false
@@ -129,158 +136,10 @@ func (ssec) IsEncrypted(metadata map[string]string) bool {
 // metadata is nil.
 func CreateMultipartMetadata(metadata map[string]string) map[string]string {
 	if metadata == nil {
-		return map[string]string{SSEMultipart: ""}
+		return map[string]string{MetaMultipart: ""}
 	}
-	metadata[SSEMultipart] = ""
+	metadata[MetaMultipart] = ""
 	return metadata
-}
-
-// CreateMetadata encodes the sealed object key into the metadata and returns
-// the modified metadata. If the keyID and the kmsKey is not empty it encodes
-// both into the metadata as well. It allocates a new metadata map if metadata
-// is nil.
-func (s3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
-	if sealedKey.Algorithm != SealAlgorithm {
-		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
-	}
-
-	// There are two possibilites:
-	// - We use a KMS -> There must be non-empty key ID and a KMS data key.
-	// - We use a K/V -> There must be no key ID and no KMS data key.
-	// Otherwise, the caller has passed an invalid argument combination.
-	if keyID == "" && len(kmsKey) != 0 {
-		logger.CriticalIf(context.Background(), errors.New("The key ID must not be empty if a KMS data key is present"))
-	}
-	if keyID != "" && len(kmsKey) == 0 {
-		logger.CriticalIf(context.Background(), errors.New("The KMS data key must not be empty if a key ID is present"))
-	}
-
-	if metadata == nil {
-		metadata = make(map[string]string, 5)
-	}
-
-	metadata[SSESealAlgorithm] = sealedKey.Algorithm
-	metadata[SSEIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
-	metadata[S3SealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
-	if len(kmsKey) > 0 && keyID != "" { // We use a KMS -> Store key ID and sealed KMS data key.
-		metadata[S3KMSKeyID] = keyID
-		metadata[S3KMSSealedKey] = base64.StdEncoding.EncodeToString(kmsKey)
-	}
-	return metadata
-}
-
-// ParseMetadata extracts all SSE-S3 related values from the object metadata
-// and checks whether they are well-formed. It returns the sealed object key
-// on success. If the metadata contains both, a KMS master key ID and a sealed
-// KMS data key it returns both. If the metadata does not contain neither a
-// KMS master key ID nor a sealed KMS data key it returns an empty keyID and
-// KMS data key. Otherwise, it returns an error.
-func (s3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, err error) {
-	// Extract all required values from object metadata
-	b64IV, ok := metadata[SSEIV]
-	if !ok {
-		return keyID, kmsKey, sealedKey, errMissingInternalIV
-	}
-	algorithm, ok := metadata[SSESealAlgorithm]
-	if !ok {
-		return keyID, kmsKey, sealedKey, errMissingInternalSealAlgorithm
-	}
-	b64SealedKey, ok := metadata[S3SealedKey]
-	if !ok {
-		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-S3")
-	}
-
-	// There are two possibilites:
-	// - We use a KMS -> There must be a key ID and a KMS data key.
-	// - We use a K/V -> There must be no key ID and no KMS data key.
-	// Otherwise, the metadata is corrupted.
-	keyID, idPresent := metadata[S3KMSKeyID]
-	b64KMSSealedKey, kmsKeyPresent := metadata[S3KMSSealedKey]
-	if !idPresent && kmsKeyPresent {
-		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3")
-	}
-	if idPresent && !kmsKeyPresent {
-		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3")
-	}
-
-	// Check whether all extracted values are well-formed
-	var iv [32]byte
-	n, err := base64.StdEncoding.Decode(iv[:], []byte(b64IV))
-	if err != nil || n != 32 {
-		return keyID, kmsKey, sealedKey, errInvalidInternalIV
-	}
-	if algorithm != SealAlgorithm {
-		return keyID, kmsKey, sealedKey, errInvalidInternalSealAlgorithm
-	}
-	var encryptedKey [64]byte
-	n, err = base64.StdEncoding.Decode(encryptedKey[:], []byte(b64SealedKey))
-	if err != nil || n != 64 {
-		return keyID, kmsKey, sealedKey, Errorf("The internal sealed key for SSE-S3 is invalid")
-	}
-	if idPresent && kmsKeyPresent { // We are using a KMS -> parse the sealed KMS data key.
-		kmsKey, err = base64.StdEncoding.DecodeString(b64KMSSealedKey)
-		if err != nil {
-			return keyID, kmsKey, sealedKey, Errorf("The internal sealed KMS data key for SSE-S3 is invalid")
-		}
-	}
-
-	sealedKey.Algorithm = algorithm
-	sealedKey.IV = iv
-	sealedKey.Key = encryptedKey
-	return keyID, kmsKey, sealedKey, nil
-}
-
-// CreateMetadata encodes the sealed key into the metadata and returns the modified metadata.
-// It allocates a new metadata map if metadata is nil.
-func (ssec) CreateMetadata(metadata map[string]string, sealedKey SealedKey) map[string]string {
-	if sealedKey.Algorithm != SealAlgorithm {
-		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-C", sealedKey.Algorithm))
-	}
-
-	if metadata == nil {
-		metadata = make(map[string]string, 3)
-	}
-	metadata[SSESealAlgorithm] = SealAlgorithm
-	metadata[SSEIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
-	metadata[SSECSealedKey] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
-	return metadata
-}
-
-// ParseMetadata extracts all SSE-C related values from the object metadata
-// and checks whether they are well-formed. It returns the sealed object key
-// on success.
-func (ssec) ParseMetadata(metadata map[string]string) (sealedKey SealedKey, err error) {
-	// Extract all required values from object metadata
-	b64IV, ok := metadata[SSEIV]
-	if !ok {
-		return sealedKey, errMissingInternalIV
-	}
-	algorithm, ok := metadata[SSESealAlgorithm]
-	if !ok {
-		return sealedKey, errMissingInternalSealAlgorithm
-	}
-	b64SealedKey, ok := metadata[SSECSealedKey]
-	if !ok {
-		return sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-C")
-	}
-
-	// Check whether all extracted values are well-formed
-	iv, err := base64.StdEncoding.DecodeString(b64IV)
-	if err != nil || len(iv) != 32 {
-		return sealedKey, errInvalidInternalIV
-	}
-	if algorithm != SealAlgorithm && algorithm != InsecureSealAlgorithm {
-		return sealedKey, errInvalidInternalSealAlgorithm
-	}
-	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
-	if err != nil || len(encryptedKey) != 64 {
-		return sealedKey, Errorf("The internal sealed key for SSE-C is invalid")
-	}
-
-	sealedKey.Algorithm = algorithm
-	copy(sealedKey.IV[:], iv)
-	copy(sealedKey.Key[:], encryptedKey)
-	return sealedKey, nil
 }
 
 // IsETagSealed returns true if the etag seems to be encrypted.

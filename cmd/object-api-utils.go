@@ -439,7 +439,9 @@ func isCompressible(header http.Header, object string) bool {
 	globalCompressConfigMu.Lock()
 	cfg := globalCompressConfig
 	globalCompressConfigMu.Unlock()
-	if !cfg.Enabled || crypto.IsRequested(header) || excludeForCompression(header, object, cfg) {
+
+	_, ok := crypto.IsRequested(header)
+	if !cfg.Enabled || ok || excludeForCompression(header, object, cfg) {
 		return false
 	}
 	return true
@@ -628,7 +630,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
 		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
+			copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 
 			cFns = append(cleanUpFns, cFns...)
 			// Attach decrypter on inputReader

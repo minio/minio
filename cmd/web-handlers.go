@@ -1171,7 +1171,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 	}
 
 	// Require Content-Length to be set in the request
@@ -1239,7 +1239,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
 			var objectEncryptionKey crypto.ObjectKey
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
@@ -1288,10 +1288,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsRequested(r.Header):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}
@@ -1447,10 +1447,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}

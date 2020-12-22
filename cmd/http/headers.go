@@ -111,6 +111,20 @@ const (
 	AmzMetaUnencryptedContentLength = "X-Amz-Meta-X-Amz-Unencrypted-Content-Length"
 	AmzMetaUnencryptedContentMD5    = "X-Amz-Meta-X-Amz-Unencrypted-Content-Md5"
 
+	// AWS server-side encryption headers for SSE-S3, SSE-KMS and SSE-C.
+	AmzServerSideEncryption                      = "X-Amz-Server-Side-Encryption"
+	AmzServerSideEncryptionKmsID                 = AmzServerSideEncryption + "-Aws-Kms-Key-Id"
+	AmzServerSideEncryptionKmsContext            = AmzServerSideEncryption + "-Context"
+	AmzServerSideEncryptionCustomerAlgorithm     = AmzServerSideEncryption + "-Customer-Algorithm"
+	AmzServerSideEncryptionCustomerKey           = AmzServerSideEncryption + "-Customer-Key"
+	AmzServerSideEncryptionCustomerKeyMD5        = AmzServerSideEncryption + "-Customer-Key-Md5"
+	AmzServerSideEncryptionCopyCustomerAlgorithm = "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Algorithm"
+	AmzServerSideEncryptionCopyCustomerKey       = "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key"
+	AmzServerSideEncryptionCopyCustomerKeyMD5    = "X-Amz-Copy-Source-Server-Side-Encryption-Customer-Key-Md5"
+
+	AmzEncryptionAES = "AES256"
+	AmzEncryptionKMS = "aws:kms"
+
 	// Signature v2 related constants
 	AmzSignatureV2 = "Signature"
 	AmzAccessKeyID = "AWSAccessKeyId"

@@ -748,7 +748,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if !objectAPI.IsEncryptionSupported() && crypto.IsRequested(r.Header) {
+	if _, ok := crypto.IsRequested(r.Header); !objectAPI.IsEncryptionSupported() && ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -895,7 +895,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if _, err = globalBucketSSEConfigSys.Get(bucket); err == nil || globalAutoEncryption {
 		// This request header needs to be set prior to setting ObjectOptions
 		if !crypto.SSEC.IsRequested(r.Header) {
-			r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+			r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 		}
 	}
 
@@ -907,7 +907,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(formValues) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+		if _, ok := crypto.IsRequested(formValues); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			if crypto.SSECopy.IsRequested(r.Header) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 				return

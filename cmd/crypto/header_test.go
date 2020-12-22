@@ -18,26 +18,29 @@ import (
 	"net/http"
 	"sort"
 	"testing"
+
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 func TestIsRequested(t *testing.T) {
 	for i, test := range kmsIsRequestedTests {
-		if got := IsRequested(test.Header) && S3KMS.IsRequested(test.Header); got != test.Expected {
+		_, got := IsRequested(test.Header)
+		got = got && S3KMS.IsRequested(test.Header)
+		if got != test.Expected {
 			t.Errorf("SSE-KMS: Test %d: Wanted %v but got %v", i, test.Expected, got)
 		}
 	}
 	for i, test := range s3IsRequestedTests {
-		if got := IsRequested(test.Header) && S3.IsRequested(test.Header); got != test.Expected {
+		_, got := IsRequested(test.Header)
+		got = got && S3.IsRequested(test.Header)
+		if got != test.Expected {
 			t.Errorf("SSE-S3: Test %d: Wanted %v but got %v", i, test.Expected, got)
 		}
 	}
 	for i, test := range ssecIsRequestedTests {
-		if got := IsRequested(test.Header) && SSEC.IsRequested(test.Header); got != test.Expected {
-			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
-		}
-	}
-	for i, test := range ssecCopyIsRequestedTests {
-		if got := IsRequested(test.Header) && SSECopy.IsRequested(test.Header); got != test.Expected {
+		_, got := IsRequested(test.Header)
+		got = got && SSEC.IsRequested(test.Header)
+		if got != test.Expected {
 			t.Errorf("SSE-C: Test %d: Wanted %v but got %v", i, test.Expected, got)
 		}
 	}
@@ -131,11 +134,11 @@ var s3IsRequestedTests = []struct {
 	Header   http.Header
 	Expected bool
 }{
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: true},         // 0
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES-256"}}, Expected: true},        // 1
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{""}}, Expected: true},               // 2
-	{Header: http.Header{"X-Amz-Server-Side-Encryptio": []string{"AES256"}}, Expected: false},         // 3
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{SSEAlgorithmKMS}}, Expected: false}, // 4
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: true},                // 0
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES-256"}}, Expected: true},               // 1
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{""}}, Expected: true},                      // 2
+	{Header: http.Header{"X-Amz-Server-Side-Encryptio": []string{"AES256"}}, Expected: false},                // 3
+	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{xhttp.AmzEncryptionKMS}}, Expected: false}, // 4
 }
 
 func TestS3IsRequested(t *testing.T) {
@@ -403,7 +406,7 @@ func TestSSECopyParse(t *testing.T) {
 		if err == nil && key == zeroKey {
 			t.Errorf("Test %d: parsed client key is zero key", i)
 		}
-		if _, ok := test.Header[SSECKey]; ok {
+		if _, ok := test.Header[xhttp.AmzServerSideEncryptionCustomerKey]; ok {
 			t.Errorf("Test %d: client key is not removed from HTTP headers after parsing", i)
 		}
 	}
@@ -414,47 +417,47 @@ var removeSensitiveHeadersTests = []struct {
 }{
 	{
 		Header: http.Header{
-			SSECKey:    []string{""},
-			SSECopyKey: []string{""},
+			xhttp.AmzServerSideEncryptionCustomerKey:     []string{""},
+			xhttp.AmzServerSideEncryptionCopyCustomerKey: []string{""},
 		},
 		ExpectedHeader: http.Header{},
 	},
 	{ // Standard SSE-C request headers
 		Header: http.Header{
-			SSECAlgorithm: []string{SSEAlgorithmAES256},
-			SSECKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-			SSECKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES},
+			xhttp.AmzServerSideEncryptionCustomerKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
 		},
 		ExpectedHeader: http.Header{
-			SSECAlgorithm: []string{SSEAlgorithmAES256},
-			SSECKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
 		},
 	},
 	{ // Standard SSE-C + SSE-C-copy request headers
 		Header: http.Header{
-			SSECAlgorithm: []string{SSEAlgorithmAES256},
-			SSECKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-			SSECKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
-			SSECopyKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-			SSECopyKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm:  []string{xhttp.AmzEncryptionAES},
+			xhttp.AmzServerSideEncryptionCustomerKey:        []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:     []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			xhttp.AmzServerSideEncryptionCopyCustomerKey:    []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="},
 		},
 		ExpectedHeader: http.Header{
-			SSECAlgorithm: []string{SSEAlgorithmAES256},
-			SSECKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
-			SSECopyKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm:  []string{xhttp.AmzEncryptionAES},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:     []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			xhttp.AmzServerSideEncryptionCopyCustomerKeyMD5: []string{"7PpPLAK26ONlVUGOWlusfg=="},
 		},
 	},
 	{ // Standard SSE-C + metadata request headers
 		Header: http.Header{
-			SSECAlgorithm:       []string{SSEAlgorithmAES256},
-			SSECKey:             []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
-			SSECKeyMD5:          []string{"7PpPLAK26ONlVUGOWlusfg=="},
-			"X-Amz-Meta-Test-1": []string{"Test-1"},
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES},
+			xhttp.AmzServerSideEncryptionCustomerKey:       []string{"MzJieXRlc2xvbmdzZWNyZXRrZXltdXN0cHJvdmlkZWQ="},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			"X-Amz-Meta-Test-1":                            []string{"Test-1"},
 		},
 		ExpectedHeader: http.Header{
-			SSECAlgorithm:       []string{SSEAlgorithmAES256},
-			SSECKeyMD5:          []string{"7PpPLAK26ONlVUGOWlusfg=="},
-			"X-Amz-Meta-Test-1": []string{"Test-1"},
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{xhttp.AmzEncryptionAES},
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    []string{"7PpPLAK26ONlVUGOWlusfg=="},
+			"X-Amz-Meta-Test-1":                            []string{"Test-1"},
 		},
 	},
 	{ // https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
