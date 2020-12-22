@@ -225,13 +225,13 @@ var sseTLSHandlerTests = []struct {
 }
 
 func TestSSETLSHandler(t *testing.T) {
-	defer func(isSSL bool) { globalIsSSL = isSSL }(globalIsSSL) // reset globalIsSSL after test
+	defer func(isSSL bool) { globalIsTLS = isSSL }(globalIsTLS) // reset globalIsTLS after test
 
 	var okHandler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 	for i, test := range sseTLSHandlerTests {
-		globalIsSSL = test.IsTLS
+		globalIsTLS = test.IsTLS
 
 		w := httptest.NewRecorder()
 		r := new(http.Request)

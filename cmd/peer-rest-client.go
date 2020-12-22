@@ -859,7 +859,7 @@ func newPeerRestClients(endpoints EndpointServerPools) (remote, all []*peerRESTC
 // Returns a peer rest client.
 func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	scheme := "http"
-	if globalIsSSL {
+	if globalIsTLS {
 		scheme = "https"
 	}
 

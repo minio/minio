@@ -119,7 +119,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var setupType SetupType
 
 	// Check and load TLS certificates.
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	globalPublicCerts, globalTLSCerts, globalIsTLS, err = getTLSConfig()
 	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Check and load Root CAs.
@@ -140,6 +140,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
+	// allow transport to be HTTP/1.1 for proxying.
+	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
+		RootCAs: globalRootCAs,
+	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
@@ -384,15 +388,15 @@ func serverMain(ctx *cli.Context) {
 		if host == "" {
 			host = sortIPs(localIP4.ToSlice())[0]
 		}
-		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
 	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
-		if globalEndpoints.HTTPS() && !globalIsSSL {
+		if globalEndpoints.HTTPS() && !globalIsTLS {
 			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
-		if !globalEndpoints.HTTPS() && globalIsSSL {
+		if !globalEndpoints.HTTPS() && globalIsTLS {
 			logger.Fatal(config.ErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
 		}
 	}

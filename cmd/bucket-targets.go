@@ -350,7 +350,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*m
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 
 	getRemoteTargetInstanceTransportOnce.Do(func() {
-		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(1 * time.Hour)
+		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
 	})
 
 	core, err := miniogo.NewCore(tcfg.URL().Host, &miniogo.Options{

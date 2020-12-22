@@ -173,7 +173,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 
 	var tlsConfig *tls.Config
-	if globalIsSSL {
+	if globalIsTLS {
 		tlsConfig = &tls.Config{
 			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,

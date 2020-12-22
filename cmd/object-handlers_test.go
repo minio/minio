@@ -213,8 +213,8 @@ func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucke
 	credentials auth.Credentials, t *testing.T) {
 
 	// Set SSL to on to do encryption tests
-	globalIsSSL = true
-	defer func() { globalIsSSL = false }()
+	globalIsTLS = true
+	defer func() { globalIsTLS = false }()
 
 	var (
 		oneMiB        int64 = 1024 * 1024
@@ -659,8 +659,8 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 	credentials auth.Credentials, t *testing.T) {
 
 	// Set SSL to on to do encryption tests
-	globalIsSSL = true
-	defer func() { globalIsSSL = false }()
+	globalIsTLS = true
+	defer func() { globalIsTLS = false }()
 
 	var (
 		oneMiB        int64 = 1024 * 1024
@@ -857,8 +857,8 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 	credentials auth.Credentials, t *testing.T) {
 
 	// Set SSL to on to do encryption tests
-	globalIsSSL = true
-	defer func() { globalIsSSL = false }()
+	globalIsTLS = true
+	defer func() { globalIsTLS = false }()
 
 	var (
 		oneMiB        int64 = 1024 * 1024

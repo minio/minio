@@ -2208,7 +2208,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	if sourceScheme := handlers.GetSourceScheme(r); sourceScheme != "" {
 		scheme = sourceScheme
 	}
-	if globalIsSSL {
+	if globalIsTLS {
 		scheme = "https"
 	}
 
@@ -2227,8 +2227,6 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	clnt := &http.Client{
 		Transport: NewGatewayHTTPTransport(),
 	}
-	defer clnt.CloseIdleConnections()
-
 	resp, err := clnt.Do(req)
 	if err != nil {
 		return toJSONError(ctx, err)
