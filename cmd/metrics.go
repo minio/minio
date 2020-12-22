@@ -500,8 +500,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// Fetch disk space info, ignore errors
 	storageInfo, _ := objLayer.StorageInfo(GlobalContext, true)
 
-	offlineDisks := storageInfo.Backend.OfflineDisks
-	onlineDisks := storageInfo.Backend.OnlineDisks
+	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
 	totalDisks := offlineDisks.Merge(onlineDisks)
 
 	// MinIO Offline Disks per node

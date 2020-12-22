@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/console"
 )
 
 const (
@@ -109,12 +111,17 @@ func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 //  2. Only the node hosting the disk is responsible to perform the heal
 func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq *healSequence) {
 	// Perform automatic disk healing when a disk is replaced locally.
+	diskCheckTimer := time.NewTimer(defaultMonitorNewDiskInterval)
+	defer diskCheckTimer.Stop()
 wait:
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(defaultMonitorNewDiskInterval):
+		case <-diskCheckTimer.C:
+			// Reset to next interval.
+			diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
+
 			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
@@ -132,6 +139,10 @@ wait:
 				for i := range z.serverPools {
 					erasureSetInZoneDisksToHeal[i] = map[int][]StorageAPI{}
 				}
+			}
+
+			if serverDebugLog {
+				console.Debugf("disk check timer fired, attempting to heal %d drives\n", len(healDisks))
 			}
 
 			// heal only if new disks found.
@@ -160,7 +171,13 @@ wait:
 				erasureSetInZoneDisksToHeal[zoneIdx][setIndex] = append(erasureSetInZoneDisksToHeal[zoneIdx][setIndex], disk)
 			}
 
-			buckets, _ := z.ListBucketsHeal(ctx)
+			buckets, _ := z.ListBuckets(ctx)
+
+			// Heal latest buckets first.
+			sort.Slice(buckets, func(i, j int) bool {
+				return buckets[i].Created.After(buckets[j].Created)
+			})
+
 			for i, setMap := range erasureSetInZoneDisksToHeal {
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {

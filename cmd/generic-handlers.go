@@ -665,7 +665,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		}
 		if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
 			r.URL.Scheme = "http"
-			if globalIsSSL {
+			if globalIsTLS {
 				r.URL.Scheme = "https"
 			}
 			r.URL.Host = getHostFromSrv(sr)
@@ -715,7 +715,7 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	if globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {
 		r.URL.Scheme = "http"
-		if globalIsSSL {
+		if globalIsTLS {
 			r.URL.Scheme = "https"
 		}
 		r.URL.Host = getHostFromSrv(sr)
@@ -798,7 +798,7 @@ type sseTLSHandler struct{ handler http.Handler }
 
 func (h sseTLSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Deny SSE-C requests if not made over TLS
-	if !globalIsSSL && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+	if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
 		if r.Method == http.MethodHead {
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 		} else {

@@ -28,9 +28,17 @@ import (
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
 	infoStorage := StorageInfo{}
+	infoStorage.Disks = []madmin.Disk{
+		{Endpoint: "http://127.0.0.1:9000/data/1/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9000/data/2/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9000/data/3/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9000/data/4/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9001/data/1/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9001/data/2/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9001/data/3/", State: madmin.DriveStateOk},
+		{Endpoint: "http://127.0.0.1:9001/data/4/", State: madmin.DriveStateOffline},
+	}
 	infoStorage.Backend.Type = BackendErasure
-	infoStorage.Backend.OnlineDisks = madmin.BackendDisks{"127.0.0.1:9000": 4, "127.0.0.1:9001": 3}
-	infoStorage.Backend.OfflineDisks = madmin.BackendDisks{"127.0.0.1:9000": 0, "127.0.0.1:9001": 1}
 
 	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
 		t.Fatal("Unexpected storage info message, found:", msg)

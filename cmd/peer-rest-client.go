@@ -78,6 +78,11 @@ func (client *peerRESTClient) String() string {
 	return client.host.String()
 }
 
+// IsOnline returns true if the peer client is online.
+func (client *peerRESTClient) IsOnline() bool {
+	return client.restClient.IsOnline()
+}
+
 // Close - marks the client as closed.
 func (client *peerRESTClient) Close() error {
 	client.restClient.Close()
@@ -859,7 +864,7 @@ func newPeerRestClients(endpoints EndpointServerPools) (remote, all []*peerRESTC
 // Returns a peer rest client.
 func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 	scheme := "http"
-	if globalIsSSL {
+	if globalIsTLS {
 		scheme = "https"
 	}
 

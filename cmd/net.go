@@ -165,7 +165,7 @@ func getAPIEndpoints() (apiEndpoints []string) {
 	}
 
 	for _, ip := range ipList {
-		endpoint := fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(ip, globalMinioPort))
+		endpoint := fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(ip, globalMinioPort))
 		apiEndpoints = append(apiEndpoints, endpoint)
 	}
 

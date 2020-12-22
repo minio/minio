@@ -73,6 +73,64 @@ func (m *metacache) finished() bool {
 	return !m.ended.IsZero()
 }
 
+// matches returns whether the metacache matches the options given.
+func (m *metacache) matches(o *listPathOptions, extend time.Duration) bool {
+	if o == nil {
+		return false
+	}
+
+	// Never return transient caches if there is no id.
+	if m.status == scanStateError || m.status == scanStateNone || m.dataVersion != metacacheStreamVersion {
+		o.debugf("cache %s state or stream version mismatch", m.id)
+		return false
+	}
+	if m.startedCycle < o.OldestCycle {
+		o.debugf("cache %s cycle too old", m.id)
+		return false
+	}
+
+	// Root of what we are looking for must at least have the same
+	if !strings.HasPrefix(o.BaseDir, m.root) {
+		o.debugf("cache %s prefix mismatch, cached:%v, want:%v", m.id, m.root, o.BaseDir)
+		return false
+	}
+	if m.filter != "" && strings.HasPrefix(m.filter, o.FilterPrefix) {
+		o.debugf("cache %s cannot be used because of filter %s", m.id, m.filter)
+		return false
+	}
+
+	if o.Recursive && !m.recursive {
+		o.debugf("cache %s not recursive", m.id)
+		// If this is recursive the cached listing must be as well.
+		return false
+	}
+	if o.Separator != slashSeparator && !m.recursive {
+		o.debugf("cache %s not slashsep and not recursive", m.id)
+		// Non slash separator requires recursive.
+		return false
+	}
+	if !m.finished() && time.Since(m.lastUpdate) > metacacheMaxRunningAge {
+		o.debugf("cache %s not running, time: %v", m.id, time.Since(m.lastUpdate))
+		// Abandoned
+		return false
+	}
+
+	if m.finished() && m.endedCycle <= o.OldestCycle {
+		if extend <= 0 {
+			// If scan has ended the oldest requested must be less.
+			o.debugf("cache %s ended and cycle (%v) <= oldest allowed (%v)", m.id, m.endedCycle, o.OldestCycle)
+			return false
+		}
+		if time.Since(m.lastUpdate) > metacacheMaxRunningAge+extend {
+			// Cache ended within bloom cycle, but we can extend the life.
+			o.debugf("cache %s ended (%v) and beyond extended life (%v)", m.id, m.lastUpdate, extend+metacacheMaxRunningAge)
+			return false
+		}
+	}
+
+	return true
+}
+
 // worthKeeping indicates if the cache by itself is worth keeping.
 func (m *metacache) worthKeeping(currentCycle uint64) bool {
 	if m == nil {

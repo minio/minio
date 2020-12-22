@@ -37,7 +37,6 @@ import (
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
 	ioutilx "github.com/minio/minio/pkg/ioutil"
@@ -213,17 +212,17 @@ func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucke
 	credentials auth.Credentials, t *testing.T) {
 
 	// Set SSL to on to do encryption tests
-	globalIsSSL = true
-	defer func() { globalIsSSL = false }()
+	globalIsTLS = true
+	defer func() { globalIsTLS = false }()
 
 	var (
 		oneMiB        int64 = 1024 * 1024
 		key32Bytes          = generateBytesData(32 * humanize.Byte)
 		key32BytesMd5       = md5.Sum(key32Bytes)
 		metaWithSSEC        = map[string]string{
-			crypto.SSECAlgorithm: crypto.SSEAlgorithmAES256,
-			crypto.SSECKey:       base64.StdEncoding.EncodeToString(key32Bytes),
-			crypto.SSECKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: xhttp.AmzEncryptionAES,
+			xhttp.AmzServerSideEncryptionCustomerKey:       base64.StdEncoding.EncodeToString(key32Bytes),
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
 		}
 		mapCopy = func(m map[string]string) map[string]string {
 			r := make(map[string]string, len(m))
@@ -659,17 +658,17 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 	credentials auth.Credentials, t *testing.T) {
 
 	// Set SSL to on to do encryption tests
-	globalIsSSL = true
-	defer func() { globalIsSSL = false }()
+	globalIsTLS = true
+	defer func() { globalIsTLS = false }()
 
 	var (
 		oneMiB        int64 = 1024 * 1024
 		key32Bytes          = generateBytesData(32 * humanize.Byte)
 		key32BytesMd5       = md5.Sum(key32Bytes)
 		metaWithSSEC        = map[string]string{
-			crypto.SSECAlgorithm: crypto.SSEAlgorithmAES256,
-			crypto.SSECKey:       base64.StdEncoding.EncodeToString(key32Bytes),
-			crypto.SSECKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: xhttp.AmzEncryptionAES,
+			xhttp.AmzServerSideEncryptionCustomerKey:       base64.StdEncoding.EncodeToString(key32Bytes),
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
 		}
 		mapCopy = func(m map[string]string) map[string]string {
 			r := make(map[string]string, len(m))
@@ -857,17 +856,17 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 	credentials auth.Credentials, t *testing.T) {
 
 	// Set SSL to on to do encryption tests
-	globalIsSSL = true
-	defer func() { globalIsSSL = false }()
+	globalIsTLS = true
+	defer func() { globalIsTLS = false }()
 
 	var (
 		oneMiB        int64 = 1024 * 1024
 		key32Bytes          = generateBytesData(32 * humanize.Byte)
 		key32BytesMd5       = md5.Sum(key32Bytes)
 		metaWithSSEC        = map[string]string{
-			crypto.SSECAlgorithm: crypto.SSEAlgorithmAES256,
-			crypto.SSECKey:       base64.StdEncoding.EncodeToString(key32Bytes),
-			crypto.SSECKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
+			xhttp.AmzServerSideEncryptionCustomerAlgorithm: xhttp.AmzEncryptionAES,
+			xhttp.AmzServerSideEncryptionCustomerKey:       base64.StdEncoding.EncodeToString(key32Bytes),
+			xhttp.AmzServerSideEncryptionCustomerKeyMD5:    base64.StdEncoding.EncodeToString(key32BytesMd5[:]),
 		}
 		mapCopy = func(m map[string]string) map[string]string {
 			r := make(map[string]string, len(m))

@@ -38,7 +38,7 @@ func GetRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	if err != nil {
 		if os.IsNotExist(err) || os.IsPermission(err) {
 			// Return success if CA's directory is missing or permission denied.
-			err = nil
+			return rootCAs, nil
 		}
 		return rootCAs, err
 	}
@@ -46,11 +46,10 @@ func GetRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	// Load all custom CA files.
 	for _, fi := range fis {
 		caCert, err := ioutil.ReadFile(path.Join(certsCAsDir, fi.Name()))
-		if err != nil {
-			// ignore files which are not readable.
-			continue
+		if err == nil {
+			rootCAs.AppendCertsFromPEM(caCert)
 		}
-		rootCAs.AppendCertsFromPEM(caCert)
+		// ignore files which are not readable.
 	}
 
 	return rootCAs, nil

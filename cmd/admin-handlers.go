@@ -461,8 +461,15 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 
 	defer logger.AuditLog(w, r, "StartProfiling", mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ProfilingAdminAction)
-	if objectAPI == nil {
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	if globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
@@ -559,8 +566,15 @@ func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *htt
 
 	defer logger.AuditLog(w, r, "DownloadProfiling", mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ProfilingAdminAction)
-	if objectAPI == nil {
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
+		return
+	}
+
+	if globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 
@@ -900,7 +914,7 @@ func validateAdminReq(ctx context.Context, w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate request signature.
-	cred, adminAPIErr = checkAdminRequestAuthType(ctx, r, action, "")
+	cred, adminAPIErr = checkAdminRequestAuth(ctx, r, action, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return nil, cred
@@ -1032,7 +1046,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	trcErr := r.URL.Query().Get("err") == "true"
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.TraceAdminAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.TraceAdminAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -1431,7 +1445,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 	defer logger.AuditLog(w, r, "BandwidthMonitor", mustGetClaimsFromToken(r))
 
 	// Validate request signature.
-	_, adminAPIErr := checkAdminRequestAuthType(ctx, r, iampolicy.BandwidthMonitorAction, "")
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.BandwidthMonitorAction, "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
@@ -1483,20 +1497,11 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	defer logger.AuditLog(w, r, "ServerInfo", mustGetClaimsFromToken(r))
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction)
-	if objectAPI == nil {
+	// Validate request signature.
+	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ServerInfoAdminAction, "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(adminAPIErr), r.URL)
 		return
-	}
-
-	buckets := madmin.Buckets{}
-	objects := madmin.Objects{}
-	usage := madmin.Usage{}
-
-	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
-	if err == nil {
-		buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
-		objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
-		usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
 	}
 
 	vault := fetchVaultStatus()
@@ -1520,30 +1525,53 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Get the notification target info
 	notifyTarget := fetchLambdaInfo()
 
-	// Fetching the Storage information, ignore any errors.
-	storageInfo, _ := objectAPI.StorageInfo(ctx, false)
-
-	var backend interface{}
-	if storageInfo.Backend.Type == BackendType(madmin.Erasure) {
-		backend = madmin.ErasureBackend{
-			Type:             madmin.ErasureType,
-			OnlineDisks:      storageInfo.Backend.OnlineDisks.Sum(),
-			OfflineDisks:     storageInfo.Backend.OfflineDisks.Sum(),
-			StandardSCData:   storageInfo.Backend.StandardSCData,
-			StandardSCParity: storageInfo.Backend.StandardSCParity,
-			RRSCData:         storageInfo.Backend.RRSCData,
-			RRSCParity:       storageInfo.Backend.RRSCParity,
-		}
-	} else {
-		backend = madmin.FSBackend{
-			Type: madmin.FsType,
-		}
-	}
-
-	mode := "online"
 	server := getLocalServerProperty(globalEndpoints, r)
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)
+
+	var backend interface{}
+	mode := madmin.ObjectLayerInitializing
+
+	buckets := madmin.Buckets{}
+	objects := madmin.Objects{}
+	usage := madmin.Usage{}
+
+	objectAPI := newObjectLayerFn()
+	if objectAPI != nil {
+		mode = madmin.ObjectLayerOnline
+		// Load data usage
+		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+		if err == nil {
+			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
+			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
+			usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
+		}
+
+		// Fetching the backend information
+		backendInfo := objectAPI.BackendInfo()
+		if backendInfo.Type == BackendType(madmin.Erasure) {
+			// Calculate the number of online/offline disks of all nodes
+			var allDisks []madmin.Disk
+			for _, s := range servers {
+				allDisks = append(allDisks, s.Disks...)
+			}
+			onlineDisks, offlineDisks := getOnlineOfflineDisksStats(allDisks)
+
+			backend = madmin.ErasureBackend{
+				Type:             madmin.ErasureType,
+				OnlineDisks:      onlineDisks.Sum(),
+				OfflineDisks:     offlineDisks.Sum(),
+				StandardSCData:   backendInfo.StandardSCData,
+				StandardSCParity: backendInfo.StandardSCParity,
+				RRSCData:         backendInfo.RRSCData,
+				RRSCParity:       backendInfo.RRSCParity,
+			}
+		} else {
+			backend = madmin.FSBackend{
+				Type: madmin.FsType,
+			}
+		}
+	}
 
 	domain := globalDomainNames
 	services := madmin.Services{
@@ -1552,25 +1580,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Logger:        log,
 		Audit:         audit,
 		Notifications: notifyTarget,
-	}
-
-	// find all disks which belong to each respective endpoints
-	for i := range servers {
-		for _, disk := range storageInfo.Disks {
-			if strings.Contains(disk.Endpoint, servers[i].Endpoint) {
-				servers[i].Disks = append(servers[i].Disks, disk)
-			}
-		}
-	}
-
-	// add all the disks local to this server.
-	for _, disk := range storageInfo.Disks {
-		if disk.DrivePath == "" && disk.Endpoint == "" {
-			continue
-		}
-		if disk.Endpoint == disk.DrivePath {
-			servers[len(servers)-1].Disks = append(servers[len(servers)-1].Disks, disk)
-		}
 	}
 
 	infoMsg := madmin.InfoMessage{

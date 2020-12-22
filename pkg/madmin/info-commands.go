@@ -39,6 +39,16 @@ const (
 	// Add your own backend.
 )
 
+// ObjectLayerState - represents the status of the object layer
+type ObjectLayerState string
+
+const (
+	// ObjectLayerInitializing indicates that the object layer is still in initialization phase
+	ObjectLayerInitializing = ObjectLayerState("initializing")
+	// ObjectLayerOnline indicates that the object layer is ready
+	ObjectLayerOnline = ObjectLayerState("online")
+)
+
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
 	Disks []Disk
@@ -163,7 +173,7 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 
 // InfoMessage container to hold server admin related information.
 type InfoMessage struct {
-	Mode         string             `json:"mode,omitempty"`
+	Mode         ObjectLayerState   `json:"mode,omitempty"`
 	Domain       []string           `json:"domain,omitempty"`
 	Region       string             `json:"region,omitempty"`
 	SQSARN       []string           `json:"sqsARN,omitempty"`

@@ -34,6 +34,11 @@ import (
 // GatewayUnsupported list of unsupported call stubs for gateway.
 type GatewayUnsupported struct{}
 
+// BackendInfo returns the underlying backend information
+func (a GatewayUnsupported) BackendInfo() BackendInfo {
+	return BackendInfo{Type: BackendGateway}
+}
+
 // CrawlAndGetDataUsage - crawl is not implemented for gateway
 func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
@@ -49,11 +54,6 @@ func (a GatewayUnsupported) NewNSLock(bucket string, objects ...string) RWLocker
 // SetDriveCount no-op
 func (a GatewayUnsupported) SetDriveCount() int {
 	return 0
-}
-
-// MakeMultipleBuckets is dummy stub for gateway.
-func (a GatewayUnsupported) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
-	return NotImplemented{}
 }
 
 // ListMultipartUploads lists all multipart uploads.
@@ -173,11 +173,6 @@ func (a GatewayUnsupported) HealFormat(ctx context.Context, dryRun bool) (madmin
 // HealBucket - Not implemented stub
 func (a GatewayUnsupported) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	return madmin.HealResultItem{}, NotImplemented{}
-}
-
-// ListBucketsHeal - Not implemented stub
-func (a GatewayUnsupported) ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error) {
-	return nil, NotImplemented{}
 }
 
 // HealObject - Not implemented stub

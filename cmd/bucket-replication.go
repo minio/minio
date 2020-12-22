@@ -287,7 +287,7 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 	if oi.UserTags != "" {
 		meta[xhttp.AmzObjectTagging] = oi.UserTags
 	}
-	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339)
+	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339Nano)
 	meta[xhttp.MinIOSourceETag] = oi.ETag
 	meta[xhttp.AmzBucketReplicationStatus] = replication.Replica.String()
 	return meta
@@ -330,7 +330,7 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 		putOpts.Mode = rmode
 	}
 	if retainDateStr, ok := objInfo.UserDefined[xhttp.AmzObjectLockRetainUntilDate]; ok {
-		rdate, err := time.Parse(time.RFC3339, retainDateStr)
+		rdate, err := time.Parse(time.RFC3339Nano, retainDateStr)
 		if err != nil {
 			return
 		}

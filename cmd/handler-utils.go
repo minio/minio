@@ -516,7 +516,7 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 	})
 
 	r.URL.Scheme = "http"
-	if globalIsSSL {
+	if globalIsTLS {
 		r.URL.Scheme = "https"
 	}
 

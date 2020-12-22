@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -245,10 +246,13 @@ func (s *erasureSets) connectDisks() {
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			s.erasureDisksMu.Unlock()
 			go func(setIndex int) {
+				idler := time.NewTimer(100 * time.Millisecond)
+				defer idler.Stop()
+
 				// Send a new disk connect event with a timeout
 				select {
 				case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
-				case <-time.After(100 * time.Millisecond):
+				case <-idler.C:
 				}
 			}(setIndex)
 		}(endpoint)
@@ -267,11 +271,21 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	// Pre-emptively connect the disks if possible.
 	s.connectDisks()
 
+	monitor := time.NewTimer(monitorInterval)
+	defer monitor.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(monitorInterval):
+		case <-monitor.C:
+			// Reset the timer once fired for required interval.
+			monitor.Reset(monitorInterval)
+
+			if serverDebugLog {
+				console.Debugln("running disk monitoring")
+			}
+
 			s.connectDisks()
 		}
 	}
@@ -477,8 +491,6 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 
 		for _, lstorageInfo := range storageInfos {
 			storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-			storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-			storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 		}
 
 		return storageInfo
@@ -516,8 +528,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 
 	for _, lstorageInfo := range storageInfos {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
 
 	if local {
@@ -559,31 +569,6 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 	default:
 		close(s.disksConnectEvent)
 	}
-	return nil
-}
-
-// MakeMultipleBuckets - make many buckets at once.
-func (s *erasureSets) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
-	g := errgroup.WithNErrs(len(s.sets))
-
-	// Create buckets in parallel across all sets.
-	for index := range s.sets {
-		index := index
-		g.Go(func() error {
-			return s.sets[index].MakeMultipleBuckets(ctx, buckets...)
-		}, index)
-	}
-
-	errs := g.Wait()
-
-	// Return the first encountered error
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	// Success.
 	return nil
 }
 
@@ -739,8 +724,24 @@ func undoDeleteBucketSets(ctx context.Context, bucket string, sets []*erasureObj
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all sets.
 func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
-	// Always lists from the same set signified by the empty string.
-	return s.ListBucketsHeal(ctx)
+	var listBuckets []BucketInfo
+	var healBuckets = map[string]VolInfo{}
+	for _, set := range s.sets {
+		// lists all unique buckets across drives.
+		if err := listAllBuckets(ctx, set.getDisks(), healBuckets); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, v := range healBuckets {
+		listBuckets = append(listBuckets, BucketInfo(v))
+	}
+
+	sort.Slice(listBuckets, func(i, j int) bool {
+		return listBuckets[i].Name < listBuckets[j].Name
+	})
+
+	return listBuckets, nil
 }
 
 // --- Object Operations ---
@@ -1319,28 +1320,6 @@ func (s *erasureSets) HealObject(ctx context.Context, bucket, object, versionID 
 	return s.getHashedSet(object).HealObject(ctx, bucket, object, versionID, opts)
 }
 
-// Lists all buckets which need healing.
-func (s *erasureSets) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	var listBuckets []BucketInfo
-	var healBuckets = map[string]VolInfo{}
-	for _, set := range s.sets {
-		// lists all unique buckets across drives.
-		if err := listAllBuckets(ctx, set.getDisks(), healBuckets); err != nil {
-			return nil, err
-		}
-	}
-	for _, v := range healBuckets {
-		listBuckets = append(listBuckets, BucketInfo(v))
-	}
-	sort.Sort(byBucketName(listBuckets))
-
-	if err := s.MakeMultipleBuckets(ctx, listBuckets...); err != nil {
-		return listBuckets, err
-	}
-
-	return listBuckets, nil
-}
-
 // PutObjectTags - replace or add tags to an existing object
 func (s *erasureSets) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
 	return s.getHashedSet(object).PutObjectTags(ctx, bucket, object, tags, opts)
@@ -1388,11 +1367,34 @@ func (s *erasureSets) maintainMRFList() {
 	}
 }
 
+func toSourceChTimed(t *time.Timer, sourceCh chan healSource, u healSource) {
+	t.Reset(100 * time.Millisecond)
+
+	// No defer, as we don't know which
+	// case will be selected
+
+	select {
+	case sourceCh <- u:
+	case <-t.C:
+		return
+	}
+
+	// We still need to check the return value
+	// of Stop, because t could have fired
+	// between the send on sourceCh and this line.
+	if !t.Stop() {
+		<-t.C
+	}
+}
+
 // healMRFRoutine monitors new disks connection, sweep the MRF list
 // to find objects related to the new disk that needs to be healed.
 func (s *erasureSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
 	bgSeq := mustGetHealSequence(GlobalContext)
+
+	idler := time.NewTimer(100 * time.Millisecond)
+	defer idler.Stop()
 
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the er.set
@@ -1408,11 +1410,8 @@ func (s *erasureSets) healMRFRoutine() {
 
 		// Heal objects
 		for _, u := range mrfOperations {
-			// Send an object to be healed with a timeout
-			select {
-			case bgSeq.sourceCh <- u:
-			case <-time.After(100 * time.Millisecond):
-			}
+			// Send an object to background heal
+			toSourceChTimed(idler, bgSeq.sourceCh, u)
 
 			s.mrfMU.Lock()
 			delete(s.mrfOperations, u)

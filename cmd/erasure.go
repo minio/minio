@@ -109,13 +109,12 @@ func diskErrToDriveState(err error) (state string) {
 	return
 }
 
-// getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error, onlineDisks, offlineDisks madmin.BackendDisks) {
-	disksInfo = make([]madmin.Disk, len(disks))
+func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDisks madmin.BackendDisks) {
 	onlineDisks = make(madmin.BackendDisks)
 	offlineDisks = make(madmin.BackendDisks)
 
-	for _, ep := range endpoints {
+	for _, disk := range disksInfo {
+		ep := disk.Endpoint
 		if _, ok := offlineDisks[ep]; !ok {
 			offlineDisks[ep] = 0
 		}
@@ -123,6 +122,47 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 			onlineDisks[ep] = 0
 		}
 	}
+
+	// Wait for the routines.
+	for _, disk := range disksInfo {
+		ep := disk.Endpoint
+		state := disk.State
+		if state != madmin.DriveStateOk && state != madmin.DriveStateUnformatted {
+			offlineDisks[ep]++
+			continue
+		}
+		onlineDisks[ep]++
+	}
+
+	rootDiskCount := 0
+	for _, di := range disksInfo {
+		if di.RootDisk {
+			rootDiskCount++
+		}
+	}
+
+	// Count offline disks as well to ensure consistent
+	// reportability of offline drives on local setups.
+	if len(disksInfo) == (rootDiskCount + offlineDisks.Sum()) {
+		// Success.
+		return onlineDisks, offlineDisks
+	}
+
+	// Root disk should be considered offline
+	for i := range disksInfo {
+		ep := disksInfo[i].Endpoint
+		if disksInfo[i].RootDisk {
+			offlineDisks[ep]++
+			onlineDisks[ep]--
+		}
+	}
+
+	return onlineDisks, offlineDisks
+}
+
+// getDisksInfo - fetch disks info across all other storage API.
+func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Disk, errs []error) {
+	disksInfo = make([]madmin.Disk, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
@@ -157,46 +197,12 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 		}, index)
 	}
 
-	errs = g.Wait()
-	// Wait for the routines.
-	for i, diskInfoErr := range errs {
-		ep := disksInfo[i].Endpoint
-		if diskInfoErr != nil && !errors.Is(diskInfoErr, errUnformattedDisk) {
-			offlineDisks[ep]++
-			continue
-		}
-		onlineDisks[ep]++
-	}
-
-	rootDiskCount := 0
-	for _, di := range disksInfo {
-		if di.RootDisk {
-			rootDiskCount++
-		}
-	}
-
-	// Count offline disks as well to ensure consistent
-	// reportability of offline drives on local setups.
-	if len(disksInfo) == (rootDiskCount + offlineDisks.Sum()) {
-		// Success.
-		return disksInfo, errs, onlineDisks, offlineDisks
-	}
-
-	// Root disk should be considered offline
-	for i := range disksInfo {
-		ep := disksInfo[i].Endpoint
-		if disksInfo[i].RootDisk {
-			offlineDisks[ep]++
-			onlineDisks[ep]--
-		}
-	}
-
-	return disksInfo, errs, onlineDisks, offlineDisks
+	return disksInfo, g.Wait()
 }
 
 // Get an aggregated storage info across all disks.
 func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []error) {
-	disksInfo, errs, onlineDisks, offlineDisks := getDisksInfo(disks, endpoints)
+	disksInfo, errs := getDisksInfo(disks, endpoints)
 
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
@@ -206,9 +212,6 @@ func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []erro
 	}
 
 	storageInfo.Backend.Type = BackendErasure
-	storageInfo.Backend.OnlineDisks = onlineDisks
-	storageInfo.Backend.OfflineDisks = offlineDisks
-
 	return storageInfo, errs
 }
 

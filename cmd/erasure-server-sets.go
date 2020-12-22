@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -272,9 +273,24 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
+	b.Type = BackendErasure
+
+	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	if scParity == 0 {
+		scParity = z.SetDriveCount() / 2
+	}
+	b.StandardSCData = z.SetDriveCount() - scParity
+	b.StandardSCParity = scParity
+
+	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
+	b.RRSCData = z.SetDriveCount() - rrSCParity
+	b.RRSCParity = rrSCParity
+	return
+}
+
 func (z *erasureServerPools) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
 	var storageInfo StorageInfo
-	storageInfo.Backend.Type = BackendErasure
 
 	storageInfos := make([]StorageInfo, len(z.serverPools))
 	storageInfosErrs := make([][]error, len(z.serverPools))
@@ -290,22 +306,10 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context, local bool) (Stora
 	// Wait for the go routines.
 	g.Wait()
 
+	storageInfo.Backend = z.BackendInfo()
 	for _, lstorageInfo := range storageInfos {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 	}
-
-	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
-	if scParity == 0 {
-		scParity = z.SetDriveCount() / 2
-	}
-
-	storageInfo.Backend.StandardSCData = z.SetDriveCount() - scParity
-	storageInfo.Backend.StandardSCParity = scParity
-	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	storageInfo.Backend.RRSCData = z.SetDriveCount() - rrSCParity
-	storageInfo.Backend.RRSCParity = rrSCParity
 
 	var errs []error
 	for i := range z.serverPools {
@@ -322,23 +326,19 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	var mu sync.Mutex
 	var results []dataUsageCache
 	var firstErr error
-	var knownBuckets = make(map[string]struct{}) // used to deduplicate buckets.
-	var allBuckets []BucketInfo
+
+	allBuckets, err := z.ListBuckets(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Crawl latest allBuckets first.
+	sort.Slice(allBuckets, func(i, j int) bool {
+		return allBuckets[i].Created.After(allBuckets[j].Created)
+	})
 
 	// Collect for each set in serverPools.
 	for _, z := range z.serverPools {
-		buckets, err := z.ListBuckets(ctx)
-		if err != nil {
-			return err
-		}
-		// Add new buckets.
-		for _, b := range buckets {
-			if _, ok := knownBuckets[b.Name]; ok {
-				continue
-			}
-			allBuckets = append(allBuckets, b)
-			knownBuckets[b.Name] = struct{}{}
-		}
 		for _, erObj := range z.sets {
 			wg.Add(1)
 			results = append(results, dataUsageCache{})
@@ -355,7 +355,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 					}
 				}()
 				// Start crawler. Blocks until done.
-				err := erObj.crawlAndGetDataUsage(ctx, buckets, bf, updates)
+				err := erObj.crawlAndGetDataUsage(ctx, allBuckets, bf, updates)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()
@@ -428,28 +428,6 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 		}
 	}
 	return firstErr
-}
-
-func (z *erasureServerPools) MakeMultipleBuckets(ctx context.Context, buckets ...BucketInfo) error {
-	g := errgroup.WithNErrs(len(z.serverPools))
-
-	// Create buckets in parallel across all sets.
-	for index := range z.serverPools {
-		index := index
-		g.Go(func() error {
-			return z.serverPools[index].MakeMultipleBuckets(ctx, buckets...)
-		}, index)
-	}
-
-	errs := g.Wait()
-	// Return the first encountered error
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // MakeBucketWithLocation - creates a new bucket across all serverPools simultaneously
@@ -729,7 +707,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	// more objects matching the prefix.
 	ri := logger.GetReqInfo(ctx)
 	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
-		opts.singleObject = true
+		opts.discardResult = true
 		opts.Transient = true
 	}
 
@@ -737,14 +715,21 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	if err != nil && err != io.EOF {
 		return loi, err
 	}
-	loi.Objects, loi.Prefixes = merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
-	loi.IsTruncated = err == nil && len(loi.Objects) > 0
-	if maxKeys > 0 && len(loi.Objects) > maxKeys {
-		loi.Objects = loi.Objects[:maxKeys]
+	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
+	loi.IsTruncated = err == nil && len(objects) > 0
+	if maxKeys > 0 && len(objects) > maxKeys {
+		objects = objects[:maxKeys]
 		loi.IsTruncated = true
 	}
+	for _, obj := range objects {
+		if obj.IsDir && delimiter != "" {
+			loi.Prefixes = append(loi.Prefixes, obj.Name)
+		} else {
+			loi.Objects = append(loi.Objects, obj)
+		}
+	}
 	if loi.IsTruncated {
-		last := loi.Objects[len(loi.Objects)-1]
+		last := objects[len(objects)-1]
 		loi.NextMarker = encodeMarker(last.Name, merged.listID)
 		loi.NextVersionIDMarker = last.VersionID
 	}
@@ -753,6 +738,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
+
 	merged, err := z.listPath(ctx, listPathOptions{
 		Bucket:      bucket,
 		Prefix:      prefix,
@@ -766,11 +752,24 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		logger.LogIf(ctx, err)
 		return loi, err
 	}
+
 	// Default is recursive, if delimiter is set then list non recursive.
-	loi.Objects, loi.Prefixes = merged.fileInfos(bucket, prefix, delimiter)
-	loi.IsTruncated = err == nil && len(loi.Objects) > 0
+	objects := merged.fileInfos(bucket, prefix, delimiter)
+	loi.IsTruncated = err == nil && len(objects) > 0
+	if maxKeys > 0 && len(objects) > maxKeys {
+		objects = objects[:maxKeys]
+		loi.IsTruncated = true
+	}
+	for _, obj := range objects {
+		if obj.IsDir && delimiter != "" {
+			loi.Prefixes = append(loi.Prefixes, obj.Name)
+		} else {
+			loi.Objects = append(loi.Objects, obj)
+		}
+	}
 	if loi.IsTruncated {
-		loi.NextMarker = encodeMarker(loi.Objects[len(loi.Objects)-1].Name, merged.listID)
+		last := objects[len(objects)-1]
+		loi.NextMarker = encodeMarker(last.Name, merged.listID)
 	}
 	return loi, nil
 }
@@ -1181,13 +1180,8 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 		Bucket: bucket,
 	}
 
-	// Ensure heal opts for bucket metadata be deep healed all the time.
-	opts.ScanMode = madmin.HealDeepScan
-
-	// Ignore the results on purpose.
-	if _, err := z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket), "", opts); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Healing bucket metadata for %s failed", bucket))
-	}
+	// Attempt heal on the bucket metadata, ignore any failures
+	_, _ = z.HealObject(ctx, minioMetaBucket, pathJoin(bucketConfigPrefix, bucket, bucketMetadataFile), "", opts)
 
 	for _, zone := range z.serverPools {
 		result, err := zone.HealBucket(ctx, bucket, opts)
@@ -1203,6 +1197,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
 		r.After.Drives = append(r.After.Drives, result.After.Drives...)
 	}
+
 	return r, nil
 }
 
@@ -1370,26 +1365,6 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		Bucket: bucket,
 		Object: object,
 	}
-}
-
-func (z *erasureServerPools) ListBucketsHeal(ctx context.Context) ([]BucketInfo, error) {
-	var healBuckets []BucketInfo
-	for _, zone := range z.serverPools {
-		bucketsInfo, err := zone.ListBucketsHeal(ctx)
-		if err != nil {
-			continue
-		}
-		healBuckets = append(healBuckets, bucketsInfo...)
-	}
-
-	for i := range healBuckets {
-		meta, err := globalBucketMetadataSys.Get(healBuckets[i].Name)
-		if err == nil {
-			healBuckets[i].Created = meta.Created
-		}
-	}
-
-	return healBuckets, nil
 }
 
 // GetMetrics - no op

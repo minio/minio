@@ -386,13 +386,13 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
 		header:            h,
 		bucket:            bucket,
 		object:            object,
-		customerKeyHeader: h.Get(crypto.SSECKey),
+		customerKeyHeader: h.Get(xhttp.AmzServerSideEncryptionCustomerKey),
 		copySource:        copySource,
 		metadata:          cloneMSS(oi.UserDefined),
 	}
 
 	if w.copySource {
-		w.customerKeyHeader = h.Get(crypto.SSECopyKey)
+		w.customerKeyHeader = h.Get(xhttp.AmzServerSideEncryptionCopyCustomerKey)
 	}
 
 	if err := w.buildDecrypter(w.parts[w.partIndex].Number); err != nil {
@@ -434,12 +434,12 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	var err error
 	if d.copySource {
 		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.header.Set(crypto.SSECopyKey, d.customerKeyHeader)
+			d.header.Set(xhttp.AmzServerSideEncryptionCopyCustomerKey, d.customerKeyHeader)
 			key, err = ParseSSECopyCustomerRequest(d.header, d.metadata)
 		}
 	} else {
 		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.header.Set(crypto.SSECKey, d.customerKeyHeader)
+			d.header.Set(xhttp.AmzServerSideEncryptionCustomerKey, d.customerKeyHeader)
 			key, err = ParseSSECustomerHeader(d.header)
 		}
 	}

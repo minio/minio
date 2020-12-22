@@ -151,9 +151,10 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 	return cred, claims, owner, ErrNone
 }
 
-// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
-// It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+// checkAdminRequestAuth checks for authentication and authorization for the incoming
+// request. It only accepts V2 and V4 requests. Presigned, JWT and anonymous requests
+// are automatically rejected.
+func checkAdminRequestAuth(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
 	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, region)
 	if s3Err != ErrNone {
 		return cred, s3Err

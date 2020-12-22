@@ -85,7 +85,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		if globalIsSSL {
+		if globalIsTLS {
 			printCertificateMsg(globalPublicCerts)
 		}
 	}
@@ -205,12 +205,13 @@ func printObjectAPIMsg() {
 func getStorageInfoMsg(storageInfo StorageInfo) string {
 	var msg string
 	var mcMessage string
+	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
 	if storageInfo.Backend.Type == BackendErasure {
-		if storageInfo.Backend.OfflineDisks.Sum() > 0 {
+		if offlineDisks.Sum() > 0 {
 			mcMessage = "Use `mc admin info` to look for latest server/disk info\n"
 		}
 
-		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks.Sum(), storageInfo.Backend.OfflineDisks.Sum())
+		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", onlineDisks.Sum(), offlineDisks.Sum())
 		msg += color.Blue("Status:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 		if len(mcMessage) > 0 {
 			msg = fmt.Sprintf("%s %s", mcMessage, msg)

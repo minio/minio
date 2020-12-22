@@ -79,10 +79,11 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown(context.Context) error
 	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
+
+	BackendInfo() BackendInfo
 	StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) // local queries only local disks
 
 	// Bucket operations.
-	MakeMultipleBuckets(ctx context.Context, bucketInfo ...BucketInfo) error
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
 	GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets(ctx context.Context) (buckets []BucketInfo, err error)
@@ -125,7 +126,6 @@ type ObjectLayer interface {
 	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
-	ListBucketsHeal(ctx context.Context) (buckets []BucketInfo, err error)
 
 	// Policy operations
 	SetBucketPolicy(context.Context, string, *policy.Policy) error

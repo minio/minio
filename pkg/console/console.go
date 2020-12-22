@@ -30,9 +30,6 @@ import (
 )
 
 var (
-	// DebugPrint enables/disables console debug printing.
-	DebugPrint = false
-
 	// Used by the caller to print multiple lines atomically. Exposed by Lock/Unlock methods.
 	publicMutex sync.Mutex
 
@@ -112,23 +109,17 @@ var (
 	// Debug prints a debug message without a new line
 	// Debug prints a debug message.
 	Debug = func(data ...interface{}) {
-		if DebugPrint {
-			consolePrint("Debug", Theme["Debug"], data...)
-		}
+		consolePrint("Debug", Theme["Debug"], data...)
 	}
 
 	// Debugf prints a debug message with a new line.
 	Debugf = func(format string, data ...interface{}) {
-		if DebugPrint {
-			consolePrintf("Debug", Theme["Debug"], format, data...)
-		}
+		consolePrintf("Debug", Theme["Debug"], format, data...)
 	}
 
 	// Debugln prints a debug message with a new line.
 	Debugln = func(data ...interface{}) {
-		if DebugPrint {
-			consolePrintln("Debug", Theme["Debug"], data...)
-		}
+		consolePrintln("Debug", Theme["Debug"], data...)
 	}
 
 	// Colorize prints message in a colorized form, dictated by the corresponding tag argument.

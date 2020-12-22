@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/cmd/logger"
 	bucketsse "github.com/minio/minio/pkg/bucket/encryption"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
@@ -168,7 +169,10 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 		}
 		meta.ReplicationConfigXML = configData
 	case bucketTargetsFile:
-		meta.BucketTargetsConfigJSON = configData
+		meta.BucketTargetsConfigJSON, meta.BucketTargetsConfigMetaJSON, err = encryptBucketMetadata(meta.Name, configData, crypto.Context{bucket: meta.Name, bucketTargetsFile: bucketTargetsFile})
+		if err != nil {
+			return fmt.Errorf("Error encrypting bucket target metadata %w", err)
+		}
 	default:
 		return fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
@@ -191,7 +195,6 @@ func (sys *BucketMetadataSys) Update(bucket string, configFile string, configDat
 // This function should only be used with
 // - GetBucketInfo
 // - ListBuckets
-// - ListBucketsHeal (only in case of erasure coding mode)
 // For all other bucket specific metadata, use the relevant
 // calls implemented specifically for each of those features.
 func (sys *BucketMetadataSys) Get(bucket string) (BucketMetadata, error) {
@@ -440,11 +443,10 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	for index := range buckets {
 		index := index
 		g.Go(func() error {
-			if _, err := objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
-				Remove: true,
-			}); err != nil {
-				return err
-			}
+			_, _ = objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
+				// Ensure heal opts for bucket metadata be deep healed all the time.
+				ScanMode: madmin.HealDeepScan,
+			})
 			meta, err := loadBucketMetadata(ctx, objAPI, buckets[index].Name)
 			if err != nil {
 				return err

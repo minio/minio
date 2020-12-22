@@ -388,7 +388,7 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 	}
 	proto := handlers.GetSourceScheme(r)
 	if proto == "" {
-		proto = getURLScheme(globalIsSSL)
+		proto = getURLScheme(globalIsTLS)
 	}
 	u := &url.URL{
 		Host:   r.Host,

@@ -125,6 +125,17 @@ func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 					osErrToFileErr(err))
 			}
 
+			// Move .minio.sys/buckets/.minio.sys/metacache transient list cache
+			// folder to speed up startup routines.
+			tmpMetacacheOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
+			if err := renameAll(pathJoin(epPath, minioMetaBucket, metacachePrefixForID(minioMetaBucket, "")),
+				tmpMetacacheOld); err != nil && err != errFileNotFound {
+				return fmt.Errorf("unable to rename (%s -> %s) %w",
+					pathJoin(epPath, minioMetaBucket+metacachePrefixForID(minioMetaBucket, "")),
+					tmpMetacacheOld,
+					osErrToFileErr(err))
+			}
+
 			// Removal of tmp-old folder is backgrounded completely.
 			go removeAll(pathJoin(epPath, minioMetaTmpBucket+"-old"))
 
@@ -162,7 +173,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 	}
 
 	var tlsConfig *tls.Config
-	if globalIsSSL {
+	if globalIsTLS {
 		tlsConfig = &tls.Config{
 			ServerName: endpoint.Hostname(),
 			RootCAs:    globalRootCAs,

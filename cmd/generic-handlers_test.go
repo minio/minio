@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 )
 
 // Tests getRedirectLocation function for all its criteria.
@@ -181,15 +182,15 @@ var containsReservedMetadataTests = []struct {
 		header: http.Header{"X-Minio-Key": []string{"value"}},
 	},
 	{
-		header:     http.Header{crypto.SSEIV: []string{"iv"}},
+		header:     http.Header{crypto.MetaIV: []string{"iv"}},
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{crypto.SSESealAlgorithm: []string{crypto.InsecureSealAlgorithm}},
+		header:     http.Header{crypto.MetaAlgorithm: []string{crypto.InsecureSealAlgorithm}},
 		shouldFail: true,
 	},
 	{
-		header:     http.Header{crypto.SSECSealedKey: []string{"mac"}},
+		header:     http.Header{crypto.MetaSealedKeySSEC: []string{"mac"}},
 		shouldFail: true,
 	},
 	{
@@ -217,21 +218,21 @@ var sseTLSHandlerTests = []struct {
 	Header            http.Header
 	IsTLS, ShouldFail bool
 }{
-	{URL: &url.URL{}, Header: http.Header{}, IsTLS: false, ShouldFail: false},                                        // 0
-	{URL: &url.URL{}, Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: false, ShouldFail: true}, // 1
-	{URL: &url.URL{}, Header: http.Header{crypto.SSECAlgorithm: []string{"AES256"}}, IsTLS: true, ShouldFail: false}, // 2
-	{URL: &url.URL{}, Header: http.Header{crypto.SSECKey: []string{""}}, IsTLS: true, ShouldFail: false},             // 3
-	{URL: &url.URL{}, Header: http.Header{crypto.SSECopyAlgorithm: []string{""}}, IsTLS: false, ShouldFail: true},    // 4
+	{URL: &url.URL{}, Header: http.Header{}, IsTLS: false, ShouldFail: false},                                                                  // 0
+	{URL: &url.URL{}, Header: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"}}, IsTLS: false, ShouldFail: true}, // 1
+	{URL: &url.URL{}, Header: http.Header{xhttp.AmzServerSideEncryptionCustomerAlgorithm: []string{"AES256"}}, IsTLS: true, ShouldFail: false}, // 2
+	{URL: &url.URL{}, Header: http.Header{xhttp.AmzServerSideEncryptionCustomerKey: []string{""}}, IsTLS: true, ShouldFail: false},             // 3
+	{URL: &url.URL{}, Header: http.Header{xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm: []string{""}}, IsTLS: false, ShouldFail: true},   // 4
 }
 
 func TestSSETLSHandler(t *testing.T) {
-	defer func(isSSL bool) { globalIsSSL = isSSL }(globalIsSSL) // reset globalIsSSL after test
+	defer func(isSSL bool) { globalIsTLS = isSSL }(globalIsTLS) // reset globalIsTLS after test
 
 	var okHandler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 	for i, test := range sseTLSHandlerTests {
-		globalIsSSL = test.IsTLS
+		globalIsTLS = test.IsTLS
 
 		w := httptest.NewRecorder()
 		r := new(http.Request)
