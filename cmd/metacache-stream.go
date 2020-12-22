@@ -519,7 +519,7 @@ func (r *metacacheReader) readN(n int, inclDeleted, inclDirs bool, prefix string
 		if !inclDirs && meta.isDir() {
 			continue
 		}
-		if meta.isDir() && !inclDeleted && meta.isLatestDeletemarker() {
+		if !inclDeleted && meta.isLatestDeletemarker() {
 			continue
 		}
 		res = append(res, meta)

@@ -168,11 +168,9 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				o.debugln("not in dir", o.Prefix, o.Separator)
 				continue
 			}
-			if !o.InclDeleted && entry.isObject() {
-				if entry.isLatestDeletemarker() {
-					o.debugln("latest delete")
-					continue
-				}
+			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() {
+				o.debugln("latest is delete marker")
+				continue
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
 				// We have enough and we have more.
