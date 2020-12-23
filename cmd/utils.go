@@ -481,7 +481,7 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		DisableCompression: true,
 	}
 
-	if globalIsTLS {
+	if tlsConfig != nil {
 		trhttp2, _ := http2.ConfigureTransports(tr)
 		if trhttp2 != nil {
 			// ReadIdleTimeout is the timeout after which a health check using ping
@@ -544,7 +544,7 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		DisableCompression: true,
 	}
 
-	if globalIsTLS {
+	if tlsConfig != nil {
 		trhttp2, _ := http2.ConfigureTransports(tr)
 		if trhttp2 != nil {
 			// ReadIdleTimeout is the timeout after which a health check using ping
