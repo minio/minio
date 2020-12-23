@@ -113,6 +113,7 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 	// Use global context for this.
 	err := objAPI.GetObject(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), 0, -1, w, "", ObjectOptions{})
 	logger.LogIf(ctx, w.CloseWithError(err))
+	wg.Wait()
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
@@ -125,7 +126,6 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 		}
 		return newBucketMetacache(bucket, false), err
 	}
-	wg.Wait()
 	if decErr != nil {
 		if errors.Is(err, context.Canceled) {
 			return newBucketMetacache(bucket, false), err
