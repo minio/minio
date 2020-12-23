@@ -100,38 +100,6 @@ When an object has only one version as a delete marker, the latter can be automa
 }
 ```
 
-## 4. Enable ILM transition feature
-
-In Erasure mode, MinIO supports transitioning of older objects to a different cluster by setting up transition rules in the bucket lifecycle configuration. This allows applications to optimize storage costs by moving less frequently accessed data to a cheaper storage without compromising accessibility of data.
-
-To transition objects in a bucket to a destination bucket on a different cluster, applications need to specify a transition ARN instead of storage class while setting up the ILM lifecycle rule.
-
->To create a transition ARN for transitioning objects in srcbucket to a destbucket on cluster endpoint https://transition-endpoint:9000 using `mc`:
-
-```
-mc admin bucket remote add myminio/srcbucket https://accessKey:secretKey@transition-endpoint:9000/destbucket --service ilm --region us-east-1 --label "HDDTier"
-Role ARN = 'arn:minio:ilm:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket'
-```
-> The access credentials on the target site needs *s3:GetBucketVersioning* permission if versioning is enabled on the `destbucket` bucket.
-
-Using above ARN, set up a lifecycle rule with transition:
-```
- mc ilm add --expiry-days 365 --transition-days 45 --storage-class "HDDTier" myminio/srcbucket
-```
-
-Once transitioned, GET or HEAD on the object will stream the content from the transitioned tier. In the event that the object needs to be restored temporarily to the local cluster, the AWS [RestoreObject API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_RestoreObject.html) can be utilized.
-
-```
-aws s3api restore-object --bucket srcbucket \
---key object \
---restore-request Days=3
-```
-
-### 4.1 Monitoring transition events
-`s3:ObjectTransition:Complete` and `s3:ObjectTransition:Failed` events can be used to monitor transition events between the source cluster and transition tier. To watch lifecycle events, you can enable bucket notification on the source bucket with `mc event add`  and specify `--event ilm` flag.
-
-Note that transition event notification is a MinIO extension.
-
 ## Explore Further
 - [MinIO | Golang Client API Reference](https://docs.min.io/docs/golang-client-api-reference.html#SetBucketLifecycle)
 - [Object Lifecycle Management](https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lifecycle-mgmt.html)
