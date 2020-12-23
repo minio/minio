@@ -870,7 +870,7 @@ struct FileMetaData {
    * position in the list, matching the position of the column in the schema.
    *
    * Without column_orders, the meaning of the min_value and max_value fields is
-   * undefined. To ensure well-defined behaviour, if min_value and max_value are
+   * undefined. To ensure well-defined behavior, if min_value and max_value are
    * written to a Parquet file, column_orders must be written as well.
    *
    * The obsolete min and max fields are always sorted by signed comparison

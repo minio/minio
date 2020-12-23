@@ -77,10 +77,10 @@ For example:
 minio server http://host{1...4}/export{1...16} http://host{5...12}/export{1...16}
 ```
 
-Now the server has expanded total storage by _(newly_added_servers\*m)_ more disks, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 server sets in this example. New objects are placed in server sets in proportion to the amount of free space in each zone. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
+Now the server has expanded total storage by _(newly_added_servers\*m)_ more disks, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 server pools in this example. New objects are placed in server pools in proportion to the amount of free space in each zone. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
 
 > __NOTE:__ __Each zone you add must have the same erasure coding set size as the original zone, so the same data redundancy SLA is maintained.__
-> For example, if your first zone was 8 drives, you could add further server sets of 16, 32 or 1024 drives each. All you have to make sure is deployment SLA is multiples of original data redundancy SLA i.e 8.
+> For example, if your first zone was 8 drives, you could add further server pools of 16, 32 or 1024 drives each. All you have to make sure is deployment SLA is multiples of original data redundancy SLA i.e 8.
 
 ## 3. Test your setup
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide).

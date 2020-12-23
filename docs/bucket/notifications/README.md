@@ -907,7 +907,7 @@ MINIO_NOTIFY_POSTGRES_MAX_OPEN_CONNECTIONS (number)             maximum number o
 ```
 
 > NOTE: If the `max_open_connections` key or the environment variable `MINIO_NOTIFY_POSTGRES_MAX_OPEN_CONNECTIONS` is set to `0`, There will be no limit set on the number of
-> open connections to the database. This setting is generally NOT recommended as the behaviour may be inconsistent during recursive deletes in `namespace` format.
+> open connections to the database. This setting is generally NOT recommended as the behavior may be inconsistent during recursive deletes in `namespace` format.
 
 MinIO supports persistent event store. The persistent store will backup events when the PostgreSQL connection goes offline and replays it when the broker comes back online. The event store can be configured by setting the directory path in `queue_dir` field and the maximum limit of events in the queue_dir in `queue_limit` field. For eg, the `queue_dir` can be `/home/events` and `queue_limit` can be `1000`. By default, the `queue_limit` is set to 100000.
 
@@ -1041,7 +1041,7 @@ MINIO_NOTIFY_MYSQL_COMMENT              (sentence)           optionally add a co
 ```
 
 > NOTE: If the `max_open_connections` key or the environment variable `MINIO_NOTIFY_MYSQL_MAX_OPEN_CONNECTIONS` is set to `0`, There will be no limit set on the number of
-> open connections to the database. This setting is generally NOT recommended as the behaviour may be inconsistent during recursive deletes in `namespace` format.
+> open connections to the database. This setting is generally NOT recommended as the behavior may be inconsistent during recursive deletes in `namespace` format.
 
 `dsn_string` is required and is of form `"<user>:<password>@tcp(<host>:<port>)/<database>"`
 
