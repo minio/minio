@@ -595,16 +595,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	}()
 
 	askDisks := o.AskDisks
-	if askDisks == -1 {
-		askDisks = getReadQuorum(er.SetDriveCount())
-	}
-
 	listingQuorum := askDisks - 1
-
 	// Special case: ask all disks if the drive count is 4
-	if er.SetDriveCount() == 4 {
-		askDisks = len(disks)
-		listingQuorum = 2
+	if askDisks == -1 || er.SetDriveCount() == 4 {
+		askDisks = len(disks) // with 'strict' quorum list on all online disks.
+		listingQuorum = getReadQuorum(er.SetDriveCount())
 	}
 
 	if len(disks) < askDisks {
