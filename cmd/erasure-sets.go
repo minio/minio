@@ -1478,10 +1478,19 @@ func (s *erasureSets) healMRFRoutine() {
 		for _, u := range mrfOperations {
 			// Send an object to background heal
 			toSourceChTimed(idler, bgSeq.sourceCh, u)
-
 			s.mrfMU.Lock()
 			delete(s.mrfOperations, u)
 			s.mrfMU.Unlock()
 		}
 	}
+}
+
+// TransitionObject - transition object content to target tier.
+func (s *erasureSets) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return s.getHashedSet(object).TransitionObject(ctx, bucket, object, opts)
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (s *erasureSets) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return s.getHashedSet(object).RestoreTransitionedObject(ctx, bucket, object, opts)
 }

@@ -776,14 +776,14 @@ next:
 				}
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
-			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
+			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && !globalBucketVersioningSys.Enabled(args.BucketName) {
 				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
 					Name:         objectName,
 					UserTags:     goi.UserTags,
 					VersionID:    goi.VersionID,
 					DeleteMarker: goi.DeleteMarker,
 					IsLatest:     goi.IsLatest,
-				}, false, true)
+				}, goi.transitionedObjName, goi.TransitionTier, false, false)
 			}
 
 			logger.LogIf(ctx, err)

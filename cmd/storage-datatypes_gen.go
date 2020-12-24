@@ -279,6 +279,16 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "TransitionStatus")
 		return
 	}
+	z.TransitionedObjName, err = dc.ReadString()
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionedObjName")
+		return
+	}
+	z.TransitionTier, err = dc.ReadString()
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionTier")
+		return
+	}
 	z.DataDir, err = dc.ReadString()
 	if err != nil {
 		err = msgp.WrapError(err, "DataDir")
@@ -430,6 +440,16 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "TransitionStatus")
 		return
 	}
+	err = en.WriteString(z.TransitionedObjName)
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionedObjName")
+		return
+	}
+	err = en.WriteString(z.TransitionTier)
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionTier")
+		return
+	}
 	err = en.WriteString(z.DataDir)
 	if err != nil {
 		err = msgp.WrapError(err, "DataDir")
@@ -533,6 +553,8 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendBool(o, z.IsLatest)
 	o = msgp.AppendBool(o, z.Deleted)
 	o = msgp.AppendString(o, z.TransitionStatus)
+	o = msgp.AppendString(o, z.TransitionedObjName)
+	o = msgp.AppendString(o, z.TransitionTier)
 	o = msgp.AppendString(o, z.DataDir)
 	o = msgp.AppendBool(o, z.XLV1)
 	o = msgp.AppendTime(o, z.ModTime)
@@ -605,6 +627,16 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	z.TransitionStatus, bts, err = msgp.ReadStringBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "TransitionStatus")
+		return
+	}
+	z.TransitionedObjName, bts, err = msgp.ReadStringBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionedObjName")
+		return
+	}
+	z.TransitionTier, bts, err = msgp.ReadStringBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "TransitionTier")
 		return
 	}
 	z.DataDir, bts, err = msgp.ReadStringBytes(bts)
@@ -724,7 +756,7 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FileInfo) Msgsize() (s int) {
-	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
+	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.MapHeaderSize
 	if z.Metadata != nil {
 		for za0001, za0002 := range z.Metadata {
 			_ = za0002

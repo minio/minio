@@ -560,7 +560,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 					// agreed value less than expected quorum
 					dangling = nAgreed < resolver.objQuorum || nAgreed < resolver.dirQuorum
-
 					// Sleep and reset.
 					wait()
 					wait = crawlerSleeper.Timer(ctx)
@@ -630,7 +629,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				if f.dataUsageCrawlDebug {
 					console.Debugf(healObjectsPrefix+" deleting dangling directory %s\n", prefix)
 				}
-
 				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{
 					Recursive: true,
 					Remove:    true,
@@ -945,16 +943,18 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj Ob
 }
 
 func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) bool {
-	opts := ObjectOptions{}
+	srcOpts := ObjectOptions{}
 	if obj.TransitionStatus == "" {
-		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
-		opts.VersionID = obj.VersionID
-		opts.TransitionStatus = lifecycle.TransitionPending
-		if _, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts); err != nil {
-			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-				return false
-			}
-			// Assume it is still there.
+		srcOpts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+		srcOpts.VersionID = obj.VersionID
+		// mark transition as pending
+		obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
+		obj.metadataOnly = true // Perform only metadata updates.
+		if _, err := objLayer.CopyObject(ctx, obj.Bucket, obj.Name, obj.Bucket, obj.Name, obj, srcOpts, ObjectOptions{
+			VersionID: obj.VersionID,
+			Versioned: globalBucketVersioningSys.Enabled(obj.Bucket),
+			MTime:     obj.ModTime,
+		}); err != nil {
 			logger.LogIf(ctx, err)
 			return false
 		}
@@ -979,7 +979,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		TransitionStatus: obj.TransitionStatus,
 	}
 
-	if err := deleteTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, restoredObject, false); err != nil {
+	if err := deleteTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, obj.transitionedObjName, obj.TransitionTier, restoredObject, false); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}

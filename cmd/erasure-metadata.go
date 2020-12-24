@@ -147,6 +147,8 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	}
 
 	objInfo.TransitionStatus = fi.TransitionStatus
+	objInfo.transitionedObjName = fi.TransitionedObjName
+	objInfo.TransitionTier = fi.TransitionTier
 
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of
@@ -163,6 +165,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	} else {
 		objInfo.StorageClass = globalMinioDefaultStorageClass
 	}
+
 	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus
 	// set restore status for transitioned object
 	if ongoing, exp, err := parseRestoreHeaderFromMeta(fi.Metadata); err == nil {
