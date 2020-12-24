@@ -227,7 +227,6 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 	if obj.ModTime.IsZero() {
 		return action
 	}
-
 	for _, rule := range lc.FilterActionableRules(obj) {
 		if obj.DeleteMarker && obj.NumVersions == 1 && rule.Expiration.DeleteMarker.val {
 			// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
@@ -305,7 +304,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 }
 
 // PredictExpiryTime returns the expiry date/time of a given object
-// after evaluting the current lifecycle document.
+// after evaluating the current lifecycle document.
 func (lc Lifecycle) PredictExpiryTime(obj ObjectOpts) (string, time.Time) {
 	if obj.DeleteMarker {
 		// We don't need to send any x-amz-expiration for delete marker.
@@ -337,4 +336,39 @@ func (lc Lifecycle) PredictExpiryTime(obj ObjectOpts) (string, time.Time) {
 		}
 	}
 	return finalExpiryRuleID, finalExpiryDate
+}
+
+// PredictTransitionTime returns the transition date/time of a given object
+// after evaluating the current lifecycle document.
+func (lc Lifecycle) PredictTransitionTime(obj ObjectOpts) (string, time.Time) {
+	if obj.DeleteMarker {
+		// We don't need to send any x-minio-transition for delete marker.
+		return "", time.Time{}
+	}
+
+	if obj.TransitionStatus == TransitionComplete {
+		return "", time.Time{}
+	}
+
+	var finalTransitionDate time.Time
+	var finalTransitionRuleID string
+
+	// Iterate over all actionable rules and find the earliest
+	// transition date and its associated rule ID.
+	for _, rule := range lc.FilterActionableRules(obj) {
+		switch {
+		case !rule.Transition.IsDateNull():
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(rule.Transition.Date.Time) {
+				finalTransitionRuleID = rule.ID
+				finalTransitionDate = rule.Transition.Date.Time
+			}
+		case !rule.Transition.IsDaysNull():
+			expectedTransition := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days))
+			if finalTransitionDate.IsZero() || finalTransitionDate.After(expectedTransition) {
+				finalTransitionRuleID = rule.ID
+				finalTransitionDate = expectedTransition
+			}
+		}
+	}
+	return finalTransitionRuleID, finalTransitionDate
 }

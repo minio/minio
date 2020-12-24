@@ -187,6 +187,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 			// RemoveRemoteTargetHandler
 			adminRouter.Methods(http.MethodDelete).Path(adminVersion+"/remove-remote-target").HandlerFunc(
 				httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler)).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
+
+			// Remote Tier management operations
+			adminRouter.Methods(http.MethodPut).Path(adminVersion + "/tier").HandlerFunc(httpTraceHdrs(adminAPI.AddTierHandler))
+			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/tier/{tier}").HandlerFunc(httpTraceHdrs(adminAPI.EditTierHandler))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/tier").HandlerFunc(httpTraceHdrs(adminAPI.ListTierHandler))
+			adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/tier/{tier}").HandlerFunc(httpTraceHdrs(adminAPI.RemoveTierHandler))
 		}
 
 		if globalIsDistErasure {
