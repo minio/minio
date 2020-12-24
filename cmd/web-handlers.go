@@ -457,7 +457,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		// Fetch all the objects
 		for {
 			// Let listObjects reply back the maximum from server implementation
-			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 0)
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 			if err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
@@ -571,8 +571,10 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		// Limit browser to defaults batches to be more responsive, scrolling friendly.
-		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, -1)
+		// Limit browser to '1000' batches to be more responsive, scrolling friendly.
+		// Also don't change the maxKeys value silly GCS SDKs do not honor maxKeys
+		// values to be '-1'
+		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
