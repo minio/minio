@@ -570,8 +570,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							bucket:    bucket,
 							object:    entry.name,
 							versionID: "",
+							opts: &madmin.HealOpts{
+								Remove: true,
+							},
 						}, madmin.HealItemObject)
-						logger.LogIf(ctx, err)
+						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, err)
+						}
 						foundObjs = foundObjs || err == nil
 						return
 					}
@@ -583,8 +588,13 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							bucket:    bucket,
 							object:    fiv.Name,
 							versionID: ver.VersionID,
+							opts: &madmin.HealOpts{
+								Remove: true,
+							},
 						}, madmin.HealItemObject)
-						logger.LogIf(ctx, err)
+						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, err)
+						}
 						foundObjs = foundObjs || err == nil
 					}
 				},

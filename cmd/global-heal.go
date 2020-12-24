@@ -130,7 +130,9 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 		bucket: minioMetaBucket,
 		object: backendEncryptedFile,
 	}, madmin.HealItemMetadata); err != nil {
-		logger.LogIf(ctx, err)
+		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			logger.LogIf(ctx, err)
+		}
 	}
 
 	// Heal all buckets with all objects
@@ -139,7 +141,9 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 		if err := bgSeq.queueHealTask(healSource{
 			bucket: bucket.Name,
 		}, madmin.HealItemBucket); err != nil {
-			logger.LogIf(ctx, err)
+			if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+				logger.LogIf(ctx, err)
+			}
 		}
 
 		var entryChs []FileInfoVersionsCh
@@ -179,7 +183,9 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 					object:    version.Name,
 					versionID: version.VersionID,
 				}, madmin.HealItemObject); err != nil {
-					logger.LogIf(ctx, err)
+					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+						logger.LogIf(ctx, err)
+					}
 				}
 			}
 		}

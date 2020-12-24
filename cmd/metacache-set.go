@@ -615,13 +615,18 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	}
 
 	// Create output for our results.
-	cacheCh := make(chan metaCacheEntry, metacacheBlockSize)
+	var cacheCh chan metaCacheEntry
+	if !o.discardResult {
+		cacheCh = make(chan metaCacheEntry, metacacheBlockSize)
+	}
 
 	// Create filter for results.
 	filterCh := make(chan metaCacheEntry, 100)
 	filteredResults := o.gatherResults(filterCh)
 	closeChannels := func() {
-		close(cacheCh)
+		if !o.discardResult {
+			close(cacheCh)
+		}
 		close(filterCh)
 	}
 
@@ -657,54 +662,62 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		}()
 
 		const retryDelay = 200 * time.Millisecond
-		const maxTries = 10
+		const maxTries = 5
 
-		// Write results to disk.
-		bw := newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
-			if o.discardResult {
-				// Don't save single object listings.
-				return nil
-			}
-			o.debugln("listPath: saving block", b.n, "to", o.objectPath(b.n))
-			r, err := hash.NewReader(bytes.NewBuffer(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
-			logger.LogIf(ctx, err)
-			custom := b.headerKV()
-			_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{UserDefined: custom})
-			if err != nil {
-				metaMu.Lock()
-				if meta.error != "" {
-					meta.status = scanStateError
-					meta.error = err.Error()
+		var bw *metacacheBlockWriter
+		// Don't save single object listings.
+		if !o.discardResult {
+			// Write results to disk.
+			bw = newMetacacheBlockWriter(cacheCh, func(b *metacacheBlock) error {
+				// if the block is 0 bytes and its a first block skip it.
+				// skip only this for Transient caches.
+				if len(b.data) == 0 && b.n == 0 && o.Transient {
+					return nil
 				}
-				metaMu.Unlock()
-				cancel()
-				return err
-			}
-			if b.n == 0 {
-				return nil
-			}
-			// Update block 0 metadata.
-			var retries int
-			for {
-				err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), b.headerKV(), ObjectOptions{})
-				if err == nil {
-					break
-				}
-				switch err.(type) {
-				case ObjectNotFound:
-					return err
-				case InsufficientReadQuorum:
-				default:
-					logger.LogIf(ctx, err)
-				}
-				if retries >= maxTries {
+				o.debugln("listPath: saving block", b.n, "to", o.objectPath(b.n))
+				r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
+				logger.LogIf(ctx, err)
+				custom := b.headerKV()
+				_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{
+					UserDefined: custom,
+					NoLock:      true, // No need to hold namespace lock, each prefix caches uniquely.
+				})
+				if err != nil {
+					metaMu.Lock()
+					if meta.error != "" {
+						meta.status = scanStateError
+						meta.error = err.Error()
+					}
+					metaMu.Unlock()
+					cancel()
 					return err
 				}
-				retries++
-				time.Sleep(retryDelay)
-			}
-			return nil
-		})
+				if b.n == 0 {
+					return nil
+				}
+				// Update block 0 metadata.
+				var retries int
+				for {
+					err := er.updateObjectMeta(ctx, minioMetaBucket, o.objectPath(0), b.headerKV(), ObjectOptions{})
+					if err == nil {
+						break
+					}
+					switch err.(type) {
+					case ObjectNotFound:
+						return err
+					case InsufficientReadQuorum:
+					default:
+						logger.LogIf(ctx, err)
+					}
+					if retries >= maxTries {
+						return err
+					}
+					retries++
+					time.Sleep(retryDelay)
+				}
+				return nil
+			})
+		}
 
 		// How to resolve results.
 		resolver := metadataResolutionParams{
@@ -721,14 +734,18 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 			filterPrefix: o.FilterPrefix,
 			minDisks:     listingQuorum,
 			agreed: func(entry metaCacheEntry) {
-				cacheCh <- entry
+				if !o.discardResult {
+					cacheCh <- entry
+				}
 				filterCh <- entry
 			},
 			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
 				// Results Disagree :-(
 				entry, ok := entries.resolve(&resolver)
 				if ok {
-					cacheCh <- *entry
+					if !o.discardResult {
+						cacheCh <- *entry
+					}
 					filterCh <- *entry
 				}
 			},
@@ -749,12 +766,14 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 		metaMu.Unlock()
 
 		closeChannels()
-		if err := bw.Close(); err != nil {
-			metaMu.Lock()
-			meta.error = err.Error()
-			meta.status = scanStateError
-			meta, err = o.updateMetacacheListing(meta, rpc)
-			metaMu.Unlock()
+		if !o.discardResult {
+			if err := bw.Close(); err != nil {
+				metaMu.Lock()
+				meta.error = err.Error()
+				meta.status = scanStateError
+				meta, err = o.updateMetacacheListing(meta, rpc)
+				metaMu.Unlock()
+			}
 		}
 	}()
 
