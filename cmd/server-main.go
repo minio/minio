@@ -486,7 +486,6 @@ func serverMain(ctx *cli.Context) {
 	if err != nil {
 		logFatalErrs(err, Endpoint{}, true)
 	}
-
 	logger.SetDeploymentID(globalDeploymentID)
 
 	// Enable background operations for erasure coding
@@ -511,6 +510,8 @@ func serverMain(ctx *cli.Context) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
 	}
+
+	loadGlobalTransitionTierConfig()
 
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.

@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -117,44 +116,23 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
-	if tgt.Type == madmin.ILMService {
-		if globalBucketVersioningSys.Enabled(bucket) {
-			vcfg, err := clnt.GetBucketVersioning(ctx, tgt.TargetBucket)
-			if err != nil {
-				if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
-					return BucketRemoteTargetNotFound{Bucket: tgt.TargetBucket}
-				}
-				return BucketRemoteConnectionErr{Bucket: tgt.TargetBucket}
-			}
-			if vcfg.Status != string(versioning.Enabled) {
-				return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
-			}
-		}
-	}
 	sys.Lock()
 	defer sys.Unlock()
 
 	tgts := sys.targetsMap[bucket]
+
 	newtgts := make([]madmin.BucketTarget, len(tgts))
-	labels := make(map[string]struct{}, len(tgts))
 	found := false
 	for idx, t := range tgts {
-		labels[t.Label] = struct{}{}
 		if t.Type == tgt.Type {
 			if t.Arn == tgt.Arn && !update {
 				return BucketRemoteAlreadyExists{Bucket: t.TargetBucket}
-			}
-			if t.Label == tgt.Label && !update {
-				return BucketRemoteLabelInUse{Bucket: t.TargetBucket}
 			}
 			newtgts[idx] = *tgt
 			found = true
 			continue
 		}
 		newtgts[idx] = t
-	}
-	if _, ok := labels[tgt.Label]; ok && !update {
-		return BucketRemoteLabelInUse{Bucket: tgt.TargetBucket}
 	}
 	if !found && !update {
 		newtgts = append(newtgts, *tgt)
@@ -184,15 +162,6 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
 		if err == nil && rcfg.RoleArn == arnStr {
-			if _, ok := sys.arnRemotesMap[arnStr]; ok {
-				return BucketRemoteRemoveDisallowed{Bucket: bucket}
-			}
-		}
-	}
-	if arn.Type == madmin.ILMService {
-		// reject removal of remote target if lifecycle transition uses this arn
-		config, err := globalBucketMetadataSys.GetLifecycleConfig(bucket)
-		if err == nil && transitionSCInUse(ctx, config, bucket, arnStr) {
 			if _, ok := sys.arnRemotesMap[arnStr]; ok {
 				return BucketRemoteRemoveDisallowed{Bucket: bucket}
 			}
@@ -228,44 +197,6 @@ func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn strin
 	sys.RLock()
 	defer sys.RUnlock()
 	return sys.arnRemotesMap[arn]
-}
-
-// GetRemoteTargetWithLabel returns bucket target given a target label
-func (sys *BucketTargetSys) GetRemoteTargetWithLabel(ctx context.Context, bucket, targetLabel string) *madmin.BucketTarget {
-	sys.RLock()
-	defer sys.RUnlock()
-	for _, t := range sys.targetsMap[bucket] {
-		if strings.ToUpper(t.Label) == strings.ToUpper(targetLabel) {
-			tgt := t.Clone()
-			return &tgt
-		}
-	}
-	return nil
-}
-
-// GetRemoteArnWithLabel returns bucket target's ARN given its target label
-func (sys *BucketTargetSys) GetRemoteArnWithLabel(ctx context.Context, bucket, tgtLabel string) *madmin.ARN {
-	tgt := sys.GetRemoteTargetWithLabel(ctx, bucket, tgtLabel)
-	if tgt == nil {
-		return nil
-	}
-	arn, err := madmin.ParseARN(tgt.Arn)
-	if err != nil {
-		return nil
-	}
-	return arn
-}
-
-// GetRemoteLabelWithArn returns a bucket target's label given its ARN
-func (sys *BucketTargetSys) GetRemoteLabelWithArn(ctx context.Context, bucket, arnStr string) string {
-	sys.RLock()
-	defer sys.RUnlock()
-	for _, t := range sys.targetsMap[bucket] {
-		if t.Arn == arnStr {
-			return t.Label
-		}
-	}
-	return ""
 }
 
 // NewBucketTargetSys - creates new replication system.
@@ -355,7 +286,6 @@ var getRemoteTargetInstanceTransportOnce sync.Once
 func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*TargetClient, error) {
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
-
 	getRemoteTargetInstanceTransportOnce.Do(func() {
 		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(10 * time.Minute)
 	})
@@ -374,8 +304,9 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	tc := &TargetClient{
 		Client:              api,
 		healthCheckDuration: hcDuration,
-		bucket:              tcfg.TargetBucket,
 		replicateSync:       tcfg.ReplicationSync,
+		Bucket:              tcfg.TargetBucket,
+		StorageClass:        tcfg.StorageClass,
 	}
 	go tc.healthCheck()
 	return tc, nil
@@ -448,8 +379,9 @@ type TargetClient struct {
 	*miniogo.Client
 	up                  int32
 	healthCheckDuration time.Duration
-	bucket              string // remote bucket target
+	Bucket              string // remote bucket target
 	replicateSync       bool
+	StorageClass        string // storage class on remote
 }
 
 func (tc *TargetClient) isOffline() bool {
@@ -458,7 +390,7 @@ func (tc *TargetClient) isOffline() bool {
 
 func (tc *TargetClient) healthCheck() {
 	for {
-		_, err := tc.BucketExists(GlobalContext, tc.bucket)
+		_, err := tc.BucketExists(GlobalContext, tc.Bucket)
 		if err != nil {
 			atomic.StoreInt32(&tc.up, 0)
 			time.Sleep(tc.healthCheckDuration)

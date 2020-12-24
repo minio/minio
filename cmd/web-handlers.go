@@ -774,7 +774,7 @@ next:
 				}
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
-			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
+			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && !globalBucketVersioningSys.Enabled(args.BucketName) {
 				action := lifecycle.DeleteAction
 				if goi.VersionID != "" {
 					action = lifecycle.DeleteVersionAction
@@ -785,7 +785,7 @@ next:
 					VersionID:    goi.VersionID,
 					DeleteMarker: goi.DeleteMarker,
 					IsLatest:     goi.IsLatest,
-				}, action, true)
+				}, action, goi.transitionedObjName, goi.TransitionTier, false)
 			}
 
 			logger.LogIf(ctx, err)

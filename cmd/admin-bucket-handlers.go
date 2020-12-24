@@ -161,7 +161,6 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrBucketRemoteIdenticalToSource), r.URL)
 		return
 	}
-
 	target.SourceBucket = bucket
 	if !update {
 		target.Arn = globalBucketTargetSys.getRemoteARN(bucket, &target)

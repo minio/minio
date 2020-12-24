@@ -1616,3 +1616,13 @@ func (fs *FSObjects) Health(ctx context.Context, opts HealthOptions) HealthResul
 		Healthy: newObjectLayerFn() != nil,
 	}
 }
+
+// TransitionObject - transition object content to target tier.
+func (fs *FSObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (fs *FSObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}
