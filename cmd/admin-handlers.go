@@ -1549,6 +1549,8 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	assignPoolNumbers(servers)
 
+	var disksMetrics []madmin.DiskMetrics
+
 	var backend interface{}
 	mode := madmin.ItemInitializing
 
@@ -1559,6 +1561,12 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	objectAPI := newObjectLayerFn()
 	if objectAPI != nil {
 		mode = madmin.ItemOnline
+
+		m, err := objectAPI.GetMetrics(ctx)
+		if err == nil {
+			disksMetrics = m.disksMetrics
+		}
+
 		// Load data usage
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err == nil {
@@ -1616,6 +1624,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		Services:     services,
 		Backend:      backend,
 		Servers:      servers,
+		DisksMetrics: disksMetrics,
 	}
 
 	// Marshal API response

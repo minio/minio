@@ -19,12 +19,67 @@ package cmd
 import (
 	"context"
 	"io"
+	"time"
+
+	ewma "github.com/VividCortex/ewma"
+)
+
+//go:generate stringer -type=storageMetric -trimprefix=storageMetric $GOFILE
+
+type storageMetric uint8
+
+const (
+	storageMetricIsOnline storageMetric = iota
+	storageMetricHealing
+	storageMetricGetDiskID
+	storageMetricDiskInfo
+	storageMetricMakeVolBulk
+	storageMetricMakeVol
+	storageMetricListVols
+	storageMetricStatVol
+	storageMetricDeleteVol
+	storageMetricWalkVersions
+	storageMetricWalkDir
+	storageMetricListDir
+	storageMetricReadFile
+	storageMetricAppendFile
+	storageMetricCreateFile
+	storageMetricReadFileStream
+	storageMetricRenameFile
+	storageMetricRenameData
+	storageMetricCheckParts
+	storageMetricCheckFile
+	storageMetricDelete
+	storageMetricDeleteVersions
+	storageMetricVerifyFile
+	storageMetricWriteAll
+	storageMetricDeleteVersion
+	storageMetricWriteMetadata
+	storageMetricReadVersion
+	storageMetricReadAll
+
+	// .... add more
+
+	metricLast
 )
 
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
 	storage *xlStorage
 	diskID  string
+
+	apisCount   [metricLast]uint64
+	apisLatency [metricLast]ewma.MovingAverage
+}
+
+func newXLStorageDiskIDCheck(storage *xlStorage) *xlStorageDiskIDCheck {
+	xl := xlStorageDiskIDCheck{
+		storage: storage,
+	}
+	for i := range xl.apisLatency[:] {
+		xl.apisLatency[i] = ewma.NewMovingAverage()
+	}
+	return &xl
 }
 
 func (p *xlStorageDiskIDCheck) String() string {
@@ -32,6 +87,7 @@ func (p *xlStorageDiskIDCheck) String() string {
 }
 
 func (p *xlStorageDiskIDCheck) IsOnline() bool {
+	defer p.storageMetrics(storageMetricIsOnline)()
 	storedDiskID, err := p.storage.GetDiskID()
 	if err != nil {
 		return false
@@ -52,6 +108,7 @@ func (p *xlStorageDiskIDCheck) Hostname() string {
 }
 
 func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
+	defer p.storageMetrics(storageMetricHealing)()
 	return p.storage.Healing()
 }
 
@@ -81,6 +138,7 @@ func (p *xlStorageDiskIDCheck) Close() error {
 }
 
 func (p *xlStorageDiskIDCheck) GetDiskID() (string, error) {
+	defer p.storageMetrics(storageMetricGetDiskID)()
 	return p.storage.GetDiskID()
 }
 
@@ -113,6 +171,7 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context) (info DiskInfo, err
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricDiskInfo)()
 	info, err = p.storage.DiskInfo(ctx)
 	if err != nil {
 		return info, err
@@ -134,6 +193,7 @@ func (p *xlStorageDiskIDCheck) MakeVolBulk(ctx context.Context, volumes ...strin
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricMakeVolBulk)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -147,6 +207,7 @@ func (p *xlStorageDiskIDCheck) MakeVol(ctx context.Context, volume string) (err 
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricMakeVol)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -160,6 +221,7 @@ func (p *xlStorageDiskIDCheck) ListVols(ctx context.Context) ([]VolInfo, error) 
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricListVols)()
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -173,6 +235,7 @@ func (p *xlStorageDiskIDCheck) StatVol(ctx context.Context, volume string) (vol 
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricStatVol)()
 	if err = p.checkDiskStale(); err != nil {
 		return vol, err
 	}
@@ -186,6 +249,7 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricDeleteVol)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -198,7 +262,7 @@ func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath stri
 		return nil, ctx.Err()
 	default:
 	}
-
+	defer p.storageMetrics(storageMetricListDir)()
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -213,6 +277,7 @@ func (p *xlStorageDiskIDCheck) ReadFile(ctx context.Context, volume string, path
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricReadFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return 0, err
 	}
@@ -227,6 +292,7 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricAppendFile)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -241,6 +307,7 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricCreateFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -255,6 +322,7 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricReadFileStream)()
 	if err := p.checkDiskStale(); err != nil {
 		return nil, err
 	}
@@ -269,6 +337,7 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricRenameFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -283,6 +352,7 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricRenameData)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -297,6 +367,7 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricCheckParts)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -311,6 +382,7 @@ func (p *xlStorageDiskIDCheck) CheckFile(ctx context.Context, volume string, pat
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricCheckFile)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -325,6 +397,7 @@ func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path s
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricDelete)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -333,6 +406,7 @@ func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path s
 }
 
 func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) (errs []error) {
+	defer p.storageMetrics(storageMetricDeleteVersions)()
 	if err := p.checkDiskStale(); err != nil {
 		errs = make([]error, len(versions))
 		for i := range errs {
@@ -350,6 +424,7 @@ func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path stri
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricVerifyFile)()
 	if err := p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -364,6 +439,7 @@ func (p *xlStorageDiskIDCheck) WriteAll(ctx context.Context, volume string, path
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricWriteAll)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -378,6 +454,7 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricDeleteVersion)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -392,6 +469,7 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricWriteMetadata)()
 	if err = p.checkDiskStale(); err != nil {
 		return err
 	}
@@ -406,6 +484,7 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricReadVersion)()
 	if err = p.checkDiskStale(); err != nil {
 		return fi, err
 	}
@@ -420,9 +499,19 @@ func (p *xlStorageDiskIDCheck) ReadAll(ctx context.Context, volume string, path 
 	default:
 	}
 
+	defer p.storageMetrics(storageMetricReadAll)()
 	if err = p.checkDiskStale(); err != nil {
 		return nil, err
 	}
 
 	return p.storage.ReadAll(ctx, volume, path)
+}
+
+// Update storage metrics
+func (p *xlStorageDiskIDCheck) storageMetrics(s storageMetric) func() {
+	startTime := time.Now()
+	return func() {
+		p.apisCount[s]++
+		p.apisLatency[s].Add(float64(time.Since(startTime)))
+	}
 }

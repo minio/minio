@@ -185,6 +185,14 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 	return dataUsageInfo, nil
 }
 
+// DiskMetrics has the information about XL Storage APIs
+// the number of calls of each API and the moving average of
+// the duration of each API.
+type DiskMetrics struct {
+	StorageAPILatency map[string]float64
+	StorageAPICalls   map[string]uint64
+}
+
 // InfoMessage container to hold server admin related information.
 type InfoMessage struct {
 	Mode         string             `json:"mode,omitempty"`
@@ -198,6 +206,8 @@ type InfoMessage struct {
 	Services     Services           `json:"services,omitempty"`
 	Backend      interface{}        `json:"backend,omitempty"`
 	Servers      []ServerProperties `json:"servers,omitempty"`
+
+	DisksMetrics []DiskMetrics `json:"disksMetrics"`
 }
 
 // Services contains different services information

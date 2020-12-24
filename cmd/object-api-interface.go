@@ -82,6 +82,7 @@ type BackendMetrics struct {
 	bytesReceived uint64
 	bytesSent     uint64
 	requestStats  RequestStats
+	disksMetrics  []madmin.DiskMetrics
 }
 
 // ObjectLayer implements primitives for object API layer.

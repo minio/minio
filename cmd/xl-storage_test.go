@@ -132,7 +132,9 @@ func newXLStorageTestSetup() (*xlStorageDiskIDCheck, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return &xlStorageDiskIDCheck{storage: storage, diskID: "da017d62-70e3-45f1-8a1a-587707e69ad1"}, diskPath, nil
+	disk := newXLStorageDiskIDCheck(storage)
+	disk.diskID = "da017d62-70e3-45f1-8a1a-587707e69ad1"
+	return disk, diskPath, nil
 }
 
 // createPermDeniedFile - creates temporary directory and file with path '/mybucket/myobject'
