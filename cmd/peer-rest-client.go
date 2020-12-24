@@ -682,6 +682,16 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 
 }
 
+func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadTransitionTierConfig, nil, nil, 0)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	defer http.DrainBody(respBody)
+	return nil
+}
+
 func (client *peerRESTClient) doTrace(traceCh chan interface{}, doneCh <-chan struct{}, trcAll, trcErr bool) {
 	values := make(url.Values)
 	values.Set(peerRESTTraceAll, strconv.FormatBool(trcAll))

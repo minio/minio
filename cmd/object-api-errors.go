@@ -478,6 +478,13 @@ func (e BucketReplicationSourceNotVersioned) Error() string {
 	return "Replication source does not have versioning enabled: " + e.Bucket
 }
 
+// TransitionStorageClassNotFound remote tier not configured.
+type TransitionStorageClassNotFound GenericError
+
+func (e TransitionStorageClassNotFound) Error() string {
+	return "Transition storage class not found "
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.
@@ -664,6 +671,12 @@ func isErrObjectNotFound(err error) bool {
 func isErrVersionNotFound(err error) bool {
 	var versionNotFound VersionNotFound
 	return errors.As(err, &versionNotFound)
+}
+
+// isErrVersionNotFound - Check if error type is SignatureDoesNotMatch.
+func isErrSignatureDoesNotMatch(err error) bool {
+	var signatureDoesNotMatch SignatureDoesNotMatch
+	return errors.As(err, &signatureDoesNotMatch)
 }
 
 // PreConditionFailed - Check if copy precondition failed

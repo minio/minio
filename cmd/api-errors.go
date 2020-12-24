@@ -238,6 +238,7 @@ const (
 	ErrClientDisconnected
 	ErrOperationMaxedOut
 	ErrInvalidRequest
+	ErrTransitionStorageClassNotFoundError
 	// MinIO storage class error codes
 	ErrInvalidStorageClass
 	ErrBackendDown
@@ -928,6 +929,12 @@ var errorCodes = errorCodeMap{
 		Description:    "Object restore is already in progress",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrTransitionStorageClassNotFoundError: {
+		Code:           "TransitionStorageClassNotFoundError",
+		Description:    "The transition storage class was not found",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+
 	/// Bucket notification related errors.
 	ErrEventNotification: {
 		Code:           "InvalidArgument",
@@ -1964,6 +1971,9 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrRemoteTargetNotVersionedError
 	case BucketReplicationSourceNotVersioned:
 		apiErr = ErrReplicationSourceNotVersionedError
+	case TransitionStorageClassNotFound:
+		apiErr = ErrTransitionStorageClassNotFoundError
+
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
 	case *event.ErrInvalidEventName:

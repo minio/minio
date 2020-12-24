@@ -36,13 +36,11 @@ type ServiceType string
 const (
 	// ReplicationService specifies replication service
 	ReplicationService ServiceType = "replication"
-	// ILMService specifies ilm service
-	ILMService ServiceType = "ilm"
 )
 
-// IsValid returns true if ARN type represents replication or ilm
+// IsValid returns true if ARN type represents replication
 func (t ServiceType) IsValid() bool {
-	return t == ReplicationService || t == ILMService
+	return t == ReplicationService
 }
 
 // ARN is a struct to define arn.
@@ -97,9 +95,9 @@ type BucketTarget struct {
 	Arn                 string            `json:"arn,omitempty"`
 	Type                ServiceType       `json:"type"`
 	Region              string            `json:"omitempty"`
-	Label               string            `json:"label,omitempty"`
 	BandwidthLimit      int64             `json:"bandwidthlimit,omitempty"`
 	ReplicationSync     bool              `json:"replicationSync"`
+	StorageClass        string            `json:"storageclass,omitempty"`
 	HealthCheckDuration time.Duration     `json:"healthCheckDuration,omitempty"`
 }
 
@@ -116,9 +114,9 @@ func (t *BucketTarget) Clone() BucketTarget {
 		Arn:                 t.Arn,
 		Type:                t.Type,
 		Region:              t.Region,
-		Label:               t.Label,
 		BandwidthLimit:      t.BandwidthLimit,
 		ReplicationSync:     t.ReplicationSync,
+		StorageClass:        t.StorageClass, // target storage class
 		HealthCheckDuration: t.HealthCheckDuration,
 	}
 }

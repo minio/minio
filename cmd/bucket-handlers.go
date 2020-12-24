@@ -487,6 +487,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 		if hasLifecycleConfig && gerr == nil {
 			object.PurgeTransitioned = goi.TransitionStatus
+			object.TransitionedObjName = goi.transitionedObjName
+			object.TransitionTier = goi.TransitionTier
 		}
 		if replicateDeletes {
 			delMarker, replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
@@ -556,6 +558,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
+			TransitionedObjName:           dObjects[i].TransitionedObjName,
+			TransitionTier:                dObjects[i].TransitionTier,
 		}]
 		if errs[i] == nil || isErrObjectNotFound(errs[i]) || isErrVersionNotFound(errs[i]) {
 			if replicateDeletes {
@@ -603,13 +607,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if hasLifecycleConfig && dobj.PurgeTransitioned == lifecycle.TransitionComplete { // clean up transitioned tier
-			deleteTransitionedObject(ctx, objectAPI, bucket, dobj.ObjectName, lifecycle.ObjectOpts{
-				Name:         dobj.ObjectName,
-				VersionID:    dobj.VersionID,
-				DeleteMarker: dobj.DeleteMarker,
-			}, false, true)
+			delTier := false
+			switch {
+			case dobj.VersionID != "":
+				delTier = true
+			case !globalBucketVersioningSys.Enabled(bucket):
+				delTier = true
+			}
+			if delTier {
+				deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, dobj.ObjectName, lifecycle.ObjectOpts{
+					Name:         dobj.ObjectName,
+					VersionID:    dobj.VersionID,
+					DeleteMarker: dobj.DeleteMarker,
+				}, dobj.TransitionedObjName, dobj.TransitionTier, false, false)
+			}
 		}
-
+	}
+	// Notify deleted event for objects.
+	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
 		objInfo := ObjectInfo{
 			Name:      dobj.ObjectName,

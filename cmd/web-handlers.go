@@ -809,14 +809,13 @@ next:
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
 			if goi.TransitionStatus == lifecycle.TransitionComplete {
-				deleteTransitionedObject(ctx, objectAPI, args.BucketName, objectName, lifecycle.ObjectOpts{
-					Name:             objectName,
-					UserTags:         goi.UserTags,
-					VersionID:        goi.VersionID,
-					DeleteMarker:     goi.DeleteMarker,
-					TransitionStatus: goi.TransitionStatus,
-					IsLatest:         goi.IsLatest,
-				}, false, true)
+				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
+					Name:         objectName,
+					UserTags:     goi.UserTags,
+					VersionID:    goi.VersionID,
+					DeleteMarker: goi.DeleteMarker,
+					IsLatest:     goi.IsLatest,
+				}, goi.transitionedObjName, goi.TransitionTier, false, false)
 			}
 
 			logger.LogIf(ctx, err)

@@ -1630,3 +1630,13 @@ func (fs *FSObjects) ReadHealth(ctx context.Context) bool {
 	_, err := os.Stat(fs.fsPath)
 	return err == nil
 }
+
+// TransitionObject - transition object content to target tier.
+func (fs *FSObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (fs *FSObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}

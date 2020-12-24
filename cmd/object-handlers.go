@@ -2914,14 +2914,26 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
-		deleteTransitionedObject(ctx, objectAPI, bucket, object, lifecycle.ObjectOpts{
-			Name:             object,
-			UserTags:         goi.UserTags,
-			VersionID:        goi.VersionID,
-			DeleteMarker:     goi.DeleteMarker,
-			TransitionStatus: goi.TransitionStatus,
-			IsLatest:         goi.IsLatest,
-		}, false, true)
+		// if version id being deleted, delete from transition tier
+		// if dm being set, noop on transition tier
+		// non versioned obj being deleted, delete from transition tier.
+		delTier := false
+		switch {
+		case opts.VersionID != "":
+			delTier = true
+		case !globalBucketVersioningSys.Enabled(bucket):
+			delTier = true
+		}
+		if delTier {
+			deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, object, lifecycle.ObjectOpts{
+				Name:             object,
+				UserTags:         goi.UserTags,
+				VersionID:        goi.VersionID,
+				DeleteMarker:     goi.DeleteMarker,
+				TransitionStatus: goi.TransitionStatus,
+				IsLatest:         goi.IsLatest,
+			}, goi.transitionedObjName, goi.TransitionTier, false, false)
+		}
 	}
 }
 
@@ -3622,7 +3634,14 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			rreq.SelectParameters.Close()
 			return
 		}
-		if err := restoreTransitionedObject(rctx, bucket, object, objectAPI, objInfo, rreq, restoreExpiry); err != nil {
+		opts := ObjectOptions{
+			Transition: TransitionOptions{
+				RestoreRequest: rreq,
+				RestoreExpiry:  restoreExpiry,
+			},
+			VersionID: objInfo.VersionID,
+		}
+		if err := objectAPI.RestoreTransitionedObject(rctx, bucket, object, opts); err != nil {
 			return
 		}
 

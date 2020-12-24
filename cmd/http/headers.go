@@ -165,6 +165,8 @@ const (
 	MinIODeleteMarkerReplicationStatus = "X-Minio-Replication-DeleteMarker-Status"
 	// Header indicates if its a GET/HEAD proxy request for active-active replication
 	MinIOSourceProxyRequest = "X-Minio-Source-Proxy-Request"
+	// Object date/time of expiration
+	MinIOTransition = "X-Minio-Transition"
 )
 
 // Common http query params S3 API

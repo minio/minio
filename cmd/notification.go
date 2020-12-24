@@ -693,6 +693,27 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	}
 }
 
+// LoadTransitionTierConfig notifies remote peers to load their remote tier
+// configs from config store.
+func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.LoadTransitionTierConfig(ctx)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+		}
+	}
+}
+
 // Loads notification policies for all buckets into NotificationSys.
 func (sys *NotificationSys) load(buckets []BucketInfo) {
 	for _, bucket := range buckets {
