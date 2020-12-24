@@ -674,11 +674,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
-	lk := er.NewNSLock(bucket, object)
-	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+			return ObjectInfo{}, err
+		}
+		defer lk.Unlock()
 	}
-	defer lk.Unlock()
 
 	for i, w := range writers {
 		if w == nil {
