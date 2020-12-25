@@ -823,7 +823,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	defer cancel()
 
 	askDisks := len(disks)
-	var readers = make([]*metacacheReader, askDisks)
+	readers := make([]*metacacheReader, askDisks)
 	for i := range disks {
 		r, w := io.Pipe()
 		d := disks[i]

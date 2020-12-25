@@ -677,10 +677,9 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
-	} else {
-		if opts.Bitrot {
-			task.opts.ScanMode = madmin.HealDeepScan
-		}
+	}
+	if opts.Bitrot {
+		task.opts.ScanMode = madmin.HealDeepScan
 	}
 
 	// Wait and proceed if there are active requests
