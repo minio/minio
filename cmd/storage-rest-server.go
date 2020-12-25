@@ -522,7 +522,10 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
 
-	io.Copy(w, rc)
+	bufp := s.storage.pool.Get().(*[]byte)
+	defer s.storage.pool.Put(bufp)
+
+	io.CopyBuffer(w, rc, *bufp)
 	w.(http.Flusher).Flush()
 }
 
