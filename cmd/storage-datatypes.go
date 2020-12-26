@@ -25,16 +25,17 @@ import (
 // DiskInfo is an extended type which returns current
 // disk usage per path.
 type DiskInfo struct {
-	Total     uint64
-	Free      uint64
-	Used      uint64
-	FSType    string
-	RootDisk  bool
-	Healing   bool
-	Endpoint  string
-	MountPath string
-	ID        string
-	Error     string // carries the error over the network
+	Total      uint64
+	Free       uint64
+	Used       uint64
+	UsedInodes uint64
+	FSType     string
+	RootDisk   bool
+	Healing    bool
+	Endpoint   string
+	MountPath  string
+	ID         string
+	Error      string // carries the error over the network
 }
 
 // VolsInfo is a collection of volume(bucket) information

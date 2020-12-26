@@ -225,7 +225,7 @@ func TestDataUpdateTracker(t *testing.T) {
 
 	// Rerun test with returned bfr2
 	bf := dut.newBloomFilter()
-	_, err = bf.ReadFrom(bytes.NewBuffer(bfr2.Filter))
+	_, err = bf.ReadFrom(bytes.NewReader(bfr2.Filter))
 	if err != nil {
 		t.Fatal(err)
 	}

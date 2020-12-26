@@ -35,7 +35,7 @@ func TestRemoveBucketHandler(t *testing.T) {
 
 func testRemoveBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials auth.Credentials, t *testing.T) {
-	_, err := obj.PutObject(GlobalContext, bucketName, "test-object", mustGetPutObjReader(t, bytes.NewBuffer([]byte{}), int64(0), "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), ObjectOptions{})
+	_, err := obj.PutObject(GlobalContext, bucketName, "test-object", mustGetPutObjReader(t, bytes.NewReader([]byte{}), int64(0), "", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), ObjectOptions{})
 	// if object upload fails stop the test.
 	if err != nil {
 		t.Fatalf("Error uploading object: <ERROR> %v", err)
@@ -669,7 +669,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	for i := 0; i < 10; i++ {
 		objectName := "test-object-" + strconv.Itoa(i)
 		// uploading the object.
-		_, err = obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewBuffer(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})
+		_, err = obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader(contentBytes), int64(len(contentBytes)), "", sha256sum), ObjectOptions{})
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object %d:  Error uploading object: <ERROR> %v", i, err)
