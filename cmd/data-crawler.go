@@ -219,7 +219,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 	if len(cache.Info.BloomFilter) > 0 {
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
-		_, err := s.withFilter.ReadFrom(bytes.NewBuffer(cache.Info.BloomFilter))
+		_, err := s.withFilter.ReadFrom(bytes.NewReader(cache.Info.BloomFilter))
 		if err != nil {
 			logger.LogIf(ctx, err, logPrefix+"Error reading bloom filter")
 			s.withFilter = nil

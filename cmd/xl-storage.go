@@ -332,20 +332,22 @@ func (s *xlStorage) Healing() bool {
 }
 
 func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+	var lc *lifecycle.Lifecycle
+	var err error
+
 	// Check if the current bucket has a configured lifecycle policy
-	lc, err := globalLifecycleSys.Get(cache.Info.Name)
-	if err == nil && lc.HasActiveRules("", true) {
-		cache.Info.lifeCycle = lc
-		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("crawlDisk:") + " lifecycle: Active rules found")
+	if globalLifecycleSys != nil {
+		lc, err = globalLifecycleSys.Get(cache.Info.Name)
+		if err == nil && lc.HasActiveRules("", true) {
+			cache.Info.lifeCycle = lc
+			if intDataUpdateTracker.debug {
+				logger.Info(color.Green("crawlDisk:") + " lifecycle: Active rules found")
+			}
 		}
 	}
 
-	// Get object api
+	// return initialized object layer
 	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		return cache, errServerNotInitialized
-	}
 
 	globalHealConfigMu.Lock()
 	healOpts := globalHealConfig
@@ -388,31 +390,33 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 				successorModTime = fivs.Versions[i-1].ModTime
 			}
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
-			size := item.applyActions(ctx, objAPI, actionMeta{
-				numVersions:      numVersions,
-				successorModTime: successorModTime,
-				oi:               oi,
-			})
-			if !version.Deleted {
-				// Bitrot check local data
-				if size > 0 && item.heal && healOpts.Bitrot {
-					// HealObject verifies bitrot requirement internally
-					res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
-						Remove:   healDeleteDangling,
-						ScanMode: madmin.HealDeepScan,
-					})
-					if err != nil {
-						if !errors.Is(err, NotImplemented{}) {
-							logger.LogIf(ctx, err)
+			if objAPI != nil {
+				size := item.applyActions(ctx, objAPI, actionMeta{
+					numVersions:      numVersions,
+					successorModTime: successorModTime,
+					oi:               oi,
+				})
+				if !version.Deleted {
+					// Bitrot check local data
+					if size > 0 && item.heal && healOpts.Bitrot {
+						// HealObject verifies bitrot requirement internally
+						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
+							Remove:   healDeleteDangling,
+							ScanMode: madmin.HealDeepScan,
+						})
+						if err != nil {
+							if !errors.Is(err, NotImplemented{}) {
+								logger.LogIf(ctx, err)
+							}
+							size = 0
+						} else {
+							size = res.ObjectSize
 						}
-						size = 0
-					} else {
-						size = res.ObjectSize
 					}
+					totalSize += size
 				}
-				totalSize += size
+				item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())}, &sizeS)
 			}
-			item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())}, &sizeS)
 		}
 		sizeS.totalSize = totalSize
 		return sizeS, nil
@@ -449,6 +453,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			dcinfo.Total = di.Total
 			dcinfo.Free = di.Free
 			dcinfo.Used = di.Used
+			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FSType = di.FSType
 
 			diskID, err := s.GetDiskID()

@@ -42,6 +42,12 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Used")
 				return
 			}
+		case "UsedInodes":
+			z.UsedInodes, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "UsedInodes")
+				return
+			}
 		case "FSType":
 			z.FSType, err = dc.ReadString()
 			if err != nil {
@@ -97,9 +103,9 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 10
+	// map header, size 11
 	// write "Total"
-	err = en.Append(0x8a, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+	err = en.Append(0x8b, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 	if err != nil {
 		return
 	}
@@ -126,6 +132,16 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteUint64(z.Used)
 	if err != nil {
 		err = msgp.WrapError(err, "Used")
+		return
+	}
+	// write "UsedInodes"
+	err = en.Append(0xaa, 0x55, 0x73, 0x65, 0x64, 0x49, 0x6e, 0x6f, 0x64, 0x65, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.UsedInodes)
+	if err != nil {
+		err = msgp.WrapError(err, "UsedInodes")
 		return
 	}
 	// write "FSType"
@@ -204,9 +220,9 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *DiskInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 10
+	// map header, size 11
 	// string "Total"
-	o = append(o, 0x8a, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
+	o = append(o, 0x8b, 0xa5, 0x54, 0x6f, 0x74, 0x61, 0x6c)
 	o = msgp.AppendUint64(o, z.Total)
 	// string "Free"
 	o = append(o, 0xa4, 0x46, 0x72, 0x65, 0x65)
@@ -214,6 +230,9 @@ func (z *DiskInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Used"
 	o = append(o, 0xa4, 0x55, 0x73, 0x65, 0x64)
 	o = msgp.AppendUint64(o, z.Used)
+	// string "UsedInodes"
+	o = append(o, 0xaa, 0x55, 0x73, 0x65, 0x64, 0x49, 0x6e, 0x6f, 0x64, 0x65, 0x73)
+	o = msgp.AppendUint64(o, z.UsedInodes)
 	// string "FSType"
 	o = append(o, 0xa6, 0x46, 0x53, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendString(o, z.FSType)
@@ -274,6 +293,12 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Used")
 				return
 			}
+		case "UsedInodes":
+			z.UsedInodes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UsedInodes")
+				return
+			}
 		case "FSType":
 			z.FSType, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -330,7 +355,7 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DiskInfo) Msgsize() (s int) {
-	s = 1 + 6 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 7 + msgp.StringPrefixSize + len(z.FSType) + 9 + msgp.BoolSize + 8 + msgp.BoolSize + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 10 + msgp.StringPrefixSize + len(z.MountPath) + 3 + msgp.StringPrefixSize + len(z.ID) + 6 + msgp.StringPrefixSize + len(z.Error)
+	s = 1 + 6 + msgp.Uint64Size + 5 + msgp.Uint64Size + 5 + msgp.Uint64Size + 11 + msgp.Uint64Size + 7 + msgp.StringPrefixSize + len(z.FSType) + 9 + msgp.BoolSize + 8 + msgp.BoolSize + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 10 + msgp.StringPrefixSize + len(z.MountPath) + 3 + msgp.StringPrefixSize + len(z.ID) + 6 + msgp.StringPrefixSize + len(z.Error)
 	return
 }
 

@@ -245,8 +245,8 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		return nil
 	}
 
-	// Collect disks we can use.
-	disks := er.getOnlineDisks()
+	// Collect disks we can use, sorted by least inode usage.
+	disks := er.getOnlineDisksSortedByUsedInodes()
 	if len(disks) == 0 {
 		logger.Info(color.Green("data-crawl:") + " all disks are offline or being healed, skipping crawl")
 		return nil
@@ -312,7 +312,6 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		defer saverWg.Done()
 		var lastSave time.Time
 
-	saveLoop:
 		for {
 			select {
 			case <-ctx.Done():
@@ -327,17 +326,17 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				lastSave = cache.Info.LastUpdate
 			case v, ok := <-bucketResults:
 				if !ok {
-					break saveLoop
+					// Save final state...
+					cache.Info.NextCycle++
+					cache.Info.LastUpdate = time.Now()
+					logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
+					updates <- cache
+					return
 				}
 				cache.replace(v.Name, v.Parent, v.Entry)
 				cache.Info.LastUpdate = time.Now()
 			}
 		}
-		// Save final state...
-		cache.Info.NextCycle++
-		cache.Info.LastUpdate = time.Now()
-		logger.LogIf(ctx, cache.save(ctx, er, dataUsageCacheName))
-		updates <- cache
 	}()
 
 	// Start one crawler per disk

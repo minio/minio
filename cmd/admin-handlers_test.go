@@ -364,7 +364,7 @@ func TestExtractHealInitParams(t *testing.T) {
 	// Test all combinations!
 	for pIdx, parms := range qParmsArr {
 		for vIdx, vars := range varsArr {
-			_, err := extractHealInitParams(vars, parms, bytes.NewBuffer([]byte(body)))
+			_, err := extractHealInitParams(vars, parms, bytes.NewReader([]byte(body)))
 			isErrCase := false
 			if pIdx < 4 || vIdx < 1 {
 				isErrCase = true

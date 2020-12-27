@@ -342,7 +342,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 				logger.LogIf(ctx, zerr)
 				continue
 			}
-			if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
+			if _, err = io.Copy(zwriter, bytes.NewReader(data)); err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 				ctx := logger.SetReqInfo(ctx, reqInfo)
 				logger.LogIf(ctx, err)
@@ -387,7 +387,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 			return profilingDataFound
 		}
 
-		if _, err = io.Copy(zwriter, bytes.NewBuffer(data)); err != nil {
+		if _, err = io.Copy(zwriter, bytes.NewReader(data)); err != nil {
 			return profilingDataFound
 		}
 	}
@@ -443,7 +443,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 	if err == nil && bfr.Complete {
 		nbf := intDataUpdateTracker.newBloomFilter()
 		bf = &nbf
-		_, err = bf.ReadFrom(bytes.NewBuffer(bfr.Filter))
+		_, err = bf.ReadFrom(bytes.NewReader(bfr.Filter))
 		logger.LogIf(ctx, err)
 	}
 
@@ -471,7 +471,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 			}
 
 			var tmp bloom.BloomFilter
-			_, err = tmp.ReadFrom(bytes.NewBuffer(serverBF.Filter))
+			_, err = tmp.ReadFrom(bytes.NewReader(serverBF.Filter))
 			if err != nil {
 				logger.LogIf(ctx, err)
 				bf = nil
@@ -508,7 +508,7 @@ func (sys *NotificationSys) collectBloomFilter(ctx context.Context, from uint64)
 	if err == nil && bfr.Complete {
 		nbf := intDataUpdateTracker.newBloomFilter()
 		bf = &nbf
-		_, err = bf.ReadFrom(bytes.NewBuffer(bfr.Filter))
+		_, err = bf.ReadFrom(bytes.NewReader(bfr.Filter))
 		logger.LogIf(ctx, err)
 	}
 	if !bfr.Complete {
@@ -540,7 +540,7 @@ func (sys *NotificationSys) collectBloomFilter(ctx context.Context, from uint64)
 			}
 
 			var tmp bloom.BloomFilter
-			_, err = tmp.ReadFrom(bytes.NewBuffer(serverBF.Filter))
+			_, err = tmp.ReadFrom(bytes.NewReader(serverBF.Filter))
 			if err != nil {
 				logger.LogIf(ctx, err)
 				bf = nil
