@@ -611,18 +611,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				if f.dataUsageCrawlDebug {
 					logger.Info(color.Green("healObjects:")+" deleting dangling directory %s", prefix)
 				}
+
 				// If we have quorum, found directories, but no objects, issue heal to delete the dangling.
-				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: true},
-					func(bucket, object, versionID string) error {
-						// Wait for each heal as per crawler frequency.
-						wait()
-						wait = crawlerSleeper.Timer(ctx)
-						return bgSeq.queueHealTask(healSource{
-							bucket:    bucket,
-							object:    object,
-							versionID: versionID,
-						}, madmin.HealItemObject)
-					})
+				objAPI.HealObject(ctx, bucket, prefix, "", madmin.HealOpts{Recursive: true, Remove: true})
 			}
 
 			wait()
