@@ -50,7 +50,6 @@ import (
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
-	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -391,31 +390,13 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			}
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			if objAPI != nil {
-				size := item.applyActions(ctx, objAPI, actionMeta{
+				totalSize += item.applyActions(ctx, objAPI, actionMeta{
 					numVersions:      numVersions,
 					successorModTime: successorModTime,
 					oi:               oi,
+					bitRotScan:       healOpts.Bitrot,
 				})
-				if !version.Deleted {
-					// Bitrot check local data
-					if size > 0 && item.heal && healOpts.Bitrot {
-						// HealObject verifies bitrot requirement internally
-						res, err := objAPI.HealObject(ctx, item.bucket, item.objectPath(), oi.VersionID, madmin.HealOpts{
-							Remove:   healDeleteDangling,
-							ScanMode: madmin.HealDeepScan,
-						})
-						if err != nil {
-							if !errors.Is(err, NotImplemented{}) {
-								logger.LogIf(ctx, err)
-							}
-							size = 0
-						} else {
-							size = res.ObjectSize
-						}
-					}
-					totalSize += size
-				}
-				item.healReplication(ctx, objAPI, actionMeta{oi: version.ToObjectInfo(item.bucket, item.objectPath())}, &sizeS)
+				item.healReplication(ctx, objAPI, oi, &sizeS)
 			}
 		}
 		sizeS.totalSize = totalSize
