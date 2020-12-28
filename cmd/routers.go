@@ -93,8 +93,12 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 		registerDistErasureRouters(router, endpointServerPools)
 	}
 
-	// Add STS router always.
-	registerSTSRouter(router)
+	// Register web router when its enabled.
+	if globalBrowserEnabled {
+		if err := registerWebRouter(router); err != nil {
+			return nil, err
+		}
+	}
 
 	// Add Admin router, all APIs are enabled in server mode.
 	registerAdminRouter(router, true, true)
@@ -105,12 +109,8 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add server metrics router
 	registerMetricsRouter(router)
 
-	// Register web router when its enabled.
-	if globalBrowserEnabled {
-		if err := registerWebRouter(router); err != nil {
-			return nil, err
-		}
-	}
+	// Add STS router always.
+	registerSTSRouter(router)
 
 	// Add API router
 	registerAPIRouter(router)
