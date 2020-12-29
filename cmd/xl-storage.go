@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/env"
 	xioutil "github.com/minio/minio/pkg/ioutil"
@@ -340,7 +341,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		if err == nil && lc.HasActiveRules("", true) {
 			cache.Info.lifeCycle = lc
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("crawlDisk:") + " lifecycle: Active rules found")
+				console.Debugln(color.Green("crawlDisk:") + " lifecycle: Active rules found")
 			}
 		}
 	}
@@ -363,7 +364,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		buf, err := ioutil.ReadFile(item.Path)
 		if err != nil {
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("crawlBucket:")+" object path missing: %v: %w", item.Path, err)
+				console.Debugf(color.Green("crawlBucket:")+" object path missing: %v: %w\n", item.Path, err)
 			}
 			return sizeSummary{}, errSkipFile
 		}
@@ -374,7 +375,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("crawlBucket:")+" reading xl.meta failed: %v: %w", item.Path, err)
+				console.Debugf(color.Green("crawlBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
 			}
 			return sizeSummary{}, errSkipFile
 		}
