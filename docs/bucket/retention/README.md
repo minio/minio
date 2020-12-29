@@ -49,7 +49,7 @@ See https://docs.aws.amazon.com/AmazonS3/latest/dev/object-lock-overview.html fo
   - Retention headers can be optionally set when uploading objects
   - Explicitly calling PutObjectRetention API call on the object
 - *MINIO_NTP_SERVER* environment variable can be set to remote NTP server endpoint if system time is not desired for setting retention dates.
-- **Object locking feature is only available in erasure coded and distributed erasrue coded setups**.
+- **Object locking feature is only available in erasure coded and distributed erasure coded setups**.
 
 ## Explore Further
 
