@@ -31,6 +31,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -126,7 +127,7 @@ func (o listPathOptions) newMetacache() metacache {
 
 func (o *listPathOptions) debugf(format string, data ...interface{}) {
 	if serverDebugLog {
-		console.Debugf(format, data...)
+		console.Debugf(format+"\n", data...)
 	}
 }
 
@@ -545,7 +546,7 @@ func (er erasureObjects) SetDriveCount() int {
 
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
-	o.debugf("listPath with options: %#v\n", o)
+	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
 	// See if we have the listing stored.
 	if !o.Create && !o.discardResult {
@@ -571,7 +572,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 	var metaMu sync.Mutex
 
-	o.debugln("listPath: scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
+	o.debugln(color.Green("listPath:")+" scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
 
 	// Disconnect from call above, but cancel on exit.
 	ctx, cancel := context.WithCancel(GlobalContext)
@@ -579,7 +580,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	disks := er.getOnlineDisks()
 
 	defer func() {
-		o.debugln("listPath returning:", entries.len(), "err:", err)
+		o.debugln(color.Green("listPath:")+" returning:", entries.len(), "err:", err)
 		if err != nil && !errors.Is(err, io.EOF) {
 			go func(err string) {
 				metaMu.Lock()
@@ -674,7 +675,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				if len(b.data) == 0 && b.n == 0 && o.Transient {
 					return nil
 				}
-				o.debugln("listPath: saving block", b.n, "to", o.objectPath(b.n))
+				o.debugln(color.Green("listPath:")+" saving block", b.n, "to", o.objectPath(b.n))
 				r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
 				logger.LogIf(ctx, err)
 				custom := b.headerKV()
