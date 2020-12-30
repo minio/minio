@@ -17,11 +17,11 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"path/filepath"
 	"strings"
@@ -458,7 +458,7 @@ func (d *dataUsageCache) merge(other dataUsageCache) {
 }
 
 type objectIO interface {
-	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
+	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 }
 
@@ -466,8 +466,7 @@ type objectIO interface {
 // Only backend errors are returned as errors.
 // If the object is not found or unable to deserialize d is cleared and nil error is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
-	var buf bytes.Buffer
-	err := store.GetObject(ctx, dataUsageBucket, name, 0, -1, &buf, "", ObjectOptions{})
+	r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
@@ -479,10 +478,9 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 		*d = dataUsageCache{}
 		return nil
 	}
-	err = d.deserialize(&buf)
-	if err != nil {
+	if err := d.deserialize(r); err != nil {
 		*d = dataUsageCache{}
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, err.Error())
 	}
 	return nil
 }
@@ -494,6 +492,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		pw.CloseWithError(d.serializeTo(pw))
 	}()
 	defer pr.Close()
+
 	r, err := hash.NewReader(pr, -1, "", "", -1, false)
 	if err != nil {
 		return err
