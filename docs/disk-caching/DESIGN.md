@@ -37,14 +37,21 @@ minio gateway <name> -h
 ### Stable
 Cache drives need to have `strictatime` or `relatime` enabled for disk caching feature. In this example, mount the xfs file system on /mnt/cache with `strictatime` or `relatime` enabled.
 
-```
+```sh
 truncate -s 4G /tmp/data
-mkfs.xfs /tmp/data     # build xfs filesystem on /tmp/data
-sudo mkdir /mnt/cache  # create mount dir
-sudo mount -o relatime /tmp/data /mnt/cache # mount xfs on /mnt/cache with atime.
-docker pull minio/minio
-docker run --net=host -e MINIO_ACCESS_KEY={s3-access-key} -e MINIO_SECRET_KEY={s3-secret-key} -e MINIO_CACHE_DRIVES=/cache -e MINIO_CACHE_QUOTA=99 -e MINIO_CACHE_AFTER=0 -e MINIO_CACHE_WATERMARK_LOW=90 -e MINIO_CACHE_WATERMARK_HIGH=95  -v /mnt/cache:/cache  minio/minio:latest gateway s3
 
+mkfs.xfs /tmp/data     # build xfs filesystem on /tmp/data
+
+sudo mkdir /mnt/cache  # create mount dir
+
+sudo mount -o relatime /tmp/data /mnt/cache # mount xfs on /mnt/cache with atime.
+
+docker pull minio/minio
+
+docker run --net=host -e MINIO_ROOT_USER={s3-access-key} -e MINIO_ROOT_PASSWORD={s3-secret-key} \
+    -e MINIO_CACHE_DRIVES=/cache -e MINIO_CACHE_QUOTA=99 -e MINIO_CACHE_AFTER=0 \
+    -e MINIO_CACHE_WATERMARK_LOW=90 -e MINIO_CACHE_WATERMARK_HIGH=95 \
+    -v /mnt/cache:/cache  minio/minio:latest gateway s3
 ```
 
 ## Assumptions

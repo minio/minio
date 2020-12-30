@@ -23,7 +23,7 @@ if [ "${1}" != "minio" ]; then
 fi
 
 ## Look for docker secrets at given absolute path or in default documented location.
-docker_secrets_env() {
+docker_secrets_env_old() {
     if [ -f "$MINIO_ACCESS_KEY_FILE" ]; then
         ACCESS_KEY_FILE="$MINIO_ACCESS_KEY_FILE"
     else
@@ -43,6 +43,30 @@ docker_secrets_env() {
         if [ -f "$SECRET_KEY_FILE" ]; then
             MINIO_SECRET_KEY="$(cat "$SECRET_KEY_FILE")"
             export MINIO_SECRET_KEY
+        fi
+    fi
+}
+
+docker_secrets_env() {
+    if [ -f "$MINIO_ROOT_USER_FILE" ]; then
+        ROOT_USER_FILE="$MINIO_ROOT_USER_FILE"
+    else
+        ROOT_USER_FILE="/run/secrets/$MINIO_ROOT_USER_FILE"
+    fi
+    if [ -f "$MINIO_ROOT_PASSWORD_FILE" ]; then
+        SECRET_KEY_FILE="$MINIO_ROOT_PASSWORD_FILE"
+    else
+        SECRET_KEY_FILE="/run/secrets/$MINIO_ROOT_PASSWORD_FILE"
+    fi
+
+    if [ -f "$ROOT_USER_FILE" ] && [ -f "$SECRET_KEY_FILE" ]; then
+        if [ -f "$ROOT_USER_FILE" ]; then
+            MINIO_ROOT_USER="$(cat "$ROOT_USER_FILE")"
+            export MINIO_ROOT_USER
+        fi
+        if [ -f "$SECRET_KEY_FILE" ]; then
+            MINIO_ROOT_PASSWORD="$(cat "$SECRET_KEY_FILE")"
+            export MINIO_ROOT_PASSWORD
         fi
     fi
 }
@@ -87,6 +111,9 @@ docker_switch_user() {
         exec "$@"
     fi
 }
+
+## Set access env from secrets if necessary.
+docker_secrets_env_old
 
 ## Set access env from secrets if necessary.
 docker_secrets_env

@@ -92,8 +92,8 @@ http://minio.cluster:9000?Action=AssumeRoleWithWebIdentity&DurationSeconds=3600&
 
 ## Using WebIdentity API
 ```
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio123
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
 export MINIO_IDENTITY_OPENID_CONFIG_URL=https://accounts.google.com/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 # Optional: Allow to specify the requested OpenID scopes (OpenID only requires the `openid` scope)

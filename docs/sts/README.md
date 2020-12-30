@@ -43,8 +43,8 @@ In this document we will explain in detail on how to configure all the prerequis
 Make sure we have followed the previous step and configured each software independently, once done we can now proceed to use MinIO STS API and MinIO server to use these credentials to perform object API operations.
 
 ```
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio123
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 minio server /mnt/data
@@ -56,8 +56,8 @@ Make sure we have followed the previous step and configured each software indepe
 > NOTE: MinIO gateway requires etcd to be configured to use STS API.
 
 ```
-export MINIO_ACCESS_KEY=aws_access_key
-export MINIO_SECRET_KEY=aws_secret_key
+export MINIO_ROOT_USER=aws_access_key
+export MINIO_ROOT_PASSWORD=aws_secret_key
 export MINIO_IDENTITY_OPENID_CONFIG_URL=http://localhost:8080/auth/realms/demo/.well-known/openid-configuration
 export MINIO_IDENTITY_OPENID_CLIENT_ID="843351d4-1080-11ea-aa20-271ecba3924a"
 export MINIO_ETCD_ENDPOINTS=http://localhost:2379

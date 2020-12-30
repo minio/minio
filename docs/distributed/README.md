@@ -36,7 +36,7 @@ To start a distributed MinIO instance, you just need to pass drive locations as 
 
 __NOTE:__
 
-- All the nodes running distributed MinIO need to have same access key and secret key for the nodes to connect. To achieve this, it is __recommended__ to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing MinIO server command.
+- All the nodes running distributed MinIO need to have same access key and secret key for the nodes to connect. To achieve this, it is __recommended__ to export access key and secret key as environment variables, `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`, on all the nodes before executing MinIO server command.
 - __MinIO creates erasure-coding sets of *4* to *16* drives per set.  The number of drives you provide in total must be a multiple of one of those numbers.__
 - __MinIO chooses the largest EC set size which divides into the total number of drives or total number of nodes given - making sure to keep the uniform distribution i.e each node participates equal number of drives per set.
 - __Each object is written to a single EC set, and therefore is spread over no more than 16 drives.__
@@ -54,8 +54,8 @@ Example 1: Start distributed MinIO instance on n nodes with m drives each mounte
 #### GNU/Linux and macOS
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...n}/export{1...m}
 ```
 
@@ -67,8 +67,8 @@ minio server http://host{1...n}/export{1...m}
 MinIO supports expanding distributed erasure coded clusters by specifying new set of clusters on the command-line as shown below:
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...n}/export{1...m} http://host{o...z}/export{1...m}
 ```
 

@@ -8,15 +8,15 @@ MinIO HDFS gateway adds Amazon S3 API support to Hadoop HDFS filesystem. Applica
 ### Using Binary
 Namenode information is obtained by reading `core-site.xml` automatically from your hadoop environment variables *$HADOOP_HOME*
 ```
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio123
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
 minio gateway hdfs
 ```
 
 You can also override the namenode endpoint as shown below.
 ```
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio123
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
 minio gateway hdfs hdfs://namenode:8200
 ```
 
@@ -25,8 +25,8 @@ Using docker is experimental, most Hadoop environments are not dockerized and ma
 ```
 docker run -p 9000:9000 \
  --name hdfs-s3 \
- -e "MINIO_ACCESS_KEY=minio" \
- -e "MINIO_SECRET_KEY=minio123" \
+ -e "MINIO_ROOT_USER=minio" \
+ -e "MINIO_ROOT_PASSWORD=minio123" \
  minio/minio gateway hdfs hdfs://namenode:8200
 ```
 

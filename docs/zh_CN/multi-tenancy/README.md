@@ -33,16 +33,16 @@ minio --config-dir ~/tenant3 server --address :9003 /disk1/data/tenant3 /disk2/d
 以下示例在一个4节点集群中托管三个租户。在4个节点里都执行下列命令：
 
 ```sh
-export MINIO_ACCESS_KEY=<TENANT1_ACCESS_KEY>
-export MINIO_SECRET_KEY=<TENANT1_SECRET_KEY>
+export MINIO_ROOT_USER=<TENANT1_ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<TENANT1_SECRET_KEY>
 minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/data/tenant1 http://192.168.10.12/data/tenant1 http://192.168.10.13/data/tenant1 http://192.168.10.14/data/tenant1
 
-export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
-export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
+export MINIO_ROOT_USER=<TENANT2_ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<TENANT2_SECRET_KEY>
 minio --config-dir ~/tenant2 server --address :9002 http://192.168.10.11/data/tenant2 http://192.168.10.12/data/tenant2 http://192.168.10.13/data/tenant2 http://192.168.10.14/data/tenant2
 
-export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
-export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
+export MINIO_ROOT_USER=<TENANT3_ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<TENANT3_SECRET_KEY>
 minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/data/tenant3 http://192.168.10.12/data/tenant3 http://192.168.10.13/data/tenant3 http://192.168.10.14/data/tenant3
 ```
 

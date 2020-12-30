@@ -5,15 +5,15 @@ MinIO网关使用NAS存储支持Amazon S3。你可以在同一个共享NAS卷上
 ### 使用Docker
 ```
 docker run -p 9000:9000 --name nas-s3 \
- -e "MINIO_ACCESS_KEY=minio" \
- -e "MINIO_SECRET_KEY=minio123" \
+ -e "MINIO_ROOT_USER=minio" \
+ -e "MINIO_ROOT_PASSWORD=minio123" \
  minio/minio gateway nas /shared/nasvol
 ```
 
 ### 使用二进制
 ```
-export MINIO_ACCESS_KEY=minioaccesskey
-export MINIO_SECRET_KEY=miniosecretkey
+export MINIO_ROOT_USER=minioaccesskey
+export MINIO_ROOT_PASSWORD=miniosecretkey
 minio gateway nas /shared/nasvol
 ```
 ## 使用浏览器进行验证

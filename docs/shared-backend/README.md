@@ -34,8 +34,8 @@ To run MinIO shared backend instances, you need to start multiple MinIO servers 
 You'll need the path to the shared volume, e.g. `/path/to/nfs-volume`. Then run the following commands on all the nodes you'd like to launch MinIO.
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio gateway nas /path/to/nfs-volume
 ```
 
@@ -44,8 +44,8 @@ minio gateway nas /path/to/nfs-volume
 You'll need the path to the shared volume, e.g. `\\remote-server\smb`. Then run the following commands on all the nodes you'd like to launch MinIO.
 
 ```cmd
-set MINIO_ACCESS_KEY=my-username
-set MINIO_SECRET_KEY=my-password
+set MINIO_ROOT_USER=my-username
+set MINIO_ROOT_PASSWORD=my-password
 minio.exe gateway nas \\remote-server\smb\export
 ```
 
@@ -54,8 +54,8 @@ minio.exe gateway nas \\remote-server\smb\export
 If a remote volume, e.g. `\\remote-server\smb` is mounted as a drive, e.g. `M:\`. You can use [`net use`](https://technet.microsoft.com/en-us/library/bb490717.aspx) command to map the drive to a folder. 
 
 ```cmd
-set MINIO_ACCESS_KEY=my-username
-set MINIO_SECRET_KEY=my-password
+set MINIO_ROOT_USER=my-username
+set MINIO_ROOT_PASSWORD=my-password
 net use m: \\remote-server\smb\export /P:Yes
 minio.exe gateway nas M:\export
 ```

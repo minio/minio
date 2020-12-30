@@ -91,8 +91,8 @@ http://minio:9000/?Action=AssumeRole&DurationSeconds=3600&Version=2011-06-15&Pol
 
 ## Using AssumeRole API
 ```
-$ export MINIO_ACCESS_KEY=minio
-$ export MINIO_SECRET_KEY=minio123
+$ export MINIO_ROOT_USER=minio
+$ export MINIO_ROOT_PASSWORD=minio123
 $ minio server ~/test
 ```
 
