@@ -34,7 +34,7 @@ You can provide a custom certs directory using `--certs-dir` command line option
 #### Credentials
 On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`. Using the combination of these two values MinIO encrypts the config stored at the backend.
 
-```
+```sh
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio13
 minio server /data
@@ -46,7 +46,7 @@ Additionally if you wish to change the admin credentials, then MinIO will automa
 
 > Old ENVs are never remembered in memory and are destroyed right after they are used to migrate your existing content with new credentials. You are safe to remove them after the server as successfully started, by restarting the services once again.
 
-```
+```sh
 export MINIO_ACCESS_KEY=newminio
 export MINIO_SECRET_KEY=newminio123
 export MINIO_ACCESS_KEY_OLD=minio
