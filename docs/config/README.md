@@ -172,7 +172,7 @@ MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 
 ### API
-By default, there is no limitation on the number of concurrents requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
+By default, there is no limitation on the number of concurrent requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
 
 ```
 KEY:
