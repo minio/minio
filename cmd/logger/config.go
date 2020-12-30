@@ -37,6 +37,7 @@ type HTTP struct {
 
 // Config console and http logger targets
 type Config struct {
+	IsAuditStdout bool      `json:"isAuditStdout"`
 	Console Console         `json:"console"`
 	HTTP    map[string]HTTP `json:"http"`
 	Audit   map[string]HTTP `json:"audit"`
@@ -54,6 +55,8 @@ const (
 	EnvAuditWebhookEnable    = "MINIO_AUDIT_WEBHOOK_ENABLE"
 	EnvAuditWebhookEndpoint  = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
 	EnvAuditWebhookAuthToken = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
+
+	EnvAuditStdoutEnable = "MINIO_AUDIT_STDOUT_ENABLE"
 )
 
 // Inject into config package.
@@ -319,6 +322,13 @@ func LookupConfig(scfg config.Config) (Config, error) {
 			AuthToken: kv.Get(AuthToken),
 		}
 	}
+
+	enable, err := config.ParseBool(env.Get(EnvAuditStdoutEnable, ""))
+	if err != nil {
+		return cfg, err
+	}
+	cfg.IsAuditStdout = enable
+
 
 	return cfg, nil
 }
