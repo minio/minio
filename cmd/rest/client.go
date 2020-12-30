@@ -118,8 +118,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-			logger.LogIf(ctx, err, "marking disk offline")
-			c.MarkOffline()
+			if c.MarkOffline() {
+				logger.LogIf(ctx, err, "marking disk offline")
+			}
 		}
 		return nil, &NetworkError{err}
 	}
@@ -148,8 +149,9 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		b, err := ioutil.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
 			if xnet.IsNetworkOrHostDown(err, c.ExpectTimeouts) {
-				logger.LogIf(ctx, err, "marking disk offline")
-				c.MarkOffline()
+				if c.MarkOffline() {
+					logger.LogIf(ctx, err, "marking disk offline")
+				}
 			}
 			return nil, err
 		}
@@ -189,7 +191,8 @@ func (c *Client) IsOnline() bool {
 
 // MarkOffline - will mark a client as being offline and spawns
 // a goroutine that will attempt to reconnect if HealthCheckFn is set.
-func (c *Client) MarkOffline() {
+// returns true if the node changed state from online to offline
+func (c *Client) MarkOffline() bool {
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
 	if c.HealthCheckFn != nil && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
@@ -200,11 +203,15 @@ func (c *Client) MarkOffline() {
 					return
 				}
 				if c.HealthCheckFn() {
-					atomic.CompareAndSwapInt32(&c.connected, offline, online)
+					if atomic.CompareAndSwapInt32(&c.connected, offline, online) {
+						logger.Info("transition peer from offline to online: " + c.url.String())
+					}
 					return
 				}
 				time.Sleep(time.Duration(r.Float64() * float64(c.HealthCheckInterval)))
 			}
 		}()
+		return true
 	}
+	return false
 }
