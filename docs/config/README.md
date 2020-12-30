@@ -34,7 +34,7 @@ You can provide a custom certs directory using `--certs-dir` command line option
 #### Credentials
 On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`. Using the combination of these two values MinIO encrypts the config stored at the backend.
 
-```
+```sh
 export MINIO_ACCESS_KEY=minio
 export MINIO_SECRET_KEY=minio13
 minio server /data
@@ -46,7 +46,7 @@ Additionally if you wish to change the admin credentials, then MinIO will automa
 
 > Old ENVs are never remembered in memory and are destroyed right after they are used to migrate your existing content with new credentials. You are safe to remove them after the server as successfully started, by restarting the services once again.
 
-```
+```sh
 export MINIO_ACCESS_KEY=newminio
 export MINIO_SECRET_KEY=newminio123
 export MINIO_ACCESS_KEY_OLD=minio
@@ -172,7 +172,7 @@ MINIO_ETCD_COMMENT          (sentence)  optionally add a comment to this setting
 ```
 
 ### API
-By default, there is no limitation on the number of concurrents requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
+By default, there is no limitation on the number of concurrent requests that a server/cluster processes at the same time. However, it is possible to impose such limitation using the API subsystem. Read more about throttling limitation in MinIO server [here](https://github.com/minio/minio/blob/master/docs/throttle/README.md).
 
 ```
 KEY:
