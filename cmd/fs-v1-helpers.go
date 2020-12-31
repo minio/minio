@@ -16,6 +16,49 @@
 
 package cmd
 
+/*
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+
+struct makefile_param {
+	ulong inode_id;
+	ulong inode_supplemental;
+	int mode;
+	char filename[256];
+};
+
+static int WekaMakeInodeFast(char *root, char *filename, int mode) {
+	int dirfd, err;
+	struct makefile_param makefile_param;
+
+	dirfd = open(root, O_RDONLY | O_DIRECTORY);
+	if (dirfd < 0) {
+		printf("Failed to open dir %s\n", root);
+		return -1;
+	}
+
+	memset(&makefile_param, 0, sizeof(makefile_param));
+	strcpy(&makefile_param.filename[0], filename);
+	makefile_param.mode = mode;
+	err = ioctl(dirfd, 'MKND', &makefile_param);
+	close(dirfd);
+
+	if (err)
+		printf("Failed to perform internal ioctl: base %s, file %s. Status %d errno %d.\n", root, filename, err, errno);
+
+	return err;
+}
+*/
+import "C"
+import "unsafe"
+
 import (
 	"context"
 	"io"
@@ -26,6 +69,22 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
+
+func fsMakeInodeFast(filePath string, mode C.int) (err error) {
+	dir, file := pathutil.Split(filePath)
+
+	cRoot := C.CString(dir)
+	cFile := C.CString(file)
+	rv, err := C.WekaMakeInodeFast(cRoot, cFile, mode)
+	C.free(unsafe.Pointer(cRoot))
+	C.free(unsafe.Pointer(cFile))
+
+	if rv == 0 {
+		return nil
+	}
+
+	return err
+}
 
 // Removes only the file at given path does not remove
 // any parent directories, handles long paths for
@@ -299,10 +358,15 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 		return 0, err
 	}
 
-	flags := os.O_CREATE | os.O_WRONLY
+	flags := os.O_WRONLY
 	if globalFSOSync {
 		flags = flags | os.O_SYNC
 	}
+	// mode = S_IFREG | 666
+	if err := fsMakeInodeFast(filePath, 0100666); err != nil {
+		flags = flags | os.O_CREATE
+	}
+
 	writer, err := lock.Open(filePath, flags, 0666)
 	if err != nil {
 		return 0, osErrToFileErr(err)

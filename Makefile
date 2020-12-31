@@ -48,7 +48,7 @@ ruleguard:
 check: test
 test: verifiers build
 	@echo "Running unit tests"
-	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=1 go test -tags kqueue ./... 1>/dev/null
 
 test-race: verifiers build
 	@echo "Running unit tests under -race"
@@ -69,7 +69,7 @@ verify-healing:
 # Builds minio locally.
 build: checks
 	@echo "Building minio binary to './minio'"
-	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GO111MODULE=on CGO_ENABLED=1 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
 hotfix: LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
     sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#'))
@@ -77,7 +77,7 @@ hotfix: install
 
 docker: checks
 	@echo "Building minio docker image '$(TAG)'"
-	@GOOS=linux GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GOOS=linux GO111MODULE=on CGO_ENABLED=1 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@docker build -t $(TAG) . -f Dockerfile.dev
 
 # Builds minio and installs it to $GOPATH/bin.
