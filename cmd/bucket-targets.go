@@ -351,7 +351,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*m
 		getRemoteTargetInstanceTransport = newGatewayHTTPTransport(1 * time.Hour)
 	})
 
-	core, err := miniogo.NewCore(tcfg.Endpoint, &miniogo.Options{
+	core, err := miniogo.NewCore(tcfg.URL().Host, &miniogo.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,
 		Transport: getRemoteTargetInstanceTransport,
@@ -366,7 +366,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	}
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
-		if tgt.Type == target.Type && tgt.TargetBucket == target.TargetBucket && target.URL() == tgt.URL() {
+		if tgt.Type == target.Type && tgt.TargetBucket == target.TargetBucket && target.URL().String() == tgt.URL().String() {
 			return tgt.Arn
 		}
 	}

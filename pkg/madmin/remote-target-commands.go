@@ -118,20 +118,15 @@ func (t *BucketTarget) Clone() BucketTarget {
 }
 
 // URL returns target url
-func (t BucketTarget) URL() string {
+func (t BucketTarget) URL() *url.URL {
 	scheme := "http"
 	if t.Secure {
 		scheme = "https"
 	}
-	urlStr := fmt.Sprintf("%s://%s", scheme, t.Endpoint)
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return urlStr
+	return &url.URL{
+		Scheme: scheme,
+		Host:   t.Endpoint,
 	}
-	if u.Port() == "80" || u.Port() == "443" {
-		u.Host = u.Hostname()
-	}
-	return u.String()
 }
 
 // Empty returns true if struct is empty.
