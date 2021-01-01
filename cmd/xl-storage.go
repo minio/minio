@@ -1199,19 +1199,6 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 		return nil, err
 	}
 
-	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
-	if err != nil {
-		if osIsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		} else if isSysErrTooManyFiles(err) {
-			return nil, errTooManyOpenFiles
-		}
-		return nil, err
-	}
-
 	// Validate file path length, before reading.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
@@ -1222,6 +1209,12 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 	buf, err = ioutil.ReadFile(filePath)
 	if err != nil {
 		if osIsNotExist(err) {
+			// Check if the object doesn't exist because its bucket
+			// is missing in order to return the correct error.
+			_, err = os.Stat(volumeDir)
+			if err != nil && osIsNotExist(err) {
+				return nil, errVolumeNotFound
+			}
 			return nil, errFileNotFound
 		} else if osIsPermission(err) {
 			return nil, errFileAccessDenied
@@ -1232,7 +1225,10 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 			return nil, errFileNotFound
 		} else if isSysErrIO(err) {
 			return nil, errFaultyDisk
+		} else if isSysErrTooManyFiles(err) {
+			return nil, errTooManyOpenFiles
 		}
+
 		return nil, err
 	}
 	return buf, nil
@@ -1465,16 +1461,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	if err != nil {
 		return nil, err
 	}
-	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
-	if err != nil {
-		if osIsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
@@ -1487,6 +1473,10 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		if err != nil {
 			switch {
 			case osIsNotExist(err):
+				_, err = os.Stat(volumeDir)
+				if err != nil && osIsNotExist(err) {
+					return nil, errVolumeNotFound
+				}
 				return nil, errFileNotFound
 			case osIsPermission(err):
 				return nil, errFileAccessDenied
@@ -1510,6 +1500,10 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
+			_, err = os.Stat(volumeDir)
+			if err != nil && osIsNotExist(err) {
+				return nil, errVolumeNotFound
+			}
 			return nil, errFileNotFound
 		case osIsPermission(err):
 			return nil, errFileAccessDenied
