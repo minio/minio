@@ -33,6 +33,7 @@ type parallelReader struct {
 	readers       []io.ReaderAt
 	orgReaders    []io.ReaderAt
 	dataBlocks    int
+	errs          []error
 	offset        int64
 	shardSize     int64
 	shardFileSize int64
@@ -49,6 +50,7 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 	return &parallelReader{
 		readers:       readers,
 		orgReaders:    readers,
+		errs:          make([]error, len(readers)),
 		dataBlocks:    e.dataBlocks,
 		offset:        (offset / e.blockSize) * e.ShardSize(),
 		shardSize:     e.ShardSize(),
@@ -169,6 +171,8 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 				// This will be communicated upstream.
 				p.orgReaders[bufIdx] = nil
 				p.readers[i] = nil
+				p.errs[i] = err
+
 				// Since ReadAt returned error, trigger another read.
 				readTriggerCh <- true
 				return
@@ -191,7 +195,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		return newBuf, nil
 	}
 
-	return nil, errErasureReadQuorum
+	return nil, reduceReadQuorumErrs(context.Background(), p.errs, objectOpIgnoredErrs, p.dataBlocks)
 }
 
 type errDecodeHealRequired struct {

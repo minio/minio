@@ -59,7 +59,6 @@ const (
 	storageRESTDirPath        = "dir-path"
 	storageRESTFilePath       = "file-path"
 	storageRESTVersionID      = "version-id"
-	storageRESTCheckDataDir   = "check-data-dir"
 	storageRESTTotalVersions  = "total-versions"
 	storageRESTSrcVolume      = "source-volume"
 	storageRESTSrcPath        = "source-path"
