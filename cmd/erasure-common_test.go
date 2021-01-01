@@ -68,6 +68,10 @@ func TestErasureParentDirIsObject(t *testing.T) {
 		},
 		{
 			parentIsObject: false,
+			objectName:     "new-dir",
+		},
+		{
+			parentIsObject: false,
 			objectName:     "",
 		},
 		{
