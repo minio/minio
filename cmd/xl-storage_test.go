@@ -1596,14 +1596,14 @@ func TestXLStorageCheckFile(t *testing.T) {
 		{
 			srcVol:      "success-vol",
 			srcPath:     "nonexistent-file",
-			expectedErr: errFileNotFound,
+			expectedErr: errPathNotFound,
 		},
 		// TestXLStorage case - 4.
 		// TestXLStorage case with non-existent file path.
 		{
 			srcVol:      "success-vol",
 			srcPath:     "path/2/success-file",
-			expectedErr: errFileNotFound,
+			expectedErr: errPathNotFound,
 		},
 		// TestXLStorage case - 5.
 		// TestXLStorage case with path being a directory.
@@ -1617,7 +1617,7 @@ func TestXLStorageCheckFile(t *testing.T) {
 		{
 			srcVol:      "non-existent-vol",
 			srcPath:     "success-file",
-			expectedErr: errVolumeNotFound,
+			expectedErr: errPathNotFound,
 		},
 	}
 

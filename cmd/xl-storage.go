@@ -1757,10 +1757,10 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 	}
 
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Stat(pathJoin(volumeDir, path))
 	if err != nil {
 		if osIsNotExist(err) {
-			return errVolumeNotFound
+			return errPathNotFound
 		}
 		return err
 	}

@@ -18,8 +18,8 @@ package cmd
 
 import (
 	"context"
-	"path"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -207,24 +207,29 @@ func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 // object is "a/b/c/d", stat makes sure that objects ""a/b/c""
 // "a/b" and "a" do not exist.
 func (er erasureObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
-	var isParentDirObject func(string) bool
-	isParentDirObject = func(p string) bool {
-		if p == "." || p == SlashSeparator {
+	path := ""
+	segments := strings.Split(parent, slashSeparator)
+	for _, s := range segments {
+		if s == "" {
+			break
+		}
+		path += s
+		isObject, pathNotExist := er.isObject(ctx, bucket, path)
+		if pathNotExist {
 			return false
 		}
-		if er.isObject(ctx, bucket, p) {
+		if isObject {
 			// If there is already a file at prefix "p", return true.
 			return true
 		}
-		// Check if there is a file as one of the parent paths.
-		return isParentDirObject(path.Dir(p))
+		path += slashSeparator
 	}
-	return isParentDirObject(parent)
+	return false
 }
 
 // isObject - returns `true` if the prefix is an object i.e if
 // `xl.meta` exists at the leaf, false otherwise.
-func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (ok bool) {
+func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (ok, pathDoesNotExist bool) {
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -246,5 +251,6 @@ func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (o
 	// ignored if necessary.
 	readQuorum := getReadQuorum(len(storageDisks))
 
-	return reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
+	err := reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum)
+	return err == nil, err == errPathNotFound
 }

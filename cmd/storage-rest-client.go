@@ -82,6 +82,8 @@ func toStorageErr(err error) error {
 		return errFileNameTooLong
 	case errFileAccessDenied.Error():
 		return errFileAccessDenied
+	case errPathNotFound.Error():
+		return errPathNotFound
 	case errIsNotRegular.Error():
 		return errIsNotRegular
 	case errVolumeNotEmpty.Error():
