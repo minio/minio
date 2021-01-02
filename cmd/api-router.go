@@ -112,7 +112,7 @@ func registerAPIRouter(router *mux.Router) {
 		// CopyObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").
 			HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").
-			HandlerFunc(maxClients(collectAPIStats("copyobjectpart", httpTraceAll(api.CopyObjectPartHandler)))).
+			HandlerFunc(collectAPIStats("copyobjectpart", maxClients(httpTraceAll(api.CopyObjectPartHandler)))).
 			Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		// PutObjectPart
 		bucket.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
