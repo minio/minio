@@ -27,21 +27,33 @@ import (
 )
 
 func newHTTPServerFn() *xhttp.Server {
-	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
+	globalObjLayerMutex.RLock()
+	defer globalObjLayerMutex.RUnlock()
 	return globalHTTPServer
 }
 
-func newObjectLayerFn() ObjectLayer {
+func setHTTPServer(h *xhttp.Server) {
 	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
+	globalHTTPServer = h
+	globalObjLayerMutex.Unlock()
+}
+
+func newObjectLayerFn() ObjectLayer {
+	globalObjLayerMutex.RLock()
+	defer globalObjLayerMutex.RUnlock()
 	return globalObjectAPI
 }
 
 func newCachedObjectLayerFn() CacheObjectLayer {
-	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
+	globalObjLayerMutex.RLock()
+	defer globalObjLayerMutex.RUnlock()
 	return globalCacheObjectAPI
+}
+
+func setCacheObjectLayer(c CacheObjectLayer) {
+	globalObjLayerMutex.Lock()
+	globalCacheObjectAPI = c
+	globalObjLayerMutex.Unlock()
 }
 
 func setObjectLayer(o ObjectLayer) {

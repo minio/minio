@@ -24,6 +24,8 @@ import (
 
 // DiskInfo is an extended type which returns current
 // disk usage per path.
+//msgp:tuple DiskInfo
+// The above means that any added/deleted fields are incompatible.
 type DiskInfo struct {
 	Total      uint64
 	Free       uint64
@@ -42,6 +44,8 @@ type DiskInfo struct {
 type VolsInfo []VolInfo
 
 // VolInfo - represents volume stat information.
+//msgp:tuple VolInfo
+// The above means that any added/deleted fields are incompatible.
 type VolInfo struct {
 	// Name of the volume.
 	Name string
@@ -147,6 +151,9 @@ type FileInfo struct {
 	MarkDeleted                   bool // mark this version as deleted
 	DeleteMarkerReplicationStatus string
 	VersionPurgeStatus            VersionPurgeStatusType
+
+	// Data (actual data for the object)
+	Data []byte
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata
