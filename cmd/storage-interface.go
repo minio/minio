@@ -58,7 +58,7 @@ type StorageAPI interface {
 	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error
 	DeleteVersions(ctx context.Context, volume string, versions []FileInfo) []error
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
-	ReadVersion(ctx context.Context, volume, path, versionID string, checkDataDir bool) (FileInfo, error)
+	ReadVersion(ctx context.Context, volume, path, versionID string) (FileInfo, error)
 	RenameData(ctx context.Context, srcVolume, srcPath, dataDir, dstVolume, dstPath string) error
 
 	// File operations.

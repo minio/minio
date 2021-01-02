@@ -113,7 +113,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		}
 		for _, uploadIDDir := range uploadIDDirs {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
-			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "")
 			if err != nil {
 				continue
 			}
@@ -127,7 +127,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		return
 	}
 	for _, tmpDir := range tmpDirs {
-		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "", false)
+		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "")
 		if err != nil {
 			continue
 		}
@@ -181,7 +181,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		if populatedUploadIds.Contains(uploadID) {
 			continue
 		}
-		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "", false)
+		fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, pathJoin(er.getUploadIDDir(bucket, object, uploadID)), "")
 		if err != nil {
 			return result, toObjectErr(err, bucket, object)
 		}
