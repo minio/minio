@@ -172,6 +172,9 @@ type browserRedirectHandler struct {
 }
 
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
+	if !globalBrowserEnabled {
+		return h
+	}
 	return browserRedirectHandler{handler: h}
 }
 
@@ -183,19 +186,17 @@ func shouldProxy() bool {
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if guessIsRPCReq(r) || guessIsBrowserReq(r) ||
+	if !shouldProxy() || guessIsRPCReq(r) || guessIsBrowserReq(r) ||
 		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) || isAdminReq(r) {
 		h.handler.ServeHTTP(w, r)
 		return
 	}
-	if shouldProxy() {
-		// if this server is still initializing, proxy the request
-		// to any other online servers to avoid 503 for any incoming
-		// API calls.
-		if idx := getOnlineProxyEndpointIdx(); idx >= 0 {
-			proxyRequest(context.TODO(), w, r, globalProxyEndpoints[idx])
-			return
-		}
+	// if this server is still initializing, proxy the request
+	// to any other online servers to avoid 503 for any incoming
+	// API calls.
+	if idx := getOnlineProxyEndpointIdx(); idx >= 0 {
+		proxyRequest(context.TODO(), w, r, globalProxyEndpoints[idx])
+		return
 	}
 	h.handler.ServeHTTP(w, r)
 }
@@ -290,6 +291,9 @@ type cacheControlHandler struct {
 }
 
 func setBrowserCacheControlHandler(h http.Handler) http.Handler {
+	if !globalBrowserEnabled {
+		return h
+	}
 	return cacheControlHandler{h}
 }
 
@@ -337,15 +341,11 @@ func setReservedBucketHandler(h http.Handler) http.Handler {
 }
 
 func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	switch {
-	case guessIsRPCReq(r), guessIsBrowserReq(r), guessIsHealthCheckReq(r), guessIsMetricsReq(r), isAdminReq(r):
-		// Allow access to reserved buckets
-	default:
-		// For all other requests reject access to reserved buckets
-		bucketName, _ := request2BucketObjectName(r)
-		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
-			browser := guessIsBrowserReq(r)
-			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL, browser)
+	// For all other requests reject access to reserved buckets
+	bucketName, _ := request2BucketObjectName(r)
+	if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
+		if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !guessIsHealthCheckReq(r) && !guessIsMetricsReq(r) && !isAdminReq(r) {
+			writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrAllAccessDisabled), r.URL, guessIsBrowserReq(r))
 			return
 		}
 	}
@@ -624,17 +624,15 @@ type bucketForwardingHandler struct {
 }
 
 func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if globalDNSConfig == nil || len(globalDomainNames) == 0 ||
-		guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
-		guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) ||
-		!globalBucketFederation {
+	if guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
+		guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
 		f.handler.ServeHTTP(w, r)
 		return
 	}
 
 	// For browser requests, when federation is setup we need to
 	// specifically handle download and upload for browser requests.
-	if globalDNSConfig != nil && len(globalDomainNames) > 0 && guessIsBrowserReq(r) {
+	if guessIsBrowserReq(r) {
 		var bucket, _ string
 		switch r.Method {
 		case http.MethodPut:
@@ -729,6 +727,10 @@ func (f bucketForwardingHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 // on a bucket to the right bucket location, bucket to IP configuration
 // is obtained from centralized etcd configuration service.
 func setBucketForwardingHandler(h http.Handler) http.Handler {
+	if globalDNSConfig == nil || len(globalDomainNames) == 0 || !globalBucketFederation {
+		return h
+	}
+
 	fwd := handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
 		RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
@@ -791,14 +793,19 @@ func (h criticalErrorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	h.handler.ServeHTTP(w, r)
 }
 
-func setSSETLSHandler(h http.Handler) http.Handler { return sseTLSHandler{h} }
+func setSSETLSHandler(h http.Handler) http.Handler {
+	if globalIsTLS {
+		return h
+	}
+	return sseTLSHandler{h}
+}
 
 // sseTLSHandler enforces certain rules for SSE requests which are made / must be made over TLS.
 type sseTLSHandler struct{ handler http.Handler }
 
 func (h sseTLSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Deny SSE-C requests if not made over TLS
-	if !globalIsTLS && (crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header)) {
+	if crypto.SSEC.IsRequested(r.Header) || crypto.SSECopy.IsRequested(r.Header) {
 		if r.Method == http.MethodHead {
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInsecureSSECustomerRequest))
 		} else {
