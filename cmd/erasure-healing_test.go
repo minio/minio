@@ -67,7 +67,7 @@ func TestHealing(t *testing.T) {
 	}
 
 	disk := er.getDisks()[0]
-	fileInfoPreHeal, err := disk.ReadVersion(context.Background(), bucket, object, "")
+	fileInfoPreHeal, err := disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileInfoPostHeal, err := disk.ReadVersion(context.Background(), bucket, object, "")
+	fileInfoPostHeal, err := disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fileInfoPostHeal, err = disk.ReadVersion(context.Background(), bucket, object, "")
+	fileInfoPostHeal, err = disk.ReadVersion(context.Background(), bucket, object, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
 
-	fileInfos, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "")
+	fileInfos, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 	fi, err := getLatestFileInfo(ctx, fileInfos, errs)
 	if err != nil {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
@@ -239,7 +239,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Expected nil but received %v", err)
 	}
 
-	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "")
+	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 	nfi, err := getLatestFileInfo(ctx, fileInfos, errs)
 	if err != nil {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)
@@ -265,7 +265,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 		t.Errorf("Expected nil but received %v", err)
 	}
 
-	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "")
+	fileInfos, errs = readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 	nfi, err = getLatestFileInfo(ctx, fileInfos, errs)
 	if err != nil {
 		t.Fatalf("Failed to getLatestFileInfo - %v", err)

@@ -395,7 +395,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 				if latestMeta.XLV1 {
 					partPath = pathJoin(object, fmt.Sprintf("part.%d", partNumber))
 				}
-				readers[i] = newBitrotReader(disk, bucket, partPath, tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
+				readers[i] = newBitrotReader(disk, partsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo, checksumInfo.Hash, erasure.ShardSize())
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
 			for i, disk := range outDatedDisks {
@@ -811,7 +811,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	storageEndpoints := er.getEndpoints()
 
 	// Read metadata files from all the disks
-	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID)
+	partsMetadata, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
 
 	if isAllNotFound(errs) {
 		err = toObjectErr(errFileNotFound, bucket, object)

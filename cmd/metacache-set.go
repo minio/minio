@@ -388,7 +388,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				continue
 			}
 
-			_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(0), "")
+			_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(0), "", false)
 			if err != nil {
 				time.Sleep(retryDelay)
 				retries++
@@ -397,7 +397,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		}
 
 		// Read metadata associated with the object from all disks.
-		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{})
+		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), false, ObjectOptions{})
 		if err != nil {
 			switch toObjectErr(err, minioMetaBucket, o.objectPath(0)).(type) {
 			case ObjectNotFound:
@@ -463,7 +463,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						continue
 					}
 
-					_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(partN), "")
+					_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(partN), "", false)
 					if err != nil {
 						time.Sleep(retryDelay)
 						retries++
@@ -471,7 +471,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					}
 				}
 				// Load first part metadata...
-				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{})
+				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), false, ObjectOptions{})
 				if err != nil {
 					time.Sleep(retryDelay)
 					retries++
