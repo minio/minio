@@ -432,6 +432,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer gr.Close()
+
 	objInfo := gr.ObjInfo
 
 	// filter object lock metadata if permission does not permit

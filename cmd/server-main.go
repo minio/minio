@@ -319,7 +319,13 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 	}
 
 	if globalIsErasure {
-		logger.Info(fmt.Sprintf("Verifying %d buckets are consistent across drives...", len(buckets)))
+		if len(buckets) > 0 {
+			if len(buckets) == 1 {
+				logger.Info(fmt.Sprintf("Verifying if %d bucket is consistent across drives...", len(buckets)))
+			} else {
+				logger.Info(fmt.Sprintf("Verifying if %d buckets are consistent across drives...", len(buckets)))
+			}
+		}
 		for _, bucket := range buckets {
 			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{}); err != nil {
 				return fmt.Errorf("Unable to list buckets to heal: %w", err)
