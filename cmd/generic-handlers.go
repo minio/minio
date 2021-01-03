@@ -114,6 +114,21 @@ func isHTTPHeaderSizeTooLarge(header http.Header) bool {
 	return false
 }
 
+type auditLoggerHandler struct {
+	http.Handler
+}
+
+func setAuditLoggerHandler(h http.Handler) http.Handler {
+	if len(logger.AuditTargets) == 0 {
+		return h
+	}
+	return auditLoggerHandler{h}
+}
+
+func (h auditLoggerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.Handler.ServeHTTP(logger.NewResponseWriter(w), r)
+}
+
 // ReservedMetadataPrefix is the prefix of a metadata key which
 // is reserved and for internal use only.
 const (
@@ -755,7 +770,7 @@ func addCustomHeaders(h http.Handler) http.Handler {
 func (s customHeaderHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Set custom headers such as x-amz-request-id for each request.
 	w.Header().Set(xhttp.AmzRequestID, mustGetRequestID(UTCNow()))
-	s.handler.ServeHTTP(logger.NewResponseWriter(w), r)
+	s.handler.ServeHTTP(w, r)
 }
 
 type securityHeaderHandler struct {
