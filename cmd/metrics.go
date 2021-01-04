@@ -22,9 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -399,11 +397,6 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 
 	if globalIsGateway {
-		return
-	}
-
-	// Crawler disabled, nothing to do.
-	if env.Get(envDataUsageCrawlConf, config.EnableOn) != config.EnableOn {
 		return
 	}
 
