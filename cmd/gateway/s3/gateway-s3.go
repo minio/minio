@@ -274,7 +274,7 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to S3 backend.
-func (l *s3Objects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
+func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	host := l.Client.EndpointURL().Host
 	if l.Client.EndpointURL().Port() == "" {

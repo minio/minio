@@ -47,7 +47,7 @@ func getFormatStr(strLen int, padding int) string {
 }
 
 func mustGetStorageInfo(objAPI ObjectLayer) StorageInfo {
-	storageInfo, _ := objAPI.StorageInfo(GlobalContext, false)
+	storageInfo, _ := objAPI.StorageInfo(GlobalContext)
 	return storageInfo
 }
 

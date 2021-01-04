@@ -216,24 +216,9 @@ func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []erro
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (er erasureObjects) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
+func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
-	if local {
-		var localDisks []StorageAPI
-		var localEndpoints []string
-		for i, disk := range disks {
-			if disk != nil {
-				if disk.IsLocal() {
-					// Append this local disk since local flag is true
-					localDisks = append(localDisks, disk)
-					localEndpoints = append(localEndpoints, endpoints[i])
-				}
-			}
-		}
-		disks = localDisks
-		endpoints = localEndpoints
-	}
 	return getStorageInfo(disks, endpoints)
 }
 

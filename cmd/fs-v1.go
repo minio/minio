@@ -206,8 +206,7 @@ func (fs *FSObjects) BackendInfo() BackendInfo {
 }
 
 // StorageInfo - returns underlying storage statistics.
-func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []error) {
-
+func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
