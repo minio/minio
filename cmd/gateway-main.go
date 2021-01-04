@@ -271,7 +271,7 @@ func StartGateway(ctx *cli.Context, gw Gateway) {
 	registerAPIRouter(router)
 
 	// Use all the middlewares
-	router.Use(registerMiddlewares)
+	router.Use(globalHandlers...)
 
 	var getCert certs.GetCertificateFunc
 	if globalTLSCerts != nil {
