@@ -60,7 +60,7 @@ var (
 	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)
 )
 
-// initDataCrawler will start the crawler unless disabled.
+// initDataCrawler will start the crawler in the background.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 	go runDataCrawler(ctx, objAPI)
 }
