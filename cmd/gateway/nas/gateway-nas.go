@@ -104,8 +104,8 @@ func (n *nasObjects) IsListenSupported() bool {
 	return false
 }
 
-func (n *nasObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
-	si, errs := n.ObjectLayer.StorageInfo(ctx, false)
+func (n *nasObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
+	si, errs := n.ObjectLayer.StorageInfo(ctx)
 	si.Backend.GatewayOnline = si.Backend.Type == minio.BackendFS
 	si.Backend.Type = minio.BackendGateway
 	return si, errs

@@ -561,7 +561,7 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
+func (a *azureObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	host := a.endpoint.Host
 	if a.endpoint.Port() == "" {

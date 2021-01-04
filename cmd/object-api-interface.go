@@ -82,7 +82,7 @@ type ObjectLayer interface {
 	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
 
 	BackendInfo() BackendInfo
-	StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) // local queries only local disks
+	StorageInfo(ctx context.Context) (StorageInfo, []error) // local queries only local disks
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error

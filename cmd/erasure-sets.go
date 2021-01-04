@@ -481,7 +481,7 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 			index := index
 			g.Go(func() error {
 				// ignoring errors on purpose
-				storageInfos[index], _ = s.sets[index].StorageInfo(ctx, false)
+				storageInfos[index], _ = s.sets[index].StorageInfo(ctx)
 				return nil
 			}, index)
 		}
@@ -508,7 +508,7 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
+func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
@@ -518,7 +518,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfoErrs[index] = s.sets[index].StorageInfo(ctx, local)
+			storageInfos[index], storageInfoErrs[index] = s.sets[index].StorageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -528,12 +528,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 
 	for _, lstorageInfo := range storageInfos {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-	}
-
-	if local {
-		// if local is true, we are not interested in the drive UUID info.
-		// this is called primarily by prometheus
-		return storageInfo, nil
 	}
 
 	var errs []error

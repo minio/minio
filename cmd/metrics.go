@@ -497,10 +497,11 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	// Fetch disk space info, ignore errors
-	storageInfo, _ := objLayer.StorageInfo(GlobalContext, true)
+	server := getLocalServerProperty(globalEndpoints, &http.Request{
+		Host: GetLocalPeer(globalEndpoints),
+	})
 
-	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
+	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(server.Disks)
 	totalDisks := offlineDisks.Merge(onlineDisks)
 
 	// MinIO Offline Disks per node
@@ -523,7 +524,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(totalDisks.Sum()),
 	)
 
-	for _, disk := range storageInfo.Disks {
+	for _, disk := range server.Disks {
 		// Total disk usage by the disk
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(

@@ -289,7 +289,7 @@ func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
 	return
 }
 
-func (z *erasureServerPools) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
+func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(z.serverPools))
@@ -298,7 +298,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context, local bool) (Stora
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfosErrs[index] = z.serverPools[index].StorageInfo(ctx, local)
+			storageInfos[index], storageInfosErrs[index] = z.serverPools[index].StorageInfo(ctx)
 			return nil
 		}, index)
 	}
