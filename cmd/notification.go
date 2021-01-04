@@ -1375,7 +1375,7 @@ func sendEvent(args eventArgs) {
 		return
 	}
 
-	if globalHTTPListen.HasSubscribers() {
+	if globalHTTPListen.NumSubscribers() > 0 {
 		globalHTTPListen.Publish(args.ToEvent(false))
 	}
 
