@@ -64,6 +64,9 @@ const (
 	// Size of each buffer.
 	readAheadBufSize = 1 << 20
 
+	// Small file threshold below which the metadata accompanies the data.
+	smallFileThreshold = 32 * humanize.KiByte
+
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
 )
@@ -1174,7 +1177,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		// - object has not yet transitioned
 		// - object size lesser than 32KiB
 		// - object has maximum of 1 parts
-		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size < 32*humanize.KiByte && len(fi.Parts) == 1 {
+		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size < smallFileThreshold && len(fi.Parts) == 1 {
 			fi.Data, err = s.readAllData(volumeDir, pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", fi.Parts[0].Number)))
 			if err != nil {
 				return fi, err
