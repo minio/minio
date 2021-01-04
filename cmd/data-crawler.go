@@ -29,14 +29,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
-	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
@@ -64,9 +62,7 @@ var (
 
 // initDataCrawler will start the crawler unless disabled.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
-	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
-		go runDataCrawler(ctx, objAPI)
-	}
+	go runDataCrawler(ctx, objAPI)
 }
 
 // runDataCrawler will start a data crawler.
