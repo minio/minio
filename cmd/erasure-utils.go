@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"io"
 
@@ -77,20 +76,25 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 			// from subsequent blocks.
 			offset = 0
 		}
+
 		// We have written all the blocks, write the last remaining block.
 		if write < int64(len(block)) {
-			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
+			n, err := dst.Write(block[:write])
 			if err != nil {
 				if err != io.ErrClosedPipe {
 					logger.LogIf(ctx, err)
 				}
 				return 0, err
 			}
-			totalWritten += n
+			if int64(n) != write {
+				return 0, io.ErrShortWrite
+			}
+			totalWritten += int64(n)
 			break
 		}
+
 		// Copy the block.
-		n, err := io.Copy(dst, bytes.NewReader(block))
+		n, err := dst.Write(block)
 		if err != nil {
 			// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
 			if err != io.ErrClosedPipe {
@@ -99,11 +103,15 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 			return 0, err
 		}
 
+		if n != len(block) {
+			return 0, io.ErrShortWrite
+		}
+
 		// Decrement output size.
-		write -= n
+		write -= int64(n)
 
 		// Increment written.
-		totalWritten += n
+		totalWritten += int64(n)
 	}
 
 	// Success.

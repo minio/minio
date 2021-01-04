@@ -186,7 +186,6 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		readerIndex++
 	}
 	wg.Wait()
-
 	if p.canDecode(newBuf) {
 		p.offset += p.shardSize
 		if healRequired != 0 {

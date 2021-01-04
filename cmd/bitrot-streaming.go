@@ -91,7 +91,8 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 // ReadAt() implementation which verifies the bitrot hash available as part of the stream.
 type streamingBitrotReader struct {
 	disk       StorageAPI
-	rc         io.ReadCloser
+	data       []byte
+	rc         io.Reader
 	volume     string
 	filePath   string
 	tillOffset int64
@@ -105,7 +106,10 @@ func (b *streamingBitrotReader) Close() error {
 	if b.rc == nil {
 		return nil
 	}
-	return b.rc.Close()
+	if closer, ok := b.rc.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
@@ -119,11 +123,16 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		// For the first ReadAt() call we need to open the stream for reading.
 		b.currOffset = offset
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
-		b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
-		if err != nil {
-			return 0, err
+		if len(b.data) == 0 {
+			b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			b.rc = io.NewSectionReader(bytes.NewReader(b.data), streamOffset, b.tillOffset-streamOffset)
 		}
 	}
+
 	if offset != b.currOffset {
 		// Can never happen unless there are programmer bugs
 		return 0, errUnexpected
@@ -150,10 +159,11 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 }
 
 // Returns streaming bitrot reader implementation.
-func newStreamingBitrotReader(disk StorageAPI, volume, filePath string, tillOffset int64, algo BitrotAlgorithm, shardSize int64) *streamingBitrotReader {
+func newStreamingBitrotReader(disk StorageAPI, data []byte, volume, filePath string, tillOffset int64, algo BitrotAlgorithm, shardSize int64) *streamingBitrotReader {
 	h := algo.New()
 	return &streamingBitrotReader{
 		disk,
+		data,
 		nil,
 		volume,
 		filePath,
