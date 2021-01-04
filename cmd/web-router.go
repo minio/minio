@@ -85,7 +85,7 @@ func registerWebRouter(router *mux.Router) error {
 				"bucket": bucketName,
 				"object": objectName,
 			})
-			if globalHTTPTrace.HasSubscribers() {
+			if globalHTTPTrace.NumSubscribers() > 0 {
 				globalHTTPTrace.Publish(WebTrace(ri))
 			}
 			logger.AuditLog(ri.ResponseWriter, ri.Request, ri.Method, claims.Map())

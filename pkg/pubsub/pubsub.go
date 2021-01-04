@@ -18,6 +18,7 @@ package pubsub
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 // Sub - subscriber entity.
@@ -28,7 +29,8 @@ type Sub struct {
 
 // PubSub holds publishers and subscribers
 type PubSub struct {
-	subs []*Sub
+	subs           []*Sub
+	numSubscribers int32
 	sync.RWMutex
 }
 
@@ -56,6 +58,7 @@ func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filt
 
 	sub := &Sub{subCh, filter}
 	ps.subs = append(ps.subs, sub)
+	atomic.AddInt32(&ps.numSubscribers, 1)
 
 	go func() {
 		<-doneCh
@@ -68,19 +71,13 @@ func (ps *PubSub) Subscribe(subCh chan interface{}, doneCh <-chan struct{}, filt
 				ps.subs = append(ps.subs[:i], ps.subs[i+1:]...)
 			}
 		}
+		atomic.AddInt32(&ps.numSubscribers, -1)
 	}()
 }
 
-// HasSubscribers returns true if pubsub system has subscribers
-func (ps *PubSub) HasSubscribers() bool {
-	return ps.NumSubscribers() > 0
-}
-
 // NumSubscribers returns the number of current subscribers
-func (ps *PubSub) NumSubscribers() int {
-	ps.RLock()
-	defer ps.RUnlock()
-	return len(ps.subs)
+func (ps *PubSub) NumSubscribers() int32 {
+	return atomic.LoadInt32(&ps.numSubscribers)
 }
 
 // New inits a PubSub system
