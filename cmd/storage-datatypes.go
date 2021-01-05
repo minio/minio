@@ -151,6 +151,8 @@ type FileInfo struct {
 	MarkDeleted                   bool // mark this version as deleted
 	DeleteMarkerReplicationStatus string
 	VersionPurgeStatus            VersionPurgeStatusType
+
+	Data []byte // optionally carries object data
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata

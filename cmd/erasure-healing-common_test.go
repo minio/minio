@@ -186,7 +186,7 @@ func TestListOnlineDisks(t *testing.T) {
 			t.Fatalf("Failed to putObject %v", err)
 		}
 
-		partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "")
+		partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 		fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
 		if err != nil {
 			t.Fatalf("Failed to getLatestFileInfo %v", err)
@@ -287,7 +287,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	_, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "")
+	_, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 	readQuorum := len(erasureDisks) / 2
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
@@ -295,7 +295,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	// Test that all disks are returned without any failures with
 	// unmodified meta data
-	partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "")
+	partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
