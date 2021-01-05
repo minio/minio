@@ -45,12 +45,12 @@ func (er erasureObjects) HealBucket(ctx context.Context, bucket string, opts mad
 	writeQuorum := getWriteQuorum(len(storageDisks))
 
 	// Heal bucket.
-	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, opts.DryRun)
+	return healBucket(ctx, storageDisks, storageEndpoints, bucket, writeQuorum, opts)
 }
 
 // Heal bucket - create buckets on disks where it does not exist.
 func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints []string, bucket string, writeQuorum int,
-	dryRun bool) (res madmin.HealResultItem, err error) {
+	opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 
 	// Initialize sync waitgroup.
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -84,7 +84,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 				afterState[index] = madmin.DriveStateMissing
 
 				// mutate only if not a dry-run
-				if dryRun {
+				if opts.DryRun {
 					return nil
 				}
 
@@ -99,7 +99,7 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 	errs := g.Wait()
 
 	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum-1)
-	if reducedErr == errVolumeNotFound {
+	if errors.Is(reducedErr, errVolumeNotFound) && !opts.Recreate {
 		return res, nil
 	}
 

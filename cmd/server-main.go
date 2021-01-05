@@ -336,7 +336,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 			}
 		}
 		for _, bucket := range buckets {
-			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{}); err != nil {
+			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{Recreate: true}); err != nil {
 				return fmt.Errorf("Unable to list buckets to heal: %w", err)
 			}
 		}
