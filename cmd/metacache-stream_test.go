@@ -33,7 +33,7 @@ func loadMetacacheSample(t testing.TB) *metacacheReader {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := newMetacacheReader(bytes.NewBuffer(b))
+	r, err := newMetacacheReader(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
 	}

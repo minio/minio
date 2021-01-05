@@ -43,7 +43,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 
 	// Corrupted XML
 	malformedReq := &http.Request{
-		Body:          ioutil.NopCloser(bytes.NewBuffer([]byte("<>"))),
+		Body:          ioutil.NopCloser(bytes.NewReader([]byte("<>"))),
 		ContentLength: int64(len("<>")),
 	}
 
@@ -58,7 +58,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 		createBucketConfig := createBucketLocationConfiguration{}
 		createBucketConfig.Location = location
 		createBucketConfigBytes, _ := xml.Marshal(createBucketConfig)
-		createBucketConfigBuffer := bytes.NewBuffer(createBucketConfigBytes)
+		createBucketConfigBuffer := bytes.NewReader(createBucketConfigBytes)
 		req.Body = ioutil.NopCloser(createBucketConfigBuffer)
 		req.ContentLength = int64(createBucketConfigBuffer.Len())
 		return req

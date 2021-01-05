@@ -163,8 +163,8 @@ func cmpReaders(r1, r2 io.Reader) (bool, string) {
 
 func TestCmpReaders(t *testing.T) {
 	{
-		r1 := bytes.NewBuffer([]byte("abc"))
-		r2 := bytes.NewBuffer([]byte("abc"))
+		r1 := bytes.NewReader([]byte("abc"))
+		r2 := bytes.NewReader([]byte("abc"))
 		ok, msg := cmpReaders(r1, r2)
 		if !(ok && msg == "") {
 			t.Fatalf("unexpected")
@@ -172,8 +172,8 @@ func TestCmpReaders(t *testing.T) {
 	}
 
 	{
-		r1 := bytes.NewBuffer([]byte("abc"))
-		r2 := bytes.NewBuffer([]byte("abcd"))
+		r1 := bytes.NewReader([]byte("abc"))
+		r2 := bytes.NewReader([]byte("abcd"))
 		ok, _ := cmpReaders(r1, r2)
 		if ok {
 			t.Fatalf("unexpected")

@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -245,10 +246,13 @@ func (s *erasureSets) connectDisks() {
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			s.erasureDisksMu.Unlock()
 			go func(setIndex int) {
+				idler := time.NewTimer(100 * time.Millisecond)
+				defer idler.Stop()
+
 				// Send a new disk connect event with a timeout
 				select {
 				case s.disksConnectEvent <- diskConnectInfo{setIndex: setIndex}:
-				case <-time.After(100 * time.Millisecond):
+				case <-idler.C:
 				}
 			}(setIndex)
 		}(endpoint)
@@ -267,11 +271,21 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	// Pre-emptively connect the disks if possible.
 	s.connectDisks()
 
+	monitor := time.NewTimer(monitorInterval)
+	defer monitor.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(monitorInterval):
+		case <-monitor.C:
+			// Reset the timer once fired for required interval.
+			monitor.Reset(monitorInterval)
+
+			if serverDebugLog {
+				console.Debugln("running disk monitoring")
+			}
+
 			s.connectDisks()
 		}
 	}
@@ -467,7 +481,7 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 			index := index
 			g.Go(func() error {
 				// ignoring errors on purpose
-				storageInfos[index], _ = s.sets[index].StorageInfo(ctx, false)
+				storageInfos[index], _ = s.sets[index].StorageInfo(ctx)
 				return nil
 			}, index)
 		}
@@ -477,8 +491,6 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 
 		for _, lstorageInfo := range storageInfos {
 			storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-			storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-			storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
 		}
 
 		return storageInfo
@@ -496,7 +508,7 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) {
+func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
@@ -506,7 +518,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index], storageInfoErrs[index] = s.sets[index].StorageInfo(ctx, local)
+			storageInfos[index], storageInfoErrs[index] = s.sets[index].StorageInfo(ctx)
 			return nil
 		}, index)
 	}
@@ -516,14 +528,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context, local bool) (StorageInfo,
 
 	for _, lstorageInfo := range storageInfos {
 		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
-		storageInfo.Backend.OnlineDisks = storageInfo.Backend.OnlineDisks.Merge(lstorageInfo.Backend.OnlineDisks)
-		storageInfo.Backend.OfflineDisks = storageInfo.Backend.OfflineDisks.Merge(lstorageInfo.Backend.OfflineDisks)
-	}
-
-	if local {
-		// if local is true, we are not interested in the drive UUID info.
-		// this is called primarily by prometheus
-		return storageInfo, nil
 	}
 
 	var errs []error
@@ -722,10 +726,14 @@ func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, er
 			return nil, err
 		}
 	}
+
 	for _, v := range healBuckets {
 		listBuckets = append(listBuckets, BucketInfo(v))
 	}
-	sort.Sort(byBucketName(listBuckets))
+
+	sort.Slice(listBuckets, func(i, j int) bool {
+		return listBuckets[i].Name < listBuckets[j].Name
+	})
 
 	return listBuckets, nil
 }
@@ -1353,11 +1361,34 @@ func (s *erasureSets) maintainMRFList() {
 	}
 }
 
+func toSourceChTimed(t *time.Timer, sourceCh chan healSource, u healSource) {
+	t.Reset(100 * time.Millisecond)
+
+	// No defer, as we don't know which
+	// case will be selected
+
+	select {
+	case sourceCh <- u:
+	case <-t.C:
+		return
+	}
+
+	// We still need to check the return value
+	// of Stop, because t could have fired
+	// between the send on sourceCh and this line.
+	if !t.Stop() {
+		<-t.C
+	}
+}
+
 // healMRFRoutine monitors new disks connection, sweep the MRF list
 // to find objects related to the new disk that needs to be healed.
 func (s *erasureSets) healMRFRoutine() {
 	// Wait until background heal state is initialized
 	bgSeq := mustGetHealSequence(GlobalContext)
+
+	idler := time.NewTimer(100 * time.Millisecond)
+	defer idler.Stop()
 
 	for e := range s.disksConnectEvent {
 		// Get the list of objects related the er.set
@@ -1373,11 +1404,8 @@ func (s *erasureSets) healMRFRoutine() {
 
 		// Heal objects
 		for _, u := range mrfOperations {
-			// Send an object to be healed with a timeout
-			select {
-			case bgSeq.sourceCh <- u:
-			case <-time.After(100 * time.Millisecond):
-			}
+			// Send an object to background heal
+			toSourceChTimed(idler, bgSeq.sourceCh, u)
 
 			s.mrfMU.Lock()
 			delete(s.mrfOperations, u)

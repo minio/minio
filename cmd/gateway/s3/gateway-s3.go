@@ -274,7 +274,7 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo is not relevant to S3 backend.
-func (l *s3Objects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
+func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	host := l.Client.EndpointURL().Host
 	if l.Client.EndpointURL().Port() == "" {
@@ -431,6 +431,11 @@ func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, st
 			return minio.ErrorRespToObjectError(err, bucket, key)
 		}
 	}
+
+	if etag != "" {
+		opts.SetMatchETag(etag)
+	}
+
 	object, _, _, err := l.Client.GetObject(ctx, bucket, key, opts)
 	if err != nil {
 		return minio.ErrorRespToObjectError(err, bucket, key)

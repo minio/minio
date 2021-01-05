@@ -348,7 +348,7 @@ func extractPostPolicyFormValues(ctx context.Context, form *multipart.Form) (fil
 // Log headers and body.
 func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !globalHTTPTrace.HasSubscribers() {
+		if globalHTTPTrace.NumSubscribers() == 0 {
 			f.ServeHTTP(w, r)
 			return
 		}
@@ -360,7 +360,7 @@ func httpTraceAll(f http.HandlerFunc) http.HandlerFunc {
 // Log only the headers.
 func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !globalHTTPTrace.HasSubscribers() {
+		if globalHTTPTrace.NumSubscribers() == 0 {
 			f.ServeHTTP(w, r)
 			return
 		}
@@ -516,7 +516,7 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 	})
 
 	r.URL.Scheme = "http"
-	if globalIsSSL {
+	if globalIsTLS {
 		r.URL.Scheme = "https"
 	}
 

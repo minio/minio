@@ -84,9 +84,19 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		o.ID = mustGetUUID()
 	}
 	o.BaseDir = baseDirFromPrefix(o.Prefix)
-	if o.singleObject {
+	if o.discardResult {
 		// Override for single object.
 		o.BaseDir = o.Prefix
+	}
+
+	// For very small recursive listings, don't same cache.
+	// Attempts to avoid expensive listings to run for a long
+	// while when clients aren't interested in results.
+	// If the client DOES resume the listing a full cache
+	// will be generated due to the marker without ID and this check failing.
+	if o.Limit < 10 && o.Marker == "" && o.Create && o.Recursive {
+		o.discardResult = true
+		o.Transient = true
 	}
 
 	var cache metacache
@@ -137,13 +147,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	var wg sync.WaitGroup
 	var errs []error
 	allAtEOF := true
-	asked := 0
 	mu.Lock()
 	// Ask all sets and merge entries.
 	for _, zone := range z.serverPools {
 		for _, set := range zone.sets {
 			wg.Add(1)
-			asked++
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()
 				e, err := set.listPath(ctx, o)
@@ -206,7 +214,9 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	}
 	truncated := entries.len() > o.Limit || !allAtEOF
 	entries.truncate(o.Limit)
-	entries.listID = o.ID
+	if !o.discardResult {
+		entries.listID = o.ID
+	}
 	if !truncated {
 		return entries, io.EOF
 	}

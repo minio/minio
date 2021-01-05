@@ -43,8 +43,8 @@ func SameDisk(di1, di2 Info) bool {
 		return false
 	}
 
-	// returns true only if Used, Free and number of free
-	// inodes are same, then its the same disk.
-	return di1.Used == di2.Used && di1.Free == di2.Free &&
-		di1.Ffree == di2.Ffree
+	// returns true only if Used, Free are same, then its the same disk.
+	// we are deliberately not using free inodes as that is unreliable
+	// due the fact that Ffree can vary even for temporary files
+	return di1.Used == di2.Used && di1.Free == di2.Free
 }

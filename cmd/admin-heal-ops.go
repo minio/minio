@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -144,9 +145,13 @@ func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {
 func (ahs *allHealState) periodicHealSeqsClean(ctx context.Context) {
 	// Launch clean-up routine to remove this heal sequence (after
 	// it ends) from the global state after timeout has elapsed.
+	periodicTimer := time.NewTimer(time.Minute * 5)
+	defer periodicTimer.Stop()
+
 	for {
 		select {
-		case <-time.After(time.Minute * 5):
+		case <-periodicTimer.C:
+			periodicTimer.Reset(time.Minute * 5)
 			now := UTCNow()
 			ahs.Lock()
 			for path, h := range ahs.healSeqMap {
@@ -672,10 +677,9 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
-	} else {
-		if opts.Bitrot {
-			task.opts.ScanMode = madmin.HealDeepScan
-		}
+	}
+	if opts.Bitrot {
+		task.opts.ScanMode = madmin.HealDeepScan
 	}
 
 	// Wait and proceed if there are active requests
@@ -872,6 +876,11 @@ func (h *healSequence) healBuckets(objAPI ObjectLayer, bucketsOnly bool) error {
 	if err != nil {
 		return errFnHealFromAPIErr(h.ctx, err)
 	}
+
+	// Heal latest buckets first.
+	sort.Slice(buckets, func(i, j int) bool {
+		return buckets[i].Created.After(buckets[j].Created)
+	})
 
 	for _, bucket := range buckets {
 		if err = h.healBucket(objAPI, bucket.Name, bucketsOnly); err != nil {

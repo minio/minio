@@ -67,6 +67,9 @@ var errVolumeExists = StorageErr("volume already exists")
 // errIsNotRegular - not of regular file type.
 var errIsNotRegular = StorageErr("not of regular file type")
 
+// errPathNotFound - cannot find the path.
+var errPathNotFound = StorageErr("path not found")
+
 // errVolumeNotFound - cannot find the volume.
 var errVolumeNotFound = StorageErr("volume not found")
 

@@ -561,7 +561,7 @@ func (a *azureObjects) Shutdown(ctx context.Context) error {
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo(ctx context.Context, _ bool) (si minio.StorageInfo, _ []error) {
+func (a *azureObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
 	si.Backend.Type = minio.BackendGateway
 	host := a.endpoint.Host
 	if a.endpoint.Port() == "" {
@@ -812,7 +812,7 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
+		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.InnerETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -833,8 +833,13 @@ func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, sta
 		return azureToObjectError(minio.InvalidRange{}, bucket, object)
 	}
 
+	accessCond := azblob.BlobAccessConditions{}
+	if etag != "" {
+		accessCond.ModifiedAccessConditions.IfMatch = azblob.ETag(etag)
+	}
+
 	blobURL := a.client.NewContainerURL(bucket).NewBlobURL(object)
-	blob, err := blobURL.Download(ctx, startOffset, length, azblob.BlobAccessConditions{}, false)
+	blob, err := blobURL.Download(ctx, startOffset, length, accessCond, false)
 	if err != nil {
 		return azureToObjectError(err, bucket, object)
 	}
@@ -855,6 +860,8 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		return objInfo, azureToObjectError(err, bucket, object)
 	}
 
+	realETag := string(blob.ETag())
+
 	// Populate correct ETag's if possible, this code primarily exists
 	// because AWS S3 indicates that
 	//
@@ -866,7 +873,7 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 	//
 	// Some applications depend on this behavior refer https://github.com/minio/minio/issues/6550
 	// So we handle it here and make this consistent.
-	etag := minio.ToS3ETag(string(blob.ETag()))
+	etag := minio.ToS3ETag(realETag)
 	metadata := blob.NewMetadata()
 	contentMD5 := blob.ContentMD5()
 	switch {
@@ -881,6 +888,7 @@ func (a *azureObjects) GetObjectInfo(ctx context.Context, bucket, object string,
 		Bucket:          bucket,
 		UserDefined:     azurePropertiesToS3Meta(metadata, blob.NewHTTPHeaders(), blob.ContentLength()),
 		ETag:            etag,
+		InnerETag:       realETag,
 		ModTime:         blob.LastModified(),
 		Name:            object,
 		Size:            blob.ContentLength(),

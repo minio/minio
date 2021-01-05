@@ -113,8 +113,6 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 // acceptable quorum expected for list operations
 func (sCfg Config) GetListQuorum() int {
 	switch sCfg.ListQuorum {
-	case "optimal":
-		return 3
 	case "reduced":
 		return 2
 	case "disk":
@@ -123,7 +121,7 @@ func (sCfg Config) GetListQuorum() int {
 	case "strict":
 		return -1
 	}
-	// Defaults to 3 drives per set.
+	// Defaults to 3 drives per set, defaults to "optimal" value
 	return 3
 }
 

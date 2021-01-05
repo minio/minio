@@ -91,7 +91,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 // ReadAt() implementation which verifies the bitrot hash available as part of the stream.
 type streamingBitrotReader struct {
 	disk       StorageAPI
-	rc         io.ReadCloser
+	rc         io.Reader
 	volume     string
 	filePath   string
 	tillOffset int64
@@ -105,7 +105,10 @@ func (b *streamingBitrotReader) Close() error {
 	if b.rc == nil {
 		return nil
 	}
-	return b.rc.Close()
+	if closer, ok := b.rc.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
@@ -124,6 +127,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 			return 0, err
 		}
 	}
+
 	if offset != b.currOffset {
 		// Can never happen unless there are programmer bugs
 		return 0, errUnexpected

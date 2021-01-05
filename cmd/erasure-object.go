@@ -368,7 +368,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
-	metaArr, errs := getAllObjectFileInfo(ctx, disks, bucket, object, opts.VersionID)
+	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID)
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
 	if err != nil {
@@ -674,11 +674,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 	}
 
-	lk := er.NewNSLock(bucket, object)
-	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+			return ObjectInfo{}, err
+		}
+		defer lk.Unlock()
 	}
-	defer lk.Unlock()
 
 	for i, w := range writers {
 		if w == nil {
@@ -727,20 +729,20 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Whether a disk was initially or becomes offline
 	// during this upload, send it to the MRF list.
 	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] == nil || storageDisks[i] == nil {
-			er.addPartial(bucket, object, fi.VersionID)
-			break
+		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+			continue
 		}
+		er.addPartial(bucket, object, fi.VersionID)
+		break
 	}
 
 	for i := 0; i < len(onlineDisks); i++ {
-		if onlineDisks[i] == nil {
-			continue
+		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
+			// Object info is the same in all disks, so we can pick
+			// the first meta from online disk
+			fi = partsMetadata[i]
+			break
 		}
-		// Object info is the same in all disks, so we can pick
-		// the first meta from online disk
-		fi = partsMetadata[i]
-		break
 	}
 
 	return fi.ToObjectInfo(bucket, object), nil
@@ -922,16 +924,15 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	for _, version := range versions {
 		// Check if there is any offline disk and add it to the MRF list
 		for _, disk := range storageDisks {
-			if disk == nil {
-				// ignore delete markers for quorum
-				if version.Deleted {
-					continue
-				}
-				// all other direct versionId references we should
-				// ensure no dangling file is left over.
-				er.addPartial(bucket, version.Name, version.VersionID)
-				break
+			if disk != nil && disk.IsOnline() {
+				// Skip attempted heal on online disks.
+				continue
 			}
+
+			// all other direct versionId references we should
+			// ensure no dangling file is left over.
+			er.addPartial(bucket, version.Name, version.VersionID)
+			break
 		}
 	}
 
@@ -1042,10 +1043,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	for _, disk := range storageDisks {
-		if disk == nil {
-			er.addPartial(bucket, object, opts.VersionID)
-			break
+		if disk != nil && disk.IsOnline() {
+			continue
 		}
+		er.addPartial(bucket, object, opts.VersionID)
+		break
 	}
 
 	return ObjectInfo{

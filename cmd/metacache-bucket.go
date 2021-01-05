@@ -74,8 +74,8 @@ func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
 }
 
 func (b *bucketMetacache) debugf(format string, data ...interface{}) {
-	if metacacheDebug {
-		console.Debugf(format, data...)
+	if serverDebugLog {
+		console.Debugf(format+"\n", data...)
 	}
 }
 
@@ -87,7 +87,8 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(250 * time.Millisecond):
+		default:
+			time.Sleep(250 * time.Millisecond)
 		}
 		objAPI = newObjectLayerFn()
 		if objAPI == nil {
@@ -112,6 +113,7 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 	// Use global context for this.
 	err := objAPI.GetObject(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), 0, -1, w, "", ObjectOptions{})
 	logger.LogIf(ctx, w.CloseWithError(err))
+	wg.Wait()
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
@@ -124,7 +126,6 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 		}
 		return newBucketMetacache(bucket, false), err
 	}
-	wg.Wait()
 	if decErr != nil {
 		if errors.Is(err, context.Canceled) {
 			return newBucketMetacache(bucket, false), err

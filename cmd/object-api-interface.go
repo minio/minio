@@ -51,6 +51,7 @@ type ObjectOptions struct {
 	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
 	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 	TransitionStatus              string                 // status of the transition
+	NoLock                        bool                   // indicates to lower layers if the caller is expecting to hold locks.
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -79,7 +80,9 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown(context.Context) error
 	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
-	StorageInfo(ctx context.Context, local bool) (StorageInfo, []error) // local queries only local disks
+
+	BackendInfo() BackendInfo
+	StorageInfo(ctx context.Context) (StorageInfo, []error) // local queries only local disks
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -34,7 +35,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/rpc/v2/json2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio-go/v7"
 	miniogo "github.com/minio/minio-go/v7"
@@ -56,6 +56,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
+	"github.com/minio/minio/pkg/rpc/json2"
 )
 
 func extractBucketObject(args reflect.Value) (bucketName, objectName string) {
@@ -456,7 +457,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		// Fetch all the objects
 		for {
 			// Let listObjects reply back the maximum from server implementation
-			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 0)
+			result, err := core.ListObjects(args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 			if err != nil {
 				return toJSONError(ctx, err, args.BucketName)
 			}
@@ -570,11 +571,15 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	nextMarker := ""
 	// Fetch all the objects
 	for {
-		// Limit browser to 1000 batches to be more responsive, scrolling friendly.
+		// Limit browser to '1000' batches to be more responsive, scrolling friendly.
+		// Also don't change the maxKeys value silly GCS SDKs do not honor maxKeys
+		// values to be '-1'
 		lo, err := listObjects(ctx, args.BucketName, args.Prefix, nextMarker, SlashSeparator, 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
+
+		nextMarker = lo.NextMarker
 		for i := range lo.Objects {
 			lo.Objects[i].Size, err = lo.Objects[i].GetActualSize()
 			if err != nil {
@@ -595,8 +600,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 				Key: prefix,
 			})
 		}
-
-		nextMarker = lo.NextMarker
 
 		// Return when there are no more objects
 		if !lo.IsTruncated {
@@ -1005,7 +1008,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// Throw error when wrong secret key is provided
-	if prevCred.SecretKey != args.CurrentSecretKey {
+	if subtle.ConstantTimeCompare([]byte(prevCred.SecretKey), []byte(args.CurrentSecretKey)) != 1 {
 		return errIncorrectCreds
 	}
 
@@ -1170,7 +1173,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Check if bucket encryption is enabled
 	_, err = globalBucketSSEConfigSys.Get(bucket)
 	if (globalAutoEncryption || err == nil) && !crypto.SSEC.IsRequested(r.Header) {
-		r.Header.Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+		r.Header.Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 	}
 
 	// Require Content-Length to be set in the request
@@ -1238,7 +1241,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsRequested(r.Header) && !HasSuffix(object, SlashSeparator) { // handle SSE requests
+		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
 			rawReader := hashReader
 			var objectEncryptionKey crypto.ObjectKey
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
@@ -1287,10 +1290,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsRequested(r.Header):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}
@@ -1446,10 +1449,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		if crypto.IsEncrypted(objInfo.UserDefined) {
 			switch {
 			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSEHeader, crypto.SSEAlgorithmAES256)
+				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(crypto.SSECAlgorithm, r.Header.Get(crypto.SSECAlgorithm))
-				w.Header().Set(crypto.SSECKeyMD5, r.Header.Get(crypto.SSECKeyMD5))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 			}
 		}
 	}
@@ -2207,7 +2210,7 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	if sourceScheme := handlers.GetSourceScheme(r); sourceScheme != "" {
 		scheme = sourceScheme
 	}
-	if globalIsSSL {
+	if globalIsTLS {
 		scheme = "https"
 	}
 
@@ -2226,8 +2229,6 @@ func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *
 	clnt := &http.Client{
 		Transport: NewGatewayHTTPTransport(),
 	}
-	defer clnt.CloseIdleConnections()
-
 	resp, err := clnt.Do(req)
 	if err != nil {
 		return toJSONError(ctx, err)

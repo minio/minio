@@ -44,7 +44,7 @@ func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		if globalIsSSL {
+		if globalIsTLS {
 			printCertificateMsg(globalPublicCerts)
 		}
 	}

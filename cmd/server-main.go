@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // ServerFlags - server command specific flags
@@ -119,7 +120,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	var setupType SetupType
 
 	// Check and load TLS certificates.
-	globalPublicCerts, globalTLSCerts, globalIsSSL, err = getTLSConfig()
+	globalPublicCerts, globalTLSCerts, globalIsTLS, err = getTLSConfig()
 	logger.FatalIf(err, "Unable to load the TLS configuration")
 
 	// Check and load Root CAs.
@@ -140,6 +141,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
 	logger.FatalIf(err, "Invalid command line arguments")
 
+	// allow transport to be HTTP/1.1 for proxying.
+	globalProxyTransport = newCustomHTTPProxyTransport(&tls.Config{
+		RootCAs: globalRootCAs,
+	}, rest.DefaultTimeout)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = newInternodeHTTPTransport(&tls.Config{
 		RootCAs: globalRootCAs,
@@ -213,9 +218,7 @@ func newAllSubsystems() {
 
 func initServer(ctx context.Context, newObject ObjectLayer) error {
 	// Once the config is fully loaded, initialize the new object layer.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
+	setObjectLayer(newObject)
 
 	// Make sure to hold lock for entire migration to avoid
 	// such that only one server should migrate the entire config
@@ -315,6 +318,21 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		return fmt.Errorf("Unable to list buckets to heal: %w", err)
 	}
 
+	if globalIsErasure {
+		if len(buckets) > 0 {
+			if len(buckets) == 1 {
+				logger.Info(fmt.Sprintf("Verifying if %d bucket is consistent across drives...", len(buckets)))
+			} else {
+				logger.Info(fmt.Sprintf("Verifying if %d buckets are consistent across drives...", len(buckets)))
+			}
+		}
+		for _, bucket := range buckets {
+			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{}); err != nil {
+				return fmt.Errorf("Unable to list buckets to heal: %w", err)
+			}
+		}
+	}
+
 	// Initialize config system.
 	if err = globalConfigSys.Init(newObject); err != nil {
 		if errors.Is(err, errDiskNotFound) ||
@@ -384,15 +402,15 @@ func serverMain(ctx *cli.Context) {
 		if host == "" {
 			host = sortIPs(localIP4.ToSlice())[0]
 		}
-		return fmt.Sprintf("%s://%s", getURLScheme(globalIsSSL), net.JoinHostPort(host, globalMinioPort))
+		return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
 	}()
 
 	// Is distributed setup, error out if no certificates are found for HTTPS endpoints.
 	if globalIsDistErasure {
-		if globalEndpoints.HTTPS() && !globalIsSSL {
+		if globalEndpoints.HTTPS() && !globalIsTLS {
 			logger.Fatal(config.ErrNoCertsAndHTTPSEndpoints(nil), "Unable to start the server")
 		}
-		if !globalEndpoints.HTTPS() && globalIsSSL {
+		if !globalEndpoints.HTTPS() && globalIsTLS {
 			logger.Fatal(config.ErrCertsAndHTTPEndpoints(nil), "Unable to start the server")
 		}
 	}
@@ -429,9 +447,7 @@ func serverMain(ctx *cli.Context) {
 		globalHTTPServerErrorCh <- httpServer.Start()
 	}()
 
-	globalObjLayerMutex.Lock()
-	globalHTTPServer = httpServer
-	globalObjLayerMutex.Unlock()
+	setHTTPServer(httpServer)
 
 	if globalIsDistErasure && globalEndpoints.FirstLocal() {
 		for {
@@ -485,9 +501,7 @@ func serverMain(ctx *cli.Context) {
 		cacheAPI, err = newServerCacheObjects(GlobalContext, globalCacheConfig)
 		logger.FatalIf(err, "Unable to initialize disk caching")
 
-		globalObjLayerMutex.Lock()
-		globalCacheObjectAPI = cacheAPI
-		globalObjLayerMutex.Unlock()
+		setCacheObjectLayer(cacheAPI)
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.

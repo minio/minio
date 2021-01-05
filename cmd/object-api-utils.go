@@ -437,7 +437,9 @@ func isCompressible(header http.Header, object string) bool {
 	globalCompressConfigMu.Lock()
 	cfg := globalCompressConfig
 	globalCompressConfigMu.Unlock()
-	if !cfg.Enabled || (crypto.IsRequested(header) && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
+
+	_, ok := crypto.IsRequested(header)
+	if !cfg.Enabled || (ok && !cfg.AllowEncrypted) || excludeForCompression(header, object, cfg) {
 		return false
 	}
 	return true
@@ -540,13 +542,6 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 	}
 	return compressedOffset, offset - skipLength
 }
-
-// byBucketName is a collection satisfying sort.Interface.
-type byBucketName []BucketInfo
-
-func (d byBucketName) Len() int           { return len(d) }
-func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
 
 // GetObjectReader is a type that wraps a reader with a lock to
 // provide a ReadCloser interface that unlocks on Close()
@@ -655,7 +650,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				return nil, PreConditionFailed{}
 			}
 			if isEncrypted {
-				copySource := h.Get(crypto.SSECopyAlgorithm) != ""
+				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
 				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, opts.PartNumber, oi, copySource)
 				if err != nil {
@@ -723,7 +718,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
 		fn = func(inputReader io.Reader, h http.Header, pcfn CheckPreconditionFn, cFns ...func()) (r *GetObjectReader, err error) {
-			copySource := h.Get(crypto.SSECopyAlgorithm) != ""
+			copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 
 			cFns = append(cleanUpFns, cFns...)
 			// Attach decrypter on inputReader

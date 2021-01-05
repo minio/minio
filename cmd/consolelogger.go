@@ -70,7 +70,7 @@ func (sys *HTTPConsoleLoggerSys) SetNodeName(endpointServerPools EndpointServerP
 // HasLogListeners returns true if console log listeners are registered
 // for this node or peers
 func (sys *HTTPConsoleLoggerSys) HasLogListeners() bool {
-	return sys != nil && sys.pubsub.HasSubscribers()
+	return sys != nil && sys.pubsub.NumSubscribers() > 0
 }
 
 // Subscribe starts console logging for this node.

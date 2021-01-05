@@ -151,9 +151,10 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 	return cred, claims, owner, ErrNone
 }
 
-// checkAdminRequestAuthType checks whether the request is a valid signature V2 or V4 request.
-// It does not accept presigned or JWT or anonymous requests.
-func checkAdminRequestAuthType(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
+// checkAdminRequestAuth checks for authentication and authorization for the incoming
+// request. It only accepts V2 and V4 requests. Presigned, JWT and anonymous requests
+// are automatically rejected.
+func checkAdminRequestAuth(ctx context.Context, r *http.Request, action iampolicy.AdminAction, region string) (auth.Credentials, APIErrorCode) {
 	cred, claims, owner, s3Err := validateAdminSignature(ctx, r, region)
 	if s3Err != ErrNone {
 		return cred, s3Err
@@ -467,16 +468,6 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 	return ErrNone
 }
 
-// authHandler - handles all the incoming authorization headers and validates them if possible.
-type authHandler struct {
-	handler http.Handler
-}
-
-// setAuthHandler to validate authorization header for the incoming request.
-func setAuthHandler(h http.Handler) http.Handler {
-	return authHandler{h}
-}
-
 // List of all support S3 auth types.
 var supportedS3AuthTypes = map[authType]struct{}{
 	authTypeAnonymous:       {},
@@ -494,26 +485,29 @@ func isSupportedS3AuthType(aType authType) bool {
 	return ok
 }
 
-// handler for validating incoming authorization headers.
-func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	aType := getRequestAuthType(r)
-	if isSupportedS3AuthType(aType) {
-		// Let top level caller validate for anonymous and known signed requests.
-		a.handler.ServeHTTP(w, r)
-		return
-	} else if aType == authTypeJWT {
-		// Validate Authorization header if its valid for JWT request.
-		if _, _, authErr := webRequestAuthenticate(r); authErr != nil {
-			w.WriteHeader(http.StatusUnauthorized)
+// setAuthHandler to validate authorization header for the incoming request.
+func setAuthHandler(h http.Handler) http.Handler {
+	// handler for validating incoming authorization headers.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		aType := getRequestAuthType(r)
+		if isSupportedS3AuthType(aType) {
+			// Let top level caller validate for anonymous and known signed requests.
+			h.ServeHTTP(w, r)
+			return
+		} else if aType == authTypeJWT {
+			// Validate Authorization header if its valid for JWT request.
+			if _, _, authErr := webRequestAuthenticate(r); authErr != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			h.ServeHTTP(w, r)
+			return
+		} else if aType == authTypeSTS {
+			h.ServeHTTP(w, r)
 			return
 		}
-		a.handler.ServeHTTP(w, r)
-		return
-	} else if aType == authTypeSTS {
-		a.handler.ServeHTTP(w, r)
-		return
-	}
-	writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrSignatureVersionNotSupported), r.URL, guessIsBrowserReq(r))
+	})
 }
 
 func validateSignature(atype authType, r *http.Request) (auth.Credentials, bool, map[string]interface{}, APIErrorCode) {

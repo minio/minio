@@ -249,6 +249,7 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 	values.Set(storageRESTVolume, opts.Bucket)
 	values.Set(storageRESTDirPath, opts.BaseDir)
 	values.Set(storageRESTRecursive, strconv.FormatBool(opts.Recursive))
+	values.Set(storageRESTReportNotFound, strconv.FormatBool(opts.ReportNotFound))
 	values.Set(storageRESTPrefixFilter, opts.FilterPrefix)
 	respBody, err := client.call(ctx, storageRESTMethodWalkDir, values, nil, -1)
 	if err != nil {
@@ -271,12 +272,23 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 		s.writeErrorResponse(w, err)
 		return
 	}
+
+	var reportNotFound bool
+	if v := vars[storageRESTReportNotFound]; v != "" {
+		reportNotFound, err = strconv.ParseBool(v)
+		if err != nil {
+			s.writeErrorResponse(w, err)
+			return
+		}
+	}
+
 	prefix := r.URL.Query().Get(storageRESTPrefixFilter)
 	writer := streamHTTPResponse(w)
 	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
-		Bucket:       volume,
-		BaseDir:      dirPath,
-		Recursive:    recursive,
-		FilterPrefix: prefix,
+		Bucket:         volume,
+		BaseDir:        dirPath,
+		Recursive:      recursive,
+		ReportNotFound: reportNotFound,
+		FilterPrefix:   prefix,
 	}, writer))
 }

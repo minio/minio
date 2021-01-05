@@ -27,7 +27,6 @@ import (
 )
 
 const (
-	envDataUsageCrawlConf  = "MINIO_DISK_USAGE_CRAWL_ENABLE"
 	envDataUsageCrawlDebug = "MINIO_DISK_USAGE_CRAWL_DEBUG"
 
 	dataUsageRoot   = SlashSeparator

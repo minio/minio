@@ -200,9 +200,13 @@ func (fs *FSObjects) Shutdown(ctx context.Context) error {
 	return fsRemoveAll(ctx, pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
-// StorageInfo - returns underlying storage statistics.
-func (fs *FSObjects) StorageInfo(ctx context.Context, _ bool) (StorageInfo, []error) {
+// BackendInfo - returns backend information
+func (fs *FSObjects) BackendInfo() BackendInfo {
+	return BackendInfo{Type: BackendFS}
+}
 
+// StorageInfo - returns underlying storage statistics.
+func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	atomic.AddInt64(&fs.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt64(&fs.activeIOCount, -1)
@@ -531,7 +535,9 @@ func (fs *FSObjects) ListBuckets(ctx context.Context) ([]BucketInfo, error) {
 	}
 
 	// Sort bucket infos by bucket name.
-	sort.Sort(byBucketName(bucketInfos))
+	sort.Slice(bucketInfos, func(i, j int) bool {
+		return bucketInfos[i].Name < bucketInfos[j].Name
+	})
 
 	// Succes.
 	return bucketInfos, nil
@@ -1532,21 +1538,18 @@ func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string
 
 // HealFormat - no-op for fs, Valid only for Erasure.
 func (fs *FSObjects) HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 
 // HealObject - no-op for fs. Valid only for Erasure.
 func (fs *FSObjects) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (
 	res madmin.HealResultItem, err error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return res, NotImplemented{}
 }
 
 // HealBucket - no-op for fs, Valid only for Erasure.
 func (fs *FSObjects) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem,
 	error) {
-	logger.LogIf(ctx, NotImplemented{})
 	return madmin.HealResultItem{}, NotImplemented{}
 }
 

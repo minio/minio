@@ -120,7 +120,6 @@ const (
 	ErrReplicationSourceNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
-	ErrBucketReplicationDisabledError
 	ErrObjectRestoreAlreadyInProgress
 	ErrNoSuchKey
 	ErrNoSuchUpload
@@ -263,7 +262,6 @@ const (
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
 	ErrAdminNoSuchQuotaConfiguration
-	ErrAdminBucketQuotaDisabled
 
 	ErrHealNotImplemented
 	ErrHealNoSuchProcess
@@ -889,11 +887,6 @@ var errorCodes = errorCodeMap{
 		Description:    "Versioning must be 'Enabled' on the bucket to add a replication target",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrBucketReplicationDisabledError: {
-		Code:           "XMinioAdminBucketReplicationDisabled",
-		Description:    "Replication specified but disk usage crawl is disabled on MinIO server",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrNoSuchObjectLockConfiguration: {
 		Code:           "NoSuchObjectLockConfiguration",
 		Description:    "The specified object does not have a ObjectLock configuration",
@@ -1214,11 +1207,6 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioAdminNoSuchQuotaConfiguration",
 		Description:    "The quota configuration does not exist",
 		HTTPStatusCode: http.StatusNotFound,
-	},
-	ErrAdminBucketQuotaDisabled: {
-		Code:           "XMinioAdminBucketQuotaDisabled",
-		Description:    "Quota specified but disk usage crawl is disabled on MinIO server",
-		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",

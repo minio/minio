@@ -22,9 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/env"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -402,11 +400,6 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	// Crawler disabled, nothing to do.
-	if env.Get(envDataUsageCrawlConf, config.EnableOn) != config.EnableOn {
-		return
-	}
-
 	dataUsageInfo, err := loadDataUsageFromBackend(GlobalContext, objLayer)
 	if err != nil {
 		return
@@ -497,11 +490,11 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	// Fetch disk space info, ignore errors
-	storageInfo, _ := objLayer.StorageInfo(GlobalContext, true)
+	server := getLocalServerProperty(globalEndpoints, &http.Request{
+		Host: GetLocalPeer(globalEndpoints),
+	})
 
-	offlineDisks := storageInfo.Backend.OfflineDisks
-	onlineDisks := storageInfo.Backend.OnlineDisks
+	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(server.Disks)
 	totalDisks := offlineDisks.Merge(onlineDisks)
 
 	// MinIO Offline Disks per node
@@ -524,7 +517,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(totalDisks.Sum()),
 	)
 
-	for _, disk := range storageInfo.Disks {
+	for _, disk := range server.Disks {
 		// Total disk usage by the disk
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(

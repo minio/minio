@@ -77,6 +77,7 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 			// from subsequent blocks.
 			offset = 0
 		}
+
 		// We have written all the blocks, write the last remaining block.
 		if write < int64(len(block)) {
 			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
@@ -89,6 +90,7 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 			totalWritten += n
 			break
 		}
+
 		// Copy the block.
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {

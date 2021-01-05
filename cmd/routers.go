@@ -38,47 +38,47 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 }
 
 // List of some generic handlers which are applied for all incoming requests.
-var globalHandlers = []MiddlewareFunc{
-	// add redirect handler to redirect
-	// requests when object layer is not
-	// initialized.
-	setRedirectHandler,
-	// set x-amz-request-id header.
-	addCustomHeaders,
-	// set HTTP security headers such as Content-Security-Policy.
-	addSecurityHeaders,
-	// Forward path style requests to actual host in a bucket federated setup.
-	setBucketForwardingHandler,
-	// Validate all the incoming requests.
-	setRequestValidityHandler,
-	// Network statistics
-	setHTTPStatsHandler,
-	// Limits all requests size to a maximum fixed limit
-	setRequestSizeLimitHandler,
-	// Limits all header sizes to a maximum fixed limit
-	setRequestHeaderSizeLimitHandler,
-	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
-	setCrossDomainPolicy,
-	// Redirect some pre-defined browser request paths to a static location prefix.
-	setBrowserRedirectHandler,
-	// Validates if incoming request is for restricted buckets.
-	setReservedBucketHandler,
-	// Adds cache control for all browser requests.
-	setBrowserCacheControlHandler,
-	// Validates all incoming requests to have a valid date header.
-	setTimeValidityHandler,
-	// Validates all incoming URL resources, for invalid/unsupported
-	// resources client receives a HTTP error.
-	setIgnoreResourcesHandler,
+var globalHandlers = []mux.MiddlewareFunc{
+	// filters HTTP headers which are treated as metadata and are reserved
+	// for internal use only.
+	filterReservedMetadata,
+	// Enforce rules specific for TLS requests
+	setSSETLSHandler,
 	// Auth handler verifies incoming authorization headers and
 	// routes them accordingly. Client receives a HTTP error for
 	// invalid/unsupported signatures.
 	setAuthHandler,
-	// Enforce rules specific for TLS requests
-	setSSETLSHandler,
-	// filters HTTP headers which are treated as metadata and are reserved
-	// for internal use only.
-	filterReservedMetadata,
+	// Validates all incoming URL resources, for invalid/unsupported
+	// resources client receives a HTTP error.
+	setIgnoreResourcesHandler,
+	// Validates all incoming requests to have a valid date header.
+	setTimeValidityHandler,
+	// Adds cache control for all browser requests.
+	setBrowserCacheControlHandler,
+	// Validates if incoming request is for restricted buckets.
+	setReservedBucketHandler,
+	// Redirect some pre-defined browser request paths to a static location prefix.
+	setBrowserRedirectHandler,
+	// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
+	setCrossDomainPolicy,
+	// Limits all header sizes to a maximum fixed limit
+	setRequestHeaderSizeLimitHandler,
+	// Limits all requests size to a maximum fixed limit
+	setRequestSizeLimitHandler,
+	// Network statistics
+	setHTTPStatsHandler,
+	// Validate all the incoming requests.
+	setRequestValidityHandler,
+	// Forward path style requests to actual host in a bucket federated setup.
+	setBucketForwardingHandler,
+	// set HTTP security headers such as Content-Security-Policy.
+	addSecurityHeaders,
+	// set x-amz-request-id header.
+	addCustomHeaders,
+	// add redirect handler to redirect
+	// requests when object layer is not
+	// initialized.
+	setRedirectHandler,
 	// Add new handlers here.
 }
 
@@ -93,8 +93,12 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 		registerDistErasureRouters(router, endpointServerPools)
 	}
 
-	// Add STS router always.
-	registerSTSRouter(router)
+	// Register web router when its enabled.
+	if globalBrowserEnabled {
+		if err := registerWebRouter(router); err != nil {
+			return nil, err
+		}
+	}
 
 	// Add Admin router, all APIs are enabled in server mode.
 	registerAdminRouter(router, true, true)
@@ -105,17 +109,13 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add server metrics router
 	registerMetricsRouter(router)
 
-	// Register web router when its enabled.
-	if globalBrowserEnabled {
-		if err := registerWebRouter(router); err != nil {
-			return nil, err
-		}
-	}
+	// Add STS router always.
+	registerSTSRouter(router)
 
 	// Add API router
 	registerAPIRouter(router)
 
-	router.Use(registerMiddlewares)
+	router.Use(globalHandlers...)
 
 	return router, nil
 }

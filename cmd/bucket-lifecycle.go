@@ -28,7 +28,6 @@ import (
 
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	sse "github.com/minio/minio/pkg/bucket/encryption"
@@ -547,7 +546,7 @@ func (r *RestoreObjectRequest) validate(ctx context.Context, objAPI ObjectLayer)
 		if r.OutputLocation.S3.Prefix == "" {
 			return fmt.Errorf("Prefix is a required parameter in OutputLocation")
 		}
-		if r.OutputLocation.S3.Encryption.EncryptionType != crypto.SSEAlgorithmAES256 {
+		if r.OutputLocation.S3.Encryption.EncryptionType != xhttp.AmzEncryptionAES {
 			return NotImplemented{}
 		}
 	}
@@ -573,7 +572,7 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 		}
 		meta[xhttp.AmzObjectTagging] = rreq.OutputLocation.S3.Tagging.String()
 		if rreq.OutputLocation.S3.Encryption.EncryptionType != "" {
-			meta[crypto.SSEHeader] = crypto.SSEAlgorithmAES256
+			meta[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
 		}
 		return ObjectOptions{
 			Versioned:        globalBucketVersioningSys.Enabled(bucket),

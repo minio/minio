@@ -30,6 +30,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -38,20 +39,26 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/env"
 )
+
+// serverDebugLog will enable debug printing
+var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
 func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
 	rand.Seed(time.Now().UTC().UnixNano())
-	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
+	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second)
 
 	initGlobalContext()
 
 	globalReplicationState = newReplicationState()
 	globalTransitionState = newTransitionState()
+
+	console.SetColor("Debug", color.New())
 
 	gob.Register(StorageErr(""))
 }

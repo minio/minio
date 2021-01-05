@@ -29,13 +29,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/heal"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
@@ -44,7 +43,7 @@ import (
 
 const (
 	dataCrawlSleepPerFolder  = time.Millisecond // Time to wait between folders.
-	dataCrawlStartDelay      = 5 * time.Minute  // Time to wait on startup and between cycles.
+	dataCrawlStartDelay      = 1 * time.Minute  // Time to wait on startup and between cycles.
 	dataUsageUpdateDirCycles = 16               // Visit all folders every n cycles.
 
 	healDeleteDangling    = true
@@ -61,11 +60,9 @@ var (
 	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)
 )
 
-// initDataCrawler will start the crawler unless disabled.
+// initDataCrawler will start the crawler in the background.
 func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
-	if env.Get(envDataUsageCrawlConf, config.EnableOn) == config.EnableOn {
-		go runDataCrawler(ctx, objAPI)
-	}
+	go runDataCrawler(ctx, objAPI)
 }
 
 // runDataCrawler will start a data crawler.
@@ -99,11 +96,21 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 		}
 	}
 
+	crawlTimer := time.NewTimer(dataCrawlStartDelay)
+	defer crawlTimer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(dataCrawlStartDelay):
+		case <-crawlTimer.C:
+			// Reset the timer for next cycle.
+			crawlTimer.Reset(dataCrawlStartDelay)
+
+			if intDataUpdateTracker.debug {
+				console.Debugln("starting crawler cycle")
+			}
+
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
@@ -162,10 +169,10 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	t := UTCNow()
 
 	logPrefix := color.Green("data-usage: ")
-	logSuffix := color.Blue(" - %v + %v", basePath, cache.Info.Name)
+	logSuffix := color.Blue("- %v + %v", basePath, cache.Info.Name)
 	if intDataUpdateTracker.debug {
 		defer func() {
-			logger.Info(logPrefix+" Crawl time: %v"+logSuffix, time.Since(t))
+			console.Debugf(logPrefix+" Crawl time: %v %s\n", time.Since(t), logSuffix)
 		}()
 
 	}
@@ -193,7 +200,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		if ok {
 			s.disks = objAPI.GetDisksID(cache.Disks...)
 			if len(s.disks) != len(cache.Disks) {
-				logger.Info(logPrefix+"Missing disks, want %d, found %d. Cannot heal."+logSuffix, len(cache.Disks), len(s.disks))
+				console.Debugf(logPrefix+"Missing disks, want %d, found %d. Cannot heal. %s\n", len(cache.Disks), len(s.disks), logSuffix)
 				s.disks = s.disks[:0]
 			}
 		}
@@ -208,28 +215,28 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 	if len(cache.Info.BloomFilter) > 0 {
 		s.withFilter = &bloomFilter{BloomFilter: &bloom.BloomFilter{}}
-		_, err := s.withFilter.ReadFrom(bytes.NewBuffer(cache.Info.BloomFilter))
+		_, err := s.withFilter.ReadFrom(bytes.NewReader(cache.Info.BloomFilter))
 		if err != nil {
 			logger.LogIf(ctx, err, logPrefix+"Error reading bloom filter")
 			s.withFilter = nil
 		}
 	}
 	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"Start crawling. Bloom filter: %v"+logSuffix, s.withFilter != nil)
+		console.Debugf(logPrefix+"Start crawling. Bloom filter: %v %s\n", s.withFilter != nil, logSuffix)
 	}
 
 	done := ctx.Done()
 	var flattenLevels = 2
 
 	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"Cycle: %v, Entries: %v"+logSuffix, cache.Info.NextCycle, len(cache.Cache))
+		console.Debugf(logPrefix+"Cycle: %v, Entries: %v %s\n", cache.Info.NextCycle, len(cache.Cache), logSuffix)
 	}
 
 	// Always scan flattenLevels deep. Cache root is level 0.
 	todo := []cachedFolder{{name: cache.Info.Name, objectHealProbDiv: 1}}
 	for i := 0; i < flattenLevels; i++ {
 		if s.dataUsageCrawlDebug {
-			logger.Info(logPrefix+"Level %v, scanning %v directories."+logSuffix, i, len(todo))
+			console.Debugf(logPrefix+"Level %v, scanning %v directories. %s\n", i, len(todo), logSuffix)
 		}
 		select {
 		case <-done:
@@ -245,7 +252,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 
 	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"New folders: %v"+logSuffix, s.newFolders)
+		console.Debugf(logPrefix+"New folders: %v %s\n", s.newFolders, logSuffix)
 	}
 
 	// Add new folders first
@@ -261,7 +268,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 			continue
 		}
 		if du == nil {
-			logger.Info(logPrefix + "no disk usage provided" + logSuffix)
+			console.Debugln(logPrefix + "no disk usage provided" + logSuffix)
 			continue
 		}
 
@@ -274,7 +281,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 	}
 
 	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"Existing folders: %v"+logSuffix, len(s.existingFolders))
+		console.Debugf(logPrefix+"Existing folders: %v %s\n", len(s.existingFolders), logSuffix)
 	}
 
 	// Do selective scanning of existing folders.
@@ -301,13 +308,13 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 				if !s.withFilter.containsDir(folder.name) {
 					if !h.mod(s.oldCache.Info.NextCycle, s.healFolderInclude/folder.objectHealProbDiv) {
 						if s.dataUsageCrawlDebug {
-							logger.Info(logPrefix+"Skipping non-updated folder: %v"+logSuffix, folder)
+							console.Debugf(logPrefix+"Skipping non-updated folder: %v %s\n", folder, logSuffix)
 						}
 						s.newCache.replaceHashed(h, folder.parent, s.oldCache.Cache[h.Key()])
 						continue
 					} else {
 						if s.dataUsageCrawlDebug {
-							logger.Info(logPrefix+"Adding non-updated folder to heal check: %v"+logSuffix, folder.name)
+							console.Debugf(logPrefix+"Adding non-updated folder to heal check: %v %s\n", folder.name, logSuffix)
 						}
 						// Update probability of including objects
 						folder.objectHealProbDiv = s.healFolderInclude
@@ -329,7 +336,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		s.newCache.replaceHashed(h, folder.parent, *du)
 	}
 	if s.dataUsageCrawlDebug {
-		logger.Info(logPrefix+"Finished crawl, %v entries"+logSuffix, len(s.newCache.Cache))
+		console.Debugf(logPrefix+"Finished crawl, %v entries %s\n", len(s.newCache.Cache), logSuffix)
 	}
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle++
@@ -343,6 +350,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFolder, final bool) ([]cachedFolder, error) {
 	var nextFolders []cachedFolder
 	done := ctx.Done()
+	scannerLogPrefix := color.Green("folder-scanner:")
 	for _, folder := range folders {
 		select {
 		case <-done:
@@ -358,7 +366,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 		var activeLifeCycle *lifecycle.Lifecycle
 		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, true) {
 			if f.dataUsageCrawlDebug {
-				logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
+				console.Debugf(scannerLogPrefix+" Prefix %q has active rules\n", prefix)
 			}
 			activeLifeCycle = f.oldCache.Info.lifeCycle
 			filter = nil
@@ -369,12 +377,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				if !thisHash.mod(f.oldCache.Info.NextCycle, f.healFolderInclude/folder.objectHealProbDiv) {
 					f.newCache.copyWithChildren(&f.oldCache, thisHash, folder.parent)
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("folder-scanner:")+" Skipping non-updated folder: %v", folder.name)
+						console.Debugf(scannerLogPrefix+" Skipping non-updated folder: %v\n", folder.name)
 					}
 					continue
 				} else {
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("folder-scanner:")+" Adding non-updated folder to heal check: %v", folder.name)
+						console.Debugf(scannerLogPrefix+" Adding non-updated folder to heal check: %v\n", folder.name)
 					}
 					// If probability was already crawlerHealFolderInclude, keep it.
 					folder.objectHealProbDiv = f.healFolderInclude
@@ -391,14 +399,14 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			bucket, prefix := path2BucketObjectWithBasePath(f.root, entName)
 			if bucket == "" {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("folder-scanner:")+" no bucket (%s,%s)", f.root, entName)
+					console.Debugf(scannerLogPrefix+" no bucket (%s,%s)\n", f.root, entName)
 				}
 				return nil
 			}
 
 			if isReservedOrInvalidBucket(bucket, false) {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("folder-scanner:")+" invalid bucket: %v, entry: %v", bucket, entName)
+					console.Debugf(scannerLogPrefix+" invalid bucket: %v, entry: %v\n", bucket, entName)
 				}
 				return nil
 			}
@@ -415,8 +423,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				cache.addChildString(entName)
 
 				this := cachedFolder{name: entName, parent: &thisHash, objectHealProbDiv: folder.objectHealProbDiv}
-				delete(existing, h.Key())
+
+				delete(existing, h.Key()) // h.Key() already accounted for.
+
 				cache.addChild(h)
+
 				if final {
 					if exists {
 						f.existingFolders = append(f.existingFolders, this)
@@ -443,16 +454,29 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				lifeCycle:  activeLifeCycle,
 				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
-			sizeSummary, err := f.getSize(item)
 
-			wait()
+			sizeSummary, err := f.getSize(item)
 			if err == errSkipFile {
+				wait() // wait to proceed to next entry.
+
 				return nil
 			}
-			logger.LogIf(ctx, err)
+
+			// successfully read means we have a valid object.
+
+			// Remove filename i.e is the meta file to construct object name
+			item.transformMetaDir()
+
+			// Object already accounted for, remove from heal map,
+			// simply because getSize() function already heals the
+			// object.
+			delete(existing, path.Join(item.bucket, item.objectPath()))
+
 			cache.addSizes(sizeSummary)
 			cache.Objects++
 			cache.ObjSizes.add(sizeSummary.totalSize)
+
+			wait() // wait to proceed to next entry.
 
 			return nil
 		})
@@ -494,10 +518,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			bucket:    "",
 		}
 
+		healObjectsPrefix := color.Green("healObjects:")
 		for k := range existing {
 			bucket, prefix := path2BucketObject(k)
 			if f.dataUsageCrawlDebug {
-				logger.Info(color.Green("folder-scanner:")+" checking disappeared folder: %v/%v", bucket, prefix)
+				console.Debugf(scannerLogPrefix+" checking disappeared folder: %v/%v\n", bucket, prefix)
 			}
 
 			// Dynamic time delay.
@@ -505,7 +530,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			resolver.bucket = bucket
 
 			foundObjs := false
-			dangling := true
+			dangling := false
 			ctx, cancel := context.WithCancel(ctx)
 			err := listPathRaw(ctx, listPathRawOptions{
 				disks:          f.disks,
@@ -517,17 +542,18 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				// Weird, maybe transient error.
 				agreed: func(entry metaCacheEntry) {
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("healObjects:")+" got agreement: %v", entry.name)
-					}
-					if entry.isObject() {
-						dangling = false
+						console.Debugf(healObjectsPrefix+" got agreement: %v\n", entry.name)
 					}
 				},
 				// Some disks have data for this.
 				partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("healObjects:")+" got partial, %d agreed, errs: %v", nAgreed, errs)
+						console.Debugf(healObjectsPrefix+" got partial, %d agreed, errs: %v\n", nAgreed, errs)
 					}
+
+					// agreed value less than expected quorum
+					dangling = nAgreed < resolver.objQuorum || nAgreed < resolver.dirQuorum
+
 					// Sleep and reset.
 					wait()
 					wait = crawlerSleeper.Timer(ctx)
@@ -535,8 +561,6 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					if !ok {
 						for _, err := range errs {
 							if err != nil {
-								// Not all disks are ready, do nothing for now.
-								dangling = false
 								return
 							}
 						}
@@ -546,12 +570,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					}
 
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("healObjects:")+" resolved to: %v, dir: %v", entry.name, entry.isDir())
+						console.Debugf(healObjectsPrefix+" resolved to: %v, dir: %v\n", entry.name, entry.isDir())
 					}
+
 					if entry.isDir() {
 						return
 					}
-					dangling = false
 					// We got an entry which we should be able to heal.
 					fiv, err := entry.fileInfoVersions(bucket)
 					if err != nil {
@@ -560,7 +584,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    entry.name,
 							versionID: "",
 						}, madmin.HealItemObject)
-						logger.LogIf(ctx, err)
+						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, err)
+						}
 						foundObjs = foundObjs || err == nil
 						return
 					}
@@ -573,31 +599,35 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
-						logger.LogIf(ctx, err)
+						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+							logger.LogIf(ctx, err)
+						}
 						foundObjs = foundObjs || err == nil
 					}
 				},
 				// Too many disks failed.
 				finished: func(errs []error) {
 					if f.dataUsageCrawlDebug {
-						logger.Info(color.Green("healObjects:")+" too many errors: %v", errs)
+						console.Debugf(healObjectsPrefix+" too many errors: %v\n", errs)
 					}
-					dangling = false
 					cancel()
 				},
 			})
 
 			if f.dataUsageCrawlDebug && err != nil && err != errFileNotFound {
-				logger.Info(color.Green("healObjects:")+" checking returned value %v (%T)", err, err)
+				console.Debugf(healObjectsPrefix+" checking returned value %v (%T)\n", err, err)
 			}
 
 			// If we found one or more disks with this folder, delete it.
 			if err == nil && dangling {
 				if f.dataUsageCrawlDebug {
-					logger.Info(color.Green("healObjects:")+" deleting dangling directory %s", prefix)
+					console.Debugf(healObjectsPrefix+" deleting dangling directory %s\n", prefix)
 				}
-				// If we have quorum, found directories, but no objects, issue heal to delete the dangling.
-				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{Recursive: true, Remove: true},
+
+				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{
+					Recursive: true,
+					Remove:    true,
+				},
 					func(bucket, object, versionID string) error {
 						// Wait for each heal as per crawler frequency.
 						wait()
@@ -637,6 +667,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 	var addDir func(entName string, typ os.FileMode) error
 	var dirStack = []string{f.root, folder.name}
 
+	deepScannerLogPrefix := color.Green("deep-scanner:")
 	addDir = func(entName string, typ os.FileMode) error {
 		select {
 		case <-done:
@@ -664,7 +695,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 		var activeLifeCycle *lifecycle.Lifecycle
 		if f.oldCache.Info.lifeCycle != nil && f.oldCache.Info.lifeCycle.HasActiveRules(prefix, false) {
 			if f.dataUsageCrawlDebug {
-				logger.Info(color.Green("folder-scanner:")+" Prefix %q has active rules", prefix)
+				console.Debugf(deepScannerLogPrefix+" Prefix %q has active rules\n", prefix)
 			}
 			activeLifeCycle = f.oldCache.Info.lifeCycle
 		}
@@ -681,16 +712,21 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			})
 
-		// Wait to throttle IO
-		wait()
-
 		if err == errSkipFile {
+			// Wait to throttle IO
+			wait()
+
 			return nil
 		}
+
 		logger.LogIf(ctx, err)
 		cache.addSizes(sizeSummary)
 		cache.Objects++
 		cache.ObjSizes.add(sizeSummary.totalSize)
+
+		// Wait to throttle IO
+		wait()
+
 		return nil
 	}
 	err := readDirFn(path.Join(dirStack...), addDir)
@@ -740,6 +776,7 @@ type actionMeta struct {
 	oi               ObjectInfo
 	successorModTime time.Time // The modtime of the successor version
 	numVersions      int       // The number of versions of this object
+	bitRotScan       bool      // indicates if bitrot check was requested.
 }
 
 // applyActions will apply lifecycle checks on to a scanned item.
@@ -751,15 +788,20 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	if i.debug {
 		logger.LogIf(ctx, err)
 	}
+	applyActionsLogPrefix := color.Green("applyActions:")
 	if i.heal {
 		if i.debug {
 			if meta.oi.VersionID != "" {
-				logger.Info(color.Green("applyActions:")+" heal checking: %v/%v v%s", i.bucket, i.objectPath(), meta.oi.VersionID)
+				console.Debugf(applyActionsLogPrefix+" heal checking: %v/%v v(%s)\n", i.bucket, i.objectPath(), meta.oi.VersionID)
 			} else {
-				logger.Info(color.Green("applyActions:")+" heal checking: %v/%v", i.bucket, i.objectPath())
+				console.Debugf(applyActionsLogPrefix+" heal checking: %v/%v\n", i.bucket, i.objectPath())
 			}
 		}
-		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, madmin.HealOpts{Remove: healDeleteDangling})
+		healOpts := madmin.HealOpts{Remove: healDeleteDangling}
+		if meta.bitRotScan {
+			healOpts.ScanMode = madmin.HealDeepScan
+		}
+		res, err := o.HealObject(ctx, i.bucket, i.objectPath(), meta.oi.VersionID, healOpts)
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return 0
 		}
@@ -771,7 +813,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	}
 	if i.lifeCycle == nil {
 		if i.debug {
-			logger.Info(color.Green("applyActions:")+" no lifecycle rules to apply: %q", i.objectPath())
+			console.Debugf(applyActionsLogPrefix+" no lifecycle rules to apply: %q\n", i.objectPath())
 		}
 		return size
 	}
@@ -793,9 +835,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 		})
 	if i.debug {
 		if versionID != "" {
-			logger.Info(color.Green("applyActions:")+" lifecycle: %q (version-id=%s), Initial scan: %v", i.objectPath(), versionID, action)
+			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, action)
 		} else {
-			logger.Info(color.Green("applyActions:")+" lifecycle: %q Initial scan: %v", i.objectPath(), action)
+			console.Debugf(applyActionsLogPrefix+" lifecycle: %q Initial scan: %v\n", i.objectPath(), action)
 		}
 	}
 	switch action {
@@ -805,7 +847,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	default:
 		// No action.
 		if i.debug {
-			logger.Info(color.Green("applyActions:")+" object not expirable: %q", i.objectPath())
+			console.Debugf(applyActionsLogPrefix+" object not expirable: %q\n", i.objectPath())
 		}
 		return size
 	}
@@ -848,7 +890,7 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	}
 	action = i.lifeCycle.ComputeAction(lcOpts)
 	if i.debug {
-		logger.Info(color.Green("applyActions:")+" lifecycle: Secondary scan: %v", action)
+		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
 	}
 	switch action {
 	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
@@ -871,9 +913,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			if locked {
 				if i.debug {
 					if obj.VersionID != "" {
-						logger.Info(color.Green("applyActions:")+" lifecycle: %s v%s is locked, not deleting", i.objectPath(), obj.VersionID)
+						console.Debugf(applyActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", i.objectPath(), obj.VersionID)
 					} else {
-						logger.Info(color.Green("applyActions:")+" lifecycle: %s is locked, not deleting", i.objectPath())
+						console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", i.objectPath())
 					}
 				}
 				return size
@@ -934,52 +976,52 @@ func (i *crawlItem) objectPath() string {
 }
 
 // healReplication will heal a scanned item that has failed replication.
-func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, meta actionMeta, sizeS *sizeSummary) {
-	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
+func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) {
+	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		// heal delete marker replication failure or versioned delete replication failure
-		if meta.oi.ReplicationStatus == replication.Pending ||
-			meta.oi.ReplicationStatus == replication.Failed ||
-			meta.oi.VersionPurgeStatus == Failed || meta.oi.VersionPurgeStatus == Pending {
-			i.healReplicationDeletes(ctx, o, meta)
+		if oi.ReplicationStatus == replication.Pending ||
+			oi.ReplicationStatus == replication.Failed ||
+			oi.VersionPurgeStatus == Failed || oi.VersionPurgeStatus == Pending {
+			i.healReplicationDeletes(ctx, o, oi)
 			return
 		}
 	}
-	switch meta.oi.ReplicationStatus {
+	switch oi.ReplicationStatus {
 	case replication.Pending:
-		sizeS.pendingSize += meta.oi.Size
-		globalReplicationState.queueReplicaTask(meta.oi)
+		sizeS.pendingSize += oi.Size
+		globalReplicationState.queueReplicaTask(oi)
 	case replication.Failed:
-		sizeS.failedSize += meta.oi.Size
-		globalReplicationState.queueReplicaTask(meta.oi)
+		sizeS.failedSize += oi.Size
+		globalReplicationState.queueReplicaTask(oi)
 	case replication.Complete:
-		sizeS.replicatedSize += meta.oi.Size
+		sizeS.replicatedSize += oi.Size
 	case replication.Replica:
-		sizeS.replicaSize += meta.oi.Size
+		sizeS.replicaSize += oi.Size
 	}
 }
 
 // healReplicationDeletes will heal a scanned deleted item that failed to replicate deletes.
-func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, meta actionMeta) {
+func (i *crawlItem) healReplicationDeletes(ctx context.Context, o ObjectLayer, oi ObjectInfo) {
 	// handle soft delete and permanent delete failures here.
-	if meta.oi.DeleteMarker || !meta.oi.VersionPurgeStatus.Empty() {
+	if oi.DeleteMarker || !oi.VersionPurgeStatus.Empty() {
 		versionID := ""
 		dmVersionID := ""
-		if meta.oi.VersionPurgeStatus.Empty() {
-			dmVersionID = meta.oi.VersionID
+		if oi.VersionPurgeStatus.Empty() {
+			dmVersionID = oi.VersionID
 		} else {
-			versionID = meta.oi.VersionID
+			versionID = oi.VersionID
 		}
 		globalReplicationState.queueReplicaDeleteTask(DeletedObjectVersionInfo{
 			DeletedObject: DeletedObject{
-				ObjectName:                    meta.oi.Name,
+				ObjectName:                    oi.Name,
 				DeleteMarkerVersionID:         dmVersionID,
 				VersionID:                     versionID,
-				DeleteMarkerReplicationStatus: string(meta.oi.ReplicationStatus),
-				DeleteMarkerMTime:             DeleteMarkerMTime{meta.oi.ModTime},
-				DeleteMarker:                  meta.oi.DeleteMarker,
-				VersionPurgeStatus:            meta.oi.VersionPurgeStatus,
+				DeleteMarkerReplicationStatus: string(oi.ReplicationStatus),
+				DeleteMarkerMTime:             DeleteMarkerMTime{oi.ModTime},
+				DeleteMarker:                  oi.DeleteMarker,
+				VersionPurgeStatus:            oi.VersionPurgeStatus,
 			},
-			Bucket: meta.oi.Bucket,
+			Bucket: oi.Bucket,
 		})
 	}
 }
