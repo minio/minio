@@ -55,13 +55,13 @@ ENDPOINT:
 
 EXAMPLES:
   1. Start minio gateway server for AWS S3 backend
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.HelpName}}
 
   2. Start minio gateway server for AWS S3 backend with edge caching enabled
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}accesskey
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}secretkey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}accesskey
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}secretkey
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_DRIVES{{.AssignmentOperator}}"/mnt/drive1,/mnt/drive2,/mnt/drive3,/mnt/drive4"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_EXCLUDE{{.AssignmentOperator}}"bucket1/*,*.png"
      {{.Prompt}} {{.EnvVarSetCommand}} MINIO_CACHE_QUOTA{{.AssignmentOperator}}90
@@ -136,7 +136,7 @@ func randString(n int, src rand.Source, prefix string) string {
 // Chains all credential types, in the following order:
 //  - AWS env vars (i.e. AWS_ACCESS_KEY_ID)
 //  - AWS creds file (i.e. AWS_SHARED_CREDENTIALS_FILE or ~/.aws/credentials)
-//  - Static credentials provided by user (i.e. MINIO_ACCESS_KEY)
+//  - Static credentials provided by user (i.e. MINIO_ROOT_USER)
 var defaultProviders = []credentials.Provider{
 	&credentials.EnvAWS{},
 	&credentials.FileAWSCredentials{},

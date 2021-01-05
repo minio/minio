@@ -29,8 +29,8 @@ MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=( "$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server )
 
 function start_minio_3_node() {
-    export MINIO_ACCESS_KEY=minio
-    export MINIO_SECRET_KEY=minio123
+    export MINIO_ROOT_USER=minio
+    export MINIO_ROOT_PASSWORD=minio123
     export MINIO_ERASURE_SET_DRIVE_COUNT=6
 
     start_port=$(shuf -i 10000-65000 -n 1)

@@ -38,8 +38,8 @@ Configure and install keycloak server by following [Keycloak Installation Guide]
 
 ### Configure MinIO
 ```
-$ export MINIO_ACCESS_KEY=minio
-$ export MINIO_SECRET_KEY=minio123
+$ export MINIO_ROOT_USER=minio
+$ export MINIO_ROOT_PASSWORD=minio123
 $ minio server /mnt/export
 ```
 

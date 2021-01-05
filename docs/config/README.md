@@ -32,11 +32,11 @@ $ mc tree --files ~/.minio
 You can provide a custom certs directory using `--certs-dir` command line option.
 
 #### Credentials
-On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`. Using the combination of these two values MinIO encrypts the config stored at the backend.
+On MinIO admin credentials or root credentials are only allowed to be changed using ENVs namely `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`. Using the combination of these two values MinIO encrypts the config stored at the backend.
 
 ```sh
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio13
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio13
 minio server /data
 ```
 
@@ -47,16 +47,16 @@ Additionally if you wish to change the admin credentials, then MinIO will automa
 > Old ENVs are never remembered in memory and are destroyed right after they are used to migrate your existing content with new credentials. You are safe to remove them after the server as successfully started, by restarting the services once again.
 
 ```sh
-export MINIO_ACCESS_KEY=newminio
-export MINIO_SECRET_KEY=newminio123
-export MINIO_ACCESS_KEY_OLD=minio
-export MINIO_SECRET_KEY_OLD=minio123
+export MINIO_ROOT_USER=newminio
+export MINIO_ROOT_PASSWORD=newminio123
+export MINIO_ROOT_USER_OLD=minio
+export MINIO_ROOT_PASSWORD_OLD=minio123
 minio server /data
 ```
 
-Once the migration is complete, server will automatically unset the `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` with in the process namespace.
+Once the migration is complete, server will automatically unset the `MINIO_ROOT_USER_OLD` and `MINIO_ROOT_PASSWORD_OLD` with in the process namespace.
 
-> **NOTE: Make sure to remove `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD` in scripts or service files before next service restarts of the server to avoid double encryption of your existing contents.**
+> **NOTE: Make sure to remove `MINIO_ROOT_USER_OLD` and `MINIO_ROOT_PASSWORD_OLD` in scripts or service files before next service restarts of the server to avoid double encryption of your existing contents.**
 
 #### Region
 ```

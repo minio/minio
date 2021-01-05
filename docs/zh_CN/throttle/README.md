@@ -15,8 +15,8 @@ MinIO服务器允许限制传入的请求：
 
 ```sh
 export MINIO_API_REQUESTS_MAX=1600
-export MINIO_ACCESS_KEY=your-access-key
-export MINIO_SECRET_KEY=your-secret-key
+export MINIO_ROOT_USER=your-access-key
+export MINIO_ROOT_PASSWORD=your-secret-key
 minio server http://server{1...8}/mnt/hdd{1...16}
 ```
 
@@ -39,8 +39,8 @@ mc admin service restart myminio/
 ```sh
 export MINIO_API_REQUESTS_MAX=1600
 export MINIO_API_REQUESTS_DEADLINE=2m
-export MINIO_ACCESS_KEY=your-access-key
-export MINIO_SECRET_KEY=your-secret-key
+export MINIO_ROOT_USER=your-access-key
+export MINIO_ROOT_PASSWORD=your-secret-key
 minio server http://server{1...8}/mnt/hdd{1...16}
 ```
 

@@ -15,8 +15,8 @@ services:
         aliases:
           - minio-cluster
     environment:
-      MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
-      MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      MINIO_ROOT_USER: AKIAIOSFODNN7EXAMPLE
+      MINIO_ROOT_PASSWORD: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
     deploy:
       restart_policy:
         delay: 10s
@@ -46,8 +46,8 @@ services:
         aliases:
           - minio-cluster
     environment:
-      MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
-      MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      MINIO_ROOT_USER: AKIAIOSFODNN7EXAMPLE
+      MINIO_ROOT_PASSWORD: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
     deploy:
       restart_policy:
         delay: 10s
@@ -77,8 +77,8 @@ services:
         aliases:
           - minio-cluster
     environment:
-      MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
-      MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      MINIO_ROOT_USER: AKIAIOSFODNN7EXAMPLE
+      MINIO_ROOT_PASSWORD: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
     deploy:
       restart_policy:
         delay: 10s
@@ -108,8 +108,8 @@ services:
         aliases:
           - minio-cluster
     environment:
-      MINIO_ACCESS_KEY: AKIAIOSFODNN7EXAMPLE
-      MINIO_SECRET_KEY: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+      MINIO_ROOT_USER: AKIAIOSFODNN7EXAMPLE
+      MINIO_ROOT_PASSWORD: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
     deploy:
       restart_policy:
         delay: 10s

@@ -60,8 +60,8 @@ func printGatewayCommonMsg(apiEndpoints []string) {
 	// Colorize the message and print.
 	logStartupMessage(color.Blue("Endpoint: ") + color.Bold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
 	if color.IsTerminal() && !globalCLIContext.Anonymous {
-		logStartupMessage(color.Blue("AccessKey: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logStartupMessage(color.Blue("SecretKey: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+		logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
+		logStartupMessage(color.Blue("RootPassword: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
 	}
 	printEventNotifiers()
 

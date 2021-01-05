@@ -39,7 +39,7 @@ Minio在分布式和单机模式下，所有读写操作都严格遵守**read-af
 
 *注意* 
 
-- 分布式Minio里所有的节点需要有同样的access秘钥和secret秘钥，这样这些节点才能建立联接。为了实现这个，__建议__ 在执行minio server命令之前，在所有节点上先将access秘钥和secret秘钥export成环境变量`MINIO_ACCESS_KEY` 和 `MINIO_SECRET_KEY`。 
+- 分布式Minio里所有的节点需要有同样的access秘钥和secret秘钥，这样这些节点才能建立联接。为了实现这个，__建议__ 在执行minio server命令之前，在所有节点上先将access秘钥和secret秘钥export成环境变量`MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`。 
 - __MinIO 可创建每组4到16个磁盘组成的纠删码集合。所以你提供的磁盘总数必须是其中一个数字的倍数。__
 - MinIO会根据给定的磁盘总数或者节点总数选择最大的纠删码集合大小，确保统一分布，即每个节点参与每个集合的磁盘数量相等。
 - __每个对象被写入一个EC集合中，因此该对象分布在不超过16个磁盘上。__
@@ -58,8 +58,8 @@ Minio在分布式和单机模式下，所有读写操作都严格遵守**read-af
 #### GNU/Linux 和 macOS
 
 ```shell
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...n}/export{1...m}
 ```
 
@@ -71,8 +71,8 @@ minio server http://host{1...n}/export{1...m}
 MinIO支持通过命令，指定新的集群来扩展现有集群（纠删码模式），命令行如下：
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...n}/export{1...m} http://host{o...z}/export{1...m}
 ```
 

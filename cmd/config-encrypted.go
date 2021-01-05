@@ -207,7 +207,7 @@ func migrateIAMConfigsEtcdToEncrypted(ctx context.Context, client *etcd.Client) 
 	}
 
 	if encrypted && globalActiveCred.IsValid() && globalOldCred.IsValid() {
-		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
+		logger.Info("Rotation complete, please make sure to unset MINIO_ROOT_USER_OLD and MINIO_ROOT_PASSWORD_OLD envs")
 	}
 
 	return saveKeyEtcd(ctx, client, backendEncryptedFile, backendEncryptedMigrationComplete)
@@ -294,7 +294,7 @@ func migrateConfigPrefixToEncrypted(objAPI ObjectLayer, activeCredOld auth.Crede
 	}
 
 	if encrypted && globalActiveCred.IsValid() && activeCredOld.IsValid() {
-		logger.Info("Rotation complete, please make sure to unset MINIO_ACCESS_KEY_OLD and MINIO_SECRET_KEY_OLD envs")
+		logger.Info("Rotation complete, please make sure to unset MINIO_ROOT_USER_OLD and MINIO_ROOT_PASSWORD_OLD envs")
 	}
 
 	return saveConfig(GlobalContext, objAPI, backendEncryptedFile, backendEncryptedMigrationComplete)

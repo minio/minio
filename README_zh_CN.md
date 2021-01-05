@@ -8,16 +8,16 @@ MinIO是一个非常轻量的服务,可以很简单的和其他应用的结合�
 ### 稳定版
 ```
 docker run -p 9000:9000 \
-  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
-  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   minio/minio server /data
 ```
 
 ### 尝鲜版
 ```
 docker run -p 9000:9000 \
-  -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
-  -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
+  -e "MINIO_ROOT_USER=AKIAIOSFODNN7EXAMPLE" \
+  -e "MINIO_ROOT_PASSWORD=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   minio/minio:edge server /data
 ```
 

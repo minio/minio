@@ -215,8 +215,8 @@ http://minio.cluster:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=foouser
 
 With multiple OU hierarchies for users, and multiple group search base DN's.
 ```
-$ export MINIO_ACCESS_KEY=minio
-$ export MINIO_SECRET_KEY=minio123
+$ export MINIO_ROOT_USER=minio
+$ export MINIO_ROOT_PASSWORD=minio123
 $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 $ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=%s,ou=Users,ou=BUS1,ou=LOB,dc=somedomain,dc=com;cn=%s,ou=Users,ou=BUS2,ou=LOB,dc=somedomain,dc=com'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'

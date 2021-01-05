@@ -27,8 +27,8 @@ export MINIO_KMS_KES_KEY_NAME=my-minio-key
 #### 3. Start the MinIO Server
 
 ```sh
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio123
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio123
 minio server ~/export
 ```
 

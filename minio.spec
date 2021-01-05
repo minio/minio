@@ -44,8 +44,8 @@ cat <<EOF >> $RPM_BUILD_ROOT/etc/default/minio
 
 # Root credentials for the server.
 # Uncomment both lines before starting the server.
-# MINIO_ACCESS_KEY=Server-Access-Key
-# MINIO_SECRET_KEY=Server-Secret-Key
+# MINIO_ROOT_USER=Server-Root-User
+# MINIO_ROOT_PASSWORD=Server-Root-Password
 
 MINIO_OPTS="--certs-dir /etc/minio/certs"
 EOF
