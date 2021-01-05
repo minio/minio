@@ -166,7 +166,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		Name:         dobj.ObjectName,
 		SSEC:         crypto.SSEC.IsEncrypted(oi.UserDefined),
 		UserTags:     oi.UserTags,
-		DeleteMarker: true,
+		DeleteMarker: oi.DeleteMarker,
 		VersionID:    dobj.VersionID,
 	}
 	return oi.DeleteMarker, rcfg.Replicate(opts)
