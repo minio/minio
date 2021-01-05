@@ -51,6 +51,11 @@ func (sys *BucketVersioningSys) Get(bucket string) (*versioning.Versioning, erro
 	return globalBucketMetadataSys.GetVersioningConfig(bucket)
 }
 
+// Reset BucketVersioningSys to initial state.
+func (sys *BucketVersioningSys) Reset() {
+	// There is currently no internal state.
+}
+
 // NewBucketVersioningSys - creates new versioning system.
 func NewBucketVersioningSys() *BucketVersioningSys {
 	return &BucketVersioningSys{}

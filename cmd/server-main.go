@@ -183,7 +183,12 @@ func newAllSubsystems() {
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
 	// Create new bucket metadata system.
-	globalBucketMetadataSys = NewBucketMetadataSys()
+	if globalBucketMetadataSys == nil {
+		globalBucketMetadataSys = NewBucketMetadataSys()
+	} else {
+		// Reinitialize safely when testing.
+		globalBucketMetadataSys.Reset()
+	}
 
 	// Create the bucket bandwidth monitor
 	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
@@ -210,7 +215,11 @@ func newAllSubsystems() {
 	globalBucketQuotaSys = NewBucketQuotaSys()
 
 	// Create new bucket versioning subsystem
-	globalBucketVersioningSys = NewBucketVersioningSys()
+	if globalBucketVersioningSys == nil {
+		globalBucketVersioningSys = NewBucketVersioningSys()
+	} else {
+		globalBucketVersioningSys.Reset()
+	}
 
 	// Create new bucket replication subsytem
 	globalBucketTargetSys = NewBucketTargetSys()

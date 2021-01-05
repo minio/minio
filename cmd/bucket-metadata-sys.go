@@ -477,6 +477,15 @@ func (sys *BucketMetadataSys) load(ctx context.Context, buckets []BucketInfo, ob
 	}
 }
 
+// Reset the state of the BucketMetadataSys.
+func (sys *BucketMetadataSys) Reset() {
+	sys.Lock()
+	for k := range sys.metadataMap {
+		delete(sys.metadataMap, k)
+	}
+	sys.Unlock()
+}
+
 // NewBucketMetadataSys - creates new policy system.
 func NewBucketMetadataSys() *BucketMetadataSys {
 	return &BucketMetadataSys{
