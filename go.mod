@@ -23,6 +23,8 @@ require (
 	github.com/dswarbrick/smart v0.0.0-20190505152634-909a45200d6d
 	github.com/dustin/go-humanize v1.0.0
 	github.com/eclipse/paho.mqtt.golang v1.3.0
+	github.com/elastic/go-elasticsearch/v7 v7.5.1-0.20210218143428-65f8e1a6f35e
+	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/fatih/color v1.10.0
 	github.com/fatih/structs v1.1.0
 	github.com/go-ldap/ldap/v3 v3.2.4
@@ -61,7 +63,6 @@ require (
 	github.com/nats-io/stan.go v0.8.3
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.0.8
-	github.com/olivere/elastic/v7 v7.0.22
 	github.com/philhofer/fwd v1.1.1
 	github.com/pierrec/lz4 v2.5.2+incompatible
 	github.com/pkg/errors v0.9.1
@@ -72,6 +73,8 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.21.1
+	github.com/sirupsen/logrus v1.7.0 // indirect
+	github.com/smartystreets/assertions v1.1.1 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v1.0.0
 	github.com/tidwall/gjson v1.6.8
@@ -83,6 +86,7 @@ require (
 	github.com/willf/bloom v2.0.3+incompatible
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd v0.0.0-20201125193152-8a03d2e9614b
+	go.opencensus.io v0.22.5 // indirect
 	go.uber.org/zap v1.13.0
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 	golang.org/x/net v0.0.0-20201216054612-986b41b23924

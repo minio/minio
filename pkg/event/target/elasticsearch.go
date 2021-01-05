@@ -17,8 +17,13 @@
 package target
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,7 +35,8 @@ import (
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/pkg/errors"
 
-	"github.com/olivere/elastic/v7"
+	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
+	"github.com/minio/highwayhash"
 )
 
 // Elastic constants
@@ -66,6 +72,9 @@ type ElasticsearchArgs struct {
 	Password   string          `json:"password"`
 }
 
+// magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
+var magicHighwayHash256Key = []byte("\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0")
+
 // Validate ElasticsearchArgs fields
 func (a ElasticsearchArgs) Validate() error {
 	if !a.Enable {
@@ -95,7 +104,7 @@ func (a ElasticsearchArgs) Validate() error {
 type ElasticsearchTarget struct {
 	id         event.TargetID
 	args       ElasticsearchArgs
-	client     *elastic.Client
+	client     *elasticsearch7.Client
 	store      Store
 	loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 }
@@ -122,14 +131,17 @@ func (target *ElasticsearchTarget) IsActive() (bool, error) {
 		}
 		target.client = client
 	}
-	_, code, err := target.client.Ping(target.args.URL.String()).HttpHeadOnly(true).Do(ctx)
+
+	// Check if cluster is running.
+	resp, err := target.client.Ping(
+		target.client.Ping.WithContext(ctx),
+	)
 	if err != nil {
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
-			return false, errNotConnected
-		}
-		return false, err
+		return false, errNotConnected
 	}
-	return !(code >= http.StatusBadRequest), nil
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+	return !resp.IsError(), nil
 }
 
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the elasticsearch connection is active.
@@ -138,7 +150,7 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 		return target.store.Put(eventData)
 	}
 	err := target.send(eventData)
-	if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
+	if xnet.IsNetworkOrHostDown(err, false) {
 		return errNotConnected
 	}
 	return err
@@ -147,28 +159,93 @@ func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 // send - sends the event to the target.
 func (target *ElasticsearchTarget) send(eventData event.Event) error {
 
-	var key string
+	var keyHash string
 
 	exists := func() (bool, error) {
-		return target.client.Exists().Index(target.args.Index).Type("event").Id(key).Do(context.Background())
+		res, err := target.client.Exists(
+			target.args.Index,
+			keyHash,
+		)
+		if err != nil {
+			return false, err
+		}
+		io.Copy(ioutil.Discard, res.Body)
+		res.Body.Close()
+		return !res.IsError(), nil
 	}
 
 	remove := func() error {
 		exists, err := exists()
 		if err == nil && exists {
-			_, err = target.client.Delete().Index(target.args.Index).Type("event").Id(key).Do(context.Background())
+			res, err := target.client.Delete(
+				target.args.Index,
+				keyHash,
+			)
+			if err != nil {
+				return err
+			}
+			defer res.Body.Close()
+			if res.IsError() {
+				err := fmt.Errorf("Delete err: %s", res.String())
+				return err
+			}
+			io.Copy(ioutil.Discard, res.Body)
+			return nil
 		}
 		return err
 	}
 
 	update := func() error {
-		_, err := target.client.Index().Index(target.args.Index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Id(key).Do(context.Background())
-		return err
+		doc := map[string]interface{}{
+			"Records": []event.Event{eventData},
+		}
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		err := enc.Encode(doc)
+		if err != nil {
+			return err
+		}
+		res, err := target.client.Index(
+			target.args.Index,
+			&buf,
+			target.client.Index.WithDocumentID(keyHash),
+		)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+		if res.IsError() {
+			err := fmt.Errorf("Update err: %s", res.String())
+			return err
+		}
+		io.Copy(ioutil.Discard, res.Body)
+		return nil
 	}
 
 	add := func() error {
-		_, err := target.client.Index().Index(target.args.Index).Type("event").BodyJson(map[string]interface{}{"Records": []event.Event{eventData}}).Do(context.Background())
-		return err
+		doc := map[string]interface{}{
+			"Records": []event.Event{eventData},
+		}
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		err := enc.Encode(doc)
+		if err != nil {
+			return err
+		}
+		res, err := target.client.Index(
+			target.args.Index,
+			&buf,
+		)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+		if res.IsError() {
+			err := fmt.Errorf("Add err: %s", res.String())
+			return err
+		}
+		io.Copy(ioutil.Discard, res.Body)
+		return nil
 	}
 
 	if target.args.Format == event.NamespaceFormat {
@@ -177,7 +254,14 @@ func (target *ElasticsearchTarget) send(eventData event.Event) error {
 			return err
 		}
 
-		key = eventData.S3.Bucket.Name + "/" + objectName
+		// Calculate a hash of the key for the id of the ES document.
+		// Id's are limited to 512 bytes, so we need to do this.
+		key := eventData.S3.Bucket.Name + "/" + objectName
+		hh, _ := highwayhash.New(magicHighwayHash256Key) // New will never return error since key is 256 bit
+		hh.Write([]byte(key))
+		hashBytes := hh.Sum(nil)
+		keyHash = base64.URLEncoding.EncodeToString(hashBytes)
+
 		if eventData.EventName == event.ObjectRemovedDelete {
 			err = remove()
 		} else {
@@ -214,7 +298,7 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 	}
 
 	if err := target.send(eventData); err != nil {
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
+		if xnet.IsNetworkOrHostDown(err, false) {
 			return errNotConnected
 		}
 		return err
@@ -226,50 +310,64 @@ func (target *ElasticsearchTarget) Send(eventKey string) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *ElasticsearchTarget) Close() error {
-	if target.client != nil {
-		// Stops the background processes that the client is running.
-		target.client.Stop()
-	}
 	return nil
 }
 
 // createIndex - creates the index if it does not exist.
-func createIndex(client *elastic.Client, args ElasticsearchArgs) error {
-	exists, err := client.IndexExists(args.Index).Do(context.Background())
+func createIndex(client *elasticsearch7.Client, args ElasticsearchArgs) error {
+	res, err := client.Indices.ResolveIndex([]string{args.Index})
 	if err != nil {
 		return err
 	}
-	if !exists {
-		var createIndex *elastic.IndicesCreateResult
-		if createIndex, err = client.CreateIndex(args.Index).Do(context.Background()); err != nil {
+	defer res.Body.Close()
+
+	var v map[string]interface{}
+	found := false
+	if err := json.NewDecoder(res.Body).Decode(&v); err != nil {
+		return fmt.Errorf("Error parsing response body: %v", err)
+	}
+
+	indices := v["indices"].([]interface{})
+	for _, index := range indices {
+		name := index.(map[string]interface{})["name"]
+		if name == args.Index {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		resp, err := client.Indices.Create(args.Index)
+		if err != nil {
 			return err
 		}
-
-		if !createIndex.Acknowledged {
-			return fmt.Errorf("index %v not created", args.Index)
+		defer resp.Body.Close()
+		if resp.IsError() {
+			err := fmt.Errorf("Create index err: %s", res.String())
+			return err
 		}
+		io.Copy(ioutil.Discard, resp.Body)
+		return nil
 	}
 	return nil
 }
 
 // newClient - creates a new elastic client with args provided.
-func newClient(args ElasticsearchArgs) (*elastic.Client, error) {
+func newClient(args ElasticsearchArgs) (*elasticsearch7.Client, error) {
 	// Client options
-	options := []elastic.ClientOptionFunc{elastic.SetURL(args.URL.String()),
-		elastic.SetMaxRetries(10),
-		elastic.SetSniff(false),
-		elastic.SetHttpClient(&http.Client{Transport: args.Transport})}
+	elasticConfig := elasticsearch7.Config{
+		Addresses:  []string{args.URL.String()},
+		Transport:  args.Transport,
+		MaxRetries: 10,
+	}
 	// Set basic auth
 	if args.Username != "" && args.Password != "" {
-		options = append(options, elastic.SetBasicAuth(args.Username, args.Password))
+		elasticConfig.Username = args.Username
+		elasticConfig.Password = args.Password
 	}
 	// Create a client
-	client, err := elastic.NewClient(options...)
+	client, err := elasticsearch7.NewClient(elasticConfig)
 	if err != nil {
-		// https://github.com/olivere/elastic/wiki/Connection-Errors
-		if elastic.IsConnErr(err) || elastic.IsContextErr(err) || xnet.IsNetworkOrHostDown(err, false) {
-			return nil, errNotConnected
-		}
 		return nil, err
 	}
 	if err = createIndex(client, args); err != nil {
