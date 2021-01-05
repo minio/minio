@@ -51,7 +51,7 @@ func init() {
 	logger.RegisterError(config.FmtError)
 
 	rand.Seed(time.Now().UTC().UnixNano())
-	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 3*time.Second)
+	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second)
 
 	initGlobalContext()
 

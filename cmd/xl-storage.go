@@ -64,9 +64,6 @@ const (
 	// Size of each buffer.
 	readAheadBufSize = 1 << 20
 
-	// Small file threshold below which the metadata accompanies the data.
-	smallFileThreshold = 32 * humanize.KiByte
-
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
 )
@@ -1127,12 +1124,7 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
 // for all objects less than `128KiB` this call returns data as well
 // along with metadata.
-func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return fi, err
-	}
-
+func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err == errFileNotFound {
@@ -1167,62 +1159,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, errFileNotFound
 	}
 
-	fi, err = getFileInfo(buf, volume, path, versionID)
-	if err != nil {
-		return fi, err
-	}
-
-	if readData {
-		// Reading data for small objects when
-		// - object has not yet transitioned
-		// - object size lesser than 32KiB
-		// - object has maximum of 1 parts
-		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size < smallFileThreshold && len(fi.Parts) == 1 {
-			fi.Data, err = s.readAllData(volumeDir, pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", fi.Parts[0].Number)))
-			if err != nil {
-				return fi, err
-			}
-		}
-	}
-
-	return fi, nil
-}
-
-func (s *xlStorage) readAllData(volumeDir, filePath string) (buf []byte, err error) {
-	var file *os.File
-	if globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
-		file, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
-	} else {
-		file, err = os.Open(filePath)
-	}
-	if err != nil {
-		if osIsNotExist(err) {
-			// Check if the object doesn't exist because its bucket
-			// is missing in order to return the correct error.
-			_, err = os.Stat(volumeDir)
-			if err != nil && osIsNotExist(err) {
-				return nil, errVolumeNotFound
-			}
-			return nil, errFileNotFound
-		} else if osIsPermission(err) {
-			return nil, errFileAccessDenied
-		} else if isSysErrNotDir(err) || isSysErrIsDir(err) {
-			return nil, errFileNotFound
-		} else if isSysErrHandleInvalid(err) {
-			// This case is special and needs to be handled for windows.
-			return nil, errFileNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		} else if isSysErrTooManyFiles(err) {
-			return nil, errTooManyOpenFiles
-		} else if isSysErrInvalidArg(err) {
-			return nil, errFileNotFound
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	return ioutil.ReadAll(file)
+	return getFileInfo(buf, volume, path, versionID)
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
