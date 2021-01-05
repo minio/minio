@@ -99,7 +99,7 @@ func TestErasureHeal(t *testing.T) {
 		readers := make([]io.ReaderAt, len(disks))
 		for i, disk := range disks {
 			shardFilesize := erasure.ShardFileSize(test.size)
-			readers[i] = newBitrotReader(disk, nil, "testbucket", "testobject", shardFilesize, test.algorithm, bitrotWriterSum(writers[i]), erasure.ShardSize())
+			readers[i] = newBitrotReader(disk, "testbucket", "testobject", shardFilesize, test.algorithm, bitrotWriterSum(writers[i]), erasure.ShardSize())
 		}
 
 		// setup stale disks for the test case

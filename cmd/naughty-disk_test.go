@@ -252,11 +252,11 @@ func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi
 	return d.disk.DeleteVersion(ctx, volume, path, fi)
 }
 
-func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return FileInfo{}, err
 	}
-	return d.disk.ReadVersion(ctx, volume, path, versionID, readData)
+	return d.disk.ReadVersion(ctx, volume, path, versionID)
 }
 
 func (d *naughtyDisk) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
