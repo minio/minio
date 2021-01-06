@@ -89,7 +89,7 @@ func toLicenseInfo(claims jwt.MapClaims) (LicenseInfo, error) {
 	}
 	plan, ok := claims[plan].(string)
 	if !ok {
-		return LicenseInfo{}, errors.New("Invalid service type in claims")
+		return LicenseInfo{}, errors.New("Invalid plan in claims")
 	}
 	return LicenseInfo{
 		Email:           email,
