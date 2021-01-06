@@ -153,22 +153,22 @@ wait:
 					continue
 				}
 
-				zoneIdx := globalEndpoints.GetLocalZoneIdx(disk.Endpoint())
-				if zoneIdx < 0 {
+				poolIdx := globalEndpoints.GetLocalZoneIdx(disk.Endpoint())
+				if poolIdx < 0 {
 					continue
 				}
 
 				// Calculate the set index where the current endpoint belongs
-				z.serverPools[zoneIdx].erasureDisksMu.RLock()
+				z.serverPools[poolIdx].erasureDisksMu.RLock()
 				// Protect reading reference format.
-				setIndex, _, err := findDiskIndex(z.serverPools[zoneIdx].format, format)
-				z.serverPools[zoneIdx].erasureDisksMu.RUnlock()
+				setIndex, _, err := findDiskIndex(z.serverPools[poolIdx].format, format)
+				z.serverPools[poolIdx].erasureDisksMu.RUnlock()
 				if err != nil {
 					printEndpointError(endpoint, err, false)
 					continue
 				}
 
-				erasureSetInZoneDisksToHeal[zoneIdx][setIndex] = append(erasureSetInZoneDisksToHeal[zoneIdx][setIndex], disk)
+				erasureSetInZoneDisksToHeal[poolIdx][setIndex] = append(erasureSetInZoneDisksToHeal[poolIdx][setIndex], disk)
 			}
 
 			buckets, _ := z.ListBuckets(ctx)
@@ -181,11 +181,11 @@ wait:
 			for i, setMap := range erasureSetInZoneDisksToHeal {
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {
-						logger.Info("Healing disk '%s' on %s zone", disk, humanize.Ordinal(i+1))
+						logger.Info("Healing disk '%s' on %s pool", disk, humanize.Ordinal(i+1))
 
 						// So someone changed the drives underneath, healing tracker missing.
 						if !disk.Healing() {
-							logger.Info("Healing tracker missing on '%s', disk was swapped again on %s zone", disk, humanize.Ordinal(i+1))
+							logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool", disk, humanize.Ordinal(i+1))
 							diskID, err := disk.GetDiskID()
 							if err != nil {
 								logger.LogIf(ctx, err)
@@ -209,7 +209,7 @@ wait:
 							continue
 						}
 
-						logger.Info("Healing disk '%s' on %s zone complete", disk, humanize.Ordinal(i+1))
+						logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
 
 						if err := disk.Delete(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix),
 							healingTrackerFilename, false); err != nil && !errors.Is(err, errFileNotFound) {

@@ -94,7 +94,7 @@ Input for the key is the object name specified in `PutObject()`, returns a uniqu
 
 - MinIO does erasure coding at the object level not at the volume level, unlike other object storage vendors. This allows applications to choose different storage class by setting `x-amz-storage-class=STANDARD/REDUCED_REDUNDANCY` for each object uploads so effectively utilizing the capacity of the cluster. Additionally these can also be enforced using IAM policies to make sure the client uploads with correct HTTP headers.
 
-- MinIO also supports expansion of existing clusters in server pools. Each zone is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created. When no such object exists then MinIO simply uses the least used zone.
+- MinIO also supports expansion of existing clusters in server pools. Each pool is a self contained entity with same SLA's (read/write quorum) for each object as original cluster. By using the existing namespace for lookup validation MinIO ensures conflicting objects are not created. When no such object exists then MinIO simply uses the least used pool.
 
 __There are no limits on how many server pools can be combined__
 
@@ -104,23 +104,23 @@ minio server http://host{1...32}/export{1...32} http://host{5...6}/export{1...8}
 
 In above example there are two server pools
 
-- 32 * 32 = 1024 drives zone1
-- 2 * 8 = 16 drives zone2
+- 32 * 32 = 1024 drives pool1
+- 2 * 8 = 16 drives pool2
 
-> Notice the requirement of common SLA here original cluster had 1024 drives with 16 drives per erasure set, second zone is expected to have a minimum of 16 drives to match the original cluster SLA or it should be in multiples of 16.
+> Notice the requirement of common SLA here original cluster had 1024 drives with 16 drives per erasure set, second pool is expected to have a minimum of 16 drives to match the original cluster SLA or it should be in multiples of 16.
 
-MinIO places new objects in server pools based on proportionate free space, per zone. Following pseudo code demonstrates this behavior.
+MinIO places new objects in server pools based on proportionate free space, per pool. Following pseudo code demonstrates this behavior.
 ```go
-func getAvailableZoneIdx(ctx context.Context) int {
+func getAvailablePoolIdx(ctx context.Context) int {
         serverPools := z.getServerPoolsAvailableSpace(ctx)
         total := serverPools.TotalAvailable()
         // choose when we reach this many
         choose := rand.Uint64() % total
         atTotal := uint64(0)
-        for _, zone := range serverPools {
-                atTotal += zone.Available
-                if atTotal > choose && zone.Available > 0 {
-                        return zone.Index
+        for _, pool := range serverPools {
+                atTotal += pool.Available
+                if atTotal > choose && pool.Available > 0 {
+                        return pool.Index
                 }
         }
         // Should not happen, but print values just in case.
