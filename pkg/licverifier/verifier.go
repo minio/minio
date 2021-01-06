@@ -43,11 +43,11 @@ type LicenseInfo struct {
 
 // license key JSON field names
 const (
-	accountID    = "accountId"
+	accountID    = "aid"
 	sub          = "sub"
 	expiresAt    = "exp"
-	organization = "organization"
-	capacity     = "capacity"
+	organization = "org"
+	capacity     = "cap"
 	plan         = "plan"
 )
 

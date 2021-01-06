@@ -55,20 +55,20 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 		expectedLicInfo LicenseInfo
 		shouldPass      bool
 	}{{"", LicenseInfo{}, false},
-		{"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrYW5hZ2FyYWorYzFAbWluaW8uaW8iLCJleHAiOjEuNjQwOTQwMjQ1OTM3ODM5NzQ1ZTksInBsYW4iOiJTVEFOREFSRCIsImlzcyI6InN1Ym5ldEBtaW4uaW8iLCJjYXBhY2l0eSI6NTAsImlhdCI6MS42MDk0MDQyNDU5Mzc4Mzk3NDVlOSwiYWNjb3VudElkIjoxLCJvcmdhbml6YXRpb24iOiJHcmluZ290dHMgSW5jLiJ9.xflbObKf7J0GE9ljZz_r0yoir4L8MnhZ0N-oIkdivzRgL_CbnqaaLDJdn5xFY3LhRysTbn3JPnOmBrzEfVIuYDCoJm7htC3vOi0AjYr0pufsNPsKzJWzh-2pv8SeM0As", LicenseInfo{
+		{"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrYW5hZ2FyYWorYzFAbWluaW8uaW8iLCJjYXAiOjUwLCJvcmciOiJHcmluZ290dHMgSW5jLiIsImV4cCI6MS42NDE0NDYxNjkwMDExOTg4OTRlOSwicGxhbiI6IlNUQU5EQVJEIiwiaXNzIjoic3VibmV0QG1pbi5pbyIsImFpZCI6MSwiaWF0IjoxLjYwOTkxMDE2OTAwMTE5ODg5NGU5fQ.EhTL2xwMHnUoLQF4UR-5bjUCja3whseLU5mb9XEj7PvAae6HEIDCOMEF8Hhh20DN_v_LRE283j2ZlA5zulcXSZXS0CLcrKqbVy6QLvZfvvLuerOjJI-NBa9dSJWJ0WoN", LicenseInfo{
 			Email:           "kanagaraj+c1@minio.io",
 			Organization:    "Gringotts Inc.",
 			AccountID:       1,
 			StorageCapacity: 50,
 			Plan:            "STANDARD",
-			ExpiresAt:       time.Date(2021, time.December, 31, 8, 44, 5, 0, time.UTC),
+			ExpiresAt:       time.Date(2022, time.January, 6, 5, 16, 9, 0, time.UTC),
 		}, true},
 	}
 
 	for i, tc := range testCases {
-		// Fixing the jwt.TimeFunc at 2020-12-31 08:58:20 +0000 UTC to
+		// Fixing the jwt.TimeFunc at 2021-01-06 05:16:09 +0000 UTC to
 		// ensure that the license JWT doesn't expire ever.
-		at(time.Unix(int64(1609405100), 0), func() {
+		at(time.Unix(int64(1609910169), 0), func() {
 			licInfo, err := lv.Verify(tc.lic)
 			if err != nil && tc.shouldPass {
 				t.Fatalf("%d: Expected license to pass verification but failed with %s", i+1, err)
@@ -100,7 +100,7 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 		fmt.Println("Failed to create license verifier", err)
 	}
 
-	licenseKey := "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrYW5hZ2FyYWorYzFAbWluaW8uaW8iLCJleHAiOjEuNjQwOTQwMjQ1OTM3ODM5NzQ1ZTksInBsYW4iOiJTVEFOREFSRCIsImlzcyI6InN1Ym5ldEBtaW4uaW8iLCJjYXBhY2l0eSI6NTAsImlhdCI6MS42MDk0MDQyNDU5Mzc4Mzk3NDVlOSwiYWNjb3VudElkIjoxLCJvcmdhbml6YXRpb24iOiJHcmluZ290dHMgSW5jLiJ9.xflbObKf7J0GE9ljZz_r0yoir4L8MnhZ0N-oIkdivzRgL_CbnqaaLDJdn5xFY3LhRysTbn3JPnOmBrzEfVIuYDCoJm7htC3vOi0AjYr0pufsNPsKzJWzh-2pv8SeM0As"
+	licenseKey := "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrYW5hZ2FyYWorYzFAbWluaW8uaW8iLCJjYXAiOjUwLCJvcmciOiJHcmluZ290dHMgSW5jLiIsImV4cCI6MS42NDE0NDYxNjkwMDExOTg4OTRlOSwicGxhbiI6IlNUQU5EQVJEIiwiaXNzIjoic3VibmV0QG1pbi5pbyIsImFpZCI6MSwiaWF0IjoxLjYwOTkxMDE2OTAwMTE5ODg5NGU5fQ.EhTL2xwMHnUoLQF4UR-5bjUCja3whseLU5mb9XEj7PvAae6HEIDCOMEF8Hhh20DN_v_LRE283j2ZlA5zulcXSZXS0CLcrKqbVy6QLvZfvvLuerOjJI-NBa9dSJWJ0WoN"
 	licInfo, err := lv.Verify(licenseKey)
 	if err != nil {
 		fmt.Println("Failed to verify license key", err)
