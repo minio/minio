@@ -515,15 +515,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	defer rc.Close()
 
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-
-	if length >= readBlockSize {
-		bufp := s.storage.pool.Get().(*[]byte)
-		defer s.storage.pool.Put(bufp)
-
-		io.CopyBuffer(w, rc, *bufp)
-	} else {
-		io.Copy(w, rc)
-	}
+	io.Copy(w, rc)
 	w.(http.Flusher).Flush()
 }
 

@@ -313,14 +313,8 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return pi, toObjectErr(err, bucket, object)
 	}
 
-	bufSize := int64(readSizeV1)
-	if size := data.Size(); size > 0 && bufSize > size {
-		bufSize = size
-	}
-	buf := make([]byte, bufSize)
-
 	tmpPartPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
-	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, buf, data.Size())
+	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, data.Size())
 
 	// Delete temporary part in case of failure. If
 	// PutObjectPart succeeds then there would be nothing to
