@@ -75,7 +75,7 @@ func TestFSStats(t *testing.T) {
 	}
 
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, nil, 0); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -85,7 +85,7 @@ func TestFSStats(t *testing.T) {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "path/to/success-file"), reader, nil, 0); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "path/to/success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -192,7 +192,7 @@ func TestFSCreateAndOpen(t *testing.T) {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
-	if _, err = fsCreateFile(GlobalContext, "", nil, nil, 0); err != errInvalidArgument {
+	if _, err = fsCreateFile(GlobalContext, "", nil, 0); err != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
 	}
 
@@ -201,7 +201,7 @@ func TestFSCreateAndOpen(t *testing.T) {
 	}
 
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, nil, 0); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -229,7 +229,7 @@ func TestFSCreateAndOpen(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		_, err = fsCreateFile(GlobalContext, pathJoin(path, testCase.srcVol, testCase.srcPath), reader, nil, 0)
+		_, err = fsCreateFile(GlobalContext, pathJoin(path, testCase.srcVol, testCase.srcPath), reader, 0)
 		if err != testCase.expectedErr {
 			t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
@@ -258,9 +258,8 @@ func TestFSDeletes(t *testing.T) {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
-	var buf = make([]byte, 4096)
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, reader.Size()); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -396,13 +395,13 @@ func TestFSRemoves(t *testing.T) {
 	}
 
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, nil, 0); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
 	reader.Seek(0, 0)
 
-	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file-new"), reader, nil, 0); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file-new"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -515,7 +514,7 @@ func TestFSRemoveMeta(t *testing.T) {
 	filePath := pathJoin(fsPath, "success-vol", "success-file")
 
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(GlobalContext, filePath, reader, nil, 0); err != nil {
+	if _, err = fsCreateFile(GlobalContext, filePath, reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 

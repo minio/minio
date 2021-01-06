@@ -703,8 +703,8 @@ func TestXLStorageListVols(t *testing.T) {
 	}
 }
 
-// TestXLStorageXlStorageListDir -  TestXLStorages validate the directory listing functionality provided by xlStorage.ListDir .
-func TestXLStorageXlStorageListDir(t *testing.T) {
+// TestXLStorageListDir -  TestXLStorages validate the directory listing functionality provided by xlStorage.ListDir .
+func TestXLStorageListDir(t *testing.T) {
 	// create xlStorage test setup
 	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
@@ -1692,8 +1692,9 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	w := newStreamingBitrotWriter(xlStorage, volName, fileName, size, algo, shardSize)
 	reader := bytes.NewReader(data)
 	for {
-		// Using io.CopyBuffer instead of this loop will not work for us as io.CopyBuffer
-		// will use bytes.Buffer.ReadConfig() which will not do shardSize'ed writes causing error.
+		// Using io.Copy instead of this loop will not work for us as io.Copy
+		// will use bytes.Reader.WriteTo() which will not do shardSize'ed writes
+		// causing error.
 		n, err := reader.Read(shard)
 		w.Write(shard[:n])
 		if err == nil {
