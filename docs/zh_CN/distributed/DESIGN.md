@@ -104,24 +104,24 @@ minio server http://host{1...32}/export{1...32} http://host{5...6}/export{1...8}
 
 以上示例有两个区域
 
-- 32 * 32 = 1024 drives zone1
-- 2 * 8 = 16 drives zone2
+- 32 * 32 = 1024 drives pool1
+- 2 * 8 = 16 drives pool2
 
 > 注意这里对通用SLA的要求，原来的集群有1024个磁盘，每个纠删集合有16个磁盘，第二个区域至少要有16个磁盘才能符合原来集群的SLA，或者应该是16的倍数。
 
 
 MinIO根据每个区域的可用空间比例将新对象放置在区域中。以下伪代码演示了此行为。
 ```go
-func getAvailableZoneIdx(ctx context.Context) int {
+func getAvailablePoolIdx(ctx context.Context) int {
         serverPools := z.getServerPoolsAvailableSpace(ctx)
         total := serverPools.TotalAvailable()
         // choose when we reach this many
         choose := rand.Uint64() % total
         atTotal := uint64(0)
-        for _, zone := range serverPools {
-                atTotal += zone.Available
-                if atTotal > choose && zone.Available > 0 {
-                        return zone.Index
+        for _, pool := range serverPools {
+                atTotal += pool.Available
+                if atTotal > choose && pool.Available > 0 {
+                        return pool.Index
                 }
         }
         // Should not happen, but print values just in case.
