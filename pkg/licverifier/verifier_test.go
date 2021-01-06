@@ -32,7 +32,7 @@ func at(t time.Time, f func()) {
 }
 
 func areEqLicenseInfo(a, b LicenseInfo) bool {
-	if a.Email == b.Email && a.TeamName == b.TeamName && a.AccountID == b.AccountID && a.ServiceType == b.ServiceType && a.StorageCapacity == b.StorageCapacity && a.ExpiresAt.Equal(b.ExpiresAt) {
+	if a.Email == b.Email && a.Organization == b.Organization && a.AccountID == b.AccountID && a.Plan == b.Plan && a.StorageCapacity == b.StorageCapacity && a.ExpiresAt.Equal(b.ExpiresAt) {
 		return true
 	}
 	return false
@@ -55,20 +55,20 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 		expectedLicInfo LicenseInfo
 		shouldPass      bool
 	}{{"", LicenseInfo{}, false},
-		{"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrcCtjMUBtaW5pby5pbyIsInRlYW1OYW1lIjoiR3JpbmdvdHRzIEluYy4iLCJleHAiOjEuNjI4MjAxODYyNjgwNzM3Nzc1ZTksImNhcGFjaXR5Ijo1MCwiaWF0IjoxLjU5NjY2NTg2MjY4MDczNzc3NWU5LCJhY2NvdW50SWQiOjEsInNlcnZpY2VUeXBlIjoiU1RBTkRBUkQifQ._2EgZpjVGo3hRacO2MNavDqZoaP-hwDQ745Z-t-N6lKDwhHOzwhENb9UhiubOQ_yTJ9Ia5EqMhQrC1QCrk8-ThiftmjFGKTyYw5j7gvox_5L-R8HIegACynVlmBlF6IV", LicenseInfo{
-			Email:           "kp+c1@minio.io",
-			TeamName:        "Gringotts Inc.",
+		{"eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrYW5hZ2FyYWorYzFAbWluaW8uaW8iLCJjYXAiOjUwLCJvcmciOiJHcmluZ290dHMgSW5jLiIsImV4cCI6MS42NDE0NDYxNjkwMDExOTg4OTRlOSwicGxhbiI6IlNUQU5EQVJEIiwiaXNzIjoic3VibmV0QG1pbi5pbyIsImFpZCI6MSwiaWF0IjoxLjYwOTkxMDE2OTAwMTE5ODg5NGU5fQ.EhTL2xwMHnUoLQF4UR-5bjUCja3whseLU5mb9XEj7PvAae6HEIDCOMEF8Hhh20DN_v_LRE283j2ZlA5zulcXSZXS0CLcrKqbVy6QLvZfvvLuerOjJI-NBa9dSJWJ0WoN", LicenseInfo{
+			Email:           "kanagaraj+c1@minio.io",
+			Organization:    "Gringotts Inc.",
 			AccountID:       1,
 			StorageCapacity: 50,
-			ServiceType:     "STANDARD",
-			ExpiresAt:       time.Date(2021, time.August, 5, 15, 17, 42, 0, time.FixedZone("PDT", -7*60*60)),
+			Plan:            "STANDARD",
+			ExpiresAt:       time.Date(2022, time.January, 6, 5, 16, 9, 0, time.UTC),
 		}, true},
 	}
 
 	for i, tc := range testCases {
-		// Fixing the jwt.TimeFunc at 2020-08-05 22:17:43 +0000 UTC to
+		// Fixing the jwt.TimeFunc at 2021-01-06 05:16:09 +0000 UTC to
 		// ensure that the license JWT doesn't expire ever.
-		at(time.Unix(int64(1596665863), 0), func() {
+		at(time.Unix(int64(1609910169), 0), func() {
 			licInfo, err := lv.Verify(tc.lic)
 			if err != nil && tc.shouldPass {
 				t.Fatalf("%d: Expected license to pass verification but failed with %s", i+1, err)
@@ -100,7 +100,7 @@ mr/cKCUyBL7rcAvg0zNq1vcSrUSGlAmY3SEDCu3GOKnjG/U4E7+p957ocWSV+mQU
 		fmt.Println("Failed to create license verifier", err)
 	}
 
-	licenseKey := "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrcCtjMUBtaW5pby5pbyIsInRlYW1OYW1lIjoiR3JpbmdvdHRzIEluYy4iLCJleHAiOjEuNjI4MjAxODYyNjgwNzM3Nzc1ZTksImNhcGFjaXR5Ijo1MCwiaWF0IjoxLjU5NjY2NTg2MjY4MDczNzc3NWU5LCJhY2NvdW50SWQiOjEsInNlcnZpY2VUeXBlIjoiU1RBTkRBUkQifQ._2EgZpjVGo3hRacO2MNavDqZoaP-hwDQ745Z-t-N6lKDwhHOzwhENb9UhiubOQ_yTJ9Ia5EqMhQrC1QCrk8-ThiftmjFGKTyYw5j7gvox_5L-R8HIegACynVlmBlF6IV"
+	licenseKey := "eyJhbGciOiJFUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJrYW5hZ2FyYWorYzFAbWluaW8uaW8iLCJjYXAiOjUwLCJvcmciOiJHcmluZ290dHMgSW5jLiIsImV4cCI6MS42NDE0NDYxNjkwMDExOTg4OTRlOSwicGxhbiI6IlNUQU5EQVJEIiwiaXNzIjoic3VibmV0QG1pbi5pbyIsImFpZCI6MSwiaWF0IjoxLjYwOTkxMDE2OTAwMTE5ODg5NGU5fQ.EhTL2xwMHnUoLQF4UR-5bjUCja3whseLU5mb9XEj7PvAae6HEIDCOMEF8Hhh20DN_v_LRE283j2ZlA5zulcXSZXS0CLcrKqbVy6QLvZfvvLuerOjJI-NBa9dSJWJ0WoN"
 	licInfo, err := lv.Verify(licenseKey)
 	if err != nil {
 		fmt.Println("Failed to verify license key", err)
