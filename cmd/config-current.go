@@ -39,6 +39,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/logger/target/http"
+	"github.com/minio/minio/cmd/logger/target/stdoutlog"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -521,6 +522,14 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 			); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize console HTTP target: %w", err))
 			}
+		}
+	}
+
+	if loggerCfg.IsAuditStdout {
+		if err = logger.AddAuditTarget(
+			stdoutlog.New("Audit: "),
+		); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("FML!: %w", err))
 		}
 	}
 
