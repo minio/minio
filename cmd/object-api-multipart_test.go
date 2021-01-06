@@ -157,7 +157,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 
 // Wrapper for calling PutObjectPart tests for both Erasure multiple disks and single node setup.
 func TestObjectAPIPutObjectPart(t *testing.T) {
-	ExecObjectLayerTest(t, testObjectAPIPutObjectPart)
+	ExecExtendedObjectLayerTest(t, testObjectAPIPutObjectPart)
 }
 
 // Tests validate correctness of PutObjectPart.
@@ -289,7 +289,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 
 // Wrapper for calling TestListMultipartUploads tests for both Erasure multiple disks and single node setup.
 func TestListMultipartUploads(t *testing.T) {
-	ExecObjectLayerTest(t, testListMultipartUploads)
+	ExecExtendedObjectLayerTest(t, testListMultipartUploads)
 }
 
 // testListMultipartUploads - Tests validate listing of multipart uploads.
@@ -1643,7 +1643,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 
 // Test for validating complete Multipart upload.
 func TestObjectCompleteMultipartUpload(t *testing.T) {
-	ExecObjectLayerTest(t, testObjectCompleteMultipartUpload)
+	ExecExtendedObjectLayerTest(t, testObjectCompleteMultipartUpload)
 }
 
 // Tests validate CompleteMultipart functionality.

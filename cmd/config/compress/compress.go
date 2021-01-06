@@ -26,19 +26,22 @@ import (
 
 // Config represents the compression settings.
 type Config struct {
-	Enabled    bool     `json:"enabled"`
-	Extensions []string `json:"extensions"`
-	MimeTypes  []string `json:"mime-types"`
+	Enabled        bool     `json:"enabled"`
+	AllowEncrypted bool     `json:"allow_encryption"`
+	Extensions     []string `json:"extensions"`
+	MimeTypes      []string `json:"mime-types"`
 }
 
 // Compression environment variables
 const (
-	Extensions = "extensions"
-	MimeTypes  = "mime_types"
+	Extensions     = "extensions"
+	AllowEncrypted = "allow_encryption"
+	MimeTypes      = "mime_types"
 
-	EnvCompressState      = "MINIO_COMPRESS_ENABLE"
-	EnvCompressExtensions = "MINIO_COMPRESS_EXTENSIONS"
-	EnvCompressMimeTypes  = "MINIO_COMPRESS_MIME_TYPES"
+	EnvCompressState           = "MINIO_COMPRESS_ENABLE"
+	EnvCompressAllowEncryption = "MINIO_COMPRESS_ALLOW_ENCRYPTION"
+	EnvCompressExtensions      = "MINIO_COMPRESS_EXTENSIONS"
+	EnvCompressMimeTypes       = "MINIO_COMPRESS_MIME_TYPES"
 
 	// Include-list for compression.
 	DefaultExtensions = ".txt,.log,.csv,.json,.tar,.xml,.bin"
@@ -50,6 +53,10 @@ var (
 	DefaultKVS = config.KVS{
 		config.KV{
 			Key:   config.Enable,
+			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   AllowEncrypted,
 			Value: config.EnableOff,
 		},
 		config.KV{
@@ -99,6 +106,12 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 	}
 	if !cfg.Enabled {
 		return cfg, nil
+	}
+
+	allowEnc := env.Get(EnvCompressAllowEncryption, kvs.Get(AllowEncrypted))
+	cfg.AllowEncrypted, err = config.ParseBool(allowEnc)
+	if err != nil {
+		return cfg, err
 	}
 
 	compressExtensions := env.Get(EnvCompressExtensions, kvs.Get(Extensions))

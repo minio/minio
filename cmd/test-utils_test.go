@@ -1866,6 +1866,14 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	removeRoots(append(erasureDisks, fsDir))
 }
 
+// ExecExtendedObjectLayerTest will execute the tests with combinations of encrypted & compressed.
+// This can be used to test functionality when reading and writing data.
+func ExecExtendedObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
+	execExtended(t, func(t *testing.T) {
+		ExecObjectLayerAPITest(t, objAPITest, endpoints)
+	})
+}
+
 // function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.
 type objAPITestType func(obj ObjectLayer, instanceType string, bucketName string,
 	apiRouter http.Handler, credentials auth.Credentials, t *testing.T)

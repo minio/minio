@@ -21,10 +21,12 @@ import (
 	"context"
 	"io"
 	"math/rand"
+	"os"
 	"strconv"
 	"testing"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/crypto"
 )
 
 // Return pointer to testOneByteReadEOF{}
@@ -68,10 +70,8 @@ func (r *testOneByteReadNoEOF) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-type ObjectLayerAPISuite struct{}
-
 // Wrapper for calling testMakeBucket for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestMakeBucket(t *testing.T) {
+func TestMakeBucket(t *testing.T) {
 	ExecObjectLayerTest(t, testMakeBucket)
 }
 
@@ -84,8 +84,8 @@ func testMakeBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
 }
 
 // Wrapper for calling testMultipartObjectCreation for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestMultipartObjectCreation(t *testing.T) {
-	ExecObjectLayerTest(t, testMultipartObjectCreation)
+func TestMultipartObjectCreation(t *testing.T) {
+	ExecExtendedObjectLayerTest(t, testMultipartObjectCreation)
 }
 
 // Tests validate creation of part files during Multipart operation.
@@ -128,7 +128,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, t TestErr
 }
 
 // Wrapper for calling testMultipartObjectAbort for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestMultipartObjectAbort(t *testing.T) {
+func TestMultipartObjectAbort(t *testing.T) {
 	ExecObjectLayerTest(t, testMultipartObjectAbort)
 }
 
@@ -173,8 +173,8 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, t TestErrHan
 }
 
 // Wrapper for calling testMultipleObjectCreation for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestMultipleObjectCreation(t *testing.T) {
-	ExecObjectLayerTest(t, testMultipleObjectCreation)
+func TestMultipleObjectCreation(t *testing.T) {
+	ExecExtendedObjectLayerTest(t, testMultipleObjectCreation)
 }
 
 // Tests validate object creation.
@@ -230,7 +230,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 }
 
 // Wrapper for calling TestPaging for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestPaging(t *testing.T) {
+func TestPaging(t *testing.T) {
 	ExecObjectLayerTest(t, testPaging)
 }
 
@@ -434,7 +434,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 }
 
 // Wrapper for calling testObjectOverwriteWorks for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestObjectOverwriteWorks(t *testing.T) {
+func TestObjectOverwriteWorks(t *testing.T) {
 	ExecObjectLayerTest(t, testObjectOverwriteWorks)
 }
 
@@ -471,7 +471,7 @@ func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHan
 }
 
 // Wrapper for calling testNonExistantBucketOperations for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestNonExistantBucketOperations(t *testing.T) {
+func TestNonExistantBucketOperations(t *testing.T) {
 	ExecObjectLayerTest(t, testNonExistantBucketOperations)
 }
 
@@ -488,7 +488,7 @@ func testNonExistantBucketOperations(obj ObjectLayer, instanceType string, t Tes
 }
 
 // Wrapper for calling testBucketRecreateFails for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestBucketRecreateFails(t *testing.T) {
+func TestBucketRecreateFails(t *testing.T) {
 	ExecObjectLayerTest(t, testBucketRecreateFails)
 }
 
@@ -508,9 +508,68 @@ func testBucketRecreateFails(obj ObjectLayer, instanceType string, t TestErrHand
 	}
 }
 
+func execExtended(t *testing.T, fn func(t *testing.T)) {
+	// Exec with default settings...
+	globalCompressConfigMu.Lock()
+	globalCompressConfig.Enabled = false
+	globalCompressConfigMu.Unlock()
+	t.Run("default", func(t *testing.T) {
+		fn(t)
+	})
+	if testing.Short() {
+		return
+	}
+
+	// Enable compression and exec...
+	globalCompressConfigMu.Lock()
+	globalCompressConfig.Enabled = true
+	globalCompressConfig.MimeTypes = nil
+	globalCompressConfig.Extensions = nil
+	globalCompressConfigMu.Unlock()
+	t.Run("compressed", func(t *testing.T) {
+		fn(t)
+	})
+
+	globalAutoEncryption = true
+	os.Setenv("MINIO_KMS_MASTER_KEY", "my-minio-key:6368616e676520746869732070617373776f726420746f206120736563726574")
+	defer os.Setenv("MINIO_KMS_MASTER_KEY", "")
+	var err error
+	GlobalKMS, err = crypto.NewKMS(crypto.KMSConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("encrypted", func(t *testing.T) {
+		fn(t)
+	})
+
+	// Enable compression of encrypted and exec...
+	globalCompressConfigMu.Lock()
+	globalCompressConfig.AllowEncrypted = true
+	globalCompressConfigMu.Unlock()
+	t.Run("compressed+encrypted", func(t *testing.T) {
+		fn(t)
+	})
+
+	// Reset...
+	globalCompressConfigMu.Lock()
+	globalCompressConfig.Enabled = false
+	globalCompressConfig.AllowEncrypted = false
+	globalCompressConfigMu.Unlock()
+	globalAutoEncryption = false
+}
+
+// ExecExtendedObjectLayerTest will execute the tests with combinations of encrypted & compressed.
+// This can be used to test functionality when reading and writing data.
+func ExecExtendedObjectLayerTest(t *testing.T, objTest objTestType) {
+	execExtended(t, func(t *testing.T) {
+		ExecObjectLayerTest(t, objTest)
+	})
+}
+
 // Wrapper for calling testPutObject for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestPutObject(t *testing.T) {
-	ExecObjectLayerTest(t, testPutObject)
+func TestPutObject(t *testing.T) {
+	ExecExtendedObjectLayerTest(t, testPutObject)
 }
 
 // Tests validate PutObject without prefix.
@@ -553,8 +612,8 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 }
 
 // Wrapper for calling testPutObjectInSubdir for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestPutObjectInSubdir(t *testing.T) {
-	ExecObjectLayerTest(t, testPutObjectInSubdir)
+func TestPutObjectInSubdir(t *testing.T) {
+	ExecExtendedObjectLayerTest(t, testPutObjectInSubdir)
 }
 
 // Tests validate PutObject with subdirectory prefix.
@@ -585,7 +644,7 @@ func testPutObjectInSubdir(obj ObjectLayer, instanceType string, t TestErrHandle
 }
 
 // Wrapper for calling testListBuckets for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestListBuckets(t *testing.T) {
+func TestListBuckets(t *testing.T) {
 	ExecObjectLayerTest(t, testListBuckets)
 }
 
@@ -644,7 +703,7 @@ func testListBuckets(obj ObjectLayer, instanceType string, t TestErrHandler) {
 }
 
 // Wrapper for calling testListBucketsOrder for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestListBucketsOrder(t *testing.T) {
+func TestListBucketsOrder(t *testing.T) {
 	ExecObjectLayerTest(t, testListBucketsOrder)
 }
 
@@ -678,7 +737,7 @@ func testListBucketsOrder(obj ObjectLayer, instanceType string, t TestErrHandler
 }
 
 // Wrapper for calling testListObjectsTestsForNonExistantBucket for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestListObjectsTestsForNonExistantBucket(t *testing.T) {
+func TestListObjectsTestsForNonExistantBucket(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjectsTestsForNonExistantBucket)
 }
 
@@ -700,7 +759,7 @@ func testListObjectsTestsForNonExistantBucket(obj ObjectLayer, instanceType stri
 }
 
 // Wrapper for calling testNonExistantObjectInBucket for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestNonExistantObjectInBucket(t *testing.T) {
+func TestNonExistantObjectInBucket(t *testing.T) {
 	ExecObjectLayerTest(t, testNonExistantObjectInBucket)
 }
 
@@ -716,8 +775,8 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, t TestE
 		t.Fatalf("%s: Expected error but found nil", instanceType)
 	}
 	if isErrObjectNotFound(err) {
-		if err.Error() != "Object not found: bucket#dir1" {
-			t.Errorf("%s: Expected the Error message to be `%s`, but instead found `%s`", instanceType, "Object not found: bucket#dir1", err.Error())
+		if err.Error() != "Object not found: bucket/dir1" {
+			t.Errorf("%s: Expected the Error message to be `%s`, but instead found `%s`", instanceType, "Object not found: bucket/dir1", err.Error())
 		}
 	} else {
 		if err.Error() != "fails" {
@@ -727,7 +786,7 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, t TestE
 }
 
 // Wrapper for calling testGetDirectoryReturnsObjectNotFound for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestGetDirectoryReturnsObjectNotFound(t *testing.T) {
+func TestGetDirectoryReturnsObjectNotFound(t *testing.T) {
 	ExecObjectLayerTest(t, testGetDirectoryReturnsObjectNotFound)
 }
 
@@ -770,7 +829,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 }
 
 // Wrapper for calling testContentType for both Erasure and FS.
-func (s *ObjectLayerAPISuite) TestContentType(t *testing.T) {
+func TestContentType(t *testing.T) {
 	ExecObjectLayerTest(t, testContentType)
 }
 

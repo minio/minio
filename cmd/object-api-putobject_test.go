@@ -37,7 +37,7 @@ func md5Header(data []byte) map[string]string {
 
 // Wrapper for calling PutObject tests for both Erasure multiple disks and single node setup.
 func TestObjectAPIPutObjectSingle(t *testing.T) {
-	ExecObjectLayerTest(t, testObjectAPIPutObject)
+	ExecExtendedObjectLayerTest(t, testObjectAPIPutObject)
 }
 
 // Tests validate correctness of PutObject.
