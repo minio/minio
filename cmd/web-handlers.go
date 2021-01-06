@@ -1081,7 +1081,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// obtain the claims here if possible, for audit logging.
 	claims, owner, authErr := webRequestAuthenticate(r)
 
-	defer logger.AuditLog(w, r, "WebUpload", claims.Map())
+	defer logger.AuditLog(w, r, ctx, claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -1321,16 +1321,16 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	vars := mux.Vars(r)
-
 	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
-	defer logger.AuditLog(w, r, "WebDownload", claims.Map())
+	defer logger.AuditLog(w, r, ctx, claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
+	vars := mux.Vars(r)
 
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -1521,7 +1521,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
 
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(w, r, "WebDownloadZip", claims.Map())
+	defer logger.AuditLog(w, r, ctx, claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {

@@ -18,14 +18,13 @@ package logger
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger/message/audit"
 )
 
@@ -125,7 +124,7 @@ func (lrw *ResponseWriter) Size() int {
 }
 
 // AuditLog - logs audit logs to all audit targets.
-func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[string]interface{}, filterKeys ...string) {
+func AuditLog(w http.ResponseWriter, r *http.Request, ctx context.Context, reqClaims map[string]interface{}, filterKeys ...string) {
 	// Fast exit if there is not audit target configured
 	if len(AuditTargets) == 0 {
 		return
@@ -144,11 +143,9 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 		timeToFirstByte = st.TimeToFirstByte
 	}
 
-	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object, err := url.PathUnescape(vars["object"])
-	if err != nil {
-		object = vars["object"]
+	reqInfo := GetReqInfo(ctx)
+	if reqInfo == nil {
+		return
 	}
 
 	entry := audit.ToEntry(w, r, reqClaims, globalDeploymentID)
@@ -158,12 +155,13 @@ func AuditLog(w http.ResponseWriter, r *http.Request, api string, reqClaims map[
 		delete(entry.ReqHeader, filterKey)
 		delete(entry.RespHeader, filterKey)
 	}
-	entry.API.Name = api
-	entry.API.Bucket = bucket
-	entry.API.Object = object
+	entry.API.Name = reqInfo.API
+	entry.API.Bucket = reqInfo.BucketName
+	entry.API.Object = reqInfo.ObjectName
 	entry.API.Status = http.StatusText(statusCode)
 	entry.API.StatusCode = statusCode
 	entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
+	entry.Tags = reqInfo.GetTagsMap()
 	// ttfb will be recorded only for GET requests, Ignore such cases where ttfb will be empty.
 	if timeToFirstByte != 0 {
 		entry.API.TimeToFirstByte = strconv.FormatInt(timeToFirstByte.Nanoseconds(), 10) + "ns"

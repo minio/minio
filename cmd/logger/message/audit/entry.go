@@ -37,6 +37,7 @@ type Entry struct {
 		Name            string `json:"name,omitempty"`
 		Bucket          string `json:"bucket,omitempty"`
 		Object          string `json:"object,omitempty"`
+		BackendServers  string `json:"servers,omitempty"`
 		Status          string `json:"status,omitempty"`
 		StatusCode      int    `json:"statusCode,omitempty"`
 		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
@@ -49,6 +50,7 @@ type Entry struct {
 	ReqQuery   map[string]string      `json:"requestQuery,omitempty"`
 	ReqHeader  map[string]string      `json:"requestHeader,omitempty"`
 	RespHeader map[string]string      `json:"responseHeader,omitempty"`
+	Tags       map[string]string      `json:"tags,omitempty"`
 }
 
 // ToEntry - constructs an audit entry object.

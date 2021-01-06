@@ -40,7 +40,7 @@ const (
 func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketVersioning")
 
-	defer logger.AuditLog(w, r, "PutBucketVersioning", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, ctx, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -98,7 +98,7 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 func (api objectAPIHandlers) GetBucketVersioningHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketVersioning")
 
-	defer logger.AuditLog(w, r, "GetBucketVersioning", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, ctx, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

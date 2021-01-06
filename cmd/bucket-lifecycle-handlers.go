@@ -38,7 +38,7 @@ const (
 func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketLifecycle")
 
-	defer logger.AuditLog(w, r, "PutBucketLifecycle", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, ctx, mustGetClaimsFromToken(r))
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -103,7 +103,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketLifecycle")
 
-	defer logger.AuditLog(w, r, "GetBucketLifecycle", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, ctx, mustGetClaimsFromToken(r))
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
@@ -145,7 +145,7 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 func (api objectAPIHandlers) DeleteBucketLifecycleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DeleteBucketLifecycle")
 
-	defer logger.AuditLog(w, r, "DeleteBucketLifecycle", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(w, r, ctx, mustGetClaimsFromToken(r))
 
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {

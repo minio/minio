@@ -88,7 +88,8 @@ func registerWebRouter(router *mux.Router) error {
 			if globalHTTPTrace.NumSubscribers() > 0 {
 				globalHTTPTrace.Publish(WebTrace(ri))
 			}
-			logger.AuditLog(ri.ResponseWriter, ri.Request, ri.Method, claims.Map())
+			ctx := newContext(ri.Request, ri.ResponseWriter, ri.Method)
+			logger.AuditLog(ri.ResponseWriter, ri.Request, ctx, claims.Map())
 		}
 	})
 
