@@ -444,6 +444,9 @@ func (sys *IAMSys) Initialized() bool {
 
 // Init - initializes config system by reading entries from config/iam
 func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
+	// Initialize IAM store
+	sys.InitStore(objAPI)
+
 	retryCtx, cancel := context.WithCancel(ctx)
 
 	// Indicate to our routine to exit cleanly upon return.

@@ -356,9 +356,6 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
 
-	// Initialize IAM store
-	globalIAMSys.InitStore(newObject)
-
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
 		// Background this operation.
