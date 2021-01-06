@@ -68,7 +68,6 @@ func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType str
 
 // ListBucketTargets - gets list of bucket targets for this bucket.
 func (sys *BucketTargetSys) ListBucketTargets(ctx context.Context, bucket string) (*madmin.BucketTargets, error) {
-
 	sys.RLock()
 	defer sys.RUnlock()
 
@@ -130,9 +129,13 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	sys.Lock()
 	defer sys.Unlock()
 
-	tgts := sys.targetsMap[bucket]
+	tgts, ok := sys.targetsMap[bucket]
+	if !ok {
+		return BucketRemoteTargetNotFound{Bucket: bucket}
+	}
+
 	newtgts := make([]madmin.BucketTarget, len(tgts))
-	labels := make(map[string]struct{})
+	labels := make(map[string]struct{}, len(tgts))
 	found := false
 	for idx, t := range tgts {
 		labels[t.Label] = struct{}{}
@@ -198,9 +201,12 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	// delete ARN type from list of matching targets
 	sys.Lock()
 	defer sys.Unlock()
-	targets := make([]madmin.BucketTarget, 0)
 	found := false
-	tgts := sys.targetsMap[bucket]
+	tgts, ok := sys.targetsMap[bucket]
+	if !ok {
+		return BucketRemoteTargetNotFound{Bucket: bucket}
+	}
+	targets := make([]madmin.BucketTarget, 0, len(tgts))
 	for _, tgt := range tgts {
 		if tgt.Arn != arnStr {
 			targets = append(targets, tgt)
