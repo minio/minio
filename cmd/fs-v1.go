@@ -857,11 +857,6 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 	}
 	defer reader.Close()
 
-	bufSize := int64(readSizeV1)
-	if length > 0 && bufSize > length {
-		bufSize = length
-	}
-
 	// For negative length we read everything.
 	if length < 0 {
 		length = size - offset
@@ -874,10 +869,7 @@ func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offse
 		return err
 	}
 
-	// Allocate a staging buffer.
-	buf := make([]byte, int(bufSize))
-
-	_, err = io.CopyBuffer(writer, io.LimitReader(reader, length), buf)
+	_, err = io.Copy(writer, io.LimitReader(reader, length))
 	// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
 	if err == io.ErrClosedPipe {
 		err = nil
@@ -1199,15 +1191,8 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// so that cleaning it up will be easy if the server goes down.
 	tempObj := mustGetUUID()
 
-	// Allocate a buffer to Read() from request body
-	bufSize := int64(readSizeV1)
-	if size := data.Size(); size > 0 && bufSize > size {
-		bufSize = size
-	}
-
-	buf := make([]byte, int(bufSize))
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
+	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, data.Size())
 
 	// Delete the temporary object in the case of a
 	// failure. If PutObject succeeds, then there would be

@@ -38,7 +38,7 @@ minio server /path/to/nfs-volume
 
 ### Windows 2012 Server
 
-示例1: 运行Minio实例在持载在`\\remote-server\cifs`路径下的共享后端存储。 
+示例1: 运行Minio实例在持载在`\\remote-server\cifs`路径下的共享后端存储。
 
 On windows server1
 ```cmd
@@ -94,7 +94,7 @@ GetObject()持有`fs.json`的一个读锁。
 
 ... you can perform other operations here ...
 
-	_, err = io.CopyBuffer(writer, reader, buf)
+	_, err = io.Copy(writer, reader)
 
 ... after successful copy operation unlocks the read lock ...
 ```

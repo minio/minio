@@ -90,7 +90,7 @@ GetObject() holds a read lock on `fs.json`.
 
 ... you can perform other operations here ...
 
-	_, err = io.CopyBuffer(writer, reader, buf)
+	_, err = io.Copy(writer, reader)
 
 ... after successful copy operation unlocks the read lock ...
 ```

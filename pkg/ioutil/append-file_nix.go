@@ -40,8 +40,6 @@ func AppendFile(dst string, src string, osync bool) error {
 		return err
 	}
 	defer srcFile.Close()
-	// Allocate staging buffer.
-	var buf = make([]byte, defaultAppendBufferSize)
-	_, err = io.CopyBuffer(appendFile, srcFile, buf)
+	_, err = io.Copy(appendFile, srcFile)
 	return err
 }

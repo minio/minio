@@ -22,12 +22,8 @@ import (
 	"io"
 	"os"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/disk"
 )
-
-// defaultAppendBufferSize - Default buffer size for the AppendFile
-const defaultAppendBufferSize = humanize.MiByte
 
 // WriteOnCloser implements io.WriteCloser and always
 // executes at least one write operation if it is closed.
@@ -186,7 +182,7 @@ const directioAlignSize = 4096
 // 4K page boundaries. Without passing aligned buffer may cause
 // this function to return error.
 //
-// This code is similar in spirit to io.CopyBuffer but it is only to be
+// This code is similar in spirit to io.Copy but it is only to be
 // used with DIRECT I/O based file descriptor and it is expected that
 // input writer *os.File not a generic io.Writer. Make sure to have
 // the file opened for writes with syscall.O_DIRECT flag.

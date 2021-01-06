@@ -31,9 +31,6 @@ const (
 	// Block size used for all internal operations version 1.
 	blockSizeV1 = 10 * humanize.MiByte
 
-	// Staging buffer read size for all internal operations version 1.
-	readSizeV1 = 1 * humanize.MiByte
-
 	// Buckets meta prefix.
 	bucketMetaPrefix = "buckets"
 

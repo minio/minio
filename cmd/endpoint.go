@@ -196,7 +196,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 	}, nil
 }
 
-// ZoneEndpoints represent endpoints in a given zone
+// ZoneEndpoints represent endpoints in a given pool
 // along with its setCount and setDriveCount.
 type ZoneEndpoints struct {
 	SetCount     int
@@ -207,8 +207,8 @@ type ZoneEndpoints struct {
 // EndpointServerPools - list of list of endpoints
 type EndpointServerPools []ZoneEndpoints
 
-// GetLocalZoneIdx returns the zone which endpoint belongs to locally.
-// if ep is remote this code will return -1 zoneIndex
+// GetLocalZoneIdx returns the pool which endpoint belongs to locally.
+// if ep is remote this code will return -1 poolIndex
 func (l EndpointServerPools) GetLocalZoneIdx(ep Endpoint) int {
 	for i, zep := range l {
 		for _, cep := range zep.Endpoints {
@@ -222,7 +222,7 @@ func (l EndpointServerPools) GetLocalZoneIdx(ep Endpoint) int {
 	return -1
 }
 
-// Add add zone endpoints
+// Add add pool endpoints
 func (l *EndpointServerPools) Add(zeps ZoneEndpoints) error {
 	existSet := set.NewStringSet()
 	for _, zep := range *l {
@@ -478,8 +478,8 @@ func (endpoints Endpoints) UpdateIsLocal(foundPrevLocal bool) error {
 						// participate atleast one disk and be local.
 						//
 						// In special cases for replica set with expanded
-						// zone setups we need to make sure to provide
-						// value of foundPrevLocal from zone1 if we already
+						// pool setups we need to make sure to provide
+						// value of foundPrevLocal from pool1 if we already
 						// found a local setup. Only if we haven't found
 						// previous local we continue to wait to look for
 						// atleast one local.

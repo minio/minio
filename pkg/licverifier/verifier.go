@@ -34,21 +34,21 @@ type LicenseVerifier struct {
 // LicenseInfo holds customer metadata present in the license key.
 type LicenseInfo struct {
 	Email           string    // Email of the license key requestor
-	TeamName        string    // Subnet team name
+	Organization    string    // Subnet organization name
 	AccountID       int64     // Subnet account id
 	StorageCapacity int64     // Storage capacity used in TB
-	ServiceType     string    // Subnet service type
+	Plan            string    // Subnet plan
 	ExpiresAt       time.Time // Time of license expiry
 }
 
 // license key JSON field names
 const (
-	accountID   = "accountId"
-	sub         = "sub"
-	expiresAt   = "exp"
-	teamName    = "teamName"
-	capacity    = "capacity"
-	serviceType = "serviceType"
+	accountID    = "aid"
+	sub          = "sub"
+	expiresAt    = "exp"
+	organization = "org"
+	capacity     = "cap"
+	plan         = "plan"
 )
 
 // NewLicenseVerifier returns an initialized license verifier with the given
@@ -79,24 +79,24 @@ func toLicenseInfo(claims jwt.MapClaims) (LicenseInfo, error) {
 		return LicenseInfo{}, errors.New("Invalid time of expiry in claims")
 	}
 	expiresAt := time.Unix(int64(expiryTS), 0)
-	tName, ok := claims[teamName].(string)
+	orgName, ok := claims[organization].(string)
 	if !ok {
-		return LicenseInfo{}, errors.New("Invalid team name in claims")
+		return LicenseInfo{}, errors.New("Invalid organization in claims")
 	}
 	storageCap, ok := claims[capacity].(float64)
 	if !ok {
 		return LicenseInfo{}, errors.New("Invalid storage capacity in claims")
 	}
-	sType, ok := claims[serviceType].(string)
+	plan, ok := claims[plan].(string)
 	if !ok {
-		return LicenseInfo{}, errors.New("Invalid service type in claims")
+		return LicenseInfo{}, errors.New("Invalid plan in claims")
 	}
 	return LicenseInfo{
 		Email:           email,
-		TeamName:        tName,
+		Organization:    orgName,
 		AccountID:       int64(accID),
 		StorageCapacity: int64(storageCap),
-		ServiceType:     sType,
+		Plan:            plan,
 		ExpiresAt:       expiresAt,
 	}, nil
 

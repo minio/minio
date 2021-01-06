@@ -672,8 +672,8 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 func getLocalDiskIDs(z *erasureServerPools) []string {
 	var ids []string
 
-	for zoneIdx := range z.serverPools {
-		for _, set := range z.serverPools[zoneIdx].sets {
+	for poolIdx := range z.serverPools {
+		for _, set := range z.serverPools[poolIdx].sets {
 			disks := set.getDisks()
 			for _, disk := range disks {
 				if disk == nil {
