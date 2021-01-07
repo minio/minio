@@ -163,9 +163,9 @@ func formatErasureCleanupTmpLocalEndpoints(endpoints Endpoints) error {
 // https://github.com/minio/minio/issues/5667
 var errErasureV3ThisEmpty = fmt.Errorf("Erasure format version 3 has This field empty")
 
-// IsServerResolvable - checks if the endpoint is resolvable
+// isServerResolvable - checks if the endpoint is resolvable
 // by sending a naked HTTP request with liveness checks.
-func IsServerResolvable(endpoint Endpoint) error {
+func isServerResolvable(endpoint Endpoint) error {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -244,7 +244,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 				return nil, nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
 			}
 			if retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", endpoints[i], IsServerResolvable(endpoints[i]))
+				logger.Info("Unable to connect to %s: %v\n", endpoints[i], isServerResolvable(endpoints[i]))
 			}
 		}
 	}
