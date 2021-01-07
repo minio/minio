@@ -834,15 +834,15 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		}
 		// Send request to each disk.
 		go func() {
-			err := d.WalkDir(ctx, WalkDirOptions{
+			werr := d.WalkDir(ctx, WalkDirOptions{
 				Bucket:         opts.bucket,
 				BaseDir:        opts.path,
 				Recursive:      opts.recursive,
 				ReportNotFound: opts.reportNotFound,
 				FilterPrefix:   opts.filterPrefix}, w)
-			w.CloseWithError(err)
-			if err != io.EOF && err != nil && err.Error() != errFileNotFound.Error() {
-				logger.LogIf(ctx, err)
+			w.CloseWithError(werr)
+			if werr != io.EOF && werr != nil && werr.Error() != errFileNotFound.Error() && werr.Error() != errVolumeNotFound.Error() {
+				logger.LogIf(ctx, werr)
 			}
 		}()
 	}
@@ -878,7 +878,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 					fnf++
 					continue
 				}
-
+				if err.Error() == errVolumeNotFound.Error() {
+					atEOF++
+					fnf++
+					continue
+				}
 				hasErr++
 				errs[i] = err
 				continue
