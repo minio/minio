@@ -166,7 +166,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		Name:         dobj.ObjectName,
 		SSEC:         crypto.SSEC.IsEncrypted(oi.UserDefined),
 		UserTags:     oi.UserTags,
-		DeleteMarker: true,
+		DeleteMarker: oi.DeleteMarker,
 		VersionID:    dobj.VersionID,
 	}
 	return oi.DeleteMarker, rcfg.Replicate(opts)
@@ -441,39 +441,43 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		}
 	}
 
-	target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
-	if err != nil {
-		gr.Close()
-		logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%s", bucket, cfg.RoleArn, err))
-		return
-	}
-	putOpts := putReplicationOpts(ctx, dest, objInfo)
 	replicationStatus := replication.Complete
+	if rtype != replicateAll {
+		gr.Close()
 
-	// Setup bandwidth throttling
-	peers, _ := globalEndpoints.peers()
-	totalNodesCount := len(peers)
-	if totalNodesCount == 0 {
-		totalNodesCount = 1 // For standalone erasure coding
-	}
-	b := target.BandwidthLimit / int64(totalNodesCount)
-	var headerSize int
-	for k, v := range putOpts.Header() {
-		headerSize += len(k) + len(v)
-	}
-	r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
-	if rtype == replicateAll {
-		_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts)
-	} else {
 		// replicate metadata for object tagging/copy with metadata replacement
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
 		_, err = tgt.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts)
-	}
+		if err != nil {
+			replicationStatus = replication.Failed
+		}
+	} else {
+		target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%s", bucket, cfg.RoleArn, err))
+			gr.Close()
+			return
+		}
 
-	r.Close()
-	gr.Close()
-	if err != nil {
-		replicationStatus = replication.Failed
+		putOpts := putReplicationOpts(ctx, dest, objInfo)
+		// Setup bandwidth throttling
+		peers, _ := globalEndpoints.peers()
+		totalNodesCount := len(peers)
+		if totalNodesCount == 0 {
+			totalNodesCount = 1 // For standalone erasure coding
+		}
+		b := target.BandwidthLimit / int64(totalNodesCount)
+		var headerSize int
+		for k, v := range putOpts.Header() {
+			headerSize += len(k) + len(v)
+		}
+		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
+		_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts)
+		if err != nil {
+			replicationStatus = replication.Failed
+		}
+		r.Close()
+		gr.Close()
 	}
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
 	if objInfo.UserTags != "" {

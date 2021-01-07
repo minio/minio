@@ -31,7 +31,7 @@ import (
 
 // Wrapper for calling GetObject tests for both Erasure multiple disks and single node setup.
 func TestGetObject(t *testing.T) {
-	ExecObjectLayerTest(t, testGetObject)
+	ExecExtendedObjectLayerTest(t, testGetObject)
 }
 
 // ObjectLayer.GetObject is called with series of cases for valid and erroneous inputs and the result is validated.

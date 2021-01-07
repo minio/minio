@@ -36,7 +36,7 @@ To start a distributed MinIO instance, you just need to pass drive locations as 
 
 __NOTE:__
 
-- All the nodes running distributed MinIO need to have same access key and secret key for the nodes to connect. To achieve this, it is __recommended__ to export access key and secret key as environment variables, `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY`, on all the nodes before executing MinIO server command.
+- All the nodes running distributed MinIO need to have same access key and secret key for the nodes to connect. To achieve this, it is __recommended__ to export access key and secret key as environment variables, `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`, on all the nodes before executing MinIO server command.
 - __MinIO creates erasure-coding sets of *4* to *16* drives per set.  The number of drives you provide in total must be a multiple of one of those numbers.__
 - __MinIO chooses the largest EC set size which divides into the total number of drives or total number of nodes given - making sure to keep the uniform distribution i.e each node participates equal number of drives per set.
 - __Each object is written to a single EC set, and therefore is spread over no more than 16 drives.__
@@ -54,8 +54,8 @@ Example 1: Start distributed MinIO instance on n nodes with m drives each mounte
 #### GNU/Linux and macOS
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...n}/export{1...m}
 ```
 
@@ -67,8 +67,8 @@ minio server http://host{1...n}/export{1...m}
 MinIO supports expanding distributed erasure coded clusters by specifying new set of clusters on the command-line as shown below:
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...n}/export{1...m} http://host{o...z}/export{1...m}
 ```
 
@@ -77,10 +77,10 @@ For example:
 minio server http://host{1...4}/export{1...16} http://host{5...12}/export{1...16}
 ```
 
-Now the server has expanded total storage by _(newly_added_servers\*m)_ more disks, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a zone. There are 2 server pools in this example. New objects are placed in server pools in proportion to the amount of free space in each zone. Within each zone, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
+Now the server has expanded total storage by _(newly_added_servers\*m)_ more disks, taking the total count to _(existing_servers\*m)+(newly_added_servers\*m)_ disks. New object upload requests automatically start using the least used cluster. This expansion strategy works endlessly, so you can perpetually expand your clusters as needed.  When you restart, it is immediate and non-disruptive to the applications. Each group of servers in the command-line is called a pool. There are 2 server pools in this example. New objects are placed in server pools in proportion to the amount of free space in each pool. Within each pool, the location of the erasure-set of drives is determined based on a deterministic hashing algorithm.
 
-> __NOTE:__ __Each zone you add must have the same erasure coding set size as the original zone, so the same data redundancy SLA is maintained.__
-> For example, if your first zone was 8 drives, you could add further server pools of 16, 32 or 1024 drives each. All you have to make sure is deployment SLA is multiples of original data redundancy SLA i.e 8.
+> __NOTE:__ __Each pool you add must have the same erasure coding set size as the original pool, so the same data redundancy SLA is maintained.__
+> For example, if your first pool was 8 drives, you could add further server pools of 16, 32 or 1024 drives each. All you have to make sure is deployment SLA is multiples of original data redundancy SLA i.e 8.
 
 ## 3. Test your setup
 To test this setup, access the MinIO server via browser or [`mc`](https://docs.min.io/docs/minio-client-quickstart-guide).

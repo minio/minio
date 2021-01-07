@@ -26,7 +26,7 @@ Once the header is validated, we proceed to the actual data structure of the `xl
 - LegacyObjectType (preserves existing deployments and older xl.json format)
 - DeleteMarker (a versionId to capture the DELETE sequences implemented primarily for AWS spec compatibility)
 
-A sample msgpack-JSON `xl.meta`, you can debug the content inside `xl.meta` using [xl-meta-to-json.go](https://github.com/minio/minio/blob/master/docs/bucket/versioning/xl-meta-to-json.go) program.
+A sample msgpack-JSON `xl.meta`, you can debug the content inside `xl.meta` using [xl-meta.go](https://github.com/minio/minio/blob/master/docs/bucket/versioning/xl-meta.go) program.
 ```json
 {
   "Versions": [

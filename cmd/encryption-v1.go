@@ -353,9 +353,7 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 
 // DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
 // reader
-func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, offset,
-	length int64, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (
-	io.Reader, error) {
+func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
 
 	bucket, object := oi.Bucket, oi.Name
 	// Single part case

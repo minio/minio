@@ -121,9 +121,9 @@ spec:
         - /data
         env:
         # MinIO access key and secret key
-        - name: MINIO_ACCESS_KEY
+        - name: MINIO_ROOT_USER
           value: "minio"
-        - name: MINIO_SECRET_KEY
+        - name: MINIO_ROOT_PASSWORD
           value: "minio123"
         ports:
         - containerPort: 9000
@@ -273,9 +273,9 @@ spec:
       containers:
       - name: minio
         env:
-        - name: MINIO_ACCESS_KEY
+        - name: MINIO_ROOT_USER
           value: "minio"
-        - name: MINIO_SECRET_KEY
+        - name: MINIO_ROOT_PASSWORD
           value: "minio123"
         image: minio/minio:RELEASE.2017-05-05T01-14-51Z
         args:
@@ -459,9 +459,9 @@ spec:
         - gcp_project_id
         env:
         # MinIO access key and secret key
-        - name: MINIO_ACCESS_KEY
+        - name: MINIO_ROOT_USER
           value: "minio"
-        - name: MINIO_SECRET_KEY
+        - name: MINIO_ROOT_PASSWORD
           value: "minio123"
         # Google Cloud Service uses this variable
         - name: GOOGLE_APPLICATION_CREDENTIALS

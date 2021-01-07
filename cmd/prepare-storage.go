@@ -228,7 +228,7 @@ func IsServerResolvable(endpoint Endpoint) error {
 // connect to list of endpoints and load all Erasure disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, zoneCount, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
+func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints)
 
@@ -272,8 +272,8 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitErasureDisks(sErrs) && firstDisk {
-		logger.Info("Formatting %s zone, %v set(s), %v drives per set.",
-			humanize.Ordinal(zoneCount), setCount, setDriveCount)
+		logger.Info("Formatting %s pool, %v set(s), %v drives per set.",
+			humanize.Ordinal(poolCount), setCount, setDriveCount)
 
 		// Initialize erasure code format on disks
 		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, "", deploymentID, sErrs)
@@ -345,7 +345,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatErasure(firstDisk bool, endpoints Endpoints, zoneCount, setCount, setDriveCount int, deploymentID string) ([]StorageAPI, *formatErasureV3, error) {
+func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) ([]StorageAPI, *formatErasureV3, error) {
 	if len(endpoints) == 0 || setCount == 0 || setDriveCount == 0 {
 		return nil, nil, errInvalidArgument
 	}
@@ -372,7 +372,7 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, zoneCount, setCou
 	for {
 		select {
 		case <-ticker.C:
-			storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, zoneCount, setCount, setDriveCount, deploymentID)
+			storageDisks, format, err := connectLoadInitFormats(tries, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID)
 			if err != nil {
 				tries++
 				switch err {

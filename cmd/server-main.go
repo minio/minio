@@ -83,13 +83,13 @@ EXAMPLES:
      {{.Prompt}} {{.HelpName}} /mnt/data{1...64}
 
   3. Start distributed minio server on an 32 node setup with 32 drives each, run following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...32}.example.com/mnt/export{1...32}
 
   4. Start distributed minio server in an expanded setup, run the following command on all the nodes
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ACCESS_KEY{{.AssignmentOperator}}minio
-     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_SECRET_KEY{{.AssignmentOperator}}miniostorage
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_USER{{.AssignmentOperator}}minio
+     {{.Prompt}} {{.EnvVarSetCommand}} MINIO_ROOT_PASSWORD{{.AssignmentOperator}}miniostorage
      {{.Prompt}} {{.HelpName}} http://node{1...16}.example.com/mnt/export{1...32} \
             http://node{17...64}.example.com/mnt/export{1...64}
 `,
@@ -183,7 +183,12 @@ func newAllSubsystems() {
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
 	// Create new bucket metadata system.
-	globalBucketMetadataSys = NewBucketMetadataSys()
+	if globalBucketMetadataSys == nil {
+		globalBucketMetadataSys = NewBucketMetadataSys()
+	} else {
+		// Reinitialize safely when testing.
+		globalBucketMetadataSys.Reset()
+	}
 
 	// Create the bucket bandwidth monitor
 	globalBucketMonitor = bandwidth.NewMonitor(GlobalServiceDoneCh)
@@ -210,7 +215,11 @@ func newAllSubsystems() {
 	globalBucketQuotaSys = NewBucketQuotaSys()
 
 	// Create new bucket versioning subsystem
-	globalBucketVersioningSys = NewBucketVersioningSys()
+	if globalBucketVersioningSys == nil {
+		globalBucketVersioningSys = NewBucketVersioningSys()
+	} else {
+		globalBucketVersioningSys.Reset()
+	}
 
 	// Create new bucket replication subsytem
 	globalBucketTargetSys = NewBucketTargetSys()
@@ -327,7 +336,7 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 			}
 		}
 		for _, bucket := range buckets {
-			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{}); err != nil {
+			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{Recreate: true}); err != nil {
 				return fmt.Errorf("Unable to list buckets to heal: %w", err)
 			}
 		}
@@ -346,9 +355,6 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		// Any other config errors we simply print a message and proceed forward.
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing %w", err))
 	}
-
-	// Initialize IAM store
-	globalIAMSys.InitStore(newObject)
 
 	// Populate existing buckets to the etcd backend
 	if globalDNSConfig != nil {
@@ -511,7 +517,7 @@ func serverMain(ctx *cli.Context) {
 	printStartupMessage(getAPIEndpoints(), err)
 
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ACCESS_KEY' and 'MINIO_SECRET_KEY'", globalActiveCred)
+		msg := fmt.Sprintf("Detected default credentials '%s', please change the credentials immediately using 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD'", globalActiveCred)
 		logger.StartupMessage(color.RedBold(msg))
 	}
 

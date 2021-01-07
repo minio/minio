@@ -22,8 +22,8 @@ MinIO的纠删码功能限制了最多只能使用16块磁盘。这就限制了�
 你需要有多块磁盘，例如 `/export1, /export2 .... /export24`。 然后在你想要启动MinIO的所有节点上运行以下命令。
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server /export{1...24}
 ```
 
@@ -31,8 +31,8 @@ minio server /export{1...24}
 你需要有多块在不同服务器上的磁盘，例如`http://host1/export1, http://host2/export2 .... http://host4/export16`。 然后在你想要启动MinIO的所有节点上运行以下命令。
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio server http://host{1...4}/export{1...16}
 ```
 

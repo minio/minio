@@ -6,15 +6,15 @@ MinIO网关将亚马逊S3兼容性添加到微软Azure Blob存储。
 ### 使用Docker
 ```
 docker run -p 9000:9000 --name azure-s3 \
- -e "MINIO_ACCESS_KEY=azureaccountname" \
- -e "MINIO_SECRET_KEY=azureaccountkey" \
+ -e "MINIO_ROOT_USER=azureaccountname" \
+ -e "MINIO_ROOT_PASSWORD=azureaccountkey" \
  minio/minio gateway azure
 ```
 
 ### 使用二进制
 ```
-export MINIO_ACCESS_KEY=azureaccountname
-export MINIO_SECRET_KEY=azureaccountkey
+export MINIO_ROOT_USER=azureaccountname
+export MINIO_ROOT_PASSWORD=azureaccountkey
 minio gateway azure
 ```
 ## 使用MinIO浏览器验证

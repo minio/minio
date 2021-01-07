@@ -286,6 +286,16 @@ func handleCommonEnvVars() {
 		globalConfigEncrypted = true
 	}
 
+	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
+		cred, err := auth.CreateCredentials(env.Get(config.EnvRootUser, ""), env.Get(config.EnvRootPassword, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate credentials inherited from the shell environment")
+		}
+		globalActiveCred = cred
+		globalConfigEncrypted = true
+	}
+
 	if env.IsSet(config.EnvAccessKeyOld) && env.IsSet(config.EnvSecretKeyOld) {
 		oldCred, err := auth.CreateCredentials(env.Get(config.EnvAccessKeyOld, ""), env.Get(config.EnvSecretKeyOld, ""))
 		if err != nil {
@@ -295,6 +305,17 @@ func handleCommonEnvVars() {
 		globalOldCred = oldCred
 		os.Unsetenv(config.EnvAccessKeyOld)
 		os.Unsetenv(config.EnvSecretKeyOld)
+	}
+
+	if env.IsSet(config.EnvRootUserOld) && env.IsSet(config.EnvRootPasswordOld) {
+		oldCred, err := auth.CreateCredentials(env.Get(config.EnvRootUserOld, ""), env.Get(config.EnvRootPasswordOld, ""))
+		if err != nil {
+			logger.Fatal(config.ErrInvalidCredentials(err),
+				"Unable to validate the old credentials inherited from the shell environment")
+		}
+		globalOldCred = oldCred
+		os.Unsetenv(config.EnvRootUserOld)
+		os.Unsetenv(config.EnvRootPasswordOld)
 	}
 }
 

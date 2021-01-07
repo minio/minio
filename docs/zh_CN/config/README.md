@@ -37,11 +37,11 @@ $ mc tree --files ~/.minio
 你可以使用`--certs-dir`命令行选项提供自定义certs目录。
 
 #### 凭据
-只能通过环境变量`MINIO_ACCESS_KEY` 和 `MINIO_SECRET_KEY` 更改MinIO的admin凭据和root凭据。使用这两个值的组合，MinIO加密存储在后端的配置
+只能通过环境变量`MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD` 更改MinIO的admin凭据和root凭据。使用这两个值的组合，MinIO加密存储在后端的配置
 
 ```
-export MINIO_ACCESS_KEY=minio
-export MINIO_SECRET_KEY=minio13
+export MINIO_ROOT_USER=minio
+export MINIO_ROOT_PASSWORD=minio13
 minio server /data
 ```
 
@@ -52,16 +52,16 @@ minio server /data
 > 旧的环境变量永远不会在内存中被记住，并且在使用新凭据迁移现有内容后立即销毁。在服务器再次成功重启后，你可以安全的删除它们。
 
 ```
-export MINIO_ACCESS_KEY=newminio
-export MINIO_SECRET_KEY=newminio123
-export MINIO_ACCESS_KEY_OLD=minio
-export MINIO_SECRET_KEY_OLD=minio123
+export MINIO_ROOT_USER=newminio
+export MINIO_ROOT_PASSWORD=newminio123
+export MINIO_ROOT_USER_OLD=minio
+export MINIO_ROOT_PASSWORD_OLD=minio123
 minio server /data
 ```
 
-迁移完成后, 服务器会自动的取消进程空间中的`MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD`设置。
+迁移完成后, 服务器会自动的取消进程空间中的`MINIO_ROOT_USER_OLD` and `MINIO_ROOT_PASSWORD_OLD`设置。
 
-> **注意: 在下一次服务重新启动前，要确保移除脚本或者服务文件中的 `MINIO_ACCESS_KEY_OLD` and `MINIO_SECRET_KEY_OLD`， 避免现有的内容被双重加密**
+> **注意: 在下一次服务重新启动前，要确保移除脚本或者服务文件中的 `MINIO_ROOT_USER_OLD` and `MINIO_ROOT_PASSWORD_OLD`， 避免现有的内容被双重加密**
 
 #### 区域
 ```

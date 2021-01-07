@@ -55,7 +55,8 @@ import (
 const (
 	nullVersionID     = "null"
 	diskMinTotalSpace = 900 * humanize.MiByte // Min 900MiB total space.
-	readBlockSize     = 4 * humanize.MiByte   // Default read block size 4MiB.
+	writeBlockSize    = 4 * humanize.MiByte   // Default write block size 4MiB.
+	readBlockSize     = 2 * humanize.MiByte   // Default read block size 2MiB.
 
 	// On regular files bigger than this;
 	readAheadSize = 16 << 20
@@ -90,9 +91,10 @@ type xlStorage struct {
 	diskPath string
 	endpoint Endpoint
 
-	pool sync.Pool
-
 	globalSync bool
+
+	wpool sync.Pool
+	rpool sync.Pool
 
 	rootDisk bool
 
@@ -254,7 +256,13 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	p := &xlStorage{
 		diskPath: path,
 		endpoint: ep,
-		pool: sync.Pool{
+		wpool: sync.Pool{
+			New: func() interface{} {
+				b := disk.AlignedBlock(writeBlockSize)
+				return &b
+			},
+		},
+		rpool: sync.Pool{
 			New: func() interface{} {
 				b := disk.AlignedBlock(readBlockSize)
 				return &b
@@ -671,12 +679,16 @@ func (s *xlStorage) StatVol(ctx context.Context, volume string) (vol VolInfo, er
 	var st os.FileInfo
 	st, err = os.Stat(volumeDir)
 	if err != nil {
-		if osIsNotExist(err) {
+		switch {
+		case osIsNotExist(err):
 			return VolInfo{}, errVolumeNotFound
-		} else if isSysErrIO(err) {
+		case osIsPermission(err):
+			return VolInfo{}, errDiskAccessDenied
+		case isSysErrIO(err):
 			return VolInfo{}, errFaultyDisk
+		default:
+			return VolInfo{}, err
 		}
-		return VolInfo{}, err
 	}
 	// As os.Stat() doesn't carry other than ModTime(), use ModTime()
 	// as CreatedTime.
@@ -721,58 +733,6 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 		}
 	}
 	return nil
-}
-
-const guidSplunk = "guidSplunk"
-
-// ListDirSplunk - return all the entries at the given directory path.
-// If an entry is a directory it will be returned with a trailing SlashSeparator.
-func (s *xlStorage) ListDirSplunk(volume, dirPath string, count int) (entries []string, err error) {
-	guidIndex := strings.Index(dirPath, guidSplunk)
-	if guidIndex != -1 {
-		return nil, nil
-	}
-
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
-	// Verify if volume is valid and it exists.
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = os.Stat(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
-	dirPathAbs := pathJoin(volumeDir, dirPath)
-	if count > 0 {
-		entries, err = readDirN(dirPathAbs, count)
-	} else {
-		entries, err = readDir(dirPathAbs)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return entries, nil
-}
-
-func (s *xlStorage) isLeafSplunk(volume string, leafPath string) bool {
-	const receiptJSON = "receipt.json"
-
-	if path.Base(leafPath) != receiptJSON {
-		return false
-	}
-	return s.isLeaf(volume, leafPath)
 }
 
 func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
@@ -903,15 +863,6 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 		return nil, err
 	}
 
-	if _, err = os.Stat(volumeDir); err != nil {
-		if osIsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
 	dirPathAbs := pathJoin(volumeDir, dirPath)
 	if count > 0 {
 		entries, err = readDirN(dirPathAbs, count)
@@ -919,6 +870,15 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 		entries, err = readDir(dirPathAbs)
 	}
 	if err != nil {
+		if err == errFileNotFound {
+			if _, verr := os.Stat(volumeDir); verr != nil {
+				if osIsNotExist(verr) {
+					return nil, errVolumeNotFound
+				} else if isSysErrIO(verr) {
+					return nil, errFaultyDisk
+				}
+			}
+		}
 		return nil, err
 	}
 
@@ -1122,8 +1082,6 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 }
 
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
-// for all objects less than `128KiB` this call returns data as well
-// along with metadata.
 func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
@@ -1300,11 +1258,8 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 		return int64(n), err
 	}
 
-	bufp := s.pool.Get().(*[]byte)
-	defer s.pool.Put(bufp)
-
 	h := verifier.algorithm.New()
-	if _, err = io.CopyBuffer(h, io.LimitReader(file, offset), *bufp); err != nil {
+	if _, err = io.Copy(h, io.LimitReader(file, offset)); err != nil {
 		return 0, err
 	}
 
@@ -1316,7 +1271,7 @@ func (s *xlStorage) ReadFile(ctx context.Context, volume string, path string, of
 		return 0, err
 	}
 
-	if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
+	if _, err = io.Copy(h, file); err != nil {
 		return 0, err
 	}
 
@@ -1384,7 +1339,7 @@ func (s *xlStorage) openFile(volume, path string, mode int) (f *os.File, err err
 }
 
 // To support O_DIRECT reads for erasure backends.
-type odirectreader struct {
+type odirectReader struct {
 	f         *os.File
 	buf       []byte
 	bufp      *[]byte
@@ -1394,12 +1349,12 @@ type odirectreader struct {
 }
 
 // Read - Implements Reader interface.
-func (o *odirectreader) Read(buf []byte) (n int, err error) {
+func (o *odirectReader) Read(buf []byte) (n int, err error) {
 	if o.err != nil {
 		return 0, o.err
 	}
 	if o.buf == nil {
-		o.bufp = o.s.pool.Get().(*[]byte)
+		o.bufp = o.s.rpool.Get().(*[]byte)
 	}
 	if o.freshRead {
 		o.buf = *o.bufp
@@ -1427,8 +1382,8 @@ func (o *odirectreader) Read(buf []byte) (n int, err error) {
 }
 
 // Close - Release the buffer and close the file.
-func (o *odirectreader) Close() error {
-	o.s.pool.Put(o.bufp)
+func (o *odirectReader) Close() error {
+	o.s.rpool.Put(o.bufp)
 	atomic.AddInt32(&o.s.activeIOCount, -1)
 	return o.f.Close()
 }
@@ -1474,7 +1429,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		}
 
 		atomic.AddInt32(&s.activeIOCount, 1)
-		return &odirectreader{file, nil, nil, true, s, nil}, nil
+		return &odirectReader{file, nil, nil, true, s, nil}, nil
 	}
 
 	// Open the file for reading.
@@ -1640,8 +1595,8 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 		w.Close()
 	}()
 
-	bufp := s.pool.Get().(*[]byte)
-	defer s.pool.Put(bufp)
+	bufp := s.wpool.Get().(*[]byte)
+	defer s.wpool.Put(bufp)
 
 	written, err := xioutil.CopyAligned(w, r, *bufp, fileSize)
 	if err != nil {
@@ -2271,11 +2226,8 @@ func (s *xlStorage) bitrotVerify(partPath string, partSize int64, algo BitrotAlg
 	defer file.Close()
 
 	if algo != HighwayHash256S {
-		bufp := s.pool.Get().(*[]byte)
-		defer s.pool.Put(bufp)
-
 		h := algo.New()
-		if _, err = io.CopyBuffer(h, file, *bufp); err != nil {
+		if _, err = io.Copy(h, file); err != nil {
 			// Premature failure in reading the object,file is corrupt.
 			return errFileCorrupt
 		}

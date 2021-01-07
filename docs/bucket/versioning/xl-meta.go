@@ -56,11 +56,12 @@ GLOBAL FLAGS:
 	}
 
 	app.Action = func(c *cli.Context) error {
-		if !c.Args().Present() {
-			cli.ShowAppHelp(c)
-			return nil
+		files := c.Args()
+		if len(files) == 0 {
+			// If no args, assume xl.meta
+			files = []string{"xl.meta"}
 		}
-		for _, file := range c.Args() {
+		for _, file := range files {
 			var r io.Reader
 			switch file {
 			case "-":

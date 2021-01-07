@@ -271,8 +271,8 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	return fr, st.Size(), nil
 }
 
-// Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
-func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
+// Creates a file and copies data from incoming reader.
+func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, fallocSize int64) (int64, error) {
 	if filePath == "" || reader == nil {
 		logger.LogIf(ctx, errInvalidArgument)
 		return 0, errInvalidArgument
@@ -317,21 +317,10 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 		}
 	}
 
-	var bytesWritten int64
-	if buf != nil {
-		bytesWritten, err = io.CopyBuffer(writer, reader, buf)
-		if err != nil {
-			if err != io.ErrUnexpectedEOF {
-				logger.LogIf(ctx, err)
-			}
-			return 0, err
-		}
-	} else {
-		bytesWritten, err = io.Copy(writer, reader)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return 0, err
-		}
+	bytesWritten, err := io.Copy(writer, reader)
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return 0, err
 	}
 
 	return bytesWritten, nil

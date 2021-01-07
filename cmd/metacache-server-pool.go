@@ -149,8 +149,8 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	allAtEOF := true
 	mu.Lock()
 	// Ask all sets and merge entries.
-	for _, zone := range z.serverPools {
-		for _, set := range zone.sets {
+	for _, pool := range z.serverPools {
+		for _, set := range pool.sets {
 			wg.Add(1)
 			go func(i int, set *erasureObjects) {
 				defer wg.Done()

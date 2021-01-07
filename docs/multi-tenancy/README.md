@@ -43,16 +43,16 @@ To host multiple tenants in a distributed environment, run several distributed M
 Use the following commands to host 3 tenants on a 4-node distributed configuration:
 
 ```sh
-export MINIO_ACCESS_KEY=<TENANT1_ACCESS_KEY>
-export MINIO_SECRET_KEY=<TENANT1_SECRET_KEY>
+export MINIO_ROOT_USER=<TENANT1_ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<TENANT1_SECRET_KEY>
 minio server --address :9001 http://192.168.10.1{1...4}/data/tenant1
 
-export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
-export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
+export MINIO_ROOT_USER=<TENANT2_ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<TENANT2_SECRET_KEY>
 minio server --address :9002 http://192.168.10.1{1...4}/data/tenant2
 
-export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
-export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
+export MINIO_ROOT_USER=<TENANT3_ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<TENANT3_SECRET_KEY>
 minio server --address :9003 http://192.168.10.1{1...4}/data/tenant3
 ```
 
@@ -60,7 +60,7 @@ minio server --address :9003 http://192.168.10.1{1...4}/data/tenant3
 
 ![Example-3](https://github.com/minio/minio/blob/master/docs/screenshots/Example-3.jpg?raw=true)
 
-**Note**: On distributed systems, credentials must be defined and exported using the `MINIO_ACCESS_KEY` and  `MINIO_SECRET_KEY` environment variables. If a domain is required, it must be specified by defining and exporting the `MINIO_DOMAIN` environment variable.
+**Note**: On distributed systems, credentials must be defined and exported using the `MINIO_ROOT_USER` and  `MINIO_ROOT_PASSWORD` environment variables. If a domain is required, it must be specified by defining and exporting the `MINIO_DOMAIN` environment variable.
 
 ## <a name="cloud-scale-deployment"></a>Cloud Scale Deployment
 

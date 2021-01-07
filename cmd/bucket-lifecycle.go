@@ -340,7 +340,6 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 		return err
 	}
 	oi := gr.ObjInfo
-
 	if oi.TransitionStatus == lifecycle.TransitionComplete {
 		gr.Close()
 		return nil

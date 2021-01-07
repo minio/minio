@@ -33,8 +33,8 @@ MinIO共享模式是为了解决在真实场景中存在的一些问题，而且
 你需要将文件夹指向共享存储，比如`/path/to/nfs-volume`，然后在所有MinIO节点上运行下面的命令。
 
 ```sh
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
+export MINIO_ROOT_USER=<ACCESS_KEY>
+export MINIO_ROOT_PASSWORD=<SECRET_KEY>
 minio gateway nas /path/to/nfs-volume
 ```
 
@@ -43,8 +43,8 @@ minio gateway nas /path/to/nfs-volume
 你需要将文件夹指向共享存储，比如`\\remote-server\smb`. 然后在所有MinIO节点上运行下面的命令。
 
 ```cmd
-set MINIO_ACCESS_KEY=my-username
-set MINIO_SECRET_KEY=my-password
+set MINIO_ROOT_USER=my-username
+set MINIO_ROOT_PASSWORD=my-password
 minio.exe gateway nas \\remote-server\smb\export
 ```
 
@@ -53,8 +53,8 @@ minio.exe gateway nas \\remote-server\smb\export
 如果一个远程的volume, 比如`\\remote-server\smb`挂载成一个硬盘, 比如`M:\`. 你可以使用[`net use`](https://technet.microsoft.com/en-us/library/bb490717.aspx)命令将这块盘映射到一个文件夹。
 
 ```cmd
-set MINIO_ACCESS_KEY=my-username
-set MINIO_SECRET_KEY=my-password
+set MINIO_ROOT_USER=my-username
+set MINIO_ROOT_PASSWORD=my-password
 net use m: \\remote-server\smb\export /P:Yes
 minio.exe gateway nas M:\export
 ```
