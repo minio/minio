@@ -478,6 +478,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 		*d = dataUsageCache{}
 		return nil
 	}
+	defer r.Close()
 	if err := d.deserialize(r); err != nil {
 		*d = dataUsageCache{}
 		logger.LogOnceIf(ctx, err, err.Error())

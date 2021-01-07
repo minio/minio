@@ -443,6 +443,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 
 	target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
 	if err != nil {
+		gr.Close()
 		logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%s", bucket, cfg.RoleArn, err))
 		return
 	}
@@ -470,6 +471,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	}
 
 	r.Close()
+	gr.Close()
 	if err != nil {
 		replicationStatus = replication.Failed
 	}
