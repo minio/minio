@@ -89,7 +89,7 @@ func registerWebRouter(router *mux.Router) error {
 				globalHTTPTrace.Publish(WebTrace(ri))
 			}
 			ctx := newContext(ri.Request, ri.ResponseWriter, ri.Method)
-			logger.AuditLog(ri.ResponseWriter, ri.Request, ctx, claims.Map())
+			logger.AuditLog(ctx, ri.ResponseWriter, ri.Request, claims.Map())
 		}
 	})
 

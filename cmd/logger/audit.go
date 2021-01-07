@@ -124,7 +124,7 @@ func (lrw *ResponseWriter) Size() int {
 }
 
 // AuditLog - logs audit logs to all audit targets.
-func AuditLog(w http.ResponseWriter, r *http.Request, ctx context.Context, reqClaims map[string]interface{}, filterKeys ...string) {
+func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, filterKeys ...string) {
 	// Fast exit if there is not audit target configured
 	if len(AuditTargets) == 0 {
 		return
