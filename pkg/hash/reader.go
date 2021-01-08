@@ -17,16 +17,21 @@
 package hash
 
 import (
+	"bufio"
 	"bytes"
-	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"hash"
 	"io"
 
-	sha256 "github.com/minio/sha256-simd"
+	"github.com/klauspost/cpuid/v2"
+	md5simd "github.com/minio/md5-simd"
+	"github.com/minio/sha256-simd"
 )
+
+// MD5Server is a singleton md5 processor.
+var MD5Server = md5simd.NewServer()
 
 // Reader writes what it reads from an io.Reader to an MD5 and SHA256 hash.Hash.
 // Reader verifies that the content of the io.Reader matches the expected checksums.
@@ -36,8 +41,22 @@ type Reader struct {
 	actualSize int64
 	bytesRead  int64
 
-	md5sum, sha256sum   []byte // Byte values of md5sum, sha256sum of client sent values.
-	md5Hash, sha256Hash hash.Hash
+	md5sum, sha256sum []byte // Byte values of md5sum, sha256sum of client sent values.
+	sha256Hash        hash.Hash
+
+	// If md5Buffer is non-nil write to this instead of md5Hash
+	md5Buffer *bufio.Writer
+	md5Hash   md5simd.Hasher
+}
+
+func newMd5(size int64) (md5simd.Hasher, *bufio.Writer) {
+	if cpuid.CPU.Has(cpuid.SSE2) && (size < 0 || size > 32<<10) {
+		h := MD5Server.NewHash()
+		// We add a 32 KB buffer
+		return h, bufio.NewWriterSize(h, 32<<10)
+	}
+
+	return md5simd.StdlibHasher(), nil
 }
 
 // NewReader returns a new hash Reader which computes the MD5 sum and
@@ -56,9 +75,12 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 func (r *Reader) Read(p []byte) (n int, err error) {
 	n, err = r.src.Read(p)
 	if n > 0 {
-		if r.md5Hash != nil {
+		if r.md5Buffer != nil {
+			r.md5Buffer.Write(p[:n])
+		} else if r.md5Hash != nil {
 			r.md5Hash.Write(p[:n])
 		}
+
 		if r.sha256Hash != nil {
 			r.sha256Hash.Write(p[:n])
 		}
@@ -95,6 +117,9 @@ func (r *Reader) MD5() []byte {
 // different results if they are intermixed with Reader.
 func (r *Reader) MD5Current() []byte {
 	if r.md5Hash != nil {
+		if r.md5Buffer != nil {
+			r.md5Buffer.Flush()
+		}
 		return r.md5Hash.Sum(nil)
 	}
 	return nil
@@ -129,6 +154,9 @@ func (r *Reader) verify() error {
 		}
 	}
 	if r.md5Hash != nil && len(r.md5sum) > 0 {
+		if r.md5Buffer != nil {
+			r.md5Buffer.Flush()
+		}
 		if sum := r.md5Hash.Sum(nil); !bytes.Equal(r.md5sum, sum) {
 			return BadDigest{hex.EncodeToString(r.md5sum), hex.EncodeToString(sum)}
 		}
@@ -184,7 +212,7 @@ func (r *Reader) merge(size int64, md5Hex, sha256Hex string, actualSize int64, s
 			return nil, BadDigest{}
 		}
 	} else if len(md5sum) > 0 || (r.md5Hash == nil && strictCompat) {
-		r.md5Hash = md5.New()
+		r.md5Hash, r.md5Buffer = newMd5(size)
 		r.md5sum = md5sum
 	}
 	return r, nil
@@ -192,6 +220,9 @@ func (r *Reader) merge(size int64, md5Hex, sha256Hex string, actualSize int64, s
 
 // Close and release resources.
 func (r *Reader) Close() error {
-	// Support the io.Closer interface.
+	if r.md5Hash != nil {
+		r.md5Hash.Close()
+		r.md5Hash = nil
+	}
 	return nil
 }

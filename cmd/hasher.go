@@ -20,6 +20,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 
+	"github.com/klauspost/cpuid/v2"
+	hash2 "github.com/minio/minio/pkg/hash"
 	"github.com/minio/sha256-simd"
 )
 
@@ -37,7 +39,12 @@ func getSHA256Sum(data []byte) []byte {
 
 // getMD5Sum returns MD5 sum of given data.
 func getMD5Sum(data []byte) []byte {
-	hash := md5.New()
+	if !cpuid.CPU.Has(cpuid.SSE2) || len(data) < 32<<10 {
+		v := md5.Sum(data)
+		return v[:]
+	}
+	hash := hash2.MD5Server.NewHash()
+	defer hash.Close()
 	hash.Write(data)
 	return hash.Sum(nil)
 }
