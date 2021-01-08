@@ -471,6 +471,8 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		for k, v := range putOpts.Header() {
 			headerSize += len(k) + len(v)
 		}
+
+		// r takes over closing gr.
 		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
 		_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts)
 		if err != nil {

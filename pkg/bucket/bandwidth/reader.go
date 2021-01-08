@@ -28,7 +28,7 @@ type MonitoredReader struct {
 	bucket            string             // Token to track bucket
 	bucketMeasurement *bucketMeasurement // bucket measurement object
 	object            string             // Token to track object
-	reader            io.Reader          // Reader to wrap
+	reader            io.ReadCloser      // Reader to wrap
 	lastStop          time.Time          // Last timestamp for a measurement
 	headerSize        int                // Size of the header not captured by reader
 	throttle          *throttle          // throttle the rate at which replication occur
@@ -36,8 +36,9 @@ type MonitoredReader struct {
 	closed            bool               // Reader is closed
 }
 
-// NewMonitoredReader returns a io.ReadCloser that reports bandwidth details
-func NewMonitoredReader(ctx context.Context, monitor *Monitor, bucket string, object string, reader io.Reader, headerSize int, bandwidthBytesPerSecond int64, clusterBandwidth int64) *MonitoredReader {
+// NewMonitoredReader returns a io.ReadCloser that reports bandwidth details.
+// The supplied reader will be closed.
+func NewMonitoredReader(ctx context.Context, monitor *Monitor, bucket string, object string, reader io.ReadCloser, headerSize int, bandwidthBytesPerSecond int64, clusterBandwidth int64) *MonitoredReader {
 	timeNow := time.Now()
 	b := monitor.track(bucket, object, timeNow)
 	return &MonitoredReader{
@@ -77,10 +78,9 @@ func (m *MonitoredReader) Read(p []byte) (n int, err error) {
 
 // Close stops tracking the io
 func (m *MonitoredReader) Close() error {
-	rc, ok := m.reader.(io.ReadCloser)
-	m.closed = true
-	if ok {
-		return rc.Close()
+	if m.closed {
+		return nil
 	}
-	return nil
+	m.closed = true
+	return m.reader.Close()
 }

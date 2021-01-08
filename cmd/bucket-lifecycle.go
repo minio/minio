@@ -341,13 +341,13 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 	}
 	oi := gr.ObjInfo
 	if oi.TransitionStatus == lifecycle.TransitionComplete {
-		gr.Close() // make sure to avoid leaks.
+		gr.Close()
 		return nil
 	}
 
 	putOpts := putTransitionOpts(oi)
 	if _, err = tgt.PutObject(ctx, arn.Bucket, oi.Name, gr, oi.Size, "", "", putOpts); err != nil {
-		gr.Close() // make sure to avoid leaks.
+		gr.Close()
 		return err
 	}
 	gr.Close()
