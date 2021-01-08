@@ -192,6 +192,8 @@ var (
 
 	globalEndpoints EndpointServerPools
 
+	globalRemoteEndpoints map[string]Endpoint
+
 	// Global server's network statistics
 	globalConnStats = newConnStats()
 

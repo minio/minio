@@ -388,7 +388,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				continue
 			}
 
-			_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(0), "")
+			_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(0), "", false)
 			if err != nil {
 				time.Sleep(retryDelay)
 				retries++
@@ -397,7 +397,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 		}
 
 		// Read metadata associated with the object from all disks.
-		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{})
+		fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(0), ObjectOptions{}, true)
 		if err != nil {
 			switch toObjectErr(err, minioMetaBucket, o.objectPath(0)).(type) {
 			case ObjectNotFound:
@@ -463,7 +463,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						continue
 					}
 
-					_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(partN), "")
+					_, err := disks[0].ReadVersion(ctx, minioMetaBucket, o.objectPath(partN), "", false)
 					if err != nil {
 						time.Sleep(retryDelay)
 						retries++
@@ -471,7 +471,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					}
 				}
 				// Load first part metadata...
-				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{})
+				fi, metaArr, onlineDisks, err = er.getObjectFileInfo(ctx, minioMetaBucket, o.objectPath(partN), ObjectOptions{}, true)
 				if err != nil {
 					time.Sleep(retryDelay)
 					retries++
@@ -654,11 +654,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				meta.endedCycle = intDataUpdateTracker.current()
 				meta, err = o.updateMetacacheListing(meta, rpc)
 				if meta.status == scanStateError {
+					logger.LogIf(ctx, err)
 					cancel()
 					exit = true
 				}
 				metaMu.Unlock()
-				logger.LogIf(ctx, err)
 			}
 		}()
 
@@ -772,7 +772,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				metaMu.Lock()
 				meta.error = err.Error()
 				meta.status = scanStateError
-				meta, err = o.updateMetacacheListing(meta, rpc)
+				meta, _ = o.updateMetacacheListing(meta, rpc)
 				metaMu.Unlock()
 			}
 		}
@@ -834,15 +834,15 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		}
 		// Send request to each disk.
 		go func() {
-			err := d.WalkDir(ctx, WalkDirOptions{
+			werr := d.WalkDir(ctx, WalkDirOptions{
 				Bucket:         opts.bucket,
 				BaseDir:        opts.path,
 				Recursive:      opts.recursive,
 				ReportNotFound: opts.reportNotFound,
 				FilterPrefix:   opts.filterPrefix}, w)
-			w.CloseWithError(err)
-			if err != io.EOF && err != nil && err.Error() != errFileNotFound.Error() {
-				logger.LogIf(ctx, err)
+			w.CloseWithError(werr)
+			if werr != io.EOF && werr != nil && werr.Error() != errFileNotFound.Error() && werr.Error() != errVolumeNotFound.Error() {
+				logger.LogIf(ctx, werr)
 			}
 		}()
 	}
@@ -878,7 +878,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 					fnf++
 					continue
 				}
-
+				if err.Error() == errVolumeNotFound.Error() {
+					atEOF++
+					fnf++
+					continue
+				}
 				hasErr++
 				errs[i] = err
 				continue
