@@ -20,12 +20,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"os"
 	"reflect"
-	"strconv"
 	"testing"
-
-	"github.com/dustin/go-humanize"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	minio "github.com/minio/minio/cmd"
@@ -267,37 +263,4 @@ func TestCheckAzureUploadID(t *testing.T) {
 			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
 		}
 	}
-}
-
-func TestParsingUploadChunkSize(t *testing.T) {
-	key := "MINIO_AZURE_CHUNK_SIZE_MB"
-	invalidValues := []string{
-		"",
-		"0,3",
-		"100.1",
-		"-1",
-	}
-
-	for i, chunkValue := range invalidValues {
-		os.Setenv(key, chunkValue)
-		result := getUploadChunkSizeFromEnv(key, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
-		if result != azureDefaultUploadChunkSize {
-			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
-		}
-	}
-
-	validValues := []string{
-		"1",
-		"1.25",
-		"50",
-		"99",
-	}
-	for i, chunkValue := range validValues {
-		os.Setenv(key, chunkValue)
-		result := getUploadChunkSizeFromEnv(key, strconv.Itoa(azureDefaultUploadChunkSize/humanize.MiByte))
-		if result == azureDefaultUploadChunkSize {
-			t.Errorf("Test %d: expected: %d, got: %d", i+1, azureDefaultUploadChunkSize, result)
-		}
-	}
-
 }
