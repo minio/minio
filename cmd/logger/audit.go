@@ -28,6 +28,12 @@ import (
 	"github.com/minio/minio/cmd/logger/message/audit"
 )
 
+const (
+	// AuditBackendEndpointsKey is the Tag key set in the context to log
+	// the backend erasure list of endpoints
+	AuditBackendEndpointsKey = "backendServers"
+)
+
 // ResponseWriter - is a wrapper to trap the http response status code.
 type ResponseWriter struct {
 	http.ResponseWriter
@@ -171,4 +177,14 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 	for _, t := range AuditTargets {
 		_ = t.Send(entry, string(All))
 	}
+}
+
+// AuditSetTag will add a tag to the passed context if Audit is enabled
+func AuditSetTag(ctx context.Context, key, value string) {
+	// Fast exit if there is not audit target configured
+	if len(AuditTargets) == 0 {
+		return
+	}
+
+	GetReqInfo(ctx).SetTags(key, value)
 }

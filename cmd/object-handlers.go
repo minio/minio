@@ -1564,10 +1564,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Update the context
-	reqInfo := logger.GetReqInfo(ctx)
-	reqInfo.SetTags("backendServers", strings.Join(objInfo.backendServers, ","))
-
 	switch {
 	case crypto.IsEncrypted(objInfo.UserDefined):
 		switch {
@@ -2669,10 +2665,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
 		scheduleReplication(ctx, objInfo, objectAPI, sync)
 	}
-
-	// Update the context
-	reqInfo := logger.GetReqInfo(ctx)
-	reqInfo.SetTags("backendServers", strings.Join(objInfo.backendServers, ","))
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)

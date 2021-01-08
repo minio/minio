@@ -234,8 +234,7 @@ type ObjectInfo struct {
 	Legacy bool // indicates object on disk is in legacy data format
 
 	// backendType indicates which backend filled this structure
-	backendType    BackendType
-	backendServers []string
+	backendType BackendType
 
 	VersionPurgeStatus VersionPurgeStatusType
 }

@@ -61,6 +61,10 @@ type erasureObjects struct {
 	// some may be local and some remote.
 	getEndpoints func() []string
 
+	// The list of all endpoints joined by a comma, this is
+	// a CPU optimization since this will be logged in Audit
+	endpointsList string
+
 	// Locker mutex map.
 	nsMutex *nsLockMap
 

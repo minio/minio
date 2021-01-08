@@ -37,7 +37,6 @@ type Entry struct {
 		Name            string `json:"name,omitempty"`
 		Bucket          string `json:"bucket,omitempty"`
 		Object          string `json:"object,omitempty"`
-		BackendServers  string `json:"servers,omitempty"`
 		Status          string `json:"status,omitempty"`
 		StatusCode      int    `json:"statusCode,omitempty"`
 		TimeToFirstByte string `json:"timeToFirstByte,omitempty"`
