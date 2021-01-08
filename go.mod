@@ -66,6 +66,7 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
+	github.com/quasilyte/go-ruleguard v0.2.1 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.0
@@ -75,6 +76,7 @@ require (
 	github.com/tidwall/gjson v1.3.5
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
+	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
@@ -83,7 +85,7 @@ require (
 	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392
 	golang.org/x/net v0.0.0-20201216054612-986b41b23924
 	golang.org/x/sys v0.0.0-20201119102817-f84b799fce68
-	golang.org/x/tools v0.0.0-20200929223013-bf155c11ec6f // indirect
+	golang.org/x/tools v0.0.0-20210108195828-e2f9c7f1fc8e // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.5.0
 	gopkg.in/ldap.v3 v3.0.3
