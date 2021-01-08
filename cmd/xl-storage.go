@@ -65,6 +65,10 @@ const (
 	// Size of each buffer.
 	readAheadBufSize = 1 << 20
 
+	// Small file threshold below which data accompanies metadata
+	// from storage layer.
+	smallFileThreshold = 32 * humanize.KiByte
+
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
 )
@@ -1082,7 +1086,14 @@ func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
 }
 
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
-func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
+// for all objects less than `32KiB` this call returns data as well
+// along with metadata.
+func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return fi, err
+	}
+
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err == errFileNotFound {
@@ -1117,7 +1128,65 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, errFileNotFound
 	}
 
-	return getFileInfo(buf, volume, path, versionID)
+	fi, err = getFileInfo(buf, volume, path, versionID)
+	if err != nil {
+		return fi, err
+	}
+
+	if readData {
+		// Reading data for small objects when
+		// - object has not yet transitioned
+		// - object size lesser than 32KiB
+		// - object has maximum of 1 parts
+		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
+			fi.Data, err = s.readAllData(volumeDir, pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", fi.Parts[0].Number)))
+			if err != nil {
+				return FileInfo{}, err
+			}
+		}
+	}
+
+	return fi, nil
+}
+
+func (s *xlStorage) readAllData(volumeDir, filePath string) (buf []byte, err error) {
+	var f *os.File
+	if globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
+		f, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
+	} else {
+		f, err = os.Open(filePath)
+	}
+	if err != nil {
+		if osIsNotExist(err) {
+			// Check if the object doesn't exist because its bucket
+			// is missing in order to return the correct error.
+			_, err = os.Stat(volumeDir)
+			if err != nil && osIsNotExist(err) {
+				return nil, errVolumeNotFound
+			}
+			return nil, errFileNotFound
+		} else if osIsPermission(err) {
+			return nil, errFileAccessDenied
+		} else if isSysErrNotDir(err) || isSysErrIsDir(err) {
+			return nil, errFileNotFound
+		} else if isSysErrHandleInvalid(err) {
+			// This case is special and needs to be handled for windows.
+			return nil, errFileNotFound
+		} else if isSysErrIO(err) {
+			return nil, errFaultyDisk
+		} else if isSysErrTooManyFiles(err) {
+			return nil, errTooManyOpenFiles
+		} else if isSysErrInvalidArg(err) {
+			return nil, errFileNotFound
+		}
+		return nil, err
+	}
+
+	atomic.AddInt32(&s.activeIOCount, 1)
+	rd := &odirectReader{f, nil, nil, true, s, nil}
+	defer rd.Close()
+
+	return ioutil.ReadAll(rd)
 }
 
 // ReadAll reads from r until an error or EOF and returns the data it read.
@@ -1405,35 +1474,13 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, err
 	}
 
+	var file *os.File
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
-		file, err := disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
-		if err != nil {
-			switch {
-			case osIsNotExist(err):
-				_, err = os.Stat(volumeDir)
-				if err != nil && osIsNotExist(err) {
-					return nil, errVolumeNotFound
-				}
-				return nil, errFileNotFound
-			case osIsPermission(err):
-				return nil, errFileAccessDenied
-			case isSysErrNotDir(err):
-				return nil, errFileAccessDenied
-			case isSysErrIO(err):
-				return nil, errFaultyDisk
-			case isSysErrTooManyFiles(err):
-				return nil, errTooManyOpenFiles
-			default:
-				return nil, err
-			}
-		}
-
-		atomic.AddInt32(&s.activeIOCount, 1)
-		return &odirectReader{file, nil, nil, true, s, nil}, nil
+		file, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
+	} else {
+		// Open the fileile fileor reading.
+		file, err = os.Open(filePath)
 	}
-
-	// Open the file for reading.
-	file, err := os.Open(filePath)
 	if err != nil {
 		switch {
 		case osIsNotExist(err):
@@ -1466,11 +1513,17 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		return nil, errIsNotRegular
 	}
 
-	if _, err = file.Seek(offset, io.SeekStart); err != nil {
-		return nil, err
+	atomic.AddInt32(&s.activeIOCount, 1)
+	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
+		return &odirectReader{file, nil, nil, true, s, nil}, nil
 	}
 
-	atomic.AddInt32(&s.activeIOCount, 1)
+	if offset > 0 {
+		if _, err = file.Seek(offset, io.SeekStart); err != nil {
+			return nil, err
+		}
+	}
+
 	r := struct {
 		io.Reader
 		io.Closer
@@ -1517,6 +1570,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 	if err != nil {
 		return err
 	}
+
 	// Stat a volume entry.
 	_, err = os.Stat(volumeDir)
 	if err != nil {

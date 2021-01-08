@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/cmd/rest"
 	xnet "github.com/minio/minio/pkg/net"
+	xbufio "github.com/philhofer/fwd"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -226,8 +227,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 				return info, err
 			}
 			defer http.DrainBody(respBody)
-			err = msgp.Decode(respBody, &info)
-			if err != nil {
+			if err = msgp.Decode(respBody, &info); err != nil {
 				return info, err
 			}
 			if info.Error != "" {
@@ -398,18 +398,38 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 	return err
 }
 
-func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string) (fi FileInfo, err error) {
+// where we keep old *Readers
+var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader{} }}
+
+// mspNewReader returns a *Reader that reads from the provided reader.
+// The reader will be buffered.
+func msgpNewReader(r io.Reader) *msgp.Reader {
+	p := readMsgpReaderPool.Get().(*msgp.Reader)
+	if p.R == nil {
+		p.R = xbufio.NewReaderSize(r, 8<<10)
+	} else {
+		p.R.Reset(r)
+	}
+	return p
+}
+
+func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
+	values.Set(storageRESTReadData, strconv.FormatBool(readData))
 
 	respBody, err := client.call(ctx, storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {
 		return fi, err
 	}
 	defer http.DrainBody(respBody)
-	err = msgp.Decode(respBody, &fi)
+
+	dec := msgpNewReader(respBody)
+	defer readMsgpReaderPool.Put(dec)
+
+	err = fi.DecodeMsg(dec)
 	return fi, err
 }
 
@@ -479,10 +499,12 @@ func (client *storageRESTClient) WalkVersions(ctx context.Context, volume, dirPa
 		defer close(ch)
 		defer http.DrainBody(respBody)
 
-		decoder := msgp.NewReader(respBody)
+		dec := msgpNewReader(respBody)
+		defer readMsgpReaderPool.Put(dec)
+
 		for {
 			var fi FileInfoVersions
-			if gerr := fi.DecodeMsg(decoder); gerr != nil {
+			if gerr := fi.DecodeMsg(dec); gerr != nil {
 				// Upon error return
 				if msgp.Cause(gerr) != io.EOF {
 					logger.LogIf(GlobalContext, gerr)

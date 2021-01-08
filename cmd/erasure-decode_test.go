@@ -134,7 +134,7 @@ func TestErasureDecode(t *testing.T) {
 			}
 			tillOffset := erasure.ShardFileOffset(test.offset, test.length, test.data)
 
-			bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", tillOffset, writeAlgorithm, bitrotWriterSum(writers[index]), erasure.ShardSize())
+			bitrotReaders[index] = newBitrotReader(disk, nil, "testbucket", "object", tillOffset, writeAlgorithm, bitrotWriterSum(writers[index]), erasure.ShardSize())
 		}
 
 		writer := bytes.NewBuffer(nil)
@@ -164,7 +164,7 @@ func TestErasureDecode(t *testing.T) {
 					continue
 				}
 				tillOffset := erasure.ShardFileOffset(test.offset, test.length, test.data)
-				bitrotReaders[index] = newBitrotReader(disk, "testbucket", "object", tillOffset, writeAlgorithm, bitrotWriterSum(writers[index]), erasure.ShardSize())
+				bitrotReaders[index] = newBitrotReader(disk, nil, "testbucket", "object", tillOffset, writeAlgorithm, bitrotWriterSum(writers[index]), erasure.ShardSize())
 			}
 			for j := range disks[:test.offDisks] {
 				if bitrotReaders[j] == nil {
@@ -270,7 +270,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 				continue
 			}
 			tillOffset := erasure.ShardFileOffset(offset, readLen, length)
-			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
+			bitrotReaders[index] = newStreamingBitrotReader(disk, nil, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length, nil)
 		closeBitrotReaders(bitrotReaders)
@@ -332,7 +332,7 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 				continue
 			}
 			tillOffset := erasure.ShardFileOffset(0, size, size)
-			bitrotReaders[index] = newStreamingBitrotReader(disk, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
+			bitrotReaders[index] = newStreamingBitrotReader(disk, nil, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 		if err = erasure.Decode(context.Background(), bytes.NewBuffer(content[:0]), bitrotReaders, 0, size, size, nil); err != nil {
 			panic(err)

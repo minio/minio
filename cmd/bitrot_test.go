@@ -62,7 +62,7 @@ func testBitrotReaderWriterAlgo(t *testing.T, bitrotAlgo BitrotAlgorithm) {
 	}
 	writer.(io.Closer).Close()
 
-	reader := newBitrotReader(disk, volume, filePath, 35, bitrotAlgo, bitrotWriterSum(writer), 10)
+	reader := newBitrotReader(disk, nil, volume, filePath, 35, bitrotAlgo, bitrotWriterSum(writer), 10)
 	b := make([]byte, 10)
 	if _, err = reader.ReadAt(b, 0); err != nil {
 		log.Fatal(err)
