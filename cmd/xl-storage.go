@@ -1478,7 +1478,7 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite {
 		file, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
 	} else {
-		// Open the fileile fileor reading.
+		// Open the file for reading.
 		file, err = os.Open(filePath)
 	}
 	if err != nil {

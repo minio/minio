@@ -654,11 +654,11 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				meta.endedCycle = intDataUpdateTracker.current()
 				meta, err = o.updateMetacacheListing(meta, rpc)
 				if meta.status == scanStateError {
+					logger.LogIf(ctx, err)
 					cancel()
 					exit = true
 				}
 				metaMu.Unlock()
-				logger.LogIf(ctx, err)
 			}
 		}()
 
@@ -772,7 +772,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				metaMu.Lock()
 				meta.error = err.Error()
 				meta.status = scanStateError
-				meta, err = o.updateMetacacheListing(meta, rpc)
+				meta, _ = o.updateMetacacheListing(meta, rpc)
 				metaMu.Unlock()
 			}
 		}
