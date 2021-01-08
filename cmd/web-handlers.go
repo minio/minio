@@ -751,7 +751,7 @@ next:
 			}
 			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
 				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
-				if _, replicateDel = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName}, goi, gerr); replicateDel {
+				if _, replicateDel = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName, VersionID: goi.VersionID}, goi, gerr); replicateDel {
 					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 					opts.DeleteMarker = true
 				}
@@ -855,8 +855,8 @@ next:
 						}
 					}
 				}
+				_, replicateDel := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name, VersionID: obj.VersionID}, obj, nil)
 				// since versioned delete is not available on web browser, yet - this is a simple DeleteMarker replication
-				_, replicateDel := checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: obj.Name}, obj, nil)
 				objToDel := ObjectToDelete{ObjectName: obj.Name}
 				if replicateDel {
 					objToDel.DeleteMarkerReplicationStatus = string(replication.Pending)
