@@ -139,6 +139,16 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
 	globalEndpoints, setupType, err = createServerEndpoints(globalCLIContext.Addr, serverCmdArgs(ctx)...)
+
+	globalRemoteEndpoints = make(map[string]Endpoint)
+	for _, z := range globalEndpoints {
+		for _, ep := range z.Endpoints {
+			if ep.IsLocal {
+				continue
+			}
+			globalRemoteEndpoints[ep.Host] = ep
+		}
+	}
 	logger.FatalIf(err, "Invalid command line arguments")
 
 	// allow transport to be HTTP/1.1 for proxying.

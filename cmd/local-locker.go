@@ -228,6 +228,11 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 				// Check whether uid is still active
 				for _, entry := range lri {
 					if entry.UID == args.UID && entry.Owner == args.Owner {
+						if ep, ok := globalRemoteEndpoints[args.Owner]; ok {
+							if err = isServerResolvable(ep); err != nil {
+								return true, nil
+							}
+						}
 						return false, nil
 					}
 				}
