@@ -253,6 +253,91 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 	}
 }
 
+// TestXLStorageReadVersion - TestXLStorages the functionality implemented by xlStorage ReadVersion storage API.
+func TestXLStorageReadVersion(t *testing.T) {
+	// create xlStorage test setup
+	xlStorage, path, err := newXLStorageTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
+	}
+
+	defer os.RemoveAll(path)
+
+	xlMeta, _ := ioutil.ReadFile("testdata/xl.meta")
+
+	// Create files for the test cases.
+	if err = xlStorage.MakeVol(context.Background(), "exists"); err != nil {
+		t.Fatalf("Unable to create a volume \"exists\", %s", err)
+	}
+	if err = xlStorage.AppendFile(context.Background(), "exists", "as-directory/as-file/xl.meta", xlMeta); err != nil {
+		t.Fatalf("Unable to create a file \"as-directory/as-file\", %s", err)
+	}
+	if err = xlStorage.AppendFile(context.Background(), "exists", "as-file/xl.meta", xlMeta); err != nil {
+		t.Fatalf("Unable to create a file \"as-file\", %s", err)
+	}
+	if err = xlStorage.AppendFile(context.Background(), "exists", "as-file-parent/xl.meta", xlMeta); err != nil {
+		t.Fatalf("Unable to create a file \"as-file-parent\", %s", err)
+	}
+
+	// TestXLStoragecases to validate different conditions for ReadVersion API.
+	testCases := []struct {
+		volume string
+		path   string
+		err    error
+	}{
+		// TestXLStorage case - 1.
+		// Validate volume does not exist.
+		{
+			volume: "i-dont-exist",
+			path:   "",
+			err:    errVolumeNotFound,
+		},
+		// TestXLStorage case - 2.
+		// Validate bad condition file does not exist.
+		{
+			volume: "exists",
+			path:   "as-file-not-found",
+			err:    errFileNotFound,
+		},
+		// TestXLStorage case - 3.
+		// Validate bad condition file exists as prefix/directory and
+		// we are attempting to read it.
+		{
+			volume: "exists",
+			path:   "as-directory",
+			err:    errFileNotFound,
+		},
+		// TestXLStorage case - 4.
+		{
+			volume: "exists",
+			path:   "as-file-parent/as-file",
+			err:    errFileNotFound,
+		},
+		// TestXLStorage case - 5.
+		// Validate the good condition file exists and we are able to read it.
+		{
+			volume: "exists",
+			path:   "as-file",
+			err:    nil,
+		},
+		// TestXLStorage case - 6.
+		// TestXLStorage case with invalid volume name.
+		{
+			volume: "ab",
+			path:   "as-file",
+			err:    errVolumeNotFound,
+		},
+	}
+
+	// Run through all the test cases and validate for ReadVersion.
+	for i, testCase := range testCases {
+		_, err = xlStorage.ReadVersion(context.Background(), testCase.volume, testCase.path, "", false)
+		if err != testCase.err {
+			t.Fatalf("TestXLStorage %d: Expected err \"%s\", got err \"%s\"", i+1, testCase.err, err)
+		}
+	}
+}
+
 // TestXLStorageReadAll - TestXLStorages the functionality implemented by xlStorage ReadAll storage API.
 func TestXLStorageReadAll(t *testing.T) {
 	// create xlStorage test setup

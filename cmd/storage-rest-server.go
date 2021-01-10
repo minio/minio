@@ -332,17 +332,14 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	fi, err := s.storage.ReadVersion(r.Context(), volume, filePath, versionID, readData)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	bufp := s.storage.rpool.Get().(*[]byte)
-	defer s.storage.rpool.Put(bufp)
 
-	enc := msgp.NewWriterBuf(w, *bufp)
-	logger.LogIf(r.Context(), fi.EncodeMsg(enc))
-	enc.Flush()
+	logger.LogIf(r.Context(), msgp.Encode(w, &fi))
 }
 
 // WriteMetadata write new updated metadata.
