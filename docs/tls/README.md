@@ -150,7 +150,7 @@ DNS.1 = localhost
 Run `openssl` by specifying the configuration file and enter a passphrase if prompted:
 
 ```sh
-openssl req -x509 -nodes -days 730 -key private.key -out public.crt -config openssl.conf
+openssl req -new -x509 -nodes -days 730 -key private.key -out public.crt -config openssl.conf
 ```
 
 ### <a name="using-gnu-tls"></a>3.3 Use GnuTLS (for Windows) to Generate a Certificate
