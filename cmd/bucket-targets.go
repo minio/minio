@@ -129,11 +129,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	sys.Lock()
 	defer sys.Unlock()
 
-	tgts, ok := sys.targetsMap[bucket]
-	if !ok {
-		return BucketRemoteTargetNotFound{Bucket: bucket}
-	}
-
+	tgts := sys.targetsMap[bucket]
 	newtgts := make([]madmin.BucketTarget, len(tgts))
 	labels := make(map[string]struct{}, len(tgts))
 	found := false
