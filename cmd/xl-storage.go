@@ -105,6 +105,7 @@ type xlStorage struct {
 	diskID string
 
 	formatFileInfo  os.FileInfo
+	formatLegacy    bool
 	formatLastCheck time.Time
 
 	diskInfoCache timedValue
@@ -496,13 +497,13 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	}
 
 	s.Lock()
-	defer s.Unlock()
-
 	// If somebody else updated the disk ID and changed the time, return what they got.
 	if !lastCheck.IsZero() && !s.formatLastCheck.Equal(lastCheck) && diskID != "" {
+		s.Unlock()
 		// Somebody else got the lock first.
 		return diskID, nil
 	}
+	s.Unlock()
 
 	formatFile := pathJoin(s.diskPath, minioMetaBucket, formatConfigFile)
 	fi, err := os.Stat(formatFile)
@@ -529,8 +530,10 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	}
 
 	if xioutil.SameFile(fi, fileInfo) && diskID != "" {
+		s.Lock()
 		// If the file has not changed, just return the cached diskID information.
 		s.formatLastCheck = time.Now()
+		s.Unlock()
 		return diskID, nil
 	}
 
@@ -564,7 +567,10 @@ func (s *xlStorage) GetDiskID() (string, error) {
 		return "", errCorruptedFormat
 	}
 
+	s.Lock()
+	defer s.Unlock()
 	s.diskID = format.Erasure.This
+	s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoLegacy
 	s.formatFileInfo = fi
 	s.formatLastCheck = time.Now()
 	return s.diskID, nil
@@ -754,7 +760,7 @@ func (s *xlStorage) isLeaf(volume string, leafPath string) bool {
 		// legacy `xl.json`, in such situation we just rename
 		// and proceed if rename is successful we know that it
 		// is the leaf since `xl.json` was present.
-		return s.renameLegacyMetadata(volume, leafPath) == nil
+		return s.renameLegacyMetadata(volumeDir, leafPath) == nil
 	}
 	return false
 }
@@ -1021,29 +1027,20 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 }
 
-func (s *xlStorage) renameLegacyMetadata(volume, path string) error {
+func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
+	s.RLock()
+	legacy := s.formatLegacy
+	s.RUnlock()
+	if !legacy {
+		// if its not a legacy backend then this function is
+		// a no-op always returns errFileNotFound
+		return errFileNotFound
+	}
+
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
-
-	volumeDir, err := s.getVolDir(volume)
-	if err != nil {
-		return err
-	}
-
-	//gi Stat a volume entry.
-	_, err = os.Stat(volumeDir)
-	if err != nil {
-		if osIsNotExist(err) {
-			return errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return errFaultyDisk
-		} else if isSysErrTooManyFiles(err) {
-			return errTooManyOpenFiles
-		}
-		return err
-	}
 
 	// Validate file path length, before reading.
 	filePath := pathJoin(volumeDir, path)
@@ -1097,7 +1094,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
 		if err == errFileNotFound {
-			if err = s.renameLegacyMetadata(volume, path); err != nil {
+			if err = s.renameLegacyMetadata(volumeDir, path); err != nil {
 				if err == errFileNotFound {
 					if versionID != "" {
 						return fi, errFileVersionNotFound
@@ -2009,7 +2006,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		if !osIsNotExist(err) {
 			return osErrToFileErr(err)
 		}
-		err = s.renameLegacyMetadata(dstVolume, dstPath)
+		// errFileNotFound comes here.
+		err = s.renameLegacyMetadata(dstVolumeDir, dstPath)
 		if err != nil && err != errFileNotFound {
 			return err
 		}
