@@ -290,7 +290,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	opts := ObjectOptions{}
-	buf := make([]byte, 33<<10)
+	buf := make([]byte, 129<<10)
 	if _, err = io.ReadFull(crand.Reader, buf); err != nil {
 		t.Fatal(err)
 	}
