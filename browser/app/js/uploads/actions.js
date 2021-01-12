@@ -94,7 +94,7 @@ export const uploadFile = file => {
       _filePath = _filePath.substring(1)
     }
     const filePath = _filePath
-    const objectName = `${currentPrefix}${filePath}`
+    const objectName = encodeURIComponent(`${currentPrefix}${filePath}`)
     const uploadUrl = `${
       window.location.origin
     }${minioBrowserPrefix}/upload/${currentBucket}/${objectName}`

@@ -138,9 +138,10 @@ describe("Uploads actions", () => {
         objects: { currentPrefix: "pre1/" }
       })
       store.dispatch(uploadsActions.uploadFile(file))
+      const objectPath = encodeURIComponent("pre1/file1")
       expect(open).toHaveBeenCalledWith(
         "PUT",
-        "https://localhost:8080/upload/test1/pre1/file1",
+        "https://localhost:8080/upload/test1/" + objectPath,
         true
       )
       expect(send).toHaveBeenCalledWith(file)
