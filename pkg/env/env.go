@@ -18,6 +18,7 @@
 package env
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -73,6 +74,16 @@ func Get(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
+}
+
+// GetInt returns an integer if found in the environment
+// and returns the default value otherwise.
+func GetInt(key string, defaultValue int) (int, error) {
+	v := Get(key, "")
+	if v == "" {
+		return defaultValue, nil
+	}
+	return strconv.Atoi(v)
 }
 
 // List all envs with a given prefix.
