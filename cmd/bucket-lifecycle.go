@@ -346,7 +346,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 	}
 
 	putOpts := putTransitionOpts(oi)
-	if _, err = tgt.PutObject(ctx, arn.Bucket, oi.Name, gr, oi.Size, "", "", putOpts); err != nil {
+	if _, err = tgt.PutObject(ctx, arn.Bucket, oi.Name, gr, oi.Size, putOpts); err != nil {
 		gr.Close()
 		return err
 	}
@@ -421,7 +421,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		}
 	}
 
-	reader, _, _, err := tgt.GetObject(ctx, arn.Bucket, object, gopts)
+	reader, err := tgt.GetObject(ctx, arn.Bucket, object, gopts)
 	if err != nil {
 		return nil, err
 	}

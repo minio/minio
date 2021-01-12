@@ -52,6 +52,8 @@ type ObjectOptions struct {
 	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
 	TransitionStatus              string                 // status of the transition
 	NoLock                        bool                   // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest                  bool                   // only set for GET/HEAD in active-active replication scenario
+
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
