@@ -37,8 +37,6 @@ LDAP configuration is designed to be simple for the MinIO administrator. The ful
 
 MinIO can be configured to find the groups of a user from AD/LDAP by specifying the **MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER** and **MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE** environment variables. When a user logs in via the STS API, the MinIO server queries the AD/LDAP server with the given search filter and extracts the given attribute from the search results. These values represent the groups that the user is a member of. On each access MinIO applies the IAM policies attached to these groups in MinIO.
 
-MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
-
 LDAP is configured via the following environment variables:
 
 ```
@@ -61,7 +59,7 @@ MINIO_IDENTITY_LDAP_SERVER_INSECURE          (on|off)    allow plain text connec
 MINIO_IDENTITY_LDAP_COMMENT                  (sentence)  optionally add a comment to this setting
 ```
 
-MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.
+**MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.**
 
 If a self-signed certificate is being used, the certificate can be added to MinIO's certificates directory, so it can be trusted by the server. An example setup for development or experimentation:
 
