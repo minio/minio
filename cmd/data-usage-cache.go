@@ -56,11 +56,27 @@ type dataUsageEntry struct {
 	Children               dataUsageHashMap
 }
 
-// dataUsageCache contains a cache of data usage entries.
+//msgp:tuple dataUsageEntryV2
+type dataUsageEntryV2 struct {
+	// These fields do no include any children.
+	Size     int64
+	Objects  uint64
+	ObjSizes sizeHistogram
+	Children dataUsageHashMap
+}
+
+// dataUsageCache contains a cache of data usage entries latest version 3.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
 	Disks []string
 	Cache map[string]dataUsageEntry
+}
+
+// dataUsageCache contains a cache of data usage entries version 2.
+type dataUsageCacheV2 struct {
+	Info  dataUsageCacheInfo
+	Disks []string
+	Cache map[string]dataUsageEntryV2
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -513,12 +529,16 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // dataUsageCacheVer indicates the cache version.
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
-const dataUsageCacheVer = 3
+const (
+	dataUsageCacheVerV3 = 3
+	dataUsageCacheVerV2 = 2
+	dataUsageCacheVerV1 = 1
+)
 
 // serialize the contents of the cache.
 func (d *dataUsageCache) serializeTo(dst io.Writer) error {
 	// Add version and compress.
-	_, err := dst.Write([]byte{dataUsageCacheVer})
+	_, err := dst.Write([]byte{dataUsageCacheVerV3})
 	if err != nil {
 		return err
 	}
@@ -553,21 +573,43 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 		return io.ErrUnexpectedEOF
 	}
 	switch b[0] {
-	case 1, 2:
+	case dataUsageCacheVerV1:
 		return errors.New("cache version deprecated (will autoupdate)")
-	case dataUsageCacheVer:
-	default:
-		return fmt.Errorf("dataUsageCache: unknown version: %d", int(b[0]))
-	}
+	case dataUsageCacheVerV2:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
 
-	// Zstd compressed.
-	dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
-	if err != nil {
-		return err
-	}
-	defer dec.Close()
+		dold := &dataUsageCacheV2{}
+		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
+			return err
+		}
+		d.Info = dold.Info
+		d.Disks = dold.Disks
+		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
+		for k, v := range dold.Cache {
+			d.Cache[k] = dataUsageEntry{
+				Size:     v.Size,
+				Objects:  v.Objects,
+				ObjSizes: v.ObjSizes,
+				Children: v.Children,
+			}
+		}
+		return nil
+	case dataUsageCacheVerV3:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
 
-	return d.DecodeMsg(msgp.NewReader(dec))
+		return d.DecodeMsg(msgp.NewReader(dec))
+	}
+	return fmt.Errorf("dataUsageCache: unknown version: %d", int(b[0]))
 }
 
 // Trim this from start+end of hashes.
