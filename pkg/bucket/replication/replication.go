@@ -31,8 +31,8 @@ const (
 	// Pending - replication is pending.
 	Pending StatusType = "PENDING"
 
-	// Complete - replication completed ok.
-	Complete StatusType = "COMPLETE"
+	// Completed - replication completed ok.
+	Completed StatusType = "COMPLETED"
 
 	// Failed - replication failed.
 	Failed StatusType = "FAILED"

@@ -180,7 +180,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if gerr != nil {
 		validReplStatus := false
 		switch oi.ReplicationStatus {
-		case replication.Pending, replication.Complete, replication.Failed:
+		case replication.Pending, replication.Completed, replication.Failed:
 			validReplStatus = true
 		}
 		if oi.DeleteMarker && validReplStatus {
@@ -246,7 +246,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		}
 	} else {
 		if dobj.VersionID == "" {
-			replicationStatus = string(replication.Complete)
+			replicationStatus = string(replication.Completed)
 		} else {
 			versionPurgeStatus = Complete
 		}
@@ -471,7 +471,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			return
 		}
 	}
-	replicationStatus := replication.Complete
+	replicationStatus := replication.Completed
 	if rtype != replicateAll {
 		gr.Close()
 

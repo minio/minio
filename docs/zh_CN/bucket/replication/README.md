@@ -73,7 +73,7 @@ Replication configuration applied successfully to myminio/srcbucket.
 
 当对象锁定与复制结合使用时，源桶和目标桶都需要启用对象锁定。同理，如果目标也支持加密，则服务器端将复制加密的对象。
 
-复制状态可以在源和目标对象的元数据中看到。在源端，根据复制的结果是成功还是失败，`X-Amz-Replication-Status`会从`PENDING`变更为`COMPLETE`或者 `FAILED`状态。 在目标端，对象成功复制，`X-Amz-Replication-Status`会被设置为`REPLICA`状态。在定期的磁盘扫描周期中，任何复制失败都将自动重新尝试。
+复制状态可以在源和目标对象的元数据中看到。在源端，根据复制的结果是成功还是失败，`X-Amz-Replication-Status`会从`PENDING`变更为`COMPLETED`或者 `FAILED`状态。 在目标端，对象成功复制，`X-Amz-Replication-Status`会被设置为`REPLICA`状态。在定期的磁盘扫描周期中，任何复制失败都将自动重新尝试。
 
 ![put](https://raw.githubusercontent.com/minio/minio/master/docs/zh_CN/bucket/replication/PUT_bucket_replication.png)
 
