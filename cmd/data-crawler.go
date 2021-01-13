@@ -993,7 +993,7 @@ func (i *crawlItem) healReplication(ctx context.Context, o ObjectLayer, oi Objec
 	case replication.Failed:
 		sizeS.failedSize += oi.Size
 		globalReplicationState.queueReplicaTask(oi)
-	case replication.Complete:
+	case replication.Completed, "COMPLETE":
 		sizeS.replicatedSize += oi.Size
 	case replication.Replica:
 		sizeS.replicaSize += oi.Size
