@@ -531,6 +531,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{"test-bucket-list-object", "new", "", "", 4, resultCases[5], nil, true},
 		{"test-bucket-list-object", "new", "", "", 5, resultCases[5], nil, true},
 		{"test-bucket-list-object", "obj", "", "", 3, resultCases[6], nil, true},
+		{"test-bucket-list-object", "/obj", "", "", 0, ListObjectsInfo{}, nil, true},
 		// Testing with prefix and truncation (29-30).
 		{"test-bucket-list-object", "new", "", "", 1, resultCases[7], nil, true},
 		{"test-bucket-list-object", "obj", "", "", 2, resultCases[8], nil, true},

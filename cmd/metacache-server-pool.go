@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,11 +54,10 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	}
 
 	// For delimiter and prefix as '/' we do not list anything at all
-	// since according to s3 spec we stop at the 'delimiter'
 	// along // with the prefix. On a flat namespace with 'prefix'
 	// as '/' we don't have any entries, since all the keys are
 	// of form 'keyName/...'
-	if o.Separator == SlashSeparator && o.Prefix == SlashSeparator {
+	if strings.HasPrefix(o.Prefix, SlashSeparator) {
 		return entries, io.EOF
 	}
 
