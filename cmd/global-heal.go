@@ -118,7 +118,7 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI) error {
+func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAPI, tracker *healingTracker) error {
 	bgSeq := mustGetHealSequence(ctx)
 
 	buckets = append(buckets, BucketInfo{
@@ -137,6 +137,11 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
+		if tracker.isHealed(bucket.Name) {
+			continue
+		}
+		tracker.Object = ""
+		tracker.Bucket = bucket.Name
 		// Heal current bucket
 		if err := bgSeq.queueHealTask(healSource{
 			bucket: bucket.Name,
@@ -184,11 +189,23 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 					versionID: version.VersionID,
 				}, madmin.HealItemObject); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+						// If not deleted, assume they failed.
+						tracker.ObjectsFailed++
+						tracker.BytesFailed += uint64(version.Size)
 						logger.LogIf(ctx, err)
 					}
+				} else {
+					tracker.ObjectsHealed++
+					tracker.BytesDone += uint64(version.Size)
 				}
 			}
+			tracker.Object = entry.Name
+			if time.Since(tracker.LastUpdate) > time.Minute {
+				logger.LogIf(ctx, tracker.update(ctx))
+			}
 		}
+		tracker.HealedBuckets = append(tracker.HealedBuckets, bucket.Name)
+		logger.LogIf(ctx, tracker.update(ctx))
 	}
 
 	return nil

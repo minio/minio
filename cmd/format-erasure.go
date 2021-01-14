@@ -339,19 +339,6 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 	return formats, g.Wait()
 }
 
-func saveHealingTracker(disk StorageAPI, diskID string) error {
-	htracker := healingTracker{
-		ID: diskID,
-	}
-	htrackerBytes, err := htracker.MarshalMsg(nil)
-	if err != nil {
-		return err
-	}
-	return disk.WriteAll(context.TODO(), minioMetaBucket,
-		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
-		htrackerBytes)
-}
-
 func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) error {
 	if disk == nil || format == nil {
 		return errDiskNotFound
@@ -386,7 +373,10 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, heal bool) erro
 
 	disk.SetDiskID(diskID)
 	if heal {
-		return saveHealingTracker(disk, diskID)
+		ctx := context.Background()
+		ht, err := newHealingTracker(disk)
+		logger.LogIf(ctx, err)
+		return ht.save(ctx)
 	}
 	return nil
 }

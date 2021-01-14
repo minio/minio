@@ -18,8 +18,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"time"
 
@@ -34,10 +36,117 @@ const (
 )
 
 //go:generate msgp -file $GOFILE -unexported
-type healingTracker struct {
-	ID string
 
+// healingTracker is used to persist healing information during a heal.
+type healingTracker struct {
+	disk StorageAPI `msg:"-"`
+
+	ID            string
+	Path          string
+	Started       time.Time
+	LastUpdate    time.Time
+	ObjectsHealed uint64
+	ObjectsFailed uint64
+	BytesDone     uint64
+	BytesFailed   uint64
+
+	// Last object scanned.
+	Bucket string
+	Object string
+
+	HealedBuckets []string
 	// future add more tracking capabilities
+}
+
+// loadHealingTracker will load the healing tracker from the supplied disk.
+// The disk ID will be validated against the loaded one.
+func loadHealingTracker(ctx context.Context, disk StorageAPI) (*healingTracker, error) {
+	if disk == nil {
+		return nil, errors.New("loadHealingTracker: nil disk given")
+	}
+	diskID, err := disk.GetDiskID()
+	if err != nil {
+		return nil, err
+	}
+	b, err := disk.ReadAll(ctx, minioMetaBucket,
+		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename))
+	if err != nil {
+		return nil, err
+	}
+	var h healingTracker
+	_, err = h.UnmarshalMsg(b)
+	if err != nil {
+		return nil, err
+	}
+	if h.ID != diskID {
+		return nil, errors.New("loadHealingTracker: disk id mismatch")
+	}
+	h.disk = disk
+	return &h, nil
+}
+
+// newHealingTracker will create a new healing tracker for the disk.
+func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
+	if disk == nil {
+		return nil, errors.New("newHealingTracker: nil disk given")
+	}
+
+	diskID, err := disk.GetDiskID()
+	if err != nil {
+		return nil, err
+	}
+
+	return &healingTracker{
+		disk:    disk,
+		ID:      diskID,
+		Path:    disk.String(),
+		Started: time.Now().UTC(),
+	}, err
+}
+
+// update will update the tracker on the disk.
+// If the tracker has been deleted an error is returned.
+func (h *healingTracker) update(ctx context.Context) error {
+	if !h.disk.Healing() {
+		return fmt.Errorf("healingTracker: disk %q is not marked as healing", h.ID)
+	}
+	return h.save(ctx)
+}
+
+// save will unconditionally save the tracker and will be created if not existing.
+func (h *healingTracker) save(ctx context.Context) error {
+	h.LastUpdate = time.Now().UTC()
+	htrackerBytes, err := h.MarshalMsg(nil)
+	if err != nil {
+		return err
+	}
+	return h.disk.WriteAll(ctx, minioMetaBucket,
+		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
+		htrackerBytes)
+}
+
+// delete the tracker on disk.
+func (h *healingTracker) delete(ctx context.Context) error {
+	return h.disk.Delete(ctx, minioMetaBucket,
+		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
+		false)
+}
+
+func (h *healingTracker) isHealed(bucket string) bool {
+	for _, v := range h.HealedBuckets {
+		if v == bucket {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *healingTracker) printTo(writer io.Writer) {
+	b, err := json.MarshalIndent(h, "", "  ")
+	if err != nil {
+		writer.Write([]byte(err.Error()))
+	}
+	writer.Write(b)
 }
 
 func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
@@ -181,12 +290,13 @@ wait:
 			for i, setMap := range erasureSetInZoneDisksToHeal {
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {
-						logger.Info("Healing disk '%s' on %s pool", disk, humanize.Ordinal(i+1))
+						logger.Info("Healing disk '%v' on %s pool", disk, humanize.Ordinal(i+1))
 
 						// So someone changed the drives underneath, healing tracker missing.
-						if !disk.Healing() {
+						tracker, err := loadHealingTracker(ctx, disk)
+						if err != nil {
 							logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool", disk, humanize.Ordinal(i+1))
-							diskID, err := disk.GetDiskID()
+							tracker, err = newHealingTracker(disk)
 							if err != nil {
 								logger.LogIf(ctx, err)
 								// reading format.json failed or not found, proceed to look
@@ -194,7 +304,7 @@ wait:
 								goto wait
 							}
 
-							if err := saveHealingTracker(disk, diskID); err != nil {
+							if err := tracker.save(ctx); err != nil {
 								logger.LogIf(ctx, err)
 								// Unable to write healing tracker, permission denied or some
 								// other unexpected error occurred. Proceed to look for new
@@ -204,18 +314,14 @@ wait:
 						}
 
 						lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
-						if err := healErasureSet(ctx, setIndex, buckets, lbDisks); err != nil {
+						if err := healErasureSet(ctx, buckets, lbDisks, tracker); err != nil {
 							logger.LogIf(ctx, err)
 							continue
 						}
 
 						logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
 
-						if err := disk.Delete(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix),
-							healingTrackerFilename, false); err != nil && !errors.Is(err, errFileNotFound) {
-							logger.LogIf(ctx, err)
-							continue
-						}
+						logger.LogIf(ctx, tracker.delete(ctx))
 
 						// Only upon success pop the healed disk.
 						globalBackgroundHealState.popHealLocalDisks(disk.Endpoint())
