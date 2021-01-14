@@ -490,9 +490,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
-	groups, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
+	ldapUserDN, groups, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
-		err = fmt.Errorf("LDAP server connection failure: %w", err)
+		err = fmt.Errorf("LDAP server error: %w", err)
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
 		return
 	}
@@ -500,7 +500,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	expiryDur := globalLDAPConfig.GetExpiryDuration()
 	m := map[string]interface{}{
 		expClaim: UTCNow().Add(expiryDur).Unix(),
-		ldapUser: ldapUsername,
+		ldapUser: ldapUserDN,
 	}
 
 	if len(sessionPolicyStr) > 0 {
@@ -516,7 +516,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	// Set the parent of the temporary access key, this is useful
 	// in obtaining service accounts by this cred.
-	cred.ParentUser = ldapUsername
+	cred.ParentUser = ldapUserDN
 
 	// Set this value to LDAP groups, LDAP user can be part
 	// of large number of groups
