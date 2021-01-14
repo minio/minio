@@ -182,6 +182,8 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		return cache, errors.New("internal error: root scan attempted")
 	}
 
+	skipHeal := cache.Info.SkipHealing
+
 	s := folderScanner{
 		root:                basePath,
 		getSize:             getSize,
@@ -244,7 +246,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		default:
 		}
 		var err error
-		todo, err = s.scanQueuedLevels(ctx, todo, i == flattenLevels-1)
+		todo, err = s.scanQueuedLevels(ctx, todo, i == flattenLevels-1, skipHeal)
 		if err != nil {
 			// No useful information...
 			return cache, err
@@ -262,7 +264,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 			return s.newCache, ctx.Err()
 		default:
 		}
-		du, err := s.deepScanFolder(ctx, folder)
+		du, err := s.deepScanFolder(ctx, folder, skipHeal)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
@@ -324,7 +326,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 		}
 
 		// Update on this cycle...
-		du, err := s.deepScanFolder(ctx, folder)
+		du, err := s.deepScanFolder(ctx, folder, skipHeal)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
@@ -347,7 +349,7 @@ func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache,
 // Files found in the folders will be added to f.newCache.
 // If final is provided folders will be put into f.newFolders or f.existingFolders.
 // If final is not provided the folders found are returned from the function.
-func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFolder, final bool) ([]cachedFolder, error) {
+func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFolder, final bool, skipHeal bool) ([]cachedFolder, error) {
 	var nextFolders []cachedFolder
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
@@ -454,6 +456,11 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				lifeCycle:  activeLifeCycle,
 				heal:       thisHash.mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
 			}
+
+			// if the drive belongs to an erasure set
+			// that is already being healed, skip the
+			// healing attempt on this drive.
+			item.heal = item.heal && !skipHeal
 
 			sizeSummary, err := f.getSize(item)
 			if err == errSkipFile {
@@ -659,7 +666,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 }
 
 // deepScanFolder will deep scan a folder and return the size if no error occurs.
-func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder) (*dataUsageEntry, error) {
+func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder, skipHeal bool) (*dataUsageEntry, error) {
 	var cache dataUsageEntry
 
 	done := ctx.Done()
@@ -700,18 +707,23 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder)
 			activeLifeCycle = f.oldCache.Info.lifeCycle
 		}
 
-		sizeSummary, err := f.getSize(
-			crawlItem{
-				Path:       fileName,
-				Typ:        typ,
-				bucket:     bucket,
-				prefix:     path.Dir(prefix),
-				objectName: path.Base(entName),
-				debug:      f.dataUsageCrawlDebug,
-				lifeCycle:  activeLifeCycle,
-				heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
-			})
+		item := crawlItem{
+			Path:       fileName,
+			Typ:        typ,
+			bucket:     bucket,
+			prefix:     path.Dir(prefix),
+			objectName: path.Base(entName),
+			debug:      f.dataUsageCrawlDebug,
+			lifeCycle:  activeLifeCycle,
+			heal:       hashPath(path.Join(prefix, entName)).mod(f.oldCache.Info.NextCycle, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure,
+		}
 
+		// if the drive belongs to an erasure set
+		// that is already being healed, skip the
+		// healing attempt on this drive.
+		item.heal = item.heal && !skipHeal
+
+		sizeSummary, err := f.getSize(item)
 		if err == errSkipFile {
 			// Wait to throttle IO
 			wait()
