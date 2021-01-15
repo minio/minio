@@ -159,7 +159,7 @@ an upcoming feature.
 By default, replication is completed asynchronously. If synchronous replication is desired, set the --sync flag while adding a
 remote replication target using the `mc admin bucket remote add` command
 ```
- mc admin bucket remote add myminio/srcbucket https://accessKey:secretKey@replica-endpoint:9000/destbucket --service replication --region us-east-1 --sync --healthcheck-seconds 100s
+ mc admin bucket remote add myminio/srcbucket https://accessKey:secretKey@replica-endpoint:9000/destbucket --service replication --region us-east-1 --sync --healthcheck-seconds 100
 ```
 
 ## Explore Further
