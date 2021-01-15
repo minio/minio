@@ -18,7 +18,6 @@ package http
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"net"
 	"sync"
@@ -96,6 +95,7 @@ type DNSCache struct {
 
 	lookupHostFn  func(ctx context.Context, host string) ([]string, error)
 	lookupTimeout time.Duration
+	loggerOnce    func(ctx context.Context, err error, id interface{}, errKind ...interface{})
 
 	cache    map[string][]string
 	doneOnce sync.Once
@@ -105,7 +105,7 @@ type DNSCache struct {
 // NewDNSCache initializes DNS cache resolver and starts auto refreshing
 // in a new goroutine. To stop auto refreshing, call `Stop()` function.
 // Once `Stop()` is called auto refreshing cannot be resumed.
-func NewDNSCache(freq time.Duration, lookupTimeout time.Duration) *DNSCache {
+func NewDNSCache(freq time.Duration, lookupTimeout time.Duration, loggerOnce func(ctx context.Context, err error, id interface{}, errKind ...interface{})) *DNSCache {
 	if freq <= 0 {
 		freq = defaultFreq
 	}
@@ -117,6 +117,7 @@ func NewDNSCache(freq time.Duration, lookupTimeout time.Duration) *DNSCache {
 	r := &DNSCache{
 		lookupHostFn:  net.DefaultResolver.LookupHost,
 		lookupTimeout: lookupTimeout,
+		loggerOnce:    loggerOnce,
 		cache:         make(map[string][]string, cacheSize),
 		doneCh:        make(chan struct{}),
 	}
@@ -179,7 +180,7 @@ func (r *DNSCache) Refresh() {
 	for _, host := range hosts {
 		ctx, cancelF := context.WithTimeout(context.Background(), r.lookupTimeout)
 		if _, err := r.LookupHost(ctx, host); err != nil {
-			log.Println("failed to refresh DNS cache, resolver is unavailable", err)
+			r.loggerOnce(ctx, err, host)
 		}
 		cancelF()
 	}

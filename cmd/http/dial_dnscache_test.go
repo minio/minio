@@ -31,9 +31,13 @@ var (
 	testDefaultLookupTimeout = 1 * time.Second
 )
 
+func logOnce(ctx context.Context, err error, id interface{}, errKind ...interface{}) {
+	// no-op
+}
+
 func testDNSCache(t *testing.T) *DNSCache {
 	t.Helper() // skip printing file and line information from this function
-	return NewDNSCache(testFreq, testDefaultLookupTimeout)
+	return NewDNSCache(testFreq, testDefaultLookupTimeout, logOnce)
 }
 
 func TestDialContextWithDNSCache(t *testing.T) {
