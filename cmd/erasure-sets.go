@@ -127,20 +127,16 @@ func (s *erasureSets) getDiskMap() map[string]StorageAPI {
 // Initializes a new StorageAPI from the endpoint argument, returns
 // StorageAPI and also `format` which exists on the disk.
 func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
-	disk, err := newStorageAPIWithoutHealthCheck(endpoint)
-	if err != nil {
-		return nil, nil, err
-	}
-
+	disk := newStorageAPIWithoutHealthCheck(endpoint)
 	format, err := loadFormatErasure(disk)
 	if err != nil {
 		if errors.Is(err, errUnformattedDisk) {
 			info, derr := disk.DiskInfo(context.TODO())
 			if derr != nil && info.RootDisk {
-				return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, derr) // make sure to '%w' to wrap the error
+				return disk, nil, fmt.Errorf("Disk: %s returned %w", disk, derr) // make sure to '%w' to wrap the error
 			}
 		}
-		return nil, nil, fmt.Errorf("Disk: %s returned %w", disk, err) // make sure to '%w' to wrap the error
+		return disk, nil, fmt.Errorf("Disk: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
 
 	return disk, format, nil
@@ -1204,13 +1200,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 
 // HealFormat - heals missing `format.json` on fresh unformatted disks.
 func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
-	storageDisks, errs := initStorageDisksWithErrorsWithoutHealthCheck(s.endpoints)
-	for i, derr := range errs {
-		if derr != nil && derr != errDiskNotFound {
-			return madmin.HealResultItem{}, fmt.Errorf("Disk %s: %w", s.endpoints[i], derr)
-		}
-	}
-
+	storageDisks := initStorageDisksWithoutHealthCheck(s.endpoints)
 	defer func(storageDisks []StorageAPI) {
 		if err != nil {
 			closeStorageDisks(storageDisks)

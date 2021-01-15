@@ -750,18 +750,19 @@ func closeStorageDisks(storageDisks []StorageAPI) {
 	}
 }
 
-func initStorageDisksWithErrorsWithoutHealthCheck(endpoints Endpoints) ([]StorageAPI, []error) {
+func initStorageDisksWithoutHealthCheck(endpoints Endpoints) []StorageAPI {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
 	g := errgroup.WithNErrs(len(endpoints))
 	for index := range endpoints {
 		index := index
 		g.Go(func() (err error) {
-			storageDisks[index], err = newStorageAPIWithoutHealthCheck(endpoints[index])
-			return err
+			storageDisks[index] = newStorageAPIWithoutHealthCheck(endpoints[index])
+			return nil
 		}, index)
 	}
-	return storageDisks, g.Wait()
+	g.Wait()
+	return storageDisks
 }
 
 // Initialize storage disks for each endpoint.

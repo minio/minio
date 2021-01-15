@@ -240,11 +240,8 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 
 	for i, err := range errs {
 		if err != nil {
-			if err != errDiskNotFound {
-				return nil, nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
-			}
-			if retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", endpoints[i], isServerResolvable(endpoints[i]))
+			if retryCount >= 3 {
+				logger.Info("Unable to connect to %s: %v %w\n", endpoints[i], isServerResolvable(endpoints[i]), fmt.Errorf("Disk %s: %w", endpoints[i], err))
 			}
 		}
 	}
@@ -254,7 +251,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// Check if we have
 	for i, sErr := range sErrs {
 		// print the error, nonetheless, which is perhaps unhandled
-		if sErr != errUnformattedDisk && sErr != errDiskNotFound && retryCount >= 5 {
+		if sErr != errUnformattedDisk && sErr != errDiskNotFound && retryCount >= 3 {
 			if sErr != nil {
 				logger.Info("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
 			}
