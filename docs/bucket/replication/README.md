@@ -22,16 +22,25 @@ Role ARN = 'arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566
 
 >  The user running the above command needs *s3:GetReplicationConfiguration* and *s3:GetBucketVersioning* permission on the source cluster. We do not recommend running root credentials/super admin with replication, instead create a dedicated user. The access credentials used at the destination requires *s3:ReplicateObject* permission.
 
-The *source* bucket should have following minimal permission policy:
+The following minimal permission policy is needed by admin user setting up replication on the `source`:
 ```
 {
  "Version": "2012-10-17",
  "Statement": [
   {
+    "Action": [
+        "admin:SetBucketTarget",
+        "admin:GetBucketTarget"
+    ],
+    "Effect": "Allow",
+    "Sid": ""
+  },
+  {
    "Effect": "Allow",
    "Action": [
     "s3:GetReplicationConfiguration",
     "s3:ListBucket",
+    "s3:ListBucketMultipartUploads",
     "s3:GetBucketLocation",
     "s3:GetBucketVersioning"
    ],
@@ -50,7 +59,12 @@ The access key provided for the replication *target* cluster should have these m
   {
    "Effect": "Allow",
    "Action": [
-    "s3:GetBucketVersioning"
+    "s3:GetReplicationConfiguration",
+    "s3:ListBucket",
+    "s3:ListBucketMultipartUploads",
+    "s3:GetBucketLocation",
+    "s3:GetBucketVersioning",
+    "s3:GetBucketObjectLockConfiguration"
    ],
    "Resource": [
     "arn:aws:s3:::destbucket"
@@ -59,12 +73,16 @@ The access key provided for the replication *target* cluster should have these m
   {
    "Effect": "Allow",
    "Action": [
+    "s3:GetReplicationConfiguration",
     "s3:ReplicateTags",
+    "s3:AbortMultipartUpload",
     "s3:GetObject",
     "s3:GetObjectVersion",
     "s3:GetObjectVersionTagging",
     "s3:PutObject",
-    "s3:ReplicateObject"
+    "s3:DeleteObject",
+    "s3:ReplicateObject",
+    "s3:ReplicateDelete"
    ],
    "Resource": [
     "arn:aws:s3:::destbucket/*"
@@ -72,8 +90,10 @@ The access key provided for the replication *target* cluster should have these m
   }
  ]
 }
-
 ```
+Please note that the permissions required by the admin user on the target cluster can be more fine grained to exclude permissions like
+"s3:ReplicateDelete", "s3:GetBucketObjectLockConfiguration" etc depending on whether delete replication rules are set up or if object locking is disabled on `destbucket`. The above policies assume that replication of objects, tags and delete marker replication are all enabled on object lock enabled buckets. A sample script to setup replication is provided [here](https://github.com/minio/minio/blob/master/docs/bucket/replication/setup.sh)
+
 Once successfully created and authorized, the `mc admin bucket remote add` command generates a replication target ARN.  This command lists all the currently authorized replication targets:
 ```
 mc admin bucket remote ls myminio/srcbucket --service "replication"
