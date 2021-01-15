@@ -6,7 +6,7 @@
 MinIO is a High Performance Object Storage released under Apache License v2.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
 
 This README provides quickstart instructions on running MinIO on baremetal hardware, including Docker-based installations. For Kubernetes environments, 
-use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/). 
+use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md). 
 
 **Table of Contents**
 
