@@ -621,7 +621,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	// -- FIXME (this also causes performance issue when disks are down).
-	if er.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+	if opts.ParentIsObject != nil && opts.ParentIsObject(ctx, bucket, path.Dir(object)) {
 		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
