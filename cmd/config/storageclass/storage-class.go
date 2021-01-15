@@ -64,7 +64,7 @@ const (
 	defaultRRSParity = minParityDisks
 
 	// Default DMA value
-	defaultDMA = DMAWrite
+	defaultDMA = DMAReadWrite
 )
 
 // DefaultKVS - default storage class config
