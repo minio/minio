@@ -51,6 +51,7 @@ The following minimal permission policy is needed by admin user setting up repli
  ]
 }
 ```
+
 The access key provided for the replication *target* cluster should have these minimal permissions:
 ```
 {
@@ -91,8 +92,8 @@ The access key provided for the replication *target* cluster should have these m
  ]
 }
 ```
-Please note that the permissions required by the admin user on the target cluster can be more fine grained to exclude permissions like
-"s3:ReplicateDelete", "s3:GetBucketObjectLockConfiguration" etc depending on whether delete replication rules are set up or if object locking is disabled on `destbucket`. The above policies assume that replication of objects, tags and delete marker replication are all enabled on object lock enabled buckets. A sample script to setup replication is provided [here](https://github.com/minio/minio/blob/master/docs/bucket/replication/setup.sh)
+
+Please note that the permissions required by the admin user on the target cluster can be more fine grained to exclude permissions like `s3:ReplicateDelete`, `s3:GetBucketObjectLockConfiguration` etc. depending on whether delete replication rules are set up or if object locking is disabled on `destbucket`. The above policies assume that replication of objects, tags and delete marker replication are all enabled on object lock enabled buckets. A sample script to setup replication is provided [here](https://github.com/minio/minio/blob/master/docs/bucket/replication/setup.sh) for convenience.
 
 Once successfully created and authorized, the `mc admin bucket remote add` command generates a replication target ARN.  This command lists all the currently authorized replication targets:
 ```
@@ -141,9 +142,7 @@ When object locking is used in conjunction with replication, both source and des
 
 Replication status can be seen in the metadata on the source and destination objects. On the source side, the `X-Amz-Replication-Status` changes from `PENDING` to `COMPLETED` or `FAILED` after replication attempt either succeeded or failed respectively. On the destination side, a `X-Amz-Replication-Status` status of `REPLICA` indicates that the object was replicated successfully. Any replication failures are automatically re-attempted during a periodic disk crawl cycle.
 
-To perform bi-directional replication, repeat the above process on the target site - this time setting the source bucket as the replication target.
-
-It is recommended that replication be run in a system with atleast two CPU's available to the process, so that replication can run in its own thread.
+To perform bi-directional replication, repeat the above process on the target site - this time setting the source bucket as the replication target. It is recommended that replication be run in a system with atleast two CPU's available to the process, so that replication can run in its own thread.
 
 ![put](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/PUT_bucket_replication.png)
 
@@ -151,6 +150,7 @@ It is recommended that replication be run in a system with atleast two CPU's ava
 
 ## MinIO Extension
 ### Replicating Deletes
+
 Delete marker replication is allowed in [AWS V1 Configuration](https://aws.amazon.com/blogs/storage/managing-delete-marker-replication-in-amazon-s3/) but not in V2 configuration. The MinIO implementation above is based on V2 configuration, however it has been extended to allow both DeleteMarker replication and replication of versioned deletes with the `DeleteMarkerReplication` and `DeleteReplication` fields in the replication configuration above. By default, this is set to `Disabled` unless the user specifies it while adding a replication rule.
 
 When an object is deleted from the source bucket, the corresponding replica version will be marked deleted if delete marker replication is enabled in the replication configuration. Replication of deletes that specify a version id (a.k.a hard deletes) can be enabled by setting the `DeleteReplication` status to enabled in the replication configuration. This is a MinIO specific extension that can be enabled using the `mc replicate add` or `mc replicate edit` command with the --replicate "delete" flag.
@@ -164,7 +164,8 @@ Additional permission of "s3:ReplicateDelete" action would need to be specified 
 mc replicate add myminio/srcbucket/Tax --priority 1 --arn "arn:minio:replication:us-east-1:c5be6b16-769d-432a-9ef1-4567081f3566:destbucket" --tags "Year=2019&Company=AcmeCorp" --storage-class "STANDARD" --remote-bucket "destbucket" --replicate "delete,delete-marker"
 Replication configuration applied successfully to myminio/srcbucket.
 ```
-Note that both source and target instance need to be upgraded to latest release to take advantage of Delete marker replication.
+
+> NOTE: Both source and target instance need to be upgraded to latest release to take advantage of Delete marker replication.
 
 Status of delete marker replication can be viewed by doing a GET/HEAD on the object version - it will return a `X-Minio-Replication-DeleteMarker-Status` header and http response code of `405`. In the case of permanent deletes, if the delete replication is pending or failed to propagate to the target cluster, GET/HEAD will return additional `X-Minio-Replication-Delete-Status` header and a http response code of `405`.
 
@@ -172,7 +173,7 @@ Status of delete marker replication can be viewed by doing a GET/HEAD on the obj
 
 The status of replication can be monitored by configuring event notifications on the source and target buckets using `mc event add`.On the source side, the `s3:PutObject`, `s3:Replication:OperationCompletedReplication` and `s3:Replication:OperationFailedReplication` events show the status of replication in the `X-Amz-Replication-Status` metadata.
 
-On the target bucket, `s3:PutObject` event shows `X-Amz-Replication-Status` status of `REPLICA` in the metadata. Additional metrics to monitor backlog state for the purpose of bandwidth management and resource allocation are  
+On the target bucket, `s3:PutObject` event shows `X-Amz-Replication-Status` status of `REPLICA` in the metadata. Additional metrics to monitor backlog state for the purpose of bandwidth management and resource allocation are
 an upcoming feature.
 
 ### Sync/Async Replication
