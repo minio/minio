@@ -107,7 +107,7 @@ func TestMain(m *testing.M) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
-	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second)
+	globalDNSCache = xhttp.NewDNSCache(3*time.Second, 10*time.Second, logger.LogOnceIf)
 
 	globalInternodeTransport = newInternodeHTTPTransport(nil, rest.DefaultTimeout)()
 
