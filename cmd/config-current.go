@@ -342,7 +342,7 @@ func validateConfig(s config.Config, setDriveCount int) error {
 	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
 }
 
-func lookupConfigs(s config.Config, setDriveCount int) {
+func lookupConfigs(s config.Config, minSetDriveCount int) {
 	ctx := GlobalContext
 
 	var err error
@@ -429,7 +429,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 		logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 	}
 
-	globalAPIConfig.init(apiConfig, setDriveCount)
+	globalAPIConfig.init(apiConfig, minSetDriveCount)
 
 	// Initialize remote instance transport once.
 	getRemoteInstanceTransportOnce.Do(func() {
@@ -437,7 +437,7 @@ func lookupConfigs(s config.Config, setDriveCount int) {
 	})
 
 	if globalIsErasure {
-		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
+		globalStorageClass, err = storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], minSetDriveCount)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 		}

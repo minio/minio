@@ -334,7 +334,7 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 // Returns per object readQuorum and writeQuorum
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
-func objectQuorumFromMeta(ctx context.Context, er erasureObjects, partsMetaData []FileInfo, errs []error) (objectReadQuorum, objectWriteQuorum int, err error) {
+func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
 	// get the latest updated Metadata and a count of all the latest updated FileInfo(s)
 	latestFileInfo, err := getLatestFileInfo(ctx, partsMetaData, errs)
 	if err != nil {
@@ -343,13 +343,13 @@ func objectQuorumFromMeta(ctx context.Context, er erasureObjects, partsMetaData 
 
 	dataBlocks := latestFileInfo.Erasure.DataBlocks
 	parityBlocks := globalStorageClass.GetParityForSC(latestFileInfo.Metadata[xhttp.AmzStorageClass])
-	if parityBlocks == 0 {
-		parityBlocks = dataBlocks
+	if parityBlocks <= 0 {
+		parityBlocks = defaultParityCount
 	}
 
 	writeQuorum := dataBlocks
 	if dataBlocks == parityBlocks {
-		writeQuorum = dataBlocks + 1
+		writeQuorum++
 	}
 
 	// Since all the valid erasure code meta updated at the same time are equivalent, pass dataBlocks
