@@ -92,7 +92,7 @@ When an object has only one version as a delete marker, the latter can be automa
             "ID": "Removing all old versions",
             "Expiration": {
                 "Days": 1,
-                "ExpiredObjectDeleteMarker": true
+                "DeleteMarker": true
             },
             "Status": "Enabled"
         }
