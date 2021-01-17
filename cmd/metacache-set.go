@@ -680,8 +680,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				logger.LogIf(ctx, err)
 				custom := b.headerKV()
 				_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{
-					UserDefined: custom,
-					NoLock:      true, // No need to hold namespace lock, each prefix caches uniquely.
+					UserDefined:    custom,
+					NoLock:         true, // No need to hold namespace lock, each prefix caches uniquely.
+					ParentIsObject: nil,
 				})
 				if err != nil {
 					metaMu.Lock()

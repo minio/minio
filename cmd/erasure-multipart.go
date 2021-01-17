@@ -690,7 +690,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
-	if er.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+	if opts.ParentIsObject != nil && opts.ParentIsObject(ctx, bucket, path.Dir(object)) {
 		return oi, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 

@@ -44,16 +44,16 @@ type ObjectOptions struct {
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
 
-	DeleteMarker                  bool                   // Is only set in DELETE operations for delete marker replication
-	UserDefined                   map[string]string      // only set in case of POST/PUT operations
-	PartNumber                    int                    // only useful in case of GetObject/HeadObject
-	CheckPrecondFn                CheckPreconditionFn    // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
-	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
-	TransitionStatus              string                 // status of the transition
-	NoLock                        bool                   // indicates to lower layers if the caller is expecting to hold locks.
-	ProxyRequest                  bool                   // only set for GET/HEAD in active-active replication scenario
-
+	DeleteMarker                  bool                                                  // Is only set in DELETE operations for delete marker replication
+	UserDefined                   map[string]string                                     // only set in case of POST/PUT operations
+	PartNumber                    int                                                   // only useful in case of GetObject/HeadObject
+	CheckPrecondFn                CheckPreconditionFn                                   // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	DeleteMarkerReplicationStatus string                                                // Is only set in DELETE operations
+	VersionPurgeStatus            VersionPurgeStatusType                                // Is only set in DELETE operations for delete marker version to be permanently deleted.
+	TransitionStatus              string                                                // status of the transition
+	NoLock                        bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
+	ProxyRequest                  bool                                                  // only set for GET/HEAD in active-active replication scenario
+	ParentIsObject                func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
