@@ -175,20 +175,16 @@ func parseStorageClass(storageClassEnv string) (sc StorageClass, err error) {
 
 // Validates the parity disks.
 func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
-	if ssParity == 0 && rrsParity == 0 {
-		return nil
-	}
-
 	// SS parity disks should be greater than or equal to minParityDisks.
 	// Parity below minParityDisks is not supported.
-	if ssParity < minParityDisks {
+	if ssParity > 0 && ssParity < minParityDisks {
 		return fmt.Errorf("Standard storage class parity %d should be greater than or equal to %d",
 			ssParity, minParityDisks)
 	}
 
 	// RRS parity disks should be greater than or equal to minParityDisks.
 	// Parity below minParityDisks is not supported.
-	if rrsParity < minParityDisks {
+	if rrsParity > 0 && rrsParity < minParityDisks {
 		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minParityDisks)
 	}
 
@@ -201,7 +197,7 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 	}
 
 	if ssParity > 0 && rrsParity > 0 {
-		if ssParity < rrsParity {
+		if ssParity > 0 && ssParity < rrsParity {
 			return fmt.Errorf("Standard storage class parity disks %d should be greater than or equal to Reduced redundancy storage class parity disks %d", ssParity, rrsParity)
 		}
 	}
