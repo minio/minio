@@ -1657,6 +1657,10 @@ func TestXLStorageCheckFile(t *testing.T) {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
+	if err := xlStorage.MakeVol(context.Background(), "success-vol/path/to/"+xlStorageFormatFile); err != nil {
+		t.Fatalf("Unable to create path, %s", err)
+	}
+
 	testCases := []struct {
 		srcVol      string
 		srcPath     string
@@ -1695,7 +1699,7 @@ func TestXLStorageCheckFile(t *testing.T) {
 		{
 			srcVol:      "success-vol",
 			srcPath:     "path",
-			expectedErr: errFileNotFound,
+			expectedErr: errPathNotFound,
 		},
 		// TestXLStorage case - 6.
 		// TestXLStorage case with non existent volume.
@@ -1703,6 +1707,13 @@ func TestXLStorageCheckFile(t *testing.T) {
 			srcVol:      "non-existent-vol",
 			srcPath:     "success-file",
 			expectedErr: errPathNotFound,
+		},
+		// TestXLStorage case - 7.
+		// TestXLStorage case with file with directory.
+		{
+			srcVol:      "success-vol",
+			srcPath:     "path/to",
+			expectedErr: errFileNotFound,
 		},
 	}
 
