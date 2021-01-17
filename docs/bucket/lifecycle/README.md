@@ -89,9 +89,8 @@ When an object has only one version as a delete marker, the latter can be automa
 {
     "Rules": [
         {
-            "ID": "Removing all old versions",
+            "ID": "Removing all delete markers",
             "Expiration": {
-                "Days": 1,
                 "DeleteMarker": true
             },
             "Status": "Enabled"
