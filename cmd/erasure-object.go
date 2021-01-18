@@ -62,7 +62,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	metaArr, errs := readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, false)
 
 	// get Quorum for this object
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
@@ -380,7 +380,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, readData)
 
-	readQuorum, _, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
 		return fi, nil, nil, err
 	}
@@ -595,8 +595,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	// Get parity and data drive count based on storage class metadata
 	parityDrives := globalStorageClass.GetParityForSC(opts.UserDefined[xhttp.AmzStorageClass])
-	if parityDrives == 0 {
-		parityDrives = getDefaultParityBlocks(len(storageDisks))
+	if parityDrives <= 0 {
+		parityDrives = er.defaultParityCount
 	}
 	dataDrives := len(storageDisks) - parityDrives
 
@@ -604,7 +604,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// writeQuorum is dataBlocks + 1
 	writeQuorum := dataDrives
 	if dataDrives == parityDrives {
-		writeQuorum = dataDrives + 1
+		writeQuorum++
 	}
 
 	// Delete temporary object in the event of failure.
@@ -621,7 +621,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	// -- FIXME (this also causes performance issue when disks are down).
-	if er.parentDirIsObject(ctx, bucket, path.Dir(object)) {
+	if opts.ParentIsObject != nil && opts.ParentIsObject(ctx, bucket, path.Dir(object)) {
 		return ObjectInfo{}, toObjectErr(errFileParentIsFile, bucket, object)
 	}
 
@@ -1093,7 +1093,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
 
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
@@ -1154,7 +1154,7 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
 
-	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, er, metaArr, errs)
+	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}

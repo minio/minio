@@ -340,8 +340,8 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 		}
 	}
 
-	// Take 8 disks down before GetObject is called, one more we loose quorum on 16 disk node.
-	for _, disk := range disks[:8] {
+	// Take 4 disks down before GetObject is called, one more we loose quorum on 16 disk node.
+	for _, disk := range disks[:4] {
 		os.RemoveAll(disk)
 	}
 

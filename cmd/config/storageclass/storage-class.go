@@ -88,14 +88,13 @@ var (
 // StorageClass - holds storage class information
 type StorageClass struct {
 	Parity int
-	DMA    string
 }
 
 // Config storage class configuration
 type Config struct {
 	Standard StorageClass `json:"standard"`
 	RRS      StorageClass `json:"rrs"`
-	DMA      StorageClass `json:"dma"`
+	DMA      string       `json:"dma"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -112,7 +111,7 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 // IsValid - returns true if input string is a valid
 // storage class kind supported.
 func IsValid(sc string) bool {
-	return sc == RRS || sc == STANDARD || sc == DMA
+	return sc == RRS || sc == STANDARD
 }
 
 // UnmarshalText unmarshals storage class from its textual form into
@@ -120,14 +119,6 @@ func IsValid(sc string) bool {
 func (sc *StorageClass) UnmarshalText(b []byte) error {
 	scStr := string(b)
 	if scStr == "" {
-		return nil
-	}
-	if scStr == DMAWrite {
-		sc.DMA = DMAWrite
-		return nil
-	}
-	if scStr == DMAReadWrite {
-		sc.DMA = DMAReadWrite
 		return nil
 	}
 	s, err := parseStorageClass(scStr)
@@ -143,14 +134,14 @@ func (sc *StorageClass) MarshalText() ([]byte, error) {
 	if sc.Parity != 0 {
 		return []byte(fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)), nil
 	}
-	return []byte(sc.DMA), nil
+	return []byte{}, nil
 }
 
 func (sc *StorageClass) String() string {
 	if sc.Parity != 0 {
 		return fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)
 	}
-	return sc.DMA
+	return ""
 }
 
 // Parses given storageClassEnv and returns a storageClass structure.
@@ -184,20 +175,16 @@ func parseStorageClass(storageClassEnv string) (sc StorageClass, err error) {
 
 // Validates the parity disks.
 func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
-	if ssParity == 0 && rrsParity == 0 {
-		return nil
-	}
-
 	// SS parity disks should be greater than or equal to minParityDisks.
 	// Parity below minParityDisks is not supported.
-	if ssParity < minParityDisks {
+	if ssParity > 0 && ssParity < minParityDisks {
 		return fmt.Errorf("Standard storage class parity %d should be greater than or equal to %d",
 			ssParity, minParityDisks)
 	}
 
 	// RRS parity disks should be greater than or equal to minParityDisks.
 	// Parity below minParityDisks is not supported.
-	if rrsParity < minParityDisks {
+	if rrsParity > 0 && rrsParity < minParityDisks {
 		return fmt.Errorf("Reduced redundancy storage class parity %d should be greater than or equal to %d", rrsParity, minParityDisks)
 	}
 
@@ -210,7 +197,7 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 	}
 
 	if ssParity > 0 && rrsParity > 0 {
-		if ssParity < rrsParity {
+		if ssParity > 0 && ssParity < rrsParity {
 			return fmt.Errorf("Standard storage class parity disks %d should be greater than or equal to Reduced redundancy storage class parity disks %d", ssParity, rrsParity)
 		}
 	}
@@ -218,14 +205,16 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 }
 
 // GetParityForSC - Returns the data and parity drive count based on storage class
-// If storage class is set using the env vars MINIO_STORAGE_CLASS_RRS and MINIO_STORAGE_CLASS_STANDARD
-// or config.json fields
-// -- corresponding values are returned
-// If storage class is not set during startup, default values are returned
-// -- Default for Reduced Redundancy Storage class is, parity = 2 and data = N-Parity
-// -- Default for Standard Storage class is, parity = N/2, data = N/2
-// If storage class is empty
-// -- standard storage class is assumed and corresponding data and parity is returned
+// If storage class is set using the env vars MINIO_STORAGE_CLASS_RRS and
+// MINIO_STORAGE_CLASS_STANDARD or server config fields corresponding values are
+// returned.
+//
+// -- if input storage class is empty then standard is assumed
+// -- if input is RRS but RRS is not configured default '2' parity
+//    for RRS is assumed
+// -- if input is STANDARD but STANDARD is not configured '0' parity
+//    is returned, the caller is expected to choose the right parity
+//    at that point.
 func (sCfg Config) GetParityForSC(sc string) (parity int) {
 	switch strings.TrimSpace(sc) {
 	case RRS:
@@ -241,7 +230,7 @@ func (sCfg Config) GetParityForSC(sc string) (parity int) {
 
 // GetDMA - returns DMA configuration.
 func (sCfg Config) GetDMA() string {
-	return sCfg.DMA.DMA
+	return sCfg.DMA
 }
 
 // Enabled returns if etcd is enabled.
@@ -254,8 +243,6 @@ func Enabled(kvs config.KVS) bool {
 // LookupConfig - lookup storage class config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	cfg = Config{}
-	cfg.Standard.Parity = setDriveCount / 2
-	cfg.RRS.Parity = defaultRRSParity
 
 	if err = config.CheckValidKeys(config.StorageClassSubSys, kvs, DefaultKVS); err != nil {
 		return Config{}, err
@@ -270,9 +257,6 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 		if err != nil {
 			return Config{}, err
 		}
-	}
-	if cfg.Standard.Parity == 0 {
-		cfg.Standard.Parity = setDriveCount / 2
 	}
 
 	if rrsc != "" {
@@ -291,7 +275,7 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	if dma != DMAReadWrite && dma != DMAWrite {
 		return Config{}, errors.New(`valid dma values are "read-write" and "write"`)
 	}
-	cfg.DMA.DMA = dma
+	cfg.DMA = dma
 
 	// Validation is done after parsing both the storage classes. This is needed because we need one
 	// storage class value to deduce the correct value of the other storage class.

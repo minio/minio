@@ -43,7 +43,8 @@ func TestFixFormatV3(t *testing.T) {
 		}
 	}
 
-	format := newFormatErasureV3(1, 8, "CRCMOD")
+	format := newFormatErasureV3(1, 8)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 8)
 
 	for j := 0; j < 8; j++ {
@@ -77,7 +78,8 @@ func TestFixFormatV3(t *testing.T) {
 
 // tests formatErasureV3ThisEmpty conditions.
 func TestFormatErasureEmpty(t *testing.T) {
-	format := newFormatErasureV3(1, 16, "CRCMOD")
+	format := newFormatErasureV3(1, 16)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 16)
 
 	for j := 0; j < 16; j++ {
@@ -276,7 +278,8 @@ func TestGetFormatErasureInQuorumCheck(t *testing.T) {
 	setCount := 2
 	setDriveCount := 16
 
-	format := newFormatErasureV3(setCount, setDriveCount, "CRCMOD")
+	format := newFormatErasureV3(setCount, setDriveCount)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 32)
 
 	for i := 0; i < setCount; i++ {
@@ -342,7 +345,8 @@ func TestGetErasureID(t *testing.T) {
 	setCount := 2
 	setDriveCount := 8
 
-	format := newFormatErasureV3(setCount, setDriveCount, "CRCMOD")
+	format := newFormatErasureV3(setCount, setDriveCount)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 16)
 
 	for i := 0; i < setCount; i++ {
@@ -397,7 +401,8 @@ func TestNewFormatSets(t *testing.T) {
 	setCount := 2
 	setDriveCount := 16
 
-	format := newFormatErasureV3(setCount, setDriveCount, "CRCMOD")
+	format := newFormatErasureV3(setCount, setDriveCount)
+	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 32)
 	errs := make([]error, 32)
 

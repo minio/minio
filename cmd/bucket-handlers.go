@@ -461,6 +461,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}, goi, gerr)
 			replicateSync = repsync
 			if replicate {
+				if apiErrCode := checkRequestAuthType(ctx, r, policy.ReplicateDeleteAction, bucket, object.ObjectName); apiErrCode != ErrNone {
+					if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
+						writeErrorResponse(ctx, w, errorCodes.ToAPIErr(apiErrCode), r.URL, guessIsBrowserReq(r))
+						return
+					}
+					continue
+				}
 				if object.VersionID != "" {
 					object.VersionPurgeStatus = Pending
 					if delMarker {

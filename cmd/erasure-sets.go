@@ -81,6 +81,7 @@ type erasureSets struct {
 
 	// Total number of sets and the number of disks per set.
 	setCount, setDriveCount int
+	defaultParityCount      int
 
 	disksConnectEvent chan diskConnectInfo
 
@@ -355,21 +356,36 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	endpointStrings := make([]string, len(endpoints))
 
+	// If storage class is not set during startup, default values are used
+	// -- Default for Reduced Redundancy Storage class is, parity = 2
+	// -- Default for Standard Storage class is, parity = 2 - disks 4, 5
+	// -- Default for Standard Storage class is, parity = 3 - disks 6, 7
+	// -- Default for Standard Storage class is, parity = 4 - disks 8 to 16
+	var defaultParityCount int
+
+	switch format.Erasure.DistributionAlgo {
+	case formatErasureVersionV3DistributionAlgoV3:
+		defaultParityCount = getDefaultParityBlocks(setDriveCount)
+	default:
+		defaultParityCount = setDriveCount / 2
+	}
+
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
-		sets:              make([]*erasureObjects, setCount),
-		erasureDisks:      make([][]StorageAPI, setCount),
-		erasureLockers:    make([][]dsync.NetLocker, setCount),
-		erasureLockOwner:  GetLocalPeer(globalEndpoints),
-		endpoints:         endpoints,
-		endpointStrings:   endpointStrings,
-		setCount:          setCount,
-		setDriveCount:     setDriveCount,
-		format:            format,
-		disksConnectEvent: make(chan diskConnectInfo),
-		distributionAlgo:  format.Erasure.DistributionAlgo,
-		deploymentID:      uuid.MustParse(format.ID),
-		mrfOperations:     make(map[healSource]int),
+		sets:               make([]*erasureObjects, setCount),
+		erasureDisks:       make([][]StorageAPI, setCount),
+		erasureLockers:     make([][]dsync.NetLocker, setCount),
+		erasureLockOwner:   GetLocalPeer(globalEndpoints),
+		endpoints:          endpoints,
+		endpointStrings:    endpointStrings,
+		setCount:           setCount,
+		setDriveCount:      setDriveCount,
+		defaultParityCount: defaultParityCount,
+		format:             format,
+		disksConnectEvent:  make(chan diskConnectInfo),
+		distributionAlgo:   format.Erasure.DistributionAlgo,
+		deploymentID:       uuid.MustParse(format.ID),
+		mrfOperations:      make(map[healSource]int),
 	}
 
 	mutex := newNSLock(globalIsDistErasure)
@@ -416,13 +432,14 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 		// Initialize erasure objects for a given set.
 		s.sets[i] = &erasureObjects{
-			setDriveCount: setDriveCount,
-			getDisks:      s.GetDisks(i),
-			getLockers:    s.GetLockers(i),
-			getEndpoints:  s.GetEndpoints(i),
-			nsMutex:       mutex,
-			bp:            bp,
-			mrfOpCh:       make(chan partialOperation, 10000),
+			setDriveCount:      setDriveCount,
+			defaultParityCount: defaultParityCount,
+			getDisks:           s.GetDisks(i),
+			getLockers:         s.GetLockers(i),
+			getEndpoints:       s.GetEndpoints(i),
+			nsMutex:            mutex,
+			bp:                 bp,
+			mrfOpCh:            make(chan partialOperation, 10000),
 		}
 	}
 
@@ -464,6 +481,12 @@ func (s *erasureSets) NewNSLock(bucket string, objects ...string) RWLocker {
 // SetDriveCount returns the current drives per set.
 func (s *erasureSets) SetDriveCount() int {
 	return s.setDriveCount
+}
+
+// ParityCount returns the default parity count used while erasure
+// coding objects
+func (s *erasureSets) ParityCount() int {
+	return s.defaultParityCount
 }
 
 // StorageUsageInfo - combines output of StorageInfo across all erasure coded object sets.
@@ -616,9 +639,9 @@ func crcHashMod(key string, cardinality int) int {
 
 func hashKey(algo string, key string, cardinality int, id [16]byte) int {
 	switch algo {
-	case formatErasureVersionV2DistributionAlgoLegacy:
+	case formatErasureVersionV2DistributionAlgoV1:
 		return crcHashMod(key, cardinality)
-	case formatErasureVersionV3DistributionAlgo:
+	case formatErasureVersionV3DistributionAlgoV2, formatErasureVersionV3DistributionAlgoV3:
 		return sipHashMod(key, cardinality, id)
 	default:
 		// Unknown algorithm returns -1, also if cardinality is lesser than 0.
@@ -750,8 +773,13 @@ func (s *erasureSets) GetObject(ctx context.Context, bucket, object string, star
 	return s.getHashedSet(object).GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
+func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
+	return s.getHashedSet(parent).parentDirIsObject(ctx, bucket, parent)
+}
+
 // PutObject - writes an object to hashedSet based on the object name.
 func (s *erasureSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	opts.ParentIsObject = s.parentDirIsObject
 	return s.getHashedSet(object).PutObject(ctx, bucket, object, data, opts)
 }
 
@@ -1041,6 +1069,7 @@ func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, 
 
 // CompleteMultipartUpload - completes a pending multipart transaction, on hashedSet based on object name.
 func (s *erasureSets) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	opts.ParentIsObject = s.parentDirIsObject
 	return s.getHashedSet(object).CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 }
 

@@ -863,8 +863,8 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 				logger.LogIf(ctx, err)
 				return size
 			}
-		case ObjectNotFound:
-			// object not found return 0
+		case ObjectNotFound, VersionNotFound:
+			// object not found or version not found return 0
 			return 0
 		default:
 			// All other errors proceed.
@@ -930,6 +930,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			opts.VersionID = obj.VersionID
 			opts.TransitionStatus = lifecycle.TransitionPending
 			if _, err = o.DeleteObject(ctx, obj.Bucket, obj.Name, opts); err != nil {
+				if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+					return 0
+				}
 				// Assume it is still there.
 				logger.LogIf(ctx, err)
 				return size
@@ -941,6 +944,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 
 	if obj.TransitionStatus != "" {
 		if err := deleteTransitionedObject(ctx, o, i.bucket, i.objectPath(), lcOpts, action, false); err != nil {
+			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+				return 0
+			}
 			logger.LogIf(ctx, err)
 			return size
 		}
@@ -950,6 +956,9 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 
 	obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
 	if err != nil {
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			return 0
+		}
 		// Assume it is still there.
 		logger.LogIf(ctx, err)
 		return size
