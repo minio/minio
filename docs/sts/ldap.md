@@ -47,10 +47,8 @@ identity_ldap  enable LDAP SSO support
 ARGS:
 MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldapserver.com:636"
 MINIO_IDENTITY_LDAP_USERNAME_FORMAT*         (list)      ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"
-MINIO_IDENTITY_LDAP_USERNAME_SEARCH_FILTER*  (string)    user search filter, for example "(cn=%s)" or "(sAMAccountName=%s)" or "(uid=%s)"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER*     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN*    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
-MINIO_IDENTITY_LDAP_USERNAME_SEARCH_BASE_DN  (list)      ";" separated list of username search DNs
 MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE     (string)    search attribute for group name e.g. "cn"
 MINIO_IDENTITY_LDAP_STS_EXPIRY               (duration)  temporary credentials validity duration in s,m,h,d. Default is "1h"
 MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY          (on|off)    trust server TLS without verification, defaults to "off" (verify)

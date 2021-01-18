@@ -45,15 +45,13 @@ type Config struct {
 	STSExpiryDuration string `json:"stsExpiryDuration"`
 
 	// Format string for usernames
-	UsernameFormat        string   `json:"usernameFormat"`
-	UsernameFormats       []string `json:"-"`
-	UsernameSearchFilter  string   `json:"-"`
-	UsernameSearchBaseDNS []string `json:"-"`
+	UsernameFormat  string   `json:"usernameFormat"`
+	UsernameFormats []string `json:"-"`
 
-	GroupSearchBaseDN  string   `json:"groupSearchBaseDN"`
-	GroupSearchBaseDNS []string `json:"-"`
-	GroupSearchFilter  string   `json:"groupSearchFilter"`
-	GroupNameAttribute string   `json:"groupNameAttribute"`
+	GroupSearchBaseDistName  string   `json:"groupSearchBaseDN"`
+	GroupSearchBaseDistNames []string `json:"-"`
+	GroupSearchFilter        string   `json:"groupSearchFilter"`
+	GroupNameAttribute       string   `json:"groupNameAttribute"`
 
 	stsExpiryDuration time.Duration // contains converted value
 	tlsSkipVerify     bool          // allows skipping TLS verification
@@ -76,17 +74,15 @@ const (
 	ServerInsecure       = "server_insecure"
 	ServerStartTLS       = "server_starttls"
 
-	EnvServerAddr           = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
-	EnvSTSExpiry            = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
-	EnvTLSSkipVerify        = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
-	EnvServerInsecure       = "MINIO_IDENTITY_LDAP_SERVER_INSECURE"
-	EnvServerStartTLS       = "MINIO_IDENTITY_LDAP_SERVER_STARTTLS"
-	EnvUsernameFormat       = "MINIO_IDENTITY_LDAP_USERNAME_FORMAT"
-	EnvUsernameSearchFilter = "MINIO_IDENTITY_LDAP_USERNAME_SEARCH_FILTER"
-	EnvUsernameSearchBaseDN = "MINIO_IDENTITY_LDAP_USERNAME_SEARCH_BASE_DN"
-	EnvGroupSearchFilter    = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER"
-	EnvGroupNameAttribute   = "MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE"
-	EnvGroupSearchBaseDN    = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN"
+	EnvServerAddr         = "MINIO_IDENTITY_LDAP_SERVER_ADDR"
+	EnvSTSExpiry          = "MINIO_IDENTITY_LDAP_STS_EXPIRY"
+	EnvTLSSkipVerify      = "MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY"
+	EnvServerInsecure     = "MINIO_IDENTITY_LDAP_SERVER_INSECURE"
+	EnvServerStartTLS     = "MINIO_IDENTITY_LDAP_SERVER_STARTTLS"
+	EnvUsernameFormat     = "MINIO_IDENTITY_LDAP_USERNAME_FORMAT"
+	EnvGroupSearchFilter  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER"
+	EnvGroupNameAttribute = "MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE"
+	EnvGroupSearchBaseDN  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN"
 )
 
 // DefaultKVS - default config for LDAP config
@@ -157,96 +153,82 @@ func getGroups(conn *ldap.Conn, sreq *ldap.SearchRequest) ([]string, error) {
 	return groups, nil
 }
 
-func (l *Config) bind(conn *ldap.Conn, username, password string) ([]string, error) {
-	var bindDNS = make([]string, len(l.UsernameFormats))
+// bind - Iterates over all given username formats and expects that only one
+// will succeed if the credentials are valid. The succeeding bindDN is returned
+// or an error.
+//
+// In the rare case that multiple username formats succeed, implying that two
+// (or more) distinct users in the LDAP directory have the same username and
+// password, we return an error as we cannot identify the account intended by
+// the user.
+func (l *Config) bind(conn *ldap.Conn, username, password string) (string, error) {
+	var bindDistNames []string
+	var errs = make([]error, len(l.UsernameFormats))
+	var successCount = 0
 	for i, usernameFormat := range l.UsernameFormats {
 		bindDN := fmt.Sprintf(usernameFormat, username)
 		// Bind with user credentials to validate the password
-		if err := conn.Bind(bindDN, password); err != nil {
-			return nil, err
+		errs[i] = conn.Bind(bindDN, password)
+		if errs[i] == nil {
+			bindDistNames = append(bindDistNames, bindDN)
+			successCount++
 		}
-		bindDNS[i] = bindDN
 	}
-	return bindDNS, nil
+	if successCount == 0 {
+		var errStrings []string = []string{"All username formats failed with: "}
+		for _, err := range errs {
+			if err != nil {
+				errStrings = append(errStrings, err.Error())
+			}
+		}
+		outErr := strings.Join(errStrings, "; ")
+		return "", errors.New(outErr)
+	}
+	if successCount > 1 {
+		successDistNames := strings.Join(bindDistNames, ", ")
+		errMsg := fmt.Sprintf("Multiple username formats succeeded - ambiguous user login (succeeded for: %s)", successDistNames)
+		return "", errors.New(errMsg)
+	}
+	return bindDistNames[0], nil
 }
 
-var standardAttributes = []string{
-	"givenName",
-	"sn",
-	"cn",
-	"memberOf",
-	"email",
-}
-
-// Bind - binds to ldap, searches LDAP and returns list of groups.
-func (l *Config) Bind(username, password string) ([]string, error) {
+// Bind - binds to ldap, searches LDAP and returns the distinguished name of the
+// user and the list of groups.
+func (l *Config) Bind(username, password string) (string, []string, error) {
 	conn, err := l.Connect()
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	defer conn.Close()
 
-	bindDNS, err := l.bind(conn, username, password)
+	bindDN, err := l.bind(conn, username, password)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	var groups []string
-	if l.UsernameSearchFilter != "" {
-		for _, userSearchBase := range l.UsernameSearchBaseDNS {
-			filter := strings.Replace(l.UsernameSearchFilter, "%s",
-				ldap.EscapeFilter(username), -1)
-
+	if l.GroupSearchFilter != "" {
+		for _, groupSearchBase := range l.GroupSearchBaseDistNames {
+			filter := strings.Replace(l.GroupSearchFilter, "%s", ldap.EscapeFilter(bindDN), -1)
 			searchRequest := ldap.NewSearchRequest(
-				userSearchBase,
+				groupSearchBase,
 				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 				filter,
-				standardAttributes,
+				[]string{l.GroupNameAttribute},
 				nil,
 			)
 
-			groups, err = getGroups(conn, searchRequest)
+			var newGroups []string
+			newGroups, err = getGroups(conn, searchRequest)
 			if err != nil {
-				return nil, err
+				return "", nil, err
 			}
+
+			groups = append(groups, newGroups...)
 		}
 	}
 
-	if l.GroupSearchFilter != "" {
-		for _, groupSearchBase := range l.GroupSearchBaseDNS {
-			var filters []string
-			if l.GroupNameAttribute == "" {
-				filters = []string{strings.Replace(l.GroupSearchFilter, "%s",
-					ldap.EscapeFilter(username), -1)}
-			} else {
-				// With group name attribute specified, make sure to
-				// include search queries for CN distinguished name
-				for _, bindDN := range bindDNS {
-					filters = append(filters, strings.Replace(l.GroupSearchFilter, "%s",
-						ldap.EscapeFilter(bindDN), -1))
-				}
-			}
-			for _, filter := range filters {
-				searchRequest := ldap.NewSearchRequest(
-					groupSearchBase,
-					ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-					filter,
-					standardAttributes,
-					nil,
-				)
-
-				var newGroups []string
-				newGroups, err = getGroups(conn, searchRequest)
-				if err != nil {
-					return nil, err
-				}
-
-				groups = append(groups, newGroups...)
-			}
-		}
-	}
-
-	return groups, nil
+	return bindDN, groups, nil
 }
 
 // Connect connect to ldap server.
@@ -343,17 +325,6 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		return l, fmt.Errorf("'%s' cannot be empty and must have a value", UsernameFormat)
 	}
 
-	if v := env.Get(EnvUsernameSearchFilter, kvs.Get(UsernameSearchFilter)); v != "" {
-		if !strings.Contains(v, "%s") {
-			return l, errors.New("LDAP username search filter doesn't have '%s' substitution")
-		}
-		l.UsernameSearchFilter = v
-	}
-
-	if v := env.Get(EnvUsernameSearchBaseDN, kvs.Get(UsernameSearchBaseDN)); v != "" {
-		l.UsernameSearchBaseDNS = strings.Split(v, dnDelimiter)
-	}
-
 	grpSearchFilter := env.Get(EnvGroupSearchFilter, kvs.Get(GroupSearchFilter))
 	grpSearchNameAttr := env.Get(EnvGroupNameAttribute, kvs.Get(GroupNameAttribute))
 	grpSearchBaseDN := env.Get(EnvGroupSearchBaseDN, kvs.Get(GroupSearchBaseDN))
@@ -370,7 +341,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	if allSet {
 		l.GroupSearchFilter = grpSearchFilter
 		l.GroupNameAttribute = grpSearchNameAttr
-		l.GroupSearchBaseDNS = strings.Split(grpSearchBaseDN, dnDelimiter)
+		l.GroupSearchBaseDistNames = strings.Split(l.GroupSearchBaseDistName, dnDelimiter)
 	}
 
 	l.rootCAs = rootCAs
