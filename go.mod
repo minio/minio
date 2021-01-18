@@ -34,7 +34,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/json-iterator/go v1.1.10
-	github.com/klauspost/compress v1.11.3
+	github.com/klauspost/compress v1.11.7
 	github.com/klauspost/cpuid v1.3.1
 	github.com/klauspost/pgzip v1.2.5
 	github.com/klauspost/readahead v1.3.1
@@ -49,10 +49,9 @@ require (
 	github.com/minio/minio-go/v7 v7.0.7-0.20210105224719-8dddba43079f
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
-	github.com/minio/simdjson-go v0.1.5
+	github.com/minio/simdjson-go v0.2.0
 	github.com/minio/sio v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/mmcloughlin/avo v0.0.0-20200803215136-443f81d77104 // indirect
 	github.com/montanaflynn/stats v0.5.0
 	github.com/nats-io/nats-server/v2 v2.1.9
 	github.com/nats-io/nats-streaming-server v0.19.0 // indirect
@@ -66,7 +65,6 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
-	github.com/quasilyte/go-ruleguard v0.2.1 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.0
@@ -76,7 +74,6 @@ require (
 	github.com/tidwall/gjson v1.3.5
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
