@@ -55,6 +55,29 @@ static int WekaMakeInodeFast(char *root, char *filename, int mode) {
 
 	return err;
 }
+
+static int WekaDeleteFileFast(char *root, char *filename) {
+	int dirfd, err;
+	struct makefile_param makefile_param;
+
+	dirfd = open(root, O_RDONLY | O_DIRECTORY);
+	if (dirfd < 0) {
+		printf("Failed to open dir %s\n", root);
+		return -1;
+	}
+
+	memset(&makefile_param, 0, sizeof(makefile_param));
+	strcpy(&makefile_param.filename[0], filename);
+	makefile_param.mode = 0;
+	err = ioctl(dirfd, 'ULNK', &makefile_param);
+	close(dirfd);
+
+	if (err)
+		printf("Failed to perform internal ioctl: base %s, file %s. Status %d errno %d.\n", root, filename, err, errno);
+
+	return err;
+}
+
 */
 import "C"
 import "unsafe"
@@ -76,6 +99,22 @@ func fsMakeInodeFast(filePath string, mode C.int) (err error) {
 	cRoot := C.CString(dir)
 	cFile := C.CString(file)
 	rv, err := C.WekaMakeInodeFast(cRoot, cFile, mode)
+	C.free(unsafe.Pointer(cRoot))
+	C.free(unsafe.Pointer(cFile))
+
+	if rv == 0 {
+		return nil
+	}
+
+	return err
+}
+
+func fsDeleteFileFast(filePath string) (err error) {
+	dir, file := pathutil.Split(filePath)
+
+	cRoot := C.CString(dir)
+	cFile := C.CString(file)
+	rv, err := C.WekaDeleteFileFast(cRoot, cFile)
 	C.free(unsafe.Pointer(cRoot))
 	C.free(unsafe.Pointer(cFile))
 
@@ -477,6 +516,10 @@ func fsDeleteFile(ctx context.Context, basePath, deletePath string) error {
 	if err := checkPathLength(deletePath); err != nil {
 		logger.LogIf(ctx, err)
 		return err
+	}
+
+	if err := fsDeleteFileFast(deletePath); err == nil {
+		return nil
 	}
 
 	if err := deleteFile(basePath, deletePath, false); err != nil {
