@@ -45,5 +45,11 @@ var (
 			Optional:    true,
 			Type:        "duration",
 		},
+		config.HelpKV{
+			Key:         apiReplicationWorkers,
+			Description: `set the number of replication workers, defaults to 100`,
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 )
