@@ -591,15 +591,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if hasLifecycleConfig && dobj.PurgeTransitioned == lifecycle.TransitionComplete { // clean up transitioned tier
-			action := lifecycle.DeleteAction
-			if dobj.VersionID != "" {
-				action = lifecycle.DeleteVersionAction
-			}
 			deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, dobj.ObjectName, lifecycle.ObjectOpts{
 				Name:         dobj.ObjectName,
 				VersionID:    dobj.VersionID,
 				DeleteMarker: dobj.DeleteMarker,
-			}, action, true)
+			}, false, true)
 		}
 
 	}

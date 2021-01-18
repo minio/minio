@@ -494,6 +494,7 @@ func serverMain(ctx *cli.Context) {
 		initAutoHeal(GlobalContext, newObject)
 		initBackgroundReplication(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
+		initBackgroundExpiry(GlobalContext, newObject)
 	}
 
 	initDataCrawler(GlobalContext, newObject)

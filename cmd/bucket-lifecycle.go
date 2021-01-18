@@ -65,6 +65,41 @@ func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
 }
 
+type expiryState struct {
+	expiryCh chan ObjectInfo
+}
+
+func (es *expiryState) queueExpiryTask(oi ObjectInfo) {
+	select {
+	case es.expiryCh <- oi:
+	default:
+	}
+}
+
+var (
+	globalExpiryState *expiryState
+)
+
+func newExpiryState() *expiryState {
+	es := &expiryState{
+		expiryCh: make(chan ObjectInfo, 10000),
+	}
+	go func() {
+		<-GlobalContext.Done()
+		close(es.expiryCh)
+	}()
+	return es
+}
+
+func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
+	globalExpiryState = newExpiryState()
+	go func() {
+		for oi := range globalExpiryState.expiryCh {
+			applyExpiryRule(ctx, objectAPI, oi, false)
+		}
+	}()
+}
+
 type transitionState struct {
 	// add future metrics here
 	transitionCh chan ObjectInfo
@@ -246,7 +281,7 @@ func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 // 1. temporarily restored copies of objects (restored with the PostRestoreObject API) expired.
 // 2. life cycle expiry date is met on the object.
 // 3. Object is removed through DELETE api call
-func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, action lifecycle.Action, isDeleteTierOnly bool) error {
+func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, restoredObject, isDeleteTierOnly bool) error {
 	if lcOpts.TransitionStatus == "" && !isDeleteTierOnly {
 		return nil
 	}
@@ -266,43 +301,40 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.Enabled(bucket)
 	opts.VersionID = lcOpts.VersionID
-	switch action {
-	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+	if restoredObject {
 		// delete locally restored copy of object or object version
 		// from the source, while leaving metadata behind. The data on
 		// transitioned tier lies untouched and still accessible
 		opts.TransitionStatus = lcOpts.TransitionStatus
 		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
 		return err
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
-		// When an object is past expiry, delete the data from transitioned tier and
-		// metadata from source
-		if err := tgt.RemoveObject(context.Background(), arn.Bucket, object, miniogo.RemoveObjectOptions{VersionID: lcOpts.VersionID}); err != nil {
-			logger.LogIf(ctx, err)
-		}
-
-		if isDeleteTierOnly {
-			return nil
-		}
-
-		objInfo, err := objectAPI.DeleteObject(ctx, bucket, object, opts)
-		if err != nil {
-			return err
-		}
-
-		eventName := event.ObjectRemovedDelete
-		if lcOpts.DeleteMarker {
-			eventName = event.ObjectRemovedDeleteMarkerCreated
-		}
-
-		// Notify object deleted event.
-		sendEvent(eventArgs{
-			EventName:  eventName,
-			BucketName: bucket,
-			Object:     objInfo,
-			Host:       "Internal: [ILM-EXPIRY]",
-		})
 	}
+
+	// When an object is past expiry, delete the data from transitioned tier and
+	// metadata from source
+	if err := tgt.RemoveObject(context.Background(), arn.Bucket, object, miniogo.RemoveObjectOptions{VersionID: lcOpts.VersionID}); err != nil {
+		logger.LogIf(ctx, err)
+	}
+
+	if isDeleteTierOnly {
+		return nil
+	}
+
+	objInfo, err := objectAPI.DeleteObject(ctx, bucket, object, opts)
+	if err != nil {
+		return err
+	}
+	eventName := event.ObjectRemovedDelete
+	if lcOpts.DeleteMarker {
+		eventName = event.ObjectRemovedDeleteMarkerCreated
+	}
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:  eventName,
+		BucketName: bucket,
+		Object:     objInfo,
+		Host:       "Internal: [ILM-EXPIRY]",
+	})
 
 	// should never reach here
 	return nil

@@ -377,21 +377,14 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		}
 
 		var totalSize int64
-		var numVersions = len(fivs.Versions)
 
 		sizeS := sizeSummary{}
-		for i, version := range fivs.Versions {
-			var successorModTime time.Time
-			if i > 0 {
-				successorModTime = fivs.Versions[i-1].ModTime
-			}
+		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			if objAPI != nil {
 				totalSize += item.applyActions(ctx, objAPI, actionMeta{
-					numVersions:      numVersions,
-					successorModTime: successorModTime,
-					oi:               oi,
-					bitRotScan:       healOpts.Bitrot,
+					oi:         oi,
+					bitRotScan: healOpts.Bitrot,
 				})
 				item.healReplication(ctx, objAPI, oi, &sizeS)
 			}

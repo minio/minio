@@ -777,17 +777,13 @@ next:
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
 			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
-				action := lifecycle.DeleteAction
-				if goi.VersionID != "" {
-					action = lifecycle.DeleteVersionAction
-				}
 				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
 					Name:         objectName,
 					UserTags:     goi.UserTags,
 					VersionID:    goi.VersionID,
 					DeleteMarker: goi.DeleteMarker,
 					IsLatest:     goi.IsLatest,
-				}, action, true)
+				}, false, true)
 			}
 
 			logger.LogIf(ctx, err)
