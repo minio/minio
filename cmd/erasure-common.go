@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -204,32 +203,12 @@ func (er erasureObjects) getLoadBalancedDisks(optimized bool) []StorageAPI {
 }
 
 // This function does the following check, suppose
-// object is "a/b/c/d", stat makes sure that objects ""a/b/c""
-// "a/b" and "a" do not exist.
+// object is "a/b/c/d", stat makes sure that objects
+// - "a/b/c"
+// - "a/b"
+// - "a"
+// do not exist on the namespace.
 func (er erasureObjects) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
-	path := ""
-	segments := strings.Split(parent, slashSeparator)
-	for _, s := range segments {
-		if s == "" {
-			break
-		}
-		path += s
-		isObject, pathNotExist := er.isObject(ctx, bucket, path)
-		if pathNotExist {
-			return false
-		}
-		if isObject {
-			// If there is already a file at prefix "p", return true.
-			return true
-		}
-		path += slashSeparator
-	}
-	return false
-}
-
-// isObject - returns `true` if the prefix is an object i.e if
-// `xl.meta` exists at the leaf, false otherwise.
-func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (ok, pathDoesNotExist bool) {
 	storageDisks := er.getDisks()
 
 	g := errgroup.WithNErrs(len(storageDisks))
@@ -241,7 +220,7 @@ func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (o
 				return errDiskNotFound
 			}
 			// Check if 'prefix' is an object on this 'disk', else continue the check the next disk
-			return storageDisks[index].CheckFile(ctx, bucket, prefix)
+			return storageDisks[index].CheckFile(ctx, bucket, parent)
 		}, index)
 	}
 
@@ -251,6 +230,5 @@ func (er erasureObjects) isObject(ctx context.Context, bucket, prefix string) (o
 	// ignored if necessary.
 	readQuorum := getReadQuorum(len(storageDisks))
 
-	err := reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum)
-	return err == nil, err == errPathNotFound
+	return reduceReadQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, readQuorum) == nil
 }
