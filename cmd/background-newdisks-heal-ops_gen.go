@@ -114,22 +114,41 @@ func (z *healingTracker) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "ResumeBytesFailed")
 				return
 			}
-		case "HealedBuckets":
+		case "QueuedBuckets":
 			var zb0002 uint32
 			zb0002, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "QueuedBuckets")
+				return
+			}
+			if cap(z.QueuedBuckets) >= int(zb0002) {
+				z.QueuedBuckets = (z.QueuedBuckets)[:zb0002]
+			} else {
+				z.QueuedBuckets = make([]string, zb0002)
+			}
+			for za0001 := range z.QueuedBuckets {
+				z.QueuedBuckets[za0001], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "QueuedBuckets", za0001)
+					return
+				}
+			}
+		case "HealedBuckets":
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "HealedBuckets")
 				return
 			}
-			if cap(z.HealedBuckets) >= int(zb0002) {
-				z.HealedBuckets = (z.HealedBuckets)[:zb0002]
+			if cap(z.HealedBuckets) >= int(zb0003) {
+				z.HealedBuckets = (z.HealedBuckets)[:zb0003]
 			} else {
-				z.HealedBuckets = make([]string, zb0002)
+				z.HealedBuckets = make([]string, zb0003)
 			}
-			for za0001 := range z.HealedBuckets {
-				z.HealedBuckets[za0001], err = dc.ReadString()
+			for za0002 := range z.HealedBuckets {
+				z.HealedBuckets[za0002], err = dc.ReadString()
 				if err != nil {
-					err = msgp.WrapError(err, "HealedBuckets", za0001)
+					err = msgp.WrapError(err, "HealedBuckets", za0002)
 					return
 				}
 			}
@@ -146,9 +165,9 @@ func (z *healingTracker) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 16
+	// map header, size 17
 	// write "ID"
-	err = en.Append(0xde, 0x0, 0x10, 0xa2, 0x49, 0x44)
+	err = en.Append(0xde, 0x0, 0x11, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -297,6 +316,23 @@ func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ResumeBytesFailed")
 		return
 	}
+	// write "QueuedBuckets"
+	err = en.Append(0xad, 0x51, 0x75, 0x65, 0x75, 0x65, 0x64, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.QueuedBuckets)))
+	if err != nil {
+		err = msgp.WrapError(err, "QueuedBuckets")
+		return
+	}
+	for za0001 := range z.QueuedBuckets {
+		err = en.WriteString(z.QueuedBuckets[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "QueuedBuckets", za0001)
+			return
+		}
+	}
 	// write "HealedBuckets"
 	err = en.Append(0xad, 0x48, 0x65, 0x61, 0x6c, 0x65, 0x64, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x73)
 	if err != nil {
@@ -307,10 +343,10 @@ func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "HealedBuckets")
 		return
 	}
-	for za0001 := range z.HealedBuckets {
-		err = en.WriteString(z.HealedBuckets[za0001])
+	for za0002 := range z.HealedBuckets {
+		err = en.WriteString(z.HealedBuckets[za0002])
 		if err != nil {
-			err = msgp.WrapError(err, "HealedBuckets", za0001)
+			err = msgp.WrapError(err, "HealedBuckets", za0002)
 			return
 		}
 	}
@@ -320,9 +356,9 @@ func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *healingTracker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 16
+	// map header, size 17
 	// string "ID"
-	o = append(o, 0xde, 0x0, 0x10, 0xa2, 0x49, 0x44)
+	o = append(o, 0xde, 0x0, 0x11, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "SetIndex"
 	o = append(o, 0xa8, 0x53, 0x65, 0x74, 0x49, 0x6e, 0x64, 0x65, 0x78)
@@ -366,11 +402,17 @@ func (z *healingTracker) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "ResumeBytesFailed"
 	o = append(o, 0xb1, 0x52, 0x65, 0x73, 0x75, 0x6d, 0x65, 0x42, 0x79, 0x74, 0x65, 0x73, 0x46, 0x61, 0x69, 0x6c, 0x65, 0x64)
 	o = msgp.AppendUint64(o, z.ResumeBytesFailed)
+	// string "QueuedBuckets"
+	o = append(o, 0xad, 0x51, 0x75, 0x65, 0x75, 0x65, 0x64, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.QueuedBuckets)))
+	for za0001 := range z.QueuedBuckets {
+		o = msgp.AppendString(o, z.QueuedBuckets[za0001])
+	}
 	// string "HealedBuckets"
 	o = append(o, 0xad, 0x48, 0x65, 0x61, 0x6c, 0x65, 0x64, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.HealedBuckets)))
-	for za0001 := range z.HealedBuckets {
-		o = msgp.AppendString(o, z.HealedBuckets[za0001])
+	for za0002 := range z.HealedBuckets {
+		o = msgp.AppendString(o, z.HealedBuckets[za0002])
 	}
 	return
 }
@@ -483,22 +525,41 @@ func (z *healingTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ResumeBytesFailed")
 				return
 			}
-		case "HealedBuckets":
+		case "QueuedBuckets":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "QueuedBuckets")
+				return
+			}
+			if cap(z.QueuedBuckets) >= int(zb0002) {
+				z.QueuedBuckets = (z.QueuedBuckets)[:zb0002]
+			} else {
+				z.QueuedBuckets = make([]string, zb0002)
+			}
+			for za0001 := range z.QueuedBuckets {
+				z.QueuedBuckets[za0001], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "QueuedBuckets", za0001)
+					return
+				}
+			}
+		case "HealedBuckets":
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "HealedBuckets")
 				return
 			}
-			if cap(z.HealedBuckets) >= int(zb0002) {
-				z.HealedBuckets = (z.HealedBuckets)[:zb0002]
+			if cap(z.HealedBuckets) >= int(zb0003) {
+				z.HealedBuckets = (z.HealedBuckets)[:zb0003]
 			} else {
-				z.HealedBuckets = make([]string, zb0002)
+				z.HealedBuckets = make([]string, zb0003)
 			}
-			for za0001 := range z.HealedBuckets {
-				z.HealedBuckets[za0001], bts, err = msgp.ReadStringBytes(bts)
+			for za0002 := range z.HealedBuckets {
+				z.HealedBuckets[za0002], bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "HealedBuckets", za0001)
+					err = msgp.WrapError(err, "HealedBuckets", za0002)
 					return
 				}
 			}
@@ -517,8 +578,12 @@ func (z *healingTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *healingTracker) Msgsize() (s int) {
 	s = 3 + 3 + msgp.StringPrefixSize + len(z.ID) + 9 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.Path) + 8 + msgp.TimeSize + 11 + msgp.TimeSize + 14 + msgp.Uint64Size + 14 + msgp.Uint64Size + 10 + msgp.Uint64Size + 12 + msgp.Uint64Size + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Object) + 20 + msgp.Uint64Size + 20 + msgp.Uint64Size + 16 + msgp.Uint64Size + 18 + msgp.Uint64Size + 14 + msgp.ArrayHeaderSize
-	for za0001 := range z.HealedBuckets {
-		s += msgp.StringPrefixSize + len(z.HealedBuckets[za0001])
+	for za0001 := range z.QueuedBuckets {
+		s += msgp.StringPrefixSize + len(z.QueuedBuckets[za0001])
+	}
+	s += 14 + msgp.ArrayHeaderSize
+	for za0002 := range z.HealedBuckets {
+		s += msgp.StringPrefixSize + len(z.HealedBuckets[za0002])
 	}
 	return
 }
