@@ -223,6 +223,51 @@ func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error)
 	return getStorageInfo(disks, endpoints)
 }
 
+func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, healing bool) {
+	var wg sync.WaitGroup
+	disks := er.getDisks()
+	infos := make([]DiskInfo, len(disks))
+	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			disk := disks[i-1]
+
+			if disk == nil {
+				return
+			}
+
+			di, err := disk.DiskInfo(context.Background())
+			if err != nil {
+				// - Do not consume disks which are not reachable
+				//   unformatted or simply not accessible for some reason.
+				//
+				//
+				// - Future: skip busy disks
+				return
+			}
+
+			infos[i-1] = di
+		}()
+	}
+	wg.Wait()
+
+	for i, info := range infos {
+		// Check if one of the drives in the set is being healed.
+		// this information is used by crawler to skip healing
+		// this erasure set while it calculates the usage.
+		if info.Healing {
+			healing = true
+			continue
+		}
+		newDisks = append(newDisks, disks[i])
+	}
+
+	return newDisks, healing
+}
+
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
@@ -231,8 +276,8 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		return nil
 	}
 
-	// Collect disks we can use, sorted by least inode usage.
-	disks := er.getOnlineDisksSortedByUsedInodes()
+	// Collect disks we can use.
+	disks, healing := er.getOnlineDisksWithHealing()
 	if len(disks) == 0 {
 		logger.Info(color.Green("data-crawl:") + " all disks are offline or being healed, skipping crawl")
 		return nil
@@ -247,6 +292,11 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 			continue
 		}
 		id, _ := disk.GetDiskID()
+		if id == "" {
+			// its possible that disk is unformatted
+			// or just went offline
+			continue
+		}
 		allDiskIDs = append(allDiskIDs, id)
 	}
 
@@ -348,6 +398,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 					cache.Info.Name = bucket.Name
 				}
 				cache.Info.BloomFilter = bloom
+				cache.Info.SkipHealing = healing
 				cache.Disks = allDiskIDs
 				if cache.Info.Name != bucket.Name {
 					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
