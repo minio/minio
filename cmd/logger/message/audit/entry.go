@@ -49,7 +49,7 @@ type Entry struct {
 	ReqQuery   map[string]string      `json:"requestQuery,omitempty"`
 	ReqHeader  map[string]string      `json:"requestHeader,omitempty"`
 	RespHeader map[string]string      `json:"responseHeader,omitempty"`
-	Tags       map[string]string      `json:"tags,omitempty"`
+	Tags       map[string]interface{} `json:"tags,omitempty"`
 }
 
 // ToEntry - constructs an audit entry object.

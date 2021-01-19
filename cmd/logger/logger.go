@@ -335,7 +335,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	}
 
 	kv := req.GetTags()
-	tags := make(map[string]string, len(kv))
+	tags := make(map[string]interface{}, len(kv))
 	for _, entry := range kv {
 		tags[entry.Key] = entry.Val
 	}
@@ -376,7 +376,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		entry.API.Args.Object = hashString(entry.API.Args.Object)
 		entry.RemoteHost = hashString(entry.RemoteHost)
 		entry.Trace.Message = reflect.TypeOf(err).String()
-		entry.Trace.Variables = make(map[string]string)
+		entry.Trace.Variables = make(map[string]interface{})
 	}
 
 	// Iterate over all logger targets to send the log entry

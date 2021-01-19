@@ -25,7 +25,6 @@ import (
 	"math/rand"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -421,8 +420,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			bp:                 bp,
 			mrfOpCh:            make(chan partialOperation, 10000),
 		}
-
-		s.sets[i].endpointsList = strings.Join(s.sets[i].getEndpoints(), ",")
 	}
 
 	// start cleanup stale uploads go-routine.
@@ -450,6 +447,31 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, 
 			}
 		}
 	}
+}
+
+func auditObjectsAndPools(ctx context.Context, objects []string, pools []*erasureObjects) {
+	if len(logger.AuditTargets) == 0 {
+		return
+	}
+
+	if len(objects) != len(pools) {
+		return
+	}
+
+	tag := make(map[string][]string)
+	for i := range objects {
+		tag[objects[i]] = pools[i].getEndpoints()
+	}
+
+	logger.GetReqInfo(ctx).SetTags("objectsAndPools", tag)
+}
+
+func auditObjectAndPool(ctx context.Context, object string, pool *erasureObjects) {
+	if len(logger.AuditTargets) == 0 {
+		return
+	}
+
+	logger.GetReqInfo(ctx).SetTags("objectsAndPools", map[string][]string{object: pool.getEndpoints()})
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -748,14 +770,14 @@ func (s *erasureSets) ListBuckets(ctx context.Context) (buckets []BucketInfo, er
 // GetObjectNInfo - returns object info and locked object ReadCloser
 func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 }
 
 // GetObject - reads an object from the hashedSet based on the object name.
 func (s *erasureSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
@@ -769,7 +791,7 @@ func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent stri
 // PutObject - writes an object to hashedSet based on the object name.
 func (s *erasureSets) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	opts.ParentIsObject = s.parentDirIsObject
 	return set.PutObject(ctx, bucket, object, data, opts)
 }
@@ -777,14 +799,14 @@ func (s *erasureSets) PutObject(ctx context.Context, bucket string, object strin
 // GetObjectInfo - reads object metadata from the hashedSet based on the object name.
 func (s *erasureSets) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.GetObjectInfo(ctx, bucket, object, opts)
 }
 
 // DeleteObject - deletes an object from the hashedSet based on the object name.
 func (s *erasureSets) DeleteObject(ctx context.Context, bucket string, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.DeleteObject(ctx, bucket, object, opts)
 }
 
@@ -827,21 +849,23 @@ func (s *erasureSets) DeleteObjects(ctx context.Context, bucket string, objects 
 		objSetMap[index] = append(objSetMap[index], delObj{setIndex: index, origIndex: i, object: object})
 	}
 
-	var backendServers []string
+	var auditObjects []string
+	var auditPools []*erasureObjects
 
 	// Invoke bulk delete on objects per set and save
 	// the result of the delete operation
 	for _, objsGroup := range objSetMap {
 		set := s.getHashedSet(objsGroup[0].object.ObjectName)
-		backendServers = append(backendServers, set.getEndpoints()...)
 		dobjects, errs := set.DeleteObjects(ctx, bucket, toNames(objsGroup), opts)
 		for i, obj := range objsGroup {
 			delErrs[obj.origIndex] = errs[i]
 			delObjects[obj.origIndex] = dobjects[i]
+			auditObjects = append(auditObjects, obj.object.ObjectName)
+			auditPools = append(auditPools, set)
 		}
 	}
 
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, strings.Join(backendServers, ","))
+	auditObjectsAndPools(ctx, auditObjects, auditPools)
 	return delObjects, delErrs
 }
 
@@ -850,7 +874,7 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	srcSet := s.getHashedSet(srcObject)
 	dstSet := s.getHashedSet(dstObject)
 
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, dstSet.endpointsList)
+	auditObjectAndPool(ctx, dstObject, dstSet)
 
 	cpSrcDstSame := srcSet == dstSet
 	// Check if this request is only metadata update.
@@ -1034,14 +1058,14 @@ func (s *erasureSets) ListMultipartUploads(ctx context.Context, bucket, prefix, 
 	// In list multipart uploads we are going to treat input prefix as the object,
 	// this means that we are not supporting directory navigation.
 	set := s.getHashedSet(prefix)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, prefix, set)
 	return set.ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
 func (s *erasureSets) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (uploadID string, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.NewMultipartUpload(ctx, bucket, object, opts)
 }
 
@@ -1049,42 +1073,42 @@ func (s *erasureSets) NewMultipartUpload(ctx context.Context, bucket, object str
 func (s *erasureSets) CopyObjectPart(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int,
 	startOffset int64, length int64, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (partInfo PartInfo, err error) {
 	destSet := s.getHashedSet(destObject)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, destSet.endpointsList)
+	auditObjectAndPool(ctx, destObject, destSet)
 	return destSet.PutObjectPart(ctx, destBucket, destObject, uploadID, partID, NewPutObjReader(srcInfo.Reader, nil, nil), dstOpts)
 }
 
 // PutObjectPart - writes part of an object to hashedSet based on the object name.
 func (s *erasureSets) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, data *PutObjReader, opts ObjectOptions) (info PartInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 }
 
 // GetMultipartInfo - return multipart metadata info uploaded at hashedSet.
 func (s *erasureSets) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (result MultipartInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 }
 
 // ListObjectParts - lists all uploaded parts to an object in hashedSet.
 func (s *erasureSets) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker int, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
 func (s *erasureSets) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	return set.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 }
 
 // CompleteMultipartUpload - completes a pending multipart transaction, on hashedSet based on object name.
 func (s *erasureSets) CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)
-	logger.AuditSetTag(ctx, logger.AuditBackendEndpointsKey, set.endpointsList)
+	auditObjectAndPool(ctx, object, set)
 	opts.ParentIsObject = s.parentDirIsObject
 	return set.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 }
