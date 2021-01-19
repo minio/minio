@@ -29,36 +29,28 @@ type RequestStats struct {
 	Post uint64 `json:"Post"`
 }
 
-// Metrics - represents bytes served from backend
-// only implemented for S3 Gateway
-type Metrics struct {
-	bytesReceived uint64
-	bytesSent     uint64
-	requestStats  RequestStats
-}
-
 // IncBytesReceived - Increase total bytes received from gateway backend
-func (s *Metrics) IncBytesReceived(n uint64) {
+func (s *BackendMetrics) IncBytesReceived(n uint64) {
 	atomic.AddUint64(&s.bytesReceived, n)
 }
 
 // GetBytesReceived - Get total bytes received from gateway backend
-func (s *Metrics) GetBytesReceived() uint64 {
+func (s *BackendMetrics) GetBytesReceived() uint64 {
 	return atomic.LoadUint64(&s.bytesReceived)
 }
 
 // IncBytesSent - Increase total bytes sent to gateway backend
-func (s *Metrics) IncBytesSent(n uint64) {
+func (s *BackendMetrics) IncBytesSent(n uint64) {
 	atomic.AddUint64(&s.bytesSent, n)
 }
 
 // GetBytesSent - Get total bytes received from gateway backend
-func (s *Metrics) GetBytesSent() uint64 {
+func (s *BackendMetrics) GetBytesSent() uint64 {
 	return atomic.LoadUint64(&s.bytesSent)
 }
 
 // IncRequests - Increase request count sent to gateway backend by 1
-func (s *Metrics) IncRequests(method string) {
+func (s *BackendMetrics) IncRequests(method string) {
 	// Only increment for Head & Get requests, else no op
 	if method == http.MethodGet {
 		atomic.AddUint64(&s.requestStats.Get, 1)
@@ -72,11 +64,11 @@ func (s *Metrics) IncRequests(method string) {
 }
 
 // GetRequests - Get total number of Get & Headrequests sent to gateway backend
-func (s *Metrics) GetRequests() RequestStats {
+func (s *BackendMetrics) GetRequests() RequestStats {
 	return s.requestStats
 }
 
-// NewMetrics - Prepare new Metrics structure
-func NewMetrics() *Metrics {
-	return &Metrics{}
+// NewMetrics - Prepare new BackendMetrics structure
+func NewMetrics() *BackendMetrics {
+	return &BackendMetrics{}
 }

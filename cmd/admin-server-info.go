@@ -69,3 +69,35 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		Disks:    storageInfo.Disks,
 	}
 }
+
+func getLocalDisks(endpointServerPools EndpointServerPools) []madmin.Disk {
+	var localEndpoints Endpoints
+	network := make(map[string]string)
+
+	for _, ep := range endpointServerPools {
+		for _, endpoint := range ep.Endpoints {
+			nodeName := endpoint.Host
+			if nodeName == "" {
+				nodeName = "localhost"
+			}
+			if endpoint.IsLocal {
+				// Only proceed for local endpoints
+				network[nodeName] = "online"
+				localEndpoints = append(localEndpoints, endpoint)
+				continue
+			}
+			_, present := network[nodeName]
+			if !present {
+				if err := isServerResolvable(endpoint); err == nil {
+					network[nodeName] = "online"
+				} else {
+					network[nodeName] = "offline"
+				}
+			}
+		}
+	}
+	localDisks, _ := initStorageDisksWithErrors(localEndpoints)
+	defer closeStorageDisks(localDisks)
+	storageInfo, _ := getStorageInfo(localDisks, localEndpoints.GetAllStrings())
+	return storageInfo.Disks
+}

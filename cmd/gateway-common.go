@@ -389,7 +389,7 @@ func shouldMeterRequest(req *http.Request) bool {
 // MetricsTransport is a custom wrapper around Transport to track metrics
 type MetricsTransport struct {
 	Transport *http.Transport
-	Metrics   *Metrics
+	Metrics   *BackendMetrics
 }
 
 // RoundTrip implements the RoundTrip method for MetricsTransport

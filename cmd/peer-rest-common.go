@@ -58,6 +58,7 @@ const (
 	peerRESTMethodGetBandwidth           = "/bandwidth"
 	peerRESTMethodGetMetacacheListing    = "/getmetacache"
 	peerRESTMethodUpdateMetacacheListing = "/updatemetacache"
+	peerRESTMethodGetPeerMetrics         = "/peermetrics"
 )
 
 const (

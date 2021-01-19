@@ -51,8 +51,8 @@ type NotificationSys struct {
 	targetResCh                chan event.TargetIDResult
 	bucketRulesMap             map[string]event.RulesMap
 	bucketRemoteTargetRulesMap map[string]map[event.TargetID]event.RulesMap
-	peerClients                []*peerRESTClient
-	allPeerClients             []*peerRESTClient
+	peerClients                []*peerRESTClient // Excludes self
+	allPeerClients             []*peerRESTClient // Includes nil client for self
 }
 
 // GetARNList - returns available ARNs.
@@ -1294,6 +1294,21 @@ func NewNotificationSys(endpoints EndpointServerPools) *NotificationSys {
 	}
 }
 
+// GetPeerOnlineCount gets the count of online and offline nodes.
+func GetPeerOnlineCount() (nodesOnline, nodesOffline int) {
+	nodesOnline = 1 // Self is always online.
+	nodesOffline = 0
+	servers := globalNotificationSys.ServerInfo()
+	for _, s := range servers {
+		if s.State == "ok" {
+			nodesOnline++
+			continue
+		}
+		nodesOffline++
+	}
+	return
+}
+
 type eventArgs struct {
 	EventName    event.Name
 	BucketName   string
@@ -1427,4 +1442,53 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		}
 	}
 	return consolidatedReport
+}
+
+// GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
+func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) chan Metric {
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	for index := range sys.peerClients {
+		if sys.peerClients[index] == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			peerChannels[index], err = sys.peerClients[index].GetPeerMetrics(ctx)
+			return err
+		}, index)
+	}
+
+	ch := make(chan Metric)
+	var wg sync.WaitGroup
+	for index, err := range g.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
+			sys.peerClients[index].host.String())
+		ctx := logger.SetReqInfo(ctx, reqInfo)
+		if err != nil {
+			logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
+			continue
+		}
+		wg.Add(1)
+		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
+			defer wg.Done()
+			for {
+				select {
+				case m, ok := <-peerChannel:
+					if !ok {
+						return
+					}
+					ch <- m
+				case <-ctx.Done():
+					return
+				}
+			}
+		}(ctx, peerChannels[index], &wg)
+	}
+	go func(wg *sync.WaitGroup, ch chan Metric) {
+		wg.Wait()
+		close(ch)
+	}(&wg, ch)
+	return ch
 }

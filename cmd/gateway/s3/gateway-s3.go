@@ -259,11 +259,11 @@ type s3Objects struct {
 	minio.GatewayUnsupported
 	Client     *miniogo.Core
 	HTTPClient *http.Client
-	Metrics    *minio.Metrics
+	Metrics    *minio.BackendMetrics
 }
 
 // GetMetrics returns this gateway's metrics
-func (l *s3Objects) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+func (l *s3Objects) GetMetrics(ctx context.Context) (*minio.BackendMetrics, error) {
 	return l.Metrics, nil
 }
 

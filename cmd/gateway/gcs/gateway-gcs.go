@@ -341,7 +341,7 @@ type gcsGateway struct {
 	minio.GatewayUnsupported
 	client     *storage.Client
 	httpClient *http.Client
-	metrics    *minio.Metrics
+	metrics    *minio.BackendMetrics
 	projectID  string
 }
 
@@ -359,7 +359,7 @@ func gcsParseProjectID(credsFile string) (projectID string, err error) {
 }
 
 // GetMetrics returns this gateway's metrics
-func (l *gcsGateway) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+func (l *gcsGateway) GetMetrics(ctx context.Context) (*minio.BackendMetrics, error) {
 	return l.metrics, nil
 }
 

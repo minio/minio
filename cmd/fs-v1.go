@@ -1554,9 +1554,9 @@ func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, opt
 }
 
 // GetMetrics - no op
-func (fs *FSObjects) GetMetrics(ctx context.Context) (*Metrics, error) {
+func (fs *FSObjects) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return &Metrics{}, NotImplemented{}
+	return &BackendMetrics{}, NotImplemented{}
 }
 
 // ListObjectsV2 lists all blobs in bucket filtered by prefix
