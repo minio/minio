@@ -311,7 +311,7 @@ func handleCommonEnvVars() {
 				globalConfigEncrypted = false
 			} else {
 				logger.Fatal(config.ErrInvalidConfigurationEncrypted(err),
-					"Unable to Parse MINIO_CONFIG_ENCRYPTED variable. Only authorized values: true or false")
+					"Unable to Parse MINIO_CONFIG_ENCRYPTED variable")
 			}
 		} else {
 			globalConfigEncrypted = true
