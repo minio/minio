@@ -137,6 +137,9 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 		}
 	}
 
+	// Reset to where last bucket ended if resuming.
+	tracker.resume()
+
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		if tracker.isHealed(bucket.Name) {
@@ -154,7 +157,7 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 		}
 
 		if serverDebugLog {
-			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, setIndex+1)
+			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, tracker.SetIndex+1)
 		}
 
 		var entryChs []FileInfoVersionsCh
@@ -210,7 +213,7 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 				logger.LogIf(ctx, tracker.update(ctx))
 			}
 		}
-		tracker.HealedBuckets = append(tracker.HealedBuckets, bucket.Name)
+		tracker.bucketDone(bucket.Name)
 		logger.LogIf(ctx, tracker.update(ctx))
 	}
 

@@ -43,6 +43,7 @@ type healingTracker struct {
 	disk StorageAPI `msg:"-"`
 
 	ID            string
+	SetIndex      int
 	Path          string
 	Started       time.Time
 	LastUpdate    time.Time
@@ -54,6 +55,13 @@ type healingTracker struct {
 	// Last object scanned.
 	Bucket string
 	Object string
+
+	// Numbers when current bucket started healing,
+	// for resuming with correct numbers.
+	ResumeObjectsHealed uint64
+	ResumeObjectsFailed uint64
+	ResumeBytesDone     uint64
+	ResumeBytesFailed   uint64
 
 	HealedBuckets []string
 	// future add more tracking capabilities
@@ -140,6 +148,24 @@ func (h *healingTracker) isHealed(bucket string) bool {
 		}
 	}
 	return false
+}
+
+// resume will reset progress to the numbers at the start of the bucket.
+func (h *healingTracker) resume() {
+	h.ObjectsHealed = h.ResumeObjectsHealed
+	h.ObjectsFailed = h.ResumeObjectsFailed
+	h.BytesDone = h.ResumeBytesDone
+	h.BytesFailed = h.ResumeBytesFailed
+}
+
+// bucketDone should be called when a bucket is done healing.
+// Adds the bucket to the list of healed buckets and updates resume numbers.
+func (h *healingTracker) bucketDone(bucket string) {
+	h.ResumeObjectsHealed = h.ObjectsHealed
+	h.ResumeObjectsFailed = h.ObjectsFailed
+	h.ResumeBytesDone = h.BytesDone
+	h.ResumeBytesFailed = h.BytesFailed
+	h.HealedBuckets = append(h.HealedBuckets, bucket)
 }
 
 func (h *healingTracker) printTo(writer io.Writer) {
@@ -314,6 +340,7 @@ wait:
 							}
 						}
 
+						tracker.SetIndex = setIndex
 						lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
 						if err := healErasureSet(ctx, buckets, lbDisks, tracker); err != nil {
 							logger.LogIf(ctx, err)
