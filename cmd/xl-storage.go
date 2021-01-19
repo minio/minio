@@ -1808,16 +1808,18 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 
 		st, _ := os.Lstat(filePath)
 		if st == nil {
-			if s.formatLegacy {
-				filePathOld := pathJoin(volumeDir, p, xlStorageFormatFileV1)
-				if err := checkPathLength(filePathOld); err != nil {
-					return err
-				}
+			if !s.formatLegacy {
+				return errPathNotFound
+			}
 
-				st, _ = os.Lstat(filePathOld)
-				if st == nil {
-					return errPathNotFound
-				}
+			filePathOld := pathJoin(volumeDir, p, xlStorageFormatFileV1)
+			if err := checkPathLength(filePathOld); err != nil {
+				return err
+			}
+
+			st, _ = os.Lstat(filePathOld)
+			if st == nil {
+				return errPathNotFound
 			}
 		}
 
@@ -2110,18 +2112,24 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		// It is possible that some drives may not have `xl.meta` file
 		// in such scenarios verify if atleast `part.1` files exist
 		// to verify for legacy version.
-		currentDataPath := pathJoin(dstVolumeDir, dstPath)
-		entries, err := readDirN(currentDataPath, 1)
-		if err != nil && err != errFileNotFound {
-			return osErrToFileErr(err)
-		}
-		for _, entry := range entries {
-			if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
-				continue
+		if s.formatLegacy {
+			// We only need this code if we are moving
+			// from `xl.json` to `xl.meta`, we can avoid
+			// one extra readdir operation here for all
+			// new deployments.
+			currentDataPath := pathJoin(dstVolumeDir, dstPath)
+			entries, err := readDirN(currentDataPath, 1)
+			if err != nil && err != errFileNotFound {
+				return osErrToFileErr(err)
 			}
-			if strings.HasPrefix(entry, "part.") {
-				legacyPreserved = true
-				break
+			for _, entry := range entries {
+				if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
+					continue
+				}
+				if strings.HasPrefix(entry, "part.") {
+					legacyPreserved = true
+					break
+				}
 			}
 		}
 	}
