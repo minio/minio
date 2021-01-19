@@ -55,8 +55,11 @@ func (z *erasureServerPools) SingleZone() bool {
 // Initialize new pool of erasure sets.
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
 	var (
-		deploymentID string
-		err          error
+		deploymentID       string
+		distributionAlgo   string
+		commonParityDrives int
+		drivesPerSet       int
+		err                error
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
@@ -72,15 +75,54 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 				localDrives = append(localDrives, endpoint.Path)
 			}
 		}
+
+		if drivesPerSet == 0 {
+			drivesPerSet = ep.DrivesPerSet
+		}
+
+		if commonParityDrives == 0 {
+			commonParityDrives = ecDrivesNoConfig(ep.DrivesPerSet)
+		}
+
+		// Once distribution algo is set, validate it for the next pool,
+		// before proceeding to write to drives.
+		switch distributionAlgo {
+		case formatErasureVersionV3DistributionAlgoV2:
+			if drivesPerSet != 0 && drivesPerSet != ep.DrivesPerSet {
+				return nil, fmt.Errorf("All legacy serverPools should have same drive per set ratio - expected %d, got %d", drivesPerSet, ep.DrivesPerSet)
+			}
+		case formatErasureVersionV3DistributionAlgoV3:
+			parityDrives := ecDrivesNoConfig(ep.DrivesPerSet)
+			if commonParityDrives != 0 && commonParityDrives != parityDrives {
+				return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, parityDrives)
+			}
+		}
+
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
-			ep.SetCount, ep.DrivesPerSet, deploymentID)
+			ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
 		if err != nil {
 			return nil, err
 		}
+
 		if deploymentID == "" {
 			// all zones should have same deployment ID
 			deploymentID = formats[i].ID
 		}
+
+		if distributionAlgo == "" {
+			distributionAlgo = formats[i].Erasure.DistributionAlgo
+		}
+
+		// Validate if users brought different DeploymentID pools.
+		if deploymentID != formats[i].ID {
+			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
+		}
+
+		// Validate if users brought different different distribution algo pools.
+		if distributionAlgo != formats[i].Erasure.DistributionAlgo {
+			return nil, fmt.Errorf("All serverPools should have same distributionAlgo expected %s, got %s", distributionAlgo, formats[i].Erasure.DistributionAlgo)
+		}
+
 		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
 		if err != nil {
 			return nil, err
