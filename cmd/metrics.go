@@ -51,6 +51,17 @@ var (
 	)
 )
 
+const (
+	healMetricsNamespace = "self_heal"
+	gatewayNamespace     = "gateway"
+	cacheNamespace       = "cache"
+	s3Namespace          = "s3"
+	bucketNamespace      = "bucket"
+	minioNamespace       = "minio"
+	diskNamespace        = "disk"
+	interNodeNamespace   = "internode"
+)
+
 func init() {
 	prometheus.MustRegister(httpRequestsDuration)
 	prometheus.MustRegister(newMinioCollector())
@@ -81,15 +92,36 @@ func (c *minioCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *minioCollector) Collect(ch chan<- prometheus.Metric) {
 
 	// Expose MinIO's version information
-	minioVersionInfo.WithLabelValues(Version, CommitID).Set(float64(1.0))
+	minioVersionInfo.WithLabelValues(Version, CommitID).Set(1.0)
 
 	storageMetricsPrometheus(ch)
+	nodeHealthMetricsPrometheus(ch)
 	bucketUsageMetricsPrometheus(ch)
 	networkMetricsPrometheus(ch)
 	httpMetricsPrometheus(ch)
 	cacheMetricsPrometheus(ch)
 	gatewayMetricsPrometheus(ch)
 	healingMetricsPrometheus(ch)
+}
+
+func nodeHealthMetricsPrometheus(ch chan<- prometheus.Metric) {
+	nodesUp, nodesDown := GetPeerOnlineCount()
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(minioNamespace, "nodes", "online"),
+			"Total number of MinIO nodes online",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(nodesUp),
+	)
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(minioNamespace, "nodes", "offline"),
+			"Total number of MinIO nodes offline",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(nodesDown),
+	)
 }
 
 // collects healing specific metrics for MinIO instance in Prometheus specific format
@@ -102,7 +134,6 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 	if !exists {
 		return
 	}
-	healMetricsNamespace := "self_heal"
 
 	var dur time.Duration
 	if !bgSeq.lastHealActivity.IsZero() {
@@ -172,7 +203,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("gateway", globalGatewayName, "bytes_received"),
+			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "bytes_received"),
 			"Total number of bytes received by current MinIO Gateway "+globalGatewayName+" backend",
 			nil, nil),
 		prometheus.CounterValue,
@@ -180,7 +211,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("gateway", globalGatewayName, "bytes_sent"),
+			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "bytes_sent"),
 			"Total number of bytes sent by current MinIO Gateway to "+globalGatewayName+" backend",
 			nil, nil),
 		prometheus.CounterValue,
@@ -189,7 +220,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	s := m.GetRequests()
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
@@ -198,7 +229,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
@@ -207,7 +238,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
@@ -216,7 +247,7 @@ func gatewayMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("gateway", globalGatewayName, "requests"),
+			prometheus.BuildFQName(gatewayNamespace, globalGatewayName, "requests"),
 			"Total number of requests made to "+globalGatewayName+" by current MinIO Gateway",
 			[]string{"method"}, nil),
 		prometheus.CounterValue,
@@ -236,7 +267,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("cache", "hits", "total"),
+			prometheus.BuildFQName(cacheNamespace, "hits", "total"),
 			"Total number of disk cache hits in current MinIO instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -244,7 +275,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("cache", "misses", "total"),
+			prometheus.BuildFQName(cacheNamespace, "misses", "total"),
 			"Total number of disk cache misses in current MinIO instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -252,7 +283,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 	)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("cache", "data", "served"),
+			prometheus.BuildFQName(cacheNamespace, "data", "served"),
 			"Total number of bytes served from cache of current MinIO instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -262,7 +293,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 		// Cache disk usage percentage
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "usage", "percent"),
+				prometheus.BuildFQName(cacheNamespace, "usage", "percent"),
 				"Total percentage cache usage",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
@@ -271,7 +302,7 @@ func cacheMetricsPrometheus(ch chan<- prometheus.Metric) {
 		)
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("cache", "usage", "high"),
+				prometheus.BuildFQName(cacheNamespace, "usage", "high"),
 				"Indicates cache usage is high or low, relative to current cache 'quota' settings",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
@@ -309,7 +340,7 @@ func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
 	for api, value := range httpStats.CurrentS3Requests.APIStats {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("s3", "requests", "current"),
+				prometheus.BuildFQName(s3Namespace, "requests", "current"),
 				"Total number of running s3 requests in current MinIO server instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
@@ -321,7 +352,7 @@ func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
 	for api, value := range httpStats.TotalS3Requests.APIStats {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("s3", "requests", "total"),
+				prometheus.BuildFQName(s3Namespace, "requests", "total"),
 				"Total number of s3 requests in current MinIO server instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
@@ -333,7 +364,7 @@ func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
 	for api, value := range httpStats.TotalS3Errors.APIStats {
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("s3", "errors", "total"),
+				prometheus.BuildFQName(s3Namespace, "errors", "total"),
 				"Total number of s3 errors in current MinIO server instance",
 				[]string{"api"}, nil),
 			prometheus.CounterValue,
@@ -351,7 +382,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// Network Sent/Received Bytes (internode)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("internode", "tx", "bytes_total"),
+			prometheus.BuildFQName(interNodeNamespace, "tx", "bytes_total"),
 			"Total number of bytes sent to the other peer nodes by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -360,7 +391,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("internode", "rx", "bytes_total"),
+			prometheus.BuildFQName(interNodeNamespace, "rx", "bytes_total"),
 			"Total number of internode bytes received by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -370,7 +401,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// Network Sent/Received Bytes (Outbound)
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("s3", "tx", "bytes_total"),
+			prometheus.BuildFQName(s3Namespace, "tx", "bytes_total"),
 			"Total number of s3 bytes sent by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -379,7 +410,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("s3", "rx", "bytes_total"),
+			prometheus.BuildFQName(s3Namespace, "rx", "bytes_total"),
 			"Total number of s3 bytes received by current MinIO server instance",
 			nil, nil),
 		prometheus.CounterValue,
@@ -414,7 +445,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		// Total space used by bucket
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("bucket", "usage", "size"),
+				prometheus.BuildFQName(bucketNamespace, "usage", "size"),
 				"Total bucket size",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
@@ -423,7 +454,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		)
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("bucket", "objects", "count"),
+				prometheus.BuildFQName(bucketNamespace, "objects", "count"),
 				"Total number of objects in a bucket",
 				[]string{"bucket"}, nil),
 			prometheus.GaugeValue,
@@ -469,7 +500,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		for k, v := range usageInfo.ObjectSizesHistogram {
 			ch <- prometheus.MustNewConstMetric(
 				prometheus.NewDesc(
-					prometheus.BuildFQName("bucket", "objects", "histogram"),
+					prometheus.BuildFQName(bucketNamespace, "objects", "histogram"),
 					"Total number of objects of different sizes in a bucket",
 					[]string{"bucket", "object_size"}, nil),
 				prometheus.GaugeValue,
@@ -497,10 +528,50 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(server.Disks)
 	totalDisks := offlineDisks.Merge(onlineDisks)
 
+	// Report total capacity
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(minioNamespace, "capacity_raw", "total"),
+			"Total capacity online in the cluster",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(GetTotalCapacity(GlobalContext)),
+	)
+
+	// Report total capacity free
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(minioNamespace, "capacity_raw_free", "total"),
+			"Total free capacity online in the cluster",
+			nil, nil),
+		prometheus.GaugeValue,
+		float64(GetTotalCapacityFree(GlobalContext)),
+	)
+
+	s, _ := objLayer.StorageInfo(GlobalContext)
+	// Report total usable capacity
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(minioNamespace, "capacity_usable", "total"),
+			"Total usable capacity online in the cluster",
+			nil, nil),
+		prometheus.GaugeValue,
+		GetTotalUsableCapacity(GlobalContext, s),
+	)
+	// Report total usable capacity free
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(minioNamespace, "capacity_usable_free", "total"),
+			"Total free usable capacity online in the cluster",
+			nil, nil),
+		prometheus.GaugeValue,
+		GetTotalUsableCapacityFree(GlobalContext, s),
+	)
+
 	// MinIO Offline Disks per node
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "disks", "offline"),
+			prometheus.BuildFQName(minioNamespace, "disks", "offline"),
 			"Total number of offline disks in current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
@@ -510,7 +581,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	// MinIO Total Disks per node
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
-			prometheus.BuildFQName("minio", "disks", "total"),
+			prometheus.BuildFQName(minioNamespace, "disks", "total"),
 			"Total number of disks for current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
@@ -521,7 +592,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		// Total disk usage by the disk
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("disk", "storage", "used"),
+				prometheus.BuildFQName(diskNamespace, "storage", "used"),
 				"Total disk storage used on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
@@ -532,7 +603,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		// Total available space in the disk
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("disk", "storage", "available"),
+				prometheus.BuildFQName(diskNamespace, "storage", "available"),
 				"Total available space left on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
@@ -543,7 +614,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		// Total storage space of the disk
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
-				prometheus.BuildFQName("disk", "storage", "total"),
+				prometheus.BuildFQName(diskNamespace, "storage", "total"),
 				"Total space on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,

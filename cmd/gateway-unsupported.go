@@ -202,9 +202,9 @@ func (a GatewayUnsupported) CopyObject(ctx context.Context, srcBucket string, sr
 }
 
 // GetMetrics - no op
-func (a GatewayUnsupported) GetMetrics(ctx context.Context) (*Metrics, error) {
+func (a GatewayUnsupported) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return &Metrics{}, NotImplemented{}
+	return &BackendMetrics{}, NotImplemented{}
 }
 
 // PutObjectTags - not implemented.

@@ -774,6 +774,9 @@ func (s *erasureSets) GetObject(ctx context.Context, bucket, object string, star
 }
 
 func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
+	if parent == "." {
+		return false
+	}
 	return s.getHashedSet(parent).parentDirIsObject(ctx, bucket, parent)
 }
 

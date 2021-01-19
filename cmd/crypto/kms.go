@@ -39,6 +39,7 @@ type Context map[string]string
 //
 // WriteTo sorts the context keys and writes the sorted
 // key-value pairs as canonical JSON object to w.
+// Sort order is based on the un-escaped keys.
 //
 // Note that neither keys nor values are escaped for JSON.
 func (c Context) WriteTo(w io.Writer) (n int64, err error) {
@@ -48,13 +49,19 @@ func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 	}
 	sort.Sort(sortedKeys)
 
+	escape := func(s string) string {
+		buf := bytes.NewBuffer(make([]byte, 0, len(s)))
+		EscapeStringJSON(buf, s)
+		return buf.String()
+	}
+
 	nn, err := io.WriteString(w, "{")
 	if err != nil {
 		return n + int64(nn), err
 	}
 	n += int64(nn)
 	for i, k := range sortedKeys {
-		s := fmt.Sprintf("\"%s\":\"%s\",", k, c[k])
+		s := fmt.Sprintf("\"%s\":\"%s\",", escape(k), escape(c[k]))
 		if i == len(sortedKeys)-1 {
 			s = s[:len(s)-1] // remove last ','
 		}
@@ -73,6 +80,7 @@ func (c Context) WriteTo(w io.Writer) (n int64, err error) {
 //
 // AppendTo sorts the context keys and writes the sorted
 // key-value pairs as canonical JSON object to w.
+// Sort order is based on the un-escaped keys.
 //
 // Note that neither keys nor values are escaped for JSON.
 func (c Context) AppendTo(dst []byte) (output []byte) {
@@ -87,9 +95,9 @@ func (c Context) AppendTo(dst []byte) (output []byte) {
 	if len(c) == 1 {
 		for k, v := range c {
 			out.WriteString(`{"`)
-			out.WriteString(k)
+			EscapeStringJSON(out, k)
 			out.WriteString(`":"`)
-			out.WriteString(v)
+			EscapeStringJSON(out, v)
 			out.WriteString(`"}`)
 		}
 		return out.Bytes()
@@ -104,9 +112,9 @@ func (c Context) AppendTo(dst []byte) (output []byte) {
 	out.WriteByte('{')
 	for i, k := range sortedKeys {
 		out.WriteByte('"')
-		out.WriteString(k)
+		EscapeStringJSON(out, k)
 		out.WriteString(`":"`)
-		out.WriteString(c[k])
+		EscapeStringJSON(out, c[k])
 		out.WriteByte('"')
 		if i < len(sortedKeys)-1 {
 			out.WriteByte(',')

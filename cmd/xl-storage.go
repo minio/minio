@@ -1778,6 +1778,12 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 }
 
 // CheckFile check if path has necessary metadata.
+// This function does the following check, suppose
+// you are creating a metadata file at "a/b/c/d/xl.meta",
+// makes sure that there is no `xl.meta` at
+// - "a/b/c/"
+// - "a/b/"
+// - "a/"
 func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) error {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
@@ -1789,42 +1795,45 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 		return err
 	}
 
-	// Stat a volume entry.
-	_, err = os.Stat(pathJoin(volumeDir, path))
-	if err != nil {
-		if osIsNotExist(err) {
+	var checkFile func(p string) error
+	checkFile = func(p string) error {
+		if p == "." || p == SlashSeparator {
 			return errPathNotFound
 		}
-		return err
-	}
 
-	filePath := pathJoin(volumeDir, path, xlStorageFormatFile)
-	if err = checkPathLength(filePath); err != nil {
-		return err
-	}
-
-	filePathOld := pathJoin(volumeDir, path, xlStorageFormatFileV1)
-	if err = checkPathLength(filePathOld); err != nil {
-		return err
-	}
-
-	st, err := os.Stat(filePath)
-	if err != nil && !osIsNotExist(err) {
-		return osErrToFileErr(err)
-	}
-	if st == nil {
-		st, err = os.Stat(filePathOld)
-		if err != nil {
-			return osErrToFileErr(err)
+		filePath := pathJoin(volumeDir, p, xlStorageFormatFile)
+		if err := checkPathLength(filePath); err != nil {
+			return err
 		}
+
+		st, _ := os.Lstat(filePath)
+		if st == nil {
+			if s.formatLegacy {
+				filePathOld := pathJoin(volumeDir, p, xlStorageFormatFileV1)
+				if err := checkPathLength(filePathOld); err != nil {
+					return err
+				}
+
+				st, _ = os.Lstat(filePathOld)
+				if st == nil {
+					return errPathNotFound
+				}
+			}
+		}
+
+		if st != nil {
+			if !st.Mode().IsRegular() {
+				// not a regular file return error.
+				return errFileNotFound
+			}
+			// Success fully found
+			return nil
+		}
+
+		return checkFile(slashpath.Dir(p))
 	}
 
-	// If its a directory its not a regular file.
-	if st.Mode().IsDir() || st.Size() == 0 {
-		return errFileNotFound
-	}
-
-	return nil
+	return checkFile(path)
 }
 
 // deleteFile deletes a file or a directory if its empty unless recursive
@@ -1837,8 +1846,8 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 		return nil
 	}
 	isObjectDir := HasSuffix(deletePath, SlashSeparator)
-	basePath = filepath.Clean(basePath)
-	deletePath = filepath.Clean(deletePath)
+	basePath = slashpath.Clean(basePath)
+	deletePath = slashpath.Clean(deletePath)
 	if !strings.HasPrefix(deletePath, basePath) || deletePath == basePath {
 		return nil
 	}
@@ -1872,7 +1881,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 		}
 	}
 
-	deletePath = filepath.Dir(deletePath)
+	deletePath = slashpath.Dir(deletePath)
 
 	// Delete parent directory obviously not recursively. Errors for
 	// parent directories shouldn't trickle down.

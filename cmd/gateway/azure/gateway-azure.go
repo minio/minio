@@ -419,7 +419,7 @@ type azureObjects struct {
 	minio.GatewayUnsupported
 	endpoint   *url.URL
 	httpClient *http.Client
-	metrics    *minio.Metrics
+	metrics    *minio.BackendMetrics
 	client     azblob.ServiceURL // Azure sdk client
 }
 
@@ -533,7 +533,7 @@ func parseAzurePart(metaPartFileName, prefix string) (partID int, err error) {
 }
 
 // GetMetrics returns this gateway's metrics
-func (a *azureObjects) GetMetrics(ctx context.Context) (*minio.Metrics, error) {
+func (a *azureObjects) GetMetrics(ctx context.Context) (*minio.BackendMetrics, error) {
 	return a.metrics, nil
 }
 

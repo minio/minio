@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -149,6 +151,10 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 			if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 				logger.LogIf(ctx, err)
 			}
+		}
+
+		if serverDebugLog {
+			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, setIndex+1)
 		}
 
 		var entryChs []FileInfoVersionsCh

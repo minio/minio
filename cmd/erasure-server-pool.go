@@ -1377,9 +1377,9 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 }
 
 // GetMetrics - no op
-func (z *erasureServerPools) GetMetrics(ctx context.Context) (*Metrics, error) {
+func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return &Metrics{}, NotImplemented{}
+	return &BackendMetrics{}, NotImplemented{}
 }
 
 func (z *erasureServerPools) getZoneAndSet(id string) (int, int, error) {

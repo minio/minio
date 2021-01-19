@@ -27,6 +27,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
 )
 
@@ -251,7 +252,7 @@ wait:
 			}
 
 			if serverDebugLog {
-				console.Debugf("disk check timer fired, attempting to heal %d drives\n", len(healDisks))
+				console.Debugf(color.Green("healDisk:")+" disk check timer fired, attempting to heal %d drives\n", len(healDisks))
 			}
 
 			// heal only if new disks found.
