@@ -50,9 +50,6 @@ static int WekaMakeInodeFast(char *root, char *filename, int mode) {
 	err = ioctl(dirfd, 'MKND', &makefile_param);
 	close(dirfd);
 
-	if (err)
-		printf("Failed to perform internal ioctl: base %s, file %s. Status %d errno %d.\n", root, filename, err, errno);
-
 	return err;
 }
 
@@ -71,9 +68,6 @@ static int WekaDeleteFileFast(char *root, char *filename) {
 	makefile_param.mode = 0;
 	err = ioctl(dirfd, 'ULNK', &makefile_param);
 	close(dirfd);
-
-	if (err)
-		printf("Failed to perform internal ioctl: base %s, file %s. Status %d errno %d.\n", root, filename, err, errno);
 
 	return err;
 }
