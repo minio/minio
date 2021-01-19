@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
@@ -63,6 +64,10 @@ type healingTracker struct {
 	ResumeBytesDone     uint64
 	ResumeBytesFailed   uint64
 
+	// Filled on startup
+	QueuedBuckets []string
+
+	// Filled during heal.
 	HealedBuckets []string
 	// future add more tracking capabilities
 }
@@ -166,6 +171,24 @@ func (h *healingTracker) bucketDone(bucket string) {
 	h.ResumeBytesDone = h.BytesDone
 	h.ResumeBytesFailed = h.BytesFailed
 	h.HealedBuckets = append(h.HealedBuckets, bucket)
+	for i, b := range h.QueuedBuckets {
+		if b == bucket {
+			// Delete...
+			h.QueuedBuckets = append(h.QueuedBuckets[:i], h.QueuedBuckets[i+1:]...)
+		}
+	}
+}
+
+// setQueuedBuckets will add buckets, but exclude any that is already in h.HealedBuckets.
+// Order is preserved.
+func (h *healingTracker) setQueuedBuckets(buckets []BucketInfo) {
+	s := set.CreateStringSet(h.HealedBuckets...)
+	h.QueuedBuckets = make([]string, 0, len(buckets)-len(s))
+	for _, b := range buckets {
+		if !s.Contains(b.Name) {
+			h.QueuedBuckets = append(h.QueuedBuckets, b.Name)
+		}
+	}
 }
 
 func (h *healingTracker) printTo(writer io.Writer) {
@@ -341,6 +364,7 @@ wait:
 						}
 
 						tracker.SetIndex = setIndex
+						tracker.setQueuedBuckets(buckets)
 						lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
 						if err := healErasureSet(ctx, buckets, lbDisks, tracker); err != nil {
 							logger.LogIf(ctx, err)
