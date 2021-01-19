@@ -118,6 +118,11 @@ var (
 		"Please set correct rotating credentials in the environment for decryption",
 		`Detected encrypted config backend, correct old access and secret keys should be specified via environment variables MINIO_ROOT_USER_OLD and MINIO_ROOT_PASSWORD_OLD to be able to re-encrypt the MinIO config, user IAM and policies with new credentials`,
 	)
+	ErrInvalidConfigurationEncrypted = newErrFn(
+		"Invalid Configuraton Encrypted setting",
+		"Please check the passed value",
+		"MINIO_CONFIG_ENCRYPTED only allow `true` of `false` values",
+	)
 
 	ErrInvalidCredentialsBackendEncrypted = newErrFn(
 		"Invalid credentials",
