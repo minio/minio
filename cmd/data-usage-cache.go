@@ -88,9 +88,12 @@ type dataUsageEntryInfo struct {
 
 type dataUsageCacheInfo struct {
 	// Name of the bucket. Also root element.
-	Name        string
-	LastUpdate  time.Time
-	NextCycle   uint32
+	Name       string
+	LastUpdate time.Time
+	NextCycle  uint32
+	// indicates if the disk is being healed and crawler
+	// should skip healing the disk
+	SkipHealing bool
 	BloomFilter []byte               `msg:"BloomFilter,omitempty"`
 	lifeCycle   *lifecycle.Lifecycle `msg:"-"`
 }
