@@ -1162,10 +1162,7 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		return cred, false
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-	if fallback {
+	reloadUser := func() {
 		sys.store.lock()
 		// If user is already found proceed.
 		if _, found := sys.iamUsersMap[accessKey]; !found {
@@ -1204,9 +1201,29 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 	}
 
 	sys.store.rlock()
+	fallback := sys.storeFallback
+	sys.store.runlock()
+	if fallback {
+		reloadUser()
+	}
+
+	sys.store.rlock()
+	cred, ok = sys.iamUsersMap[accessKey]
+	if !ok && !fallback {
+		sys.store.runlock()
+		// accessKey not found, also
+		// IAM store is not in fallback mode
+		// we can try to reload again from
+		// the IAM store and see if credential
+		// exists now. If it doesn't proceed to
+		// fail.
+		reloadUser()
+
+		sys.store.rlock()
+		cred, ok = sys.iamUsersMap[accessKey]
+	}
 	defer sys.store.runlock()
 
-	cred, ok = sys.iamUsersMap[accessKey]
 	if ok && cred.IsValid() {
 		if cred.ParentUser != "" && sys.usersSysType == MinIOUsersSysType {
 			_, ok = sys.iamUsersMap[cred.ParentUser]
