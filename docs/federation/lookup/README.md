@@ -43,6 +43,13 @@ a bucket `bucket1` created on current MinIO instance will be accessible as `buck
 - This field is optional for distributed deployments. If you don't set this field in a federated setup, we use the IP addresses of
 hosts passed to the MinIO server startup and use them for DNS entries.
 
+#### MINIO_CONFIG_ENCRYPTED
+
+This is an environment variable to define if the Configuration stored in ETCD is encrypted or not. If the value is not set the configuration is encrypted.
+2 values are allowed:
+- `true` to encrypt the configuration
+- `false` to not encrypt the configuration
+
 ### Run Multiple Clusters
 
 > cluster1

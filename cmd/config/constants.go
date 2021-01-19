@@ -38,6 +38,7 @@ const (
 	EnvFSOSync         = "MINIO_FS_OSYNC"
 	EnvArgs            = "MINIO_ARGS"
 	EnvDNSWebhook      = "MINIO_DNS_WEBHOOK_ENDPOINT"
+	ConfigEncrypted    = "MINIO_CONFIG_ENCRYPTED"
 
 	EnvUpdate = "MINIO_UPDATE"
 

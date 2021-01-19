@@ -283,7 +283,18 @@ func handleCommonEnvVars() {
 				"Unable to validate credentials inherited from the shell environment")
 		}
 		globalActiveCred = cred
-		globalConfigEncrypted = true
+		if env.IsSet(config.ConfigEncrypted) {
+			if env.Get(config.ConfigEncrypted, "true") == "true" {
+				globalConfigEncrypted = true
+			} else if env.Get(config.ConfigEncrypted, "true") == "false" {
+				globalConfigEncrypted = false
+			} else {
+				logger.Fatal(config.ErrInvalidCredentials(err),
+					"Unable to Parse MINIO_CONFIG_ENCRYPTED variable. Only authorized values: true or false")
+			}
+		} else {
+			globalConfigEncrypted = true
+		}
 	}
 
 	if env.IsSet(config.EnvRootUser) || env.IsSet(config.EnvRootPassword) {
@@ -293,7 +304,19 @@ func handleCommonEnvVars() {
 				"Unable to validate credentials inherited from the shell environment")
 		}
 		globalActiveCred = cred
-		globalConfigEncrypted = true
+		if env.IsSet(config.ConfigEncrypted) {
+			if env.Get(config.ConfigEncrypted, "true") == "true" {
+				globalConfigEncrypted = true
+			} else if env.Get(config.ConfigEncrypted, "true") == "false" {
+				globalConfigEncrypted = false
+			} else {
+				logger.Fatal(config.ErrInvalidCredentials(err),
+					"Unable to Parse MINIO_CONFIG_ENCRYPTED variable. Only authorized values: true or false")
+			}
+		} else {
+			globalConfigEncrypted = true
+		}
+
 	}
 
 	if env.IsSet(config.EnvAccessKeyOld) && env.IsSet(config.EnvSecretKeyOld) {
