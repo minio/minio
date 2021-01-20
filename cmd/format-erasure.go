@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
@@ -908,7 +909,8 @@ func getDefaultParityBlocks(drive int) int {
 // ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
 // It will attempt to read it from env variable and fall back to drives/2.
 func ecDrivesNoConfig(setDriveCount int) int {
-	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	sc, _ := storageclass.LookupConfig(config.KVS{}, setDriveCount)
+	ecDrives := sc.GetParityForSC(storageclass.STANDARD)
 	if ecDrives <= 0 {
 		ecDrives = getDefaultParityBlocks(setDriveCount)
 	}
