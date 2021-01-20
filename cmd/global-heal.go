@@ -213,7 +213,7 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 			}
 		}
 		select {
-		// If context is cancelled don't mark as done...
+		// If context is canceled don't mark as done...
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
