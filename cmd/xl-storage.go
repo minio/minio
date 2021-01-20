@@ -962,7 +962,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	}
 
 	// when data-dir is specified. Transition leverages existing DeleteObject
-	// api call to mark object as deleted.When object is pending transition,
+	// api call to mark object as deleted. When object is pending transition,
 	// just update the metadata and avoid deleting data dir.
 	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
 		filePath := pathJoin(volumeDir, path, dataDir)
@@ -974,6 +974,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return err
 		}
 	}
+
 	// transitioned objects maintains metadata on the source cluster. When transition
 	// status is set, update the metadata to disk.
 	if !lastVersion || fi.TransitionStatus != "" {

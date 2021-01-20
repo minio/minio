@@ -260,6 +260,7 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 		ventry.DeleteMarker = &xlMetaV2DeleteMarker{
 			VersionID: uv,
 			ModTime:   fi.ModTime.UnixNano(),
+			MetaSys:   make(map[string][]byte),
 		}
 	} else {
 		ventry.Type = ObjectType
@@ -355,13 +356,19 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		versionID = uuid.UUID(j.VersionID).String()
 	}
 	fi := FileInfo{
-		Volume:                        volume,
-		Name:                          path,
-		ModTime:                       time.Unix(0, j.ModTime).UTC(),
-		VersionID:                     versionID,
-		Deleted:                       true,
-		DeleteMarkerReplicationStatus: string(j.MetaSys[xhttp.AmzBucketReplicationStatus]),
-		VersionPurgeStatus:            VersionPurgeStatusType(string(j.MetaSys[VersionPurgeStatusKey])),
+		Volume:    volume,
+		Name:      path,
+		ModTime:   time.Unix(0, j.ModTime).UTC(),
+		VersionID: versionID,
+		Deleted:   true,
+	}
+	for k, v := range j.MetaSys {
+		if strings.EqualFold(k, xhttp.AmzBucketReplicationStatus) {
+			fi.DeleteMarkerReplicationStatus = string(v)
+		}
+		if strings.EqualFold(k, VersionPurgeStatusKey) {
+			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
+		}
 	}
 	return fi, nil
 }
@@ -408,11 +415,14 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		fi.Metadata[k] = v
 	}
 	for k, v := range j.MetaSys {
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
-			fi.Metadata[k] = string(v)
+		if strings.EqualFold(strings.ToLower(k), ReservedMetadataPrefixLower+"transition-status") {
+			fi.TransitionStatus = string(v)
 		}
 		if strings.EqualFold(k, VersionPurgeStatusKey) {
 			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
+		}
+		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+			fi.Metadata[k] = string(v)
 		}
 	}
 	fi.Erasure.Algorithm = j.ErasureAlgorithm.String()
@@ -426,9 +436,6 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	}
 	fi.DataDir = uuid.UUID(j.DataDir).String()
 
-	if st, ok := j.MetaSys[ReservedMetadataPrefixLower+"transition-status"]; ok {
-		fi.TransitionStatus = string(st)
-	}
 	return fi, nil
 }
 
