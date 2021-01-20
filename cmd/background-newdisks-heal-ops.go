@@ -17,12 +17,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -142,7 +142,6 @@ func (h *healingTracker) save(ctx context.Context) error {
 		return err
 	}
 	globalBackgroundHealState.updateHealStatus(h)
-	h.printTo(os.Stdout)
 	return h.disk.WriteAll(ctx, minioMetaBucket,
 		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
 		htrackerBytes)
@@ -215,8 +214,8 @@ func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
 		Endpoint:      h.Endpoint,
 		SetIndex:      h.SetIndex,
 		Path:          h.Path,
-		Started:       h.Started,
-		LastUpdate:    h.LastUpdate,
+		Started:       h.Started.UTC(),
+		LastUpdate:    h.LastUpdate.UTC(),
 		ObjectsHealed: h.ObjectsHealed,
 		ObjectsFailed: h.ObjectsFailed,
 		BytesDone:     h.BytesDone,
@@ -410,7 +409,9 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 							}
 
 							logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
-
+							var buf bytes.Buffer
+							tracker.printTo(&buf)
+							logger.Info("Summary:\n%s", buf.String())
 							logger.LogIf(ctx, tracker.delete(ctx))
 
 							// Only upon success pop the healed disk.

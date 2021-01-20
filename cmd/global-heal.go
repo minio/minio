@@ -221,6 +221,8 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 			logger.LogIf(ctx, tracker.update(ctx))
 		}
 	}
+	tracker.Object = ""
+	tracker.Bucket = ""
 
 	return nil
 }
