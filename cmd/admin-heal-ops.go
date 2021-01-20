@@ -90,8 +90,9 @@ type allHealState struct {
 	sync.RWMutex
 
 	// map of heal path to heal sequence
-	healSeqMap     map[string]*healSequence
+	healSeqMap     map[string]*healSequence // Indexed by endpoint
 	healLocalDisks map[Endpoint]struct{}
+	healStatus     map[string]healingTracker // Indexed by disk ID
 }
 
 // newHealState - initialize global heal state management
@@ -99,6 +100,7 @@ func newHealState(cleanup bool) *allHealState {
 	hstate := &allHealState{
 		healSeqMap:     make(map[string]*healSequence),
 		healLocalDisks: map[Endpoint]struct{}{},
+		healStatus:     make(map[string]healingTracker),
 	}
 	if cleanup {
 		go hstate.periodicHealSeqsClean(GlobalContext)
@@ -131,6 +133,39 @@ func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {
 	for _, ep := range healLocalDisks {
 		delete(ahs.healLocalDisks, ep)
 	}
+	for id, disk := range ahs.healStatus {
+		for _, ep := range healLocalDisks {
+			if disk.Endpoint == ep.String() {
+				delete(ahs.healStatus, id)
+			}
+		}
+	}
+}
+
+// updateHealStatus will update the heal status.
+func (ahs *allHealState) updateHealStatus(tracker *healingTracker) {
+	ahs.Lock()
+	defer ahs.Unlock()
+	ahs.healStatus[tracker.ID] = *tracker
+}
+
+func (ahs *allHealState) getHealingDisks() []madmin.HealingDisk {
+	ahs.RLock()
+	defer ahs.RUnlock()
+	dst := make([]madmin.HealingDisk, 0, len(ahs.healStatus))
+	for _, v := range ahs.healStatus {
+		dst = append(dst, v.toHealingDisk())
+	}
+
+	// Sort by setindex, then endpoint.
+	sort.Slice(dst, func(i, j int) bool {
+		a, b := &dst[i], &dst[j]
+		if a.SetIndex != b.SetIndex {
+			return a.SetIndex < b.SetIndex
+		}
+		return a.Endpoint < b.Endpoint
+	})
+	return dst
 }
 
 func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {

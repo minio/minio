@@ -821,7 +821,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAggregatedBackgroundHealState(ctx context.Context) (madmin.BgHealState, error) {
-	var bgHealStates []madmin.BgHealState
+	var bgHealStates madmin.BgHealState
 
 	localHealState, ok := getLocalBackgroundHealStatus()
 	if !ok {
@@ -829,7 +829,7 @@ func getAggregatedBackgroundHealState(ctx context.Context) (madmin.BgHealState, 
 	}
 
 	// Get local heal status first
-	bgHealStates = append(bgHealStates, localHealState)
+	bgHealStates.Merge(localHealState)
 
 	if globalIsDistErasure {
 		// Get heal status from other peers
@@ -844,33 +844,10 @@ func getAggregatedBackgroundHealState(ctx context.Context) (madmin.BgHealState, 
 		if errCount == len(nerrs) {
 			return madmin.BgHealState{}, fmt.Errorf("all remote servers failed to report heal status, cluster is unhealthy")
 		}
-		bgHealStates = append(bgHealStates, peersHealStates...)
+		bgHealStates.Merge(peersHealStates...)
 	}
 
-	// Aggregate healing result
-	var aggregatedHealStateResult = madmin.BgHealState{
-		ScannedItemsCount: bgHealStates[0].ScannedItemsCount,
-		LastHealActivity:  bgHealStates[0].LastHealActivity,
-		NextHealRound:     bgHealStates[0].NextHealRound,
-		HealDisks:         bgHealStates[0].HealDisks,
-	}
-
-	bgHealStates = bgHealStates[1:]
-
-	for _, state := range bgHealStates {
-		aggregatedHealStateResult.ScannedItemsCount += state.ScannedItemsCount
-		aggregatedHealStateResult.HealDisks = append(aggregatedHealStateResult.HealDisks, state.HealDisks...)
-		if !state.LastHealActivity.IsZero() && aggregatedHealStateResult.LastHealActivity.Before(state.LastHealActivity) {
-			aggregatedHealStateResult.LastHealActivity = state.LastHealActivity
-			// The node which has the last heal activity means its
-			// is the node that is orchestrating self healing operations,
-			// which also means it is the same node which decides when
-			// the next self healing operation will be done.
-			aggregatedHealStateResult.NextHealRound = state.NextHealRound
-		}
-	}
-
-	return aggregatedHealStateResult, nil
+	return bgHealStates, nil
 }
 
 func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {

@@ -294,9 +294,67 @@ func (adm *AdminClient) Heal(ctx context.Context, bucket, prefix string,
 // BgHealState represents the status of the background heal
 type BgHealState struct {
 	ScannedItemsCount int64
-	LastHealActivity  time.Time
-	NextHealRound     time.Time
-	HealDisks         []string
+
+	HealDisks []string
+
+	// HealingDisks is information about disks that are currently healing.
+	HealingDisks []HealingDisk
+}
+
+// HealingDisk contains information about
+type HealingDisk struct {
+	// Copied from cmd/background-newdisks-heal-ops.go
+	// When adding new field, update (*healingTracker).toHealingDisk
+
+	ID            string
+	SetIndex      int // May be -1 until picked up...
+	Endpoint      string
+	Path          string
+	Started       time.Time
+	LastUpdate    time.Time
+	ObjectsHealed uint64
+	ObjectsFailed uint64
+	BytesDone     uint64
+	BytesFailed   uint64
+
+	// Last object scanned.
+	Bucket string
+	Object string
+
+	// Filled on startup/restarts.
+	QueuedBuckets []string
+
+	// Filled during heal.
+	HealedBuckets []string
+	// future add more tracking capabilities
+}
+
+// Merge others into b.
+func (b *BgHealState) Merge(others ...BgHealState) {
+	for _, other := range others {
+		b.ScannedItemsCount += other.ScannedItemsCount
+		if len(b.HealingDisks) == 0 {
+			b.HealingDisks = make([]HealingDisk, len(other.HealingDisks))
+			copy(b.HealingDisks, other.HealingDisks)
+			continue
+		}
+		// Add disk if not present.
+		// If present select the one with latest lastupdate.
+		addDisk := func(disk HealingDisk) {
+			for i, existing := range b.HealingDisks {
+				if existing.ID == disk.ID {
+					if existing.LastUpdate.Before(disk.LastUpdate) {
+						b.HealingDisks[i] = disk
+					}
+					return
+				}
+			}
+			b.HealingDisks = append(b.HealingDisks, disk)
+		}
+		for _, disk := range other.HealingDisks {
+			addDisk(disk)
+		}
+	}
 }
 
 // BackgroundHealStatus returns the background heal status of the

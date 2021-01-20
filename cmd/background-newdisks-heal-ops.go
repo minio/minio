@@ -22,7 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -30,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/console"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
@@ -44,8 +47,9 @@ type healingTracker struct {
 	disk StorageAPI `msg:"-"`
 
 	ID            string
-	SetIndex      int
+	SetIndex      int // This will be -1 until the disk is picked up.
 	Path          string
+	Endpoint      string
 	Started       time.Time
 	LastUpdate    time.Time
 	ObjectsHealed uint64
@@ -64,12 +68,13 @@ type healingTracker struct {
 	ResumeBytesDone     uint64
 	ResumeBytesFailed   uint64
 
-	// Filled on startup
+	// Filled on startup/restarts.
 	QueuedBuckets []string
 
 	// Filled during heal.
 	HealedBuckets []string
-	// future add more tracking capabilities
+	// Add future tracking capabilities
+	// Be sure that they are included in toHealingDisk
 }
 
 // loadHealingTracker will load the healing tracker from the supplied disk.
@@ -111,10 +116,12 @@ func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
 	}
 
 	return &healingTracker{
-		disk:    disk,
-		ID:      diskID,
-		Path:    disk.String(),
-		Started: time.Now().UTC(),
+		disk:     disk,
+		ID:       diskID,
+		SetIndex: -1,
+		Path:     disk.String(),
+		Endpoint: disk.Endpoint().String(),
+		Started:  time.Now().UTC(),
 	}, err
 }
 
@@ -134,6 +141,8 @@ func (h *healingTracker) save(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	globalBackgroundHealState.updateHealStatus(h)
+	h.printTo(os.Stdout)
 	return h.disk.WriteAll(ctx, minioMetaBucket,
 		pathJoin(bucketMetaPrefix, slashSeparator, healingTrackerFilename),
 		htrackerBytes)
@@ -197,6 +206,26 @@ func (h *healingTracker) printTo(writer io.Writer) {
 		writer.Write([]byte(err.Error()))
 	}
 	writer.Write(b)
+}
+
+// toHealingDisk converts the information to madmin.HealingDisk
+func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
+	return madmin.HealingDisk{
+		ID:            h.ID,
+		Endpoint:      h.Endpoint,
+		SetIndex:      h.SetIndex,
+		Path:          h.Path,
+		Started:       h.Started,
+		LastUpdate:    h.LastUpdate,
+		ObjectsHealed: h.ObjectsHealed,
+		ObjectsFailed: h.ObjectsFailed,
+		BytesDone:     h.BytesDone,
+		BytesFailed:   h.BytesFailed,
+		Bucket:        h.Bucket,
+		Object:        h.Object,
+		QueuedBuckets: h.QueuedBuckets,
+		HealedBuckets: h.HealedBuckets,
+	}
 }
 
 func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
@@ -272,7 +301,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 	// Perform automatic disk healing when a disk is replaced locally.
 	diskCheckTimer := time.NewTimer(defaultMonitorNewDiskInterval)
 	defer diskCheckTimer.Stop()
-wait:
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -337,49 +366,60 @@ wait:
 				return buckets[i].Created.After(buckets[j].Created)
 			})
 
+			// TODO(klauspost): This will block until all heals are done,
+			// in the future this should be able to start healing other sets at once.
+			var wg sync.WaitGroup
 			for i, setMap := range erasureSetInZoneDisksToHeal {
+				i := i
 				for setIndex, disks := range setMap {
-					for _, disk := range disks {
-						logger.Info("Healing disk '%v' on %s pool", disk, humanize.Ordinal(i+1))
+					if len(disks) == 0 {
+						continue
+					}
+					wg.Add(1)
+					go func(setIndex int, disks []StorageAPI) {
+						defer wg.Done()
+						for _, disk := range disks {
+							logger.Info("Healing disk '%v' on %s pool", disk, humanize.Ordinal(i+1))
 
-						// So someone changed the drives underneath, healing tracker missing.
-						tracker, err := loadHealingTracker(ctx, disk)
-						if err != nil {
-							logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool", disk, humanize.Ordinal(i+1))
-							tracker, err = newHealingTracker(disk)
+							// So someone changed the drives underneath, healing tracker missing.
+							tracker, err := loadHealingTracker(ctx, disk)
 							if err != nil {
-								logger.LogIf(ctx, err)
-								// reading format.json failed or not found, proceed to look
-								// for new disks to be healed again, we cannot proceed further.
-								goto wait
+								logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool", disk, humanize.Ordinal(i+1))
+								tracker, err = newHealingTracker(disk)
+								if err != nil {
+									logger.LogIf(ctx, err)
+									// reading format.json failed or not found, proceed to look
+									// for new disks to be healed again, we cannot proceed further.
+									return
+								}
 							}
 
+							tracker.SetIndex = setIndex
+							tracker.setQueuedBuckets(buckets)
 							if err := tracker.save(ctx); err != nil {
 								logger.LogIf(ctx, err)
 								// Unable to write healing tracker, permission denied or some
 								// other unexpected error occurred. Proceed to look for new
 								// disks to be healed again, we cannot proceed further.
-								goto wait
+								return
 							}
+							lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
+							if err := healErasureSet(ctx, buckets, lbDisks, tracker); err != nil {
+								logger.LogIf(ctx, err)
+								continue
+							}
+
+							logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
+
+							logger.LogIf(ctx, tracker.delete(ctx))
+
+							// Only upon success pop the healed disk.
+							globalBackgroundHealState.popHealLocalDisks(disk.Endpoint())
 						}
-
-						tracker.SetIndex = setIndex
-						tracker.setQueuedBuckets(buckets)
-						lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
-						if err := healErasureSet(ctx, buckets, lbDisks, tracker); err != nil {
-							logger.LogIf(ctx, err)
-							continue
-						}
-
-						logger.Info("Healing disk '%s' on %s pool complete", disk, humanize.Ordinal(i+1))
-
-						logger.LogIf(ctx, tracker.delete(ctx))
-
-						// Only upon success pop the healed disk.
-						globalBackgroundHealState.popHealLocalDisks(disk.Endpoint())
-					}
+					}(setIndex, disks)
 				}
 			}
+			wg.Wait()
 		}
 	}
 }

@@ -92,9 +92,8 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 
 	return madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
-		LastHealActivity:  bgSeq.lastHealActivity,
 		HealDisks:         healDisks,
-		NextHealRound:     UTCNow(),
+		HealingDisks:      globalBackgroundHealState.getHealingDisks(),
 	}, true
 }
 
@@ -213,8 +212,14 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 				logger.LogIf(ctx, tracker.update(ctx))
 			}
 		}
-		tracker.bucketDone(bucket.Name)
-		logger.LogIf(ctx, tracker.update(ctx))
+		select {
+		// If context is cancelled don't mark as done...
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			tracker.bucketDone(bucket.Name)
+			logger.LogIf(ctx, tracker.update(ctx))
+		}
 	}
 
 	return nil

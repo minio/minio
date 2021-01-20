@@ -42,6 +42,12 @@ func (z *healingTracker) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Path")
 				return
 			}
+		case "Endpoint":
+			z.Endpoint, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Endpoint")
+				return
+			}
 		case "Started":
 			z.Started, err = dc.ReadTime()
 			if err != nil {
@@ -165,9 +171,9 @@ func (z *healingTracker) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 17
+	// map header, size 18
 	// write "ID"
-	err = en.Append(0xde, 0x0, 0x11, 0xa2, 0x49, 0x44)
+	err = en.Append(0xde, 0x0, 0x12, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -194,6 +200,16 @@ func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteString(z.Path)
 	if err != nil {
 		err = msgp.WrapError(err, "Path")
+		return
+	}
+	// write "Endpoint"
+	err = en.Append(0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Endpoint)
+	if err != nil {
+		err = msgp.WrapError(err, "Endpoint")
 		return
 	}
 	// write "Started"
@@ -356,9 +372,9 @@ func (z *healingTracker) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *healingTracker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 17
+	// map header, size 18
 	// string "ID"
-	o = append(o, 0xde, 0x0, 0x11, 0xa2, 0x49, 0x44)
+	o = append(o, 0xde, 0x0, 0x12, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "SetIndex"
 	o = append(o, 0xa8, 0x53, 0x65, 0x74, 0x49, 0x6e, 0x64, 0x65, 0x78)
@@ -366,6 +382,9 @@ func (z *healingTracker) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Path"
 	o = append(o, 0xa4, 0x50, 0x61, 0x74, 0x68)
 	o = msgp.AppendString(o, z.Path)
+	// string "Endpoint"
+	o = append(o, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
+	o = msgp.AppendString(o, z.Endpoint)
 	// string "Started"
 	o = append(o, 0xa7, 0x53, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64)
 	o = msgp.AppendTime(o, z.Started)
@@ -451,6 +470,12 @@ func (z *healingTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.Path, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Path")
+				return
+			}
+		case "Endpoint":
+			z.Endpoint, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Endpoint")
 				return
 			}
 		case "Started":
@@ -577,7 +602,7 @@ func (z *healingTracker) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *healingTracker) Msgsize() (s int) {
-	s = 3 + 3 + msgp.StringPrefixSize + len(z.ID) + 9 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.Path) + 8 + msgp.TimeSize + 11 + msgp.TimeSize + 14 + msgp.Uint64Size + 14 + msgp.Uint64Size + 10 + msgp.Uint64Size + 12 + msgp.Uint64Size + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Object) + 20 + msgp.Uint64Size + 20 + msgp.Uint64Size + 16 + msgp.Uint64Size + 18 + msgp.Uint64Size + 14 + msgp.ArrayHeaderSize
+	s = 3 + 3 + msgp.StringPrefixSize + len(z.ID) + 9 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.Path) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 8 + msgp.TimeSize + 11 + msgp.TimeSize + 14 + msgp.Uint64Size + 14 + msgp.Uint64Size + 10 + msgp.Uint64Size + 12 + msgp.Uint64Size + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Object) + 20 + msgp.Uint64Size + 20 + msgp.Uint64Size + 16 + msgp.Uint64Size + 18 + msgp.Uint64Size + 14 + msgp.ArrayHeaderSize
 	for za0001 := range z.QueuedBuckets {
 		s += msgp.StringPrefixSize + len(z.QueuedBuckets[za0001])
 	}
