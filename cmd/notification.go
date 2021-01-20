@@ -1276,6 +1276,9 @@ func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient
 		return nil
 	}
 	peerClients := sys.getOnlinePeers()
+	if len(peerClients) == 0 {
+		return nil
+	}
 	idx := xxhash.Sum64String(s) % uint64(len(peerClients))
 	return peerClients[idx]
 }
