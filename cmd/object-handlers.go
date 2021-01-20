@@ -243,6 +243,7 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		}
 		return
 	}
+	defer s3Select.Close()
 
 	if err = s3Select.Open(getObject); err != nil {
 		if serr, ok := err.(s3select.SelectError); ok {
@@ -281,7 +282,6 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	s3Select.Evaluate(w)
-	s3Select.Close()
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
