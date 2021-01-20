@@ -51,9 +51,9 @@ func (a GatewayUnsupported) NewNSLock(bucket string, objects ...string) RWLocker
 	return nil
 }
 
-// SetDriveCount no-op
-func (a GatewayUnsupported) SetDriveCount() int {
-	return 0
+// SetDriveCounts no-op
+func (a GatewayUnsupported) SetDriveCounts() []int {
+	return nil
 }
 
 // ListMultipartUploads lists all multipart uploads.

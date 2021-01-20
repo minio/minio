@@ -1561,9 +1561,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 				Type:             madmin.ErasureType,
 				OnlineDisks:      onlineDisks.Sum(),
 				OfflineDisks:     offlineDisks.Sum(),
-				StandardSCData:   backendInfo.StandardSCData,
 				StandardSCParity: backendInfo.StandardSCParity,
-				RRSCData:         backendInfo.RRSCData,
 				RRSCParity:       backendInfo.RRSCParity,
 			}
 		} else {

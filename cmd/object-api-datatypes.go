@@ -51,10 +51,10 @@ type BackendInfo struct {
 	GatewayOnline bool
 
 	// Following fields are only meaningful if BackendType is Erasure.
-	StandardSCData   int // Data disks for currently configured Standard storage class.
-	StandardSCParity int // Parity disks for currently configured Standard storage class.
-	RRSCData         int // Data disks for currently configured Reduced Redundancy storage class.
-	RRSCParity       int // Parity disks for currently configured Reduced Redundancy storage class.
+	StandardSCData   []int // Data disks for currently configured Standard storage class.
+	StandardSCParity int   // Parity disks for currently configured Standard storage class.
+	RRSCData         []int // Data disks for currently configured Reduced Redundancy storage class.
+	RRSCParity       int   // Parity disks for currently configured Reduced Redundancy storage class.
 }
 
 // StorageInfo - represents total capacity of underlying storage.

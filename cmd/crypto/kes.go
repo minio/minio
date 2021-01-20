@@ -116,9 +116,9 @@ func NewKes(cfg KesConfig) (KMS, error) {
 	if err != nil {
 		return nil, err
 	}
-	if cfg.Transport.TLSClientConfig != nil {
-		if err = loadCACertificates(cfg.CAPath,
-			cfg.Transport.TLSClientConfig.RootCAs); err != nil {
+
+	if cfg.Transport.TLSClientConfig != nil && cfg.Transport.TLSClientConfig.RootCAs != nil {
+		if err = loadCACertificates(cfg.CAPath, cfg.Transport.TLSClientConfig.RootCAs); err != nil {
 			return nil, err
 		}
 	} else {
@@ -132,8 +132,12 @@ func NewKes(cfg KesConfig) (KMS, error) {
 		if err = loadCACertificates(cfg.CAPath, rootCAs); err != nil {
 			return nil, err
 		}
-		cfg.Transport.TLSClientConfig = &tls.Config{
-			RootCAs: rootCAs,
+		if cfg.Transport.TLSClientConfig == nil {
+			cfg.Transport.TLSClientConfig = &tls.Config{
+				RootCAs: rootCAs,
+			}
+		} else {
+			cfg.Transport.TLSClientConfig.RootCAs = rootCAs
 		}
 	}
 	cfg.Transport.TLSClientConfig.Certificates = []tls.Certificate{cert}

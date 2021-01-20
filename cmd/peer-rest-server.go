@@ -782,13 +782,17 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	case serviceStop:
 		globalServiceSignalCh <- signal
 	case serviceReloadDynamic:
-		srvCfg, err := getValidConfig(newObjectLayerFn())
+		objAPI := newObjectLayerFn()
+		if objAPI == nil {
+			s.writeErrorResponse(w, errServerNotInitialized)
+			return
+		}
+		srvCfg, err := getValidConfig(objAPI)
 		if err != nil {
 			s.writeErrorResponse(w, err)
 			return
 		}
-		err = applyDynamicConfig(r.Context(), srvCfg)
-		if err != nil {
+		if err = applyDynamicConfig(r.Context(), objAPI, srvCfg); err != nil {
 			s.writeErrorResponse(w, err)
 		}
 		return

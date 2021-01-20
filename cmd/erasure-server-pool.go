@@ -167,8 +167,12 @@ func (z *erasureServerPools) GetAllLockers() []dsync.NetLocker {
 	return z.serverPools[0].GetAllLockers()
 }
 
-func (z *erasureServerPools) SetDriveCount() int {
-	return z.serverPools[0].SetDriveCount()
+func (z *erasureServerPools) SetDriveCounts() []int {
+	setDriveCounts := make([]int, len(z.serverPools))
+	for i := range z.serverPools {
+		setDriveCounts[i] = z.serverPools[i].SetDriveCount()
+	}
+	return setDriveCounts
 }
 
 type serverPoolsAvailableSpace []poolAvailableSpace
@@ -320,16 +324,19 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
 	b.Type = BackendErasure
 
-	setDriveCount := z.SetDriveCount()
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity <= 0 {
 		scParity = z.serverPools[0].defaultParityCount
 	}
-	b.StandardSCData = setDriveCount - scParity
-	b.StandardSCParity = scParity
-
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	b.RRSCData = setDriveCount - rrSCParity
+
+	// Data blocks can vary per pool, but parity is same.
+	for _, setDriveCount := range z.SetDriveCounts() {
+		b.StandardSCData = append(b.StandardSCData, setDriveCount-scParity)
+		b.RRSCData = append(b.RRSCData, setDriveCount-rrSCParity)
+	}
+
+	b.StandardSCParity = scParity
 	b.RRSCParity = rrSCParity
 	return
 }
@@ -1360,7 +1367,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 				// knows that its not our first attempt at 'prefix'
 				err = nil
 
-				if quorumCount == z.SetDriveCount() && opts.ScanMode == madmin.HealNormalScan {
+				if quorumCount == set.setDriveCount && opts.ScanMode == madmin.HealNormalScan {
 					continue
 				}
 
@@ -1482,8 +1489,8 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
-	writeQuorum := b.StandardSCData
-	if b.StandardSCData == b.StandardSCParity {
+	writeQuorum := b.StandardSCData[0]
+	if writeQuorum == b.StandardSCParity {
 		writeQuorum++
 	}
 

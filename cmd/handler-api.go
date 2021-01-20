@@ -35,16 +35,19 @@ type apiConfig struct {
 	listQuorum       int
 	extendListLife   time.Duration
 	corsAllowOrigins []string
-	setDriveCount    int
+	// total drives per erasure set across pools.
+	totalDriveCount int
 }
 
-func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
+func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	t.clusterDeadline = cfg.ClusterDeadline
 	t.corsAllowOrigins = cfg.CorsAllowOrigin
-	t.setDriveCount = setDriveCount
+	for _, setDriveCount := range setDriveCounts {
+		t.totalDriveCount += setDriveCount
+	}
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
@@ -56,8 +59,8 @@ func (t *apiConfig) init(cfg api.Config, setDriveCount int) {
 		}
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
-		// ram_per_request is 4MiB * setDriveCount + 2 * 10MiB (default erasure block size)
-		apiRequestsMaxPerNode = int(stats.TotalRAM / uint64(setDriveCount*(blockSizeLarge+blockSizeSmall)+blockSizeV1*2))
+		// ram_per_request is 1MiB * driveCount + 2 * 10MiB (default erasure block size)
+		apiRequestsMaxPerNode = int(stats.TotalRAM / uint64(t.totalDriveCount*(blockSizeLarge+blockSizeSmall)+blockSizeV1*2))
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
 		if len(globalEndpoints.Hostnames()) > 0 {
@@ -82,13 +85,6 @@ func (t *apiConfig) getListQuorum() int {
 	defer t.mu.RUnlock()
 
 	return t.listQuorum
-}
-
-func (t *apiConfig) getSetDriveCount() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	return t.setDriveCount
 }
 
 func (t *apiConfig) getExtendListLife() time.Duration {

@@ -944,7 +944,12 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 		}
 
 		rs := partNumberToRangeSpec(oinfo, partNumber)
-		off, length, err := rs.GetOffsetLength(oinfo.Size)
+		size, err := oinfo.GetActualSize()
+		if err != nil {
+			t.Fatalf("Object: %s Object Index %d: Unexpected err: %v", object, oindex, err)
+		}
+
+		off, length, err := rs.GetOffsetLength(size)
 		if err != nil {
 			t.Fatalf("Object: %s Object Index %d: Unexpected err: %v", object, oindex, err)
 		}
@@ -955,6 +960,7 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 			readers = append(readers, NewDummyDataGen(p, cumulativeSum))
 			cumulativeSum += p
 		}
+
 		refReader := io.LimitReader(ioutilx.NewSkipReader(io.MultiReader(readers...), off), length)
 		if ok, msg := cmpReaders(refReader, rec.Body); !ok {
 			t.Fatalf("(%s) Object: %s ObjectIndex %d PartNumber: %d --> data mismatch! (msg: %s)", instanceType, oi.objectName, oindex, partNumber, msg)
@@ -1247,8 +1253,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d %s: Expected the response status to be `%d`, but instead found `%d`",
-				i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Test %d %s: Expected the response status to be `%d`, but instead found `%d`: fault case %d",
+				i+1, instanceType, testCase.expectedRespStatus, rec.Code, testCase.fault)
 		}
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
@@ -1274,14 +1280,18 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				t.Fatalf("Test %d: %s: ContentEncoding is set to \"%s\" which is unexpected, expected \"%s\"", i+1, instanceType, objInfo.ContentEncoding, expectedContentEncoding)
 			}
 			buffer := new(bytes.Buffer)
-			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer, objInfo.ETag, opts)
+			r, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, testCase.objectName, nil, nil, readLock, opts)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
+			if _, err = io.Copy(buffer, r); err != nil {
+				r.Close()
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			r.Close()
 			if !bytes.Equal(testCase.data, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
-			buffer.Reset()
 		}
 	}
 }
@@ -1445,12 +1455,16 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
-
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer, "", opts)
+			gr, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, testCase.objectName, nil, nil, readLock, opts)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
+			if _, err = io.Copy(buffer, gr); err != nil {
+				gr.Close()
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			gr.Close()
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
@@ -1490,10 +1504,15 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(context.Background(), testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer, "", opts)
+			gr, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, testCase.objectName, nil, nil, readLock, opts)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
+			if _, err = io.Copy(buffer, gr); err != nil {
+				gr.Close()
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			gr.Close()
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
@@ -1638,9 +1657,15 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 	}
 
 	var buf bytes.Buffer
-	if err = obj.GetObject(context.Background(), bucketName, testObject, 0, int64(len(bytesData[0].byteData)), &buf, "", opts); err != nil {
+	r, err := obj.GetObjectNInfo(context.Background(), bucketName, testObject, nil, nil, readLock, ObjectOptions{})
+	if err != nil {
 		t.Fatalf("Test: %s reading completed file failed: <ERROR> %v", instanceType, err)
 	}
+	if _, err = io.Copy(&buf, r); err != nil {
+		r.Close()
+		t.Fatalf("Test %s: Failed to fetch the copied object: <ERROR> %s", instanceType, err)
+	}
+	r.Close()
 	if !bytes.Equal(buf.Bytes(), bytesData[0].byteData) {
 		t.Fatalf("Test: %s returned data is not expected corruption detected:", instanceType)
 	}
@@ -2035,6 +2060,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		copySourceHeader     string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
 		copyModifiedHeader   string // data for "X-Amz-Copy-Source-If-Modified-Since" header
 		copyUnmodifiedHeader string // data for "X-Amz-Copy-Source-If-Unmodified-Since" header
+		copySourceSame       bool
 		metadataGarbage      bool
 		metadataReplace      bool
 		metadataCopy         bool
@@ -2079,6 +2105,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
+			copySourceSame:   true,
 			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusBadRequest,
@@ -2090,6 +2117,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		4: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
+			copySourceSame:   true,
 			copySourceHeader: url.QueryEscape(bucketName + SlashSeparator + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
@@ -2140,9 +2168,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			metadata: map[string]string{
 				"Content-Type": "application/json",
 			},
-			metadataCopy: true,
-			accessKey:    credentials.AccessKey,
-			secretKey:    credentials.SecretKey,
+			copySourceSame: true,
+			metadataCopy:   true,
+			accessKey:      credentials.AccessKey,
+			secretKey:      credentials.SecretKey,
 
 			expectedRespStatus: http.StatusBadRequest,
 		},
@@ -2306,8 +2335,16 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, rec.Code)
-			continue
+			if testCase.copySourceSame {
+				// encryption will rotate creds, so fail only for non-encryption scenario.
+				if GlobalKMS == nil {
+					t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, rec.Code)
+					continue
+				}
+			} else {
+				t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, rec.Code)
+				continue
+			}
 		}
 		if rec.Code == http.StatusOK {
 			var cpObjResp CopyObjectResponse
@@ -2319,21 +2356,18 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			// testing whether the copy was successful.
 			// Note that this goes directly to the file system,
 			// so encryption/compression may interfere at some point.
-
-			globalCompressConfigMu.Lock()
-			cfg := globalCompressConfig
-			globalCompressConfigMu.Unlock()
-			if !cfg.Enabled {
-				err = obj.GetObject(context.Background(), testCase.bucketName, testCase.newObjectName, 0, int64(len(bytesData[0].byteData)), buffers[0], "", opts)
-				if err != nil {
-					t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i, instanceType, err)
-				}
-				if !bytes.Equal(bytesData[0].byteData, buffers[0].Bytes()) {
-					t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the copied object doesn't match the original one.", i, instanceType)
-				}
-				buffers[0].Reset()
-			} else {
-				t.Log("object not validated due to compression")
+			buffers[0].Reset()
+			r, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, testCase.newObjectName, nil, nil, readLock, opts)
+			if err != nil {
+				t.Fatalf("Test %d: %s reading completed file failed: <ERROR> %v", i, instanceType, err)
+			}
+			if _, err = io.Copy(buffers[0], r); err != nil {
+				r.Close()
+				t.Fatalf("Test %d %s: Failed to fetch the copied object: <ERROR> %s", i, instanceType, err)
+			}
+			r.Close()
+			if !bytes.Equal(bytesData[0].byteData, buffers[0].Bytes()) {
+				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the copied object doesn't match the original one.", i, instanceType)
 			}
 		}
 
@@ -2379,7 +2413,14 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(recV2, reqV2)
 		if recV2.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, recV2.Code)
+			if testCase.copySourceSame {
+				// encryption will rotate creds, so fail only for non-encryption scenario.
+				if GlobalKMS == nil {
+					t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, rec.Code)
+				}
+			} else {
+				t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+			}
 		}
 	}
 

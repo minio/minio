@@ -162,8 +162,8 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// Check if the part number is correct.
 	if opts.PartNumber > 1 && opts.PartNumber > len(objInfo.Parts) {
-		writeHeaders()
-		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		// According to S3 we don't need to set any object information here.
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidPartNumber), r.URL, guessIsBrowserReq(r))
 		return true
 	}
 
