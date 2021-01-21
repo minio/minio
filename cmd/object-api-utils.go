@@ -519,7 +519,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 // Returns the compressed offset which should be skipped.
 // If encrypted offsets are adjusted for encrypted block headers/trailers.
 // Since de-compression is after decryption encryption overhead is only added to compressedOffset.
-func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64) {
+func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
@@ -535,12 +535,13 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 			}
 		}
 	}
+
 	if isEncryptedMultipart(objectInfo) && firstPartIdx > 0 {
 		off, _, _, _, _, err := objectInfo.GetDecryptedRange(partNumberToRangeSpec(objectInfo, firstPartIdx))
 		logger.LogIf(context.Background(), err)
 		compressedOffset += off
 	}
-	return compressedOffset, offset - skipLength
+	return compressedOffset, offset - skipLength, firstPartIdx
 }
 
 // GetObjectReader is a type that wraps a reader with a lock to
@@ -608,6 +609,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 	if opts.TransitionStatus == lifecycle.TransitionPending && isEncrypted {
 		isEncrypted = false
 	}
+	var firstPart = opts.PartNumber
 	var skipLen int64
 	// Calculate range to read (different for encrypted/compressed objects)
 	switch {
@@ -626,7 +628,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				return nil, 0, 0, err
 			}
 			// In case of range based queries on multiparts, the offset and length are reduced.
-			off, decOff = getCompressedOffsets(oi, off)
+			off, decOff, firstPart = getCompressedOffsets(oi, off)
 			decLength = length
 			length = oi.Size - off
 
@@ -652,7 +654,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
-				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, opts.PartNumber, oi, copySource)
+				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
@@ -660,6 +662,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 					}
 					return nil, err
 				}
+				oi.Size = decLength
+
 			}
 			// Decompression reader.
 			s2Reader := s2.NewReader(inputReader)
