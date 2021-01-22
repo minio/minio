@@ -540,10 +540,6 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 	}
 }
 
-func (er erasureObjects) SetDriveCount() int {
-	return er.setDriveCount
-}
-
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
@@ -598,9 +594,9 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	askDisks := o.AskDisks
 	listingQuorum := askDisks - 1
 	// Special case: ask all disks if the drive count is 4
-	if askDisks == -1 || er.SetDriveCount() == 4 {
+	if askDisks == -1 || er.setDriveCount == 4 {
 		askDisks = len(disks) // with 'strict' quorum list on all online disks.
-		listingQuorum = getReadQuorum(er.SetDriveCount())
+		listingQuorum = getReadQuorum(er.setDriveCount)
 	}
 
 	if len(disks) < askDisks {

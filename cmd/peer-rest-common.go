@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v11"
+	peerRESTVersion       = "v12"
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix

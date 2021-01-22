@@ -1213,9 +1213,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
-		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
+		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
-		actualReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, actualSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -1223,7 +1223,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
-		s2c := newS2CompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader, actualSize)
 		defer s2c.Close()
 		reader = s2c
 		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)

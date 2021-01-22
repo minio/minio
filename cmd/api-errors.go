@@ -87,6 +87,7 @@ const (
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
 	ErrInvalidPartNumberMarker
+	ErrInvalidPartNumber
 	ErrInvalidRequestBody
 	ErrInvalidCopySource
 	ErrInvalidMetadataDirective
@@ -436,6 +437,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidArgument",
 		Description:    "Argument partNumberMarker must be an integer.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidPartNumber: {
+		Code:           "InvalidPartNumber",
+		Description:    "The requested partnumber is not satisfiable",
+		HTTPStatusCode: http.StatusRequestedRangeNotSatisfiable,
 	},
 	ErrInvalidPolicyDocument: {
 		Code:           "InvalidPolicyDocument",

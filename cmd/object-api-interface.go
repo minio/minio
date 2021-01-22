@@ -81,8 +81,6 @@ type BackendMetrics struct {
 
 // ObjectLayer implements primitives for object API layer.
 type ObjectLayer interface {
-	SetDriveCount() int // Only implemented by erasure layer
-
 	// Locking operations on object.
 	NewNSLock(bucket string, objects ...string) RWLocker
 
@@ -131,12 +129,6 @@ type ObjectLayer interface {
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
 
-	// Healing operations.
-	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
-	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
-	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
-	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
-
 	// Policy operations
 	SetBucketPolicy(context.Context, string, *policy.Policy) error
 	GetBucketPolicy(context.Context, string) (*policy.Policy, error)
@@ -148,6 +140,14 @@ type ObjectLayer interface {
 	IsEncryptionSupported() bool
 	IsTaggingSupported() bool
 	IsCompressionSupported() bool
+
+	SetDriveCounts() []int // list of erasure stripe size for each pool in order.
+
+	// Healing operations.
+	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
+	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
+	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
+	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
 
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*BackendMetrics, error)
