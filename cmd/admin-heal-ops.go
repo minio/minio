@@ -339,7 +339,11 @@ type healSource struct {
 	bucket    string
 	object    string
 	versionID string
-	opts      *madmin.HealOpts // optional heal option overrides default setting
+	throttle  struct {
+		maxSleep time.Duration
+		maxIO    int
+	}
+	opts *madmin.HealOpts // optional heal option overrides default setting
 }
 
 // healSequence - state for each heal sequence initiated on the
@@ -656,17 +660,27 @@ func (h *healSequence) healSequenceStart() {
 	}
 }
 
-func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItemType) error {
+func (h *healSequence) queueHealTask(ctx context.Context, source healSource, healType madmin.HealItemType) error {
 	// Send heal request
 	task := healTask{
-		bucket:     source.bucket,
-		object:     source.object,
-		versionID:  source.versionID,
-		opts:       h.settings,
-		responseCh: h.respCh,
+		bucket:        source.bucket,
+		object:        source.object,
+		versionID:     source.versionID,
+		opts:          h.settings,
+		responseCh:    h.respCh,
+		sleepForIO:    globalEndpoints.NEndpoints(),
+		sleepDuration: time.Second,
 	}
 	if source.opts != nil {
 		task.opts = *source.opts
+	}
+
+	if source.throttle.maxIO > 0 {
+		task.sleepForIO = source.throttle.maxIO
+	}
+
+	if source.throttle.maxSleep > 0 {
+		task.sleepDuration = source.throttle.maxSleep
 	}
 
 	h.mutex.Lock()
@@ -677,6 +691,8 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	globalBackgroundHealRoutine.queueHealTask(task)
 
 	select {
+	case <-ctx.Done():
+		return nil
 	case res := <-h.respCh:
 		if !h.reportProgress {
 			// Object might have been deleted, by the time heal
@@ -746,12 +762,8 @@ func (h *healSequence) healItemsFromSourceCh() error {
 				itemType = madmin.HealItemObject
 			}
 
-			if err := h.queueHealTask(source, itemType); err != nil {
-				switch err.(type) {
-				case ObjectExistsAsDirectory:
-				case ObjectNotFound:
-				case VersionNotFound:
-				default:
+			if err := h.queueHealTask(context.Background(), source, itemType); err != nil {
+				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 					logger.LogIf(h.ctx, fmt.Errorf("Heal attempt failed for %s: %w",
 						pathJoin(source.bucket, source.object), err))
 				}
@@ -821,7 +833,7 @@ func (h *healSequence) healMinioSysMeta(metaPrefix string) func() error {
 				return errHealStopSignalled
 			}
 
-			err := h.queueHealTask(healSource{
+			err := h.queueHealTask(context.Background(), healSource{
 				bucket:    bucket,
 				object:    object,
 				versionID: versionID,
@@ -849,7 +861,7 @@ func (h *healSequence) healDiskFormat() error {
 		return errServerNotInitialized
 	}
 
-	return h.queueHealTask(healSource{bucket: SlashSeparator}, madmin.HealItemMetadata)
+	return h.queueHealTask(context.Background(), healSource{bucket: SlashSeparator}, madmin.HealItemMetadata)
 }
 
 // healBuckets - check for all buckets heal or just particular bucket.
@@ -891,7 +903,7 @@ func (h *healSequence) healBucket(bucket string, bucketsOnly bool) error {
 		return errServerNotInitialized
 	}
 
-	if err := h.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket); err != nil {
+	if err := h.queueHealTask(context.Background(), healSource{bucket: bucket}, madmin.HealItemBucket); err != nil {
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			return err
 		}
@@ -941,7 +953,7 @@ func (h *healSequence) healObject(bucket, object, versionID string) error {
 		return errHealStopSignalled
 	}
 
-	err := h.queueHealTask(healSource{
+	err := h.queueHealTask(context.Background(), healSource{
 		bucket:    bucket,
 		object:    object,
 		versionID: versionID,

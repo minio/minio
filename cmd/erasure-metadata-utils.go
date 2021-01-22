@@ -140,7 +140,12 @@ func readVersionFromDisks(ctx context.Context, disks []StorageAPI, bucket, objec
 			}
 			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, checkDataDir)
 			if err != nil {
-				if err != errFileNotFound && err != errVolumeNotFound && err != errFileVersionNotFound {
+				if !IsErr(err, []error{
+					errFileNotFound,
+					errVolumeNotFound,
+					errFileVersionNotFound,
+					errDiskNotFound,
+				}...) {
 					logger.GetReqInfo(ctx).AppendTags("disk", disks[index].String())
 					logger.LogIf(ctx, err)
 				}

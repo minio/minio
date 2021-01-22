@@ -209,6 +209,71 @@ func (hri *HealResultItem) GetOnlineCounts() (b, a int) {
 	return
 }
 
+// HealSetsOpts heal sets options
+type HealSetsOpts struct {
+	TaskID     string
+	Sets       string // comma separated list of set numbers
+	SleepMaxIO string // maximum IO tolerance after which healing would sleep
+	// maximum sleep duration between objects to slow down heal operation
+	// only applied in conjunction with maxIO.
+	SleepMax string
+}
+
+// CancelHealSets cancels task started with HealSets()
+func (adm *AdminClient) CancelHealSets(ctx context.Context, opts HealSetsOpts) error {
+	queryVals := make(url.Values)
+	queryVals.Set("healSetsUUID", opts.TaskID)
+
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     adminAPIPrefix + "/cancel-heal-sets",
+			queryValues: queryVals,
+		})
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+
+	return nil
+}
+
+// HealSets starts a new background heal sets task in parallel across multiple sets.
+func (adm *AdminClient) HealSets(ctx context.Context, opts HealSetsOpts) (string, error) {
+	queryVals := make(url.Values)
+	queryVals.Set("healSetsList", opts.Sets)
+	queryVals.Set("healSleepMaxIO", opts.SleepMaxIO)
+	queryVals.Set("healSleepDuration", opts.SleepMax)
+
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     adminAPIPrefix + "/heal-sets",
+			queryValues: queryVals,
+		})
+	defer closeResponse(resp)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", httpRespToErrorResponse(resp)
+	}
+
+	respBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var taskID string
+	if err = json.Unmarshal(respBytes, &taskID); err != nil {
+		return "", err
+	}
+
+	return taskID, nil
+}
+
 // Heal - API endpoint to start heal and to fetch status
 // forceStart and forceStop are mutually exclusive, you can either
 // set one of them to 'true'. If both are set 'forceStart' will be

@@ -497,11 +497,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					defer func() {
 						t = UTCNow()
 					}()
-					return bgSeq.queueHealTask(healSource{
-						bucket:    bucket,
-						object:    object,
-						versionID: versionID,
-					}, madmin.HealItemObject)
+					return bgSeq.queueHealTask(ctx,
+						healSource{
+							bucket:    bucket,
+							object:    object,
+							versionID: versionID,
+						}, madmin.HealItemObject)
 				})
 
 			sleepDuration(time.Since(t), f.dataUsageCrawlMult)

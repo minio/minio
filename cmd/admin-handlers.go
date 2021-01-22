@@ -59,6 +59,11 @@ const (
 	mgmtClientToken = "clientToken"
 	mgmtForceStart  = "forceStart"
 	mgmtForceStop   = "forceStop"
+
+	healSetsUUID      = "healSetsUUID"
+	healSetsList      = "healSetsList"
+	healSleepDuration = "healSleepDuration"
+	healSleepMaxIO    = "healSleepMaxIO"
 )
 
 func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (us madmin.ServerUpdateStatus, err error) {
@@ -635,6 +640,154 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	return
 }
 
+type healInitSetParams struct {
+	taskUUID      string
+	setNumbers    []int
+	sleepDuration time.Duration
+	sleepForIO    int
+	cancel        func()
+}
+
+// CancelHealSetsHandler - POST /minio/admin/v3/cancel-heal-sets/
+func (a adminAPIHandlers) CancelHealSetsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "CancelHeal")
+
+	defer logger.AuditLog(w, r, "CancelHeal", mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	// Check if this setup has an erasure coded backend.
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	z, ok := objectAPI.(*erasureServerSets)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	if !z.SingleZone() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	taskUUID := vars[healSetsUUID]
+	if taskUUID == "" {
+		writeErrorResponseJSON(ctx, w, APIError{
+			Code:           "XMinioHealNoSuchProcess",
+			Description:    "No such heal process is running on the server",
+			HTTPStatusCode: http.StatusNotFound,
+		}, r.URL)
+		return
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	opts, ok := a.healSetsMap[taskUUID]
+	if !ok {
+		writeErrorResponseJSON(ctx, w, APIError{
+			Code:           "XMinioHealNoSuchProcess",
+			Description:    "No such heal process is running on the server",
+			HTTPStatusCode: http.StatusNotFound,
+		}, r.URL)
+		return
+	}
+
+	opts.cancel()
+	delete(a.healSetsMap, opts.taskUUID)
+}
+
+// HealSetsHandler - POST /minio/admin/v3/heal-sets/
+func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HealSets")
+
+	defer logger.AuditLog(w, r, "HealSets", mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	// Check if this setup has an erasure coded backend.
+	if !globalIsErasure {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	z, ok := objectAPI.(*erasureServerSets)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	if !z.SingleZone() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrHealNotImplemented), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	opts := healInitSetParams{
+		taskUUID: mustGetUUID(),
+	}
+	for _, setIdx := range strings.Split(vars[healSetsList], ",") {
+		if setIdx == "" {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("empty values not allowed")), r.URL)
+			return
+		}
+		i, err := strconv.Atoi(setIdx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if i == 0 {
+			i = 1
+		}
+		opts.setNumbers = append(opts.setNumbers, i-1)
+	}
+
+	opts.sleepDuration = time.Second
+	var err error
+	if v := vars[healSleepDuration]; v != "" {
+		opts.sleepDuration, err = time.ParseDuration(v)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	opts.sleepForIO = 10
+	if v := vars[healSleepMaxIO]; v != "" {
+		opts.sleepForIO, err = strconv.Atoi(v)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	buckets, _ := objectAPI.ListBucketsHeal(ctx)
+	ctx, opts.cancel = context.WithCancel(context.Background())
+	for _, setNumber := range opts.setNumbers {
+		go func(setNumber int) {
+			lbDisks := z.serverSets[0].sets[setNumber].getOnlineDisks()
+			if err := healErasureSet(ctx, setNumber, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
+				logger.LogIf(ctx, err)
+			}
+		}(setNumber)
+	}
+
+	a.mu.Lock()
+	a.healSetsMap[opts.taskUUID] = opts
+	a.mu.Unlock()
+
+	writeSuccessResponseJSON(w, []byte(fmt.Sprintf(`"%s"`, opts.taskUUID)))
+}
+
 // HealHandler - POST /minio/admin/v3/heal/
 // -----------
 // Start heal processing and return heal status items.
@@ -875,7 +1028,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	aggregateHealStateResult, err := getAggregatedBackgroundHealState(r.Context())
+	aggregateHealStateResult, err := getAggregatedBackgroundHealState(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

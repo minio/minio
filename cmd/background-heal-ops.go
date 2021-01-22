@@ -29,10 +29,12 @@ import (
 //   path: 'bucket/' or '/bucket/' => Heal bucket
 //   path: 'bucket/object' => Heal object
 type healTask struct {
-	bucket    string
-	object    string
-	versionID string
-	opts      madmin.HealOpts
+	bucket        string
+	object        string
+	versionID     string
+	sleepDuration time.Duration
+	sleepForIO    int
+	opts          madmin.HealOpts
 	// Healing response will be sent here
 	responseCh chan healResult
 }
@@ -54,20 +56,32 @@ func (h *healRoutine) queueHealTask(task healTask) {
 	h.tasks <- task
 }
 
-func waitForLowHTTPReq(tolerance int32, maxWait time.Duration) {
-	const wait = 10 * time.Millisecond
-	waitCount := maxWait / wait
+func waitForLowHTTPReq(maxIO int, maxWait time.Duration) {
+	// No need to wait run at full speed.
+	if maxIO <= 0 {
+		return
+	}
+
+	waitTick := 100 * time.Millisecond
 
 	// Bucket notification and http trace are not costly, it is okay to ignore them
 	// while counting the number of concurrent connections
-	tolerance += int32(globalHTTPListen.NumSubscribers() + globalHTTPTrace.NumSubscribers())
+	maxIOFn := func() int {
+		return maxIO + int(globalHTTPListen.NumSubscribers()) + int(globalHTTPTrace.NumSubscribers())
+	}
 
 	if httpServer := newHTTPServerFn(); httpServer != nil {
 		// Any requests in progress, delay the heal.
-		for (httpServer.GetRequestCount() >= tolerance) &&
-			waitCount > 0 {
-			waitCount--
-			time.Sleep(wait)
+		for httpServer.GetRequestCount() >= int32(maxIOFn()) {
+			if maxWait < waitTick {
+				time.Sleep(maxWait)
+			} else {
+				time.Sleep(waitTick)
+			}
+			maxWait = maxWait - waitTick
+			if maxWait <= 0 {
+				return
+			}
 		}
 	}
 }
@@ -82,7 +96,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 			}
 
 			// Wait and proceed if there are active requests
-			waitForLowHTTPReq(int32(globalEndpoints.NEndpoints()), time.Second)
+			waitForLowHTTPReq(task.sleepForIO, task.sleepDuration)
 
 			var res madmin.HealResultItem
 			var err error
