@@ -59,11 +59,13 @@ var (
 		config.HelpKV{
 			Key:         UsernameFormat,
 			Description: `";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"`,
+			Optional:    true,
 			Type:        "list",
 		},
 		config.HelpKV{
 			Key:         GroupSearchFilter,
 			Description: `search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"`,
+			Optional:    true,
 			Type:        "string",
 		},
 		config.HelpKV{
@@ -75,6 +77,7 @@ var (
 		config.HelpKV{
 			Key:         GroupSearchBaseDN,
 			Description: `";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"`,
+			Optional:    true,
 			Type:        "list",
 		},
 		config.HelpKV{
