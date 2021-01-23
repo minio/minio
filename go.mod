@@ -66,6 +66,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
+	github.com/prometheus/procfs v0.2.0
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.0
