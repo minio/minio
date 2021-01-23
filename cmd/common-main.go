@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
@@ -61,7 +62,9 @@ func init() {
 		PassHost:     true,
 		RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
 		Logger: func(err error) {
-			logger.LogIf(GlobalContext, err)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.LogIf(GlobalContext, err)
+			}
 		},
 	})
 

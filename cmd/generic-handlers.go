@@ -580,6 +580,11 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 					r.URL.Scheme = "https"
 				}
 				r.URL.Host = getHostFromSrv(sr)
+				// Make sure we remove any existing headers before
+				// proxying the request to another node.
+				for k := range w.Header() {
+					w.Header().Del(k)
+				}
 				globalForwarder.ServeHTTP(w, r)
 				return
 			}
@@ -630,6 +635,11 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 				r.URL.Scheme = "https"
 			}
 			r.URL.Host = getHostFromSrv(sr)
+			// Make sure we remove any existing headers before
+			// proxying the request to another node.
+			for k := range w.Header() {
+				w.Header().Del(k)
+			}
 			globalForwarder.ServeHTTP(w, r)
 			return
 		}
