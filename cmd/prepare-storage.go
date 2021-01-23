@@ -165,7 +165,7 @@ var errErasureV3ThisEmpty = fmt.Errorf("Erasure format version 3 has This field 
 
 // isServerResolvable - checks if the endpoint is resolvable
 // by sending a naked HTTP request with liveness checks.
-func isServerResolvable(endpoint Endpoint) error {
+func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	serverURL := &url.URL{
 		Scheme: endpoint.Scheme,
 		Host:   endpoint.Host,
@@ -199,7 +199,7 @@ func isServerResolvable(endpoint Endpoint) error {
 	}
 	defer httpClient.CloseIdleConnections()
 
-	ctx, cancel := context.WithTimeout(GlobalContext, 3*time.Second)
+	ctx, cancel := context.WithTimeout(GlobalContext, timeout)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, serverURL.String(), nil)
 	if err != nil {
@@ -244,7 +244,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 				return nil, nil, fmt.Errorf("Disk %s: %w", endpoints[i], err)
 			}
 			if retryCount >= 5 {
-				logger.Info("Unable to connect to %s: %v\n", endpoints[i], isServerResolvable(endpoints[i]))
+				logger.Info("Unable to connect to %s: %v\n", endpoints[i], isServerResolvable(endpoints[i], time.Second))
 			}
 		}
 	}

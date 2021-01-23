@@ -292,27 +292,6 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	}
 }
 
-// GetAllLockers return a list of all lockers for all sets.
-func (s *erasureSets) GetAllLockers() []dsync.NetLocker {
-	var allLockers []dsync.NetLocker
-	lockEpSet := set.NewStringSet()
-	for _, lockers := range s.erasureLockers {
-		for _, locker := range lockers {
-			if locker == nil || !locker.IsOnline() {
-				// Skip any offline lockers.
-				continue
-			}
-			if lockEpSet.Contains(locker.String()) {
-				// Skip duplicate lockers.
-				continue
-			}
-			lockEpSet.Add(locker.String())
-			allLockers = append(allLockers, locker)
-		}
-	}
-	return allLockers
-}
-
 func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string) {
 	return func() ([]dsync.NetLocker, string) {
 		lockers := make([]dsync.NetLocker, len(s.erasureLockers[setIndex]))

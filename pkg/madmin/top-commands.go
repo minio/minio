@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -61,6 +62,30 @@ func (l LockEntries) Swap(i, j int) {
 type TopLockOpts struct {
 	Count int
 	Stale bool
+}
+
+// ForceUnlock force unlocks input paths...
+func (adm *AdminClient) ForceUnlock(ctx context.Context, paths ...string) error {
+	// Execute POST on /minio/admin/v3/force-unlock
+	queryVals := make(url.Values)
+	queryVals.Set("paths", strings.Join(paths, ","))
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost,
+		requestData{
+			relPath:     adminAPIPrefix + "/force-unlock",
+			queryValues: queryVals,
+		},
+	)
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+
+	return nil
 }
 
 // TopLocksWithOpts - returns the count number of oldest locks currently active on the server.

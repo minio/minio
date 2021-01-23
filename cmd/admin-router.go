@@ -189,10 +189,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 				httpTraceHdrs(adminAPI.RemoveRemoteTargetHandler)).Queries("bucket", "{bucket:.*}", "arn", "{arn:.*}")
 		}
 
-		// -- Top APIs --
-		// Top locks
 		if globalIsDistErasure {
+			// Top locks
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/top/locks").HandlerFunc(httpTraceHdrs(adminAPI.TopLocksHandler))
+			// Force unlocks paths
+			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/force-unlock").
+				Queries("paths", "{paths:.*}").HandlerFunc(httpTraceHdrs(adminAPI.ForceUnlockHandler))
 		}
 
 		// HTTP Trace

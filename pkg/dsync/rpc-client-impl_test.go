@@ -119,6 +119,11 @@ func (rpcClient *ReconnectRPCClient) Expired(ctx context.Context, args LockArgs)
 	return expired, err
 }
 
+func (rpcClient *ReconnectRPCClient) ForceUnlock(ctx context.Context, args LockArgs) (reply bool, err error) {
+	err = rpcClient.Call("Dsync.ForceUnlock", &args, &reply)
+	return reply, err
+}
+
 func (rpcClient *ReconnectRPCClient) String() string {
 	return "http://" + rpcClient.addr + "/" + rpcClient.endpoint
 }
