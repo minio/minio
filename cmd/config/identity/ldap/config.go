@@ -165,6 +165,11 @@ func getGroups(conn *ldap.Conn, sreq *ldap.SearchRequest) ([]string, error) {
 	var groups []string
 	sres, err := conn.Search(sreq)
 	if err != nil {
+		// Check if there is no matching result and return empty slice.
+		// Ref: https://ldap.com/ldap-result-code-reference/
+		if ldap.IsErrorWithCode(err, 32) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	for _, entry := range sres.Entries {
@@ -263,7 +268,8 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 		// Lookup user DN
 		bindDN, err = l.lookupUserDN(conn, username)
 		if err != nil {
-			return "", nil, err
+			errRet := fmt.Errorf("Unable to find user DN: %s", err)
+			return "", nil, errRet
 		}
 
 		// Authenticate the user credentials.
@@ -303,7 +309,8 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 			var newGroups []string
 			newGroups, err = getGroups(conn, searchRequest)
 			if err != nil {
-				return "", nil, err
+				errRet := fmt.Errorf("Error finding groups of %s: %v", bindDN, err)
+				return "", nil, errRet
 			}
 
 			groups = append(groups, newGroups...)
