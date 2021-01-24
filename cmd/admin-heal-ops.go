@@ -750,16 +750,19 @@ func (h *healSequence) healItemsFromSourceCh() error {
 			if !ok {
 				return nil
 			}
+
 			var itemType madmin.HealItemType
-			switch {
-			case source.bucket == nopHeal:
+			switch source.bucket {
+			case nopHeal:
 				continue
-			case source.bucket == SlashSeparator:
+			case SlashSeparator:
 				itemType = madmin.HealItemMetadata
-			case source.bucket != "" && source.object == "":
-				itemType = madmin.HealItemBucket
 			default:
-				itemType = madmin.HealItemObject
+				if source.object == "" {
+					itemType = madmin.HealItemBucket
+				} else {
+					itemType = madmin.HealItemObject
+				}
 			}
 
 			if err := h.queueHealTask(source, itemType); err != nil {
