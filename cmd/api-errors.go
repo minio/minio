@@ -2125,6 +2125,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 				HTTPStatusCode: e.Response().StatusCode,
 			}
 			// Add more Gateway SDKs here if any in future.
+		default:
+			apiErr = APIError{
+				Code:           apiErr.Code,
+				Description:    fmt.Sprintf("%s: cause(%v)", apiErr.Description, err),
+				HTTPStatusCode: apiErr.HTTPStatusCode,
+			}
 		}
 	}
 
