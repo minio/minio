@@ -1325,7 +1325,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 // HealObjectFn closure function heals the object.
 type HealObjectFn func(bucket, object, versionID string) error
 
-func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
+func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject, skipHealObject HealObjectFn) error {
 	// If listing did not return any entries upon first attempt, we
 	// return `ObjectNotFound`, to indicate the caller for any
 	// actions they may want to take as if `prefix` is missing.
@@ -1367,12 +1367,20 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 				// knows that its not our first attempt at 'prefix'
 				err = nil
 
+				healFn := healObject
 				if quorumCount == set.setDriveCount && opts.ScanMode == madmin.HealNormalScan {
-					continue
+					// Run skipHealObject callback instead of healObject if the object has full quorum in disks
+					// and if skipHealObject is not nil. This will save us actually calling HealObject again
+					// in normal heal mode
+					if skipHealObject == nil {
+						continue
+					} else {
+						healFn = skipHealObject
+					}
 				}
 
 				for _, version := range entry.Versions {
-					if err := healObject(bucket, version.Name, version.VersionID); err != nil {
+					if err := healFn(bucket, version.Name, version.VersionID); err != nil {
 						return toObjectErr(err, bucket, version.Name)
 					}
 				}

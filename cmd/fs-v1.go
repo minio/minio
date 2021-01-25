@@ -1549,7 +1549,7 @@ func (fs *FSObjects) Walk(ctx context.Context, bucket, prefix string, results ch
 }
 
 // HealObjects - no-op for fs. Valid only for Erasure.
-func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) (e error) {
+func (fs *FSObjects) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn1, fn2 HealObjectFn) (e error) {
 	logger.LogIf(ctx, NotImplemented{})
 	return NotImplemented{}
 }

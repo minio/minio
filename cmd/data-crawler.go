@@ -644,7 +644,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 							object:    object,
 							versionID: versionID,
 						}, madmin.HealItemObject)
-					})
+					}, nil)
 			}
 
 			wait()

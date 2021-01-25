@@ -121,6 +121,7 @@ type HealResultItem struct {
 	Object       string       `json:"object"`
 	VersionID    string       `json:"versionId"`
 	Detail       string       `json:"detail"`
+	Skipped      bool         `json:"skipped"`
 	ParityBlocks int          `json:"parityBlocks,omitempty"`
 	DataBlocks   int          `json:"dataBlocks,omitempty"`
 	DiskCount    int          `json:"diskCount"`

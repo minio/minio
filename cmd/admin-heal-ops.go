@@ -847,7 +847,7 @@ func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) f
 				return nil
 			}
 			return err
-		})
+		}, nil)
 	}
 }
 
@@ -921,7 +921,7 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 		return nil
 	}
 
-	if err := objAPI.HealObjects(h.ctx, bucket, h.object, h.settings, h.healObject); err != nil {
+	if err := objAPI.HealObjects(h.ctx, bucket, h.object, h.settings, h.healObject, h.skipObject); err != nil {
 		// Object might have been deleted, by the time heal
 		// was attempted we ignore this object an move on.
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -929,6 +929,21 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 		}
 	}
 	return nil
+}
+
+// skipObject - indicates that we are skipped scanning this given object
+func (h *healSequence) skipObject(bucket, object, versionID string) error {
+	if h.isQuitting() {
+		return errHealStopSignalled
+	}
+
+	return h.pushHealResultItem(madmin.HealResultItem{
+		Type:      madmin.HealItemObject,
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+		Skipped:   true,
+	})
 }
 
 // healObject - heal the given object and record result

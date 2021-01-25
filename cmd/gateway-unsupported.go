@@ -191,7 +191,7 @@ func (a GatewayUnsupported) Walk(ctx context.Context, bucket, prefix string, res
 }
 
 // HealObjects - Not implemented stub
-func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) (e error) {
+func (a GatewayUnsupported) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn1, fn2 HealObjectFn) (e error) {
 	return NotImplemented{}
 }
 

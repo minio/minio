@@ -147,7 +147,7 @@ type ObjectLayer interface {
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
 	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error)
-	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn) error
+	HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, fn HealObjectFn, skipHealObjectCallBack HealObjectFn) error
 
 	// Backend related metrics
 	GetMetrics(ctx context.Context) (*BackendMetrics, error)
