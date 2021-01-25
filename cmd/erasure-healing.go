@@ -102,16 +102,13 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 
 	errs := g.Wait()
 
-	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum-1)
-	if errors.Is(reducedErr, errVolumeNotFound) && !opts.Recreate {
-		return res, nil
-	}
-
 	// Initialize heal result info
 	res = madmin.HealResultItem{
-		Type:      madmin.HealItemBucket,
-		Bucket:    bucket,
-		DiskCount: len(storageDisks),
+		Type:         madmin.HealItemBucket,
+		Bucket:       bucket,
+		DiskCount:    len(storageDisks),
+		ParityBlocks: len(storageDisks) / 2,
+		DataBlocks:   len(storageDisks) / 2,
 	}
 
 	for i := range beforeState {
@@ -120,6 +117,18 @@ func healBucket(ctx context.Context, storageDisks []StorageAPI, storageEndpoints
 			Endpoint: storageEndpoints[i],
 			State:    beforeState[i],
 		})
+	}
+
+	reducedErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, writeQuorum-1)
+	if errors.Is(reducedErr, errVolumeNotFound) && !opts.Recreate {
+		for i := range beforeState {
+			res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+				UUID:     "",
+				Endpoint: storageEndpoints[i],
+				State:    madmin.DriveStateOk,
+			})
+		}
+		return res, nil
 	}
 
 	// Initialize sync waitgroup.
