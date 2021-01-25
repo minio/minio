@@ -191,7 +191,7 @@ func (h *healingTracker) bucketDone(bucket string) {
 // Order is preserved.
 func (h *healingTracker) setQueuedBuckets(buckets []BucketInfo) {
 	s := set.CreateStringSet(h.HealedBuckets...)
-	h.QueuedBuckets = make([]string, 0, len(buckets)-len(s))
+	h.QueuedBuckets = make([]string, 0, len(buckets))
 	for _, b := range buckets {
 		if !s.Contains(b.Name) {
 			h.QueuedBuckets = append(h.QueuedBuckets, b.Name)
