@@ -408,7 +408,7 @@ type PeerLocks struct {
 func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ForceUnlock")
 
-	defer logger.AuditLog(w, r, "ForceUnlock", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ForceUnlockAdminAction)
 	if objectAPI == nil {

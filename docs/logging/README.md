@@ -104,7 +104,7 @@ NOTE:
   "tags": {
     "objectErasureMap": {
       "pool": 1,
-      "set":   10,
+      "set": 10,
       "path/to/object": [
         "http://minio.example.com/mnt/zone1/disk1",
         "http://minio.example.com/mnt/zone1/disk2",

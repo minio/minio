@@ -51,6 +51,8 @@ type erasureObjects struct {
 	setDriveCount      int
 	defaultParityCount int
 
+	setNumber int
+
 	// getDisks returns list of storageAPIs.
 	getDisks func() []StorageAPI
 
