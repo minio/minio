@@ -51,6 +51,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstObject))
+
 	lk := er.NewNSLock(dstBucket, dstObject)
 	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return oi, err
@@ -580,7 +581,9 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer ObjectPathUpdated(pathJoin(bucket, object))
+	defer func() {
+		ObjectPathUpdated(pathJoin(bucket, object))
+	}()
 
 	data := r.Reader
 

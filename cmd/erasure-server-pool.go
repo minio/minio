@@ -126,6 +126,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if err != nil {
 			return nil, err
 		}
+		z.serverPools[i].poolNumber = i
 	}
 	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
