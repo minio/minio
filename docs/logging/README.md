@@ -60,7 +60,10 @@ Setting this environment variable automatically enables audit logging to the HTT
 
 NOTE:
 - `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
-- In case of the erasure setup, the list of involved disks in object operations can be found in `tags.objectsAndPools`
+- In the case of the erasure setup `tags.objectErasureMap` provides
+   - Pool number
+   - Set number
+   - The list of disks belonging to the set
 
 ```json
 {
@@ -99,7 +102,9 @@ NOTE:
     "X-Xss-Protection": "1; mode=block"
   },
   "tags": {
-    "objectsAndPools": {
+    "objectErasureMap": {
+      "pool": 1,
+      "set":   10,
       "path/to/object": [
         "http://minio.example.com/mnt/zone1/disk1",
         "http://minio.example.com/mnt/zone1/disk2",
