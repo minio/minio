@@ -1358,8 +1358,8 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 					break
 				}
 
-				// Remove empty directories if found - they are not supposed to be existed
-				// only possibly in highly concurrent put/remove
+				// Remove empty directories if found - they have no meaning.
+				// Can be left over from highly concurrent put/remove.
 				if quorumCount > set.setDriveCount/2 && entry.IsEmptyDir {
 					if !opts.DryRun && opts.Remove {
 						set.deleteEmptyDir(ctx, bucket, entry.Name)
