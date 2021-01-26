@@ -58,7 +58,12 @@ minio server /mnt/data
 
 Setting this environment variable automatically enables audit logging to the HTTP target. The audit logging is in JSON format as described below.
 
-NOTE: `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
+NOTE:
+- `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
+- In the case of the erasure setup `tags.objectErasureMap` provides
+   - Pool number
+   - Set number
+   - The list of disks belonging to the set
 
 ```json
 {
@@ -95,6 +100,18 @@ NOTE: `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
     "Vary": "Origin",
     "X-Amz-Request-Id": "15BA4A72C0C70AFC",
     "X-Xss-Protection": "1; mode=block"
+  },
+  "tags": {
+    "objectErasureMap": {
+      "pool": 1,
+      "set": 10,
+      "path/to/object": [
+        "http://minio.example.com/mnt/zone1/disk1",
+        "http://minio.example.com/mnt/zone1/disk2",
+        "http://minio.example.com/mnt/zone1/disk3",
+        "http://minio.example.com/mnt/zone1/disk4"
+        ]
+      }
   }
 }
 ```
