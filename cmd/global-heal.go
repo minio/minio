@@ -148,7 +148,8 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 				}
 				mu.Lock()
 				entryChs = append(entryChs, FileInfoVersionsCh{
-					Ch: entryCh,
+					Ch:       entryCh,
+					SetIndex: setIndex,
 				})
 				mu.Unlock()
 			}()
