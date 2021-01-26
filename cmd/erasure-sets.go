@@ -455,9 +455,9 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, 
 const objectErasureMapKey = "objectErasureMap"
 
 type auditObjectOp struct {
-	Pool           int      `json:"pool"`
-	Set            int      `json:"set"`
-	BackendServers []string `json:"backendServers"`
+	Pool  int      `json:"poolId"`
+	Set   int      `json:"setId"`
+	Disks []string `json:"disks"`
 }
 
 func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjects, poolNum int) {
@@ -468,9 +468,9 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 	object = decodeDirObject(object)
 
 	op := auditObjectOp{
-		Pool:           poolNum + 1,
-		Set:            set.setNumber + 1,
-		BackendServers: set.getEndpoints(),
+		Pool:  poolNum + 1,
+		Set:   set.setNumber + 1,
+		Disks: set.getEndpoints(),
 	}
 
 	var objectErasureSetTag map[string]auditObjectOp

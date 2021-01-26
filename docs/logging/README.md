@@ -60,10 +60,10 @@ Setting this environment variable automatically enables audit logging to the HTT
 
 NOTE:
 - `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
-- In the case of the erasure setup `tags.objectErasureMap` provides
-   - Pool number
-   - Set number
-   - The list of disks belonging to the set
+- Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
+   - Pool number the object operation was performed on.
+   - Set number the object operation was performed on.
+   - The list of disks participating in this operation belong to the set.
 
 ```json
 {
@@ -103,15 +103,16 @@ NOTE:
   },
   "tags": {
     "objectErasureMap": {
-      "pool": 1,
-      "set": 10,
-      "path/to/object": [
-        "http://minio.example.com/mnt/zone1/disk1",
-        "http://minio.example.com/mnt/zone1/disk2",
-        "http://minio.example.com/mnt/zone1/disk3",
-        "http://minio.example.com/mnt/zone1/disk4"
+      "object": {
+        "poolId": 1,
+        "setId": 10,
+        "disks": [
+          "http://server01/mnt/pool1/disk01",
+          "http://server02/mnt/pool1/disk02",
+          "http://server03/mnt/pool1/disk03",
+          "http://server04/mnt/pool1/disk04"
         ]
-      }
+     }
   }
 }
 ```

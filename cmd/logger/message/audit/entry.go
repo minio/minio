@@ -68,7 +68,9 @@ func ToEntry(w http.ResponseWriter, r *http.Request, reqClaims map[string]interf
 	for k, v := range wh {
 		respHeader[k] = strings.Join(v, ",")
 	}
-	respHeader[xhttp.ETag] = strings.Trim(respHeader[xhttp.ETag], `"`)
+	if etag := respHeader[xhttp.ETag]; etag != "" {
+		respHeader[xhttp.ETag] = strings.Trim(etag, `"`)
+	}
 
 	entry := Entry{
 		Version:      Version,
