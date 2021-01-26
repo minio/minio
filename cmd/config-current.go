@@ -480,11 +480,13 @@ func lookupConfigs(s config.Config, setDriveCounts []int) {
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to setup KMS with current KMS config: %w", err))
 	}
+	globalAutoEncryption = kmsCfg.AutoEncryption // Enable auto-encryption if enabled
 
-	// Enable auto-encryption if enabled
-	globalAutoEncryption = kmsCfg.AutoEncryption
-	if globalAutoEncryption && !globalIsGateway {
-		logger.LogIf(ctx, fmt.Errorf("%s env is deprecated please migrate to using `mc encrypt` at bucket level", crypto.EnvKMSAutoEncryption))
+	if kmsCfg.Vault.Enabled {
+		const deprecationWarning = `Native Hashicorp Vault support is deprecated and will be removed on 2021-10-01. Please migrate to KES + Hashicorp Vault: https://github.com/minio/kes/wiki/Hashicorp-Vault-Keystore
+Note that native Hashicorp Vault and KES + Hashicorp Vault are not compatible.
+If you need help to migrate smoothly visit: https://min.io/pricing`
+		logger.LogIf(ctx, fmt.Errorf(deprecationWarning))
 	}
 
 	globalOpenIDConfig, err = openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
