@@ -139,6 +139,9 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
 
+	if bucketName != "" {
+		values.Set(peerRESTListenBucket, bucketName)
+	}
 	for _, peer := range peers {
 		if peer == nil {
 			continue
