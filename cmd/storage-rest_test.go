@@ -82,8 +82,8 @@ func testStorageAPIListVols(t *testing.T, storage StorageAPI) {
 		expectedResult []VolInfo
 		expectErr      bool
 	}{
-		{nil, []VolInfo{}, false},
-		{[]string{"foo"}, []VolInfo{{Name: "foo"}}, false},
+		{nil, []VolInfo{{Name: ".minio.sys"}}, false},
+		{[]string{"foo"}, []VolInfo{{Name: ".minio.sys"}, {Name: "foo"}}, false},
 	}
 
 	for i, testCase := range testCases {
@@ -452,7 +452,7 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 
 	prevGlobalServerConfig := globalServerConfig
 	globalServerConfig = newServerConfig()
-	lookupConfigs(globalServerConfig, 0)
+	lookupConfigs(globalServerConfig, nil)
 
 	restClient := newStorageRESTClient(endpoint, false)
 

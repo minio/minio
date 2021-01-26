@@ -519,7 +519,7 @@ func partNumberToRangeSpec(oi ObjectInfo, partNumber int) *HTTPRangeSpec {
 // Returns the compressed offset which should be skipped.
 // If encrypted offsets are adjusted for encrypted block headers/trailers.
 // Since de-compression is after decryption encryption overhead is only added to compressedOffset.
-func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64) {
+func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset int64, partSkip int64, firstPart int) {
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
@@ -535,12 +535,13 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 			}
 		}
 	}
+
 	if isEncryptedMultipart(objectInfo) && firstPartIdx > 0 {
 		off, _, _, _, _, err := objectInfo.GetDecryptedRange(partNumberToRangeSpec(objectInfo, firstPartIdx))
 		logger.LogIf(context.Background(), err)
 		compressedOffset += off
 	}
-	return compressedOffset, offset - skipLength
+	return compressedOffset, offset - skipLength, firstPartIdx
 }
 
 // GetObjectReader is a type that wraps a reader with a lock to
@@ -604,14 +605,24 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 	if err != nil {
 		return nil, 0, 0, err
 	}
+
 	// if object is encrypted, transition content without decrypting.
-	if opts.TransitionStatus == lifecycle.TransitionPending && isEncrypted {
+	if opts.TransitionStatus == lifecycle.TransitionPending && (isEncrypted || isCompressed) {
 		isEncrypted = false
+		isCompressed = false
 	}
-	var skipLen int64
+
 	// Calculate range to read (different for encrypted/compressed objects)
 	switch {
 	case isCompressed:
+		var firstPart int
+		if opts.PartNumber > 0 {
+			// firstPart is an index to Parts slice,
+			// make sure that PartNumber uses the
+			// index value properly.
+			firstPart = opts.PartNumber - 1
+		}
+
 		// If compressed, we start from the beginning of the part.
 		// Read the decompressed size from the meta.json.
 		actualSize, err := oi.GetActualSize()
@@ -626,10 +637,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 				return nil, 0, 0, err
 			}
 			// In case of range based queries on multiparts, the offset and length are reduced.
-			off, decOff = getCompressedOffsets(oi, off)
+			off, decOff, firstPart = getCompressedOffsets(oi, off)
 			decLength = length
 			length = oi.Size - off
-
 			// For negative length we read everything.
 			if decLength < 0 {
 				decLength = actualSize - decOff
@@ -652,7 +662,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
-				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, opts.PartNumber, oi, copySource)
+				inputReader, err = DecryptBlocksRequestR(inputReader, h, 0, firstPart, oi, copySource)
 				if err != nil {
 					// Call the cleanup funcs
 					for i := len(cFns) - 1; i >= 0; i-- {
@@ -660,17 +670,19 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 					}
 					return nil, err
 				}
+				oi.Size = decLength
 			}
 			// Decompression reader.
 			s2Reader := s2.NewReader(inputReader)
 			// Apply the skipLen and limit on the decompressed stream.
-			err = s2Reader.Skip(decOff)
-			if err != nil {
-				// Call the cleanup funcs
-				for i := len(cFns) - 1; i >= 0; i-- {
-					cFns[i]()
+			if decOff > 0 {
+				if err = s2Reader.Skip(decOff); err != nil {
+					// Call the cleanup funcs
+					for i := len(cFns) - 1; i >= 0; i-- {
+						cFns[i]()
+					}
+					return nil, err
 				}
-				return nil, err
 			}
 
 			decReader := io.LimitReader(s2Reader, decLength)
@@ -698,6 +710,8 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 	case isEncrypted:
 		var seqNumber uint32
 		var partStart int
+		var skipLen int64
+
 		off, length, skipLen, seqNumber, partStart, err = oi.GetDecryptedRange(rs)
 		if err != nil {
 			return nil, 0, 0, err
@@ -895,20 +909,30 @@ func CleanMinioInternalMetadataKeys(metadata map[string]string) map[string]strin
 
 // newS2CompressReader will read data from r, compress it and return the compressed data as a Reader.
 // Use Close to ensure resources are released on incomplete streams.
-func newS2CompressReader(r io.Reader) io.ReadCloser {
+//
+// input 'on' is always recommended such that this function works
+// properly, because we do not wish to create an object even if
+// client closed the stream prematurely.
+func newS2CompressReader(r io.Reader, on int64) io.ReadCloser {
 	pr, pw := io.Pipe()
 	comp := s2.NewWriter(pw)
 	// Copy input to compressor
 	go func() {
-		_, err := io.Copy(comp, r)
+		cn, err := io.Copy(comp, r)
 		if err != nil {
 			comp.Close()
 			pw.CloseWithError(err)
 			return
 		}
+		if on > 0 && on != cn {
+			// if client didn't sent all data
+			// from the client verify here.
+			comp.Close()
+			pw.CloseWithError(IncompleteBody{})
+			return
+		}
 		// Close the stream.
-		err = comp.Close()
-		if err != nil {
+		if err = comp.Close(); err != nil {
 			pw.CloseWithError(err)
 			return
 		}

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -45,7 +46,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			}
 			_, present := network[nodeName]
 			if !present {
-				if err := isServerResolvable(endpoint); err == nil {
+				if err := isServerResolvable(endpoint, time.Second); err == nil {
 					network[nodeName] = "online"
 				} else {
 					network[nodeName] = "offline"
@@ -88,7 +89,7 @@ func getLocalDisks(endpointServerPools EndpointServerPools) []madmin.Disk {
 			}
 			_, present := network[nodeName]
 			if !present {
-				if err := isServerResolvable(endpoint); err == nil {
+				if err := isServerResolvable(endpoint, time.Second); err == nil {
 					network[nodeName] = "online"
 				} else {
 					network[nodeName] = "offline"

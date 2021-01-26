@@ -256,12 +256,8 @@ type ErasureBackend struct {
 	Type         backendType `json:"backendType,omitempty"`
 	OnlineDisks  int         `json:"onlineDisks,omitempty"`
 	OfflineDisks int         `json:"offlineDisks,omitempty"`
-	// Data disks for currently configured Standard storage class.
-	StandardSCData int `json:"standardSCData,omitempty"`
 	// Parity disks for currently configured Standard storage class.
 	StandardSCParity int `json:"standardSCParity,omitempty"`
-	// Data disks for currently configured Reduced Redundancy storage class.
-	RRSCData int `json:"rrSCData,omitempty"`
 	// Parity disks for currently configured Reduced Redundancy storage class.
 	RRSCParity int `json:"rrSCParity,omitempty"`
 }

@@ -30,7 +30,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/http/stats"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/handlers"
 )
 
 // Adds limiting body size middleware
@@ -532,14 +531,6 @@ func setRequestValidityHandler(h http.Handler) http.Handler {
 	})
 }
 
-var fwd = handlers.NewForwarder(&handlers.Forwarder{
-	PassHost:     true,
-	RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
-	Logger: func(err error) {
-		logger.LogIf(GlobalContext, err)
-	},
-})
-
 // setBucketForwardingHandler middleware forwards the path style requests
 // on a bucket to the right bucket location, bucket to IP configuration
 // is obtained from centralized etcd configuration service.
@@ -589,7 +580,12 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 					r.URL.Scheme = "https"
 				}
 				r.URL.Host = getHostFromSrv(sr)
-				fwd.ServeHTTP(w, r)
+				// Make sure we remove any existing headers before
+				// proxying the request to another node.
+				for k := range w.Header() {
+					w.Header().Del(k)
+				}
+				globalForwarder.ServeHTTP(w, r)
 				return
 			}
 			h.ServeHTTP(w, r)
@@ -639,7 +635,12 @@ func setBucketForwardingHandler(h http.Handler) http.Handler {
 				r.URL.Scheme = "https"
 			}
 			r.URL.Host = getHostFromSrv(sr)
-			fwd.ServeHTTP(w, r)
+			// Make sure we remove any existing headers before
+			// proxying the request to another node.
+			for k := range w.Header() {
+				w.Header().Del(k)
+			}
+			globalForwarder.ServeHTTP(w, r)
 			return
 		}
 		h.ServeHTTP(w, r)

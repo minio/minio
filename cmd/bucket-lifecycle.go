@@ -284,19 +284,17 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 		if isDeleteTierOnly {
 			return nil
 		}
-		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
+
+		objInfo, err := objectAPI.DeleteObject(ctx, bucket, object, opts)
 		if err != nil {
 			return err
 		}
+
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
 			eventName = event.ObjectRemovedDeleteMarkerCreated
 		}
-		objInfo := ObjectInfo{
-			Name:         object,
-			VersionID:    lcOpts.VersionID,
-			DeleteMarker: lcOpts.DeleteMarker,
-		}
+
 		// Notify object deleted event.
 		sendEvent(eventArgs{
 			EventName:  eventName,
@@ -358,19 +356,17 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 	opts.TransitionStatus = lifecycle.TransitionComplete
 	eventName := event.ObjectTransitionComplete
 
-	_, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts)
+	objInfo, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts)
 	if err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
+
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  eventName,
-		BucketName: oi.Bucket,
-		Object: ObjectInfo{
-			Name:      oi.Name,
-			VersionID: opts.VersionID,
-		},
-		Host: "Internal: [ILM-Transition]",
+		BucketName: objInfo.Bucket,
+		Object:     objInfo,
+		Host:       "Internal: [ILM-Transition]",
 	})
 	return err
 }

@@ -335,6 +335,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 				logger.LogIf(ctx, zerr)
 				continue
 			}
+			header.Method = zip.Deflate
 			zwriter, zerr := zipWriter.CreateHeader(header)
 			if zerr != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
@@ -381,6 +382,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		if zerr != nil {
 			return profilingDataFound
 		}
+		header.Method = zip.Deflate
 
 		zwriter, zerr := zipWriter.CreateHeader(header)
 		if zerr != nil {
@@ -1276,6 +1278,9 @@ func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient
 		return nil
 	}
 	peerClients := sys.getOnlinePeers()
+	if len(peerClients) == 0 {
+		return nil
+	}
 	idx := xxhash.Sum64String(s) % uint64(len(peerClients))
 	return peerClients[idx]
 }

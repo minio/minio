@@ -173,18 +173,18 @@ func TestNewErasureSets(t *testing.T) {
 	}
 
 	endpoints := mustGetNewEndpoints(erasureDisks...)
-	_, _, err := waitForFormatErasure(true, endpoints, 1, 0, 16, "")
+	_, _, err := waitForFormatErasure(true, endpoints, 1, 0, 16, "", "")
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
-	_, _, err = waitForFormatErasure(true, nil, 1, 1, 16, "")
+	_, _, err = waitForFormatErasure(true, nil, 1, 1, 16, "", "")
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
 	// Initializes all erasure disks
-	storageDisks, format, err := waitForFormatErasure(true, endpoints, 1, 1, 16, "")
+	storageDisks, format, err := waitForFormatErasure(true, endpoints, 1, 1, 16, "", "")
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}

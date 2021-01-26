@@ -128,7 +128,12 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 			}
 			metadataArray[index], err = disks[index].ReadVersion(ctx, bucket, object, versionID, readData)
 			if err != nil {
-				if !IsErr(err, errFileNotFound, errVolumeNotFound, errFileVersionNotFound, errDiskNotFound) {
+				if !IsErr(err, []error{
+					errFileNotFound,
+					errVolumeNotFound,
+					errFileVersionNotFound,
+					errDiskNotFound,
+				}...) {
 					logger.LogOnceIf(ctx, err, disks[index].String())
 				}
 			}

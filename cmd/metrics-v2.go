@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/procfs"
 )
 
 // MetricNamespace is top level grouping of metrics to create the metric name.
@@ -51,43 +53,55 @@ const (
 	capacityRawSubsystem    MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem MetricSubsystem = "capacity_usable"
 	diskSubsystem           MetricSubsystem = "disk"
+	goRoutines              MetricSubsystem = "go_routine"
 	nodesSubsystem          MetricSubsystem = "nodes"
 	objectsSubsystem        MetricSubsystem = "objects"
+	fileDescriptorSubsystem MetricSubsystem = "file_descriptor"
+	ioSubsystem             MetricSubsystem = "io"
 	replicationSubsystem    MetricSubsystem = "replication"
 	requestsSubsystem       MetricSubsystem = "requests"
 	timeSubsystem           MetricSubsystem = "time"
 	trafficSubsystem        MetricSubsystem = "traffic"
+	sysCallSubsystem        MetricSubsystem = "syscall"
 	usageSubsystem          MetricSubsystem = "usage"
 	softwareSubsystem       MetricSubsystem = "software"
 )
 
-// MetricNames are the individual names for the metric.
-type MetricNames string
+// MetricName are the individual names for the metric.
+type MetricName string
 
 const (
-	errorsTotal   MetricNames = "error_total"
-	healTotal     MetricNames = "heal_total"
-	hitsTotal     MetricNames = "hits_total"
-	inflightTotal MetricNames = "inflight_total"
-	missedTotal   MetricNames = "missed_total"
-	objectTotal   MetricNames = "object_total"
-	offlineTotal  MetricNames = "offline_total"
-	onlineTotal   MetricNames = "online_total"
-	total         MetricNames = "total"
+	errorsTotal   MetricName = "error_total"
+	healTotal     MetricName = "heal_total"
+	hitsTotal     MetricName = "hits_total"
+	inflightTotal MetricName = "inflight_total"
+	limitTotal    MetricName = "limit_total"
+	missedTotal   MetricName = "missed_total"
+	objectTotal   MetricName = "object_total"
+	offlineTotal  MetricName = "offline_total"
+	onlineTotal   MetricName = "online_total"
+	openTotal     MetricName = "open_total"
+	readTotal     MetricName = "read_total"
+	writeTotal    MetricName = "write_total"
+	total         MetricName = "total"
 
-	failedBytes   MetricNames = "failed_bytes"
-	freeBytes     MetricNames = "free_bytes"
-	pendingBytes  MetricNames = "pending_bytes"
-	receivedBytes MetricNames = "received_bytes"
-	sentBytes     MetricNames = "sent_bytes"
-	totalBytes    MetricNames = "total_bytes"
-	usedBytes     MetricNames = "used_bytes"
+	failedBytes   MetricName = "failed_bytes"
+	freeBytes     MetricName = "free_bytes"
+	pendingBytes  MetricName = "pending_bytes"
+	readBytes     MetricName = "read_bytes"
+	rcharBytes    MetricName = "rchar_bytes"
+	receivedBytes MetricName = "received_bytes"
+	sentBytes     MetricName = "sent_bytes"
+	totalBytes    MetricName = "total_bytes"
+	usedBytes     MetricName = "used_bytes"
+	writeBytes    MetricName = "write_bytes"
+	wcharBytes    MetricName = "wchar_bytes"
 
-	usagePercent MetricNames = "update_percent"
+	usagePercent MetricName = "update_percent"
 
-	commitInfo  MetricNames = "commit_info"
-	usageInfo   MetricNames = "usage_info"
-	versionInfo MetricNames = "version_info"
+	commitInfo  MetricName = "commit_info"
+	usageInfo   MetricName = "usage_info"
+	versionInfo MetricName = "version_info"
 
 	sizeDistribution = "size_distribution"
 	ttfbDistribution = "ttbf_seconds_distribution"
@@ -112,7 +126,7 @@ const (
 type MetricDescription struct {
 	Namespace MetricNamespace `json:"MetricNamespace"`
 	Subsystem MetricSubsystem `json:"Subsystem"`
-	Name      MetricNames     `json:"MetricNames"`
+	Name      MetricName      `json:"MetricName"`
 	Help      string          `json:"Help"`
 	Type      GaugeMetricType `json:"Type"`
 }
@@ -157,12 +171,14 @@ func GetAllGenerators() []MetricsGenerator {
 // GetGeneratorsForPeer - gets the generators to report to peer.
 func GetGeneratorsForPeer() []MetricsGenerator {
 	g := []MetricsGenerator{
-		getLocalStorageMetrics,
-		getMinioVersionMetrics,
+		getCacheMetrics,
+		getGoMetrics,
 		getHTTPMetrics,
+		getLocalStorageMetrics,
+		getMinioProcMetrics,
+		getMinioVersionMetrics,
 		getNetworkMetrics,
 		getS3TTFBMetric,
-		getCacheMetrics,
 	}
 	return g
 }
@@ -534,7 +550,168 @@ func getS3TTFBDistributionMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+func getMinioFDOpenMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: fileDescriptorSubsystem,
+		Name:      openTotal,
+		Help:      "Total number of open file descriptors by the MinIO Server process.",
+		Type:      gaugeMetric,
+	}
+}
+func getMinioFDLimitMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: fileDescriptorSubsystem,
+		Name:      limitTotal,
+		Help:      "Limit on total number of open file descriptors for the MinIO Server process.",
+		Type:      gaugeMetric,
+	}
+}
+func getMinioProcessIOWriteBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ioSubsystem,
+		Name:      writeBytes,
+		Help:      "Total bytes written by the process to the underlying storage system, /proc/[pid]/io write_bytes",
+		Type:      counterMetric,
+	}
+}
+func getMinioProcessIOReadBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ioSubsystem,
+		Name:      readBytes,
+		Help:      "Total bytes read by the process from the underlying storage system, /proc/[pid]/io read_bytes",
+		Type:      counterMetric,
+	}
+}
+func getMinioProcessIOWriteCachedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ioSubsystem,
+		Name:      wcharBytes,
+		Help:      "Total bytes written by the process to the underlying storage system including page cache, /proc/[pid]/io wchar",
+		Type:      counterMetric,
+	}
+}
+func getMinioProcessIOReadCachedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ioSubsystem,
+		Name:      rcharBytes,
+		Help:      "Total bytes read by the process from the underlying storage system including cache, /proc/[pid]/io rchar",
+		Type:      counterMetric,
+	}
+}
+func getMinIOProcessSysCallRMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: sysCallSubsystem,
+		Name:      readTotal,
+		Help:      "Total read SysCalls to the kernel. /proc/[pid]/io syscr",
+		Type:      counterMetric,
+	}
+}
+func getMinIOProcessSysCallWMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: sysCallSubsystem,
+		Name:      writeTotal,
+		Help:      "Total write SysCalls to the kernel. /proc/[pid]/io syscw",
+		Type:      counterMetric,
+	}
+}
+func getMinIOGORoutineCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: goRoutines,
+		Name:      total,
+		Help:      "Total number of go routines running.",
+		Type:      gaugeMetric,
+	}
+}
+func getMinioProcMetrics() MetricsGroup {
+	return MetricsGroup{
+		Metrics: []Metric{},
+		initialize: func(ctx context.Context, metrics *MetricsGroup) {
+			p, err := procfs.Self()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, nodeMetricNamespace)
+				return
+			}
+			var openFDs int
+			openFDs, err = p.FileDescriptorsLen()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, getMinioFDOpenMD())
+				return
+			}
+			l, err := p.Limits()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, getMinioFDLimitMD())
+				return
+			}
+			io, err := p.IO()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, ioSubsystem)
+				return
+			}
 
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinioFDOpenMD(),
+					Value:       float64(openFDs),
+				},
+			)
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinioFDLimitMD(),
+					Value:       float64(l.OpenFiles),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinIOProcessSysCallRMD(),
+					Value:       float64(io.SyscR),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinIOProcessSysCallWMD(),
+					Value:       float64(io.SyscW),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinioProcessIOReadBytesMD(),
+					Value:       float64(io.ReadBytes),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinioProcessIOWriteBytesMD(),
+					Value:       float64(io.WriteBytes),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinioProcessIOReadCachedBytesMD(),
+					Value:       float64(io.RChar),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinioProcessIOWriteCachedBytesMD(),
+					Value:       float64(io.WChar),
+				})
+		},
+	}
+}
+func getGoMetrics() MetricsGroup {
+	return MetricsGroup{
+		Metrics: []Metric{},
+		initialize: func(ctx context.Context, metrics *MetricsGroup) {
+			metrics.Metrics = append(metrics.Metrics, Metric{
+				Description: getMinIOGORoutineCountMD(),
+				Value:       float64(runtime.NumGoroutine()),
+			})
+		},
+	}
+}
 func getS3TTFBMetric() MetricsGroup {
 	return MetricsGroup{
 		Metrics: []Metric{},
@@ -1171,9 +1348,18 @@ func metricsNodeHandler() http.Handler {
 	if err != nil {
 		logger.CriticalIf(GlobalContext, err)
 	}
-
+	err = registry.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{
+		Namespace:    minioNamespace,
+		ReportErrors: true,
+	}))
+	if err != nil {
+		logger.CriticalIf(GlobalContext, err)
+	}
+	err = registry.Register(prometheus.NewGoCollector())
+	if err != nil {
+		logger.CriticalIf(GlobalContext, err)
+	}
 	gatherers := prometheus.Gatherers{
-		prometheus.DefaultGatherer,
 		registry,
 	}
 	// Delegate http serving to Prometheus client library, which will call collector.Collect.

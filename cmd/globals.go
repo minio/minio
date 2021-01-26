@@ -25,6 +25,7 @@ import (
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/bandwidth"
+	"github.com/minio/minio/pkg/handlers"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/config/cache"
@@ -285,6 +286,8 @@ var (
 	globalProxyTransport http.RoundTripper
 
 	globalDNSCache *xhttp.DNSCache
+
+	globalForwarder *handlers.Forwarder
 	// Add new variable global values here.
 )
 

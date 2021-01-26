@@ -31,6 +31,14 @@ These metrics can be from any MinIO server once per collection.
 |`minio_node_disk_free_bytes`                    |Total storage available on a disk.                                                                                           |
 |`minio_node_disk_total_bytes`                   |Total storage on a disk.                                                                                                     |
 |`minio_node_disk_used_bytes`                    |Total storage used on a disk.                                                                                                |
+|`minio_node_file_descriptor_limit_total`        |Limit on total number of open file descriptors for the MinIO Server process.                                                 |
+|`minio_node_file_descriptor_open_total`         |Total number of open file descriptors by the MinIO Server process.                                                           |
+|`minio_node_io_rchar_bytes`                     |Total bytes read by the process from the underlying storage system including cache, /proc/[pid]/io rchar                     |
+|`minio_node_io_read_bytes`                      |Total bytes read by the process from the underlying storage system, /proc/[pid]/io read_bytes                                |
+|`minio_node_io_wchar_bytes`                     |Total bytes written by the process to the underlying storage system including page cache, /proc/[pid]/io wchar               |
+|`minio_node_io_write_bytes`                     |Total bytes written by the process to the underlying storage system, /proc/[pid]/io write_bytes                              |
+|`minio_node_syscall_read_total`                 |Total read SysCalls to the kernel. /proc/[pid]/io syscr                                                                      |
+|`minio_node_syscall_write_total`                |Total write SysCalls to the kernel. /proc/[pid]/io syscw                                                                     |
 |`minio_s3_requests_error_total`                 |Total number S3 requests with errors                                                                                         |
 |`minio_s3_requests_inflight_total`              |Total number of S3 requests currently in flight.                                                                             |
 |`minio_s3_requests_total`                       |Total number S3 requests                                                                                                     |

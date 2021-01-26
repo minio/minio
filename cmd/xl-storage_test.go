@@ -31,7 +31,6 @@ import (
 	"testing"
 
 	"github.com/minio/minio/cmd/config/storageclass"
-	"github.com/minio/minio/pkg/disk"
 )
 
 func TestCheckPathLength(t *testing.T) {
@@ -125,10 +124,6 @@ func newXLStorageTestSetup() (*xlStorageDiskIDCheck, string, error) {
 
 	// Initialize a new xlStorage layer.
 	storage, err := newLocalXLStorage(diskPath)
-	if err != nil {
-		return nil, "", err
-	}
-	err = storage.MakeVol(context.Background(), minioMetaBucket)
 	if err != nil {
 		return nil, "", err
 	}
@@ -258,7 +253,7 @@ func TestXLStorageReadVersion(t *testing.T) {
 	// create xlStorage test setup
 	xlStorage, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create xlStorage test setup, %s", err)
+		t.Fatalf("Unable to cfgreate xlStorage test setup, %s", err)
 	}
 
 	defer os.RemoveAll(path)
@@ -539,7 +534,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && err != errFileAccessDenied {
+		if err != nil && err != errDiskAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -638,7 +633,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && err != errFileAccessDenied {
+		if err != nil && err != errDiskAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -890,7 +885,7 @@ func TestXLStorageListDir(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && err != errFileAccessDenied {
+		if err != nil && err != errDiskAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -1014,7 +1009,7 @@ func TestXLStorageDeleteFile(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && err != errFileAccessDenied {
+		if err != nil && err != errDiskAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -1221,7 +1216,7 @@ func TestXLStorageReadFile(t *testing.T) {
 
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && err != errFileAccessDenied {
+		if err != nil && err != errDiskAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -1391,7 +1386,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 		var xlStoragePermStorage StorageAPI
 		// Initialize xlStorage storage layer for permission denied error.
 		_, err = newLocalXLStorage(permDeniedDir)
-		if err != nil && err != errFileAccessDenied {
+		if err != nil && err != errDiskAccessDenied {
 			t.Fatalf("Unable to initialize xlStorage, %s", err)
 		}
 
@@ -1719,7 +1714,7 @@ func TestXLStorageCheckFile(t *testing.T) {
 
 	for i, testCase := range testCases {
 		if err := xlStorage.CheckFile(context.Background(), testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
-			t.Fatalf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+			t.Errorf("TestXLStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
 }
@@ -1822,56 +1817,5 @@ func TestXLStorageVerifyFile(t *testing.T) {
 	}
 	if err := xlStorage.storage.bitrotVerify(pathJoin(path, volName, fileName), size+1, algo, nil, shardSize); err == nil {
 		t.Fatal("expected to fail bitrot check")
-	}
-}
-
-// Checks for restrictions for min total disk space and inodes.
-func TestCheckDiskTotalMin(t *testing.T) {
-	testCases := []struct {
-		diskInfo disk.Info
-		err      error
-	}{
-		// Test 1 - when fstype is nfs.
-		{
-			diskInfo: disk.Info{
-				Total:  diskMinTotalSpace * 3,
-				FSType: "NFS",
-			},
-			err: nil,
-		},
-		// Test 2 - when fstype is xfs and total inodes are less than 10k.
-		{
-			diskInfo: disk.Info{
-				Total:  diskMinTotalSpace * 3,
-				FSType: "XFS",
-				Files:  9999,
-			},
-			err: nil,
-		},
-		// Test 3 - when fstype is btrfs and total inodes is empty.
-		{
-			diskInfo: disk.Info{
-				Total:  diskMinTotalSpace * 3,
-				FSType: "BTRFS",
-				Files:  0,
-			},
-			err: nil,
-		},
-		// Test 4 - when fstype is xfs and total disk space is really small.
-		{
-			diskInfo: disk.Info{
-				Total:  diskMinTotalSpace - diskMinTotalSpace/1024,
-				FSType: "XFS",
-				Files:  9999,
-			},
-			err: errMinDiskSize,
-		},
-	}
-
-	// Validate all cases.
-	for i, test := range testCases {
-		if err := checkDiskMinTotal(test.diskInfo); test.err != err {
-			t.Errorf("Test %d: Expected error %s, got %s", i+1, test.err, err)
-		}
 	}
 }

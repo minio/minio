@@ -363,17 +363,10 @@ func createServerEndpoints(serverAddr string, args ...string) (
 	}
 
 	var foundPrevLocal bool
-	var commonParityDrives int
-
 	for _, arg := range args {
 		setArgs, err := GetAllSets(arg)
 		if err != nil {
 			return nil, -1, err
-		}
-
-		parityDrives := ecDrivesNoConfig(len(setArgs[0]))
-		if commonParityDrives != 0 && commonParityDrives != parityDrives {
-			return nil, -1, fmt.Errorf("All serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, parityDrives)
 		}
 
 		endpointList, gotSetupType, err := CreateEndpoints(serverAddr, foundPrevLocal, setArgs...)
@@ -388,10 +381,6 @@ func createServerEndpoints(serverAddr string, args ...string) (
 			return nil, -1, err
 		}
 		foundPrevLocal = endpointList.atleastOneEndpointLocal()
-		if commonParityDrives == 0 {
-			commonParityDrives = ecDrivesNoConfig(len(setArgs[0]))
-		}
-
 		if setupType == UnknownSetupType {
 			setupType = gotSetupType
 		}

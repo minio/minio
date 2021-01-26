@@ -63,6 +63,11 @@ type NetLocker interface {
 	// Expired returns if current lock args has expired.
 	Expired(ctx context.Context, args LockArgs) (bool, error)
 
+	// Unlock (read/write) forcefully for given LockArgs. It should return
+	// * a boolean to indicate success/failure of the operation
+	// * an error on failure of unlock request operation.
+	ForceUnlock(ctx context.Context, args LockArgs) (bool, error)
+
 	// Returns underlying endpoint of this lock client instance.
 	String() string
 

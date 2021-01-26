@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
@@ -41,6 +42,7 @@ import (
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/env"
+	"github.com/minio/minio/pkg/handlers"
 )
 
 // serverDebugLog will enable debug printing
@@ -51,9 +53,20 @@ func init() {
 	logger.RegisterError(config.FmtError)
 
 	rand.Seed(time.Now().UTC().UnixNano())
+
 	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second, logger.LogOnceIf)
 
 	initGlobalContext()
+
+	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: newGatewayHTTPTransport(1 * time.Hour),
+		Logger: func(err error) {
+			if err != nil && !errors.Is(err, context.Canceled) {
+				logger.LogIf(GlobalContext, err)
+			}
+		},
+	})
 
 	globalReplicationState = newReplicationState()
 	globalTransitionState = newTransitionState()

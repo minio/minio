@@ -519,8 +519,9 @@ func TestGetCompressedOffsets(t *testing.T) {
 		offset            int64
 		startOffset       int64
 		snappyStartOffset int64
+		firstPart         int
 	}{
-		{
+		0: {
 			objInfo: ObjectInfo{
 				Parts: []ObjectPartInfo{
 					{
@@ -536,8 +537,9 @@ func TestGetCompressedOffsets(t *testing.T) {
 			offset:            79109865,
 			startOffset:       39235668,
 			snappyStartOffset: 12001001,
+			firstPart:         1,
 		},
-		{
+		1: {
 			objInfo: ObjectInfo{
 				Parts: []ObjectPartInfo{
 					{
@@ -554,7 +556,7 @@ func TestGetCompressedOffsets(t *testing.T) {
 			startOffset:       0,
 			snappyStartOffset: 19109865,
 		},
-		{
+		2: {
 			objInfo: ObjectInfo{
 				Parts: []ObjectPartInfo{
 					{
@@ -573,14 +575,18 @@ func TestGetCompressedOffsets(t *testing.T) {
 		},
 	}
 	for i, test := range testCases {
-		startOffset, snappyStartOffset := getCompressedOffsets(test.objInfo, test.offset)
+		startOffset, snappyStartOffset, firstPart := getCompressedOffsets(test.objInfo, test.offset)
 		if startOffset != test.startOffset {
 			t.Errorf("Test %d - expected startOffset %d but received %d",
-				i+1, test.startOffset, startOffset)
+				i, test.startOffset, startOffset)
 		}
 		if snappyStartOffset != test.snappyStartOffset {
 			t.Errorf("Test %d - expected snappyOffset %d but received %d",
-				i+1, test.snappyStartOffset, snappyStartOffset)
+				i, test.snappyStartOffset, snappyStartOffset)
+		}
+		if firstPart != test.firstPart {
+			t.Errorf("Test %d - expected firstPart %d but received %d",
+				i, test.firstPart, firstPart)
 		}
 	}
 }
@@ -599,7 +605,7 @@ func TestS2CompressReader(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buf := make([]byte, 100) // make small buffer to ensure multiple reads are required for large case
 
-			r := newS2CompressReader(bytes.NewReader(tt.data))
+			r := newS2CompressReader(bytes.NewReader(tt.data), int64(len(tt.data)))
 			defer r.Close()
 
 			var rdrBuf bytes.Buffer

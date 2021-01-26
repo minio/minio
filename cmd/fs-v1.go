@@ -123,7 +123,7 @@ func NewFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	var err error
-	if fsPath, err = getValidPath(fsPath, false); err != nil {
+	if fsPath, err = getValidPath(fsPath); err != nil {
 		if err == errMinDiskSize {
 			return nil, config.ErrUnableToWriteInBackend(err).Hint(err.Error())
 		}
@@ -187,9 +187,9 @@ func (fs *FSObjects) NewNSLock(bucket string, objects ...string) RWLocker {
 	return fs.nsMutex.NewNSLock(nil, bucket, objects...)
 }
 
-// SetDriveCount no-op
-func (fs *FSObjects) SetDriveCount() int {
-	return 0
+// SetDriveCounts no-op
+func (fs *FSObjects) SetDriveCounts() []int {
+	return nil
 }
 
 // Shutdown - should be called when process shuts down.
@@ -735,9 +735,9 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		rwPoolUnlocker = func() { fs.rwPool.Close(fsMetaPath) }
 	}
 
-	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts, nsUnlocker, rwPoolUnlocker)
-	if rErr != nil {
-		return nil, rErr
+	objReaderFn, off, length, err := NewGetObjectReader(rs, objInfo, opts, nsUnlocker, rwPoolUnlocker)
+	if err != nil {
+		return nil, err
 	}
 
 	// Read the object, doesn't exist returns an s3 compatible error.
@@ -748,10 +748,11 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		nsUnlocker()
 		return nil, toObjectErr(err, bucket, object)
 	}
-	reader := io.LimitReader(readCloser, length)
+
 	closeFn := func() {
 		readCloser.Close()
 	}
+	reader := io.LimitReader(readCloser, length)
 
 	// Check if range is valid
 	if off > size || off+length > size {

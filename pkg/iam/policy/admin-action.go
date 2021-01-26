@@ -33,6 +33,8 @@ const (
 	StorageInfoAdminAction = "admin:StorageInfo"
 	// DataUsageInfoAdminAction - allow listing data usage info
 	DataUsageInfoAdminAction = "admin:DataUsageInfo"
+	// ForceUnlockAdminAction - allow force unlocking locks
+	ForceUnlockAdminAction = "admin:ForceUnlock"
 	// TopLocksAdminAction - allow listing top locks
 	TopLocksAdminAction = "admin:TopLocksInfo"
 	// ProfilingAdminAction - allow profiling

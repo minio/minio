@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
-	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -55,8 +54,11 @@ func (z *erasureServerPools) SingleZone() bool {
 // Initialize new pool of erasure sets.
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
 	var (
-		deploymentID string
-		err          error
+		deploymentID       string
+		distributionAlgo   string
+		commonParityDrives int
+		drivesPerSet       int
+		err                error
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
@@ -72,15 +74,54 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 				localDrives = append(localDrives, endpoint.Path)
 			}
 		}
+
+		if drivesPerSet == 0 {
+			drivesPerSet = ep.DrivesPerSet
+		}
+
+		if commonParityDrives == 0 {
+			commonParityDrives = ecDrivesNoConfig(ep.DrivesPerSet)
+		}
+
+		// Once distribution algo is set, validate it for the next pool,
+		// before proceeding to write to drives.
+		switch distributionAlgo {
+		case formatErasureVersionV3DistributionAlgoV2:
+			if drivesPerSet != 0 && drivesPerSet != ep.DrivesPerSet {
+				return nil, fmt.Errorf("All legacy serverPools should have same drive per set ratio - expected %d, got %d", drivesPerSet, ep.DrivesPerSet)
+			}
+		case formatErasureVersionV3DistributionAlgoV3:
+			parityDrives := ecDrivesNoConfig(ep.DrivesPerSet)
+			if commonParityDrives != 0 && commonParityDrives != parityDrives {
+				return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, parityDrives)
+			}
+		}
+
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
-			ep.SetCount, ep.DrivesPerSet, deploymentID)
+			ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
 		if err != nil {
 			return nil, err
 		}
+
 		if deploymentID == "" {
 			// all zones should have same deployment ID
 			deploymentID = formats[i].ID
 		}
+
+		if distributionAlgo == "" {
+			distributionAlgo = formats[i].Erasure.DistributionAlgo
+		}
+
+		// Validate if users brought different DeploymentID pools.
+		if deploymentID != formats[i].ID {
+			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
+		}
+
+		// Validate if users brought different different distribution algo pools.
+		if distributionAlgo != formats[i].Erasure.DistributionAlgo {
+			return nil, fmt.Errorf("All serverPools should have same distributionAlgo expected %s, got %s", distributionAlgo, formats[i].Erasure.DistributionAlgo)
+		}
+
 		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
 		if err != nil {
 			return nil, err
@@ -121,12 +162,12 @@ func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
 	return res
 }
 
-func (z *erasureServerPools) GetAllLockers() []dsync.NetLocker {
-	return z.serverPools[0].GetAllLockers()
-}
-
-func (z *erasureServerPools) SetDriveCount() int {
-	return z.serverPools[0].SetDriveCount()
+func (z *erasureServerPools) SetDriveCounts() []int {
+	setDriveCounts := make([]int, len(z.serverPools))
+	for i := range z.serverPools {
+		setDriveCounts[i] = z.serverPools[i].SetDriveCount()
+	}
+	return setDriveCounts
 }
 
 type serverPoolsAvailableSpace []poolAvailableSpace
@@ -278,16 +319,19 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
 	b.Type = BackendErasure
 
-	setDriveCount := z.SetDriveCount()
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity <= 0 {
 		scParity = z.serverPools[0].defaultParityCount
 	}
-	b.StandardSCData = setDriveCount - scParity
-	b.StandardSCParity = scParity
-
 	rrSCParity := globalStorageClass.GetParityForSC(storageclass.RRS)
-	b.RRSCData = setDriveCount - rrSCParity
+
+	// Data blocks can vary per pool, but parity is same.
+	for _, setDriveCount := range z.SetDriveCounts() {
+		b.StandardSCData = append(b.StandardSCData, setDriveCount-scParity)
+		b.RRSCData = append(b.RRSCData, setDriveCount-rrSCParity)
+	}
+
+	b.StandardSCParity = scParity
 	b.RRSCParity = rrSCParity
 	return
 }
@@ -1318,7 +1362,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 				// knows that its not our first attempt at 'prefix'
 				err = nil
 
-				if quorumCount == z.SetDriveCount() && opts.ScanMode == madmin.HealNormalScan {
+				if quorumCount == set.setDriveCount && opts.ScanMode == madmin.HealNormalScan {
 					continue
 				}
 
@@ -1355,6 +1399,7 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 
 	for _, pool := range z.serverPools {
 		result, err := pool.HealObject(ctx, bucket, object, versionID, opts)
+		result.Object = decodeDirObject(result.Object)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
@@ -1440,8 +1485,8 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
-	writeQuorum := b.StandardSCData
-	if b.StandardSCData == b.StandardSCParity {
+	writeQuorum := b.StandardSCData[0]
+	if writeQuorum == b.StandardSCParity {
 		writeQuorum++
 	}
 

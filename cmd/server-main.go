@@ -144,9 +144,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	for _, z := range globalEndpoints {
 		for _, ep := range z.Endpoints {
 			if ep.IsLocal {
-				continue
+				globalRemoteEndpoints[GetLocalPeer(globalEndpoints)] = ep
+			} else {
+				globalRemoteEndpoints[ep.Host] = ep
 			}
-			globalRemoteEndpoints[ep.Host] = ep
 		}
 	}
 	logger.FatalIf(err, "Invalid command line arguments")

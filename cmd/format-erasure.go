@@ -27,6 +27,7 @@ import (
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
@@ -827,7 +828,7 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
-func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
+func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID, distributionAlgo string, sErrs []error) (*formatErasureV3, error) {
 	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, len(storageDisks))
 	wantAtMost := ecDrivesNoConfig(setDriveCount)
@@ -838,6 +839,9 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 			disk := storageDisks[i*setDriveCount+j]
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
+			if distributionAlgo != "" {
+				newFormat.Erasure.DistributionAlgo = distributionAlgo
+			}
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
@@ -895,7 +899,8 @@ func getDefaultParityBlocks(drive int) int {
 // ecDrivesNoConfig returns the erasure coded drives in a set if no config has been set.
 // It will attempt to read it from env variable and fall back to drives/2.
 func ecDrivesNoConfig(setDriveCount int) int {
-	ecDrives := globalStorageClass.GetParityForSC(storageclass.STANDARD)
+	sc, _ := storageclass.LookupConfig(config.KVS{}, setDriveCount)
+	ecDrives := sc.GetParityForSC(storageclass.STANDARD)
 	if ecDrives <= 0 {
 		ecDrives = getDefaultParityBlocks(setDriveCount)
 	}

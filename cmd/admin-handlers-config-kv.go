@@ -130,13 +130,14 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
 	dynamic, err := cfg.ReadConfig(bytes.NewReader(kvBytes))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	if err = validateConfig(cfg, objectAPI.SetDriveCount()); err != nil {
+	if err = validateConfig(cfg, objectAPI.SetDriveCounts()); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -158,15 +159,14 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		saveConfig(GlobalContext, objectAPI, backendEncryptedFile, backendEncryptedMigrationComplete)
 	}
 
-	// Apply dynamic values.
-	if err := applyDynamicConfig(GlobalContext, cfg); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	globalNotificationSys.SignalService(serviceReloadDynamic)
-
-	// If all values were dynamic, tell the client.
 	if dynamic {
+		// Apply dynamic values.
+		if err := applyDynamicConfig(GlobalContext, objectAPI, cfg); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		globalNotificationSys.SignalService(serviceReloadDynamic)
+		// If all values were dynamic, tell the client.
 		w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
 	}
 	writeSuccessResponseHeadersOnly(w)
@@ -282,7 +282,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 		return
 	}
 
-	if err = validateConfig(cfg, objectAPI.SetDriveCount()); err != nil {
+	if err = validateConfig(cfg, objectAPI.SetDriveCounts()); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
@@ -394,7 +394,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err = validateConfig(cfg, objectAPI.SetDriveCount()); err != nil {
+	if err = validateConfig(cfg, objectAPI.SetDriveCounts()); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}

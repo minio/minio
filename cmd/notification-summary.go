@@ -31,9 +31,16 @@ func GetTotalCapacity(ctx context.Context) (capacity uint64) {
 }
 
 // GetTotalUsableCapacity gets the total usable capacity in the cluster.
+// This value is not an accurate representation of total usable in a multi-tenant deployment.
 func GetTotalUsableCapacity(ctx context.Context, s StorageInfo) (capacity float64) {
 	raw := GetTotalCapacity(ctx)
-	ratio := float64(s.Backend.StandardSCData) / float64(s.Backend.StandardSCData+s.Backend.StandardSCParity)
+	var approxDataBlocks float64
+	var actualDisks float64
+	for _, scData := range s.Backend.StandardSCData {
+		approxDataBlocks += float64(scData)
+		actualDisks += float64(scData + s.Backend.StandardSCParity)
+	}
+	ratio := approxDataBlocks / actualDisks
 	return float64(raw) * ratio
 }
 
@@ -47,8 +54,15 @@ func GetTotalCapacityFree(ctx context.Context) (capacity uint64) {
 }
 
 // GetTotalUsableCapacityFree gets the total usable capacity free in the cluster.
+// This value is not an accurate representation of total free in a multi-tenant deployment.
 func GetTotalUsableCapacityFree(ctx context.Context, s StorageInfo) (capacity float64) {
 	raw := GetTotalCapacityFree(ctx)
-	ratio := float64(s.Backend.StandardSCData) / float64(s.Backend.StandardSCData+s.Backend.StandardSCParity)
+	var approxDataBlocks float64
+	var actualDisks float64
+	for _, scData := range s.Backend.StandardSCData {
+		approxDataBlocks += float64(scData)
+		actualDisks += float64(scData + s.Backend.StandardSCParity)
+	}
+	ratio := approxDataBlocks / actualDisks
 	return float64(raw) * ratio
 }

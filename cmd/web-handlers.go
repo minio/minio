@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -1213,9 +1212,9 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
-		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
+		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
-		actualReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, actualSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -1223,7 +1222,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 		// Set compression metrics.
 		size = -1 // Since compressed size is un-predictable.
-		s2c := newS2CompressReader(actualReader)
+		s2c := newS2CompressReader(actualReader, actualSize)
 		defer s2c.Close()
 		reader = s2c
 		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
@@ -2202,54 +2201,61 @@ type LoginSTSArgs struct {
 	Token string `json:"token" form:"token"`
 }
 
+var errSTSNotInitialized = errors.New("STS API not initialized, please configure STS support")
+
 // LoginSTS - STS user login handler.
 func (web *webAPIHandlers) LoginSTS(r *http.Request, args *LoginSTSArgs, reply *LoginRep) error {
 	ctx := newWebContext(r, args, "WebLoginSTS")
 
-	v := url.Values{}
-	v.Set("Action", webIdentity)
-	v.Set("WebIdentityToken", args.Token)
-	v.Set("Version", stsAPIVersion)
-
-	scheme := "http"
-	if sourceScheme := handlers.GetSourceScheme(r); sourceScheme != "" {
-		scheme = sourceScheme
-	}
-	if globalIsTLS {
-		scheme = "https"
+	if globalOpenIDValidators == nil {
+		return toJSONError(ctx, errSTSNotInitialized)
 	}
 
-	u := &url.URL{
-		Scheme: scheme,
-		Host:   r.Host,
+	v, err := globalOpenIDValidators.Get("jwt")
+	if err != nil {
+		logger.LogIf(ctx, err)
+		return toJSONError(ctx, errSTSNotInitialized)
 	}
 
-	u.RawQuery = v.Encode()
-
-	req, err := http.NewRequest(http.MethodPost, u.String(), nil)
+	m, err := v.Validate(args.Token, "")
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
 
-	clnt := &http.Client{
-		Transport: NewGatewayHTTPTransport(),
+	// JWT has requested a custom claim with policy value set.
+	// This is a MinIO STS API specific value, this value should
+	// be set and configured on your identity provider as part of
+	// JWT custom claims.
+	var policyName string
+	policySet, ok := iampolicy.GetPoliciesFromClaims(m, iamPolicyClaimNameOpenID())
+	if ok {
+		policyName = globalIAMSys.CurrentPolicies(strings.Join(policySet.ToSlice(), ","))
 	}
-	resp, err := clnt.Do(req)
+	if policyName == "" && globalPolicyOPA == nil {
+		return toJSONError(ctx, fmt.Errorf("%s claim missing from the JWT token, credentials will not be generated", iamPolicyClaimNameOpenID()))
+	}
+	m[iamPolicyClaimNameOpenID()] = policyName
+
+	secret := globalActiveCred.SecretKey
+	cred, err := auth.GetNewCredentialsWithMetadata(m, secret)
 	if err != nil {
 		return toJSONError(ctx, err)
 	}
-	defer xhttp.DrainBody(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		return toJSONError(ctx, errors.New(resp.Status))
-	}
-
-	a := AssumeRoleWithWebIdentityResponse{}
-	if err = xml.NewDecoder(resp.Body).Decode(&a); err != nil {
+	// Set the newly generated credentials.
+	if err = globalIAMSys.SetTempUser(cred.AccessKey, cred, policyName); err != nil {
 		return toJSONError(ctx, err)
 	}
 
-	reply.Token = a.Result.Credentials.SessionToken
+	// Notify all other MinIO peers to reload temp users
+	for _, nerr := range globalNotificationSys.LoadUser(cred.AccessKey, true) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	reply.Token = cred.SessionToken
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -2304,6 +2310,8 @@ func toWebAPIError(ctx context.Context, err error) APIError {
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
+	case errSTSNotInitialized:
+		return APIError(stsErrCodes.ToSTSErr(ErrSTSNotInitialized))
 	case errServerNotInitialized:
 		return APIError{
 			Code:           "XMinioServerNotInitialized",
