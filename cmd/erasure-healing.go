@@ -239,13 +239,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
 
-	// List of disks having latest version of the object er.meta
-	// (by modtime).
-	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
-
-	// List of disks having all parts as per latest er.meta.
-	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
-
 	// Initialize heal result object
 	result = madmin.HealResultItem{
 		Type:         madmin.HealItemObject,
@@ -255,6 +248,21 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		ParityBlocks: er.defaultParityCount,
 		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 	}
+
+	if !opts.NoLock && newObjectLayerFn() != nil {
+		lk := er.NewNSLock(bucket, object)
+		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+			return result, err
+		}
+		defer lk.Unlock()
+	}
+
+	// List of disks having latest version of the object er.meta
+	// (by modtime).
+	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+
+	// List of disks having all parts as per latest er.meta.
+	availableDisks, dataErrs := disksWithAllParts(ctx, latestDisks, partsMetadata, errs, bucket, object, scanMode)
 
 	// Loop to find number of disks with valid data, per-drive
 	// data state and a list of outdated disks on which data needs

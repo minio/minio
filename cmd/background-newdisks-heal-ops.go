@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -360,8 +361,16 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 
 			buckets, _ := z.ListBuckets(ctx)
 
+			buckets = append(buckets, BucketInfo{
+				Name: pathJoin(minioMetaBucket, minioConfigPrefix),
+			})
+
 			// Heal latest buckets first.
 			sort.Slice(buckets, func(i, j int) bool {
+				a, b := strings.HasPrefix(buckets[i].Name, minioMetaBucket), strings.HasPrefix(buckets[j].Name, minioMetaBucket)
+				if a != b {
+					return a
+				}
 				return buckets[i].Created.After(buckets[j].Created)
 			})
 

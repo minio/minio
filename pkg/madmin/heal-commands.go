@@ -43,6 +43,7 @@ type HealOpts struct {
 	DryRun    bool         `json:"dryRun"`
 	Remove    bool         `json:"remove"`
 	Recreate  bool         `json:"recreate"` // only used when bucket needs to be healed
+	NoLock    bool         `json:"-"`        // only used internally.
 	ScanMode  HealScanMode `json:"scanMode"`
 }
 

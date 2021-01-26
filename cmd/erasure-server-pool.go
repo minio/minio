@@ -1381,22 +1381,6 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	object = encodeDirObject(object)
 
-	lk := z.NewNSLock(bucket, object)
-	if bucket == minioMetaBucket {
-		// For .minio.sys bucket heals we should hold write locks.
-		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
-			return madmin.HealResultItem{}, err
-		}
-		defer lk.Unlock()
-	} else {
-		// Lock the object before healing. Use read lock since healing
-		// will only regenerate parts & xl.meta of outdated disks.
-		if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
-			return madmin.HealResultItem{}, err
-		}
-		defer lk.RUnlock()
-	}
-
 	for _, pool := range z.serverPools {
 		result, err := pool.HealObject(ctx, bucket, object, versionID, opts)
 		result.Object = decodeDirObject(result.Object)

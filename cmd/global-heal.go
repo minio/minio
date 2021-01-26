@@ -122,10 +122,6 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAPI, tracker *healingTracker) error {
 	bgSeq := mustGetHealSequence(ctx)
 
-	buckets = append(buckets, BucketInfo{
-		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
-	})
-
 	// Try to pro-actively heal backend-encrypted file.
 	if err := bgSeq.queueHealTask(healSource{
 		bucket: minioMetaBucket,
