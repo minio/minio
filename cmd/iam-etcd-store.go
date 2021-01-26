@@ -264,6 +264,9 @@ func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map
 	var p iampolicy.Policy
 	err := ies.loadIAMConfig(ctx, &p, getPolicyDocPath(policy))
 	if err != nil {
+		if err == errConfigNotFound {
+			return errNoSuchPolicy
+		}
 		return err
 	}
 	m[policy] = p
@@ -282,8 +285,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampol
 
 	// Reload config and policies for all policys.
 	for _, policyName := range policies.ToSlice() {
-		err = ies.loadPolicyDoc(ctx, policyName, m)
-		if err != nil {
+		if err = ies.loadPolicyDoc(ctx, policyName, m); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}
@@ -358,7 +360,7 @@ func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m 
 
 	// Reload config for all users.
 	for _, user := range users.ToSlice() {
-		if err = ies.loadUser(ctx, user, userType, m); err != nil {
+		if err = ies.loadUser(ctx, user, userType, m); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}
@@ -392,7 +394,7 @@ func (ies *IAMEtcdStore) loadGroups(ctx context.Context, m map[string]GroupInfo)
 
 	// Reload config for all groups.
 	for _, group := range groups.ToSlice() {
-		if err = ies.loadGroup(ctx, group, m); err != nil {
+		if err = ies.loadGroup(ctx, group, m); err != nil && err != errNoSuchGroup {
 			return err
 		}
 	}
@@ -440,7 +442,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 
 	// Reload config and policies for all users.
 	for _, user := range users.ToSlice() {
-		if err = ies.loadMappedPolicy(ctx, user, userType, isGroup, m); err != nil {
+		if err = ies.loadMappedPolicy(ctx, user, userType, isGroup, m); err != nil && err != errNoSuchPolicy {
 			return err
 		}
 	}
@@ -449,117 +451,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 }
 
 func (ies *IAMEtcdStore) loadAll(ctx context.Context, sys *IAMSys) error {
-	iamUsersMap := make(map[string]auth.Credentials)
-	iamGroupsMap := make(map[string]GroupInfo)
-	iamUserPolicyMap := make(map[string]MappedPolicy)
-	iamGroupPolicyMap := make(map[string]MappedPolicy)
-
-	ies.rlock()
-	isMinIOUsersSys := sys.usersSysType == MinIOUsersSysType
-	ies.runlock()
-
-	ies.lock()
-	if err := ies.loadPolicyDocs(ctx, sys.iamPolicyDocsMap); err != nil {
-		ies.unlock()
-		return err
-	}
-	// Sets default canned policies, if none are set.
-	setDefaultCannedPolicies(sys.iamPolicyDocsMap)
-
-	ies.unlock()
-
-	if isMinIOUsersSys {
-		if err := ies.loadUsers(ctx, regularUser, iamUsersMap); err != nil {
-			return err
-		}
-		if err := ies.loadGroups(ctx, iamGroupsMap); err != nil {
-			return err
-		}
-	}
-
-	// load polices mapped to users
-	if err := ies.loadMappedPolicies(ctx, regularUser, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-
-	// load policies mapped to groups
-	if err := ies.loadMappedPolicies(ctx, regularUser, true, iamGroupPolicyMap); err != nil {
-		return err
-	}
-
-	if err := ies.loadUsers(ctx, srvAccUser, iamUsersMap); err != nil {
-		return err
-	}
-
-	// load STS temp users
-	if err := ies.loadUsers(ctx, stsUser, iamUsersMap); err != nil {
-		return err
-	}
-
-	// load STS policy mappings
-	if err := ies.loadMappedPolicies(ctx, stsUser, false, iamUserPolicyMap); err != nil {
-		return err
-	}
-
-	ies.lock()
-	defer ies.Unlock()
-
-	// Merge the new reloaded entries into global map.
-	// See issue https://github.com/minio/minio/issues/9651
-	// where the present list of entries on disk are not yet
-	// latest, there is a small window where this can make
-	// valid users invalid.
-	for k, v := range iamUsersMap {
-		sys.iamUsersMap[k] = v
-	}
-
-	for k, v := range iamUserPolicyMap {
-		sys.iamUserPolicyMap[k] = v
-	}
-
-	// purge any expired entries which became expired now.
-	var expiredEntries []string
-	for k, v := range sys.iamUsersMap {
-		if v.IsExpired() {
-			delete(sys.iamUsersMap, k)
-			delete(sys.iamUserPolicyMap, k)
-			expiredEntries = append(expiredEntries, k)
-			// Deleting on the disk is taken care of in the next cycle
-		}
-	}
-
-	for _, v := range sys.iamUsersMap {
-		if v.IsServiceAccount() {
-			for _, accessKey := range expiredEntries {
-				if v.ParentUser == accessKey {
-					_ = ies.deleteUserIdentity(ctx, v.AccessKey, srvAccUser)
-					delete(sys.iamUsersMap, v.AccessKey)
-				}
-			}
-		}
-	}
-
-	// purge any expired entries which became expired now.
-	for k, v := range sys.iamUsersMap {
-		if v.IsExpired() {
-			delete(sys.iamUsersMap, k)
-			delete(sys.iamUserPolicyMap, k)
-			// Deleting on the etcd is taken care of in the next cycle
-		}
-	}
-
-	for k, v := range iamGroupPolicyMap {
-		sys.iamGroupPolicyMap[k] = v
-	}
-
-	for k, v := range iamGroupsMap {
-		sys.iamGroupsMap[k] = v
-	}
-
-	sys.buildUserGroupMemberships()
-	sys.storeFallback = false
-
-	return nil
+	return sys.Load(ctx, ies)
 }
 
 func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p iampolicy.Policy) error {
@@ -653,6 +545,7 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 	usersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigUsersPrefix)
 	groupsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigGroupsPrefix)
 	stsPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigSTSPrefix)
+	svcPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigServiceAccountsPrefix)
 	policyPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPoliciesPrefix)
 	policyDBUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBUsersPrefix)
 	policyDBSTSUsersPrefix := strings.HasPrefix(string(event.Kv.Key), iamConfigPolicyDBSTSUsersPrefix)
@@ -672,6 +565,10 @@ func (ies *IAMEtcdStore) reloadFromEvent(sys *IAMSys, event *etcd.Event) {
 			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigSTSPrefix))
 			ies.loadUser(ctx, accessKey, stsUser, sys.iamUsersMap)
+		case svcPrefix:
+			accessKey := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
+				iamConfigServiceAccountsPrefix))
+			ies.loadUser(ctx, accessKey, srvAccUser, sys.iamUsersMap)
 		case groupsPrefix:
 			group := path.Dir(strings.TrimPrefix(string(event.Kv.Key),
 				iamConfigGroupsPrefix))
