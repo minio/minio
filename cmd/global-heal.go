@@ -153,7 +153,8 @@ func healErasureSet(ctx context.Context, setIndex int, setDriveCount int, maxIO 
 					}
 					mu.Lock()
 					entryChs = append(entryChs, FileInfoVersionsCh{
-						Ch: entryCh,
+						Ch:       entryCh,
+						SetIndex: setIndex,
 					})
 					mu.Unlock()
 				}(disk)
