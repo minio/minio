@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	defaultHealthCheckDuration = 60 * time.Second
+	defaultHealthCheckDuration = 100 * time.Second
 )
 
 // BucketTargetSys represents bucket targets subsystem
@@ -461,10 +461,10 @@ func (tc *TargetClient) healthCheck() {
 		_, err := tc.BucketExists(GlobalContext, tc.bucket)
 		if err != nil {
 			atomic.StoreInt32(&tc.up, 0)
-			time.Sleep(tc.healthCheckDuration * time.Second)
+			time.Sleep(tc.healthCheckDuration)
 			continue
 		}
 		atomic.StoreInt32(&tc.up, 1)
-		time.Sleep(tc.healthCheckDuration * time.Second)
+		time.Sleep(tc.healthCheckDuration)
 	}
 }
