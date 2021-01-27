@@ -893,7 +893,8 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	return errs
 }
 
-// DeleteVersion - deletes FileInfo metadata for path at `xl.meta`
+// DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. Create a fresh
+// `xl.meta` if it does not exist and we creating a new delete-marker.
 func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error {
 	if HasSuffix(path, SlashSeparator) {
 		return s.Delete(ctx, volume, path, false)
@@ -901,10 +902,17 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
-		if err == errFileNotFound && fi.VersionID != "" {
-			err = errFileVersionNotFound
+		if err != errFileNotFound {
+			return err
 		}
-		return err
+		if fi.Deleted {
+			// Create a new xl.meta with a delete marker in it
+			return s.WriteMetadata(ctx, volume, path, fi)
+		}
+		if fi.VersionID != "" {
+			return errFileVersionNotFound
+		}
+		return errFileNotFound
 	}
 
 	if len(buf) == 0 {
