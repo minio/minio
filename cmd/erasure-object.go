@@ -786,6 +786,31 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
+// deleteEmptyDir knows only how to remove an empty directory (not the empty object with a
+// trailing slash), this is called for the healing code to remove such directories.
+func (er erasureObjects) deleteEmptyDir(ctx context.Context, bucket, object string) error {
+	defer ObjectPathUpdated(pathJoin(bucket, object))
+
+	if bucket == minioMetaTmpBucket {
+		return nil
+	}
+
+	disks := er.getDisks()
+	g := errgroup.WithNErrs(len(disks))
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			return disks[index].Delete(ctx, bucket, object, false)
+		}, index)
+	}
+
+	// return errors if any during deletion
+	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, len(disks)/2+1)
+}
+
 // deleteObject - wrapper for delete object, deletes an object from
 // all the disks in parallel, including `xl.meta` associated with the
 // object.
