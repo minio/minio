@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -315,17 +316,29 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			// Prefer local disks
 			prefer[index] = disk.Hostname() == ""
 		}
-		err = erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize, prefer)
+
+		written, err := erasure.Decode(ctx, writer, readers, partOffset, partLength, partSize, prefer)
 		// Note: we should not be defer'ing the following closeBitrotReaders() call as
 		// we are inside a for loop i.e if we use defer, we would accumulate a lot of open files by the time
 		// we return from this function.
 		closeBitrotReaders(readers)
 		if err != nil {
-			if decodeHealErr, ok := err.(*errDecodeHealRequired); ok {
-				healOnce.Do(func() {
-					go deepHealObject(bucket, object, fi.VersionID)
-				})
-				err = decodeHealErr.err
+			// If we have successfully written all the content that was asked
+			// by the client, but we still see an error - this would mean
+			// that we have some parts or data blocks missing or corrupted
+			// - attempt a heal to successfully heal them for future calls.
+			if written == partLength {
+				var scan madmin.HealScanMode
+				if errors.Is(err, errFileNotFound) {
+					scan = madmin.HealNormalScan
+				} else if errors.Is(err, errFileCorrupt) {
+					scan = madmin.HealDeepScan
+				}
+				if scan != madmin.HealUnknownScan {
+					healOnce.Do(func() {
+						go healObject(bucket, object, fi.VersionID, scan)
+					})
+				}
 			}
 			if err != nil {
 				return toObjectErr(err, bucket, object)
@@ -416,6 +429,24 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	if err != nil {
 		return fi, nil, nil, err
 	}
+
+	var missingBlocks int
+	for i, err := range errs {
+		if err != nil && errors.Is(err, errFileNotFound) {
+			missingBlocks++
+			continue
+		}
+		if metaArr[i].IsValid() && metaArr[i].ModTime.Equal(fi.ModTime) {
+			continue
+		}
+		missingBlocks++
+	}
+
+	// if missing metadata can be reconstructed, attempt to reconstruct.
+	if missingBlocks > 0 && missingBlocks < readQuorum {
+		go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
+	}
+
 	return fi, metaArr, onlineDisks, nil
 }
 
