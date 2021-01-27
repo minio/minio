@@ -437,7 +437,7 @@ func (b *bucketMetacache) deleteAll() {
 	ctx := context.Background()
 	ez, ok := newObjectLayerFn().(*erasureServerPools)
 	if !ok {
-		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasureZones"))
+		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be *erasurePools"))
 		return
 	}
 

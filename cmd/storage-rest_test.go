@@ -446,7 +446,7 @@ func newStorageRESTHTTPServerClient(t *testing.T) (*httptest.Server, *storageRES
 		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
-	registerStorageRESTHandlers(router, []ZoneEndpoints{{
+	registerStorageRESTHandlers(router, []PoolEndpoints{{
 		Endpoints: Endpoints{endpoint},
 	}})
 

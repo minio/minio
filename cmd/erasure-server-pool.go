@@ -47,7 +47,7 @@ type erasureServerPools struct {
 	shutdown context.CancelFunc
 }
 
-func (z *erasureServerPools) SingleZone() bool {
+func (z *erasureServerPools) SinglePool() bool {
 	return len(z.serverPools) == 1
 }
 
@@ -187,9 +187,9 @@ func (p serverPoolsAvailableSpace) TotalAvailable() uint64 {
 	return total
 }
 
-// getAvailableZoneIdx will return an index that can hold size bytes.
+// getAvailablePoolIdx will return an index that can hold size bytes.
 // -1 is returned if no serverPools have available space for the size given.
-func (z *erasureServerPools) getAvailableZoneIdx(ctx context.Context, size int64) int {
+func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, size int64) int {
 	serverPools := z.getServerPoolsAvailableSpace(ctx, size)
 	total := serverPools.TotalAvailable()
 	if total == 0 {
@@ -260,10 +260,10 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, s
 	return serverPools
 }
 
-// getZoneIdx returns the found previous object and its corresponding pool idx,
+// getPoolIdx returns the found previous object and its corresponding pool idx,
 // if none are found falls back to most available space pool.
-func (z *erasureServerPools) getZoneIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
-	if z.SingleZone() {
+func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
+	if z.SinglePool() {
 		return 0, nil
 	}
 	for i, pool := range z.serverPools {
@@ -289,7 +289,7 @@ func (z *erasureServerPools) getZoneIdx(ctx context.Context, bucket, object stri
 	}
 
 	// We multiply the size by 2 to account for erasure coding.
-	idx = z.getAvailableZoneIdx(ctx, size*2)
+	idx = z.getAvailablePoolIdx(ctx, size*2)
 	if idx < 0 {
 		return -1, toObjectErr(errDiskFull)
 	}
@@ -601,11 +601,11 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 
 	object = encodeDirObject(object)
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts, data.Size())
+	idx, err := z.getPoolIdx(ctx, bucket, object, opts, data.Size())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -621,7 +621,7 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 
 	object = encodeDirObject(object)
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
 	}
 	for _, pool := range z.serverPools {
@@ -658,7 +658,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	}
 	defer multiDeleteLock.Unlock()
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
 	}
 
@@ -680,7 +680,7 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
-	poolIdx, err := z.getZoneIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
+	poolIdx, err := z.getPoolIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
 	}
@@ -833,7 +833,7 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		return ListMultipartsInfo{}, err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	}
 
@@ -859,12 +859,12 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		return "", err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
 	// We don't know the exact size, so we ask for at least 1GiB file.
-	idx, err := z.getZoneIdx(ctx, bucket, object, opts, 1<<30)
+	idx, err := z.getPoolIdx(ctx, bucket, object, opts, 1<<30)
 	if err != nil {
 		return "", err
 	}
@@ -888,7 +888,7 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		return PartInfo{}, err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
@@ -918,7 +918,7 @@ func (z *erasureServerPools) GetMultipartInfo(ctx context.Context, bucket, objec
 		return MultipartInfo{}, err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 	}
 	for _, pool := range z.serverPools {
@@ -948,7 +948,7 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 		return ListPartsInfo{}, err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
 	for _, pool := range z.serverPools {
@@ -975,7 +975,7 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		return err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 	}
 
@@ -1004,7 +1004,7 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		return objInfo, err
 	}
 
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 	}
 
@@ -1031,7 +1031,7 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 
 // GetBucketInfo - returns bucket info from one of the erasure coded serverPools.
 func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string) (bucketInfo BucketInfo, err error) {
-	if z.SingleZone() {
+	if z.SinglePool() {
 		bucketInfo, err = z.serverPools[0].GetBucketInfo(ctx, bucket)
 		if err != nil {
 			return bucketInfo, err
@@ -1089,7 +1089,7 @@ func (z *erasureServerPools) IsTaggingSupported() bool {
 // even if one of the serverPools fail to delete buckets, we proceed to
 // undo a successful operation.
 func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, forceDelete bool) error {
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].DeleteBucket(ctx, bucket, forceDelete)
 	}
 	g := errgroup.WithNErrs(len(z.serverPools))
@@ -1165,7 +1165,7 @@ func undoDeleteBucketServerPools(ctx context.Context, bucket string, serverPools
 // sort here just for simplification. As per design it is assumed
 // that all buckets are present on all serverPools.
 func (z *erasureServerPools) ListBuckets(ctx context.Context) (buckets []BucketInfo, err error) {
-	if z.SingleZone() {
+	if z.SinglePool() {
 		buckets, err = z.serverPools[0].ListBuckets(ctx)
 	} else {
 		for _, pool := range z.serverPools {
@@ -1428,7 +1428,7 @@ func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, e
 	return &BackendMetrics{}, NotImplemented{}
 }
 
-func (z *erasureServerPools) getZoneAndSet(id string) (int, int, error) {
+func (z *erasureServerPools) getPoolAndSet(id string) (int, int, error) {
 	for poolIdx := range z.serverPools {
 		format := z.serverPools[poolIdx].format
 		for setIdx, set := range format.Erasure.Sets {
@@ -1453,7 +1453,7 @@ type HealthOptions struct {
 type HealthResult struct {
 	Healthy       bool
 	HealingDrives int
-	ZoneID, SetID int
+	PoolID, SetID int
 	WriteQuorum   int
 }
 
@@ -1474,7 +1474,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for _, localDiskIDs := range diskIDs {
 		for _, id := range localDiskIDs {
-			poolIdx, setIdx, err := z.getZoneAndSet(id)
+			poolIdx, setIdx, err := z.getPoolAndSet(id)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				continue
@@ -1519,7 +1519,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 				return HealthResult{
 					Healthy:       false,
 					HealingDrives: len(aggHealStateResult.HealDisks),
-					ZoneID:        poolIdx,
+					PoolID:        poolIdx,
 					SetID:         setIdx,
 					WriteQuorum:   writeQuorum,
 				}
@@ -1546,7 +1546,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 // PutObjectTags - replace or add tags to an existing object
 func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
 	object = encodeDirObject(object)
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
 
@@ -1576,7 +1576,7 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 // DeleteObjectTags - delete object tags from an existing object
 func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	object = encodeDirObject(object)
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 	for _, pool := range z.serverPools {
@@ -1605,7 +1605,7 @@ func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, objec
 // GetObjectTags - get object tags from an existing object
 func (z *erasureServerPools) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
 	object = encodeDirObject(object)
-	if z.SingleZone() {
+	if z.SinglePool() {
 		return z.serverPools[0].GetObjectTags(ctx, bucket, object, opts)
 	}
 	for _, pool := range z.serverPools {
