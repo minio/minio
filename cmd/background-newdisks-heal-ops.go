@@ -310,7 +310,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 			// Reset to next interval.
 			diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
 
-			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
+			var erasureSetInPoolDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
 			if len(healDisks) > 0 {
@@ -323,9 +323,9 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
 					len(healDisks)))
 
-				erasureSetInZoneDisksToHeal = make([]map[int][]StorageAPI, len(z.serverPools))
+				erasureSetInPoolDisksToHeal = make([]map[int][]StorageAPI, len(z.serverPools))
 				for i := range z.serverPools {
-					erasureSetInZoneDisksToHeal[i] = map[int][]StorageAPI{}
+					erasureSetInPoolDisksToHeal[i] = map[int][]StorageAPI{}
 				}
 			}
 
@@ -341,7 +341,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 					continue
 				}
 
-				poolIdx := globalEndpoints.GetLocalZoneIdx(disk.Endpoint())
+				poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
 				if poolIdx < 0 {
 					continue
 				}
@@ -356,7 +356,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 					continue
 				}
 
-				erasureSetInZoneDisksToHeal[poolIdx][setIndex] = append(erasureSetInZoneDisksToHeal[poolIdx][setIndex], disk)
+				erasureSetInPoolDisksToHeal[poolIdx][setIndex] = append(erasureSetInPoolDisksToHeal[poolIdx][setIndex], disk)
 			}
 
 			buckets, _ := z.ListBuckets(ctx)
@@ -377,7 +377,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 			// TODO(klauspost): This will block until all heals are done,
 			// in the future this should be able to start healing other sets at once.
 			var wg sync.WaitGroup
-			for i, setMap := range erasureSetInZoneDisksToHeal {
+			for i, setMap := range erasureSetInPoolDisksToHeal {
 				i := i
 				for setIndex, disks := range setMap {
 					if len(disks) == 0 {

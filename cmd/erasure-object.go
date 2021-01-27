@@ -51,6 +51,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	defer ObjectPathUpdated(pathJoin(dstBucket, dstObject))
+
 	lk := er.NewNSLock(dstBucket, dstObject)
 	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 		return oi, err
@@ -580,7 +581,9 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	defer ObjectPathUpdated(pathJoin(bucket, object))
+	defer func() {
+		ObjectPathUpdated(pathJoin(bucket, object))
+	}()
 
 	data := r.Reader
 
@@ -781,6 +784,31 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 	}
 	// return errors if any during deletion
 	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
+}
+
+// deleteEmptyDir knows only how to remove an empty directory (not the empty object with a
+// trailing slash), this is called for the healing code to remove such directories.
+func (er erasureObjects) deleteEmptyDir(ctx context.Context, bucket, object string) error {
+	defer ObjectPathUpdated(pathJoin(bucket, object))
+
+	if bucket == minioMetaTmpBucket {
+		return nil
+	}
+
+	disks := er.getDisks()
+	g := errgroup.WithNErrs(len(disks))
+	for index := range disks {
+		index := index
+		g.Go(func() error {
+			if disks[index] == nil {
+				return errDiskNotFound
+			}
+			return disks[index].Delete(ctx, bucket, object, false)
+		}, index)
+	}
+
+	// return errors if any during deletion
+	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, len(disks)/2+1)
 }
 
 // deleteObject - wrapper for delete object, deletes an object from

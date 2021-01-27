@@ -205,7 +205,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -331,7 +331,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	credentials := globalActiveCred
 
 	testServer.Obj = objLayer
-	testServer.Disks = mustGetZoneEndpoints(disks...)
+	testServer.Disks = mustGetPoolEndpoints(disks...)
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
@@ -2000,7 +2000,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of disks for Erasure setup: %s", err)
 	}
-	objLayer, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(erasureDisks...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(erasureDisks...))
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for Erasure setup: %s", err)
 	}
@@ -2250,7 +2250,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 	return certOut.Bytes(), keyOut.Bytes(), nil
 }
 
-func mustGetZoneEndpoints(args ...string) EndpointServerPools {
+func mustGetPoolEndpoints(args ...string) EndpointServerPools {
 	endpoints := mustGetNewEndpoints(args...)
 	drivesPerSet := len(args)
 	setCount := 1
@@ -2258,7 +2258,7 @@ func mustGetZoneEndpoints(args ...string) EndpointServerPools {
 		drivesPerSet = 16
 		setCount = len(args) / 16
 	}
-	return []ZoneEndpoints{{
+	return []PoolEndpoints{{
 		SetCount:     setCount,
 		DrivesPerSet: drivesPerSet,
 		Endpoints:    endpoints,

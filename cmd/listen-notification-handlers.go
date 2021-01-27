@@ -30,7 +30,7 @@ import (
 func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListenNotification")
 
-	defer logger.AuditLog(w, r, "ListenNotification", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
@@ -139,6 +139,9 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
 
+	if bucketName != "" {
+		values.Set(peerRESTListenBucket, bucketName)
+	}
 	for _, peer := range peers {
 		if peer == nil {
 			continue

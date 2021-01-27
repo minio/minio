@@ -737,6 +737,12 @@ func (z *FileInfoVersions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
+		case "IsEmptyDir":
+			z.IsEmptyDir, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "IsEmptyDir")
+				return
+			}
 		case "LatestModTime":
 			z.LatestModTime, err = dc.ReadTime()
 			if err != nil {
@@ -775,9 +781,9 @@ func (z *FileInfoVersions) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *FileInfoVersions) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
+	// map header, size 5
 	// write "Volume"
-	err = en.Append(0x84, 0xa6, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65)
+	err = en.Append(0x85, 0xa6, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -794,6 +800,16 @@ func (z *FileInfoVersions) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteString(z.Name)
 	if err != nil {
 		err = msgp.WrapError(err, "Name")
+		return
+	}
+	// write "IsEmptyDir"
+	err = en.Append(0xaa, 0x49, 0x73, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x44, 0x69, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.IsEmptyDir)
+	if err != nil {
+		err = msgp.WrapError(err, "IsEmptyDir")
 		return
 	}
 	// write "LatestModTime"
@@ -829,13 +845,16 @@ func (z *FileInfoVersions) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *FileInfoVersions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
+	// map header, size 5
 	// string "Volume"
-	o = append(o, 0x84, 0xa6, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65)
+	o = append(o, 0x85, 0xa6, 0x56, 0x6f, 0x6c, 0x75, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Volume)
 	// string "Name"
 	o = append(o, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
+	// string "IsEmptyDir"
+	o = append(o, 0xaa, 0x49, 0x73, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x44, 0x69, 0x72)
+	o = msgp.AppendBool(o, z.IsEmptyDir)
 	// string "LatestModTime"
 	o = append(o, 0xad, 0x4c, 0x61, 0x74, 0x65, 0x73, 0x74, 0x4d, 0x6f, 0x64, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendTime(o, z.LatestModTime)
@@ -882,6 +901,12 @@ func (z *FileInfoVersions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Name")
 				return
 			}
+		case "IsEmptyDir":
+			z.IsEmptyDir, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "IsEmptyDir")
+				return
+			}
 		case "LatestModTime":
 			z.LatestModTime, bts, err = msgp.ReadTimeBytes(bts)
 			if err != nil {
@@ -921,7 +946,7 @@ func (z *FileInfoVersions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FileInfoVersions) Msgsize() (s int) {
-	s = 1 + 7 + msgp.StringPrefixSize + len(z.Volume) + 5 + msgp.StringPrefixSize + len(z.Name) + 14 + msgp.TimeSize + 9 + msgp.ArrayHeaderSize
+	s = 1 + 7 + msgp.StringPrefixSize + len(z.Volume) + 5 + msgp.StringPrefixSize + len(z.Name) + 11 + msgp.BoolSize + 14 + msgp.TimeSize + 9 + msgp.ArrayHeaderSize
 	for za0001 := range z.Versions {
 		s += z.Versions[za0001].Msgsize()
 	}
