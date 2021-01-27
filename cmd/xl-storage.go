@@ -811,8 +811,9 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) {
 				fiv = FileInfoVersions{
-					Volume: volume,
-					Name:   walkResult.entry,
+					Volume:     volume,
+					Name:       walkResult.entry,
+					IsEmptyDir: walkResult.isEmptyDir,
 					Versions: []FileInfo{
 						{
 							Volume: volume,

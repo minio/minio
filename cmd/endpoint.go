@@ -196,20 +196,20 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 	}, nil
 }
 
-// ZoneEndpoints represent endpoints in a given pool
+// PoolEndpoints represent endpoints in a given pool
 // along with its setCount and setDriveCount.
-type ZoneEndpoints struct {
+type PoolEndpoints struct {
 	SetCount     int
 	DrivesPerSet int
 	Endpoints    Endpoints
 }
 
 // EndpointServerPools - list of list of endpoints
-type EndpointServerPools []ZoneEndpoints
+type EndpointServerPools []PoolEndpoints
 
-// GetLocalZoneIdx returns the pool which endpoint belongs to locally.
+// GetLocalPoolIdx returns the pool which endpoint belongs to locally.
 // if ep is remote this code will return -1 poolIndex
-func (l EndpointServerPools) GetLocalZoneIdx(ep Endpoint) int {
+func (l EndpointServerPools) GetLocalPoolIdx(ep Endpoint) int {
 	for i, zep := range l {
 		for _, cep := range zep.Endpoints {
 			if cep.IsLocal && ep.IsLocal {
@@ -223,7 +223,7 @@ func (l EndpointServerPools) GetLocalZoneIdx(ep Endpoint) int {
 }
 
 // Add add pool endpoints
-func (l *EndpointServerPools) Add(zeps ZoneEndpoints) error {
+func (l *EndpointServerPools) Add(zeps PoolEndpoints) error {
 	existSet := set.NewStringSet()
 	for _, zep := range *l {
 		for _, ep := range zep.Endpoints {

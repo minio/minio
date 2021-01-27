@@ -160,7 +160,7 @@ func TestHealObjectCorrupted(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +310,7 @@ func TestHealObjectErasure(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestHealEmptyDirectoryErasure(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(ctx, mustGetZoneEndpoints(fsDirs...))
+	obj, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}

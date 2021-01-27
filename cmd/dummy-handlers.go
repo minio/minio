@@ -32,7 +32,7 @@ import (
 func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketWebsite")
 
-	defer logger.AuditLog(w, r, "GetBucketWebsite", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -64,7 +64,7 @@ func (api objectAPIHandlers) GetBucketWebsiteHandler(w http.ResponseWriter, r *h
 func (api objectAPIHandlers) GetBucketAccelerateHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketAccelerate")
 
-	defer logger.AuditLog(w, r, "GetBucketAccelerate", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -97,7 +97,7 @@ func (api objectAPIHandlers) GetBucketAccelerateHandler(w http.ResponseWriter, r
 func (api objectAPIHandlers) GetBucketRequestPaymentHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketRequestPayment")
 
-	defer logger.AuditLog(w, r, "GetBucketRequestPayment", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -131,7 +131,7 @@ func (api objectAPIHandlers) GetBucketRequestPaymentHandler(w http.ResponseWrite
 func (api objectAPIHandlers) GetBucketLoggingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketLogging")
 
-	defer logger.AuditLog(w, r, "GetBucketLogging", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -170,7 +170,7 @@ func (api objectAPIHandlers) DeleteBucketWebsiteHandler(w http.ResponseWriter, r
 func (api objectAPIHandlers) GetBucketCorsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketCors")
 
-	defer logger.AuditLog(w, r, "GetBucketCors", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

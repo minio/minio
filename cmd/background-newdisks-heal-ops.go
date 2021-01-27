@@ -123,7 +123,7 @@ wait:
 			// Reset to next interval.
 			diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
 
-			var erasureSetInZoneDisksToHeal []map[int][]StorageAPI
+			var erasureSetInPoolDisksToHeal []map[int][]StorageAPI
 
 			healDisks := globalBackgroundHealState.getHealLocalDisks()
 			if len(healDisks) > 0 {
@@ -136,9 +136,9 @@ wait:
 				logger.Info(fmt.Sprintf("Found drives to heal %d, proceeding to heal content...",
 					len(healDisks)))
 
-				erasureSetInZoneDisksToHeal = make([]map[int][]StorageAPI, len(z.serverPools))
+				erasureSetInPoolDisksToHeal = make([]map[int][]StorageAPI, len(z.serverPools))
 				for i := range z.serverPools {
-					erasureSetInZoneDisksToHeal[i] = map[int][]StorageAPI{}
+					erasureSetInPoolDisksToHeal[i] = map[int][]StorageAPI{}
 				}
 			}
 
@@ -154,7 +154,7 @@ wait:
 					continue
 				}
 
-				poolIdx := globalEndpoints.GetLocalZoneIdx(disk.Endpoint())
+				poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
 				if poolIdx < 0 {
 					continue
 				}
@@ -169,7 +169,7 @@ wait:
 					continue
 				}
 
-				erasureSetInZoneDisksToHeal[poolIdx][setIndex] = append(erasureSetInZoneDisksToHeal[poolIdx][setIndex], disk)
+				erasureSetInPoolDisksToHeal[poolIdx][setIndex] = append(erasureSetInPoolDisksToHeal[poolIdx][setIndex], disk)
 			}
 
 			buckets, _ := z.ListBuckets(ctx)
@@ -179,7 +179,7 @@ wait:
 				return buckets[i].Created.After(buckets[j].Created)
 			})
 
-			for i, setMap := range erasureSetInZoneDisksToHeal {
+			for i, setMap := range erasureSetInPoolDisksToHeal {
 				for setIndex, disks := range setMap {
 					for _, disk := range disks {
 						logger.Info("Healing disk '%s' on %s pool", disk, humanize.Ordinal(i+1))
