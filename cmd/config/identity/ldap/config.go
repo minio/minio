@@ -283,6 +283,11 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 			errRet := fmt.Errorf("LDAP auth failed for DN %s: %v", bindDN, err)
 			return "", nil, errRet
 		}
+
+		// Bind to the lookup user account again to perform group search.
+		if err = l.lookupBind(conn); err != nil {
+			return "", nil, err
+		}
 	} else {
 		// Verify login credentials by checking the username formats.
 		bindDN, err = l.usernameFormatsBind(conn, username, password)
