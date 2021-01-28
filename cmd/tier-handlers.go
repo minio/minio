@@ -24,6 +24,12 @@ var (
 		Message:    "Specified remote tier was not found",
 		StatusCode: http.StatusNotFound,
 	}
+	// error returned when remote tier is being used an ILM transition rule
+	errTierInUse = AdminError{
+		Code:       "XMinioAdminTierInUse",
+		Message:    "Specified remote tier is actively used by one or more ILM transition rules",
+		StatusCode: http.StatusConflict,
+	}
 )
 
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {
@@ -92,9 +98,12 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	globalTierConfigMgr.RemoveTier(scName)
-	err := saveGlobalTierConfig()
-	if err != nil {
+	if err := globalTierConfigMgr.RemoveTier(scName); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	if err := saveGlobalTierConfig(); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

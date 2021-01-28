@@ -161,15 +161,18 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 	return nil
 }
 
-func (config *TierConfigMgr) RemoveTier(name string) {
+func (config *TierConfigMgr) RemoveTier(name string) error {
 	config.Lock()
 	defer config.Unlock()
 
-	// FIXME: check if the SC is used by any of the ILM policies.
+	if globalBucketMetadataSys.IsTierInUse(name) {
+		return errTierInUse
+	}
 
 	delete(config.S3, name)
 	delete(config.Azure, name)
 	delete(config.GCS, name)
+	return nil
 }
 
 func (config *TierConfigMgr) Bytes() ([]byte, error) {
