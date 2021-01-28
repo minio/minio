@@ -161,7 +161,7 @@ func newlockRESTClient(endpoint Endpoint) *lockRESTClient {
 	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 	healthClient.ExpectTimeouts = true
 	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
 		defer cancel()
 		respBody, err := healthClient.Call(ctx, lockRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)

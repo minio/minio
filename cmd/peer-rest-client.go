@@ -881,7 +881,7 @@ func newPeerRESTClient(peer *xnet.Host) *peerRESTClient {
 
 	// Construct a new health function.
 	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
 		defer cancel()
 		respBody, err := healthClient.Call(ctx, peerRESTMethodHealth, nil, nil, -1)
 		xhttp.DrainBody(respBody)
