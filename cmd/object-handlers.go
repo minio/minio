@@ -3265,17 +3265,23 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
+	objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	tagsStr := tags.String()
+
 	// Put object tags
-	err = objAPI.PutObjectTags(ctx, bucket, object, tags.String(), opts)
+	err = objAPI.PutObjectTags(ctx, bucket, object, tagsStr, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if replicate {
-		if objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			scheduleReplication(ctx, objInfo, objAPI, sync)
-		}
+		scheduleReplication(ctx, objInfo, objAPI, sync)
 	}
 
 	if opts.VersionID != "" {
@@ -3283,6 +3289,17 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	writeSuccessResponseHeadersOnly(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedPutTagging,
+		BucketName:   bucket,
+		Object:       ObjectInfo{Bucket: bucket, Name: object, VersionID: objInfo.VersionID, UserTags: tagsStr},
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+
 }
 
 // DeleteObjectTaggingHandler - DELETE object tagging
@@ -3344,6 +3361,16 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	writeSuccessNoContent(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedDeleteTagging,
+		BucketName:   bucket,
+		Object:       ObjectInfo{Bucket: bucket, Name: object, VersionID: oi.VersionID, UserTags: ""},
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 }
 
 // RestoreObjectHandler - POST restore object handler.
