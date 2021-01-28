@@ -467,7 +467,7 @@ func (sys *NotificationSys) updateBloomFilter(ctx context.Context, current uint6
 			defer mu.Unlock()
 
 			if err != nil || !serverBF.Complete || bf == nil {
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, fmt.Sprintf("host:%s, cycle:%d", client.host, current), client.cycleServerBloomFilter)
 				bf = nil
 				return nil
 			}
