@@ -354,7 +354,9 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && err != dns.ErrNoEntriesFound {
+		if err != nil && !IsErrIgnored(err,
+			dns.ErrNoEntriesFound,
+			dns.ErrDomainMissing) {
 			return toJSONError(ctx, err)
 		}
 		for _, dnsRecords := range dnsBuckets {

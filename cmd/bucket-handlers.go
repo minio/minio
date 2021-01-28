@@ -25,8 +25,10 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -72,7 +74,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 	// Get buckets in the DNS
 	dnsBuckets, err := globalDNSConfig.List()
-	if err != nil && err != dns.ErrNoEntriesFound && err != dns.ErrNotImplemented {
+	if err != nil && !IsErrIgnored(err, dns.ErrNoEntriesFound, dns.ErrNotImplemented, dns.ErrDomainMissing) {
 		logger.LogIf(GlobalContext, err)
 		return
 	}
@@ -80,6 +82,10 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	bucketsSet := set.NewStringSet()
 	bucketsToBeUpdated := set.NewStringSet()
 	bucketsInConflict := set.NewStringSet()
+
+	// This means that domain is updated, we should update
+	// all bucket entries with new domain name.
+	domainMissing := err == dns.ErrDomainMissing
 	if dnsBuckets != nil {
 		for _, bucket := range buckets {
 			bucketsSet.Add(bucket.Name)
@@ -89,11 +95,16 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 				continue
 			}
 			if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
-				if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
+				if globalDomainIPs.Difference(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() && !domainMissing {
 					// No difference in terms of domainIPs and nothing
 					// has changed so we don't change anything on the etcd.
+					//
+					// Additionally also check if domain is updated/missing with more
+					// entries, if that is the case we should update the
+					// new domain entries as well.
 					continue
 				}
+
 				// if domain IPs intersect then it won't be an empty set.
 				// such an intersection means that bucket exists on etcd.
 				// but if we do see a difference with local domain IPs with
@@ -102,6 +113,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 				bucketsToBeUpdated.Add(bucket.Name)
 				continue
 			}
+
 			// No IPs seem to intersect, this means that bucket exists but has
 			// different IP addresses perhaps from a different deployment.
 			// bucket names are globally unique in federation at a given
@@ -112,8 +124,8 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	}
 
 	// Add/update buckets that are not registered with the DNS
-	g := errgroup.WithNErrs(len(buckets))
 	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
+	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice))
 	for index := range bucketsToBeUpdatedSlice {
 		index := index
 		g.Go(func() error {
@@ -128,9 +140,10 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
-		logger.LogIf(GlobalContext, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket. Use one of these IP addresses %v to access the bucket", bucket, globalDomainIPs.ToSlice()))
+		logger.LogIf(GlobalContext, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket.", bucket, globalDomainIPs.ToSlice()))
 	}
 
+	var wg sync.WaitGroup
 	// Remove buckets that are in DNS for this server, but aren't local
 	for bucket, records := range dnsBuckets {
 		if bucketsSet.Contains(bucket) {
@@ -142,13 +155,18 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 			continue
 		}
 
-		// We go to here, so we know the bucket no longer exists,
-		// but is registered in DNS to this server
-		if err = globalDNSConfig.Delete(bucket); err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("Failed to remove DNS entry for %s due to %w",
-				bucket, err))
-		}
+		wg.Add(1)
+		go func(bucket string) {
+			defer wg.Done()
+			// We go to here, so we know the bucket no longer exists,
+			// but is registered in DNS to this server
+			if err := globalDNSConfig.Delete(bucket); err != nil {
+				logger.LogIf(GlobalContext, fmt.Errorf("Failed to remove DNS entry for %s due to %w",
+					bucket, err))
+			}
+		}(bucket)
 	}
+	wg.Wait()
 }
 
 // GetBucketLocationHandler - GET Bucket location.
@@ -280,7 +298,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	var bucketsInfo []BucketInfo
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && err != dns.ErrNoEntriesFound {
+		if err != nil && !IsErrIgnored(err,
+			dns.ErrNoEntriesFound,
+			dns.ErrDomainMissing) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -290,6 +310,11 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Created: dnsRecords[0].CreationDate,
 			})
 		}
+
+		sort.Slice(bucketsInfo, func(i, j int) bool {
+			return bucketsInfo[i].Name < bucketsInfo[j].Name
+		})
+
 	} else {
 		// Invoke the list buckets.
 		var err error
