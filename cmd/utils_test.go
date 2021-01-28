@@ -460,7 +460,7 @@ func TestLCP(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		foundPrefix := lcp(test.prefixes)
+		foundPrefix := lcp(test.prefixes, true)
 		if foundPrefix != test.commonPrefix {
 			t.Fatalf("Test %d: Common prefix found: `%v`, expected: `%v`", i+1, foundPrefix, test.commonPrefix)
 		}
