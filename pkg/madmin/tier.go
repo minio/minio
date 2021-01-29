@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -39,13 +38,9 @@ func (adm *AdminClient) AddTier(ctx context.Context, cfg TierConfig) error {
 		return err
 	}
 
-	queryValues := url.Values{}
-	queryValues.Set("add", "")
-
 	reqData := requestData{
-		relPath:     strings.Join([]string{adminAPIPrefix, TierAPI}, "/"),
-		queryValues: queryValues,
-		content:     encData,
+		relPath: strings.Join([]string{adminAPIPrefix, TierAPI}, "/"),
+		content: encData,
 	}
 
 	// Execute PUT on /minio/admin/v3/tier to add a remote tier
