@@ -36,7 +36,7 @@ type StorageAPI interface {
 	Close() error
 	GetDiskID() (string, error)
 	SetDiskID(id string)
-	Healing() bool // Returns if disk is healing.
+	Healing() *healingTracker // Returns nil if disk is not healing.
 
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
 	CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)

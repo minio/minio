@@ -66,7 +66,7 @@ func (d *naughtyDisk) Hostname() string {
 	return d.disk.Hostname()
 }
 
-func (d *naughtyDisk) Healing() bool {
+func (d *naughtyDisk) Healing() *healingTracker {
 	return d.disk.Healing()
 }
 

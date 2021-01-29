@@ -320,11 +320,17 @@ func (s *xlStorage) IsLocal() bool {
 	return true
 }
 
-func (s *xlStorage) Healing() bool {
+func (s *xlStorage) Healing() *healingTracker {
 	healingFile := pathJoin(s.diskPath, minioMetaBucket,
 		bucketMetaPrefix, healingTrackerFilename)
-	_, err := os.Stat(healingFile)
-	return err == nil
+	b, err := ioutil.ReadFile(healingFile)
+	if err != nil {
+		return nil
+	}
+	var h healingTracker
+	b, err = h.UnmarshalMsg(b)
+	logger.LogIf(GlobalContext, err)
+	return &h
 }
 
 func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
@@ -442,7 +448,7 @@ func (s *xlStorage) DiskInfo(context.Context) (info DiskInfo, err error) {
 			} else {
 				// Check if the disk is being healed if GetDiskID
 				// returned any error other than fresh disk
-				dcinfo.Healing = s.Healing()
+				dcinfo.Healing = s.Healing() != nil
 			}
 
 			dcinfo.ID = diskID

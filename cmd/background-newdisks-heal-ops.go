@@ -48,6 +48,7 @@ type healingTracker struct {
 	disk StorageAPI `msg:"-"`
 
 	ID            string
+	PoolIndex     int
 	SetIndex      int // This will be -1 until the disk is picked up.
 	Path          string
 	Endpoint      string
@@ -129,7 +130,7 @@ func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
 // update will update the tracker on the disk.
 // If the tracker has been deleted an error is returned.
 func (h *healingTracker) update(ctx context.Context) error {
-	if !h.disk.Healing() {
+	if h.disk.Healing() == nil {
 		return fmt.Errorf("healingTracker: disk %q is not marked as healing", h.ID)
 	}
 	return h.save(ctx)
@@ -277,7 +278,7 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 			disk, _, err := connectEndpoint(endpoint)
 			if errors.Is(err, errUnformattedDisk) {
 				disksToHeal = append(disksToHeal, endpoint)
-			} else if err == nil && disk != nil && disk.Healing() {
+			} else if err == nil && disk != nil && disk.Healing() != nil {
 				disksToHeal = append(disksToHeal, disk.Endpoint())
 			}
 		}

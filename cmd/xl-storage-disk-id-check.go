@@ -51,7 +51,7 @@ func (p *xlStorageDiskIDCheck) Hostname() string {
 	return p.storage.Hostname()
 }
 
-func (p *xlStorageDiskIDCheck) Healing() bool {
+func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 	return p.storage.Healing()
 }
 

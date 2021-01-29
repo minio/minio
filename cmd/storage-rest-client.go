@@ -122,6 +122,7 @@ type storageRESTClient struct {
 	diskID     string
 
 	diskInfoCache timedValue
+	diskHealCache timedValue
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -163,14 +164,24 @@ func (client *storageRESTClient) Endpoint() Endpoint {
 	return client.endpoint
 }
 
-func (client *storageRESTClient) Healing() bool {
-	// This call should never be called over the network
-	// this function should always return 'false'
-	//
-	// To know if a remote disk is being healed
-	// perform DiskInfo() call which would return
-	// back the correct data if disk is being healed.
-	return false
+func (client *storageRESTClient) Healing() *healingTracker {
+	client.diskHealCache.Once.Do(func() {
+		// Update at least every second.
+		client.diskHealCache.TTL = time.Second
+		client.diskHealCache.Update = func() (interface{}, error) {
+			var h healingTracker
+			b, err := client.ReadAll(GlobalContext, minioMetaBucket,
+				pathJoin(bucketMetaPrefix, healingTrackerFilename))
+			if err != nil {
+				// If error, likely not healing.
+				return (*healingTracker)(nil), nil
+			}
+			b, err = h.UnmarshalMsg(b)
+			return &h, err
+		}
+	})
+	val, _ := client.diskHealCache.Get()
+	return val.(*healingTracker)
 }
 
 func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {

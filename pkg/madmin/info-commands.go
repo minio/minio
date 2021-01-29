@@ -275,21 +275,22 @@ type ServerProperties struct {
 
 // Disk holds Disk information
 type Disk struct {
-	Endpoint        string  `json:"endpoint,omitempty"`
-	RootDisk        bool    `json:"rootDisk,omitempty"`
-	DrivePath       string  `json:"path,omitempty"`
-	Healing         bool    `json:"healing,omitempty"`
-	State           string  `json:"state,omitempty"`
-	UUID            string  `json:"uuid,omitempty"`
-	Model           string  `json:"model,omitempty"`
-	TotalSpace      uint64  `json:"totalspace,omitempty"`
-	UsedSpace       uint64  `json:"usedspace,omitempty"`
-	AvailableSpace  uint64  `json:"availspace,omitempty"`
-	ReadThroughput  float64 `json:"readthroughput,omitempty"`
-	WriteThroughPut float64 `json:"writethroughput,omitempty"`
-	ReadLatency     float64 `json:"readlatency,omitempty"`
-	WriteLatency    float64 `json:"writelatency,omitempty"`
-	Utilization     float64 `json:"utilization,omitempty"`
+	Endpoint        string       `json:"endpoint,omitempty"`
+	RootDisk        bool         `json:"rootDisk,omitempty"`
+	DrivePath       string       `json:"path,omitempty"`
+	Healing         bool         `json:"healing,omitempty"`
+	State           string       `json:"state,omitempty"`
+	UUID            string       `json:"uuid,omitempty"`
+	Model           string       `json:"model,omitempty"`
+	TotalSpace      uint64       `json:"totalspace,omitempty"`
+	UsedSpace       uint64       `json:"usedspace,omitempty"`
+	AvailableSpace  uint64       `json:"availspace,omitempty"`
+	ReadThroughput  float64      `json:"readthroughput,omitempty"`
+	WriteThroughPut float64      `json:"writethroughput,omitempty"`
+	ReadLatency     float64      `json:"readlatency,omitempty"`
+	WriteLatency    float64      `json:"writelatency,omitempty"`
+	Utilization     float64      `json:"utilization,omitempty"`
+	HealInfo        *HealingDisk `json:"heal_info,omitempty"`
 }
 
 // ServerInfo - Connect to a minio server and call Server Admin Info Management API

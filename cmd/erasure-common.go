@@ -28,7 +28,7 @@ func (er erasureObjects) getLoadBalancedLocalDisks() (newDisks []StorageAPI) {
 	// Based on the random shuffling return back randomized disks.
 	for _, i := range hashOrder(UTCNow().String(), len(disks)) {
 		if disks[i-1] != nil && disks[i-1].IsLocal() {
-			if !disks[i-1].Healing() && disks[i-1].IsOnline() {
+			if disks[i-1].Healing() == nil && disks[i-1].IsOnline() {
 				newDisks = append(newDisks, disks[i-1])
 			}
 		}

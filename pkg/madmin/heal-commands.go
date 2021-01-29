@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"time"
 )
 
@@ -298,8 +299,17 @@ type BgHealState struct {
 
 	HealDisks []string
 
-	// HealingDisks is information about disks that are currently healing.
-	HealingDisks []HealingDisk
+	// SetStatus contains information for each set.
+	Sets []SetStatus `json:"sets"`
+}
+
+type SetStatus struct {
+	ID           string `json:"id"`
+	PoolIndex    int    `json:"pool_index"`
+	SetIndex     int    `json:"set_index"`
+	HealStatus   string `json:"heal_status"`
+	HealPriority string `json:"heal_priority"`
+	Disks        []Disk `json:"disks"`
 }
 
 // HealingDisk contains information about
@@ -334,28 +344,37 @@ type HealingDisk struct {
 func (b *BgHealState) Merge(others ...BgHealState) {
 	for _, other := range others {
 		b.ScannedItemsCount += other.ScannedItemsCount
-		if len(b.HealingDisks) == 0 {
-			b.HealingDisks = make([]HealingDisk, len(other.HealingDisks))
-			copy(b.HealingDisks, other.HealingDisks)
+		if len(b.Sets) == 0 {
+			b.Sets = make([]SetStatus, len(other.Sets))
+			copy(b.Sets, other.Sets)
 			continue
 		}
 		// Add disk if not present.
 		// If present select the one with latest lastupdate.
-		addDisk := func(disk HealingDisk) {
-			for i, existing := range b.HealingDisks {
-				if existing.ID == disk.ID {
-					if existing.LastUpdate.Before(disk.LastUpdate) {
-						b.HealingDisks[i] = disk
-					}
-					return
+		addSet := func(set SetStatus) {
+			for _, existing := range b.Sets {
+				if existing.ID != set.ID {
+					continue
 				}
+				for _, disk := range set.Disks {
+					if disk.HealInfo != nil {
+
+					}
+				}
+				return
 			}
-			b.HealingDisks = append(b.HealingDisks, disk)
+			b.Sets = append(b.Sets, set)
 		}
-		for _, disk := range other.HealingDisks {
-			addDisk(disk)
+		for _, disk := range other.Sets {
+			addSet(disk)
 		}
 	}
+	sort.Slice(b.Sets, func(i, j int) bool {
+		if b.Sets[i].PoolIndex != b.Sets[j].PoolIndex {
+			return b.Sets[i].PoolIndex < b.Sets[j].PoolIndex
+		}
+		return b.Sets[i].SetIndex < b.Sets[j].SetIndex
+	})
 }
 
 // BackgroundHealStatus returns the background heal status of the
