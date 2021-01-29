@@ -246,6 +246,7 @@ func (s *erasureSets) connectDisks() {
 				disk.SetDiskID(format.Erasure.This)
 				s.erasureDisks[setIndex][diskIndex] = disk
 			}
+			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			s.endpointStrings[setIndex*s.setDriveCount+diskIndex] = disk.String()
 			s.erasureDisksMu.Unlock()
 			go func(setIndex int) {
@@ -408,6 +409,7 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			if err != nil {
 				continue
 			}
+			disk.SetDiskLoc(s.poolIndex, m, n)
 			s.endpointStrings[m*setDriveCount+n] = disk.String()
 			s.erasureDisks[m][n] = disk
 		}
@@ -519,7 +521,7 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 	storageUsageInfo := func() StorageInfo {
 		var storageInfo StorageInfo
 		storageInfos := make([]StorageInfo, len(s.sets))
-		storageInfo.Backend.Type = BackendErasure
+		storageInfo.Backend.Type = madmin.Erasure
 
 		g := errgroup.WithNErrs(len(s.sets))
 		for index := range s.sets {
@@ -554,9 +556,9 @@ func (s *erasureSets) StorageUsageInfo(ctx context.Context) StorageInfo {
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
 func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
-	var storageInfo StorageInfo
+	var storageInfo madmin.StorageInfo
 
-	storageInfos := make([]StorageInfo, len(s.sets))
+	storageInfos := make([]madmin.StorageInfo, len(s.sets))
 	storageInfoErrs := make([][]error, len(s.sets))
 
 	g := errgroup.WithNErrs(len(s.sets))
@@ -1307,8 +1309,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	res.Before.Drives = make([]madmin.HealDriveInfo, len(beforeDrives))
 	// Copy "after" drive state too from before.
 	for k, v := range beforeDrives {
-		res.Before.Drives[k] = madmin.HealDriveInfo(v)
-		res.After.Drives[k] = madmin.HealDriveInfo(v)
+		res.Before.Drives[k] = v
+		res.After.Drives[k] = v
 	}
 
 	if countErrs(sErrs, errUnformattedDisk) == 0 {
@@ -1351,7 +1353,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			if s.erasureDisks[m][n] != nil {
 				s.erasureDisks[m][n].Close()
 			}
-
+			storageDisks[index].SetDiskLoc(s.poolIndex, m, n)
 			s.erasureDisks[m][n] = storageDisks[index]
 			s.endpointStrings[m*s.setDriveCount+n] = storageDisks[index].String()
 		}

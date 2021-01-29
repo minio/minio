@@ -29,15 +29,15 @@ import (
 	"github.com/minio/cli"
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio-go/v7/pkg/tags"
-	minio "github.com/minio/minio/cmd"
-
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/tags"
+	minio "github.com/minio/minio/cmd"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 func init() {
@@ -275,7 +275,7 @@ func (l *s3Objects) Shutdown(ctx context.Context) error {
 
 // StorageInfo is not relevant to S3 backend.
 func (l *s3Objects) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.Type = madmin.Gateway
 	host := l.Client.EndpointURL().Host
 	if l.Client.EndpointURL().Port() == "" {
 		host = l.Client.EndpointURL().Host + ":" + l.Client.EndpointURL().Scheme

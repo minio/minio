@@ -121,8 +121,23 @@ type storageRESTClient struct {
 	restClient *rest.Client
 	diskID     string
 
+	// Indexes, will be -1 until assigned a set.
+	poolIndex, setIndex, diskIndex int
+
 	diskInfoCache timedValue
 	diskHealCache timedValue
+}
+
+// Retrieve location indexes.
+func (client *storageRESTClient) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return client.poolIndex, client.setIndex, client.diskIndex
+}
+
+// Set location indexes.
+func (client *storageRESTClient) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	client.poolIndex = poolIdx
+	client.setIndex = setIdx
+	client.diskIndex = diskIdx
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -681,5 +696,5 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		}
 	}
 
-	return &storageRESTClient{endpoint: endpoint, restClient: restClient}
+	return &storageRESTClient{endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1}
 }

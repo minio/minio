@@ -35,6 +35,8 @@ const (
 	FS
 	// Multi disk Erasure (single, distributed) backend.
 	Erasure
+	// Gateway to other storage
+	Gateway
 
 	// Add your own backend.
 )
@@ -54,18 +56,22 @@ type StorageInfo struct {
 	Disks []Disk
 
 	// Backend type.
-	Backend struct {
-		// Represents various backend types, currently on FS and Erasure.
-		Type BackendType
+	Backend BackendInfo
+}
 
-		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks      BackendDisks // Online disks during server startup.
-		OfflineDisks     BackendDisks // Offline disks during server startup.
-		StandardSCData   int          // Data disks for currently configured Standard storage class.
-		StandardSCParity int          // Parity disks for currently configured Standard storage class.
-		RRSCData         int          // Data disks for currently configured Reduced Redundancy storage class.
-		RRSCParity       int          // Parity disks for currently configured Reduced Redundancy storage class.
-	}
+// BackendInfo - contains info of the underlying backend
+type BackendInfo struct {
+	// Represents various backend types, currently on FS, Erasure and Gateway
+	Type BackendType
+
+	// Following fields are only meaningful if BackendType is Gateway.
+	GatewayOnline bool
+
+	// Following fields are only meaningful if BackendType is Erasure.
+	StandardSCData   []int // Data disks for currently configured Standard storage class.
+	StandardSCParity int   // Parity disks for currently configured Standard storage class.
+	RRSCData         []int // Data disks for currently configured Reduced Redundancy storage class.
+	RRSCParity       int   // Parity disks for currently configured Reduced Redundancy storage class.
 }
 
 // BackendDisks - represents the map of endpoint-disks.
@@ -291,6 +297,11 @@ type Disk struct {
 	WriteLatency    float64      `json:"writelatency,omitempty"`
 	Utilization     float64      `json:"utilization,omitempty"`
 	HealInfo        *HealingDisk `json:"heal_info,omitempty"`
+
+	// Indexes, will be -1 until assigned a set.
+	PoolIndex int `json:"pool_index"`
+	SetIndex  int `json:"set_index"`
+	DiskIndex int `json:"disk_index"`
 }
 
 // ServerInfo - Connect to a minio server and call Server Admin Info Management API

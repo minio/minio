@@ -316,8 +316,8 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
-	b.Type = BackendErasure
+func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
+	b.Type = madmin.Erasure
 
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity <= 0 {

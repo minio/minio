@@ -55,6 +55,14 @@ func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 	return p.storage.Healing()
 }
 
+func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return p.storage.GetDiskLoc()
+}
+
+func (p *xlStorageDiskIDCheck) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	p.storage.SetDiskLoc(poolIdx, setIdx, diskIdx)
+}
+
 func (p *xlStorageDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err

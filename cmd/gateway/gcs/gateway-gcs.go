@@ -29,9 +29,8 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"strconv"
-
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,17 +38,16 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
+	minio "github.com/minio/minio/cmd"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/env"
-
+	"github.com/minio/minio/pkg/madmin"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
-
-	minio "github.com/minio/minio/cmd"
 )
 
 var (
@@ -413,7 +411,7 @@ func (l *gcsGateway) Shutdown(ctx context.Context) error {
 
 // StorageInfo - Not relevant to GCS backend.
 func (l *gcsGateway) StorageInfo(ctx context.Context) (si minio.StorageInfo, _ []error) {
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.Type = madmin.Gateway
 	si.Backend.GatewayOnline = minio.IsBackendOnline(ctx, "storage.googleapis.com:443")
 	return si, nil
 }

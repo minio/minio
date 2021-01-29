@@ -94,7 +94,7 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
 		HealDisks:         healDisks,
 		// FIXME:
-		Sets: globalBackgroundHealState.getHealingDisks(),
+		//Sets: globalBackgroundHealState.getHealingDisks(),
 	}, true
 }
 

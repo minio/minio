@@ -35,8 +35,8 @@ import (
 type GatewayUnsupported struct{}
 
 // BackendInfo returns the underlying backend information
-func (a GatewayUnsupported) BackendInfo() BackendInfo {
-	return BackendInfo{Type: BackendGateway}
+func (a GatewayUnsupported) BackendInfo() madmin.BackendInfo {
+	return madmin.BackendInfo{Type: madmin.Gateway}
 }
 
 // CrawlAndGetDataUsage - crawl is not implemented for gateway

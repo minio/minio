@@ -79,6 +79,9 @@ type StorageAPI interface {
 
 	// Read all.
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)
+
+	GetDiskLoc() (poolIdx, setIdx, diskIdx int) // Retrieve location indexes.
+	SetDiskLoc(poolIdx, setIdx, diskIdx int)    // Set location indexes.
 }
 
 // storageReader is an io.Reader view of a disk

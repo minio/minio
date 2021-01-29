@@ -27,6 +27,7 @@ import (
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/cmd/logger"
 	color "github.com/minio/minio/pkg/color"
+	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -206,7 +207,7 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 	var msg string
 	var mcMessage string
 	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
-	if storageInfo.Backend.Type == BackendErasure {
+	if storageInfo.Backend.Type == madmin.Erasure {
 		if offlineDisks.Sum() > 0 {
 			mcMessage = "Use `mc admin info` to look for latest server/disk info\n"
 		}

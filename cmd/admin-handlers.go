@@ -1542,9 +1542,9 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Get the notification target info
 	notifyTarget := fetchLambdaInfo()
 
-	server := getLocalServerProperty(globalEndpoints, r)
+	local := getLocalServerProperty(globalEndpoints, r)
 	servers := globalNotificationSys.ServerInfo()
-	servers = append(servers, server)
+	servers = append(servers, local)
 
 	var backend interface{}
 	mode := madmin.ObjectLayerInitializing
@@ -1566,7 +1566,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 		// Fetching the backend information
 		backendInfo := objectAPI.BackendInfo()
-		if backendInfo.Type == BackendType(madmin.Erasure) {
+		if backendInfo.Type == madmin.Erasure {
 			// Calculate the number of online/offline disks of all nodes
 			var allDisks []madmin.Disk
 			for _, s := range servers {

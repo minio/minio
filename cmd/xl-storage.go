@@ -106,6 +106,9 @@ type xlStorage struct {
 
 	diskID string
 
+	// Indexes, will be -1 until assigned a set.
+	poolIndex, setIndex, diskIndex int
+
 	formatFileInfo  os.FileInfo
 	formatLegacy    bool
 	formatLastCheck time.Time
@@ -242,6 +245,9 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
 		ctx:        GlobalContext,
 		rootDisk:   rootDisk,
+		poolIndex:  -1,
+		setIndex:   -1,
+		diskIndex:  -1,
 	}
 
 	// Create all necessary bucket folders if possible.
@@ -318,6 +324,18 @@ func (s *xlStorage) IsOnline() bool {
 
 func (s *xlStorage) IsLocal() bool {
 	return true
+}
+
+// Retrieve location indexes.
+func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return s.poolIndex, s.setIndex, s.diskIndex
+}
+
+// Set location indexes.
+func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	s.poolIndex = poolIdx
+	s.setIndex = setIdx
+	s.diskIndex = diskIdx
 }
 
 func (s *xlStorage) Healing() *healingTracker {

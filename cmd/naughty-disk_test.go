@@ -90,6 +90,12 @@ func (d *naughtyDisk) calcError() (err error) {
 	return nil
 }
 
+func (p *naughtyDisk) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return -1, -1, -1
+}
+
+func (p *naughtyDisk) SetDiskLoc(poolIdx, setIdx, diskIdx int) {}
+
 func (d *naughtyDisk) GetDiskID() (string, error) {
 	return d.disk.GetDiskID()
 }

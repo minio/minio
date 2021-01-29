@@ -193,6 +193,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 				Healing:        info.Healing,
 				State:          diskErrToDriveState(err),
 			}
+			di.PoolIndex, di.SetIndex, di.DiskIndex = disks[index].GetDiskLoc()
 			if info.Total > 0 {
 				di.Utilization = float64(info.Used / info.Total * 100)
 			}
@@ -215,7 +216,7 @@ func getStorageInfo(disks []StorageAPI, endpoints []string) (StorageInfo, []erro
 		Disks: disksInfo,
 	}
 
-	storageInfo.Backend.Type = BackendErasure
+	storageInfo.Backend.Type = madmin.Erasure
 	return storageInfo, errs
 }
 

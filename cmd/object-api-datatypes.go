@@ -32,36 +32,18 @@ type BackendType int
 
 // Enum for different backend types.
 const (
-	Unknown BackendType = iota
+	Unknown = BackendType(madmin.Unknown)
 	// Filesystem backend.
-	BackendFS
+	BackendFS = BackendType(madmin.FS)
 	// Multi disk BackendErasure (single, distributed) backend.
-	BackendErasure
+	BackendErasure = BackendType(madmin.Erasure)
 	// Gateway backend.
-	BackendGateway
+	BackendGateway = BackendType(madmin.Gateway)
 	// Add your own backend.
 )
 
-// BackendInfo - contains info of the underlying backend
-type BackendInfo struct {
-	// Represents various backend types, currently on FS, Erasure and Gateway
-	Type BackendType
-
-	// Following fields are only meaningful if BackendType is Gateway.
-	GatewayOnline bool
-
-	// Following fields are only meaningful if BackendType is Erasure.
-	StandardSCData   []int // Data disks for currently configured Standard storage class.
-	StandardSCParity int   // Parity disks for currently configured Standard storage class.
-	RRSCData         []int // Data disks for currently configured Reduced Redundancy storage class.
-	RRSCParity       int   // Parity disks for currently configured Reduced Redundancy storage class.
-}
-
 // StorageInfo - represents total capacity of underlying storage.
-type StorageInfo struct {
-	Disks   []madmin.Disk
-	Backend BackendInfo
-}
+type StorageInfo = madmin.StorageInfo
 
 // objectHistogramInterval is an interval that will be
 // used to report the histogram of objects data sizes
