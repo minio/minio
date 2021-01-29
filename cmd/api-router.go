@@ -19,9 +19,14 @@ package cmd
 import (
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config/api"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/wildcard"
 	"github.com/rs/cors"
 )
@@ -48,6 +53,7 @@ func newCachedObjectLayerFn() CacheObjectLayer {
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 	CacheAPI  func() CacheObjectLayer
+	Throttler map[string]chan struct{}
 }
 
 // getHost tries its best to return the request host.
@@ -60,12 +66,39 @@ func getHost(r *http.Request) string {
 	return r.Host
 }
 
+// api throttler constants
+const (
+	listAPI = "LIST"
+
+	granularDeadline = 10 * time.Second
+)
+
+func parseThrottler(throttle string) map[string]chan struct{} {
+	th := make(map[string]chan struct{})
+	for _, v := range strings.Split(throttle, ";") {
+		vs := strings.SplitN(v, "=", 2)
+		if len(vs) == 2 {
+			l, err := strconv.Atoi(vs[1])
+			if err == nil {
+				if l >= len(globalEndpoints.Hostnames()) {
+					l /= len(globalEndpoints.Hostnames())
+				} else {
+					l = 1
+				}
+				th[vs[0]] = make(chan struct{}, l)
+			}
+		}
+	}
+	return th
+}
+
 // registerAPIRouter - registers S3 compatible APIs.
 func registerAPIRouter(router *mux.Router) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 		CacheAPI:  newCachedObjectLayerFn,
+		Throttler: parseThrottler(env.Get(api.EnvAPIRequestsGranularMax, "")),
 	}
 
 	// API Router

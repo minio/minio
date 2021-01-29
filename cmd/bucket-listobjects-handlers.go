@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/minio/cmd/logger"
@@ -82,8 +83,26 @@ func validateListObjectsArgs(marker, delimiter, encodingType string, maxKeys int
 // of the versions of objects in a bucket.
 func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectVersions")
-
 	defer logger.AuditLog(w, r, "ListObjectVersions", mustGetClaimsFromToken(r))
+
+	pool := api.Throttler[listAPI]
+	if pool != nil {
+		deadlineTimer := time.NewTimer(granularDeadline)
+		defer deadlineTimer.Stop()
+
+		select {
+		case pool <- struct{}{}:
+			defer func() { <-pool }()
+		case <-deadlineTimer.C:
+			// Send a http timeout message
+			writeErrorResponse(ctx, w,
+				errorCodes.ToAPIErr(ErrOperationMaxedOut),
+				r.URL, guessIsBrowserReq(r))
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -119,6 +138,7 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 	if forwardStr == "" {
 		forwardStr = bucket
 	}
+
 	if proxyRequestByStringHash(ctx, w, r, forwardStr) {
 		return
 	}
@@ -152,8 +172,26 @@ func (api objectAPIHandlers) ListObjectVersionsHandler(w http.ResponseWriter, r 
 // MinIO continues to support ListObjectsV1 and V2 for supporting legacy tools.
 func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2M")
-
 	defer logger.AuditLog(w, r, "ListObjectsV2M", mustGetClaimsFromToken(r))
+
+	pool := api.Throttler[listAPI]
+	if pool != nil {
+		deadlineTimer := time.NewTimer(granularDeadline)
+		defer deadlineTimer.Stop()
+
+		select {
+		case pool <- struct{}{}:
+			defer func() { <-pool }()
+		case <-deadlineTimer.C:
+			// Send a http timeout message
+			writeErrorResponse(ctx, w,
+				errorCodes.ToAPIErr(ErrOperationMaxedOut),
+				r.URL, guessIsBrowserReq(r))
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -229,8 +267,26 @@ func (api objectAPIHandlers) ListObjectsV2MHandler(w http.ResponseWriter, r *htt
 // MinIO continues to support ListObjectsV1 for supporting legacy tools.
 func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV2")
-
 	defer logger.AuditLog(w, r, "ListObjectsV2", mustGetClaimsFromToken(r))
+
+	pool := api.Throttler[listAPI]
+	if pool != nil {
+		deadlineTimer := time.NewTimer(granularDeadline)
+		defer deadlineTimer.Stop()
+
+		select {
+		case pool <- struct{}{}:
+			defer func() { <-pool }()
+		case <-deadlineTimer.C:
+			// Send a http timeout message
+			writeErrorResponse(ctx, w,
+				errorCodes.ToAPIErr(ErrOperationMaxedOut),
+				r.URL, guessIsBrowserReq(r))
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -358,8 +414,26 @@ func proxyRequestByStringHash(ctx context.Context, w http.ResponseWriter, r *htt
 //
 func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListObjectsV1")
-
 	defer logger.AuditLog(w, r, "ListObjectsV1", mustGetClaimsFromToken(r))
+
+	pool := api.Throttler[listAPI]
+	if pool != nil {
+		deadlineTimer := time.NewTimer(granularDeadline)
+		defer deadlineTimer.Stop()
+
+		select {
+		case pool <- struct{}{}:
+			defer func() { <-pool }()
+		case <-deadlineTimer.C:
+			// Send a http timeout message
+			writeErrorResponse(ctx, w,
+				errorCodes.ToAPIErr(ErrOperationMaxedOut),
+				r.URL, guessIsBrowserReq(r))
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -393,6 +467,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	if forwardStr == "" {
 		forwardStr = bucket
 	}
+
 	if proxyRequestByStringHash(ctx, w, r, forwardStr) {
 		return
 	}

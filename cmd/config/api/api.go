@@ -36,6 +36,7 @@ const (
 	apiRemoteTransportDeadline = "remote_transport_deadline"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsGranularMax     = "MINIO_API_REQUESTS_GRANULAR_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
 	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"

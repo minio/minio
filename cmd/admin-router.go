@@ -36,7 +36,7 @@ const (
 
 // adminAPIHandlers provides HTTP handlers for MinIO admin API.
 type adminAPIHandlers struct {
-	mu          sync.Mutex
+	mu          *sync.Mutex
 	healSetsMap map[string]healInitSetParams
 }
 
@@ -44,6 +44,7 @@ type adminAPIHandlers struct {
 func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool) {
 
 	adminAPI := adminAPIHandlers{
+		mu:          &sync.Mutex{},
 		healSetsMap: make(map[string]healInitSetParams),
 	}
 
