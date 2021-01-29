@@ -267,7 +267,7 @@ func TestCheckFormatErasureValue(t *testing.T) {
 
 	// Valid all test cases.
 	for i, testCase := range testCases {
-		if err := checkFormatErasureValue(testCase.format); err != nil && testCase.success {
+		if err := checkFormatErasureValue(testCase.format, nil); err != nil && testCase.success {
 			t.Errorf("Test %d: Expected failure %s", i+1, err)
 		}
 	}

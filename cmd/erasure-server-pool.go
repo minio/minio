@@ -57,7 +57,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		deploymentID       string
 		distributionAlgo   string
 		commonParityDrives int
-		drivesPerSet       int
 		err                error
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
@@ -75,26 +74,17 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			}
 		}
 
-		if drivesPerSet == 0 {
-			drivesPerSet = ep.DrivesPerSet
-		}
-
+		// If storage class is not set during startup, default values are used
+		// -- Default for Reduced Redundancy Storage class is, parity = 2
+		// -- Default for Standard Storage class is, parity = 2 - disks 4, 5
+		// -- Default for Standard Storage class is, parity = 3 - disks 6, 7
+		// -- Default for Standard Storage class is, parity = 4 - disks 8 to 16
 		if commonParityDrives == 0 {
 			commonParityDrives = ecDrivesNoConfig(ep.DrivesPerSet)
 		}
 
-		// Once distribution algo is set, validate it for the next pool,
-		// before proceeding to write to drives.
-		switch distributionAlgo {
-		case formatErasureVersionV3DistributionAlgoV2:
-			if drivesPerSet != 0 && drivesPerSet != ep.DrivesPerSet {
-				return nil, fmt.Errorf("All legacy serverPools should have same drive per set ratio - expected %d, got %d", drivesPerSet, ep.DrivesPerSet)
-			}
-		case formatErasureVersionV3DistributionAlgoV3:
-			parityDrives := ecDrivesNoConfig(ep.DrivesPerSet)
-			if commonParityDrives != 0 && commonParityDrives != parityDrives {
-				return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, parityDrives)
-			}
+		if err = storageclass.ValidateParity(commonParityDrives, ep.DrivesPerSet); err != nil {
+			return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, ecDrivesNoConfig(ep.DrivesPerSet))
 		}
 
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
@@ -122,7 +112,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("All serverPools should have same distributionAlgo expected %s, got %s", distributionAlgo, formats[i].Erasure.DistributionAlgo)
 		}
 
-		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
+		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives)
 		if err != nil {
 			return nil, err
 		}

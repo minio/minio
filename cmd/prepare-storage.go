@@ -266,7 +266,7 @@ func connectLoadInitFormats(retryCount int, firstDisk bool, endpoints Endpoints,
 	// most part unless one of the formats is not consistent
 	// with expected Erasure format. For example if a user is
 	// trying to pool FS backend into an Erasure set.
-	if err = checkFormatErasureValues(formatConfigs, setDriveCount); err != nil {
+	if err = checkFormatErasureValues(formatConfigs, storageDisks, setDriveCount); err != nil {
 		return nil, nil, err
 	}
 
