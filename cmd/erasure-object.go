@@ -101,7 +101,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		modTime = dstOpts.MTime
 		fi.ModTime = dstOpts.MTime
 	}
-
+	fi.Metadata = srcInfo.UserDefined
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 
 	// Update `xl.meta` content on each disks.
