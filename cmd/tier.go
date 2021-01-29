@@ -178,37 +178,39 @@ func (config *TierConfigMgr) Bytes() ([]byte, error) {
 	return json.Marshal(config)
 }
 
-func (config *TierConfigMgr) GetDriver(sc string) (d warmBackend, err error) {
+func (config *TierConfigMgr) GetDriver(tierName string) (d warmBackend, err error) {
 	config.Lock()
 	defer config.Unlock()
 
-	d = config.drivercache[sc]
+	d = config.drivercache[tierName]
 	if d != nil {
 		return d, nil
 	}
 	for k, v := range config.S3 {
-		if k == sc {
+		if k == tierName {
 			d, err = newWarmBackendS3(v)
 			break
 		}
 	}
 	for k, v := range config.Azure {
-		if k == sc {
+		if k == tierName {
 			d, err = newWarmBackendAzure(v)
 			break
 		}
 	}
 	for k, v := range config.GCS {
-		if k == sc {
+		if k == tierName {
 			d, err = newWarmBackendGCS(v)
 			break
 		}
 	}
-	if d != nil {
-		config.drivercache[sc] = d
-		return d, nil
+
+	if err != nil {
+		return nil, err
 	}
-	return nil, errInvalidArgument
+
+	config.drivercache[tierName] = d
+	return d, nil
 }
 
 func saveGlobalTierConfig() error {
