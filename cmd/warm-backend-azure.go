@@ -74,7 +74,7 @@ func newWarmBackendAzure(conf madmin.TierAzure) (*warmBackendAzure, error) {
 		if _, ok := err.(base64.CorruptInputError); ok {
 			return nil, errors.New("invalid Azure credentials")
 		}
-		return &warmBackendAzure{}, err
+		return nil, err
 	}
 	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
 	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", conf.AccessKey))
