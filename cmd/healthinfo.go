@@ -204,7 +204,7 @@ func getLocalProcInfo(ctx context.Context, r *http.Request) madmin.ServerProcInf
 		if err != nil {
 			return errProcInfo(err)
 		}
-		sysProc.Connections = conns
+		sysProc.ConnectionCount = len(conns)
 
 		createTime, err := proc.CreateTimeWithContext(ctx)
 		if err != nil {
