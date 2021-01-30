@@ -123,8 +123,29 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 		if len(name) == 0 || bytes.Equal(name, []byte{'.'}) || bytes.Equal(name, []byte{'.', '.'}) {
 			continue
 		}
-		if typ&os.ModeSymlink == os.ModeSymlink {
-			continue
+
+		// Fallback for filesystems (like old XFS) that don't
+		// support Dirent.Type and have DT_UNKNOWN (0) there
+		// instead.
+		if typ == unexpectedFileMode || typ&os.ModeSymlink == os.ModeSymlink {
+			fi, err := os.Stat(pathJoin(dirPath, string(name)))
+			if err != nil {
+				// It got deleted in the meantime, not found
+				// or returns too many symlinks ignore this
+				// file/directory.
+				if osIsNotExist(err) || isSysErrPathNotFound(err) ||
+					isSysErrTooManySymlinks(err) {
+					continue
+				}
+				return err
+			}
+
+			// Ignore symlinked directories.
+			if typ&os.ModeSymlink == os.ModeSymlink && fi.IsDir() {
+				continue
+			}
+
+			typ = fi.Mode() & os.ModeType
 		}
 		if err = fn(string(name), typ); err == errDoneForNow {
 			// fn() requested to return by caller.
@@ -176,11 +197,12 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		if len(name) == 0 || bytes.Equal(name, []byte{'.'}) || bytes.Equal(name, []byte{'.', '.'}) {
 			continue
 		}
+
 		// Fallback for filesystems (like old XFS) that don't
 		// support Dirent.Type and have DT_UNKNOWN (0) there
 		// instead.
-		if typ == unexpectedFileMode {
-			fi, err := os.Lstat(pathJoin(dirPath, string(name)))
+		if typ == unexpectedFileMode || typ&os.ModeSymlink == os.ModeSymlink {
+			fi, err := os.Stat(pathJoin(dirPath, string(name)))
 			if err != nil {
 				// It got deleted in the meantime, not found
 				// or returns too many symlinks ignore this
@@ -191,22 +213,30 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				}
 				return nil, err
 			}
+
+			// Ignore symlinked directories.
+			if typ&os.ModeSymlink == os.ModeSymlink && fi.IsDir() {
+				continue
+			}
+
 			typ = fi.Mode() & os.ModeType
 		}
-		if typ&os.ModeSymlink == os.ModeSymlink {
-			continue
-		}
+
+		var nameStr string
 		if typ.IsRegular() {
-			entries = append(entries, string(name))
+			nameStr = string(name)
 		} else if typ.IsDir() {
 			// Use temp buffer to append a slash to avoid string concat.
 			tmp = tmp[:len(name)+1]
 			copy(tmp, name)
 			tmp[len(tmp)-1] = '/' // SlashSeparator
-			entries = append(entries, string(tmp))
+			nameStr = string(tmp)
 		}
+
 		count--
+		entries = append(entries, nameStr)
 	}
+
 	return
 }
 
