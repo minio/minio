@@ -32,6 +32,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -772,14 +773,25 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 
 	buckets, _ := objectAPI.ListBucketsHeal(ctx)
 	ctx, opts.cancel = context.WithCancel(context.Background())
-	for _, setNumber := range opts.setNumbers {
-		go func(setNumber int) {
-			lbDisks := z.serverSets[0].sets[setNumber].getOnlineDisks()
-			if err := healErasureSet(ctx, setNumber, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
-				logger.LogIf(ctx, err)
-			}
-		}(setNumber)
-	}
+	go func() {
+		var wg sync.WaitGroup
+		for _, setNumber := range opts.setNumbers {
+			wg.Add(1)
+			go func(setNumber int) {
+				defer wg.Done()
+				lbDisks := z.serverSets[0].sets[setNumber].getOnlineDisks()
+				if err := healErasureSet(ctx, setNumber, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
+					logger.LogIf(ctx, err)
+				}
+			}(setNumber)
+		}
+		wg.Wait()
+		a.mu.Lock()
+		opts.cancel()
+		delete(a.healSetsMap, opts.taskUUID)
+		a.mu.Unlock()
+		logger.Info("Healing finished for %v", vars[healSetsList])
+	}()
 
 	a.mu.Lock()
 	a.healSetsMap[opts.taskUUID] = opts

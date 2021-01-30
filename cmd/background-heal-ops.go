@@ -19,6 +19,7 @@ package cmd
 import (
 	"context"
 	"path"
+	"runtime"
 	"time"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -125,7 +126,7 @@ func (h *healRoutine) run(ctx context.Context, objAPI ObjectLayer) {
 
 func newHealRoutine() *healRoutine {
 	return &healRoutine{
-		tasks:  make(chan healTask),
+		tasks:  make(chan healTask, runtime.GOMAXPROCS(0)),
 		doneCh: make(chan struct{}),
 	}
 

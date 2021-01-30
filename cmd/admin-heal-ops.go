@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
@@ -420,7 +421,7 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 	clientToken := mustGetUUID()
 
 	return &healSequence{
-		respCh:         make(chan healResult),
+		respCh:         make(chan healResult, runtime.GOMAXPROCS(0)),
 		bucket:         bucket,
 		object:         objPrefix,
 		reportProgress: true,
