@@ -3293,7 +3293,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPutTagging,
 		BucketName:   bucket,
-		Object:       ObjectInfo{Bucket: bucket, Name: object, VersionID: objInfo.VersionID, UserTags: tagsStr},
+		Object:       objInfo,
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
@@ -3346,11 +3346,13 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
+
 	// Delete object tags
 	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+	oi.UserTags = ""
 
 	if opts.VersionID != "" {
 		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
@@ -3365,7 +3367,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedDeleteTagging,
 		BucketName:   bucket,
-		Object:       ObjectInfo{Bucket: bucket, Name: object, VersionID: oi.VersionID, UserTags: ""},
+		Object:       oi,
 		ReqParams:    extractReqParams(r),
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
