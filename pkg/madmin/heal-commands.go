@@ -349,16 +349,24 @@ func (b *BgHealState) Merge(others ...BgHealState) {
 			copy(b.Sets, other.Sets)
 			continue
 		}
+
 		// Add disk if not present.
 		// If present select the one with latest lastupdate.
 		addSet := func(set SetStatus) {
-			for _, existing := range b.Sets {
+			for eSetIdx, existing := range b.Sets {
 				if existing.ID != set.ID {
 					continue
 				}
-				for _, disk := range set.Disks {
+				if len(existing.Disks) < len(set.Disks) {
+					b.Sets[eSetIdx].Disks = set.Disks
+				}
+				if len(existing.Disks) < len(set.Disks) {
+					return
+				}
+				for i, disk := range set.Disks {
+					// Disks should be the same.
 					if disk.HealInfo != nil {
-
+						existing.Disks[i].HealInfo = disk.HealInfo
 					}
 				}
 				return

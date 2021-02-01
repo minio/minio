@@ -861,15 +861,11 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getAggregatedBackgroundHealState(ctx context.Context) (madmin.BgHealState, error) {
-	var bgHealStates madmin.BgHealState
-
-	localHealState, ok := getLocalBackgroundHealStatus()
-	if !ok {
-		return madmin.BgHealState{}, errServerNotInitialized
-	}
-
 	// Get local heal status first
-	bgHealStates.Merge(localHealState)
+	bgHealStates, ok := getLocalBackgroundHealStatus()
+	if !ok {
+		return bgHealStates, errServerNotInitialized
+	}
 
 	if globalIsDistErasure {
 		// Get heal status from other peers
