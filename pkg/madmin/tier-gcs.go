@@ -24,7 +24,7 @@ import (
 type TierGCS struct {
 	Name         string
 	Endpoint     string // custom endpoint is not supported for GCS
-	Creds        string // base64 encoding of credentials.json FIXME: TBD how do we persist gcs creds file
+	Creds        string // base64 encoding of credentials.json
 	Bucket       string
 	Prefix       string
 	Region       string
@@ -58,15 +58,15 @@ func (gcs *TierGCS) GetCredentialJSON() ([]byte, error) {
 	return base64.URLEncoding.DecodeString(gcs.Creds)
 }
 
-func NewTierGCS(name string, credsJSON []byte, bucket string, options ...GCSOptions) (*TierGCS, error) {
+func NewTierGCS(name string, credsJSON []byte, bucket string, options ...GCSOptions) (*TierConfig, error) {
 	creds := base64.URLEncoding.EncodeToString(credsJSON)
 	gcs := &TierGCS{
 		Name:   name,
 		Creds:  creds,
 		Bucket: bucket,
 		// Defaults
-		Endpoint: "https://storage.googleapis.com/storage/v1/", // endpoint is meant only for client-side display purposes
-
+		// endpoint is meant only for client-side display purposes
+		Endpoint:     "https://storage.googleapis.com/storage/v1/",
 		Prefix:       "",
 		Region:       "",
 		StorageClass: "",
@@ -79,5 +79,8 @@ func NewTierGCS(name string, credsJSON []byte, bucket string, options ...GCSOpti
 		}
 	}
 
-	return gcs, nil
+	return &TierConfig{
+		Type: GCS,
+		GCS:  gcs,
+	}, nil
 }

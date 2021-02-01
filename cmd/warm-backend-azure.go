@@ -69,7 +69,7 @@ func (az *warmBackendAzure) Remove(ctx context.Context, object string) error {
 }
 
 func newWarmBackendAzure(conf madmin.TierAzure) (*warmBackendAzure, error) {
-	credential, err := azblob.NewSharedKeyCredential(conf.AccessKey, conf.SecretKey)
+	credential, err := azblob.NewSharedKeyCredential(conf.AccountName, conf.AccountKey)
 	if err != nil {
 		if _, ok := err.(base64.CorruptInputError); ok {
 			return nil, errors.New("invalid Azure credentials")
@@ -77,7 +77,7 @@ func newWarmBackendAzure(conf madmin.TierAzure) (*warmBackendAzure, error) {
 		return nil, err
 	}
 	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
-	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", conf.AccessKey))
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", conf.AccountKey))
 	serviceURL := azblob.NewServiceURL(*u, p)
 	return &warmBackendAzure{
 		serviceURL:   serviceURL,

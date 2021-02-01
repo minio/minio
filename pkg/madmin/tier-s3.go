@@ -58,7 +58,7 @@ func S3StorageClass(storageClass string) func(s3 *TierS3) error {
 	}
 }
 
-func NewTierS3(name, accessKey, secretKey, bucket string, options ...S3Options) (*TierS3, error) {
+func NewTierS3(name, accessKey, secretKey, bucket string, options ...S3Options) (*TierConfig, error) {
 	sc := &TierS3{
 		Name:      name,
 		AccessKey: accessKey,
@@ -77,5 +77,8 @@ func NewTierS3(name, accessKey, secretKey, bucket string, options ...S3Options) 
 		}
 	}
 
-	return sc, nil
+	return &TierConfig{
+		Type: S3,
+		S3:   sc,
+	}, nil
 }

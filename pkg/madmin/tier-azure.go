@@ -20,8 +20,8 @@ package madmin
 type TierAzure struct {
 	Name         string
 	Endpoint     string
-	AccessKey    string
-	SecretKey    string
+	AccountName  string
+	AccountKey   string
 	Bucket       string
 	Prefix       string
 	Region       string
@@ -58,12 +58,12 @@ func AzureStorageClass(sc string) func(az *TierAzure) error {
 	}
 }
 
-func NewTierAzure(name, accessKey, secretKey, bucket string, options ...AzureOptions) (*TierAzure, error) {
+func NewTierAzure(name, accountName, accountKey, bucket string, options ...AzureOptions) (*TierConfig, error) {
 	az := &TierAzure{
-		Name:      name,
-		AccessKey: accessKey,
-		SecretKey: secretKey,
-		Bucket:    bucket,
+		Name:        name,
+		AccountName: accountName,
+		AccountKey:  accountKey,
+		Bucket:      bucket,
 		// Defaults
 		Endpoint:     "http://blob.core.windows.net",
 		Prefix:       "",
@@ -78,5 +78,8 @@ func NewTierAzure(name, accessKey, secretKey, bucket string, options ...AzureOpt
 		}
 	}
 
-	return az, nil
+	return &TierConfig{
+		Type:  Azure,
+		Azure: az,
+	}, nil
 }
