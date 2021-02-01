@@ -79,7 +79,7 @@ func (c *CoreDNS) Get(bucket string) ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
-		records, err := c.list(key+etcdPathSeparator, false)
+		records, err := c.list(key, false)
 		if err != nil {
 			return nil, err
 		}
