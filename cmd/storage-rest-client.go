@@ -191,7 +191,7 @@ func (client *storageRESTClient) Healing() *healingTracker {
 				// If error, likely not healing.
 				return (*healingTracker)(nil), nil
 			}
-			b, err = h.UnmarshalMsg(b)
+			_, err = h.UnmarshalMsg(b)
 			return &h, err
 		}
 	})

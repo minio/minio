@@ -346,7 +346,7 @@ func (s *xlStorage) Healing() *healingTracker {
 		return nil
 	}
 	var h healingTracker
-	b, err = h.UnmarshalMsg(b)
+	_, err = h.UnmarshalMsg(b)
 	logger.LogIf(GlobalContext, err)
 	return &h
 }

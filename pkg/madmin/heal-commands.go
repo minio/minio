@@ -307,6 +307,7 @@ type BgHealState struct {
 	Sets []SetStatus `json:"sets"`
 }
 
+// SetStatus contains information about the heal status of a set.
 type SetStatus struct {
 	ID           string `json:"id"`
 	PoolIndex    int    `json:"pool_index"`
