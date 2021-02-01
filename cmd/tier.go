@@ -148,8 +148,8 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 
 	case madmin.Azure:
 		sc := config.Azure[tierName]
-		sc.AccessKey = creds.AccessKey
-		sc.SecretKey = creds.SecretKey
+		sc.AccountName = creds.AccessKey
+		sc.AccountKey = creds.SecretKey
 		config.Azure[tierName] = sc
 
 	case madmin.GCS:

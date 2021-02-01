@@ -27,7 +27,7 @@ import (
 
 const TierAPI = "tier"
 
-func (adm *AdminClient) AddTier(ctx context.Context, cfg TierConfig) error {
+func (adm *AdminClient) AddTier(ctx context.Context, cfg *TierConfig) error {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -56,7 +56,7 @@ func (adm *AdminClient) AddTier(ctx context.Context, cfg TierConfig) error {
 	return nil
 }
 
-func (adm *AdminClient) ListTiers(ctx context.Context) ([]TierConfig, error) {
+func (adm *AdminClient) ListTiers(ctx context.Context) ([]*TierConfig, error) {
 	reqData := requestData{
 		relPath: strings.Join([]string{adminAPIPrefix, TierAPI}, "/"),
 	}
@@ -72,7 +72,7 @@ func (adm *AdminClient) ListTiers(ctx context.Context) ([]TierConfig, error) {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	var tiers []TierConfig
+	var tiers []*TierConfig
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return tiers, err
