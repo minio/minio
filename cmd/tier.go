@@ -161,17 +161,6 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 	return nil
 }
 
-func (config *TierConfigMgr) RemoveTier(name string) {
-	config.Lock()
-	defer config.Unlock()
-
-	// FIXME: check if the SC is used by any of the ILM policies.
-
-	delete(config.S3, name)
-	delete(config.Azure, name)
-	delete(config.GCS, name)
-}
-
 func (config *TierConfigMgr) Bytes() ([]byte, error) {
 	config.Lock()
 	defer config.Unlock()

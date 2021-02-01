@@ -72,37 +72,6 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 	writeSuccessNoContent(w)
 }
 
-func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "RemoveTier")
-
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminUsersReq(ctx, w, r, iampolicy.RemoveTierAction)
-	if objectAPI == nil || globalNotificationSys == nil || globalTierConfigMgr == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
-		return
-	}
-
-	var vars = mux.Vars(r)
-	scName := vars["tier"]
-
-	// Refresh from the disk in case we had missed notifications about edits from peers.
-	if err := loadGlobalTransitionTierConfig(); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	globalTierConfigMgr.RemoveTier(scName)
-	err := saveGlobalTierConfig()
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	globalNotificationSys.LoadTransitionTierConfig(ctx)
-
-	writeSuccessNoContent(w)
-}
-
 func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListTier")
 
