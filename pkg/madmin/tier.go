@@ -118,23 +118,3 @@ func (adm *AdminClient) EditTier(ctx context.Context, tierName string, creds Tie
 
 	return nil
 }
-
-func (adm *AdminClient) RemoveTier(ctx context.Context, tierName string) error {
-	reqData := requestData{
-		relPath: strings.Join([]string{adminAPIPrefix, TierAPI, tierName}, "/"),
-	}
-
-	// Execute DELETE on /minio/admin/v3/tier/tierName" to remove a tier
-	// configured.
-	resp, err := adm.executeMethod(ctx, http.MethodDelete, reqData)
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusNoContent {
-		return httpRespToErrorResponse(resp)
-	}
-
-	return nil
-}

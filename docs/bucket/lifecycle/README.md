@@ -109,7 +109,7 @@ To transition objects in a bucket to a destination bucket on a different cluster
 ```
  mc admin tier add azure source AZURETIER --endpoint https://blob.core.windows.net --access-key AZURE_ACCOUNT_NAME --secret-key AZURE_ACCOUNT_KEY  --bucket azurebucket --prefix testprefix1/
 ```
-> The admin user running this command needs the "admin:SetTier", "admin:ListTier","admin:RemoveTier" permissions if not running as root.
+> The admin user running this command needs the "admin:SetTier" and "admin:ListTier" permissions if not running as root.
 
 Using above tier, set up a lifecycle rule with transition:
 ```
