@@ -1146,7 +1146,7 @@ func (er erasureObjects) addPartial(bucket, object, versionID string) {
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -1154,7 +1154,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
@@ -1163,13 +1163,13 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	// Pick latest valid metadata.
 	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fi.Deleted {
 		if opts.VersionID == "" {
-			return toObjectErr(errFileNotFound, bucket, object)
+			return ObjectInfo{}, toObjectErr(errFileNotFound, bucket, object)
 		}
-		return toObjectErr(errMethodNotAllowed, bucket, object)
+		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
 	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
@@ -1192,15 +1192,18 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	// Write unique `xl.meta` for each disk.
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Atomically rename metadata from tmp location to destination for each disk.
 	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	return nil
+	objInfo := fi.ToObjectInfo(bucket, object)
+	objInfo.UserTags = tags
+
+	return objInfo, nil
 }
 
 // updateObjectMeta will update the metadata of a file.
@@ -1264,7 +1267,7 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (er erasureObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (er erasureObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	return er.PutObjectTags(ctx, bucket, object, "", opts)
 }
 

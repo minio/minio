@@ -728,23 +728,34 @@ func (l *s3Objects) GetObjectTags(ctx context.Context, bucket string, object str
 }
 
 // PutObjectTags attaches the tags to the object
-func (l *s3Objects) PutObjectTags(ctx context.Context, bucket, object string, tagStr string, opts minio.ObjectOptions) error {
+func (l *s3Objects) PutObjectTags(ctx context.Context, bucket, object string, tagStr string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	tagObj, err := tags.Parse(tagStr, true)
 	if err != nil {
-		return minio.ErrorRespToObjectError(err, bucket, object)
+		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	if err = l.Client.PutObjectTagging(ctx, bucket, object, tagObj, miniogo.PutObjectTaggingOptions{}); err != nil {
-		return minio.ErrorRespToObjectError(err, bucket, object)
+	if err = l.Client.PutObjectTagging(ctx, bucket, object, tagObj, miniogo.PutObjectTaggingOptions{VersionID: opts.VersionID}); err != nil {
+		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	return nil
+
+	objInfo, err := l.GetObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+
+	return objInfo, nil
 }
 
 // DeleteObjectTags removes the tags attached to the object
-func (l *s3Objects) DeleteObjectTags(ctx context.Context, bucket, object string, opts minio.ObjectOptions) error {
+func (l *s3Objects) DeleteObjectTags(ctx context.Context, bucket, object string, opts minio.ObjectOptions) (minio.ObjectInfo, error) {
 	if err := l.Client.RemoveObjectTagging(ctx, bucket, object, miniogo.RemoveObjectTaggingOptions{}); err != nil {
-		return minio.ErrorRespToObjectError(err, bucket, object)
+		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
 	}
-	return nil
+	objInfo, err := l.GetObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		return minio.ObjectInfo{}, minio.ErrorRespToObjectError(err, bucket, object)
+	}
+
+	return objInfo, nil
 }
 
 // IsCompressionSupported returns whether compression is applicable for this layer.

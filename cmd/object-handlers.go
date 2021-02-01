@@ -3265,16 +3265,10 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
-	objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
 	tagsStr := tags.String()
 
 	// Put object tags
-	err = objAPI.PutObjectTags(ctx, bucket, object, tagsStr, opts)
+	objInfo, err := objAPI.PutObjectTags(ctx, bucket, object, tagsStr, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -3284,8 +3278,8 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		scheduleReplication(ctx, objInfo, objAPI, sync)
 	}
 
-	if opts.VersionID != "" {
-		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
 	writeSuccessResponseHeadersOnly(w)
@@ -3347,21 +3341,19 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
-	// Delete object tags
-	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
+	if _, err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 	oi.UserTags = ""
 
-	if opts.VersionID != "" {
-		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
-	}
-
 	if replicate {
 		scheduleReplication(ctx, oi, objAPI, sync)
 	}
 
+	if oi.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{oi.VersionID}
+	}
 	writeSuccessNoContent(w)
 
 	sendEvent(eventArgs{

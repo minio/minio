@@ -1475,9 +1475,9 @@ func (fs *FSObjects) GetObjectTags(ctx context.Context, bucket, object string, o
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	if opts.VersionID != "" && opts.VersionID != nullVersionID {
-		return VersionNotFound{
+		return ObjectInfo{}, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: opts.VersionID,
@@ -1491,7 +1491,7 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
 	// This close will allow for locks to be synchronized on `fs.json`.
@@ -1512,13 +1512,20 @@ func (fs *FSObjects) PutObjectTags(ctx context.Context, bucket, object string, t
 	}
 
 	if _, err = fsMeta.WriteTo(wlk); err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	return nil
+
+	// Stat the file to get file size.
+	fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (fs *FSObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	return fs.PutObjectTags(ctx, bucket, object, "", opts)
 }
 
