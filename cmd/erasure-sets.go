@@ -1384,13 +1384,13 @@ func (s *erasureSets) HealObject(ctx context.Context, bucket, object, versionID 
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (s *erasureSets) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (s *erasureSets) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	er := s.getHashedSet(object)
 	return er.PutObjectTags(ctx, bucket, object, tags, opts)
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (s *erasureSets) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (s *erasureSets) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	er := s.getHashedSet(object)
 	return er.DeleteObjectTags(ctx, bucket, object, opts)
 }

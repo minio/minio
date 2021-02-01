@@ -3281,24 +3281,35 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
+	tagsStr := tags.String()
+
 	// Put object tags
-	err = objAPI.PutObjectTags(ctx, bucket, object, tags.String(), opts)
+	objInfo, err := objAPI.PutObjectTags(ctx, bucket, object, tagsStr, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if replicate {
-		if objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			scheduleReplication(ctx, objInfo, objAPI, sync)
-		}
+		scheduleReplication(ctx, objInfo, objAPI, sync)
 	}
 
-	if opts.VersionID != "" {
-		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
 	writeSuccessResponseHeadersOnly(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedPutTagging,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+
 }
 
 // DeleteObjectTaggingHandler - DELETE object tagging
@@ -3345,21 +3356,31 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
-	// Delete object tags
-	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
+
+	if _, err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	if opts.VersionID != "" {
-		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
-	}
+	oi.UserTags = ""
 
 	if replicate {
 		scheduleReplication(ctx, oi, objAPI, sync)
 	}
 
+	if oi.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{oi.VersionID}
+	}
 	writeSuccessNoContent(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedDeleteTagging,
+		BucketName:   bucket,
+		Object:       oi,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 }
 
 // RestoreObjectHandler - POST restore object handler.

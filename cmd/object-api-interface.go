@@ -157,7 +157,7 @@ type ObjectLayer interface {
 	Health(ctx context.Context, opts HealthOptions) HealthResult
 
 	// ObjectTagging operations
-	PutObjectTags(context.Context, string, string, string, ObjectOptions) error
+	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
 	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)
-	DeleteObjectTags(context.Context, string, string, ObjectOptions) error
+	DeleteObjectTags(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
 }
