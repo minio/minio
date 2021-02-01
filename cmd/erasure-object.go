@@ -1147,6 +1147,13 @@ func (er erasureObjects) addPartial(bucket, object, versionID string) {
 
 // PutObjectTags - replace or add tags to an existing object
 func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
+	// Lock the object before updating tags.
+	lk := er.NewNSLock(bucket, object)
+	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.Unlock()
+
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
