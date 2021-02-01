@@ -434,38 +434,38 @@ func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
 }
 
 // Valid formatErasure basic versions.
-func checkFormatErasureValue(formatErasure *formatErasureV3) error {
+func checkFormatErasureValue(formatErasure *formatErasureV3, disk StorageAPI) error {
 	// Validate format version and format type.
 	if formatErasure.Version != formatMetaVersionV1 {
-		return fmt.Errorf("Unsupported version of backend format [%s] found", formatErasure.Version)
+		return fmt.Errorf("Unsupported version of backend format [%s] found on %s", formatErasure.Version, disk)
 	}
 	if formatErasure.Format != formatBackendErasure {
-		return fmt.Errorf("Unsupported backend format [%s] found", formatErasure.Format)
+		return fmt.Errorf("Unsupported backend format [%s] found on %s", formatErasure.Format, disk)
 	}
 	if formatErasure.Erasure.Version != formatErasureVersionV3 {
-		return fmt.Errorf("Unsupported Erasure backend format found [%s]", formatErasure.Erasure.Version)
+		return fmt.Errorf("Unsupported Erasure backend format found [%s] on %s", formatErasure.Erasure.Version, disk)
 	}
 	return nil
 }
 
 // Check all format values.
-func checkFormatErasureValues(formats []*formatErasureV3, setDriveCount int) error {
+func checkFormatErasureValues(formats []*formatErasureV3, disks []StorageAPI, setDriveCount int) error {
 	for i, formatErasure := range formats {
 		if formatErasure == nil {
 			continue
 		}
-		if err := checkFormatErasureValue(formatErasure); err != nil {
+		if err := checkFormatErasureValue(formatErasure, disks[i]); err != nil {
 			return err
 		}
 		if len(formats) != len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]) {
 			return fmt.Errorf("%s disk is already being used in another erasure deployment. (Number of disks specified: %d but the number of disks found in the %s disk's format.json: %d)",
-				humanize.Ordinal(i+1), len(formats), humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]))
+				disks[i], len(formats), humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]))
 		}
 		// Only if custom erasure drive count is set, verify if the
 		// set_drive_count was manually set - we need to honor what is
 		// present on the drives.
 		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != setDriveCount {
-			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets[0]), setDriveCount)
+			return fmt.Errorf("%s disk is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", disks[i], len(formatErasure.Erasure.Sets[0]), setDriveCount)
 		}
 	}
 	return nil

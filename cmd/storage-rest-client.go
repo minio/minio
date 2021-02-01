@@ -688,7 +688,7 @@ func newStorageRESTClient(endpoint Endpoint, healthcheck bool) *storageRESTClien
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newAuthToken)
 		healthClient.ExpectTimeouts = true
 		restClient.HealthCheckFn = func() bool {
-			ctx, cancel := context.WithTimeout(GlobalContext, restClient.HealthCheckTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
 			defer cancel()
 			respBody, err := healthClient.Call(ctx, storageRESTMethodHealth, nil, nil, -1)
 			xhttp.DrainBody(respBody)

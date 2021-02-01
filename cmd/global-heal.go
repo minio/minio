@@ -224,8 +224,8 @@ func healErasureSet(ctx context.Context, buckets []BucketInfo, disks []StorageAP
 	return nil
 }
 
-// deepHealObject heals given object path in deep to fix bitrot.
-func deepHealObject(bucket, object, versionID string) {
+// healObject heals given object path in deep to fix bitrot.
+func healObject(bucket, object, versionID string, scan madmin.HealScanMode) {
 	// Get background heal sequence to send elements to heal
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if ok {
@@ -235,7 +235,7 @@ func deepHealObject(bucket, object, versionID string) {
 			versionID: versionID,
 			opts: &madmin.HealOpts{
 				Remove:   true, // if found dangling purge it.
-				ScanMode: madmin.HealDeepScan,
+				ScanMode: scan,
 			},
 		}
 	}

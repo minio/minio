@@ -1517,7 +1517,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	vault := fetchVaultStatus()
+	kmsStat := fetchKMSStatus()
 
 	ldap := madmin.LDAP{}
 	if globalLDAPConfig.Enabled {
@@ -1586,7 +1586,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		Vault:         vault,
+		KMS:           kmsStat,
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
@@ -1662,47 +1662,46 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	return notify
 }
 
-// fetchVaultStatus fetches Vault Info
-func fetchVaultStatus() madmin.Vault {
-	vault := madmin.Vault{}
+// fetchKMSStatus fetches KMS-related status information.
+func fetchKMSStatus() madmin.KMS {
+	kmsStat := madmin.KMS{}
 	if GlobalKMS == nil {
-		vault.Status = "disabled"
-		return vault
+		kmsStat.Status = "disabled"
+		return kmsStat
 	}
 	keyID := GlobalKMS.DefaultKeyID()
 	kmsInfo := GlobalKMS.Info()
-
 	if len(kmsInfo.Endpoints) == 0 {
-		vault.Status = "KMS configured using master key"
-		return vault
+		kmsStat.Status = "KMS configured using master key"
+		return kmsStat
 	}
 
 	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
-		vault.Status = "offline"
+		kmsStat.Status = "offline"
 	} else {
-		vault.Status = "online"
+		kmsStat.Status = "online"
 
 		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 		// 1. Generate a new key using the KMS.
 		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 		if err != nil {
-			vault.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+			kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
-			vault.Encrypt = "Ok"
+			kmsStat.Encrypt = "Ok"
 		}
 
 		// 2. Verify that we can indeed decrypt the (encrypted) key
 		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
 		switch {
 		case err != nil:
-			vault.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+			kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
 		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
-			vault.Decrypt = "Decryption failed: decrypted key does not match generated key"
+			kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
 		default:
-			vault.Decrypt = "Ok"
+			kmsStat.Decrypt = "Ok"
 		}
 	}
-	return vault
+	return kmsStat
 }
 
 // fetchLoggerDetails return log info

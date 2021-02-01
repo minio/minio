@@ -332,25 +332,11 @@ func (s *erasureSets) GetDisks(setIndex int) func() []StorageAPI {
 const defaultMonitorConnectEndpointInterval = defaultMonitorNewDiskInterval + time.Second*5
 
 // Initialize new set of erasure coded sets.
-func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatErasureV3, poolIdx int) (*erasureSets, error) {
+func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []StorageAPI, format *formatErasureV3, defaultParityCount, poolIdx int) (*erasureSets, error) {
 	setCount := len(format.Erasure.Sets)
 	setDriveCount := len(format.Erasure.Sets[0])
 
 	endpointStrings := make([]string, len(endpoints))
-
-	// If storage class is not set during startup, default values are used
-	// -- Default for Reduced Redundancy Storage class is, parity = 2
-	// -- Default for Standard Storage class is, parity = 2 - disks 4, 5
-	// -- Default for Standard Storage class is, parity = 3 - disks 6, 7
-	// -- Default for Standard Storage class is, parity = 4 - disks 8 to 16
-	var defaultParityCount int
-
-	switch format.Erasure.DistributionAlgo {
-	case formatErasureVersionV3DistributionAlgoV3:
-		defaultParityCount = getDefaultParityBlocks(setDriveCount)
-	default:
-		defaultParityCount = setDriveCount / 2
-	}
 
 	// Initialize the erasure sets instance.
 	s := &erasureSets{
@@ -1282,7 +1268,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	}(storageDisks)
 
 	formats, sErrs := loadFormatErasureAll(storageDisks, true)
-	if err = checkFormatErasureValues(formats, s.setDriveCount); err != nil {
+	if err = checkFormatErasureValues(formats, storageDisks, s.setDriveCount); err != nil {
 		return madmin.HealResultItem{}, err
 	}
 

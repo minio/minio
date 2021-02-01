@@ -32,8 +32,12 @@ import (
 type HealScanMode int
 
 const (
+	// HealUnknownScan default is unknown
+	HealUnknownScan HealScanMode = iota
+
 	// HealNormalScan checks if parts are present and not outdated
-	HealNormalScan HealScanMode = iota
+	HealNormalScan
+
 	// HealDeepScan checks for parts bitrot checksums
 	HealDeepScan
 )

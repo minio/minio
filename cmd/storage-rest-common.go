@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v24" // Add more small file optimization
+	storageRESTVersion       = "v25" // Add more small file optimization
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

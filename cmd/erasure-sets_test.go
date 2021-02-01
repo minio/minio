@@ -189,7 +189,7 @@ func TestNewErasureSets(t *testing.T) {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
 
-	if _, err := newErasureSets(ctx, endpoints, storageDisks, format, 0); err != nil {
+	if _, err := newErasureSets(ctx, endpoints, storageDisks, format, ecDrivesNoConfig(16), 0); err != nil {
 		t.Fatalf("Unable to initialize erasure")
 	}
 }
