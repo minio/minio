@@ -8,21 +8,6 @@ MinIO is a High Performance Object Storage released under Apache License v2.0. I
 This README provides quickstart instructions on running MinIO on baremetal hardware, including Docker-based installations. For Kubernetes environments, 
 use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md). 
 
-**Table of Contents**
-
-- [Docker Installation](#docker-installation)
-- [macOS Installation](#macos)
-- [GNU/Linux Installation](#gnulinux)
-- [Windows Installation](#microsoft-windows)
-- [FreeBSD Installation](#freebsd)
-- [Source Installation](#install-from-source)
-- [Deployment Recommendations](#deployment-recommendations)
-- [Test Connectivity to MinIO](#test-minio-connectivity)
-- [Upgrade MinIO](#upgrading-minio)
-- [Explore Further](#explore-further)
-- [Contribute to MinIO](#contribute-to-minio-project)
-- [License](#license)
-
 # Docker Installation
 
 Use the following commands to run a standalone MinIO server on a Docker container. 
