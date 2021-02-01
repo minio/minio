@@ -84,7 +84,7 @@ docker run -p 9000:9000 \
 #### Windows
 在windows上， 你需要用到 [Docker集成Windows身份验证](https://success.docker.com/article/modernizing-traditional-dot-net-applications#integratedwindowsauthentication) 和 [创建具有Active Directory支持的容器](https://blogs.msdn.microsoft.com/containerstuff/2017/01/30/create-a-container-with-active-directory-support/) 的能力
 
-> 注意: 在使用`credentialspec=`欠，要确保你的AD/Windows用户具备 *D:\data* 的写入权限。
+> 注意: 在使用`credentialspec=`时，要确保你的AD/Windows用户具备 *D:\data* 的写入权限。
 
 ```powershell
 docker run -p 9000:9000 \
