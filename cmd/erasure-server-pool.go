@@ -1525,59 +1525,59 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	object = encodeDirObject(object)
 	if z.SinglePool() {
 		return z.serverPools[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
 
 	for _, pool := range z.serverPools {
-		err := pool.PutObjectTags(ctx, bucket, object, tags, opts)
+		objInfo, err := pool.PutObjectTags(ctx, bucket, object, tags, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
-			return err
+			return ObjectInfo{}, err
 		}
-		return nil
+		return objInfo, nil
 	}
 	if opts.VersionID != "" {
-		return VersionNotFound{
+		return ObjectInfo{}, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: opts.VersionID,
 		}
 	}
-	return ObjectNotFound{
+	return ObjectInfo{}, ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
 	}
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	object = encodeDirObject(object)
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 	for _, pool := range z.serverPools {
-		err := pool.DeleteObjectTags(ctx, bucket, object, opts)
+		objInfo, err := pool.DeleteObjectTags(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
-			return err
+			return ObjectInfo{}, err
 		}
-		return nil
+		return objInfo, nil
 	}
 	if opts.VersionID != "" {
-		return VersionNotFound{
+		return ObjectInfo{}, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: opts.VersionID,
 		}
 	}
-	return ObjectNotFound{
+	return ObjectInfo{}, ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
 	}

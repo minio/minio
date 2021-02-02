@@ -652,6 +652,18 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 	return versions, latestModTime, nil
 }
 
+func getModTimeFromVersion(v xlMetaV2Version) time.Time {
+	switch v.Type {
+	case ObjectType:
+		return time.Unix(0, v.ObjectV2.ModTime)
+	case DeleteType:
+		return time.Unix(0, v.DeleteMarker.ModTime)
+	case LegacyType:
+		return v.ObjectV1.Stat.ModTime
+	}
+	return time.Time{}
+}
+
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
 // for consumption across callers.
 func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
@@ -663,52 +675,6 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		}
 	}
 
-	var latestModTime time.Time
-	var latestIndex int
-	for i, version := range z.Versions {
-		if !version.Valid() {
-			logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", version))
-			return FileInfo{}, errFileNotFound
-		}
-		var modTime time.Time
-		switch version.Type {
-		case ObjectType:
-			modTime = time.Unix(0, version.ObjectV2.ModTime)
-		case DeleteType:
-			modTime = time.Unix(0, version.DeleteMarker.ModTime)
-		case LegacyType:
-			modTime = version.ObjectV1.Stat.ModTime
-		}
-		if modTime.After(latestModTime) {
-			latestModTime = modTime
-			latestIndex = i
-		}
-	}
-
-	if versionID == "" {
-		if len(z.Versions) >= 1 {
-			if !z.Versions[latestIndex].Valid() {
-				logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", z.Versions[latestIndex]))
-				return FileInfo{}, errFileNotFound
-			}
-			switch z.Versions[latestIndex].Type {
-			case ObjectType:
-				fi, err = z.Versions[latestIndex].ObjectV2.ToFileInfo(volume, path)
-				fi.IsLatest = true
-				return fi, err
-			case DeleteType:
-				fi, err = z.Versions[latestIndex].DeleteMarker.ToFileInfo(volume, path)
-				fi.IsLatest = true
-				return fi, err
-			case LegacyType:
-				fi, err = z.Versions[latestIndex].ObjectV1.ToFileInfo(volume, path)
-				fi.IsLatest = true
-				return fi, err
-			}
-		}
-		return FileInfo{}, errFileNotFound
-	}
-
 	for _, version := range z.Versions {
 		if !version.Valid() {
 			logger.LogIf(GlobalContext, fmt.Errorf("invalid version detected %#v", version))
@@ -716,27 +682,73 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 				return FileInfo{}, errFileNotFound
 			}
 			return FileInfo{}, errFileVersionNotFound
+
 		}
+	}
+
+	orderedVersions := make([]xlMetaV2Version, len(z.Versions))
+	copy(orderedVersions, z.Versions)
+
+	sort.Slice(orderedVersions, func(i, j int) bool {
+		mtime1 := getModTimeFromVersion(orderedVersions[i])
+		mtime2 := getModTimeFromVersion(orderedVersions[j])
+		return mtime1.After(mtime2)
+	})
+
+	if versionID == "" {
+		if len(orderedVersions) >= 1 {
+			switch orderedVersions[0].Type {
+			case ObjectType:
+				fi, err = orderedVersions[0].ObjectV2.ToFileInfo(volume, path)
+			case DeleteType:
+				fi, err = orderedVersions[0].DeleteMarker.ToFileInfo(volume, path)
+			case LegacyType:
+				fi, err = orderedVersions[0].ObjectV1.ToFileInfo(volume, path)
+			}
+			fi.IsLatest = true
+			fi.NumVersions = len(orderedVersions)
+			return fi, err
+
+		}
+		return FileInfo{}, errFileNotFound
+	}
+
+	var i = -1
+	var version xlMetaV2Version
+
+findVersion:
+	for i, version = range orderedVersions {
 		switch version.Type {
 		case ObjectType:
 			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
 				fi, err = version.ObjectV2.ToFileInfo(volume, path)
-				fi.IsLatest = latestModTime.Equal(fi.ModTime)
-				return fi, err
+				break findVersion
 			}
 		case LegacyType:
 			if version.ObjectV1.VersionID == versionID {
 				fi, err = version.ObjectV1.ToFileInfo(volume, path)
-				fi.IsLatest = latestModTime.Equal(fi.ModTime)
-				return fi, err
+				break findVersion
 			}
 		case DeleteType:
 			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
 				fi, err = version.DeleteMarker.ToFileInfo(volume, path)
-				fi.IsLatest = latestModTime.Equal(fi.ModTime)
-				return fi, err
+				break findVersion
 			}
 		}
+	}
+
+	if err != nil {
+		return fi, err
+	}
+
+	if i >= 0 {
+		// A version is found, fill dynamic fields
+		fi.IsLatest = i == 0
+		fi.NumVersions = len(z.Versions)
+		if i < len(orderedVersions)-1 {
+			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[i+1])
+		}
+		return fi, nil
 	}
 
 	if versionID == "" {

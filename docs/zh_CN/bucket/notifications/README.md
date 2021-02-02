@@ -186,7 +186,7 @@ python rabbit.py
 
 ### 第一步: 添加MQTT endpoint到MinIO
 
-MQTT的配置信息位于`notify_mqtt`这个顶级的key下。在这里为你的MQTT实例创建配置信息键值对。key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。
+MQTT的配置信息位于`notify_mqtt`这个顶级的key下。在这里为你的MQTT实例创建配置信息键值对。key是你的MQTT endpoint的名称，value是下面表格中列的键值对集合。
 
 ```
 KEY:
@@ -259,7 +259,7 @@ arn:minio:sqs::1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.j
 
 ### 第三步：验证MQTT
 
-下面的python程序等待mqtt topic `/ minio`，并在控制台上打印事件通知。 我们使用[paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/)库来执行此操作。
+下面的python程序等待mqtt topic `/minio`，并在控制台上打印事件通知。 我们使用[paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/)库来执行此操作。
 
 ```py
 #!/usr/bin/env python3
@@ -319,7 +319,7 @@ python mqtt.py
 下面的步骤展示的是在`namespace`格式下，如何使用通知目标。另一种格式和这个很类似，为了不让你们说我墨迹，就不再赘述了。
 
 
-### 第一步：确保至少满足第低要求
+### 第一步：确保至少满足最低要求
 
 MinIO要求使用的是ES 5.X系统版本。如果使用的是低版本的ES，也没关系，ES官方支持升级迁移，详情请看[这里](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html)。
 
@@ -485,7 +485,7 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 
 ### 第一步：集成Redis到MinIO
 
-The MinIO server的配置文件以json格式存储在后端。Redis的配置信息位于`notify_redis`这个顶级的key下。在这里为你的Redis实例创建配置信息键值对。key是你的Redis endpoint的名称，value是下面表格中列列的键值对集合。
+The MinIO server的配置文件以json格式存储在后端。Redis的配置信息位于`notify_redis`这个顶级的key下。在这里为你的Redis实例创建配置信息键值对。key是你的Redis endpoint的名称，value是下面表格中列的键值对集合。
 
 ```
 KEY:
@@ -831,7 +831,7 @@ Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jp
 
 下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述，我相信你可以触类旁通，举一反三，不要让我失望哦。
 
-### 第一步：确保确保至少满足第低要求
+### 第一步：确保确保至少满足最低要求
 
 MinIO要求PostgresSQL9.5版本及以上。 MinIO用了PostgreSQL9.5引入的[`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性,以及9.4引入的 [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
 
@@ -949,7 +949,7 @@ key                 |                      value
 > 服务器升级/重启后，控制台上会显示一条错误消息，请务必遵循上述说明。
 > 如有其他问题，请加入我们的 https://slack.min.io
 
-安装 [MySQL](https://dev.mysql.com/downloads/mysql/). 为了演示，我们将"postgres"用户的密码设为`password`，并且创建了一个`miniodb`数据库来存储事件信息。
+安装 [MySQL](https://dev.mysql.com/downloads/mysql/). 为了演示，我们将"root"用户的密码设为`password`，并且创建了一个`miniodb`数据库来存储事件信息。
 
 这个通知目标支持两种格式: _namespace_ 和 _access_。
 
@@ -959,7 +959,7 @@ key                 |                      value
 
 下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述。
 
-### 第一步：确保确保至少满足第低要求
+### 第一步：确保确保至少满足最低要求
 
 MinIO要求MySQL 版本 5.7.8及以上，MinIO使用了MySQL5.7.8版本引入的 [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。我们使用的是MySQL5.7.17进行的测试。
 
@@ -1062,7 +1062,7 @@ mysql> select * from minio_images;
 
 安装[ Apache Kafka](http://kafka.apache.org/).
 
-### 第一步：确保确保至少满足第低要求
+### 第一步：确保确保至少满足最低要求
 
 MinIO要求Kafka版本0.10或者0.9.MinIO内部使用了 [Shopify/sarama](https://github.com/Shopify/sarama/) 库，因此需要和该库有同样的版本兼容性。
 
@@ -1092,7 +1092,7 @@ version          (string)    指定 Kafka集群的版本， 例如 '2.2.0'
 comment          (sentence)  可选的注释说明
 ```
           
-患者通过环境变量（说明详见上面）
+或者通过环境变量（说明详见上面）
 ```
 KEY:
 notify_kafka[:name]  publish bucket notifications to Kafka endpoints
@@ -1220,7 +1220,7 @@ kafkacat -b localhost:9092 -t bucketevents
 
 [Webhooks](https://en.wikipedia.org/wiki/Webhook) 采用推的方式获取数据，而不是一直去拉取。
 
-### 第一步：集成MySQL到MinIO
+### 第一步：集成Webhook到MinIO
 
 MinIO支持持久事件存储。持久存储将在webhook离线时备份事件，并在broker恢复在线时重播事件。事件存储的目录可以通过`queue_dir`字段设置，存储的最大限制可以通过`queue_limit`设置。例如, `queue_dir`可以设置为`/home/events`, 并且`queue_limit`可以设置为`1000`. 默认情况下 `queue_limit` 是100000.
 

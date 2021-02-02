@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"runtime"
 	"strings"
 	"time"
 
@@ -631,19 +630,9 @@ func (r *replicationState) queueReplicaDeleteTask(doi DeletedObjectVersionInfo) 
 
 var (
 	globalReplicationState *replicationState
-	// TODO: currently keeping it conservative
-	// but eventually can be tuned in future,
-	// take only half the CPUs for replication
-	// conservatively.
-	globalReplicationConcurrent = runtime.GOMAXPROCS(0) / 2
 )
 
 func newReplicationState() *replicationState {
-
-	// fix minimum concurrent replication to 1 for single CPU setup
-	if globalReplicationConcurrent == 0 {
-		globalReplicationConcurrent = 1
-	}
 	rs := &replicationState{
 		replicaCh:       make(chan ObjectInfo, 10000),
 		replicaDeleteCh: make(chan DeletedObjectVersionInfo, 10000),
@@ -684,8 +673,8 @@ func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 		return
 	}
 
-	// Start with globalReplicationConcurrent.
-	for i := 0; i < globalReplicationConcurrent; i++ {
+	// Start replication workers per count set in api config or MINIO_API_REPLICATION_WORKERS.
+	for i := 0; i < globalAPIConfig.getReplicationWorkers(); i++ {
 		globalReplicationState.addWorker(ctx, objectAPI)
 	}
 }

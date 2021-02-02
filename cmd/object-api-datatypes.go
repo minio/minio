@@ -219,6 +219,11 @@ type ObjectInfo struct {
 	backendType BackendType
 
 	VersionPurgeStatus VersionPurgeStatusType
+
+	// The total count of all versions of this object
+	NumVersions int
+	//  The modtime of the successor object version if any
+	SuccessorModTime time.Time
 }
 
 // MultipartInfo captures metadata information about the uploadId

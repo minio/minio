@@ -431,6 +431,16 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	objInfo := gr.ObjInfo
 
+	// Automatically remove the object/version is an expiry lifecycle rule can be applied
+	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
+		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
+			globalExpiryState.queueExpiryTask(objInfo)
+			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+			return
+		}
+	}
+
 	// filter object lock metadata if permission does not permit
 	getRetPerms := checkRequestAuthType(ctx, r, policy.GetObjectRetentionAction, bucket, object)
 	legalHoldPerms := checkRequestAuthType(ctx, r, policy.GetObjectLegalHoldAction, bucket, object)
@@ -588,6 +598,16 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
+	}
+
+	// Automatically remove the object/version is an expiry lifecycle rule can be applied
+	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
+		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
+		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
+			globalExpiryState.queueExpiryTask(objInfo)
+			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
+			return
+		}
 	}
 
 	// filter object lock metadata if permission does not permit
@@ -2820,10 +2840,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
-		action := lifecycle.DeleteAction
-		if goi.VersionID != "" {
-			action = lifecycle.DeleteVersionAction
-		}
 		deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, object, lifecycle.ObjectOpts{
 			Name:             object,
 			UserTags:         goi.UserTags,
@@ -2831,7 +2847,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			DeleteMarker:     goi.DeleteMarker,
 			TransitionStatus: goi.TransitionStatus,
 			IsLatest:         goi.IsLatest,
-		}, action, true)
+		}, false, true)
 	}
 
 	setPutObjHeaders(w, objInfo, true)
@@ -3265,24 +3281,35 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
+	tagsStr := tags.String()
+
 	// Put object tags
-	err = objAPI.PutObjectTags(ctx, bucket, object, tags.String(), opts)
+	objInfo, err := objAPI.PutObjectTags(ctx, bucket, object, tagsStr, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	if replicate {
-		if objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts); err == nil {
-			scheduleReplication(ctx, objInfo, objAPI, sync)
-		}
+		scheduleReplication(ctx, objInfo, objAPI, sync)
 	}
 
-	if opts.VersionID != "" {
-		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
+	if objInfo.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
 	}
 
 	writeSuccessResponseHeadersOnly(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedPutTagging,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+
 }
 
 // DeleteObjectTaggingHandler - DELETE object tagging
@@ -3329,21 +3356,31 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		opts.UserDefined = make(map[string]string)
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
-	// Delete object tags
-	if err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
+
+	if _, err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-
-	if opts.VersionID != "" {
-		w.Header()[xhttp.AmzVersionID] = []string{opts.VersionID}
-	}
+	oi.UserTags = ""
 
 	if replicate {
 		scheduleReplication(ctx, oi, objAPI, sync)
 	}
 
+	if oi.VersionID != "" {
+		w.Header()[xhttp.AmzVersionID] = []string{oi.VersionID}
+	}
 	writeSuccessNoContent(w)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectCreatedDeleteTagging,
+		BucketName:   bucket,
+		Object:       oi,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 }
 
 // RestoreObjectHandler - POST restore object handler.

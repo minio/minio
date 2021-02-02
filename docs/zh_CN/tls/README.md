@@ -122,7 +122,9 @@ certtool.exe --generate-self-signed --load-privkey private.key --template cert.c
 
 ## 4. 安装第三方CAs
 
-Minio可以配置成连接其它服务，不管是Minio节点还是像NATs、Redis这些。如果这些服务用的不是在已知证书机构注册的证书，你可以让Minio服务信任这些CA，怎么做呢，将这些证书放到Minio配置路径下(`~/.minio/certs/CAs/` Linux 或者 `C:\Users\<Username>\.minio\certs\CAs` Windows).
+Minio可以配置成连接其它服务，不管是Minio节点还是像NATs、Redis这些。如果这些服务用的不是在已知证书机构注册的证书，你可以让Minio服务信任这些CA，怎么做呢，将这些证书放到Minio配置路径下
+* **Linux:** `~/.minio/certs/CAs/`
+* **Windows**: `C:\Users\<Username>\.minio\certs\CAs`
 
 # 了解更多
 * [Minio快速入门](https://docs.min.io/cn/minio-quickstart-guide)

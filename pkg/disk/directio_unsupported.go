@@ -1,4 +1,4 @@
-// +build !linux,!netbsd,!freebsd,!darwin,!openbsd
+// +build !linux,!netbsd,!freebsd,!darwin
 
 /*
  * Minio Cloud Storage, (C) 2019-2020 Minio, Inc.
@@ -61,9 +61,4 @@ func DisableDirectIO(f *os.File) error {
 // for systems that do not support DirectIO.
 func AlignedBlock(BlockSize int) []byte {
 	return make([]byte, BlockSize)
-}
-
-// Fdatasync is a no-op
-func Fdatasync(f *os.File) error {
-	return nil
 }

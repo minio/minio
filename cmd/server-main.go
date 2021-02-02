@@ -492,8 +492,8 @@ func serverMain(ctx *cli.Context) {
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
-		initBackgroundReplication(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
+		initBackgroundExpiry(GlobalContext, newObject)
 	}
 
 	initDataCrawler(GlobalContext, newObject)
@@ -512,6 +512,9 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	if globalIsErasure { // to be done after config init
+		initBackgroundReplication(GlobalContext, newObject)
+	}
 	if globalCacheConfig.Enabled {
 		// initialize the new disk cache objects.
 		var cacheAPI CacheObjectLayer

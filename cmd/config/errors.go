@@ -281,4 +281,10 @@ Example 1:
 		"",
 		"Refer to https://docs.min.io/docs/minio-kms-quickstart-guide.html for setting up SSE",
 	)
+
+	ErrInvalidReplicationWorkersValue = newErrFn(
+		"Invalid value for replication workers",
+		"",
+		"MINIO_API_REPLICATION_WORKERS: should be > 0",
+	)
 )
