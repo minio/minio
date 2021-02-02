@@ -33,6 +33,9 @@ import (
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
+	krb "github.com/jcmturner/gokrb5/v8/client"
+	"github.com/jcmturner/gokrb5/v8/config"
+	"github.com/jcmturner/gokrb5/v8/credentials"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
@@ -41,9 +44,6 @@ import (
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	krb "gopkg.in/jcmturner/gokrb5.v7/client"
-	"gopkg.in/jcmturner/gokrb5.v7/config"
-	"gopkg.in/jcmturner/gokrb5.v7/credentials"
 )
 
 const (
@@ -136,7 +136,7 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
-	return krb.NewClientFromCCache(ccache, cfg)
+	return krb.NewFromCCache(ccache, cfg)
 }
 
 // NewGatewayLayer returns hdfs gatewaylayer.
