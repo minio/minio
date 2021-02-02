@@ -19,14 +19,18 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"path"
 	"sync"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/sio"
 )
 
 var TierConfigPath string = path.Join(minioConfigPrefix, "tier-config.json")
@@ -241,22 +245,75 @@ func (config *TierConfigMgr) GetDriver(tierName string) (d warmBackend, err erro
 	return d, nil
 }
 
+// configReader returns a PutObjReader and ObjectOptions needed to save config
+// using a PutObject API. PutObjReader encrypts json encoded tier configurations
+// if KMS is enabled, otherwise simply yields the json encoded bytes as is.
+// Similarly, ObjectOptions value depends on KMS' status.
+func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, error) {
+	b, err := config.Bytes()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	payloadSize := int64(len(b))
+	br := bytes.NewReader(b)
+	hr, err := hash.NewReader(br, payloadSize, "", "", payloadSize, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if GlobalKMS == nil {
+		return NewPutObjReader(hr, nil, nil), &ObjectOptions{}, nil
+	}
+
+	// Note: Local variables with names ek, oek, etc are named inline with
+	// acronyms defined here -
+	// https://github.com/minio/minio/blob/master/docs/security/README.md#acronyms
+
+	// Encrypt json encoded tier configurations
+	metadata := make(map[string]string)
+	kmsContext := crypto.Context{minioMetaBucket: path.Join(minioMetaBucket, TierConfigPath)}
+
+	ek, encEK, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), kmsContext)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	oek := crypto.GenerateKey(ek, rand.Reader)
+	encOEK := oek.Seal(ek, crypto.GenerateIV(rand.Reader), crypto.S3.String(), minioMetaBucket, TierConfigPath)
+	crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encEK, encOEK)
+	encBr, err := sio.EncryptReader(br, sio.Config{Key: oek[:], MinVersion: sio.Version20})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	info := ObjectInfo{
+		Size: payloadSize,
+	}
+	encSize := info.EncryptedSize()
+
+	encHr, err := hash.NewReader(encBr, encSize, "", "", encSize, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts := &ObjectOptions{
+		UserDefined: metadata,
+		MTime:       UTCNow(),
+	}
+	return NewPutObjReader(hr, encHr, &oek), opts, nil
+}
+
 func saveGlobalTierConfig() error {
-	b, err := globalTierConfigMgr.Bytes()
+	pr, opts, err := globalTierConfigMgr.configReader()
 	if err != nil {
 		return err
 	}
-	r, err := hash.NewReader(bytes.NewReader(b), int64(len(b)), "", "", int64(len(b)), false)
-	if err != nil {
-		return err
-	}
-	_, err = globalObjectAPI.PutObject(context.Background(), minioMetaBucket, TierConfigPath, NewPutObjReader(r, nil, nil), ObjectOptions{})
+
+	_, err = globalObjectAPI.PutObject(context.Background(), minioMetaBucket, TierConfigPath, pr, *opts)
 	return err
 }
 
 func loadGlobalTransitionTierConfig() error {
-	var buf bytes.Buffer
-	err := globalObjectAPI.GetObject(context.Background(), minioMetaBucket, TierConfigPath, 0, -1, &buf, "", ObjectOptions{})
+	objReadCloser, err := globalObjectAPI.GetObjectNInfo(context.Background(), minioMetaBucket, TierConfigPath, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		if isErrObjectNotFound(err) {
 			globalTierConfigMgr = &TierConfigMgr{
@@ -270,8 +327,11 @@ func loadGlobalTransitionTierConfig() error {
 		}
 		return err
 	}
+
+	defer objReadCloser.Close()
+
 	var config TierConfigMgr
-	err = json.Unmarshal(buf.Bytes(), &config)
+	err = json.NewDecoder(objReadCloser).Decode(&config)
 	if err != nil {
 		return err
 	}
