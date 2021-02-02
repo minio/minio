@@ -386,7 +386,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 					oi:         oi,
 					bitRotScan: healOpts.Bitrot,
 				})
-				item.healReplication(ctx, objAPI, oi, &sizeS)
+				item.healReplication(ctx, objAPI, oi.Clone(), &sizeS)
 			}
 		}
 		sizeS.totalSize = totalSize
