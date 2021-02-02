@@ -868,9 +868,6 @@ func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmi
 	if !ok {
 		return bgHealStates, errServerNotInitialized
 	}
-	if o != nil {
-		return bgHealStates, nil
-	}
 
 	if globalIsDistErasure {
 		// Get heal status from other peers
