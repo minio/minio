@@ -69,13 +69,11 @@ func newBgHealSequence() *healSequence {
 // getBackgroundHealStatus will return the
 func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
-		fmt.Println("no bgheal state")
 		return madmin.BgHealState{}, false
 	}
 
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if !ok {
-		fmt.Println("no bgheal")
 		return madmin.BgHealState{}, false
 	}
 
@@ -88,7 +86,6 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 	}
 
 	if o == nil {
-		fmt.Println("no objlayer")
 		healing := globalBackgroundHealState.getLocalHealingDisks()
 		for _, disk := range healing {
 			status.HealDisks = append(status.HealDisks, disk.Endpoint)
@@ -99,7 +96,6 @@ func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealS
 
 	// ignores any errors here.
 	si, _ := o.StorageInfo(ctx)
-	fmt.Println(si)
 
 	indexed := make(map[string][]madmin.Disk)
 	for _, disk := range si.Disks {

@@ -295,7 +295,6 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// ignores any errors here.
 	storageInfo, _ := objectAPI.StorageInfo(ctx)
 
-	fmt.Printf("storageInfo: %#v\n", storageInfo)
 	// Collect any disk healing.
 	healing, _ := getAggregatedBackgroundHealState(ctx, nil)
 	healDisks := make(map[string]struct{}, len(healing.HealDisks))

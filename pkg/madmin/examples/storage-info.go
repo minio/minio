@@ -21,8 +21,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -34,7 +32,7 @@ func main() {
 
 	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
 	// New returns an MinIO Admin client object.
-	madmClnt, err := madmin.New("127.0.0.1:9001", "minio", "minio123", false)
+	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -43,6 +41,5 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	js, _ := json.MarshalIndent(st, "", "  ")
-	fmt.Println(string(js))
+	log.Printf("%+v\n", st)
 }
