@@ -780,7 +780,8 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 			go func(setNumber int) {
 				defer wg.Done()
 				lbDisks := z.serverSets[0].sets[setNumber].getOnlineDisks()
-				if err := healErasureSet(ctx, setNumber, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
+				setDriveCount := z.SetDriveCount()
+				if err := healErasureSet(ctx, setNumber, setDriveCount, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
 					logger.LogIf(ctx, err)
 				}
 			}(setNumber)
