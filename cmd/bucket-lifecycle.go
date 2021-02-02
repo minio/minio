@@ -184,11 +184,11 @@ func validateLifecycleTransition(ctx context.Context, bucket string, lfc *lifecy
 // validateTransitionDestination returns error if transition destination bucket missing or not configured
 // It also returns true if transition destination is same as this server.
 func validateTransitionDestination(sc string) error {
-	client, err := globalTierConfigMgr.GetDriver(sc)
+	backend, err := globalTierConfigMgr.GetDriver(sc)
 	if err != nil {
-		return err
+		return TransitionStorageClassNotFound{}
 	}
-	_, err = client.Get(context.Background(), "probeobject", warmBackendGetOpts{})
+	_, err = backend.Get(context.Background(), "probeobject", warmBackendGetOpts{})
 	if isErrBucketNotFound(err) || !isErrObjectNotFound(err) {
 		return err
 	}
@@ -230,8 +230,10 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 		logger.LogIf(ctx, err)
 		return err
 	}
+
 	// Delete metadata on source, now that transition tier has been cleaned up.
 	if _, err = objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 

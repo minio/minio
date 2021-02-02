@@ -207,17 +207,18 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 // ObjectOpts provides information to deduce the lifecycle actions
 // which can be triggered on the resultant object.
 type ObjectOpts struct {
-	Name             string
-	UserTags         string
-	ModTime          time.Time
-	VersionID        string
-	IsLatest         bool
-	DeleteMarker     bool
-	NumVersions      int
-	SuccessorModTime time.Time
-	TransitionStatus string
-	RestoreOngoing   bool
-	RestoreExpires   time.Time
+	Name                   string
+	UserTags               string
+	ModTime                time.Time
+	VersionID              string
+	IsLatest               bool
+	DeleteMarker           bool
+	NumVersions            int
+	SuccessorModTime       time.Time
+	TransitionStatus       string
+	RestoreOngoing         bool
+	RestoreExpires         time.Time
+	RemoteTiersImmediately []string // strictly for debug only
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
@@ -277,6 +278,16 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					case !rule.Transition.IsDaysNull():
 						if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
 							action = TransitionAction
+						}
+					}
+					// this if condition is strictly for debug purposes to force immediate
+					// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
+					if action == NoneAction && (!rule.Transition.IsDateNull() || !rule.Transition.IsDaysNull()) {
+						for _, t := range obj.RemoteTiersImmediately {
+							if strings.ToUpper(t) == strings.ToUpper(rule.Transition.StorageClass) {
+								action = TransitionAction
+								break
+							}
 						}
 					}
 				}

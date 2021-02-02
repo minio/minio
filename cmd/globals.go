@@ -290,6 +290,8 @@ var (
 	globalForwarder *handlers.Forwarder
 
 	globalTierConfigMgr *TierConfigMgr
+
+	globalDebugRemoteTiersImmediately []string
 	// Add new variable global values here.
 )
 

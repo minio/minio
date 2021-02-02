@@ -830,17 +830,18 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	versionID := meta.oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:             i.objectPath(),
-			UserTags:         meta.oi.UserTags,
-			ModTime:          meta.oi.ModTime,
-			VersionID:        meta.oi.VersionID,
-			DeleteMarker:     meta.oi.DeleteMarker,
-			IsLatest:         meta.oi.IsLatest,
-			NumVersions:      meta.oi.NumVersions,
-			SuccessorModTime: meta.oi.SuccessorModTime,
-			RestoreOngoing:   meta.oi.RestoreOngoing,
-			RestoreExpires:   meta.oi.RestoreExpires,
-			TransitionStatus: meta.oi.TransitionStatus,
+			Name:                   i.objectPath(),
+			UserTags:               meta.oi.UserTags,
+			ModTime:                meta.oi.ModTime,
+			VersionID:              meta.oi.VersionID,
+			DeleteMarker:           meta.oi.DeleteMarker,
+			IsLatest:               meta.oi.IsLatest,
+			NumVersions:            meta.oi.NumVersions,
+			SuccessorModTime:       meta.oi.SuccessorModTime,
+			RestoreOngoing:         meta.oi.RestoreOngoing,
+			RestoreExpires:         meta.oi.RestoreExpires,
+			TransitionStatus:       meta.oi.TransitionStatus,
+			RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 		})
 	if i.debug {
 		if versionID != "" {
@@ -896,17 +897,18 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 
 func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (action lifecycle.Action) {
 	lcOpts := lifecycle.ObjectOpts{
-		Name:             obj.Name,
-		UserTags:         obj.UserTags,
-		ModTime:          obj.ModTime,
-		VersionID:        obj.VersionID,
-		DeleteMarker:     obj.DeleteMarker,
-		IsLatest:         obj.IsLatest,
-		NumVersions:      obj.NumVersions,
-		SuccessorModTime: obj.SuccessorModTime,
-		RestoreOngoing:   obj.RestoreOngoing,
-		RestoreExpires:   obj.RestoreExpires,
-		TransitionStatus: obj.TransitionStatus,
+		Name:                   obj.Name,
+		UserTags:               obj.UserTags,
+		ModTime:                obj.ModTime,
+		VersionID:              obj.VersionID,
+		DeleteMarker:           obj.DeleteMarker,
+		IsLatest:               obj.IsLatest,
+		NumVersions:            obj.NumVersions,
+		SuccessorModTime:       obj.SuccessorModTime,
+		RestoreOngoing:         obj.RestoreOngoing,
+		RestoreExpires:         obj.RestoreExpires,
+		TransitionStatus:       obj.TransitionStatus,
+		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 	}
 
 	action = lc.ComputeAction(lcOpts)

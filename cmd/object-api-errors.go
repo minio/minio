@@ -478,6 +478,13 @@ func (e BucketReplicationSourceNotVersioned) Error() string {
 	return "Replication source does not have versioning enabled: " + e.Bucket
 }
 
+// TransitionStorageClassNotFound remote tier not configured.
+type TransitionStorageClassNotFound GenericError
+
+func (e TransitionStorageClassNotFound) Error() string {
+	return "Transition storage class not found "
+}
+
 /// Bucket related errors.
 
 // BucketNameInvalid - bucketname provided is invalid.

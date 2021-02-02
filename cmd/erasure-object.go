@@ -1056,7 +1056,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			deleteMarker = false
 		}
 	}
-
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
@@ -1070,6 +1069,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				ModTime:                       modTime,
 				DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 				VersionPurgeStatus:            opts.VersionPurgeStatus,
+				TransitionStatus:              opts.Transition.Status,
 			}
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
@@ -1077,7 +1077,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					fi.VersionID = opts.VersionID
 				}
 			}
-			//			fi.TransitionStatus = opts.Transition.Status
 
 			// versioning suspended means we add `null`
 			// version as delete marker
