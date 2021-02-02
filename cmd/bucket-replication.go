@@ -129,19 +129,29 @@ func mustReplicater(ctx context.Context, bucket, object string, meta map[string]
 		opts.UserTags = tagStr
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
-	if tgt == nil || tgt.isOffline() {
-		return cfg.Replicate(opts), false
+	// the target online status should not be used here while deciding
+	// whether to replicate as the target could be temporarily down
+	if tgt != nil {
+		return cfg.Replicate(opts), tgt.replicateSync
 	}
-	return cfg.Replicate(opts), tgt.replicateSync
+	return cfg.Replicate(opts), false
 }
 
 // Standard headers that needs to be extracted from User metadata.
 var standardHeaders = []string{
-	"content-type",
-	"content-encoding",
+	xhttp.ContentType,
+	xhttp.CacheControl,
+	xhttp.ContentEncoding,
+	xhttp.ContentLanguage,
+	xhttp.ContentDisposition,
 	xhttp.AmzStorageClass,
 	xhttp.AmzObjectTagging,
 	xhttp.AmzBucketReplicationStatus,
+	xhttp.AmzObjectLockMode,
+	xhttp.AmzObjectLockRetainUntilDate,
+	xhttp.AmzObjectLockLegalHold,
+	xhttp.AmzTagCount,
+	xhttp.AmzServerSideEncryption,
 }
 
 // returns true if any of the objects being deleted qualifies for replication.
@@ -189,7 +199,9 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		return oi.DeleteMarker, false, sync
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
-	if tgt == nil || tgt.isOffline() {
+	// the target online status should not be used here while deciding
+	// whether to replicate deletes as the target could be temporarily down
+	if tgt == nil {
 		return oi.DeleteMarker, false, false
 	}
 	opts := replication.ObjectOpts{
@@ -216,10 +228,12 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 	bucket := dobj.Bucket
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
+		logger.LogIf(ctx, err)
 		return
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
 	if tgt == nil {
+		logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, rcfg.RoleArn))
 		return
 	}
 	versionID := dobj.DeleteMarkerVersionID
@@ -349,6 +363,15 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 			SourceETag:        objInfo.ETag,
 		},
 	}
+	if lang, ok := objInfo.UserDefined[xhttp.ContentLanguage]; ok {
+		putOpts.ContentLanguage = lang
+	}
+	if disp, ok := objInfo.UserDefined[xhttp.ContentDisposition]; ok {
+		putOpts.ContentDisposition = disp
+	}
+	if cc, ok := objInfo.UserDefined[xhttp.CacheControl]; ok {
+		putOpts.CacheControl = cc
+	}
 	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
 		rmode := miniogo.RetentionMode(mode)
 		putOpts.Mode = rmode
@@ -384,29 +407,40 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 	if oi1.ETag != oi2.ETag ||
 		oi1.VersionID != oi2.VersionID ||
 		oi1.Size != oi2.Size ||
-		oi1.DeleteMarker != oi2.IsDeleteMarker {
+		oi1.DeleteMarker != oi2.IsDeleteMarker ||
+		!oi1.ModTime.Equal(oi2.LastModified) {
 		return replicateAll
 	}
-
-	if !oi1.ModTime.Equal(oi2.LastModified) ||
-		oi1.ContentType != oi2.ContentType ||
-		oi1.StorageClass != oi2.StorageClass {
+	if oi1.ContentType != oi2.ContentType {
 		return replicateMetadata
 	}
 	if oi1.ContentEncoding != "" {
-		enc, ok := oi2.UserMetadata[xhttp.ContentEncoding]
-		if !ok || enc != oi1.ContentEncoding {
+		enc, ok := oi2.Metadata[xhttp.ContentEncoding]
+		if !ok || strings.Join(enc, "") != oi1.ContentEncoding {
 			return replicateMetadata
 		}
 	}
-	for k, v := range oi2.UserMetadata {
-		oi2.Metadata[k] = []string{v}
-	}
-	if len(oi2.Metadata) != len(oi1.UserDefined) {
+	// compare metadata on both maps to see if meta is identical
+	for k1, v1 := range oi1.UserDefined {
+		if v2, ok := oi2.UserMetadata[k1]; ok && v1 == v2 {
+			continue
+		}
+		if v2, ok := oi2.Metadata[k1]; ok && v1 == strings.Join(v2, "") {
+			continue
+		}
 		return replicateMetadata
 	}
-	for k1, v1 := range oi1.UserDefined {
-		if v2, ok := oi2.Metadata[k1]; !ok || v1 != strings.Join(v2, "") {
+	for k1, v1 := range oi2.UserMetadata {
+		if v2, ok := oi1.UserDefined[k1]; !ok || v1 != v2 {
+			return replicateMetadata
+		}
+	}
+	for k1, v1slc := range oi2.Metadata {
+		v1 := strings.Join(v1slc, "")
+		if k1 == xhttp.ContentEncoding { //already compared
+			continue
+		}
+		if v2, ok := oi1.UserDefined[k1]; !ok || v1 != v2 {
 			return replicateMetadata
 		}
 	}
@@ -455,7 +489,11 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	}
 
 	rtype := replicateAll
-	oi, err := tgt.StatObject(ctx, dest.Bucket, object, miniogo.StatObjectOptions{VersionID: objInfo.VersionID})
+	oi, err := tgt.StatObject(ctx, dest.Bucket, object, miniogo.StatObjectOptions{
+		VersionID: objInfo.VersionID,
+		Internal: miniogo.AdvancedGetOptions{
+			ReplicationProxyRequest: "false",
+		}})
 	if err == nil {
 		rtype = getReplicationAction(objInfo, oi)
 		if rtype == replicateNone {
@@ -468,7 +506,6 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	replicationStatus := replication.Completed
 	if rtype != replicateAll {
 		gr.Close()
-
 		// replicate metadata for object tagging/copy with metadata replacement
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
 		c := &miniogo.Core{Client: tgt.Client}
@@ -668,7 +705,7 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 		VersionID:            opts.VersionID,
 		ServerSideEncryption: opts.ServerSideEncryption,
 		Internal: miniogo.AdvancedGetOptions{
-			ReplicationProxyRequest: true,
+			ReplicationProxyRequest: "true",
 		},
 	}
 	// get correct offsets for encrypted object
@@ -701,10 +738,11 @@ func isProxyable(ctx context.Context, bucket string) bool {
 	dest := cfg.GetDestination()
 	return dest.Bucket == bucket
 }
+
 func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts ObjectOptions) (tgt *TargetClient, oi ObjectInfo, proxy bool, err error) {
 	// this option is set when active-active replication is in place between site A -> B,
 	// and site B does not have the object yet.
-	if opts.ProxyRequest { // true only when site B sets MinIOSourceProxyRequest header
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
 		return nil, oi, false, nil
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
@@ -728,14 +766,14 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 	}
 	tgt = globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil || tgt.isOffline() {
-		return nil, oi, false, fmt.Errorf("missing target")
+		return nil, oi, false, fmt.Errorf("target is offline or not configured")
 	}
 
 	gopts := miniogo.GetObjectOptions{
 		VersionID:            opts.VersionID,
 		ServerSideEncryption: opts.ServerSideEncryption,
 		Internal: miniogo.AdvancedGetOptions{
-			ReplicationProxyRequest: true,
+			ReplicationProxyRequest: "true",
 		},
 	}
 

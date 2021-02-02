@@ -234,8 +234,14 @@ type ObjectInfo struct {
 	Legacy bool // indicates object on disk is in legacy data format
 
 	// backendType indicates which backend filled this structure
-	backendType        BackendType
+	backendType BackendType
+
 	VersionPurgeStatus VersionPurgeStatusType
+
+	// The total count of all versions of this object
+	NumVersions int
+	//  The modtime of the successor object version if any
+	SuccessorModTime time.Time
 }
 
 // MultipartInfo captures metadata information about the uploadId

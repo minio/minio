@@ -53,6 +53,7 @@ type ObjectOptions struct {
 	TransitionStatus              string                                                // status of the transition
 	NoLock                        bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
 	ProxyRequest                  bool                                                  // only set for GET/HEAD in active-active replication scenario
+	ProxyHeaderSet                bool                                                  // only set for GET/HEAD in active-active replication scenario
 	ParentIsObject                func(ctx context.Context, bucket, parent string) bool // Used to verify if parent is an object.
 }
 
@@ -156,7 +157,7 @@ type ObjectLayer interface {
 	Health(ctx context.Context, opts HealthOptions) HealthResult
 
 	// ObjectTagging operations
-	PutObjectTags(context.Context, string, string, string, ObjectOptions) error
+	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
 	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)
-	DeleteObjectTags(context.Context, string, string, ObjectOptions) error
+	DeleteObjectTags(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
 }

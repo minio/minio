@@ -76,6 +76,8 @@ type FileInfoVersions struct {
 	// Name of the file.
 	Name string
 
+	IsEmptyDir bool
+
 	// Represents the latest mod time of the
 	// latest version.
 	LatestModTime time.Time
@@ -153,6 +155,9 @@ type FileInfo struct {
 	VersionPurgeStatus            VersionPurgeStatusType
 
 	Data []byte // optionally carries object data
+
+	NumVersions      int
+	SuccessorModTime time.Time
 }
 
 // VersionPurgeStatusKey denotes purge status in metadata

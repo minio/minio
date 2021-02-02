@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v24" // Add more small file optimization
+	storageRESTVersion       = "v26" // Add NumVersions/SuccessorModTime fields in FileInfo
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

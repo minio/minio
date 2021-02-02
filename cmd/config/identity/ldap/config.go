@@ -103,6 +103,11 @@ const (
 	EnvLookupBindPassword = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD"
 )
 
+var removedKeys = []string{
+	"username_search_filter",
+	"username_search_base_dn",
+}
+
 // DefaultKVS - default config for LDAP config
 var (
 	DefaultKVS = config.KVS{
@@ -278,6 +283,11 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 			errRet := fmt.Errorf("LDAP auth failed for DN %s: %v", bindDN, err)
 			return "", nil, errRet
 		}
+
+		// Bind to the lookup user account again to perform group search.
+		if err = l.lookupBind(conn); err != nil {
+			return "", nil, err
+		}
 	} else {
 		// Verify login credentials by checking the username formats.
 		bindDN, err = l.usernameFormatsBind(conn, username, password)
@@ -366,6 +376,12 @@ func Enabled(kvs config.KVS) bool {
 // Lookup - initializes LDAP config, overrides config, if any ENV values are set.
 func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	l = Config{}
+
+	// Purge all removed keys first
+	for _, k := range removedKeys {
+		kvs.Delete(k)
+	}
+
 	if err = config.CheckValidKeys(config.IdentityLDAPSubSys, kvs, DefaultKVS); err != nil {
 		return l, err
 	}

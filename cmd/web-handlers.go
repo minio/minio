@@ -354,7 +354,9 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	// If etcd, dns federation configured list buckets from etcd.
 	if globalDNSConfig != nil && globalBucketFederation {
 		dnsBuckets, err := globalDNSConfig.List()
-		if err != nil && err != dns.ErrNoEntriesFound {
+		if err != nil && !IsErrIgnored(err,
+			dns.ErrNoEntriesFound,
+			dns.ErrDomainMissing) {
 			return toJSONError(ctx, err)
 		}
 		for _, dnsRecords := range dnsBuckets {
@@ -775,17 +777,13 @@ next:
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
 			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
-				action := lifecycle.DeleteAction
-				if goi.VersionID != "" {
-					action = lifecycle.DeleteVersionAction
-				}
 				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
 					Name:         objectName,
 					UserTags:     goi.UserTags,
 					VersionID:    goi.VersionID,
 					DeleteMarker: goi.DeleteMarker,
 					IsLatest:     goi.IsLatest,
-				}, action, true)
+				}, false, true)
 			}
 
 			logger.LogIf(ctx, err)
@@ -1081,7 +1079,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// obtain the claims here if possible, for audit logging.
 	claims, owner, authErr := webRequestAuthenticate(r)
 
-	defer logger.AuditLog(w, r, "WebUpload", claims.Map())
+	defer logger.AuditLog(ctx, w, r, claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -1321,16 +1319,16 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "WebDownload")
 
-	vars := mux.Vars(r)
-
 	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
-	defer logger.AuditLog(w, r, "WebDownload", claims.Map())
+	defer logger.AuditLog(ctx, w, r, claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		writeWebErrorResponse(w, errServerNotInitialized)
 		return
 	}
+
+	vars := mux.Vars(r)
 
 	bucket := vars["bucket"]
 	object, err := url.PathUnescape(vars["object"])
@@ -1521,7 +1519,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	claims, owner, authErr := webTokenAuthenticate(r.URL.Query().Get("token"))
 
 	ctx := newContext(r, w, "WebDownloadZip")
-	defer logger.AuditLog(w, r, "WebDownloadZip", claims.Map())
+	defer logger.AuditLog(ctx, w, r, claims.Map())
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {

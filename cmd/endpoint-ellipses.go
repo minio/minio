@@ -353,7 +353,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if err != nil {
 			return nil, -1, err
 		}
-		endpointServerPools = append(endpointServerPools, ZoneEndpoints{
+		endpointServerPools = append(endpointServerPools, PoolEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,
@@ -373,7 +373,7 @@ func createServerEndpoints(serverAddr string, args ...string) (
 		if err != nil {
 			return nil, -1, err
 		}
-		if err = endpointServerPools.Add(ZoneEndpoints{
+		if err = endpointServerPools.Add(PoolEndpoints{
 			SetCount:     len(setArgs),
 			DrivesPerSet: len(setArgs[0]),
 			Endpoints:    endpointList,

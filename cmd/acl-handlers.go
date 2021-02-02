@@ -61,7 +61,7 @@ type accessControlPolicy struct {
 func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutBucketACL")
 
-	defer logger.AuditLog(w, r, "PutBucketACL", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -125,7 +125,7 @@ func (api objectAPIHandlers) PutBucketACLHandler(w http.ResponseWriter, r *http.
 func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetBucketACL")
 
-	defer logger.AuditLog(w, r, "GetBucketACL", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -176,7 +176,7 @@ func (api objectAPIHandlers) GetBucketACLHandler(w http.ResponseWriter, r *http.
 func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "PutObjectACL")
 
-	defer logger.AuditLog(w, r, "PutObjectACL", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -240,7 +240,7 @@ func (api objectAPIHandlers) PutObjectACLHandler(w http.ResponseWriter, r *http.
 func (api objectAPIHandlers) GetObjectACLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetObjectACL")
 
-	defer logger.AuditLog(w, r, "GetObjectACL", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]

@@ -79,7 +79,7 @@ func updateServer(u *url.URL, sha256Sum []byte, lrTime time.Time, mode string) (
 func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ServerUpdate")
 
-	defer logger.AuditLog(w, r, "ServerUpdate", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerUpdateAdminAction)
 	if objectAPI == nil {
@@ -188,7 +188,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "Service")
 
-	defer logger.AuditLog(w, r, "Service", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	vars := mux.Vars(r)
 	action := vars["action"]
@@ -285,7 +285,7 @@ type ServerInfo struct {
 func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "StorageInfo")
 
-	defer logger.AuditLog(w, r, "StorageInfo", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.StorageInfoAdminAction)
 	if objectAPI == nil {
@@ -328,7 +328,7 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DataUsageInfo")
 
-	defer logger.AuditLog(w, r, "DataUsageInfo", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DataUsageInfoAdminAction)
 	if objectAPI == nil {
@@ -408,7 +408,7 @@ type PeerLocks struct {
 func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ForceUnlock")
 
-	defer logger.AuditLog(w, r, "ForceUnlock", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ForceUnlockAdminAction)
 	if objectAPI == nil {
@@ -447,7 +447,7 @@ func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) TopLocksHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "TopLocks")
 
-	defer logger.AuditLog(w, r, "TopLocks", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.TopLocksAdminAction)
 	if objectAPI == nil {
@@ -499,7 +499,7 @@ type StartProfilingResult struct {
 func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "StartProfiling")
 
-	defer logger.AuditLog(w, r, "StartProfiling", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
@@ -604,7 +604,7 @@ func (f dummyFileInfo) Sys() interface{}   { return f.sys }
 func (a adminAPIHandlers) DownloadProfilingHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "DownloadProfiling")
 
-	defer logger.AuditLog(w, r, "DownloadProfiling", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ProfilingAdminAction, "")
@@ -705,7 +705,7 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "Heal")
 
-	defer logger.AuditLog(w, r, "Heal", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
 	if objectAPI == nil {
@@ -916,7 +916,7 @@ func getAggregatedBackgroundHealState(ctx context.Context) (madmin.BgHealState, 
 func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HealBackgroundStatus")
 
-	defer logger.AuditLog(w, r, "HealBackgroundStatus", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealAdminAction)
 	if objectAPI == nil {
@@ -1137,7 +1137,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ConsoleLog")
 
-	defer logger.AuditLog(w, r, "ConsoleLog", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConsoleLogAdminAction)
 	if objectAPI == nil {
@@ -1208,7 +1208,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 // KMSCreateKeyHandler - POST /minio/admin/v3/kms/key/create?key-id=<master-key-id>
 func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSCreateKey")
-	defer logger.AuditLog(w, r, "KMSCreateKey", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSCreateKeyAdminAction)
 	if objectAPI == nil {
@@ -1231,7 +1231,7 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSKeyStatus")
 
-	defer logger.AuditLog(w, r, "KMSKeyStatus", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.KMSKeyStatusAdminAction)
 	if objectAPI == nil {
@@ -1304,7 +1304,7 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "HealthInfo")
 
-	defer logger.AuditLog(w, r, "HealthInfo", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.HealthInfoAdminAction)
 	if objectAPI == nil {
@@ -1482,7 +1482,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "BandwidthMonitor")
 
-	defer logger.AuditLog(w, r, "BandwidthMonitor", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.BandwidthMonitorAction, "")
@@ -1535,7 +1535,7 @@ func (a adminAPIHandlers) BandwidthMonitorHandler(w http.ResponseWriter, r *http
 func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ServerInfo")
 
-	defer logger.AuditLog(w, r, "ServerInfo", mustGetClaimsFromToken(r))
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	// Validate request signature.
 	_, adminAPIErr := checkAdminRequestAuth(ctx, r, iampolicy.ServerInfoAdminAction, "")
@@ -1544,7 +1544,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	vault := fetchVaultStatus()
+	kmsStat := fetchKMSStatus()
 
 	ldap := madmin.LDAP{}
 	if globalLDAPConfig.Enabled {
@@ -1613,7 +1613,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		Vault:         vault,
+		KMS:           kmsStat,
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
@@ -1689,47 +1689,46 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	return notify
 }
 
-// fetchVaultStatus fetches Vault Info
-func fetchVaultStatus() madmin.Vault {
-	vault := madmin.Vault{}
+// fetchKMSStatus fetches KMS-related status information.
+func fetchKMSStatus() madmin.KMS {
+	kmsStat := madmin.KMS{}
 	if GlobalKMS == nil {
-		vault.Status = "disabled"
-		return vault
+		kmsStat.Status = "disabled"
+		return kmsStat
 	}
 	keyID := GlobalKMS.DefaultKeyID()
 	kmsInfo := GlobalKMS.Info()
-
 	if len(kmsInfo.Endpoints) == 0 {
-		vault.Status = "KMS configured using master key"
-		return vault
+		kmsStat.Status = "KMS configured using master key"
+		return kmsStat
 	}
 
 	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
-		vault.Status = "offline"
+		kmsStat.Status = "offline"
 	} else {
-		vault.Status = "online"
+		kmsStat.Status = "online"
 
 		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 		// 1. Generate a new key using the KMS.
 		key, sealedKey, err := GlobalKMS.GenerateKey(keyID, kmsContext)
 		if err != nil {
-			vault.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
+			kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
-			vault.Encrypt = "Ok"
+			kmsStat.Encrypt = "Ok"
 		}
 
 		// 2. Verify that we can indeed decrypt the (encrypted) key
 		decryptedKey, err := GlobalKMS.UnsealKey(keyID, sealedKey, kmsContext)
 		switch {
 		case err != nil:
-			vault.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
+			kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
 		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
-			vault.Decrypt = "Decryption failed: decrypted key does not match generated key"
+			kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
 		default:
-			vault.Decrypt = "Ok"
+			kmsStat.Decrypt = "Ok"
 		}
 	}
-	return vault
+	return kmsStat
 }
 
 // fetchLoggerDetails return log info

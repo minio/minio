@@ -34,6 +34,9 @@ import (
 // ErrNoEntriesFound - Indicates no entries were found for the given key (directory)
 var ErrNoEntriesFound = errors.New("No entries found for this key")
 
+// ErrDomainMissing - Indicates domain is missing
+var ErrDomainMissing = errors.New("domain is missing")
+
 const etcdPathSeparator = "/"
 
 // create a new coredns service record for the bucket.
@@ -57,9 +60,9 @@ func (c *CoreDNS) List() (map[string][]SrvRecord, error) {
 	var srvRecords = map[string][]SrvRecord{}
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.", domainName), c.prefixPath)
-		records, err := c.list(key)
+		records, err := c.list(key+etcdPathSeparator, true)
 		if err != nil {
-			return nil, err
+			return srvRecords, err
 		}
 		for _, record := range records {
 			if record.Key == "" {
@@ -76,7 +79,7 @@ func (c *CoreDNS) Get(bucket string) ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
-		records, err := c.list(key)
+		records, err := c.list(key, false)
 		if err != nil {
 			return nil, err
 		}
@@ -109,18 +112,24 @@ func msgUnPath(s string) string {
 
 // Retrieves list of entries under the key passed.
 // Note that this method fetches entries upto only two levels deep.
-func (c *CoreDNS) list(key string) ([]SrvRecord, error) {
+func (c *CoreDNS) list(key string, domain bool) ([]SrvRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 	r, err := c.etcdClient.Get(ctx, key, clientv3.WithPrefix())
 	defer cancel()
 	if err != nil {
 		return nil, err
 	}
+
 	if r.Count == 0 {
 		key = strings.TrimSuffix(key, etcdPathSeparator)
 		r, err = c.etcdClient.Get(ctx, key)
 		if err != nil {
 			return nil, err
+		}
+		// only if we are looking at `domain` as true
+		// we should return error here.
+		if domain && r.Count == 0 {
+			return nil, ErrDomainMissing
 		}
 	}
 
@@ -166,11 +175,11 @@ func (c *CoreDNS) Put(bucket string) error {
 			key = key + etcdPathSeparator + ip
 			ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 			_, err = c.etcdClient.Put(ctx, key, string(bucketMsg))
-			defer cancel()
+			cancel()
 			if err != nil {
 				ctx, cancel = context.WithTimeout(context.Background(), defaultContextTimeout)
 				c.etcdClient.Delete(ctx, key)
-				defer cancel()
+				cancel()
 				return err
 			}
 		}
@@ -182,17 +191,11 @@ func (c *CoreDNS) Put(bucket string) error {
 func (c *CoreDNS) Delete(bucket string) error {
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
-		srvRecords, err := c.list(key)
+		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+		_, err := c.etcdClient.Delete(ctx, key+etcdPathSeparator, clientv3.WithPrefix())
+		cancel()
 		if err != nil {
 			return err
-		}
-		for _, record := range srvRecords {
-			dctx, dcancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-			if _, err = c.etcdClient.Delete(dctx, key+etcdPathSeparator+record.Host); err != nil {
-				dcancel()
-				return err
-			}
-			dcancel()
 		}
 	}
 	return nil
@@ -203,12 +206,12 @@ func (c *CoreDNS) DeleteRecord(record SrvRecord) error {
 	for _, domainName := range c.domainNames {
 		key := msg.Path(fmt.Sprintf("%s.%s.", record.Key, domainName), c.prefixPath)
 
-		dctx, dcancel := context.WithTimeout(context.Background(), defaultContextTimeout)
-		if _, err := c.etcdClient.Delete(dctx, key+etcdPathSeparator+record.Host); err != nil {
-			dcancel()
+		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
+		_, err := c.etcdClient.Delete(ctx, key+etcdPathSeparator+record.Host)
+		cancel()
+		if err != nil {
 			return err
 		}
-		dcancel()
 	}
 	return nil
 }

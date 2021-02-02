@@ -66,7 +66,7 @@ func prepareAdminErasureTestBed(ctx context.Context) (*adminErasureTestBed, erro
 	// Initialize boot time
 	globalBootTime = UTCNow()
 
-	globalEndpoints = mustGetZoneEndpoints(erasureDirs...)
+	globalEndpoints = mustGetPoolEndpoints(erasureDirs...)
 
 	newAllSubsystems()
 
@@ -97,7 +97,7 @@ func initTestErasureObjLayer(ctx context.Context) (ObjectLayer, []string, error)
 	if err != nil {
 		return nil, nil, err
 	}
-	endpoints := mustGetZoneEndpoints(erasureDirs...)
+	endpoints := mustGetPoolEndpoints(erasureDirs...)
 	globalPolicySys = NewPolicySys()
 	objLayer, err := newErasureServerPools(ctx, endpoints)
 	if err != nil {

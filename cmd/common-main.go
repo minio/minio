@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -253,6 +254,14 @@ func handleCommonEnvVars() {
 					"Invalid MINIO_DOMAIN value in environment variable")
 			}
 			globalDomainNames = append(globalDomainNames, domainName)
+		}
+		sort.Strings(globalDomainNames)
+		lcpSuf := lcpSuffix(globalDomainNames)
+		for _, domainName := range globalDomainNames {
+			if domainName == lcpSuf && len(globalDomainNames) > 1 {
+				logger.Fatal(config.ErrOverlappingDomainValue(nil).Msg("Overlapping domains `%s` not allowed", globalDomainNames),
+					"Invalid MINIO_DOMAIN value in environment variable")
+			}
 		}
 	}
 

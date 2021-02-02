@@ -26,8 +26,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 )
 
-var errHealRequired = errors.New("heal required")
-
 // Reads in parallel from readers.
 type parallelReader struct {
 	readers       []io.ReaderAt
@@ -125,7 +123,8 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 		readTriggerCh <- true
 	}
 
-	healRequired := int32(0) // Atomic bool flag.
+	bitrotHeal := int32(0)       // Atomic bool flag.
+	missingPartsHeal := int32(0) // Atomic bool flag.
 	readerIndex := 0
 	var wg sync.WaitGroup
 	// if readTrigger is true, it implies next disk.ReadAt() should be tried
@@ -164,8 +163,10 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			p.buf[bufIdx] = p.buf[bufIdx][:p.shardSize]
 			_, err := rr.ReadAt(p.buf[bufIdx], p.offset)
 			if err != nil {
-				if _, ok := err.(*errHashMismatch); ok {
-					atomic.StoreInt32(&healRequired, 1)
+				if errors.Is(err, errFileNotFound) {
+					atomic.StoreInt32(&missingPartsHeal, 1)
+				} else if errors.Is(err, errFileCorrupt) {
+					atomic.StoreInt32(&bitrotHeal, 1)
 				}
 
 				// This will be communicated upstream.
@@ -188,8 +189,10 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 	wg.Wait()
 	if p.canDecode(newBuf) {
 		p.offset += p.shardSize
-		if healRequired != 0 {
-			return newBuf, errHealRequired
+		if atomic.LoadInt32(&missingPartsHeal) == 1 {
+			return newBuf, errFileNotFound
+		} else if atomic.LoadInt32(&bitrotHeal) == 1 {
+			return newBuf, errFileCorrupt
 		}
 		return newBuf, nil
 	}
@@ -197,41 +200,20 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 	return nil, reduceReadQuorumErrs(context.Background(), p.errs, objectOpIgnoredErrs, p.dataBlocks)
 }
 
-type errDecodeHealRequired struct {
-	err error
-}
-
-func (err *errDecodeHealRequired) Error() string {
-	return err.err.Error()
-}
-
-func (err *errDecodeHealRequired) Unwrap() error {
-	return err.err
-}
-
 // Decode reads from readers, reconstructs data if needed and writes the data to the writer.
 // A set of preferred drives can be supplied. In that case they will be used and the data reconstructed.
-func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64, prefer []bool) error {
-	healRequired, err := e.decode(ctx, writer, readers, offset, length, totalLength, prefer)
-	if healRequired {
-		return &errDecodeHealRequired{err}
-	}
-
-	return err
-}
-
-// Decode reads from readers, reconstructs data if needed and writes the data to the writer.
-func (e Erasure) decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64, prefer []bool) (bool, error) {
+func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64, prefer []bool) (written int64, derr error) {
 	if offset < 0 || length < 0 {
 		logger.LogIf(ctx, errInvalidArgument)
-		return false, errInvalidArgument
+		return -1, errInvalidArgument
 	}
 	if offset+length > totalLength {
 		logger.LogIf(ctx, errInvalidArgument)
-		return false, errInvalidArgument
+		return -1, errInvalidArgument
 	}
+
 	if length == 0 {
-		return false, nil
+		return 0, nil
 	}
 
 	reader := newParallelReader(readers, e, offset, totalLength)
@@ -242,7 +224,6 @@ func (e Erasure) decode(ctx context.Context, writer io.Writer, readers []io.Read
 	startBlock := offset / e.blockSize
 	endBlock := (offset + length) / e.blockSize
 
-	var healRequired bool
 	var bytesWritten int64
 	var bufs [][]byte
 	for block := startBlock; block <= endBlock; block++ {
@@ -264,32 +245,39 @@ func (e Erasure) decode(ctx context.Context, writer io.Writer, readers []io.Read
 		if blockLength == 0 {
 			break
 		}
+
 		var err error
 		bufs, err = reader.Read(bufs)
-		if err != nil {
-			if errors.Is(err, errHealRequired) {
-				// errHealRequired is only returned if there are be enough data for reconstruction.
-				healRequired = true
-			} else {
-				return healRequired, err
+		if len(bufs) > 0 {
+			// Set only if there are be enough data for reconstruction.
+			// and only for expected errors, also set once.
+			if errors.Is(err, errFileNotFound) || errors.Is(err, errFileCorrupt) {
+				if derr == nil {
+					derr = err
+				}
 			}
+		} else if err != nil {
+			// For all errors that cannot be reconstructed fail the read operation.
+			return -1, err
 		}
 
 		if err = e.DecodeDataBlocks(bufs); err != nil {
 			logger.LogIf(ctx, err)
-			return healRequired, err
+			return -1, err
 		}
 
 		n, err := writeDataBlocks(ctx, writer, bufs, e.dataBlocks, blockOffset, blockLength)
 		if err != nil {
-			return healRequired, err
+			return -1, err
 		}
+
 		bytesWritten += n
 	}
+
 	if bytesWritten != length {
 		logger.LogIf(ctx, errLessData)
-		return healRequired, errLessData
+		return bytesWritten, errLessData
 	}
 
-	return healRequired, nil
+	return bytesWritten, derr
 }
