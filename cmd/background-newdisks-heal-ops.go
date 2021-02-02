@@ -49,7 +49,8 @@ type healingTracker struct {
 
 	ID            string
 	PoolIndex     int
-	SetIndex      int // This will be -1 until the disk is picked up.
+	SetIndex      int
+	DiskIndex     int
 	Path          string
 	Endpoint      string
 	Started       time.Time
@@ -117,14 +118,15 @@ func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
 		return nil, err
 	}
 
-	return &healingTracker{
+	h := healingTracker{
 		disk:     disk,
 		ID:       diskID,
-		SetIndex: -1,
 		Path:     disk.String(),
 		Endpoint: disk.Endpoint().String(),
 		Started:  time.Now().UTC(),
-	}, err
+	}
+	h.PoolIndex, h.SetIndex, h.DiskIndex = disk.GetDiskLoc()
+	return &h, err
 }
 
 // update will update the tracker on the disk.
@@ -214,7 +216,9 @@ func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
 	return madmin.HealingDisk{
 		ID:            h.ID,
 		Endpoint:      h.Endpoint,
+		PoolIndex:     h.PoolIndex,
 		SetIndex:      h.SetIndex,
+		DiskIndex:     h.DiskIndex,
 		Path:          h.Path,
 		Started:       h.Started.UTC(),
 		LastUpdate:    h.LastUpdate.UTC(),
@@ -313,7 +317,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 
 			var erasureSetInPoolDisksToHeal []map[int][]StorageAPI
 
-			healDisks := globalBackgroundHealState.getHealLocalDisks()
+			healDisks := globalBackgroundHealState.getHealLocalDiskEndpoints()
 			if len(healDisks) > 0 {
 				// Reformat disks
 				bgSeq.sourceCh <- healSource{bucket: SlashSeparator}
@@ -403,7 +407,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 								}
 							}
 
-							tracker.SetIndex = setIndex
+							tracker.PoolIndex, tracker.SetIndex, tracker.DiskIndex = disk.GetDiskLoc()
 							tracker.setQueuedBuckets(buckets)
 							if err := tracker.save(ctx); err != nil {
 								logger.LogIf(ctx, err)

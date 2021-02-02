@@ -323,7 +323,9 @@ type HealingDisk struct {
 	// When adding new field, update (*healingTracker).toHealingDisk
 
 	ID            string
-	SetIndex      int // May be -1 until picked up...
+	PoolIndex     int
+	SetIndex      int
+	DiskIndex     int
 	Endpoint      string
 	Path          string
 	Started       time.Time

@@ -115,17 +115,6 @@ func (ahs *allHealState) healDriveCount() int {
 	return len(ahs.healLocalDisks)
 }
 
-func (ahs *allHealState) getHealLocalDisks() Endpoints {
-	ahs.RLock()
-	defer ahs.RUnlock()
-
-	var endpoints Endpoints
-	for ep := range ahs.healLocalDisks {
-		endpoints = append(endpoints, ep)
-	}
-	return endpoints
-}
-
 func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {
 	ahs.Lock()
 	defer ahs.Unlock()
@@ -149,23 +138,41 @@ func (ahs *allHealState) updateHealStatus(tracker *healingTracker) {
 	ahs.healStatus[tracker.ID] = *tracker
 }
 
-func (ahs *allHealState) getHealingDisks() []madmin.HealingDisk {
-	ahs.RLock()
-	defer ahs.RUnlock()
-	dst := make([]madmin.HealingDisk, 0, len(ahs.healStatus))
-	for _, v := range ahs.healStatus {
-		dst = append(dst, v.toHealingDisk())
-	}
-
-	// Sort by setindex, then endpoint.
-	sort.Slice(dst, func(i, j int) bool {
-		a, b := &dst[i], &dst[j]
+// Sort by zone, set and disk index
+func sortDisks(disks []madmin.Disk) {
+	sort.Slice(disks, func(i, j int) bool {
+		a, b := &disks[i], &disks[j]
+		if a.PoolIndex != b.PoolIndex {
+			return a.PoolIndex < b.PoolIndex
+		}
 		if a.SetIndex != b.SetIndex {
 			return a.SetIndex < b.SetIndex
 		}
-		return a.Endpoint < b.Endpoint
+		return a.DiskIndex < b.DiskIndex
 	})
+}
+
+// getLocalHealingDisks returns local healing disks indexed by endpoint.
+func (ahs *allHealState) getLocalHealingDisks() map[string]madmin.HealingDisk {
+	ahs.RLock()
+	defer ahs.RUnlock()
+	dst := make(map[string]madmin.HealingDisk, len(ahs.healStatus))
+	for _, v := range ahs.healStatus {
+		dst[v.Endpoint] = v.toHealingDisk()
+	}
+
 	return dst
+}
+
+func (ahs *allHealState) getHealLocalDiskEndpoints() Endpoints {
+	ahs.RLock()
+	defer ahs.RUnlock()
+
+	var endpoints Endpoints
+	for ep := range ahs.healLocalDisks {
+		endpoints = append(endpoints, ep)
+	}
+	return endpoints
 }
 
 func (ahs *allHealState) pushHealLocalDisks(healLocalDisks ...Endpoint) {

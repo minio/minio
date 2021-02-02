@@ -295,8 +295,9 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 	// ignores any errors here.
 	storageInfo, _ := objectAPI.StorageInfo(ctx)
 
+	fmt.Printf("storageInfo: %#v\n", storageInfo)
 	// Collect any disk healing.
-	healing, _ := getAggregatedBackgroundHealState(ctx)
+	healing, _ := getAggregatedBackgroundHealState(ctx, nil)
 	healDisks := make(map[string]struct{}, len(healing.HealDisks))
 	for _, disk := range healing.HealDisks {
 		healDisks[disk] = struct{}{}
@@ -860,11 +861,16 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	keepConnLive(w, r, respCh)
 }
 
-func getAggregatedBackgroundHealState(ctx context.Context) (madmin.BgHealState, error) {
+// getAggregatedBackgroundHealState returns the heal state of disks.
+// If no ObjectLayer is provided no set status is returned.
+func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmin.BgHealState, error) {
 	// Get local heal status first
-	bgHealStates, ok := getLocalBackgroundHealStatus()
+	bgHealStates, ok := getBackgroundHealStatus(ctx, o)
 	if !ok {
 		return bgHealStates, errServerNotInitialized
+	}
+	if o != nil {
+		return bgHealStates, nil
 	}
 
 	if globalIsDistErasure {
@@ -902,7 +908,7 @@ func (a adminAPIHandlers) BackgroundHealStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	aggregateHealStateResult, err := getAggregatedBackgroundHealState(r.Context())
+	aggregateHealStateResult, err := getAggregatedBackgroundHealState(r.Context(), objectAPI)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

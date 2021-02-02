@@ -1478,7 +1478,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		// we need to tell healthy status as 'false' so that this server
 		// is not taken down for maintenance
 		var err error
-		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx)
+		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx, nil)
 		if err != nil {
 			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
 			return HealthResult{

@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -64,13 +66,16 @@ func newBgHealSequence() *healSequence {
 	}
 }
 
-func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
+// getBackgroundHealStatus will return the
+func getBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.BgHealState, bool) {
 	if globalBackgroundHealState == nil {
+		fmt.Println("no bgheal state")
 		return madmin.BgHealState{}, false
 	}
 
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if !ok {
+		fmt.Println("no bgheal")
 		return madmin.BgHealState{}, false
 	}
 
@@ -78,24 +83,53 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 	for _, ep := range getLocalDisksToHeal() {
 		healDisksMap[ep.String()] = struct{}{}
 	}
-
-	for _, ep := range globalBackgroundHealState.getHealLocalDisks() {
-		if _, ok := healDisksMap[ep.String()]; !ok {
-			healDisksMap[ep.String()] = struct{}{}
-		}
-	}
-
-	var healDisks []string
-	for disk := range healDisksMap {
-		healDisks = append(healDisks, disk)
-	}
-
-	return madmin.BgHealState{
+	status := madmin.BgHealState{
 		ScannedItemsCount: bgSeq.getScannedItemsCount(),
-		HealDisks:         healDisks,
-		// FIXME:
-		//Sets: globalBackgroundHealState.getHealingDisks(),
-	}, true
+	}
+
+	if o == nil {
+		fmt.Println("no objlayer")
+		healing := globalBackgroundHealState.getLocalHealingDisks()
+		for _, disk := range healing {
+			status.HealDisks = append(status.HealDisks, disk.Endpoint)
+		}
+
+		return status, true
+	}
+
+	// ignores any errors here.
+	si, _ := o.StorageInfo(ctx)
+	fmt.Println(si)
+
+	indexed := make(map[string][]madmin.Disk)
+	for _, disk := range si.Disks {
+		setIdx := fmt.Sprintf("%d-%d", disk.PoolIndex, disk.SetIndex)
+		indexed[setIdx] = append(indexed[setIdx], disk)
+	}
+
+	for id, disks := range indexed {
+		ss := madmin.SetStatus{
+			ID:        id,
+			SetIndex:  disks[0].SetIndex,
+			PoolIndex: disks[0].PoolIndex,
+		}
+		for _, disk := range disks {
+			ss.Disks = append(ss.Disks, disk)
+			if disk.Healing {
+				ss.HealStatus = "Healing"
+				ss.HealPriority = "high"
+				status.HealDisks = append(status.HealDisks, disk.Endpoint)
+			}
+		}
+		sortDisks(ss.Disks)
+		status.Sets = append(status.Sets, ss)
+	}
+	sort.Slice(status.Sets, func(i, j int) bool {
+		return status.Sets[i].ID < status.Sets[j].ID
+	})
+
+	return status, true
+
 }
 
 func mustGetHealSequence(ctx context.Context) *healSequence {

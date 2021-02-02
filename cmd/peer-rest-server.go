@@ -947,10 +947,9 @@ func (s *peerRESTServer) BackgroundHealStatusHandler(w http.ResponseWriter, r *h
 		s.writeErrorResponse(w, errors.New("invalid request"))
 		return
 	}
-
 	ctx := newContext(r, w, "BackgroundHealStatus")
 
-	state, ok := getLocalBackgroundHealStatus()
+	state, ok := getBackgroundHealStatus(ctx, newObjectLayerFn())
 	if !ok {
 		s.writeErrorResponse(w, errServerNotInitialized)
 		return
