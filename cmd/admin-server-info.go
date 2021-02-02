@@ -71,9 +71,8 @@ func getLocalDisks(endpointServerPools EndpointServerPools) []madmin.Disk {
 
 	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
-			nodeName := endpoint.Host
-			if nodeName == "" {
-				nodeName = "localhost"
+			if endpoint.Host == "" {
+				endpoint.Host = "localhost"
 			}
 			if endpoint.IsLocal {
 				// Only proceed for local endpoints
