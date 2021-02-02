@@ -37,6 +37,7 @@ These metrics can be from any MinIO server once per collection.
 |`minio_node_io_read_bytes`                      |Total bytes read by the process from the underlying storage system, /proc/[pid]/io read_bytes                                |
 |`minio_node_io_wchar_bytes`                     |Total bytes written by the process to the underlying storage system including page cache, /proc/[pid]/io wchar               |
 |`minio_node_io_write_bytes`                     |Total bytes written by the process to the underlying storage system, /proc/[pid]/io write_bytes                              |
+|`minio_node_process_starttime_seconds`          |Start time for MinIO process per node in seconds.                                                                            |
 |`minio_node_syscall_read_total`                 |Total read SysCalls to the kernel. /proc/[pid]/io syscr                                                                      |
 |`minio_node_syscall_write_total`                |Total write SysCalls to the kernel. /proc/[pid]/io syscw                                                                     |
 |`minio_s3_requests_error_total`                 |Total number S3 requests with errors                                                                                         |

@@ -53,18 +53,19 @@ const (
 	capacityRawSubsystem    MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem MetricSubsystem = "capacity_usable"
 	diskSubsystem           MetricSubsystem = "disk"
+	fileDescriptorSubsystem MetricSubsystem = "file_descriptor"
 	goRoutines              MetricSubsystem = "go_routine"
+	ioSubsystem             MetricSubsystem = "io"
 	nodesSubsystem          MetricSubsystem = "nodes"
 	objectsSubsystem        MetricSubsystem = "objects"
-	fileDescriptorSubsystem MetricSubsystem = "file_descriptor"
-	ioSubsystem             MetricSubsystem = "io"
+	processSubsystem        MetricSubsystem = "process"
 	replicationSubsystem    MetricSubsystem = "replication"
 	requestsSubsystem       MetricSubsystem = "requests"
 	timeSubsystem           MetricSubsystem = "time"
 	trafficSubsystem        MetricSubsystem = "traffic"
+	softwareSubsystem       MetricSubsystem = "software"
 	sysCallSubsystem        MetricSubsystem = "syscall"
 	usageSubsystem          MetricSubsystem = "usage"
-	softwareSubsystem       MetricSubsystem = "software"
 )
 
 // MetricName are the individual names for the metric.
@@ -107,6 +108,7 @@ const (
 	ttfbDistribution = "ttbf_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
+	startTime        = "starttime_seconds"
 )
 
 const (
@@ -631,6 +633,15 @@ func getMinIOGORoutineCountMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+func getMinIOProcessStartTimeMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      startTime,
+		Help:      "Start time for MinIO process per node in seconds.",
+		Type:      gaugeMetric,
+	}
+}
 func getMinioProcMetrics() MetricsGroup {
 	return MetricsGroup{
 		Metrics: []Metric{},
@@ -654,6 +665,16 @@ func getMinioProcMetrics() MetricsGroup {
 			io, err := p.IO()
 			if err != nil {
 				logger.LogOnceIf(ctx, err, ioSubsystem)
+				return
+			}
+			stat, err := p.Stat()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, processSubsystem)
+				return
+			}
+			startTime, err := stat.StartTime()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, startTime)
 				return
 			}
 
@@ -697,6 +718,11 @@ func getMinioProcMetrics() MetricsGroup {
 				Metric{
 					Description: getMinioProcessIOWriteCachedBytesMD(),
 					Value:       float64(io.WChar),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinIOProcessStartTimeMD(),
+					Value:       startTime,
 				})
 		},
 	}
