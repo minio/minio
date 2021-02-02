@@ -226,20 +226,42 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 // on target.
 func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectAPI ObjectLayer) {
 	bucket := dobj.Bucket
+	versionID := dobj.DeleteMarkerVersionID
+	if versionID == "" {
+		versionID = dobj.VersionID
+	}
+
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
 		logger.LogIf(ctx, err)
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: event.ObjectReplicationNotTracked,
+		})
 		return
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
 	if tgt == nil {
 		logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, rcfg.RoleArn))
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: event.ObjectReplicationNotTracked,
+		})
 		return
-	}
-
-	versionID := dobj.DeleteMarkerVersionID
-	if versionID == "" {
-		versionID = dobj.VersionID
 	}
 
 	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
@@ -279,8 +301,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		VersionID:                     versionID,
 		DeleteMarker:                  dobj.DeleteMarker,
 		DeleteMarkerReplicationStatus: replicationStatus,
-		Versioned:                     globalBucketVersioningSys.Enabled(bucket),
 		VersionPurgeStatus:            versionPurgeStatus,
+		Versioned:                     globalBucketVersioningSys.Enabled(bucket),
 		VersionSuspended:              globalBucketVersioningSys.Suspended(bucket),
 	})
 	if err != nil {
@@ -430,7 +452,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 		oi1.VersionID != oi2.VersionID ||
 		oi1.Size != oi2.Size ||
 		oi1.DeleteMarker != oi2.IsDeleteMarker ||
-		!oi1.ModTime.Equal(oi2.LastModified) {
+		oi1.ModTime.Unix() != oi2.LastModified.Unix() {
 		return replicateAll
 	}
 
@@ -489,37 +511,73 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 // replicateObject replicates the specified version of the object to destination bucket
 // The source object is then updated to reflect the replication status.
 func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLayer) {
+	z, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		return
+	}
+
 	bucket := objInfo.Bucket
 	object := objInfo.Name
 
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
 		logger.LogIf(ctx, err)
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
 		return
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, cfg.RoleArn)
 	if tgt == nil {
 		logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, cfg.RoleArn))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
 		return
 	}
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, readLock, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
 		logger.LogIf(ctx, err)
 		return
 	}
+	defer gr.Close() // hold read lock for entire transaction
+
 	objInfo = gr.ObjInfo
 	size, err := objInfo.GetActualSize()
 	if err != nil {
 		logger.LogIf(ctx, err)
-		gr.Close()
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
 		return
 	}
 
 	dest := cfg.GetDestination()
 	if dest.Bucket == "" {
-		gr.Close()
+		logger.LogIf(ctx, fmt.Errorf("Unable to replicate object %s(%s), bucket is empty", objInfo.Name, objInfo.VersionID))
+		sendEvent(eventArgs{
+			EventName:  event.ObjectReplicationNotTracked,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
 		return
 	}
 
@@ -532,7 +590,6 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	if err == nil {
 		rtype = getReplicationAction(objInfo, oi)
 		if rtype == replicateNone {
-			gr.Close()
 			// object with same VersionID already exists, replication kicked off by
 			// PutObject might have completed.
 			return
@@ -540,7 +597,6 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	}
 	replicationStatus := replication.Completed
 	if rtype != replicateAll {
-		gr.Close()
 		// replicate metadata for object tagging/copy with metadata replacement
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
 		c := &miniogo.Core{Client: tgt.Client}
@@ -552,7 +608,12 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s cfg:%s err:%s", bucket, cfg.RoleArn, err))
-			gr.Close()
+			sendEvent(eventArgs{
+				EventName:  event.ObjectReplicationNotTracked,
+				BucketName: bucket,
+				Object:     objInfo,
+				Host:       "Internal: [Replication]",
+			})
 			return
 		}
 
@@ -575,7 +636,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
-		r.Close()
+		defer r.Close()
 	}
 
 	objInfo.UserDefined[xhttp.AmzBucketReplicationStatus] = replicationStatus.String()
@@ -584,7 +645,6 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	}
 
 	// FIXME: add support for missing replication events
-	// - event.ObjectReplicationNotTracked
 	// - event.ObjectReplicationMissedThreshold
 	// - event.ObjectReplicationReplicatedAfterThreshold
 	var eventName = event.ObjectReplicationComplete
@@ -592,28 +652,25 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		eventName = event.ObjectReplicationFailed
 	}
 
-	objInfo.metadataOnly = true // Perform only metadata updates.
-	nobjInfo, err := objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
+	// This lower level implementation is necessary to avoid write locks from CopyObject.
+	poolIdx, err := z.getPoolIdx(ctx, bucket, object, ObjectOptions{
 		VersionID: objInfo.VersionID,
-	}, ObjectOptions{
-		VersionID: objInfo.VersionID,
-	})
+	}, objInfo.Size)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
-		sendEvent(eventArgs{
-			EventName:  eventName,
-			BucketName: bucket,
-			Object:     objInfo,
-			Host:       "Internal: [Replication]",
-		})
 	} else {
-		sendEvent(eventArgs{
-			EventName:  eventName,
-			BucketName: bucket,
-			Object:     nobjInfo,
-			Host:       "Internal: [Replication]",
-		})
+		if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, objInfo.UserDefined, ObjectOptions{
+			VersionID: objInfo.VersionID,
+		}); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+		}
 	}
+	sendEvent(eventArgs{
+		EventName:  eventName,
+		BucketName: bucket,
+		Object:     objInfo,
+		Host:       "Internal: [Replication]",
+	})
 }
 
 // filterReplicationStatusMetadata filters replication status metadata for COPY
