@@ -238,6 +238,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			disk := disks[i-1]
 
 			if disk == nil {
+				infos[i-1].Error = "nil disk"
 				return
 			}
 
@@ -248,6 +249,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 				//
 				//
 				// - Future: skip busy disks
+				infos[i-1].Error = err.Error()
 				return
 			}
 
@@ -260,7 +262,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 		// Check if one of the drives in the set is being healed.
 		// this information is used by crawler to skip healing
 		// this erasure set while it calculates the usage.
-		if info.Healing {
+		if info.Healing || info.Error != "" {
 			healing = true
 			continue
 		}
