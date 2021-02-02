@@ -20,4 +20,4 @@ MinIO是建立在云原生的基础上，有纠删码、分布式和共享存储
 
 现在的应用、数据库，key-store这些，很多都已经部署在容器中，并且通过编排平台进行管理。MinIO提供了一个健壮的、可伸缩、AWS S3兼容的对象存储，这是MinIO的立身之本，凭此在云原生应用中占据一席之地。
 
-![Cloud-native](https://github.com/minio/minio/blob/master/docs/screenshots/MinIO_Cloud_Native_Arch.jpg?raw=true)
+![Cloud-native](https://github.com/minio/minio/blob/master/docs/screenshots/Minio_Cloud_Native_Arch.jpg?raw=true)

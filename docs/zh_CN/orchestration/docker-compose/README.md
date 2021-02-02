@@ -2,7 +2,7 @@
 
 Docker Compose允许定义和运行单主机，多容器Docker应用程序。
 
-使用Compose，您可以使用Compose文件来配置MinIO服务。 然后，使用单个命令，您可以通过你的配置创建并启动所有分布式MinIO实例。 分布式MinIO实例将部署在同一主机上的多个容器中。 这是建立基于分布式MinIO的开发，测试和分期环境的好方法。
+使用Compose，您可以使用Compose文件来配置MinIO服务。 然后，使用单个命令，您可以通过你的配置创建并启动所有分布式MinIO实例。 分布式MinIO实例将部署在同一主机上的多个容器中。 这是建立基于分布式MinIO的开发，测试和预发布环境的好方法。
 
 ## 1. 前提条件
 
@@ -33,7 +33,7 @@ docker-compose.exe up
 
 * 默认情况下Docker Compose file使用的是最新版的MinIO server的Docker镜像，你可以修改image tag来拉取指定版本的[MinIO Docker image](https://hub.docker.com/r/minio/minio/).
 
-* 默认情况下会创建4个minio实例，你可以添加更多的MinIO服务（最多总共16个）到你的MinIO Comose deployment。添加一个服务
+* 默认情况下会创建4个minio实例，你可以添加更多的MinIO服务（最多总共16个）到你的MinIO Compose deployment。添加一个服务
   * 复制服务定义并适当地更改新服务的名称。
   * 更新每个服务中的命令部分。
   * 更新要为新服务公开的端口号。 另外，请确保分配给新服务的端口尚未使用。

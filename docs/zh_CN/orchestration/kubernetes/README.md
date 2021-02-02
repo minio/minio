@@ -9,7 +9,7 @@ Kubernetes的部署和状态集提供了在独立，分布式或共享模式下�
 <a name="prerequisites"></a>
 ## 1. 前提条件
 
-* 默认standaline模式下，需要开启Beta API的Kubernetes 1.4+。
+* 默认standalone模式下，需要开启Beta API的Kubernetes 1.4+。
 * [distributed 模式](#distributed-minio)，需要开启Beta API的Kubernetes 1.5+。
 * 底层支持PV provisioner。
 * 你的K8s集群里需要有Helm package manager [installed](https://github.com/kubernetes/helm#install)。
