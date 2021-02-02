@@ -170,9 +170,8 @@ func hasReplicationRules(ctx context.Context, bucket string, objects []ObjectToD
 
 // isStandardHeader returns true if header is a supported header and not a custom header
 func isStandardHeader(headerKey string) bool {
-	key := strings.ToLower(headerKey)
 	for _, header := range standardHeaders {
-		if strings.ToLower(header) == key {
+		if strings.EqualFold(header, headerKey) {
 			return true
 		}
 	}
@@ -462,7 +461,13 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 
 	if oi1.ContentEncoding != "" {
 		enc, ok := oi2.Metadata[xhttp.ContentEncoding]
-		if !ok || strings.Join(enc, "") != oi1.ContentEncoding {
+		if !ok {
+			enc, ok = oi2.Metadata[strings.ToLower(xhttp.ContentEncoding)]
+			if !ok {
+				return replicateMetadata
+			}
+		}
+		if strings.Join(enc, "") != oi1.ContentEncoding {
 			return replicateMetadata
 		}
 	}
@@ -482,10 +487,10 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 
 	for k1, v1slc := range oi2.Metadata {
 		v1 := strings.Join(v1slc, "")
-		if k1 == xhttp.ContentEncoding { // already compared
-			continue
-		}
-		if k1 == xhttp.ContentType { // already compared
+		if strings.EqualFold(k1, xhttp.ContentEncoding) ||
+			strings.EqualFold(k1, xhttp.ContentType) ||
+			strings.EqualFold(k1, xhttp.AmzTagCount) ||
+			strings.EqualFold(k1, xhttp.AmzStorageClass) {
 			continue
 		}
 		v2, ok := oi1.UserDefined[k1]
