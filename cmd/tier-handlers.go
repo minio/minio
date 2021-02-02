@@ -24,6 +24,12 @@ var (
 		Message:    "Specified remote tier was not found",
 		StatusCode: http.StatusNotFound,
 	}
+	// error returned when remote tier name is not in uppercase
+	errTierNameNotUppercase = AdminError{
+		Code:       "XMinioAdminTierNameNotUpperCase",
+		Message:    "Tier name must be in uppercase",
+		StatusCode: http.StatusBadRequest,
+	}
 )
 
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {

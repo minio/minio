@@ -965,7 +965,7 @@ func (s *peerRESTServer) LoadTransitionTierConfigHandler(w http.ResponseWriter, 
 		s.writeErrorResponse(w, errors.New("invalid request"))
 		return
 	}
-	loadGlobalTransitionTierConfig()
+	go loadGlobalTransitionTierConfig()
 }
 
 // ConsoleLogHandler sends console logs of this node back to peer rest client
