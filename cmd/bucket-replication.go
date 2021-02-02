@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -235,10 +236,12 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		logger.LogIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, rcfg.RoleArn))
 		return
 	}
+
 	versionID := dobj.DeleteMarkerVersionID
 	if versionID == "" {
 		versionID = dobj.VersionID
 	}
+
 	rmErr := tgt.RemoveObject(ctx, rcfg.GetDestination().Bucket, dobj.ObjectName, miniogo.RemoveObjectOptions{
 		VersionID: versionID,
 		Internal: miniogo.AdvancedRemoveOptions{
@@ -257,6 +260,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		} else {
 			versionPurgeStatus = Failed
 		}
+		logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %w", rcfg.GetDestination().Bucket, dobj.ObjectName, versionID, err))
 	} else {
 		if dobj.VersionID == "" {
 			replicationStatus = string(replication.Completed)
@@ -271,7 +275,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 	}
 
 	// Update metadata on the delete marker or purge permanent delete if replication success.
-	objInfo, err := objectAPI.DeleteObject(ctx, bucket, dobj.ObjectName, ObjectOptions{
+	dobjInfo, err := objectAPI.DeleteObject(ctx, bucket, dobj.ObjectName, ObjectOptions{
 		VersionID:                     versionID,
 		DeleteMarker:                  dobj.DeleteMarker,
 		DeleteMarkerReplicationStatus: replicationStatus,
@@ -280,52 +284,69 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		VersionSuspended:              globalBucketVersioningSys.Suspended(bucket),
 	})
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s %s: %w", bucket, dobj.ObjectName, dobj.VersionID, err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, dobj.ObjectName, versionID, err))
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object: ObjectInfo{
+				Bucket:       bucket,
+				Name:         dobj.ObjectName,
+				VersionID:    versionID,
+				DeleteMarker: dobj.DeleteMarker,
+			},
+			Host:      "Internal: [Replication]",
+			EventName: eventName,
+		})
+	} else {
+		sendEvent(eventArgs{
+			BucketName: bucket,
+			Object:     dobjInfo,
+			Host:       "Internal: [Replication]",
+			EventName:  eventName,
+		})
 	}
-
-	sendEvent(eventArgs{
-		BucketName: bucket,
-		Object:     objInfo,
-		Host:       "Internal: [Replication]",
-		EventName:  eventName,
-	})
 }
 
 func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]string {
 	meta := make(map[string]string, len(oi.UserDefined))
 	for k, v := range oi.UserDefined {
-		if k == xhttp.AmzBucketReplicationStatus {
-			continue
-		}
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
 			continue
 		}
+
+		if k == xhttp.AmzBucketReplicationStatus {
+			continue
+		}
+
+		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+			continue
+		}
+
 		meta[k] = v
 	}
+
 	if oi.ContentEncoding != "" {
-		meta[xhttp.ContentEncoding] = oi.ContentEncoding
+		meta[strings.ToLower(xhttp.ContentEncoding)] = oi.ContentEncoding
 	}
+
 	if oi.ContentType != "" {
-		meta[xhttp.ContentType] = oi.ContentType
+		meta[strings.ToLower(xhttp.ContentType)] = oi.ContentType
 	}
-	tag, err := tags.ParseObjectTags(oi.UserTags)
-	if err != nil {
-		return nil
-	}
-	if tag != nil {
-		meta[xhttp.AmzObjectTagging] = tag.String()
+
+	if oi.UserTags != "" {
+		meta[xhttp.AmzObjectTagging] = oi.UserTags
 		meta[xhttp.AmzTagDirective] = "REPLACE"
 	}
+
 	sc := dest.StorageClass
 	if sc == "" {
 		sc = oi.StorageClass
 	}
-	meta[xhttp.AmzStorageClass] = sc
-	if oi.UserTags != "" {
-		meta[xhttp.AmzObjectTagging] = oi.UserTags
+	if sc != "" {
+		meta[xhttp.AmzStorageClass] = sc
 	}
-	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339Nano)
 	meta[xhttp.MinIOSourceETag] = oi.ETag
+	meta[xhttp.MinIOSourceMTime] = oi.ModTime.Format(time.RFC3339Nano)
 	meta[xhttp.AmzBucketReplicationStatus] = replication.Replica.String()
 	return meta
 }
@@ -341,17 +362,13 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 		}
 		meta[k] = v
 	}
-	tag, err := tags.ParseObjectTags(objInfo.UserTags)
-	if err != nil {
-		return
-	}
+
 	sc := dest.StorageClass
 	if sc == "" {
 		sc = objInfo.StorageClass
 	}
 	putOpts = miniogo.PutObjectOptions{
 		UserMetadata:    meta,
-		UserTags:        tag.ToMap(),
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
 		StorageClass:    sc,
@@ -361,6 +378,12 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 			SourceMTime:       objInfo.ModTime,
 			SourceETag:        objInfo.ETag,
 		},
+	}
+	if objInfo.UserTags != "" {
+		tag, _ := tags.ParseObjectTags(objInfo.UserTags)
+		if tag != nil {
+			putOpts.UserTags = tag.ToMap()
+		}
 	}
 	if lang, ok := objInfo.UserDefined[xhttp.ContentLanguage]; ok {
 		putOpts.ContentLanguage = lang
@@ -410,18 +433,23 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 		!oi1.ModTime.Equal(oi2.LastModified) {
 		return replicateAll
 	}
+
 	if oi1.ContentType != oi2.ContentType {
 		return replicateMetadata
 	}
+
 	if oi1.ContentEncoding != "" {
 		enc, ok := oi2.Metadata[xhttp.ContentEncoding]
 		if !ok || strings.Join(enc, "") != oi1.ContentEncoding {
 			return replicateMetadata
 		}
 	}
+
+	// Do not compare oi2.UserMetadata - it does not contain `x-amz-meta-` prefix.
+
 	// compare metadata on both maps to see if meta is identical
 	for k1, v1 := range oi1.UserDefined {
-		if v2, ok := oi2.UserMetadata[k1]; ok && v1 == v2 {
+		if v2, ok := oi2.Metadata[strings.ToLower(k1)]; ok && v1 == strings.Join(v2, "") {
 			continue
 		}
 		if v2, ok := oi2.Metadata[k1]; ok && v1 == strings.Join(v2, "") {
@@ -429,24 +457,32 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 		}
 		return replicateMetadata
 	}
-	for k1, v1 := range oi2.UserMetadata {
-		if v2, ok := oi1.UserDefined[k1]; !ok || v1 != v2 {
-			return replicateMetadata
-		}
-	}
+
 	for k1, v1slc := range oi2.Metadata {
 		v1 := strings.Join(v1slc, "")
-		if k1 == xhttp.ContentEncoding { //already compared
+		if k1 == xhttp.ContentEncoding { // already compared
 			continue
 		}
-		if v2, ok := oi1.UserDefined[k1]; !ok || v1 != v2 {
+		if k1 == xhttp.ContentType { // already compared
+			continue
+		}
+		v2, ok := oi1.UserDefined[k1]
+		if !ok {
+			v2, ok = oi1.UserDefined[strings.ToLower(k1)]
+			if !ok {
+				return replicateMetadata
+			}
+		}
+		if v1 != v2 {
 			return replicateMetadata
 		}
 	}
-	t, _ := tags.MapToObjectTags(oi2.UserTags)
-	if t.String() != oi1.UserTags {
+
+	t, _ := tags.ParseObjectTags(oi1.UserTags)
+	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) {
 		return replicateMetadata
 	}
+
 	return replicateNone
 }
 
@@ -508,9 +544,9 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		// replicate metadata for object tagging/copy with metadata replacement
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
 		c := &miniogo.Core{Client: tgt.Client}
-		_, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts)
-		if err != nil {
+		if _, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts); err != nil {
 			replicationStatus = replication.Failed
+			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	} else {
 		target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
@@ -535,9 +571,9 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 
 		// r takes over closing gr.
 		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
-		_, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, putOpts)
-		if err != nil {
+		if _, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, putOpts); err != nil {
 			replicationStatus = replication.Failed
+			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 		r.Close()
 	}
@@ -557,21 +593,27 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	}
 
 	objInfo.metadataOnly = true // Perform only metadata updates.
-	objInfo, err = objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
+	nobjInfo, err := objectAPI.CopyObject(ctx, bucket, object, bucket, object, objInfo, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	}, ObjectOptions{
 		VersionID: objInfo.VersionID,
 	})
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s: %s", objInfo.VersionID, err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+		sendEvent(eventArgs{
+			EventName:  eventName,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [Replication]",
+		})
+	} else {
+		sendEvent(eventArgs{
+			EventName:  eventName,
+			BucketName: bucket,
+			Object:     nobjInfo,
+			Host:       "Internal: [Replication]",
+		})
 	}
-
-	sendEvent(eventArgs{
-		EventName:  eventName,
-		BucketName: bucket,
-		Object:     objInfo,
-		Host:       "Internal: [Replication]",
-	})
 }
 
 // filterReplicationStatusMetadata filters replication status metadata for COPY
