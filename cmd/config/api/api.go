@@ -29,14 +29,14 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax             = "requests_max"
-	apiRequestsDeadline        = "requests_deadline"
-	apiClusterDeadline         = "cluster_deadline"
-	apiCorsAllowOrigin         = "cors_allow_origin"
-	apiRemoteTransportDeadline = "remote_transport_deadline"
-	apiListQuorum              = "list_quorum"
-	apiExtendListCacheLife     = "extend_list_cache_life"
-
+	apiRequestsMax                = "requests_max"
+	apiRequestsDeadline           = "requests_deadline"
+	apiClusterDeadline            = "cluster_deadline"
+	apiCorsAllowOrigin            = "cors_allow_origin"
+	apiRemoteTransportDeadline    = "remote_transport_deadline"
+	apiListQuorum                 = "list_quorum"
+	apiExtendListCacheLife        = "extend_list_cache_life"
+	apiReplicationWorkers         = "replication_workers"
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
 	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
@@ -45,6 +45,7 @@ const (
 	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
 	EnvAPIExtendListCacheLife     = "MINIO_API_EXTEND_LIST_CACHE_LIFE"
 	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS"
+	EnvAPIReplicationWorkers      = "MINIO_API_REPLICATION_WORKERS"
 )
 
 // Deprecated key and ENVs
@@ -84,6 +85,10 @@ var (
 			Key:   apiExtendListCacheLife,
 			Value: "0s",
 		},
+		config.KV{
+			Key:   apiReplicationWorkers,
+			Value: "100",
+		},
 	}
 )
 
@@ -96,6 +101,7 @@ type Config struct {
 	RemoteTransportDeadline time.Duration `json:"remote_transport_deadline"`
 	ListQuorum              string        `json:"list_strict_quorum"`
 	ExtendListLife          time.Duration `json:"extend_list_cache_life"`
+	ReplicationWorkers      int           `json:"replication_workers"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -172,7 +178,13 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
-
+	replicationWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationWorkers, kvs.Get(apiReplicationWorkers)))
+	if err != nil {
+		return cfg, err
+	}
+	if replicationWorkers <= 0 {
+		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication workers should be 1")
+	}
 	return Config{
 		RequestsMax:             requestsMax,
 		RequestsDeadline:        requestsDeadline,
@@ -181,5 +193,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		RemoteTransportDeadline: remoteTransportDeadline,
 		ListQuorum:              listQuorum,
 		ExtendListLife:          listLife,
+		ReplicationWorkers:      replicationWorkers,
 	}, nil
 }
