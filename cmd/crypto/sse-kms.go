@@ -82,12 +82,6 @@ func (ssekms) IsEncrypted(metadata map[string]string) bool {
 	if _, ok := metadata[MetaSealedKeyKMS]; ok {
 		return true
 	}
-	if _, ok := metadata[MetaKeyID]; ok {
-		return true
-	}
-	if _, ok := metadata[MetaDataEncryptionKey]; ok {
-		return true
-	}
 	return false
 }
 
@@ -95,11 +89,14 @@ func (ssekms) IsEncrypted(metadata map[string]string) bool {
 // from the metadata using KMS and returns the decrypted object
 // key.
 func (s3 ssekms) UnsealObjectKey(kms KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
-	keyID, kmsKey, sealedKey, err := s3.ParseMetadata(metadata)
+	keyID, kmsKey, sealedKey, ctx, err := s3.ParseMetadata(metadata)
 	if err != nil {
 		return key, err
 	}
-	unsealKey, err := kms.UnsealKey(keyID, kmsKey, Context{bucket: path.Join(bucket, object)})
+	if _, ok := ctx[bucket]; !ok {
+		ctx[bucket] = path.Join(bucket, object)
+	}
+	unsealKey, err := kms.UnsealKey(keyID, kmsKey, ctx)
 	if err != nil {
 		return key, err
 	}
@@ -147,19 +144,19 @@ func (ssekms) CreateMetadata(metadata map[string]string, keyID string, kmsKey []
 // KMS data key it returns both. If the metadata does not contain neither a
 // KMS master key ID nor a sealed KMS data key it returns an empty keyID and
 // KMS data key. Otherwise, it returns an error.
-func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, err error) {
+func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []byte, sealedKey SealedKey, ctx Context, err error) {
 	// Extract all required values from object metadata
 	b64IV, ok := metadata[MetaIV]
 	if !ok {
-		return keyID, kmsKey, sealedKey, errMissingInternalIV
+		return keyID, kmsKey, sealedKey, ctx, errMissingInternalIV
 	}
 	algorithm, ok := metadata[MetaAlgorithm]
 	if !ok {
-		return keyID, kmsKey, sealedKey, errMissingInternalSealAlgorithm
+		return keyID, kmsKey, sealedKey, ctx, errMissingInternalSealAlgorithm
 	}
 	b64SealedKey, ok := metadata[MetaSealedKeyKMS]
 	if !ok {
-		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-S3")
+		return keyID, kmsKey, sealedKey, ctx, Errorf("The object metadata is missing the internal sealed key for SSE-S3")
 	}
 
 	// There are two possibilites:
@@ -169,33 +166,44 @@ func (ssekms) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []
 	keyID, idPresent := metadata[MetaKeyID]
 	b64KMSSealedKey, kmsKeyPresent := metadata[MetaDataEncryptionKey]
 	if !idPresent && kmsKeyPresent {
-		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3")
+		return keyID, kmsKey, sealedKey, ctx, Errorf("The object metadata is missing the internal KMS key-ID for SSE-S3")
 	}
 	if idPresent && !kmsKeyPresent {
-		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3")
+		return keyID, kmsKey, sealedKey, ctx, Errorf("The object metadata is missing the internal sealed KMS data key for SSE-S3")
 	}
 
 	// Check whether all extracted values are well-formed
 	iv, err := base64.StdEncoding.DecodeString(b64IV)
 	if err != nil || len(iv) != 32 {
-		return keyID, kmsKey, sealedKey, errInvalidInternalIV
+		return keyID, kmsKey, sealedKey, ctx, errInvalidInternalIV
 	}
 	if algorithm != SealAlgorithm {
-		return keyID, kmsKey, sealedKey, errInvalidInternalSealAlgorithm
+		return keyID, kmsKey, sealedKey, ctx, errInvalidInternalSealAlgorithm
 	}
 	encryptedKey, err := base64.StdEncoding.DecodeString(b64SealedKey)
 	if err != nil || len(encryptedKey) != 64 {
-		return keyID, kmsKey, sealedKey, Errorf("The internal sealed key for SSE-S3 is invalid")
+		return keyID, kmsKey, sealedKey, ctx, Errorf("The internal sealed key for SSE-KMS is invalid")
 	}
 	if idPresent && kmsKeyPresent { // We are using a KMS -> parse the sealed KMS data key.
 		kmsKey, err = base64.StdEncoding.DecodeString(b64KMSSealedKey)
 		if err != nil {
-			return keyID, kmsKey, sealedKey, Errorf("The internal sealed KMS data key for SSE-S3 is invalid")
+			return keyID, kmsKey, sealedKey, ctx, Errorf("The internal sealed KMS data key for SSE-KMS is invalid")
+		}
+	}
+	b64Ctx, ok := metadata[MetaContext]
+	if ok {
+		b, err := base64.StdEncoding.DecodeString(b64Ctx)
+		if err != nil {
+			return keyID, kmsKey, sealedKey, ctx, Errorf("The internal KMS context is not base64-encoded")
+		}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err = json.Unmarshal(b, ctx); err != nil {
+			return keyID, kmsKey, sealedKey, ctx, Errorf("The internal sealed KMS context is invalid")
 		}
 	}
 
 	sealedKey.Algorithm = algorithm
 	copy(sealedKey.IV[:], iv)
 	copy(sealedKey.Key[:], encryptedKey)
-	return keyID, kmsKey, sealedKey, nil
+	return keyID, kmsKey, sealedKey, ctx, nil
 }
