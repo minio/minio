@@ -565,7 +565,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 					continue
 				}
 				// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-				if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+				if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 					continue
 				}
 				content.UserMetadata[k] = v

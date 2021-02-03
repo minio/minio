@@ -169,13 +169,8 @@ func hasReplicationRules(ctx context.Context, bucket string, objects []ObjectToD
 }
 
 // isStandardHeader returns true if header is a supported header and not a custom header
-func isStandardHeader(headerKey string) bool {
-	for _, header := range standardHeaders {
-		if strings.EqualFold(header, headerKey) {
-			return true
-		}
-	}
-	return false
+func isStandardHeader(matchHeaderKey string) bool {
+	return equals(matchHeaderKey, standardHeaders...)
 }
 
 // returns whether object version is a deletemarker and if object qualifies for replication
@@ -334,12 +329,12 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 			continue
 		}
 
-		if k == xhttp.AmzBucketReplicationStatus {
+		if equals(k, xhttp.AmzBucketReplicationStatus) {
 			continue
 		}
 
 		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
 
@@ -347,11 +342,11 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 	}
 
 	if oi.ContentEncoding != "" {
-		meta[strings.ToLower(xhttp.ContentEncoding)] = oi.ContentEncoding
+		meta[xhttp.ContentEncoding] = oi.ContentEncoding
 	}
 
 	if oi.ContentType != "" {
-		meta[strings.ToLower(xhttp.ContentType)] = oi.ContentType
+		meta[xhttp.ContentType] = oi.ContentType
 	}
 
 	if oi.UserTags != "" {
@@ -444,6 +439,16 @@ const (
 	replicateAll      replicationAction = "all"
 )
 
+// matches k1 with all keys, returns 'true' if one of them matches
+func equals(k1 string, keys ...string) bool {
+	for _, k2 := range keys {
+		if strings.ToLower(k1) == strings.ToLower(k2) {
+			return true
+		}
+	}
+	return false
+}
+
 // returns replicationAction by comparing metadata between source and target
 func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationAction {
 	// needs full replication
@@ -487,10 +492,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 
 	for k1, v1slc := range oi2.Metadata {
 		v1 := strings.Join(v1slc, "")
-		if strings.EqualFold(k1, xhttp.ContentEncoding) ||
-			strings.EqualFold(k1, xhttp.ContentType) ||
-			strings.EqualFold(k1, xhttp.AmzTagCount) ||
-			strings.EqualFold(k1, xhttp.AmzStorageClass) {
+		if equals(k1, xhttp.ContentEncoding, xhttp.ContentType, xhttp.AmzTagCount, xhttp.AmzStorageClass) {
 			continue
 		}
 		v2, ok := oi1.UserDefined[k1]
