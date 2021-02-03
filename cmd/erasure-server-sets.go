@@ -1319,11 +1319,15 @@ func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, pref
 		loi.NextMarker = entries.FilesVersions[len(entries.FilesVersions)-1].Name
 	}
 
+	var prevPrefix string
 	for _, entry := range entries.FilesVersions {
 		for _, version := range entry.Versions {
 			objInfo := version.ToObjectInfo(bucket, entry.Name)
 			if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
-				loi.Prefixes = append(loi.Prefixes, objInfo.Name)
+				if objInfo.Name != prevPrefix {
+					loi.Prefixes = append(loi.Prefixes, objInfo.Name)
+					prevPrefix = objInfo.Name
+				}
 				continue
 			}
 			loi.Objects = append(loi.Objects, objInfo)
