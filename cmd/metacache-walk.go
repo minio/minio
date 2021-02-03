@@ -209,7 +209,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				// NOT an object, append to stack (with slash)
 				// If dirObject, but no metadata (which is unexpected) we skip it.
 				if !isDirObj {
-					dirStack = append(dirStack, meta.name+slashSeparator)
+					if !isDirEmpty(pathJoin(volumeDir, meta.name+slashSeparator)) {
+						dirStack = append(dirStack, meta.name+slashSeparator)
+					}
 				}
 			case isSysErrNotDir(err):
 				// skip
