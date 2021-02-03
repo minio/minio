@@ -166,19 +166,29 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 		logger.LogIf(ctx, errInvalidArgument)
 		return errInvalidArgument
 	}
+
+	nv := make(textproto.MIMEHeader, len(v))
+	for k, kv := range v {
+		// Canonicalize all headers, to remove any duplicates.
+		nv[http.CanonicalHeaderKey(k)] = kv
+	}
+
 	// Save all supported headers.
 	for _, supportedHeader := range supportedHeaders {
-		if value := v.Get(supportedHeader); value != "" {
-			m[supportedHeader] = value
+		value, ok := nv[http.CanonicalHeaderKey(supportedHeader)]
+		if ok {
+			m[supportedHeader] = strings.Join(value, ",")
 		}
 	}
+
 	for key := range v {
 		for _, prefix := range userMetadataKeyPrefixes {
 			if !strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
 				continue
 			}
-			if value := v.Get(key); value != "" {
-				m[key] = value
+			value, ok := nv[http.CanonicalHeaderKey(key)]
+			if ok {
+				m[key] = strings.Join(value, ",")
 				break
 			}
 		}

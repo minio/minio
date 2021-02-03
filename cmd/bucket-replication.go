@@ -809,8 +809,11 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 			return nil, false
 		}
 	}
+	// Make sure to match ETag when proxying.
+	if err = gopts.SetMatchETag(oi.ETag); err != nil {
+		return nil, false
+	}
 	c := miniogo.Core{Client: tgt.Client}
-
 	obj, _, _, err := c.GetObject(ctx, bucket, object, gopts)
 	if err != nil {
 		return nil, false
@@ -876,6 +879,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 	if err != nil {
 		return nil, oi, false, err
 	}
+
 	tags, _ := tags.MapToObjectTags(objInfo.UserTags)
 	oi = ObjectInfo{
 		Bucket:            bucket,
@@ -890,12 +894,17 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 		Expires:           objInfo.Expires,
 		StorageClass:      objInfo.StorageClass,
 		ReplicationStatus: replication.StatusType(objInfo.ReplicationStatus),
-		UserDefined:       cloneMSS(objInfo.UserMetadata),
 		UserTags:          tags.String(),
 	}
-	if ce, ok := oi.UserDefined[xhttp.ContentEncoding]; ok {
+	for k, v := range objInfo.Metadata {
+		oi.UserDefined[k] = v[0]
+	}
+	ce, ok := oi.UserDefined[xhttp.ContentEncoding]
+	if !ok {
+		ce, ok = oi.UserDefined[strings.ToLower(xhttp.ContentEncoding)]
+	}
+	if ok {
 		oi.ContentEncoding = ce
-		delete(oi.UserDefined, xhttp.ContentEncoding)
 	}
 	return tgt, oi, true, nil
 }

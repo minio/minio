@@ -162,14 +162,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {
-		if isProxyable(ctx, bucket) && (errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound)) {
-			// proxy to replication target if active-active replication is in place.
-			reader, proxy := proxyGetToReplicationTarget(ctx, bucket, object, rs, h, opts)
-			if reader == nil || !proxy {
-				return nil, toObjectErr(err, bucket, object)
-			}
-			return reader, nil
-		}
 		return nil, toObjectErr(err, bucket, object)
 	}
 
@@ -454,13 +446,6 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {
-		// proxy HEAD to replication target if active-active replication configured on bucket
-		if isProxyable(ctx, bucket) && (errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound)) {
-			oi, proxy, err := proxyHeadToReplicationTarget(ctx, bucket, object, opts)
-			if proxy {
-				return oi, err
-			}
-		}
 		return objInfo, toObjectErr(err, bucket, object)
 
 	}
