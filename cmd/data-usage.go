@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
@@ -59,20 +60,18 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 }
 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
-	var dataUsageInfoJSON bytes.Buffer
-
-	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageObjName, 0, -1, &dataUsageInfoJSON, "", ObjectOptions{})
+	r, err := objAPI.GetObjectNInfo(ctx, dataUsageBucket, dataUsageObjName, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrBucketNotFound(err) {
 			return DataUsageInfo{}, nil
 		}
 		return DataUsageInfo{}, toObjectErr(err, dataUsageBucket, dataUsageObjName)
 	}
+	defer r.Close()
 
 	var dataUsageInfo DataUsageInfo
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	err = json.Unmarshal(dataUsageInfoJSON.Bytes(), &dataUsageInfo)
-	if err != nil {
+	if err = json.NewDecoder(r).Decode(&dataUsageInfo); err != nil {
 		return DataUsageInfo{}, err
 	}
 
