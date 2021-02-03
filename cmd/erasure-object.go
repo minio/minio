@@ -414,7 +414,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 					er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
 						Name:      object,
 						VersionID: opts.VersionID,
-					})
+					}, false)
 				}
 			}
 		}
@@ -800,7 +800,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object), nil
 }
 
-func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo) error {
+func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
 	defer ObjectPathUpdated(pathJoin(bucket, object))
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
@@ -810,7 +810,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return disks[index].DeleteVersion(ctx, bucket, object, fi)
+			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
 		}, index)
 	}
 	// return errors if any during deletion
@@ -1098,7 +1098,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			// version as delete marker
 			// Add delete marker, since we don't have any version specified explicitly.
 			// Or if a particular version id needs to be replicated.
-			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
+			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
 			return fi.ToObjectInfo(bucket, object), nil
@@ -1115,7 +1115,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
 		TransitionStatus:              opts.TransitionStatus,
-	}); err != nil {
+	}, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 

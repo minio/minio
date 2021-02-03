@@ -332,10 +332,11 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path
 	return err
 }
 
-func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
+	values.Set(storageRESTForceDelMarker, strconv.FormatBool(forceDelMarker))
 
 	var buffer bytes.Buffer
 	if err := msgp.Encode(&buffer, &fi); err != nil {
