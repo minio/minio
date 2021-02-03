@@ -878,7 +878,7 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) []error {
 	errs := make([]error, len(versions))
 	for i, version := range versions {
-		if err := s.DeleteVersion(ctx, volume, version.Name, version); err != nil {
+		if err := s.DeleteVersion(ctx, volume, version.Name, version, false); err != nil {
 			errs[i] = err
 		}
 	}
@@ -886,9 +886,9 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	return errs
 }
 
-// DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. Create a fresh
-// `xl.meta` if it does not exist and we creating a new delete-marker.
-func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error {
+// DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. forceDelMarker
+// will force creating a new `xl.meta` to create a new delete marker
+func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
 	if HasSuffix(path, SlashSeparator) {
 		return s.Delete(ctx, volume, path, false)
 	}
@@ -898,7 +898,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if err != errFileNotFound {
 			return err
 		}
-		if fi.Deleted {
+		if fi.Deleted && forceDelMarker {
 			// Create a new xl.meta with a delete marker in it
 			return s.WriteMetadata(ctx, volume, path, fi)
 		}

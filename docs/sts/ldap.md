@@ -235,7 +235,7 @@ $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=%
 $ export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
 $ minio server ~/test
 ```
-
+You can make sure it works appropriately using our [example program](https://raw.githubusercontent.com/minio/minio/master/docs/sts/ldap.go):
 ```
 $ go run ldap.go -u foouser -p foopassword
 

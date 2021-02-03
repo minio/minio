@@ -55,7 +55,7 @@ type StorageAPI interface {
 	WalkVersions(ctx context.Context, volume, dirPath, marker string, recursive bool, endWalkCh <-chan struct{}) (chan FileInfoVersions, error)
 
 	// Metadata operations
-	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error
+	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error
 	DeleteVersions(ctx context.Context, volume string, versions []FileInfo) []error
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
