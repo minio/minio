@@ -9,6 +9,7 @@ import (
 	"github.com/minio/minio/pkg/madmin"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
@@ -59,6 +60,24 @@ func (gcs *warmBackendGCS) Get(ctx context.Context, key string, opts warmBackend
 func (gcs *warmBackendGCS) Remove(ctx context.Context, key string) error {
 	err := gcs.client.Bucket(gcs.Bucket).Object(key).Delete(ctx)
 	return gcsToObjectError(err, gcs.Bucket, key)
+}
+
+func (gcs *warmBackendGCS) InUse(ctx context.Context) (bool, error) {
+	it := gcs.client.Bucket(gcs.Bucket).Objects(ctx, &storage.Query{
+		Delimiter: "/",
+		Prefix:    gcs.Prefix,
+		Versions:  false,
+	})
+	pager := iterator.NewPager(it, 1, "")
+	gcsObjects := make([]*storage.ObjectAttrs, 0)
+	_, err := pager.NextPage(&gcsObjects)
+	if err != nil {
+		return false, gcsToObjectError(err, gcs.Bucket, gcs.Prefix)
+	}
+	if len(gcsObjects) > 0 {
+		return true, nil
+	}
+	return false, nil
 }
 
 func newWarmBackendGCS(conf madmin.TierGCS) (*warmBackendGCS, error) {

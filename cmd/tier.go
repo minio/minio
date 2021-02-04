@@ -39,6 +39,8 @@ type TierConfigMgr struct {
 	GCS         map[string]madmin.TierGCS   `json:"gcs"`
 }
 
+var errWarmBackendInUse = errors.New("Backend warm tier already in use")
+
 func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, bool) {
 	for name := range config.S3 {
 		if tierName == name {
@@ -61,6 +63,25 @@ func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, 
 	return madmin.Unsupported, false
 }
 
+func tierBackendInUse(sc madmin.TierConfig) (bool, error) {
+	var d warmBackend
+	var err error
+	switch sc.Type {
+	case madmin.S3:
+		d, err = newWarmBackendS3(*sc.S3)
+	case madmin.Azure:
+		d, err = newWarmBackendAzure(*sc.Azure)
+	case madmin.GCS:
+		d, err = newWarmBackendGCS(*sc.GCS)
+	default:
+		return false, errors.New("Unsupported tier type")
+	}
+	if err != nil {
+		return false, err
+	}
+	return d.InUse(context.Background())
+}
+
 func (config *TierConfigMgr) Add(sc madmin.TierConfig) error {
 	config.Lock()
 	defer config.Unlock()
@@ -69,6 +90,14 @@ func (config *TierConfigMgr) Add(sc madmin.TierConfig) error {
 	// storage-class name already in use
 	if _, exists := config.isTierNameInUse(tierName); exists {
 		return errTierAlreadyExists
+	}
+
+	inuse, err := tierBackendInUse(sc)
+	if err != nil {
+		return err
+	}
+	if inuse {
+		return errWarmBackendInUse
 	}
 
 	switch sc.Type {
