@@ -488,7 +488,6 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 		"Cache-Control",
 		"Content-Language",
 		"Content-Disposition",
-		"X-Amz-Storage-Class",
 		"X-Amz-Object-Lock-Mode",
 		"X-Amz-Object-Lock-Retain-Until-Date",
 		"X-Amz-Object-Lock-Legal-Hold",
@@ -523,7 +522,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 			break
 		}
 		if found {
-			compareMeta1[strings.ToLower(k)] = strings.Join(v, ",")
+			compareMeta2[strings.ToLower(k)] = strings.Join(v, ",")
 		}
 	}
 
@@ -683,12 +682,12 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		VersionID: objInfo.VersionID,
 	}, objInfo.Size)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 	} else {
 		if err = z.serverPools[poolIdx].getHashedSet(object).updateObjectMeta(ctx, bucket, object, objInfo.UserDefined, ObjectOptions{
 			VersionID: objInfo.VersionID,
 		}); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	}
 	sendEvent(eventArgs{
