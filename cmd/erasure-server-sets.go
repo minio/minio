@@ -993,6 +993,10 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 		return lentry, 0, zoneIndex, isTruncated
 	}
 
+	if HasSuffix(lentry.Name, globalDirSuffix) {
+		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
+	}
+
 	lexicallySortedEntryCount := 0
 	for i, entriesValid := range zoneEntriesValid {
 		for j, valid := range entriesValid {
@@ -1000,21 +1004,24 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 				continue
 			}
 
+			zoneEntryName := zoneEntries[i][j].Name
+			if HasSuffix(zoneEntryName, globalDirSuffix) {
+				zoneEntryName = strings.TrimSuffix(zoneEntryName, globalDirSuffix) + slashSeparator
+			}
+
 			// Entries are duplicated across disks,
 			// we should simply skip such entries.
-			if lentry.Name == zoneEntries[i][j].Name && lentry.ModTime.Equal(zoneEntries[i][j].ModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
-				lexicallySortedEntryCount++
-				continue
+			if lentry.Name == zoneEntryName && setIndex == zoneEntryChs[i][j].SetIndex {
+				if HasSuffix(lentry.Name, slashSeparator) || lentry.ModTime.Equal(zoneEntries[i][j].ModTime) {
+					lexicallySortedEntryCount++
+					continue
+				}
 			}
 
 			// Push all entries which are lexically higher
 			// and will be returned later in Pop()
 			zoneEntryChs[i][j].Push(zoneEntries[i][j])
 		}
-	}
-
-	if HasSuffix(lentry.Name, globalDirSuffix) {
-		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
 	}
 
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
@@ -1087,6 +1094,10 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 		return lentry, 0, zoneIndex, isTruncated
 	}
 
+	if HasSuffix(lentry.Name, globalDirSuffix) {
+		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
+	}
+
 	lexicallySortedEntryCount := 0
 	for i, entriesValid := range zoneEntriesValid {
 		for j, valid := range entriesValid {
@@ -1094,21 +1105,24 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 				continue
 			}
 
+			zoneEntryName := zoneEntries[i][j].Name
+			if HasSuffix(zoneEntryName, globalDirSuffix) {
+				zoneEntryName = strings.TrimSuffix(zoneEntryName, globalDirSuffix) + slashSeparator
+			}
+
 			// Entries are duplicated across disks,
 			// we should simply skip such entries.
-			if lentry.Name == zoneEntries[i][j].Name && lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
-				lexicallySortedEntryCount++
-				continue
+			if lentry.Name == zoneEntryName && setIndex == zoneEntryChs[i][j].SetIndex {
+				if HasSuffix(lentry.Name, slashSeparator) || lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) {
+					lexicallySortedEntryCount++
+					continue
+				}
 			}
 
 			// Push all entries which are lexically higher
 			// and will be returned later in Pop()
 			zoneEntryChs[i][j].Push(zoneEntries[i][j])
 		}
-	}
-
-	if HasSuffix(lentry.Name, globalDirSuffix) {
-		lentry.Name = strings.TrimSuffix(lentry.Name, globalDirSuffix) + slashSeparator
 	}
 
 	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
