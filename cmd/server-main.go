@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2015-2019 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2015-2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // ServerFlags - server command specific flags
@@ -346,9 +347,19 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 				logger.Info(fmt.Sprintf("Verifying if %d buckets are consistent across drives...", len(buckets)))
 			}
 		}
-		for _, bucket := range buckets {
-			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{Recreate: true}); err != nil {
-				return fmt.Errorf("Unable to list buckets to heal: %w", err)
+		g := errgroup.WithNErrs(len(buckets))
+		for index := range buckets {
+			index := index
+			g.Go(func() error {
+				if _, berr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true}); berr != nil {
+					return fmt.Errorf("Unable to list buckets to heal: %w", berr)
+				}
+				return nil
+			}, index)
+		}
+		for _, err := range g.Wait() {
+			if err != nil {
+				return err
 			}
 		}
 	}
