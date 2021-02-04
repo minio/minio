@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,48 +19,17 @@ package madmin
 
 import (
 	"bytes"
-	"encoding/json"
+	"context"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"net/url"
 )
 
-const (
-	configQueryParam = "config"
-)
-
-// NodeSummary - represents the result of an operation part of
-// set-config on a node.
-type NodeSummary struct {
-	Name   string `json:"name"`
-	ErrSet bool   `json:"errSet"`
-	ErrMsg string `json:"errMsg"`
-}
-
-// SetConfigResult - represents detailed results of a set-config
-// operation.
-type SetConfigResult struct {
-	NodeResults []NodeSummary `json:"nodeResults"`
-	Status      bool          `json:"status"`
-}
-
-// GetConfig - returns the config.json of a minio setup.
-func (adm *AdminClient) GetConfig() ([]byte, error) {
-	queryVal := make(url.Values)
-	queryVal.Set(configQueryParam, "")
-
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "get")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Execute GET on /?config to get config of a setup.
-	resp, err := adm.executeMethod("GET", reqData)
-
+// GetConfig - returns the config.json of a minio setup, incoming data is encrypted.
+func (adm *AdminClient) GetConfig(ctx context.Context) ([]byte, error) {
+	// Execute GET on /minio/admin/v3/config to get config of a setup.
+	resp, err := adm.executeMethod(ctx,
+		http.MethodGet,
+		requestData{relPath: adminAPIPrefix + "/config"})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -70,55 +39,44 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 		return nil, httpRespToErrorResponse(resp)
 	}
 
-	// Return the JSON marshalled bytes to user.
-	return ioutil.ReadAll(resp.Body)
+	return DecryptData(adm.getSecretKey(), resp.Body)
 }
 
 // SetConfig - set config supplied as config.json for the setup.
-func (adm *AdminClient) SetConfig(config io.Reader) (SetConfigResult, error) {
-	queryVal := url.Values{}
-	queryVal.Set(configQueryParam, "")
+func (adm *AdminClient) SetConfig(ctx context.Context, config io.Reader) (err error) {
+	const maxConfigJSONSize = 256 * 1024 // 256KiB
 
-	// Set x-minio-operation to set.
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "set")
-
-	// Read config bytes to calculate MD5, SHA256 and content length.
-	configBytes, err := ioutil.ReadAll(config)
+	// Read configuration bytes
+	configBuf := make([]byte, maxConfigJSONSize+1)
+	n, err := io.ReadFull(config, configBuf)
+	if err == nil {
+		return bytes.ErrTooLarge
+	}
+	if err != io.ErrUnexpectedEOF {
+		return err
+	}
+	configBytes := configBuf[:n]
+	econfigBytes, err := EncryptData(adm.getSecretKey(), configBytes)
 	if err != nil {
-		return SetConfigResult{}, err
+		return err
 	}
 
 	reqData := requestData{
-		queryValues:        queryVal,
-		customHeaders:      hdrs,
-		contentBody:        bytes.NewReader(configBytes),
-		contentMD5Bytes:    sumMD5(configBytes),
-		contentSHA256Bytes: sum256(configBytes),
+		relPath: adminAPIPrefix + "/config",
+		content: econfigBytes,
 	}
 
-	// Execute PUT on /?config to set config.
-	resp, err := adm.executeMethod("PUT", reqData)
+	// Execute PUT on /minio/admin/v3/config to set config.
+	resp, err := adm.executeMethod(ctx, http.MethodPut, reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
-		return SetConfigResult{}, err
+		return err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return SetConfigResult{}, httpRespToErrorResponse(resp)
+		return httpRespToErrorResponse(resp)
 	}
 
-	var result SetConfigResult
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return SetConfigResult{}, err
-	}
-
-	err = json.Unmarshal(jsonBytes, &result)
-	if err != nil {
-		return SetConfigResult{}, err
-	}
-
-	return result, nil
+	return nil
 }

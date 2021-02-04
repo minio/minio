@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2019 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,69 +18,47 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
 	"net/url"
-	"time"
+	"strconv"
+
+	trace "github.com/minio/minio/pkg/trace"
 )
 
-// ServiceStatusMetadata - contains the response of service status API
-type ServiceStatusMetadata struct {
-	Uptime time.Duration `json:"uptime"`
+// ServiceRestart - restarts the MinIO cluster
+func (adm *AdminClient) ServiceRestart(ctx context.Context) error {
+	return adm.serviceCallAction(ctx, ServiceActionRestart)
 }
 
-// ServiceStatus - Connect to a minio server and call Service Status Management API
-// to fetch server's storage information represented by ServiceStatusMetadata structure
-func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
-
-	// Prepare web service request
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "status")
-
-	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("GET", reqData)
-	defer closeResponse(resp)
-	if err != nil {
-		return ServiceStatusMetadata{}, err
-	}
-
-	// Check response http status code
-	if resp.StatusCode != http.StatusOK {
-		return ServiceStatusMetadata{}, httpRespToErrorResponse(resp)
-	}
-
-	// Unmarshal the server's json response
-	var serviceStatus ServiceStatusMetadata
-
-	respBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return ServiceStatusMetadata{}, err
-	}
-
-	err = json.Unmarshal(respBytes, &serviceStatus)
-	if err != nil {
-		return ServiceStatusMetadata{}, err
-	}
-
-	return serviceStatus, nil
+// ServiceStop - stops the MinIO cluster
+func (adm *AdminClient) ServiceStop(ctx context.Context) error {
+	return adm.serviceCallAction(ctx, ServiceActionStop)
 }
 
-// ServiceRestart - Call Service Restart API to restart a specified Minio server
-func (adm *AdminClient) ServiceRestart() error {
-	//
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "restart")
+// ServiceAction - type to restrict service-action values
+type ServiceAction string
 
-	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("POST", reqData)
+const (
+	// ServiceActionRestart represents restart action
+	ServiceActionRestart ServiceAction = "restart"
+	// ServiceActionStop represents stop action
+	ServiceActionStop = "stop"
+)
 
+// serviceCallAction - call service restart/update/stop API.
+func (adm *AdminClient) serviceCallAction(ctx context.Context, action ServiceAction) error {
+	queryValues := url.Values{}
+	queryValues.Set("action", string(action))
+
+	// Request API to Restart server
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     adminAPIPrefix + "/service",
+			queryValues: queryValues,
+		},
+	)
 	defer closeResponse(resp)
 	if err != nil {
 		return err
@@ -89,5 +67,58 @@ func (adm *AdminClient) ServiceRestart() error {
 	if resp.StatusCode != http.StatusOK {
 		return httpRespToErrorResponse(resp)
 	}
+
 	return nil
+}
+
+// ServiceTraceInfo holds http trace
+type ServiceTraceInfo struct {
+	Trace trace.Info
+	Err   error `json:"-"`
+}
+
+// ServiceTrace - listen on http trace notifications.
+func (adm AdminClient) ServiceTrace(ctx context.Context, allTrace, errTrace bool) <-chan ServiceTraceInfo {
+	traceInfoCh := make(chan ServiceTraceInfo)
+	// Only success, start a routine to start reading line by line.
+	go func(traceInfoCh chan<- ServiceTraceInfo) {
+		defer close(traceInfoCh)
+		for {
+			urlValues := make(url.Values)
+			urlValues.Set("all", strconv.FormatBool(allTrace))
+			urlValues.Set("err", strconv.FormatBool(errTrace))
+			reqData := requestData{
+				relPath:     adminAPIPrefix + "/trace",
+				queryValues: urlValues,
+			}
+			// Execute GET to call trace handler
+			resp, err := adm.executeMethod(ctx, http.MethodGet, reqData)
+			if err != nil {
+				closeResponse(resp)
+				traceInfoCh <- ServiceTraceInfo{Err: err}
+				return
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				traceInfoCh <- ServiceTraceInfo{Err: httpRespToErrorResponse(resp)}
+				return
+			}
+
+			dec := json.NewDecoder(resp.Body)
+			for {
+				var info trace.Info
+				if err = dec.Decode(&info); err != nil {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case traceInfoCh <- ServiceTraceInfo{Trace: info}:
+				}
+			}
+		}
+	}(traceInfoCh)
+
+	// Returns the trace info channel, for caller to start reading from.
+	return traceInfoCh
 }

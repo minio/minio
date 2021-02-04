@@ -1,7 +1,7 @@
 // +build darwin freebsd dragonfly
 
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 package disk
 
 import (
+	"fmt"
 	"syscall"
 )
 
@@ -29,11 +30,17 @@ func GetInfo(path string) (info Info, err error) {
 	if err != nil {
 		return Info{}, err
 	}
-	info = Info{}
-	info.Total = int64(s.Bsize) * int64(s.Blocks)
-	info.Free = int64(s.Bsize) * int64(s.Bavail)
-	info.Files = int64(s.Files)
-	info.Ffree = int64(s.Ffree)
-	info.FSType = getFSType(s.Fstypename)
+	reservedBlocks := uint64(s.Bfree) - uint64(s.Bavail)
+	info = Info{
+		Total:  uint64(s.Bsize) * (uint64(s.Blocks) - reservedBlocks),
+		Free:   uint64(s.Bsize) * uint64(s.Bavail),
+		Files:  uint64(s.Files),
+		Ffree:  uint64(s.Ffree),
+		FSType: getFSType(s.Fstypename[:]),
+	}
+	if info.Free > info.Total {
+		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
+	}
+	info.Used = info.Total - info.Free
 	return info, nil
 }

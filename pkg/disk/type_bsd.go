@@ -1,7 +1,7 @@
-// +build darwin freebsd dragonfly openbsd
+// +build darwin freebsd dragonfly openbsd solaris
 
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,10 @@
 package disk
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(fstype [16]int8) string {
-	return b2s(fstype[:])
+func getFSType(fstype []int8) string {
+	b := make([]byte, len(fstype))
+	for i, v := range fstype {
+		b[i] = byte(v)
+	}
+	return string(b)
 }

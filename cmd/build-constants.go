@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,15 +22,18 @@ var (
 	// GOPATH - GOPATH value at the time of build.
 	GOPATH = ""
 
-	// Go get development tag.
-	goGetTag = "DEVELOPMENT.GOGET"
+	// GOROOT - GOROOT value at the time of build.
+	GOROOT = ""
 
 	// Version - version time.RFC3339.
-	Version = goGetTag
+	Version = "DEVELOPMENT.GOGET"
+
 	// ReleaseTag - release tag in TAG.%Y-%m-%dT%H-%M-%SZ.
-	ReleaseTag = goGetTag
+	ReleaseTag = "DEVELOPMENT.GOGET"
+
 	// CommitID - latest commit id.
-	CommitID = goGetTag
+	CommitID = "DEVELOPMENT.GOGET"
+
 	// ShortCommitID - first 12 characters from CommitID.
-	ShortCommitID = CommitID[:12]
+	ShortCommitID = "DEVELOPMENT.GOGET"
 )

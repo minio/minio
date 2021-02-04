@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -26,41 +27,65 @@ import (
 	"github.com/minio/minio/pkg/lock"
 )
 
-func TestFSStats(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+func TestFSRenameFile(t *testing.T) {
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
+
+	if err = fsMkdir(GlobalContext, pathJoin(path, "testvolume1")); err != nil {
+		t.Fatal(err)
+	}
+	if err = fsRenameFile(GlobalContext, pathJoin(path, "testvolume1"), pathJoin(path, "testvolume2")); err != nil {
+		t.Fatal(err)
+	}
+	if err = fsRenameFile(GlobalContext, pathJoin(path, "testvolume1"), pathJoin(path, "testvolume2")); err != errFileNotFound {
+		t.Fatal(err)
+	}
+	if err = fsRenameFile(GlobalContext, pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"), pathJoin(path, "testvolume2")); err != errFileNameTooLong {
+		t.Fatal("Unexpected error", err)
+	}
+	if err = fsRenameFile(GlobalContext, pathJoin(path, "testvolume1"), pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")); err != errFileNameTooLong {
+		t.Fatal("Unexpected error", err)
+	}
+}
+
+func TestFSStats(t *testing.T) {
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
+	}
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 
-	if err = fsMkdir(""); errorCause(err) != errInvalidArgument {
+	if err = fsMkdir(GlobalContext, ""); err != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if err = fsMkdir(pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")); errorCause(err) != errFileNameTooLong {
+	if err = fsMkdir(GlobalContext, pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")); err != errFileNameTooLong {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol")); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
 	}
 
-	var buf = make([]byte, 4096)
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(pathJoin(path, "success-vol", "success-file"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
 	reader.Seek(0, 0)
 
-	if err = fsMkdir(pathJoin(path, "success-vol", "success-file")); errorCause(err) != errVolumeExists {
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol", "success-file")); err != errVolumeExists {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if _, err = fsCreateFile(pathJoin(path, "success-vol", "path/to/success-file"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "path/to/success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -143,12 +168,13 @@ func TestFSStats(t *testing.T) {
 
 	for i, testCase := range testCases {
 		if testCase.srcPath != "" {
-			if _, err := fsStatFile(pathJoin(testCase.srcFSPath, testCase.srcVol, testCase.srcPath)); errorCause(err) != testCase.expectedErr {
-				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+			if _, err := fsStatFile(GlobalContext, pathJoin(testCase.srcFSPath, testCase.srcVol,
+				testCase.srcPath)); err != testCase.expectedErr {
+				t.Fatalf("TestErasureStorage case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		} else {
-			if _, err := fsStatDir(pathJoin(testCase.srcFSPath, testCase.srcVol)); errorCause(err) != testCase.expectedErr {
-				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+			if _, err := fsStatVolume(GlobalContext, pathJoin(testCase.srcFSPath, testCase.srcVol)); err != testCase.expectedErr {
+				t.Fatalf("TestFS case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		}
 	}
@@ -156,27 +182,26 @@ func TestFSStats(t *testing.T) {
 
 func TestFSCreateAndOpen(t *testing.T) {
 	// Setup test environment.
-	_, path, err := newPosixTestSetup()
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
-	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol")); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
-	if _, err = fsCreateFile("", nil, nil, 0); errorCause(err) != errInvalidArgument {
+	if _, err = fsCreateFile(GlobalContext, "", nil, 0); err != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if _, _, err = fsOpenFile("", -1); errorCause(err) != errInvalidArgument {
+	if _, _, err = fsOpenFile(GlobalContext, "", -1); err != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
 	}
 
-	var buf = make([]byte, 4096)
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(pathJoin(path, "success-vol", "success-file"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -204,108 +229,179 @@ func TestFSCreateAndOpen(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		_, err = fsCreateFile(pathJoin(path, testCase.srcVol, testCase.srcPath), reader, buf, reader.Size())
-		if errorCause(err) != testCase.expectedErr {
+		_, err = fsCreateFile(GlobalContext, pathJoin(path, testCase.srcVol, testCase.srcPath), reader, 0)
+		if err != testCase.expectedErr {
 			t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
-		_, _, err = fsOpenFile(pathJoin(path, testCase.srcVol, testCase.srcPath), 0)
-		if errorCause(err) != testCase.expectedErr {
+		_, _, err = fsOpenFile(GlobalContext, pathJoin(path, testCase.srcVol, testCase.srcPath), 0)
+		if err != testCase.expectedErr {
 			t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
 
 	// Attempt to open a directory.
-	if _, _, err = fsOpenFile(pathJoin(path), 0); errorCause(err) != errIsNotRegular {
+	if _, _, err = fsOpenFile(GlobalContext, pathJoin(path), 0); err != errIsNotRegular {
 		t.Fatal("Unexpected error", err)
 	}
 }
 
 func TestFSDeletes(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol")); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
-	var buf = make([]byte, 4096)
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(pathJoin(path, "success-vol", "success-file"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, reader.Size()); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
-	reader.Seek(0, 0)
+	reader.Seek(0, io.SeekStart)
+
+	// folder is not empty
+	err = fsMkdir(GlobalContext, pathJoin(path, "success-vol", "not-empty"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ioutil.WriteFile(pathJoin(path, "success-vol", "not-empty", "file"), []byte("data"), 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// recursive
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol", "parent")); err != nil {
+		t.Fatal(err)
+	}
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol", "parent", "dir")); err != nil {
+		t.Fatal(err)
+	}
 
 	testCases := []struct {
+		basePath    string
 		srcVol      string
 		srcPath     string
 		expectedErr error
 	}{
-		// Test case - 1.
 		// valid case with existing volume and file to delete.
 		{
+			basePath:    path,
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
 			expectedErr: nil,
 		},
-		// Test case - 2.
-		// The file was deleted in the last case, so DeleteFile should fail.
+		// The file was deleted in the last case, so Delete should fail.
 		{
+			basePath:    path,
 			srcVol:      "success-vol",
 			srcPath:     "success-file",
 			expectedErr: errFileNotFound,
 		},
-		// Test case - 3.
 		// Test case with segment of the volume name > 255.
 		{
+			basePath:    path,
 			srcVol:      "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			srcPath:     "success-file",
 			expectedErr: errFileNameTooLong,
 		},
-		// Test case - 4.
 		// Test case with src path segment > 255.
 		{
+			basePath:    path,
 			srcVol:      "success-vol",
 			srcPath:     "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			expectedErr: errFileNameTooLong,
 		},
+		// Base path is way too long.
+		{
+			basePath:    "path03333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+			srcVol:      "success-vol",
+			srcPath:     "object",
+			expectedErr: errFileNameTooLong,
+		},
+		// Directory is not empty. Should give nil, but won't delete.
+		{
+			basePath:    path,
+			srcVol:      "success-vol",
+			srcPath:     "not-empty",
+			expectedErr: nil,
+		},
+		// Should delete recursively.
+		{
+			basePath:    path,
+			srcVol:      "success-vol",
+			srcPath:     pathJoin("parent", "dir"),
+			expectedErr: nil,
+		},
 	}
 
 	for i, testCase := range testCases {
-		if err = fsDeleteFile(path, pathJoin(path, testCase.srcVol, testCase.srcPath)); errorCause(err) != testCase.expectedErr {
+		if err = fsDeleteFile(GlobalContext, testCase.basePath, pathJoin(testCase.basePath, testCase.srcVol, testCase.srcPath)); err != testCase.expectedErr {
 			t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+		}
+	}
+}
+
+func BenchmarkFSDeleteFile(b *testing.B) {
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
+	if err != nil {
+		b.Fatalf("Unable to create xlStorage test setup, %s", err)
+	}
+	defer os.RemoveAll(path)
+
+	// Setup test environment.
+	if err = fsMkdir(GlobalContext, pathJoin(path, "benchmark")); err != nil {
+		b.Fatalf("Unable to create directory, %s", err)
+	}
+
+	benchDir := pathJoin(path, "benchmark")
+	filename := pathJoin(benchDir, "file.txt")
+
+	b.ResetTimer()
+	// We need to create and delete the file sequentially inside the benchmark.
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		err = ioutil.WriteFile(filename, []byte("data"), 0777)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+
+		err = fsDeleteFile(GlobalContext, benchDir, filename)
+		if err != nil {
+			b.Fatal(err)
 		}
 	}
 }
 
 // Tests fs removes.
 func TestFSRemoves(t *testing.T) {
-	// create posix test setup
-	_, path, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, path, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
-	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
+	if err = fsMkdir(GlobalContext, pathJoin(path, "success-vol")); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
-	var buf = make([]byte, 4096)
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(pathJoin(path, "success-vol", "success-file"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
 	reader.Seek(0, 0)
 
-	if _, err = fsCreateFile(pathJoin(path, "success-vol", "success-file-new"), reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, pathJoin(path, "success-vol", "success-file-new"), reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Seek back.
@@ -326,7 +422,7 @@ func TestFSRemoves(t *testing.T) {
 			expectedErr: nil,
 		},
 		// Test case - 2.
-		// The file was deleted in the last case, so DeleteFile should fail.
+		// The file was deleted in the last case, so Delete should fail.
 		{
 			srcFSPath:   path,
 			srcVol:      "success-vol",
@@ -379,47 +475,46 @@ func TestFSRemoves(t *testing.T) {
 
 	for i, testCase := range testCases {
 		if testCase.srcPath != "" {
-			if err = fsRemoveFile(pathJoin(testCase.srcFSPath, testCase.srcVol, testCase.srcPath)); errorCause(err) != testCase.expectedErr {
+			if err = fsRemoveFile(GlobalContext, pathJoin(testCase.srcFSPath, testCase.srcVol, testCase.srcPath)); err != testCase.expectedErr {
 				t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		} else {
-			if err = fsRemoveDir(pathJoin(testCase.srcFSPath, testCase.srcVol, testCase.srcPath)); errorCause(err) != testCase.expectedErr {
+			if err = fsRemoveDir(GlobalContext, pathJoin(testCase.srcFSPath, testCase.srcVol, testCase.srcPath)); err != testCase.expectedErr {
 				t.Error(err)
 			}
 		}
 	}
 
-	if err = fsRemoveAll(pathJoin(path, "success-vol")); err != nil {
+	if err = fsRemoveAll(GlobalContext, pathJoin(path, "success-vol")); err != nil {
 		t.Fatal(err)
 	}
 
-	if err = fsRemoveAll(""); errorCause(err) != errInvalidArgument {
+	if err = fsRemoveAll(GlobalContext, ""); err != errInvalidArgument {
 		t.Fatal(err)
 	}
 
-	if err = fsRemoveAll("my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"); errorCause(err) != errFileNameTooLong {
+	if err = fsRemoveAll(GlobalContext, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"); err != errFileNameTooLong {
 		t.Fatal(err)
 	}
 }
 
 func TestFSRemoveMeta(t *testing.T) {
-	// create posix test setup
-	_, fsPath, err := newPosixTestSetup()
+	// create xlStorage test setup
+	_, fsPath, err := newXLStorageTestSetup()
 	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
+		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
-	defer removeAll(fsPath)
+	defer os.RemoveAll(fsPath)
 
 	// Setup test environment.
-	if err = fsMkdir(pathJoin(fsPath, "success-vol")); err != nil {
+	if err = fsMkdir(GlobalContext, pathJoin(fsPath, "success-vol")); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
 	filePath := pathJoin(fsPath, "success-vol", "success-file")
 
-	var buf = make([]byte, 4096)
 	var reader = bytes.NewReader([]byte("Hello, world"))
-	if _, err = fsCreateFile(filePath, reader, buf, reader.Size()); err != nil {
+	if _, err = fsCreateFile(GlobalContext, filePath, reader, 0); err != nil {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
@@ -438,15 +533,33 @@ func TestFSRemoveMeta(t *testing.T) {
 		t.Fatal(tmpErr)
 	}
 
-	if err := fsRemoveMeta(fsPath, filePath, tmpDir); err != nil {
+	if err := fsRemoveMeta(GlobalContext, fsPath, filePath, tmpDir); err != nil {
 		t.Fatalf("Unable to remove file, %s", err)
 	}
 
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+	if _, err := os.Stat((filePath)); !osIsNotExist(err) {
 		t.Fatalf("`%s` file found though it should have been deleted.", filePath)
 	}
 
-	if _, err := os.Stat(path.Dir(filePath)); !os.IsNotExist(err) {
+	if _, err := os.Stat((path.Dir(filePath))); !osIsNotExist(err) {
 		t.Fatalf("`%s` parent directory found though it should have been deleted.", filePath)
+	}
+}
+
+func TestFSIsFile(t *testing.T) {
+	dirPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatalf("Unable to create tmp directory %s", err)
+	}
+	defer os.RemoveAll(dirPath)
+
+	filePath := pathJoin(dirPath, "tmpfile")
+
+	if err = ioutil.WriteFile(filePath, nil, 0777); err != nil {
+		t.Fatalf("Unable to create file %s", filePath)
+	}
+
+	if !fsIsFile(GlobalContext, filePath) {
+		t.Fatalf("Expected %s to be a file", filePath)
 	}
 }

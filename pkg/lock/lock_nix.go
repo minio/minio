@@ -1,7 +1,7 @@
 // +build !windows,!plan9,!solaris
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,21 +19,16 @@
 package lock
 
 import (
-	"fmt"
 	"os"
 	"syscall"
 )
 
-// LockedOpenFile - initializes a new lock and protects
-// the file from concurrent access across mount points.
-// This implementation doesn't support all the open
-// flags and shouldn't be considered as replacement
-// for os.OpenFile().
-func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
-	var lockType int
+// Internal function implements support for both
+// blocking and non blocking lock type.
+func lockedOpenFile(path string, flag int, perm os.FileMode, lockType int) (*LockedFile, error) {
 	switch flag {
 	case syscall.O_RDONLY:
-		lockType = syscall.LOCK_SH
+		lockType |= syscall.LOCK_SH
 	case syscall.O_WRONLY:
 		fallthrough
 	case syscall.O_RDWR:
@@ -41,9 +36,13 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 	case syscall.O_WRONLY | syscall.O_CREAT:
 		fallthrough
 	case syscall.O_RDWR | syscall.O_CREAT:
-		lockType = syscall.LOCK_EX
+		lockType |= syscall.LOCK_EX
 	default:
-		return nil, fmt.Errorf("Unsupported flag (%d)", flag)
+		return nil, &os.PathError{
+			Op:   "open",
+			Path: path,
+			Err:  syscall.EINVAL,
+		}
 	}
 
 	f, err := os.OpenFile(path, flag|syscall.O_SYNC, perm)
@@ -53,6 +52,9 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 
 	if err = syscall.Flock(int(f.Fd()), lockType); err != nil {
 		f.Close()
+		if err == syscall.EWOULDBLOCK {
+			err = ErrAlreadyLocked
+		}
 		return nil, err
 	}
 
@@ -72,4 +74,27 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 	}
 
 	return &LockedFile{File: f}, nil
+}
+
+// TryLockedOpenFile - tries a new write lock, functionality
+// it is similar to LockedOpenFile with with syscall.LOCK_EX
+// mode but along with syscall.LOCK_NB such that the function
+// doesn't wait forever but instead returns if it cannot
+// acquire a write lock.
+func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+	return lockedOpenFile(path, flag, perm, syscall.LOCK_NB)
+}
+
+// LockedOpenFile - initializes a new lock and protects
+// the file from concurrent access across mount points.
+// This implementation doesn't support all the open
+// flags and shouldn't be considered as replacement
+// for os.OpenFile().
+func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+	return lockedOpenFile(path, flag, perm, 0)
+}
+
+// Open - Call os.OpenFile
+func Open(path string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(path, flag, perm)
 }

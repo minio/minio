@@ -1,5 +1,5 @@
 /*
- * Minio Client (C) 2015 Minio, Inc.
+ * MinIO Client (C) 2015, 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,83 +21,172 @@ import (
 	"os"
 	"path"
 	"testing"
-
-	. "gopkg.in/check.v1"
 )
-
-func Test(t *testing.T) { TestingT(t) }
 
 type MySuite struct {
 	root string
 }
 
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) SetUpSuite(c *C) {
+func (s *MySuite) SetUpSuite(t *testing.T) {
 	root, err := ioutil.TempDir(os.TempDir(), "safe_test.go.")
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	s.root = root
 }
 
-func (s *MySuite) TearDownSuite(c *C) {
-	err := os.Remove(s.root)
-	c.Assert(err, IsNil)
+func (s *MySuite) TearDownSuite(t *testing.T) {
+	err := os.RemoveAll(s.root)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func (s *MySuite) TestSafeAbort(c *C) {
+func TestSafeAbort(t *testing.T) {
+	s := &MySuite{}
+	s.SetUpSuite(t)
+	defer s.TearDownSuite(t)
+
 	f, err := CreateFile(path.Join(s.root, "testfile-abort"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = os.Stat(path.Join(s.root, "testfile-abort"))
-	c.Assert(err, Not(IsNil))
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
 	err = f.Abort()
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = f.Close()
-	c.Assert(err.Error(), Equals, "close on aborted file")
+	if err != nil {
+		if err.Error() != "close on aborted file" {
+			t.Fatal(err)
+		}
+	}
 }
 
-func (s *MySuite) TestSafeClose(c *C) {
+func TestSafeClose(t *testing.T) {
+	s := &MySuite{}
+	s.SetUpSuite(t)
+	defer s.TearDownSuite(t)
+
 	f, err := CreateFile(path.Join(s.root, "testfile-close"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = os.Stat(path.Join(s.root, "testfile-close"))
-	c.Assert(err, Not(IsNil))
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+
 	err = f.Close()
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = os.Stat(path.Join(s.root, "testfile-close"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = os.Remove(path.Join(s.root, "testfile-close"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = f.Abort()
-	c.Assert(err.Error(), Equals, "abort on closed file")
+	if err != nil {
+		if err.Error() != "abort on closed file" {
+			t.Fatal(err)
+		}
+	}
 }
 
-func (s *MySuite) TestSafe(c *C) {
+func TestSafe(t *testing.T) {
+	s := &MySuite{}
+	s.SetUpSuite(t)
+	defer s.TearDownSuite(t)
+
 	f, err := CreateFile(path.Join(s.root, "testfile-safe"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
-	c.Assert(err, Not(IsNil))
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+
 	err = f.Close()
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = f.Write([]byte("Test"))
-	c.Assert(err.Error(), Equals, "write on closed file")
+	if err != nil {
+		if err.Error() != "write on closed file" {
+			t.Fatal(err)
+		}
+	}
+
 	err = f.Close()
-	c.Assert(err.Error(), Equals, "close on closed file")
+	if err != nil {
+		if err.Error() != "close on closed file" {
+			t.Fatal(err)
+		}
+	}
+
 	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = os.Remove(path.Join(s.root, "testfile-safe"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func (s *MySuite) TestSafeAbortWrite(c *C) {
+func TestSafeAbortWrite(t *testing.T) {
+	s := &MySuite{}
+	s.SetUpSuite(t)
+	defer s.TearDownSuite(t)
+
 	f, err := CreateFile(path.Join(s.root, "purgefile-abort"))
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
-	c.Assert(err, Not(IsNil))
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+
 	err = f.Abort()
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
-	c.Assert(err, Not(IsNil))
+	if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+
 	err = f.Abort()
-	c.Assert(err.Error(), Equals, "abort on aborted file")
+	if err != nil {
+		if err.Error() != "abort on aborted file" {
+			t.Fatal(err)
+		}
+	}
+
 	_, err = f.Write([]byte("Test"))
-	c.Assert(err.Error(), Equals, "write on aborted file")
+	if err != nil {
+		if err.Error() != "write on aborted file" {
+			t.Fatal(err)
+		}
+	}
 }

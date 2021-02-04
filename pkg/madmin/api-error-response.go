@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package madmin
 
 import (
 	"encoding/xml"
+	"fmt"
 	"net/http"
 )
 
@@ -54,7 +55,7 @@ func (e ErrorResponse) Error() string {
 }
 
 const (
-	reportIssue = "Please report this issue at https://github.com/minio/minio-go/issues."
+	reportIssue = "Please report this issue at https://github.com/minio/minio/issues."
 )
 
 // httpRespToErrorResponse returns a new encoded ErrorResponse
@@ -65,15 +66,38 @@ func httpRespToErrorResponse(resp *http.Response) error {
 		return ErrInvalidArgument(msg)
 	}
 	var errResp ErrorResponse
-	// Decode the xml error
-	err := xmlDecoder(resp.Body, &errResp)
+	// Decode the json error
+	err := jsonDecoder(resp.Body, &errResp)
 	if err != nil {
 		return ErrorResponse{
 			Code:    resp.Status,
-			Message: "Failed to parse server response.",
+			Message: fmt.Sprintf("Failed to parse server response: %s.", err),
 		}
 	}
+	closeResponse(resp)
 	return errResp
+}
+
+// ToErrorResponse - Returns parsed ErrorResponse struct from body and
+// http headers.
+//
+// For example:
+//
+//   import admin "github.com/minio/minio/pkg/madmin"
+//   ...
+//   ...
+//   ss, err := adm.ServiceStatus(...)
+//   if err != nil {
+//      resp := admin.ToErrorResponse(err)
+//   }
+//   ...
+func ToErrorResponse(err error) ErrorResponse {
+	switch err := err.(type) {
+	case ErrorResponse:
+		return err
+	default:
+		return ErrorResponse{}
+	}
 }
 
 // ErrInvalidArgument - Invalid argument response.

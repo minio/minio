@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,11 +161,13 @@ func TestLockAndUnlock(t *testing.T) {
 	go func() {
 		bl, blerr := LockedOpenFile(f.Name(), os.O_WRONLY, 0600)
 		if blerr != nil {
-			t.Fatal(blerr)
+			t.Error(blerr)
+			return
 		}
 		locked <- struct{}{}
 		if blerr = bl.Close(); blerr != nil {
-			t.Fatal(blerr)
+			t.Error(blerr)
+			return
 		}
 	}()
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"net/url"
-	"strings"
 	"testing"
 )
 
@@ -30,13 +29,14 @@ func TestListObjectsV2Resources(t *testing.T) {
 		fetchOwner                           bool
 		maxKeys                              int
 		encodingType                         string
+		errCode                              APIErrorCode
 	}{
 		{
 			values: url.Values{
 				"prefix":             []string{"photos/"},
-				"continuation-token": []string{"token"},
+				"continuation-token": []string{"dG9rZW4="},
 				"start-after":        []string{"start-after"},
-				"delimiter":          []string{"/"},
+				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
 				"max-keys":           []string{"100"},
 				"encoding-type":      []string{"gzip"},
@@ -44,32 +44,56 @@ func TestListObjectsV2Resources(t *testing.T) {
 			prefix:       "photos/",
 			token:        "token",
 			startAfter:   "start-after",
-			delimiter:    "/",
+			delimiter:    SlashSeparator,
 			fetchOwner:   true,
 			maxKeys:      100,
 			encodingType: "gzip",
+			errCode:      ErrNone,
 		},
 		{
 			values: url.Values{
 				"prefix":             []string{"photos/"},
-				"continuation-token": []string{"token"},
+				"continuation-token": []string{"dG9rZW4="},
 				"start-after":        []string{"start-after"},
-				"delimiter":          []string{"/"},
+				"delimiter":          []string{SlashSeparator},
 				"fetch-owner":        []string{"true"},
 				"encoding-type":      []string{"gzip"},
 			},
 			prefix:       "photos/",
 			token:        "token",
 			startAfter:   "start-after",
-			delimiter:    "/",
+			delimiter:    SlashSeparator,
 			fetchOwner:   true,
-			maxKeys:      1000,
+			maxKeys:      maxObjectList,
 			encodingType: "gzip",
+			errCode:      ErrNone,
+		},
+		{
+			values: url.Values{
+				"prefix":             []string{"photos/"},
+				"continuation-token": []string{""},
+				"start-after":        []string{"start-after"},
+				"delimiter":          []string{SlashSeparator},
+				"fetch-owner":        []string{"true"},
+				"encoding-type":      []string{"gzip"},
+			},
+			prefix:       "",
+			token:        "",
+			startAfter:   "",
+			delimiter:    "",
+			fetchOwner:   false,
+			maxKeys:      0,
+			encodingType: "",
+			errCode:      ErrIncorrectContinuationToken,
 		},
 	}
 
 	for i, testCase := range testCases {
-		prefix, token, startAfter, delimiter, fetchOwner, maxKeys, encodingType := getListObjectsV2Args(testCase.values)
+		prefix, token, startAfter, delimiter, fetchOwner, maxKeys, encodingType, errCode := getListObjectsV2Args(testCase.values)
+
+		if errCode != testCase.errCode {
+			t.Errorf("Test %d: Expected error code:%d, got %d", i+1, testCase.errCode, errCode)
+		}
 		if prefix != testCase.prefix {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.prefix, prefix)
 		}
@@ -106,13 +130,13 @@ func TestListObjectsV1Resources(t *testing.T) {
 			values: url.Values{
 				"prefix":        []string{"photos/"},
 				"marker":        []string{"test"},
-				"delimiter":     []string{"/"},
+				"delimiter":     []string{SlashSeparator},
 				"max-keys":      []string{"100"},
 				"encoding-type": []string{"gzip"},
 			},
 			prefix:       "photos/",
 			marker:       "test",
-			delimiter:    "/",
+			delimiter:    SlashSeparator,
 			maxKeys:      100,
 			encodingType: "gzip",
 		},
@@ -120,19 +144,22 @@ func TestListObjectsV1Resources(t *testing.T) {
 			values: url.Values{
 				"prefix":        []string{"photos/"},
 				"marker":        []string{"test"},
-				"delimiter":     []string{"/"},
+				"delimiter":     []string{SlashSeparator},
 				"encoding-type": []string{"gzip"},
 			},
 			prefix:       "photos/",
 			marker:       "test",
-			delimiter:    "/",
-			maxKeys:      1000,
+			delimiter:    SlashSeparator,
+			maxKeys:      maxObjectList,
 			encodingType: "gzip",
 		},
 	}
 
 	for i, testCase := range testCases {
-		prefix, marker, delimiter, maxKeys, encodingType := getListObjectsV1Args(testCase.values)
+		prefix, marker, delimiter, maxKeys, encodingType, argsErr := getListObjectsV1Args(testCase.values)
+		if argsErr != ErrNone {
+			t.Errorf("Test %d: argument parsing failed, got %v", i+1, argsErr)
+		}
 		if prefix != testCase.prefix {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.prefix, prefix)
 		}
@@ -174,7 +201,10 @@ func TestGetObjectsResources(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		uploadID, partNumberMarker, maxParts, encodingType := getObjectResources(testCase.values)
+		uploadID, partNumberMarker, maxParts, encodingType, argsErr := getObjectResources(testCase.values)
+		if argsErr != ErrNone {
+			t.Errorf("Test %d: argument parsing failed, got %v", i+1, argsErr)
+		}
 		if uploadID != testCase.uploadID {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.uploadID, uploadID)
 		}
@@ -186,41 +216,6 @@ func TestGetObjectsResources(t *testing.T) {
 		}
 		if encodingType != testCase.encodingType {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.encodingType, encodingType)
-		}
-	}
-}
-
-// Validates if filter values are correct
-func TestValidateFilterValues(t *testing.T) {
-	testCases := []struct {
-		values        []string
-		expectedError APIErrorCode
-	}{
-		{
-			values:        []string{""},
-			expectedError: ErrNone,
-		},
-		{
-			values:        []string{"", "prefix"},
-			expectedError: ErrNone,
-		},
-		{
-			values:        []string{strings.Repeat("a", 1025)},
-			expectedError: ErrFilterValueInvalid,
-		},
-		{
-			values:        []string{"a\\b"},
-			expectedError: ErrFilterValueInvalid,
-		},
-		{
-			values:        []string{string([]byte{0xff, 0xfe, 0xfd})},
-			expectedError: ErrFilterValueInvalid,
-		},
-	}
-
-	for i, testCase := range testCases {
-		if actualError := validateFilterValues(testCase.values); actualError != testCase.expectedError {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedError, actualError)
 		}
 	}
 }

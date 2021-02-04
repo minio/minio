@@ -1,12 +1,12 @@
-Introduction [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+Introduction [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 ------------
 
-This feature allows Minio to serve a shared NAS drive across multiple Minio instances. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default.
+This feature allows MinIO to serve a shared NAS drive across multiple MinIO instances. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default.
 
 Motivation
 ----------
 
-Since Minio instances serve the purpose of a single tenant there is an increasing requirement where users want to run multiple Minio instances on a same backend which is managed by an existing NAS (NFS, GlusterFS, Other distributed filesystems) rather than a local disk. This feature is implemented also with minimal disruption in mind for the user and overall UI.
+Since MinIO instances serve the purpose of a single tenant there is an increasing requirement where users want to run multiple MinIO instances on a same backend which is managed by an existing NAS (NFS, GlusterFS, Other distributed filesystems) rather than a local disk. This feature is implemented also with minimal disruption in mind for the user and overall UI.
 
 Restrictions
 ------------
@@ -17,46 +17,46 @@ Restrictions
 
 ## How To Run?
 
-Running Minio instances on shared backend is no different than running on a stand-alone disk. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default. Following examples will clarify this further for each operating system of your choice:
+Running MinIO instances on shared backend is no different than running on a stand-alone disk. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default. Following examples will clarify this further for each operating system of your choice:
 
 ### Ubuntu 16.04 LTS
 
-Example 1: Start Minio instance on a shared backend mounted and available at `/mnt/nfs`.
+Example 1: Start MinIO instance on a shared backend mounted and available at `/path/to/nfs-volume`.
 
 On linux server1
 ```shell
-minio server /mnt/nfs
+minio gateway nas /path/to/nfs-volume
 ```
 
 On linux server2
 ```shell
-minio server /mnt/nfs
+minio gateway nas /path/to/nfs-volume
 ```
 
 ### Windows 2012 Server
 
-Example 1: Start Minio instance on a shared backend mounted and available at `\\remote-server\cifs`.
+Example 1: Start MinIO instance on a shared backend mounted and available at `\\remote-server\cifs`.
 
 On windows server1
 ```cmd
-minio.exe server \\remote-server\cifs\export
+minio.exe gateway nas \\remote-server\cifs\data
 ```
 
 On windows server2
 ```cmd
-minio.exe server \\remote-server\cifs\export
+minio.exe gateway nas \\remote-server\cifs\data
 ```
 
 Alternatively if `\\remote-server\cifs` is mounted as `D:\` drive.
 
 On windows server1
 ```cmd
-minio.exe server D:\export
+minio.exe gateway nas D:\data
 ```
 
 On windows server2
 ```cmd
-minio.exe server D:\export
+minio.exe gateway nas D:\data
 ```
 
 Architecture
@@ -66,7 +66,7 @@ Architecture
 
 ### Lock process
 
-With in the same Minio instance locking is handled by existing in-memory namespace locks (**sync.RWMutex** et. al).  To synchronize locks between many Minio instances we leverage POSIX `fcntl()` locks on Unixes and on Windows `LockFileEx()` Win32 API. Requesting write lock block if there are any read locks held by neighboring Minio instance on the same path. So does the read lock if there are any active write locks in-progress.
+With in the same MinIO instance locking is handled by existing in-memory namespace locks (**sync.RWMutex** et. al).  To synchronize locks between many MinIO instances we leverage POSIX `fcntl()` locks on Unixes and on Windows `LockFileEx()` Win32 API. Requesting write lock block if there are any read locks held by neighboring MinIO instance on the same path. So does the read lock if there are any active write locks in-progress.
 
 ### Unlock process
 
@@ -84,13 +84,13 @@ GetObject() holds a read lock on `fs.json`.
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	if err != nil {
-		return toObjectErr(traceError(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 	defer rlk.Close()
 
 ... you can perform other operations here ...
 
-	_, err = io.CopyBuffer(writer, reader, buf)
+	_, err = io.Copy(writer, reader)
 
 ... after successful copy operation unlocks the read lock ...
 ```

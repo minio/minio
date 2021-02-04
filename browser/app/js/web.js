@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 
-import { browserHistory } from 'react-router'
 import JSONrpc from './jsonrpc'
-import * as  actions from './actions'
 import { minioBrowserPrefix } from './constants.js'
 import Moment from 'moment'
 import storage from 'local-storage-fallback'
 
-export default class Web {
-  constructor(endpoint, dispatch) {
-    const namespace = 'Web'
-    this.dispatch = dispatch
+class Web {
+  constructor(endpoint) {
+    const namespace = 'web'
     this.JSONrpc = new JSONrpc({
       endpoint,
       namespace
@@ -37,12 +34,12 @@ export default class Web {
       .catch(err => {
         if (err.status === 401) {
           storage.removeItem('token')
-          browserHistory.push(`${minioBrowserPrefix}/login`)
+          location.reload()
           throw new Error('Please re-login.')
         }
         if (err.status)
           throw new Error(`Server returned error [${err.status}]`)
-        throw new Error('Minio server is unreachable')
+        throw new Error('MinIO server is unreachable')
       })
       .then(res => {
         let json = JSON.parse(res.text)
@@ -75,6 +72,19 @@ export default class Web {
   Logout() {
     storage.removeItem('token')
   }
+  GetToken() {
+    return storage.getItem('token')
+  }
+  GetDiscoveryDoc() {
+    return this.makeCall("GetDiscoveryDoc")
+  }
+  LoginSTS(args) {
+    return this.makeCall('LoginSTS', args)
+      .then(res => {
+        storage.setItem('token', `${res.token}`)
+        return res
+      })
+  }
   ServerInfo() {
     return this.makeCall('ServerInfo')
   }
@@ -86,6 +96,9 @@ export default class Web {
   }
   MakeBucket(args) {
     return this.makeCall('MakeBucket', args)
+  }
+  DeleteBucket(args) {
+    return this.makeCall('DeleteBucket', args)
   }
   ListObjects(args) {
     return this.makeCall('ListObjects', args)
@@ -99,18 +112,15 @@ export default class Web {
   RemoveObject(args) {
     return this.makeCall('RemoveObject', args)
   }
-  GetAuth() {
-    return this.makeCall('GetAuth')
-  }
-  GenerateAuth() {
-    return this.makeCall('GenerateAuth')
-  }
   SetAuth(args) {
     return this.makeCall('SetAuth', args)
       .then(res => {
         storage.setItem('token', `${res.token}`)
         return res
       })
+  }
+  CreateURLToken() {
+    return this.makeCall('CreateURLToken')
   }
   GetBucketPolicy(args) {
     return this.makeCall('GetBucketPolicy', args)
@@ -122,3 +132,7 @@ export default class Web {
     return this.makeCall('ListAllBucketPolicies', args)
   }
 }
+
+const web = new Web(`${window.location.protocol}//${window.location.host}${minioBrowserPrefix}/webrpc`);
+
+export default web;

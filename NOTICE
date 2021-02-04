@@ -1,9 +1,9 @@
-Minio Cloud Storage, (C) 2014,2015 Minio, Inc.
+MinIO Cloud Storage, (C) 2014-2020 MinIO, Inc.
 
-This product includes software developed at Minio, Inc.
-(https://minio.io/).
+This product includes software developed at MinIO, Inc.
+(https://min.io/).
 
-The Minio project contains unmodified/modified subcomponents too with
+The MinIO project contains unmodified/modified subcomponents too with
 separate copyright notices and license terms. Your use of the source
 code for these subcomponents is subject to the terms and conditions
-of the following licenses.
+of Apache License Version 2.0

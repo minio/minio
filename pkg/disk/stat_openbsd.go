@@ -1,7 +1,7 @@
 // +build openbsd
 
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 package disk
 
 import (
+	"fmt"
 	"syscall"
 )
 
@@ -29,11 +30,17 @@ func GetInfo(path string) (info Info, err error) {
 	if err != nil {
 		return Info{}, err
 	}
-	info = Info{}
-	info.Total = int64(s.F_bsize) * int64(s.F_blocks)
-	info.Free = int64(s.F_bsize) * int64(s.F_bavail)
-	info.Files = int64(s.F_files)
-	info.Ffree = int64(s.F_ffree)
-	info.FSType = getFSType(s.F_fstypename)
+	reservedBlocks := uint64(s.F_bfree) - uint64(s.F_bavail)
+	info = Info{
+		Total:  uint64(s.F_bsize) * (uint64(s.F_blocks) - reservedBlocks),
+		Free:   uint64(s.F_bsize) * uint64(s.F_bavail),
+		Files:  uint64(s.F_files),
+		Ffree:  uint64(s.F_ffree),
+		FSType: getFSType(s.F_fstypename[:]),
+	}
+	if info.Free > info.Total {
+		return info, fmt.Errorf("detected free space (%d) > total disk space (%d), fs corruption at (%s). please run 'fsck'", info.Free, info.Total, path)
+	}
+	info.Used = info.Total - info.Free
 	return info, nil
 }

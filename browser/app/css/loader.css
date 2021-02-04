@@ -4,7 +4,7 @@
     height: 100%;
     top: 0;
     left: 0;
-    background: #32393F;
+    background: #002a37;
     z-index: 100;
     transition: opacity 200ms;
     -webkit-transition: opacity 200ms;
@@ -54,7 +54,7 @@
 
 .pl-inner > img {
     width: 30px;
-    margin-top: 28px;
+    margin-top: 21px;
 }
 
 @-webkit-keyframes fade-in {

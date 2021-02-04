@@ -1,0 +1,84 @@
+{
+    "title": "Murder on the Orient Express",
+    "authorInfo": {
+        "name": "Agatha Christie",
+        "yearRange": [1890, 1976],
+        "penName": "Mary Westmacott"
+    },
+    "genre": "Crime novel",
+    "publicationHistory": [
+        {
+            "year": 1934,
+            "publisher": "Collins Crime Club (London)",
+            "type": "Hardcover",
+            "pages": 256
+        },
+        {
+            "year": 1934,
+            "publisher": "Dodd Mead and Company (New York)",
+            "type": "Hardcover",
+            "pages": 302
+        },
+        {
+            "year": 2011,
+            "publisher": "Harper Collins",
+            "type": "Paperback",
+            "pages": 265
+        }
+    ]
+}
+{
+    "title": "The Robots of Dawn",
+    "authorInfo": {
+        "name": "Isaac Asimov",
+        "yearRange": [1920, 1992],
+        "penName": "Paul French"
+    },
+    "genre": "Science fiction",
+    "publicationHistory": [
+        {
+            "year": 1983,
+            "publisher": "Phantasia Press",
+            "type": "Hardcover",
+            "pages": 336
+        },
+        {
+            "year": 1984,
+            "publisher": "Granada",
+            "type": "Hardcover",
+            "pages": 419
+        },
+        {
+            "year": 2018,
+            "publisher": "Harper Voyager",
+            "type": "Paperback",
+            "pages": 432
+        }
+    ]
+}
+{
+    "title": "Pigs Have Wings",
+    "authorInfo": {
+        "name": "P. G. Wodehouse",
+        "yearRange": [1881, 1975]
+    },
+    "genre": "Comic novel",
+    "publicationHistory": [
+        {
+            "year": 1952,
+            "publisher": "Doubleday & Company",
+            "type": "Hardcover"
+        },
+        {
+            "year": 2000,
+            "publisher": "Harry N. Abrams",
+            "type": "Hardcover"
+        },
+        {
+            "year": 2019,
+            "publisher": "Ulverscroft Collections",
+            "type": "Paperback",
+            "pages": 294
+        }
+    ]
+}

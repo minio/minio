@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,44 +18,55 @@ package cmd
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
+
+	"github.com/minio/minio/pkg/color"
 )
 
 // Prints the formatted startup message.
-func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, backendType string) {
+func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
+	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+	// If cache layer is enabled, print cache capacity.
+	cacheAPI := newCachedObjectLayerFn()
+	if cacheAPI != nil {
+		printCacheStorageInfo(cacheAPI.StorageInfo(GlobalContext))
+	}
 	// Prints credential.
-	printGatewayCommonMsg(apiEndPoints, accessKey, secretKey)
+	printGatewayCommonMsg(strippedAPIEndpoints)
 
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
-	endPoint := apiEndPoints[0]
-
-	// Configure 'mc', following block prints platform specific information for minio client.
-	log.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
-	if runtime.GOOS == globalWindowsOSName {
-		mcMessage := fmt.Sprintf("$ mc.exe config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
-		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-	} else {
-		mcMessage := fmt.Sprintf("$ mc config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
-		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-	}
+	printCLIAccessMsg(strippedAPIEndpoints[0], fmt.Sprintf("my%s", backendType))
 
 	// Prints documentation message.
 	printObjectAPIMsg()
 
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
-	if globalIsSSL {
-		printCertificateMsg(globalPublicCerts)
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
+		if globalIsTLS {
+			printCertificateMsg(globalPublicCerts)
+		}
 	}
 }
 
 // Prints common server startup message. Prints credential, region and browser access.
-func printGatewayCommonMsg(apiEndpoints []string, accessKey, secretKey string) {
+func printGatewayCommonMsg(apiEndpoints []string) {
+	// Get saved credentials.
+	cred := globalActiveCred
+
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
+
 	// Colorize the message and print.
-	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", accessKey)))
-	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", secretKey)))
+	logStartupMessage(color.Blue("Endpoint: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
+	if color.IsTerminal() && !globalCLIContext.Anonymous {
+		logStartupMessage(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
+		logStartupMessage(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+	}
+	printEventNotifiers()
+
+	if globalBrowserEnabled {
+		logStartupMessage(color.Blue("\nBrowser Access:"))
+		logStartupMessage(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
+	}
 }

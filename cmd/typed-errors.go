@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,18 @@
 
 package cmd
 
-import "errors"
+import (
+	"errors"
+)
 
 // errInvalidArgument means that input argument is invalid.
 var errInvalidArgument = errors.New("Invalid arguments specified")
 
+// errMethodNotAllowed means that method is not allowed.
+var errMethodNotAllowed = errors.New("Method not allowed")
+
 // errSignatureMismatch means signature did not match.
 var errSignatureMismatch = errors.New("Signature does not match")
-
-// used when token used for authentication by the MinioBrowser has expired
-var errInvalidToken = errors.New("Invalid token")
-
-// If x-amz-content-sha256 header value mismatches with what we calculate.
-var errContentSHA256Mismatch = errors.New("Content checksum SHA256 mismatch")
 
 // used when we deal with data larger than expected
 var errSizeUnexpected = errors.New("Data size larger than expected")
@@ -45,15 +44,15 @@ var errDataTooSmall = errors.New("Object size smaller than expected")
 // errServerNotInitialized - server not initialized.
 var errServerNotInitialized = errors.New("Server not initialized, please try again")
 
-// errServerVersionMismatch - server versions do not match.
-var errServerVersionMismatch = errors.New("Server versions do not match")
+// errRPCAPIVersionUnsupported - unsupported rpc API version.
+var errRPCAPIVersionUnsupported = errors.New("Unsupported rpc API version")
 
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
 
-// errReservedBucket - bucket name is reserved for Minio, usually
-// returned for 'minio', '.minio.sys'
-var errReservedBucket = errors.New("All access to this bucket is disabled")
+// errInvalidBucketName - bucket name is reserved for MinIO, usually
+// returned for 'minio', '.minio.sys', buckets with capital letters.
+var errInvalidBucketName = errors.New("The specified bucket is not valid")
 
 // errInvalidRange - returned when given range value is not valid.
 var errInvalidRange = errors.New("Invalid range")
@@ -61,3 +60,41 @@ var errInvalidRange = errors.New("Invalid range")
 // errInvalidRangeSource - returned when given range value exceeds
 // the source object size.
 var errInvalidRangeSource = errors.New("Range specified exceeds source object size")
+
+// error returned by disks which are to be initialized are waiting for the
+// first server to initialize them in distributed set to initialize them.
+var errNotFirstDisk = errors.New("Not first disk")
+
+// error returned by first disk waiting to initialize other servers.
+var errFirstDiskWait = errors.New("Waiting on other disks")
+
+// error returned when a bucket already exists
+var errBucketAlreadyExists = errors.New("Your previous request to create the named bucket succeeded and you already own it")
+
+// error returned for a negative actual size.
+var errInvalidDecompressedSize = errors.New("Invalid Decompressed Size")
+
+// error returned in IAM subsystem when user doesn't exist.
+var errNoSuchUser = errors.New("Specified user does not exist")
+
+// error returned in IAM subsystem when groups doesn't exist.
+var errNoSuchGroup = errors.New("Specified group does not exist")
+
+// error returned in IAM subsystem when a non-empty group needs to be
+// deleted.
+var errGroupNotEmpty = errors.New("Specified group is not empty - cannot remove it")
+
+// error returned in IAM subsystem when policy doesn't exist.
+var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
+
+// error returned in IAM subsystem when an external users systems is configured.
+var errIAMActionNotAllowed = errors.New("Specified IAM action is not allowed with LDAP configuration")
+
+// error returned in IAM subsystem when IAM sub-system is still being initialized.
+var errIAMNotInitialized = errors.New("IAM sub-system is being initialized, please try again")
+
+// error returned when access is denied.
+var errAccessDenied = errors.New("Do not have enough permissions to access this resource")
+
+// error returned when object is locked.
+var errLockedObject = errors.New("Object is WORM protected and cannot be overwritten or deleted")

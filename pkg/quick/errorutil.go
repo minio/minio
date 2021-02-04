@@ -1,7 +1,7 @@
 /*
  * Quick - Quick key value store for config files and persistent state files
  *
- * Quick (C) 2015 Minio, Inc.
+ * Quick (C) 2015 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,28 +21,22 @@ package quick
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
 	"github.com/cheggaaa/pb"
 )
 
-const errorFmt = "%5d: %s <--  "
+const errorFmt = "%5d: %s  <<<<"
 
 // FormatJSONSyntaxError generates a pretty printed json syntax error since
 // golang doesn't provide an easy way to report the location of the error
-func FormatJSONSyntaxError(data io.Reader, sErr *json.SyntaxError) error {
-	if sErr == nil {
-		return nil
-	}
-
+func FormatJSONSyntaxError(data io.Reader, offset int64) (highlight string) {
 	var readLine bytes.Buffer
+	var errLine = 1
+	var readBytes int64
 
 	bio := bufio.NewReader(data)
-	errLine := int64(1)
-	readBytes := int64(0)
 
 	// termWidth is set to a default one to use when we are
 	// not able to calculate terminal width via OS syscalls
@@ -60,26 +54,22 @@ func FormatJSONSyntaxError(data io.Reader, sErr *json.SyntaxError) error {
 	for {
 		b, err := bio.ReadByte()
 		if err != nil {
-			if err != io.EOF {
-				return err
-			}
 			break
 		}
 		readBytes++
-		if readBytes > sErr.Offset {
+		if readBytes > offset {
 			break
 		}
-		switch b {
-		case '\n':
+		if b == '\n' {
 			readLine.Reset()
 			errLine++
-		case '\t':
+			continue
+		} else if b == '\t' {
 			readLine.WriteByte(' ')
-		case '\r':
+		} else if b == '\r' {
 			break
-		default:
-			readLine.WriteByte(b)
 		}
+		readLine.WriteByte(b)
 	}
 
 	lineLen := readLine.Len()
@@ -88,9 +78,5 @@ func FormatJSONSyntaxError(data io.Reader, sErr *json.SyntaxError) error {
 		idx = 0
 	}
 
-	errorStr := fmt.Sprintf("JSON syntax error at line %d, col %d : %s.\n",
-		errLine, readLine.Len(), sErr)
-	errorStr += fmt.Sprintf(errorFmt, errLine, readLine.String()[idx:])
-
-	return errors.New(errorStr)
+	return fmt.Sprintf(errorFmt, errLine, readLine.String()[idx:])
 }

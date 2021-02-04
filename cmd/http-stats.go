@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,46 +17,72 @@
 package cmd
 
 import (
-	"fmt"
 	"net/http"
-	"time"
+	"strings"
+	"sync"
+	"sync/atomic"
 
-	"go.uber.org/atomic"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ConnStats - Network statistics
 // Count total input/output transferred bytes during
 // the server's life.
 type ConnStats struct {
-	totalInputBytes  atomic.Uint64
-	totalOutputBytes atomic.Uint64
+	totalInputBytes  uint64
+	totalOutputBytes uint64
+	s3InputBytes     uint64
+	s3OutputBytes    uint64
 }
 
 // Increase total input bytes
 func (s *ConnStats) incInputBytes(n int) {
-	s.totalInputBytes.Add(uint64(n))
+	atomic.AddUint64(&s.totalInputBytes, uint64(n))
 }
 
 // Increase total output bytes
 func (s *ConnStats) incOutputBytes(n int) {
-	s.totalOutputBytes.Add(uint64(n))
+	atomic.AddUint64(&s.totalOutputBytes, uint64(n))
 }
 
 // Return total input bytes
 func (s *ConnStats) getTotalInputBytes() uint64 {
-	return s.totalInputBytes.Load()
+	return atomic.LoadUint64(&s.totalInputBytes)
 }
 
 // Return total output bytes
 func (s *ConnStats) getTotalOutputBytes() uint64 {
-	return s.totalOutputBytes.Load()
+	return atomic.LoadUint64(&s.totalOutputBytes)
 }
 
-// Return connection stats (total input/output bytes)
+// Increase outbound input bytes
+func (s *ConnStats) incS3InputBytes(n int) {
+	atomic.AddUint64(&s.s3InputBytes, uint64(n))
+}
+
+// Increase outbound output bytes
+func (s *ConnStats) incS3OutputBytes(n int) {
+	atomic.AddUint64(&s.s3OutputBytes, uint64(n))
+}
+
+// Return outbound input bytes
+func (s *ConnStats) getS3InputBytes() uint64 {
+	return atomic.LoadUint64(&s.s3InputBytes)
+}
+
+// Return outbound output bytes
+func (s *ConnStats) getS3OutputBytes() uint64 {
+	return atomic.LoadUint64(&s.s3OutputBytes)
+}
+
+// Return connection stats (total input/output bytes and total s3 input/output bytes)
 func (s *ConnStats) toServerConnStats() ServerConnStats {
 	return ServerConnStats{
-		TotalInputBytes:  s.getTotalInputBytes(),
-		TotalOutputBytes: s.getTotalOutputBytes(),
+		TotalInputBytes:  s.getTotalInputBytes(),  // Traffic including reserved bucket
+		TotalOutputBytes: s.getTotalOutputBytes(), // Traffic including reserved bucket
+		S3InputBytes:     s.getS3InputBytes(),     // Traffic for client buckets
+		S3OutputBytes:    s.getS3OutputBytes(),    // Traffic for client buckets
 	}
 }
 
@@ -65,129 +91,91 @@ func newConnStats() *ConnStats {
 	return &ConnStats{}
 }
 
-// HTTPMethodStats holds statistics information about
-// a given HTTP method made by all clients
-type HTTPMethodStats struct {
-	Counter  atomic.Uint64
-	Duration atomic.Float64
+// HTTPAPIStats holds statistics information about
+// a given API in the requests.
+type HTTPAPIStats struct {
+	apiStats map[string]int
+	sync.RWMutex
+}
+
+// Inc increments the api stats counter.
+func (stats *HTTPAPIStats) Inc(api string) {
+	if stats == nil {
+		return
+	}
+	stats.Lock()
+	defer stats.Unlock()
+	if stats.apiStats == nil {
+		stats.apiStats = make(map[string]int)
+	}
+	stats.apiStats[api]++
+}
+
+// Dec increments the api stats counter.
+func (stats *HTTPAPIStats) Dec(api string) {
+	if stats == nil {
+		return
+	}
+	stats.Lock()
+	defer stats.Unlock()
+	if val, ok := stats.apiStats[api]; ok && val > 0 {
+		stats.apiStats[api]--
+	}
+}
+
+// Load returns the recorded stats.
+func (stats *HTTPAPIStats) Load() map[string]int {
+	stats.Lock()
+	defer stats.Unlock()
+	var apiStats = make(map[string]int, len(stats.apiStats))
+	for k, v := range stats.apiStats {
+		apiStats[k] = v
+	}
+	return apiStats
 }
 
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
-	// HEAD request stats.
-	totalHEADs   HTTPMethodStats
-	successHEADs HTTPMethodStats
-
-	// GET request stats.
-	totalGETs   HTTPMethodStats
-	successGETs HTTPMethodStats
-
-	// PUT request stats.
-	totalPUTs   HTTPMethodStats
-	successPUTs HTTPMethodStats
-
-	// POST request stats.
-	totalPOSTs   HTTPMethodStats
-	successPOSTs HTTPMethodStats
-
-	// DELETE request stats.
-	totalDELETEs   HTTPMethodStats
-	successDELETEs HTTPMethodStats
-}
-
-func durationStr(totalDuration, totalCount float64) string {
-	return fmt.Sprint(time.Duration(totalDuration/totalCount) * time.Second)
+	currentS3Requests HTTPAPIStats
+	totalS3Requests   HTTPAPIStats
+	totalS3Errors     HTTPAPIStats
 }
 
 // Converts http stats into struct to be sent back to the client.
-func (st HTTPStats) toServerHTTPStats() ServerHTTPStats {
+func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats := ServerHTTPStats{}
-	serverStats.TotalHEADStats = ServerHTTPMethodStats{
-		Count:       st.totalHEADs.Counter.Load(),
-		AvgDuration: durationStr(st.totalHEADs.Duration.Load(), float64(st.totalHEADs.Counter.Load())),
+
+	serverStats.CurrentS3Requests = ServerHTTPAPIStats{
+		APIStats: st.currentS3Requests.Load(),
 	}
-	serverStats.SuccessHEADStats = ServerHTTPMethodStats{
-		Count:       st.successHEADs.Counter.Load(),
-		AvgDuration: durationStr(st.successHEADs.Duration.Load(), float64(st.successHEADs.Counter.Load())),
+
+	serverStats.TotalS3Requests = ServerHTTPAPIStats{
+		APIStats: st.totalS3Requests.Load(),
 	}
-	serverStats.TotalGETStats = ServerHTTPMethodStats{
-		Count:       st.totalGETs.Counter.Load(),
-		AvgDuration: durationStr(st.totalGETs.Duration.Load(), float64(st.totalGETs.Counter.Load())),
-	}
-	serverStats.SuccessGETStats = ServerHTTPMethodStats{
-		Count:       st.successGETs.Counter.Load(),
-		AvgDuration: durationStr(st.successGETs.Duration.Load(), float64(st.successGETs.Counter.Load())),
-	}
-	serverStats.TotalPUTStats = ServerHTTPMethodStats{
-		Count:       st.totalPUTs.Counter.Load(),
-		AvgDuration: durationStr(st.totalPUTs.Duration.Load(), float64(st.totalPUTs.Counter.Load())),
-	}
-	serverStats.SuccessPUTStats = ServerHTTPMethodStats{
-		Count:       st.successPUTs.Counter.Load(),
-		AvgDuration: durationStr(st.successPUTs.Duration.Load(), float64(st.successPUTs.Counter.Load())),
-	}
-	serverStats.TotalPOSTStats = ServerHTTPMethodStats{
-		Count:       st.totalPOSTs.Counter.Load(),
-		AvgDuration: durationStr(st.totalPOSTs.Duration.Load(), float64(st.totalPOSTs.Counter.Load())),
-	}
-	serverStats.SuccessPOSTStats = ServerHTTPMethodStats{
-		Count:       st.successPOSTs.Counter.Load(),
-		AvgDuration: durationStr(st.successPOSTs.Duration.Load(), float64(st.successPOSTs.Counter.Load())),
-	}
-	serverStats.TotalDELETEStats = ServerHTTPMethodStats{
-		Count:       st.totalDELETEs.Counter.Load(),
-		AvgDuration: durationStr(st.totalDELETEs.Duration.Load(), float64(st.totalDELETEs.Counter.Load())),
-	}
-	serverStats.SuccessDELETEStats = ServerHTTPMethodStats{
-		Count:       st.successDELETEs.Counter.Load(),
-		AvgDuration: durationStr(st.successDELETEs.Duration.Load(), float64(st.successDELETEs.Counter.Load())),
+
+	serverStats.TotalS3Errors = ServerHTTPAPIStats{
+		APIStats: st.totalS3Errors.Load(),
 	}
 	return serverStats
 }
 
 // Update statistics from http request and response data
-func (st *HTTPStats) updateStats(r *http.Request, w *httpResponseRecorder, durationSecs float64) {
+func (st *HTTPStats) updateStats(api string, r *http.Request, w *logger.ResponseWriter) {
 	// A successful request has a 2xx response code
-	successReq := (w.respStatusCode >= 200 && w.respStatusCode < 300)
-	// Update stats according to method verb
-	switch r.Method {
-	case "HEAD":
-		st.totalHEADs.Counter.Inc()
-		st.totalHEADs.Duration.Add(durationSecs)
-		if successReq {
-			st.successHEADs.Counter.Inc()
-			st.successHEADs.Duration.Add(durationSecs)
-		}
-	case "GET":
-		st.totalGETs.Counter.Inc()
-		st.totalGETs.Duration.Add(durationSecs)
-		if successReq {
-			st.successGETs.Counter.Inc()
-			st.successGETs.Duration.Add(durationSecs)
-		}
-	case "PUT":
-		st.totalPUTs.Counter.Inc()
-		st.totalPUTs.Duration.Add(durationSecs)
-		if successReq {
-			st.successPUTs.Counter.Inc()
-			st.totalPUTs.Duration.Add(durationSecs)
-		}
-	case "POST":
-		st.totalPOSTs.Counter.Inc()
-		st.totalPOSTs.Duration.Add(durationSecs)
-		if successReq {
-			st.successPOSTs.Counter.Inc()
-			st.totalPOSTs.Duration.Add(durationSecs)
-		}
-	case "DELETE":
-		st.totalDELETEs.Counter.Inc()
-		st.totalDELETEs.Duration.Add(durationSecs)
-		if successReq {
-			st.successDELETEs.Counter.Inc()
-			st.successDELETEs.Duration.Add(durationSecs)
+	successReq := w.StatusCode >= 200 && w.StatusCode < 300
+
+	if !strings.HasSuffix(r.URL.Path, prometheusMetricsPathLegacy) ||
+		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2ClusterPath) ||
+		!strings.HasSuffix(r.URL.Path, prometheusMetricsV2NodePath) {
+		st.totalS3Requests.Inc(api)
+		if !successReq && w.StatusCode != 0 {
+			st.totalS3Errors.Inc(api)
 		}
 	}
+
+	// Increment the prometheus http request response histogram with appropriate label
+	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
 }
 
 // Prepare new HTTPStats structure

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,19 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/elazarl/go-bindata-assetfs"
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/handlers"
-	router "github.com/gorilla/mux"
-	jsonrpc "github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json2"
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/cmd/logger"
+	jsonrpc "github.com/minio/minio/pkg/rpc"
+	"github.com/minio/minio/pkg/rpc/json2"
 )
 
 // webAPI container for Web API.
 type webAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
+	CacheAPI  func() CacheObjectLayer
 }
 
 // indexHandler - Handler to serve index.html
@@ -39,7 +41,7 @@ type indexHandler struct {
 }
 
 func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = minioReservedBucketPath + "/"
+	r.URL.Path = minioReservedBucketPath + SlashSeparator
 	h.handler.ServeHTTP(w, r)
 }
 
@@ -55,45 +57,64 @@ func assetFS() *assetfs.AssetFS {
 }
 
 // specialAssets are files which are unique files not embedded inside index_bundle.js.
-const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
+const specialAssets = "index_bundle.*.js|loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon-16x16.png|favicon-32x32.png|favicon-96x96.png"
 
 // registerWebRouter - registers web router for serving minio browser.
-func registerWebRouter(mux *router.Router) error {
+func registerWebRouter(router *mux.Router) error {
 	// Initialize Web.
 	web := &webAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
+		CacheAPI:  newCachedObjectLayerFn,
 	}
 
 	// Initialize a new json2 codec.
 	codec := json2.NewCodec()
 
-	// Minio browser router.
-	webBrowserRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	// MinIO browser router.
+	webBrowserRouter := router.PathPrefix(minioReservedBucketPath).HeadersRegexp("User-Agent", ".*Mozilla.*").Subrouter()
 
 	// Initialize json rpc handlers.
 	webRPC := jsonrpc.NewServer()
 	webRPC.RegisterCodec(codec, "application/json")
 	webRPC.RegisterCodec(codec, "application/json; charset=UTF-8")
+	webRPC.RegisterAfterFunc(func(ri *jsonrpc.RequestInfo) {
+		if ri != nil {
+			claims, _, _ := webRequestAuthenticate(ri.Request)
+			bucketName, objectName := extractBucketObject(ri.Args)
+			ri.Request = mux.SetURLVars(ri.Request, map[string]string{
+				"bucket": bucketName,
+				"object": objectName,
+			})
+			if globalHTTPTrace.NumSubscribers() > 0 {
+				globalHTTPTrace.Publish(WebTrace(ri))
+			}
+			ctx := newContext(ri.Request, ri.ResponseWriter, ri.Method)
+			logger.AuditLog(ctx, ri.ResponseWriter, ri.Request, claims.Map())
+		}
+	})
 
 	// Register RPC handlers with server
-	if err := webRPC.RegisterService(web, "Web"); err != nil {
+	if err := webRPC.RegisterService(web, "web"); err != nil {
 		return err
 	}
 
 	// RPC handler at URI - /minio/webrpc
-	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
-	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
-	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(web.Download)
-	webBrowserRouter.Methods("POST").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
+	webBrowserRouter.Methods(http.MethodPost).Path("/webrpc").Handler(webRPC)
+	webBrowserRouter.Methods(http.MethodPut).Path("/upload/{bucket}/{object:.+}").HandlerFunc(httpTraceHdrs(web.Upload))
 
-	// Add compression for assets.
-	compressedAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS())))
+	// These methods use short-expiry tokens in the URLs. These tokens may unintentionally
+	// be logged, so a new one must be generated for each request.
+	webBrowserRouter.Methods(http.MethodGet).Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(httpTraceHdrs(web.Download))
+	webBrowserRouter.Methods(http.MethodPost).Path("/zip").Queries("token", "{token:.*}").HandlerFunc(httpTraceHdrs(web.DownloadZip))
+
+	// Create compressed assets handler
+	compressAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS())))
 
 	// Serve javascript files and favicon from assets.
-	webBrowserRouter.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(compressedAssets)
+	webBrowserRouter.Path(fmt.Sprintf("/{assets:%s}", specialAssets)).Handler(compressAssets)
 
-	// Serve index.html for rest of the requests.
-	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS()))})
+	// Serve index.html from assets for rest of the requests.
+	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{compressAssets})
 
 	return nil
 }

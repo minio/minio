@@ -1,161 +1,101 @@
-LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 PWD := $(shell pwd)
 GOPATH := $(shell go env GOPATH)
-BUILD_LDFLAGS := '$(LDFLAGS) -s -w'
-TAG := latest
+LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 
-HOST ?= $(shell uname)
-CPU ?= $(shell uname -m)
+GOARCH := $(shell go env GOARCH)
+GOOS := $(shell go env GOOS)
 
-# if no host is identifed (no uname tool)
-# we assume a Linux-64bit build
-ifeq ($(HOST),)
-  HOST = Linux
-endif
+VERSION ?= $(shell git describe --tags)
+TAG ?= "minio/minio:$(VERSION)"
 
-# identify CPU
-ifeq ($(CPU), x86_64)
-  HOST := $(HOST)64
-else
-ifeq ($(CPU), amd64)
-  HOST := $(HOST)64
-else
-ifeq ($(CPU), i686)
-  HOST := $(HOST)32
-endif
-endif
-endif
-
-
-#############################################
-# now we find out the target OS for
-# which we are going to compile in case
-# the caller didn't yet define OS himself
-ifndef (OS)
-  ifeq ($(HOST), Linux64)
-    arch = gcc
-  else
-  ifeq ($(HOST), Linux32)
-    arch = 32
-  else
-  ifeq ($(HOST), Darwin64)
-    arch = clang
-  else
-  ifeq ($(HOST), Darwin32)
-    arch = clang
-  else
-  ifeq ($(HOST), FreeBSD64)
-    arch = gcc
-  endif
-  endif
-  endif
-  endif
-  endif
-endif
-
-all: install
+all: build
 
 checks:
-	@echo -n "Check deps: "
+	@echo "Checking dependencies"
 	@(env bash $(PWD)/buildscripts/checkdeps.sh)
-	@echo "Done."
-	@echo -n "Checking project is in GOPATH: "
-	@(env bash $(PWD)/buildscripts/checkgopath.sh)
-	@echo "Done."
 
-getdeps: checks
-	@echo -n "Installing golint: " && go get -u github.com/golang/lint/golint
-	@echo "Done."
-	@echo -n "Installing gocyclo: " && go get -u github.com/fzipp/gocyclo
-	@echo "Done."
-	@echo -n "Installing deadcode: " && go get -u github.com/remyoudompheng/go-misc/deadcode
-	@echo "Done."
-	@echo -n "Installing misspell: " && go get -u github.com/client9/misspell/cmd/misspell
-	@echo "Done."
-	@echo -n "Installing ineffassign: " && go get -u github.com/gordonklaus/ineffassign
-	@echo "Done."
+getdeps:
+	@mkdir -p ${GOPATH}/bin
+	@which golangci-lint 1>/dev/null || (echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.27.0)
+	@which ruleguard 1>/dev/null || (echo "Installing ruleguard" && go get github.com/quasilyte/go-ruleguard/cmd/ruleguard@v0.2.1)
+	@which msgp 1>/dev/null || (echo "Installing msgp" && go get github.com/tinylib/msgp@v1.1.3)
+	@which stringer 1>/dev/null || (echo "Installing stringer" && go get golang.org/x/tools/cmd/stringer)
 
-verifiers: vet fmt lint cyclo spelling
+crosscompile:
+	@(env bash $(PWD)/buildscripts/cross-compile.sh)
 
-vet:
-	@echo -n "Running $@: "
-	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult cmd
-	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult pkg
-	@echo "Done."
+verifiers: getdeps fmt lint ruleguard check-gen
+
+check-gen:
+	@go generate ./... >/dev/null
+	@(! git diff --name-only | grep '_gen.go$$') || (echo "Non-committed changes in auto-generated code is detected, please commit them to proceed." && false)
 
 fmt:
-	@echo -n "Running $@: "
-	@gofmt -s -l cmd
-	@gofmt -s -l pkg
-	@echo "Done."
+	@echo "Running $@ check"
+	@GO111MODULE=on gofmt -d cmd/
+	@GO111MODULE=on gofmt -d pkg/
 
 lint:
-	@echo -n "Running $@: "
-	@${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd...
-	@${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg...
-	@echo "Done."
+	@echo "Running $@ check"
+	@GO111MODULE=on ${GOPATH}/bin/golangci-lint cache clean
+	@GO111MODULE=on ${GOPATH}/bin/golangci-lint run --timeout=10m --config ./.golangci.yml
 
-ineffassign:
-	@echo -n "Running $@: "
-	@${GOPATH}/bin/ineffassign .
-	@echo "Done."
+ruleguard:
+	@echo "Running $@ check"
+	@${GOPATH}/bin/ruleguard -rules ruleguard.rules.go github.com/minio/minio/...
 
-cyclo:
-	@echo -n "Running $@: "
-	@${GOPATH}/bin/gocyclo -over 100 cmd
-	@${GOPATH}/bin/gocyclo -over 100 pkg
-	@echo "Done."
+# Builds minio, runs the verifiers then runs the tests.
+check: test
+test: verifiers build
+	@echo "Running unit tests"
+	@GO111MODULE=on CGO_ENABLED=0 go test -tags kqueue ./... 1>/dev/null
 
-build: getdeps verifiers $(UI_ASSETS)
+test-race: verifiers build
+	@echo "Running unit tests under -race"
+	@(env bash $(PWD)/buildscripts/race.sh)
 
-deadcode:
-	@${GOPATH}/bin/deadcode
+# Verify minio binary
+verify:
+	@echo "Verifying build with race"
+	@GO111MODULE=on CGO_ENABLED=1 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
-spelling:
-	@${GOPATH}/bin/misspell -error `find cmd/`
-	@${GOPATH}/bin/misspell -error `find pkg/`
-	@${GOPATH}/bin/misspell -error `find docs/`
+# Verify healing of disks with minio binary
+verify-healing:
+	@echo "Verify healing build with race"
+	@GO111MODULE=on CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 
-test: build
-	@echo -n "Running all minio testing: "
-	@go test $(GOFLAGS) .
-	@go test $(GOFLAGS) github.com/minio/minio/cmd...
-	@go test $(GOFLAGS) github.com/minio/minio/pkg...
-	@echo "Done."
+# Builds minio locally.
+build: checks
+	@echo "Building minio binary to './minio'"
+	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
-coverage: build
-	@echo -n "Running all coverage for minio: "
-	@./buildscripts/go-coverage.sh
-	@echo "Done."
+hotfix: LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
+    sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#'))
+	TAG := "minio/minio:$(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD)"
+hotfix: install
 
-gomake-all: build
-	@echo -n "Installing minio at $(GOPATH)/bin/minio: "
-	@go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
-	@echo "Done."
+docker-hotfix: hotfix checks
+	@echo "Building minio docker image '$(TAG)'"
+	@docker build -t $(TAG) . -f Dockerfile.dev
 
-pkg-add:
-	${GOPATH}/bin/govendor add $(PKG)
+docker: checks
+	@echo "Building minio docker image '$(TAG)'"
+	@GOOS=linux GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@docker build -t $(TAG) . -f Dockerfile.dev
 
-pkg-update:
-	${GOPATH}/bin/govendor update $(PKG)
-
-pkg-remove:
-	${GOPATH}/bin/govendor remove $(PKG)
-
-pkg-list:
-	@$(GOPATH)/bin/govendor list
-
-install: gomake-all
-
-release: verifiers
-	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
-
-experimental: verifiers
-	@MINIO_RELEASE=EXPERIMENTAL ./buildscripts/build.sh
+# Builds minio and installs it to $GOPATH/bin.
+install: build
+	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
+	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
+	@echo "Installation successful. To learn more, try \"minio --help\"."
 
 clean:
-	@echo -n "Cleaning up all the generated files: "
+	@echo "Cleaning up all the generated files"
 	@find . -name '*.test' | xargs rm -fv
-	@rm -rf build
-	@rm -rf release
-	@echo "Done."
+	@find . -name '*~' | xargs rm -fv
+	@rm -rvf minio
+	@rm -rvf build
+	@rm -rvf release
+	@rm -rvf .verify*

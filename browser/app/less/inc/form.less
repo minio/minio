@@ -8,6 +8,13 @@
     background-color: transparent;
 }
 
+.form-control--path {
+    color: @link-color;
+    padding: 5px 5px 6px 0;
+    font-size: 16px;
+    .placeholder(@text-muted-color)
+}
+
 select.form-control {
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -87,6 +94,7 @@ select.form-control {
     z-index: 1;
     border-bottom: 1px solid #eee;
     color: #32393F;
+    box-shadow: none;
     font-size: 13px;
 
 
@@ -152,7 +160,7 @@ select.form-control {
     }
     &:after {
         content: "\f05a";
-        font-family: FontAwesome;
+        font-family: 'Font Awesome 5 Free';
         position: absolute;
         top: 17px;
         right: 9px;
@@ -161,18 +169,39 @@ select.form-control {
     }
 }
 
-.ig-search {
+.ig-search-dark {
     &:before {
         font-family: @font-family-icon;
+        font-weight: 900;
         content: '\f002';
         font-size: 15px;
         position: absolute;
         left: 2px;
         top: 8px;
+        color: rgba(0, 0, 0, 0.5);
     }
 
     .ig-text {
         padding-left: 25px;
+        .placeholder(rgba(0, 0, 0, 0.5))
+    }
+}
+
+.ig-search {
+    &:before {
+        font-family: @font-family-icon;
+        font-weight: 900;
+        content: '\f002';
+        font-size: 15px;
+        position: absolute;
+        left: 2px;
+        top: 8px;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .ig-text {
+        padding-left: 25px;
+        .placeholder(rgba(255, 255, 255, 0.5))
     }
 }
 
@@ -183,6 +212,17 @@ select.form-control {
 .set-expire {
     border: 1px solid @input-border;
     margin: 35px 0 30px;
+    position: relative;
+
+    &:before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+    }
 }
 
 .set-expire-item {
@@ -191,6 +231,7 @@ select.form-control {
     display: table-cell;
     width: 1%;
     text-align: center;
+    .user-select(none);
 
     &:not(:last-child) {
         border-right: 1px solid @input-border;
@@ -209,6 +250,7 @@ select.form-control {
     left: -8px;
 
     input {
+        .user-select(none);
         font-size: 20px;
         text-align: center;
         position: relative;

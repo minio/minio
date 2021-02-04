@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	pathutil "path"
 	"sync"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
 )
 
@@ -29,6 +30,41 @@ import (
 type fsIOPool struct {
 	sync.Mutex
 	readersMap map[string]*lock.RLockedFile
+}
+
+// lookupToRead - looks up an fd from readers map and
+// returns read locked fd for caller to read from, if
+// fd found increments the reference count. If the fd
+// is found to be closed then purges it from the
+// readersMap and returns nil instead.
+//
+// NOTE: this function is not protected and it is callers
+// responsibility to lock this call to be thread safe. For
+// implementation ideas look at the usage inside Open() call.
+func (fsi *fsIOPool) lookupToRead(path string) (*lock.RLockedFile, bool) {
+	rlkFile, ok := fsi.readersMap[path]
+	// File reference exists on map, validate if its
+	// really closed and we are safe to purge it.
+	if ok && rlkFile != nil {
+		// If the file is closed and not removed from map is a bug.
+		if rlkFile.IsClosed() {
+			// Log this as an error.
+			reqInfo := (&logger.ReqInfo{}).AppendTags("path", path)
+			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
+			logger.LogIf(ctx, errUnexpected)
+
+			// Purge the cached lock path from map.
+			delete(fsi.readersMap, path)
+
+			// Indicate that we can populate the new fd.
+			ok = false
+		} else {
+			// Increment the lock ref, since the file is not closed yet
+			// and caller requested to read the file again.
+			rlkFile.IncLockRef()
+		}
+	}
+	return rlkFile, ok
 }
 
 // Open is a wrapper call to read locked file which
@@ -49,78 +85,52 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 	}
 
 	fsi.Lock()
-	rlkFile, ok := fsi.readersMap[path]
-	// File reference exists on map, validate if its
-	// really closed and we are safe to purge it.
-	if ok && rlkFile != nil {
-		// If the file is closed and not removed from map is a bug.
-		if rlkFile.IsClosed() {
-			// Log this as an error.
-			errorIf(errUnexpected, "Unexpected entry found on the map %s", path)
-
-			// Purge the cached lock path from map.
-			delete(fsi.readersMap, path)
-
-			// Indicate that we can populate the new fd.
-			ok = false
-		} else {
-			// Increment the lock ref, since the file is not closed yet
-			// and caller requested to read the file again.
-			rlkFile.IncLockRef()
-		}
-	}
+	rlkFile, ok := fsi.lookupToRead(path)
 	fsi.Unlock()
-
-	// Locked path reference doesn't exist, freshly open the file in
-	// read lock mode.
+	// Locked path reference doesn't exist, acquire a read lock again on the file.
 	if !ok {
-		var err error
-		var newRlkFile *lock.RLockedFile
-		// Open file for reading.
-		newRlkFile, err = lock.RLockedOpenFile(preparePath(path))
+		// Open file for reading with read lock.
+		newRlkFile, err := lock.RLockedOpenFile(path)
 		if err != nil {
-			if os.IsNotExist(err) {
+			switch {
+			case osIsNotExist(err):
 				return nil, errFileNotFound
-			} else if os.IsPermission(err) {
+			case osIsPermission(err):
 				return nil, errFileAccessDenied
-			} else if isSysErrIsDir(err) {
+			case isSysErrIsDir(err):
 				return nil, errIsNotRegular
-			} else if isSysErrNotDir(err) {
+			case isSysErrNotDir(err):
 				return nil, errFileAccessDenied
-			} else if isSysErrPathNotFound(err) {
+			case isSysErrPathNotFound(err):
 				return nil, errFileNotFound
+			default:
+				return nil, err
 			}
-			return nil, err
 		}
 
-		// Save new reader on the map.
+		/// Save new reader on the map.
+
+		// It is possible by this time due to concurrent
+		// i/o we might have another lock present. Lookup
+		// again to check for such a possibility. If no such
+		// file exists save the newly opened fd, if not
+		// reuse the existing fd and close the newly opened
+		// file
 		fsi.Lock()
-		rlkFile, ok = fsi.readersMap[path]
-		if ok && rlkFile != nil {
-			// If the file is closed and not removed from map is a bug.
-			if rlkFile.IsClosed() {
-				// Log this as an error.
-				errorIf(errUnexpected, "Unexpected entry found on the map %s", path)
-
-				// Purge the cached lock path from map.
-				delete(fsi.readersMap, path)
-
-				// Save the newly acquired read locked file.
-				rlkFile = newRlkFile
-			} else {
-				// Increment the lock ref, since the file is not closed yet
-				// and caller requested to read the file again.
-				rlkFile.IncLockRef()
-				newRlkFile.Close()
-			}
+		rlkFile, ok = fsi.lookupToRead(path)
+		if ok {
+			// Close the new fd, since we already seem to have
+			// an active reference.
+			newRlkFile.Close()
 		} else {
-			// Save the newly acquired read locked file.
+			// Save the new rlk file.
 			rlkFile = newRlkFile
 		}
 
-		// Save the rlkFile back on the map.
+		// Save the new fd on the map.
 		fsi.readersMap[path] = rlkFile
 		fsi.Unlock()
+
 	}
 
 	// Success.
@@ -137,16 +147,21 @@ func (fsi *fsIOPool) Write(path string) (wlk *lock.LockedFile, err error) {
 		return nil, err
 	}
 
-	wlk, err = lock.LockedOpenFile(preparePath(path), os.O_RDWR, 0666)
+	wlk, err = lock.LockedOpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
-		if os.IsNotExist(err) {
+		switch {
+		case osIsNotExist(err):
 			return nil, errFileNotFound
-		} else if os.IsPermission(err) {
+		case osIsPermission(err):
 			return nil, errFileAccessDenied
-		} else if isSysErrIsDir(err) {
+		case isSysErrIsDir(err):
 			return nil, errIsNotRegular
+		default:
+			if isSysErrPathNotFound(err) {
+				return nil, errFileNotFound
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 	return wlk, nil
 }
@@ -160,29 +175,26 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 
 	// Creates parent if missing.
 	if err = mkdirAll(pathutil.Dir(path), 0777); err != nil {
-		if os.IsPermission(err) {
-			return nil, errFileAccessDenied
-		} else if isSysErrNotDir(err) {
-			return nil, errFileAccessDenied
-		}
 		return nil, err
 	}
 
 	// Attempt to create the file.
-	wlk, err = lock.LockedOpenFile(preparePath(path), os.O_RDWR|os.O_CREATE, 0666)
+	wlk, err = lock.LockedOpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		if os.IsPermission(err) {
+		switch {
+		case osIsPermission(err):
 			return nil, errFileAccessDenied
-		} else if isSysErrIsDir(err) {
+		case isSysErrIsDir(err):
 			return nil, errIsNotRegular
-		} else if isSysErrPathNotFound(err) {
+		case isSysErrPathNotFound(err):
 			return nil, errFileAccessDenied
+		default:
+			return nil, err
 		}
-		return nil, err
 	}
 
 	// Success.
-	return wlk, err
+	return wlk, nil
 }
 
 // Close implements closing the path referenced by the reader in such

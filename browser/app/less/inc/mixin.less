@@ -50,3 +50,12 @@
     -webkit-animation: zoomIn 250ms, spin 700ms 250ms infinite linear;
     animation: zoomIn 250ms, spin 700ms 250ms infinite linear;
 }
+
+/*----------------------------------------
+    Placeholder
+-----------------------------------------*/
+.placeholder(@color) {
+    ::-webkit-input-placeholder { color: @color }
+    ::-moz-placeholder { color: @color }
+    :-ms-input-placeholder { color: @color }
+}

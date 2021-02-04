@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"syscall"
@@ -26,21 +27,27 @@ import (
 type serviceSignal int
 
 const (
-	serviceStatus  = iota // Gets status about the service.
-	serviceRestart        // Restarts the service.
-	serviceStop           // Stops the server.
+	serviceRestart       serviceSignal = iota // Restarts the server.
+	serviceStop                               // Stops the server.
+	serviceReloadDynamic                      // Reload dynamic config values.
 	// Add new service requests here.
 )
 
 // Global service signal channel.
 var globalServiceSignalCh chan serviceSignal
 
-// Global service done channel.
-var globalServiceDoneCh chan struct{}
+// GlobalServiceDoneCh - Global service done channel.
+var GlobalServiceDoneCh <-chan struct{}
 
-// Initialize service mutex once.
-func init() {
-	globalServiceDoneCh = make(chan struct{}, 1)
+// GlobalContext context that is canceled when server is requested to shut down.
+var GlobalContext context.Context
+
+// cancelGlobalContext can be used to indicate server shutdown.
+var cancelGlobalContext context.CancelFunc
+
+func initGlobalContext() {
+	GlobalContext, cancelGlobalContext = context.WithCancel(context.Background())
+	GlobalServiceDoneCh = GlobalContext.Done()
 	globalServiceSignalCh = make(chan serviceSignal)
 }
 
@@ -57,61 +64,7 @@ func restartProcess() error {
 		return err
 	}
 
-	// Pass on the environment and replace the old count key with the new one.
-	cmd := exec.Command(argv0, os.Args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Start()
-}
-
-// Handles all serviceSignal and execute service functions.
-func (m *ServerMux) handleServiceSignals() error {
-	// Custom exit function
-	runExitFn := func(err error) {
-		// If global profiler is set stop before we exit.
-		if globalProfiler != nil {
-			globalProfiler.Stop()
-		}
-
-		// Call user supplied user exit function
-		fatalIf(err, "Unable to gracefully complete service operation.")
-
-		// We are usually done here, close global service done channel.
-		globalServiceDoneCh <- struct{}{}
-	}
-
-	// Wait for SIGTERM in a go-routine.
-	trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-	go func(<-chan bool) {
-		<-trapCh
-		globalServiceSignalCh <- serviceStop
-	}(trapCh)
-
-	// Start listening on service signal. Monitor signals.
-	for {
-		signal := <-globalServiceSignalCh
-		switch signal {
-		case serviceStatus:
-			/// We don't do anything for this.
-		case serviceRestart:
-			if err := m.Close(); err != nil {
-				errorIf(err, "Unable to close server gracefully")
-			}
-			if err := restartProcess(); err != nil {
-				errorIf(err, "Unable to restart the server.")
-			}
-			runExitFn(nil)
-		case serviceStop:
-			if err := m.Close(); err != nil {
-				errorIf(err, "Unable to close server gracefully")
-			}
-			objAPI := newObjectLayerFn()
-			if objAPI == nil {
-				// Server not initialized yet, exit happily.
-				runExitFn(nil)
-			} else {
-				runExitFn(objAPI.Shutdown())
-			}
-		}
-	}
+	// Invokes the execve system call.
+	// Re-uses the same pid. This preserves the pid over multiple server-respawns.
+	return syscall.Exec(argv0, os.Args, os.Environ())
 }

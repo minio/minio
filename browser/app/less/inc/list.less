@@ -43,6 +43,9 @@ header.fesl-row {
                 color: @dark-gray;
                 font-size: 14px;
             }
+            & > .fesli-sort--active {
+                .opacity(0.5);
+            }
 
             &:hover:not(.fesl-item-actions) {
                 background: lighten(@text-muted-color, 22%);
@@ -100,19 +103,27 @@ div.fesl-row {
         }
     }
 
+    .fesl-item-name {
+        a {
+            cursor: pointer;
+        }
+    }
+
     /*--------------------------
         Icons
     ----------------------------*/
-    &[data-type=folder] { .list-type(#a1d6dd, '\f114'); }
+    &[data-type=folder] {
+        .list-type(#a1d6dd, '\f07b');
+    }
     &[data-type=pdf] {.list-type(#fa7775, '\f1c1'); }
     &[data-type=zip] { .list-type(#427089, '\f1c6'); }
     &[data-type=audio] { .list-type(#009688, '\f1c7'); }
     &[data-type=code] { .list-type(#997867, "\f1c9"); }
-    &[data-type=excel] { .list-type(#f1c3, '\f1c3'); }
+    &[data-type=excel] { .list-type(#64c866, '\f1c3'); }
     &[data-type=image] { .list-type(#f06292, '\f1c5'); }
     &[data-type=video] { .list-type(#f8c363, '\f1c8'); }
-    &[data-type=other] { .list-type(#afafaf, '\f016'); }
-    &[data-type=text] { .list-type(#8a8a8a, '\f0f6'); }
+    &[data-type=other] { .list-type(#afafaf, '\f15b'); }
+    &[data-type=text] { .list-type(#8a8a8a, '\f15c'); }
     &[data-type=doc] { .list-type(#2196f5, '\f1c2'); }
     &[data-type=presentation] { .list-type(#896ea6, '\f1c4'); }
 
@@ -159,7 +170,7 @@ div.fesl-row {
         top: 0;
         width: 35px;
         height: 35px;
-        z-index: 20;
+        z-index: 8;
         opacity: 0;
         cursor: pointer;
 
@@ -223,7 +234,7 @@ div.fesl-row {
         width: 15px;
         height: 15px;
         border: 2px solid @white;
-        z-index: 10;
+        z-index: 7;
         border-radius: 2px;
         top: 10px;
         left: 10px;
@@ -232,6 +243,7 @@ div.fesl-row {
 
     &:after {
         font-family: @font-family-icon;
+        font-weight: 900;
         content: '\f00c';
         top: 8px;
         left: 9px;
@@ -337,6 +349,7 @@ div.fesl-row {
         margin: 0;
         height: 100%;
         text-align: right;
+        white-space: nowrap;
     }
 
     .dropdown {
@@ -432,7 +445,7 @@ div.fesl-row {
     float: left;
     padding: 4px 0;
 
-    .fa {
+    .fas {
         font-size: 22px;
         vertical-align: top;
         margin-right: 10px;

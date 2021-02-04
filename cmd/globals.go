@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,27 +18,58 @@ package cmd
 
 import (
 	"crypto/x509"
-	"runtime"
+	"net/http"
+	"os"
+	"sync"
 	"time"
 
+	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/pkg/bucket/bandwidth"
+	"github.com/minio/minio/pkg/handlers"
+
 	humanize "github.com/dustin/go-humanize"
-	"github.com/fatih/color"
+	"github.com/minio/minio/cmd/config/cache"
+	"github.com/minio/minio/cmd/config/compress"
+	"github.com/minio/minio/cmd/config/dns"
+	xldap "github.com/minio/minio/cmd/config/identity/ldap"
+	"github.com/minio/minio/cmd/config/identity/openid"
+	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/storageclass"
+	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/auth"
+	etcd "go.etcd.io/etcd/clientv3"
+
+	"github.com/minio/minio/pkg/certs"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/pubsub"
 )
 
 // minio configuration related constants.
 const (
-	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
+	GlobalMinioDefaultPort = "9000"
 
-	globalMinioDefaultRegion       = "us-east-1"
-	globalMinioDefaultOwnerID      = "minio"
+	globalMinioDefaultRegion = ""
+	// This is a sha256 output of ``arn:aws:iam::minio:user/admin``,
+	// this is kept in present form to be compatible with S3 owner ID
+	// requirements -
+	//
+	// ```
+	//    The canonical user ID is the Amazon S3–only concept.
+	//    It is 64-character obfuscated version of the account ID.
+	// ```
+	// http://docs.aws.amazon.com/AmazonS3/latest/dev/example-walkthroughs-managing-access-example4.html
+	globalMinioDefaultOwnerID      = "02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
-	globalNetBSDOSName             = "netbsd"
-	globalSolarisOSName            = "solaris"
+	globalMacOSName                = "darwin"
 	globalMinioModeFS              = "mode-server-fs"
-	globalMinioModeXL              = "mode-server-xl"
-	globalMinioModeDistXL          = "mode-server-distributed-xl"
-	globalMinioModeGatewayAzure    = "mode-gateway-azure"
+	globalMinioModeErasure         = "mode-server-xl"
+	globalMinioModeDistErasure     = "mode-server-distributed-xl"
+	globalMinioModeGatewayPrefix   = "mode-gateway-"
+	globalDirSuffix                = "__XLDIR__"
+	globalDirSuffixWithSlash       = globalDirSuffix + slashSeparator
+
 	// Add new global values here.
 )
 
@@ -50,56 +81,119 @@ const (
 	// Limit memory allocation to store multipart data
 	maxFormMemory = int64(5 * humanize.MiByte)
 
-	// The maximum allowed difference between the request generation time and the server processing time
-	globalMaxSkewTime = 15 * time.Minute
+	// The maximum allowed time difference between the incoming request
+	// date and server date during signature verification.
+	globalMaxSkewTime = 15 * time.Minute // 15 minutes skew allowed.
+
+	// GlobalStaleUploadsExpiry - Expiry duration after which the uploads in multipart, tmp directory are deemed stale.
+	GlobalStaleUploadsExpiry = time.Hour * 24 // 24 hrs.
+	// GlobalStaleUploadsCleanupInterval - Cleanup interval when the stale uploads cleanup is initiated.
+	GlobalStaleUploadsCleanupInterval = time.Hour * 24 // 24 hrs.
+
+	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
+	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
+
+	// Refresh interval to update in-memory iam config cache.
+	globalRefreshIAMInterval = 5 * time.Minute
+
+	// Limit of location constraint XML for unauthenticted PUT bucket operations.
+	maxLocationConstraintSize = 3 * humanize.MiByte
+
+	// Maximum size of default bucket encryption configuration allowed
+	maxBucketSSEConfigSize = 1 * humanize.MiByte
+
+	// diskFillFraction is the fraction of a disk we allow to be filled.
+	diskFillFraction = 0.95
 )
+
+var globalCLIContext = struct {
+	JSON, Quiet    bool
+	Anonymous      bool
+	Addr           string
+	StrictS3Compat bool
+}{}
 
 var (
 	// Indicates if the running minio server is distributed setup.
-	globalIsDistXL = false
+	globalIsDistErasure = false
 
 	// Indicates if the running minio server is an erasure-code backend.
-	globalIsXL = false
+	globalIsErasure = false
+
+	// Indicates if the running minio is in gateway mode.
+	globalIsGateway = false
+
+	// Name of gateway server, e.g S3, GCS, Azure, etc
+	globalGatewayName = ""
 
 	// This flag is set to 'true' by default
-	globalIsBrowserEnabled = true
-	// This flag is set to 'true' when MINIO_BROWSER env is set.
-	globalIsEnvBrowser = false
+	globalBrowserEnabled = true
 
-	// Set to true if credentials were passed from env, default is false.
-	globalIsEnvCreds = false
+	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
+	globalInplaceUpdateDisabled = false
 
-	// This flag is set to 'true' wen MINIO_REGION env is set.
-	globalIsEnvRegion = false
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
 
-	// Maximum size of internal objects parts
-	globalPutPartSize = int64(64 * 1024 * 1024)
-
-	// Minio local server address (in `host:port` format)
+	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
-	// Minio default port, can be changed through command line.
-	globalMinioPort = "9000"
+	// MinIO default port, can be changed through command line.
+	globalMinioPort = GlobalMinioDefaultPort
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
+	// Holds the possible host endpoint.
+	globalMinioEndpoint = ""
 
-	// Peer communication struct
-	globalS3Peers = s3Peers{}
+	// globalConfigSys server config system.
+	globalConfigSys *ConfigSys
+
+	globalNotificationSys  *NotificationSys
+	globalConfigTargetList *event.TargetList
+	// globalEnvTargetList has list of targets configured via env.
+	globalEnvTargetList *event.TargetList
+
+	globalBucketMetadataSys *BucketMetadataSys
+	globalBucketMonitor     *bandwidth.Monitor
+	globalPolicySys         *PolicySys
+	globalIAMSys            *IAMSys
+
+	globalLifecycleSys       *LifecycleSys
+	globalBucketSSEConfigSys *BucketSSEConfigSys
+	globalBucketTargetSys    *BucketTargetSys
+	// globalAPIConfig controls S3 API requests throttling,
+	// healthcheck readiness deadlines and cors settings.
+	globalAPIConfig = apiConfig{listQuorum: 3}
+
+	globalStorageClass storageclass.Config
+	globalLDAPConfig   xldap.Config
+	globalOpenIDConfig openid.Config
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
 
 	// IsSSL indicates if the server is configured with SSL.
-	globalIsSSL bool
+	globalIsTLS bool
 
-	// List of admin peers.
-	globalAdminPeers = adminPeers{}
+	globalTLSCerts *certs.Manager
 
-	// Minio server user agent string.
-	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+	globalHTTPServer        *xhttp.Server
+	globalHTTPServerErrorCh = make(chan error)
+	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	globalEndpoints EndpointList
+	// global Trace system to send HTTP request/response logs to
+	// registered listeners
+	globalHTTPTrace = pubsub.New()
+
+	// global Listen system to send S3 API events to registered listeners
+	globalHTTPListen = pubsub.New()
+
+	// global console system to send console logs to
+	// registered listeners
+	globalConsoleSys *HTTPConsoleLoggerSys
+
+	globalEndpoints EndpointServerPools
+
+	globalRemoteEndpoints map[string]Endpoint
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
@@ -107,23 +201,105 @@ var (
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
 
-	// Time when object layer was initialized on start up.
-	globalBootTime time.Time
+	// Time when the server is started
+	globalBootTime = UTCNow()
 
-	globalActiveCred         credential
-	globalPublicCerts        []*x509.Certificate
-	globalXLObjCacheDisabled bool
+	globalActiveCred auth.Credentials
+
+	// Hold the old server credentials passed by the environment
+	globalOldCred auth.Credentials
+
+	// Indicates if config is to be encrypted
+	globalConfigEncrypted bool
+
+	globalPublicCerts []*x509.Certificate
+
+	globalDomainNames []string      // Root domains for virtual host style requests
+	globalDomainIPs   set.StringSet // Root domain IP address(s) for a distributed MinIO deployment
+
+	globalOperationTimeout       = newDynamicTimeout(10*time.Minute, 5*time.Minute) // default timeout for general ops
+	globalDeleteOperationTimeout = newDynamicTimeout(5*time.Minute, 1*time.Minute)  // default time for delete ops
+
+	globalBucketObjectLockSys *BucketObjectLockSys
+	globalBucketQuotaSys      *BucketQuotaSys
+	globalBucketVersioningSys *BucketVersioningSys
+
+	// Disk cache drives
+	globalCacheConfig cache.Config
+
+	// Initialized KMS configuration for disk cache
+	globalCacheKMS crypto.KMS
+
+	// Allocated etcd endpoint for config and bucket DNS.
+	globalEtcdClient *etcd.Client
+
+	// Is set to true when Bucket federation is requested
+	// and is 'true' when etcdConfig.PathPrefix is empty
+	globalBucketFederation bool
+
+	// Allocated DNS config wrapper over etcd client.
+	globalDNSConfig dns.Store
+
+	// GlobalKMS initialized KMS configuration
+	GlobalKMS crypto.KMS
+
+	// Auto-Encryption, if enabled, turns any non-SSE-C request
+	// into an SSE-S3 request. If enabled a valid, non-empty KMS
+	// configuration must be present.
+	globalAutoEncryption bool
+
+	// Is compression enabled?
+	globalCompressConfigMu sync.Mutex
+	globalCompressConfig   compress.Config
+
+	// Some standard object extensions which we strictly dis-allow for compression.
+	standardExcludeCompressExtensions = []string{".gz", ".bz2", ".rar", ".zip", ".7z", ".xz", ".mp4", ".mkv", ".mov"}
+
+	// Some standard content-types which we strictly dis-allow for compression.
+	standardExcludeCompressContentTypes = []string{"video/*", "audio/*", "application/zip", "application/x-gzip", "application/x-zip-compressed", " application/x-compress", "application/x-spoon"}
+
+	// Authorization validators list.
+	globalOpenIDValidators *openid.Validators
+
+	// OPA policy system.
+	globalPolicyOPA *opa.Opa
+
+	// Deployment ID - unique per deployment
+	globalDeploymentID string
+
+	// GlobalGatewaySSE sse options
+	GlobalGatewaySSE gatewaySSE
+
+	globalAllHealState *allHealState
+
+	// The always present healing routine ready to heal objects
+	globalBackgroundHealRoutine *healRoutine
+	globalBackgroundHealState   *allHealState
+
+	// If writes to FS backend should be O_SYNC.
+	globalFSOSync bool
+
+	globalProxyEndpoints []ProxyEndpoint
+
+	globalInternodeTransport http.RoundTripper
+
+	globalProxyTransport http.RoundTripper
+
+	globalDNSCache *xhttp.DNSCache
+
+	globalForwarder *handlers.Forwarder
 	// Add new variable global values here.
 )
 
-var (
-	// Keeps the connection active by waiting for following amount of time.
-	// Primarily used in ListenBucketNotification.
-	globalSNSConnAlive = 5 * time.Second
-)
+// Returns minio global information, as a key value map.
+// returned list of global values is not an exhaustive
+// list. Feel free to add new relevant fields.
+func getGlobalInfo() (globalInfo map[string]interface{}) {
+	globalInfo = map[string]interface{}{
+		"serverRegion": globalServerRegion,
+		"domains":      globalDomainNames,
+		// Add more relevant global settings here.
+	}
 
-// global colors.
-var (
-	colorBold = color.New(color.Bold).SprintFunc()
-	colorBlue = color.New(color.FgBlue).SprintfFunc()
-)
+	return globalInfo
+}

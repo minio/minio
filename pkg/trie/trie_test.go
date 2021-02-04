@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,7 @@ import (
 
 // Simply make sure creating a new tree works.
 func TestNewTrie(t *testing.T) {
-	var trie *Trie
-	trie = NewTrie()
+	trie := NewTrie()
 
 	if trie.size != 0 {
 		t.Errorf("expected size 0, got: %d", trie.size)
@@ -32,8 +31,7 @@ func TestNewTrie(t *testing.T) {
 
 // Ensure that we can insert new keys into the tree, then check the size.
 func TestInsert(t *testing.T) {
-	var trie *Trie
-	trie = NewTrie()
+	trie := NewTrie()
 
 	// We need to have an empty tree to begin with.
 	if trie.size != 0 {
@@ -51,8 +49,7 @@ func TestInsert(t *testing.T) {
 
 // Ensure that PrefixMatch gives us the correct two keys in the tree.
 func TestPrefixMatch(t *testing.T) {
-	var trie *Trie
-	trie = NewTrie()
+	trie := NewTrie()
 
 	// Feed it some fodder: only 'minio' and 'miny-os' should trip the matcher.
 	trie.Insert("minio")

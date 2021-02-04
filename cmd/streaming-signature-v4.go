@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,9 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/sha256-simd"
+	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/auth"
+	sha256 "github.com/minio/sha256-simd"
 )
 
 // Streaming AWS Signature Version '4' constants.
@@ -41,13 +43,7 @@ const (
 )
 
 // getChunkSignature - get chunk signature.
-func getChunkSignature(seedSignature string, date time.Time, hashedChunk string) string {
-	// Access credentials.
-	cred := serverConfig.GetCredential()
-
-	// Server region.
-	region := serverConfig.GetRegion()
-
+func getChunkSignature(cred auth.Credentials, seedSignature string, region string, date time.Time, hashedChunk string) string {
 	// Calculate string to sign.
 	stringToSign := signV4ChunkedAlgorithm + "\n" +
 		date.Format(iso8601Format) + "\n" +
@@ -57,7 +53,7 @@ func getChunkSignature(seedSignature string, date time.Time, hashedChunk string)
 		hashedChunk
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, date, region, serviceS3)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)
@@ -69,64 +65,54 @@ func getChunkSignature(seedSignature string, date time.Time, hashedChunk string)
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
 // returns signature, error otherwise if the signature mismatches or any other
 // error while parsing and validating.
-func calculateSeedSignature(r *http.Request) (signature string, date time.Time, errCode APIErrorCode) {
-	// Access credentials.
-	cred := serverConfig.GetCredential()
-
-	// Server region.
-	region := serverConfig.GetRegion()
-
+func calculateSeedSignature(r *http.Request) (cred auth.Credentials, signature string, region string, date time.Time, errCode APIErrorCode) {
 	// Copy request.
 	req := *r
 
 	// Save authorization header.
-	v4Auth := req.Header.Get("Authorization")
+	v4Auth := req.Header.Get(xhttp.Authorization)
 
 	// Parse signature version '4' header.
-	signV4Values, errCode := parseSignV4(v4Auth)
+	signV4Values, errCode := parseSignV4(v4Auth, globalServerRegion, serviceS3)
 	if errCode != ErrNone {
-		return "", time.Time{}, errCode
+		return cred, "", "", time.Time{}, errCode
 	}
 
 	// Payload streaming.
 	payload := streamingContentSHA256
 
 	// Payload for STREAMING signature should be 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'
-	if payload != req.Header.Get("X-Amz-Content-Sha256") {
-		return "", time.Time{}, ErrContentSHA256Mismatch
+	if payload != req.Header.Get(xhttp.AmzContentSha256) {
+		return cred, "", "", time.Time{}, ErrContentSHA256Mismatch
 	}
 
 	// Extract all the signed headers along with its values.
 	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, r)
 	if errCode != ErrNone {
-		return "", time.Time{}, errCode
+		return cred, "", "", time.Time{}, errCode
 	}
-	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKey {
-		return "", time.Time{}, ErrInvalidAccessKeyID
+
+	cred, _, errCode = checkKeyValid(signV4Values.Credential.accessKey)
+	if errCode != ErrNone {
+		return cred, "", "", time.Time{}, errCode
 	}
 
 	// Verify if region is valid.
-	sRegion := signV4Values.Credential.scope.region
-	// Should validate region, only if region is set. Some operations
-	// do not need region validated for example GetBucketLocation.
-	if !isValidRegion(sRegion, region) {
-		return "", time.Time{}, ErrInvalidRegion
-	}
+	region = signV4Values.Credential.scope.region
 
 	// Extract date, if not present throw error.
 	var dateStr string
-	if dateStr = req.Header.Get(http.CanonicalHeaderKey("x-amz-date")); dateStr == "" {
+	if dateStr = req.Header.Get("x-amz-date"); dateStr == "" {
 		if dateStr = r.Header.Get("Date"); dateStr == "" {
-			return "", time.Time{}, ErrMissingDateHeader
+			return cred, "", "", time.Time{}, ErrMissingDateHeader
 		}
 	}
+
 	// Parse date header.
 	var err error
 	date, err = time.Parse(iso8601Format, dateStr)
 	if err != nil {
-		errorIf(err, "Unable to parse date", dateStr)
-		return "", time.Time{}, ErrMalformedDate
+		return cred, "", "", time.Time{}, ErrMalformedDate
 	}
 
 	// Query string.
@@ -139,18 +125,18 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	stringToSign := getStringToSign(canonicalRequest, date, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region, serviceS3)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)
 
 	// Verify if signature match.
-	if newSignature != signV4Values.Signature {
-		return "", time.Time{}, ErrSignatureDoesNotMatch
+	if !compareSignatureV4(newSignature, signV4Values.Signature) {
+		return cred, "", "", time.Time{}, ErrSignatureDoesNotMatch
 	}
 
 	// Return caculated signature.
-	return newSignature, date, ErrNone
+	return cred, newSignature, region, date, ErrNone
 }
 
 const maxLineLength = 4 * humanize.KiByte // assumed <= bufio.defaultBufSize 4KiB
@@ -167,15 +153,18 @@ var errMalformedEncoding = errors.New("malformed chunked encoding")
 //
 // NewChunkedReader is not needed by normal applications. The http package
 // automatically decodes chunking when reading response bodies.
-func newSignV4ChunkedReader(req *http.Request) (io.Reader, APIErrorCode) {
-	seedSignature, seedDate, errCode := calculateSeedSignature(req)
+func newSignV4ChunkedReader(req *http.Request) (io.ReadCloser, APIErrorCode) {
+	cred, seedSignature, region, seedDate, errCode := calculateSeedSignature(req)
 	if errCode != ErrNone {
 		return nil, errCode
 	}
+
 	return &s3ChunkedReader{
 		reader:            bufio.NewReader(req.Body),
+		cred:              cred,
 		seedSignature:     seedSignature,
 		seedDate:          seedDate,
+		region:            region,
 		chunkSHA256Writer: sha256.New(),
 		state:             readChunkHeader,
 	}, ErrNone
@@ -185,8 +174,10 @@ func newSignV4ChunkedReader(req *http.Request) (io.Reader, APIErrorCode) {
 // AWS Signature V4 chunked reader.
 type s3ChunkedReader struct {
 	reader            *bufio.Reader
+	cred              auth.Credentials
 	seedSignature     string
 	seedDate          time.Time
+	region            string
 	state             chunkState
 	lastChunk         bool
 	chunkSignature    string
@@ -241,6 +232,10 @@ func (cs chunkState) String() string {
 
 	}
 	return stateString
+}
+
+func (cr *s3ChunkedReader) Close() (err error) {
+	return nil
 }
 
 // Read - implements `io.Reader`, which transparently decodes
@@ -304,8 +299,8 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			// Calculate the hashed chunk.
 			hashedChunk := hex.EncodeToString(cr.chunkSHA256Writer.Sum(nil))
 			// Calculate the chunk signature.
-			newSignature := getChunkSignature(cr.seedSignature, cr.seedDate, hashedChunk)
-			if cr.chunkSignature != newSignature {
+			newSignature := getChunkSignature(cr.cred, cr.seedSignature, cr.region, cr.seedDate, hashedChunk)
+			if !compareSignatureV4(cr.chunkSignature, newSignature) {
 				// Chunk signature doesn't match we return signature does not match.
 				cr.err = errSignatureMismatch
 				return 0, cr.err

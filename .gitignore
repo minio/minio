@@ -9,10 +9,16 @@ site/
 /.idea/
 /Minio.iml
 **/access.log
-build
 vendor/**/*.js
 vendor/**/*.json
 release
 .DS_Store
 *.syso
 coverage.txt
+.vscode/
+*.tar.bz2
+parts/
+prime/
+stage/
+.sia_temp/
+config.json

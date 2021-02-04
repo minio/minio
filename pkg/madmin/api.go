@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,32 +18,38 @@ package madmin
 
 import (
 	"bytes"
-	"encoding/base64"
+	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
-	"github.com/minio/minio-go/pkg/s3signer"
-	"github.com/minio/minio-go/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/s3utils"
+	"github.com/minio/minio-go/v7/pkg/signer"
+	"golang.org/x/net/publicsuffix"
 )
 
 // AdminClient implements Amazon S3 compatible methods.
 type AdminClient struct {
 	///  Standard options.
 
-	// AccessKeyID required for authorized requests.
-	accessKeyID string
-	// SecretAccessKey required for authorized requests.
-	secretAccessKey string
+	// Parsed endpoint url provided by the user.
+	endpointURL *url.URL
+
+	// Holds various credential providers.
+	credsProvider *credentials.Credentials
 
 	// User supplied.
 	appInfo struct {
@@ -51,100 +57,113 @@ type AdminClient struct {
 		appVersion string
 	}
 
-	endpointURL url.URL
-
 	// Indicate whether we are using https or not
 	secure bool
 
 	// Needs allocation.
 	httpClient *http.Client
 
+	random *rand.Rand
+
 	// Advanced functionality.
 	isTraceEnabled bool
 	traceOutput    io.Writer
-
-	// Random seed.
-	random *rand.Rand
 }
 
 // Global constants.
 const (
 	libraryName    = "madmin-go"
 	libraryVersion = "0.0.1"
+
+	libraryAdminURLPrefix = "/minio/admin"
 )
 
 // User Agent should always following the below style.
 // Please open an issue to discuss any new changes here.
 //
-//       Minio (OS; ARCH) LIB/VER APP/VER
+//       MinIO (OS; ARCH) LIB/VER APP/VER
 const (
-	libraryUserAgentPrefix = "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
+	libraryUserAgentPrefix = "MinIO (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
 	libraryUserAgent       = libraryUserAgentPrefix + libraryName + "/" + libraryVersion
 )
 
-// New - instantiate minio client Client, adds automatic verification of signature.
+// Options for New method
+type Options struct {
+	Creds  *credentials.Credentials
+	Secure bool
+	// Add future fields here
+}
+
+// New - instantiate minio admin client
 func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
-	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
+	creds := credentials.NewStaticV4(accessKeyID, secretAccessKey, "")
+
+	clnt, err := privateNew(endpoint, creds, secure)
 	if err != nil {
 		return nil, err
 	}
 	return clnt, nil
 }
 
-// redirectHeaders copies all headers when following a redirect URL.
-// This won't be needed anymore from go 1.8 (https://github.com/golang/go/issues/4800)
-func redirectHeaders(req *http.Request, via []*http.Request) error {
-	if len(via) == 0 {
-		return nil
+// NewWithOptions - instantiate minio admin client with options.
+func NewWithOptions(endpoint string, opts *Options) (*AdminClient, error) {
+	clnt, err := privateNew(endpoint, opts.Creds, opts.Secure)
+	if err != nil {
+		return nil, err
 	}
-	for key, val := range via[0].Header {
-		req.Header[key] = val
-	}
-	return nil
+	return clnt, nil
 }
 
-func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
+func privateNew(endpoint string, creds *credentials.Credentials, secure bool) (*AdminClient, error) {
+	// Initialize cookies to preserve server sent cookies if any and replay
+	// them upon each request.
+	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return nil, err
+	}
+
 	// construct endpoint.
 	endpointURL, err := getEndpointURL(endpoint, secure)
 	if err != nil {
 		return nil, err
 	}
 
-	// instantiate new Client.
-	clnt := &AdminClient{
-		accessKeyID:     accessKeyID,
-		secretAccessKey: secretAccessKey,
-		// Remember whether we are using https or not
-		secure: secure,
-		// Save endpoint URL, user agent for future uses.
-		endpointURL: *endpointURL,
-		// Instantiate http client and bucket location cache.
-		httpClient: &http.Client{
-			Transport:     http.DefaultTransport,
-			CheckRedirect: redirectHeaders,
-		},
+	clnt := new(AdminClient)
+
+	// Save the credentials.
+	clnt.credsProvider = creds
+
+	// Remember whether we are using https or not
+	clnt.secure = secure
+
+	// Save endpoint URL, user agent for future uses.
+	clnt.endpointURL = endpointURL
+
+	// Instantiate http client and bucket location cache.
+	clnt.httpClient = &http.Client{
+		Jar:       jar,
+		Transport: DefaultTransport(secure),
 	}
+
+	// Add locked pseudo-random number generator.
+	clnt.random = rand.New(&lockedRandSource{src: rand.NewSource(time.Now().UTC().UnixNano())})
 
 	// Return.
 	return clnt, nil
 }
 
 // SetAppInfo - add application details to user agent.
-func (c *AdminClient) SetAppInfo(appName string, appVersion string) {
+func (adm *AdminClient) SetAppInfo(appName string, appVersion string) {
 	// if app name and version is not set, we do not a new user
 	// agent.
 	if appName != "" && appVersion != "" {
-		c.appInfo = struct {
-			appName    string
-			appVersion string
-		}{}
-		c.appInfo.appName = appName
-		c.appInfo.appVersion = appVersion
+		adm.appInfo.appName = appName
+		adm.appInfo.appVersion = appVersion
 	}
 }
 
 // SetCustomTransport - set new custom transport.
-func (c *AdminClient) SetCustomTransport(customHTTPTransport http.RoundTripper) {
+func (adm *AdminClient) SetCustomTransport(customHTTPTransport http.RoundTripper) {
 	// Set this to override default transport
 	// ``http.DefaultTransport``.
 	//
@@ -159,28 +178,28 @@ func (c *AdminClient) SetCustomTransport(customHTTPTransport http.RoundTripper) 
 	//   }
 	//   api.SetTransport(tr)
 	//
-	if c.httpClient != nil {
-		c.httpClient.Transport = customHTTPTransport
+	if adm.httpClient != nil {
+		adm.httpClient.Transport = customHTTPTransport
 	}
 }
 
 // TraceOn - enable HTTP tracing.
-func (c *AdminClient) TraceOn(outputStream io.Writer) {
+func (adm *AdminClient) TraceOn(outputStream io.Writer) {
 	// if outputStream is nil then default to os.Stdout.
 	if outputStream == nil {
 		outputStream = os.Stdout
 	}
 	// Sets a new output stream.
-	c.traceOutput = outputStream
+	adm.traceOutput = outputStream
 
 	// Enable tracing.
-	c.isTraceEnabled = true
+	adm.isTraceEnabled = true
 }
 
 // TraceOff - disable HTTP tracing.
-func (c *AdminClient) TraceOff() {
+func (adm *AdminClient) TraceOff() {
 	// Disable tracing.
-	c.isTraceEnabled = false
+	adm.isTraceEnabled = false
 }
 
 // requestMetadata - is container for all the values to make a
@@ -188,15 +207,12 @@ func (c *AdminClient) TraceOff() {
 type requestData struct {
 	customHeaders http.Header
 	queryValues   url.Values
-
-	contentBody        io.Reader
-	contentLength      int64
-	contentSHA256Bytes []byte
-	contentMD5Bytes    []byte
+	relPath       string // URL path relative to admin API base endpoint
+	content       []byte
 }
 
 // Filter out signature value from Authorization header.
-func (c AdminClient) filterSignature(req *http.Request) {
+func (adm AdminClient) filterSignature(req *http.Request) {
 	/// Signature V4 authorization header.
 
 	// Save the original auth.
@@ -212,19 +228,18 @@ func (c AdminClient) filterSignature(req *http.Request) {
 
 	// Set a temporary redacted auth
 	req.Header.Set("Authorization", newAuth)
-	return
 }
 
 // dumpHTTP - dump HTTP request and response.
-func (c AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
+func (adm AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
 	// Starts http dump.
-	_, err := fmt.Fprintln(c.traceOutput, "---------START-HTTP---------")
+	_, err := fmt.Fprintln(adm.traceOutput, "---------START-HTTP---------")
 	if err != nil {
 		return err
 	}
 
 	// Filter out Signature field from Authorization header.
-	c.filterSignature(req)
+	adm.filterSignature(req)
 
 	// Only display request header.
 	reqTrace, err := httputil.DumpRequestOut(req, false)
@@ -233,7 +248,7 @@ func (c AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
 	}
 
 	// Write request to trace output.
-	_, err = fmt.Fprint(c.traceOutput, string(reqTrace))
+	_, err = fmt.Fprint(adm.traceOutput, string(reqTrace))
 	if err != nil {
 		return err
 	}
@@ -269,47 +284,31 @@ func (c AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
 		}
 	}
 	// Write response to trace output.
-	_, err = fmt.Fprint(c.traceOutput, strings.TrimSuffix(string(respTrace), "\r\n"))
+	_, err = fmt.Fprint(adm.traceOutput, strings.TrimSuffix(string(respTrace), "\r\n"))
 	if err != nil {
 		return err
 	}
 
 	// Ends the http dump.
-	_, err = fmt.Fprintln(c.traceOutput, "---------END-HTTP---------")
+	_, err = fmt.Fprintln(adm.traceOutput, "---------END-HTTP---------")
 	return err
 }
 
 // do - execute http request.
-func (c AdminClient) do(req *http.Request) (*http.Response, error) {
-	var resp *http.Response
-	var err error
-	// Do the request in a loop in case of 307 http is met since golang still doesn't
-	// handle properly this situation (https://github.com/golang/go/issues/7912)
-	for {
-		resp, err = c.httpClient.Do(req)
-		if err != nil {
-			// Handle this specifically for now until future Golang
-			// versions fix this issue properly.
-			urlErr, ok := err.(*url.Error)
-			if ok && strings.Contains(urlErr.Err.Error(), "EOF") {
+func (adm AdminClient) do(req *http.Request) (*http.Response, error) {
+	resp, err := adm.httpClient.Do(req)
+	if err != nil {
+		// Handle this specifically for now until future Golang versions fix this issue properly.
+		if urlErr, ok := err.(*url.Error); ok {
+			if strings.Contains(urlErr.Err.Error(), "EOF") {
 				return nil, &url.Error{
 					Op:  urlErr.Op,
 					URL: urlErr.URL,
-					Err: fmt.Errorf("Connection closed by foreign host %s", urlErr.URL),
+					Err: errors.New("Connection closed by foreign host " + urlErr.URL + ". Retry again."),
 				}
 			}
-			return nil, err
 		}
-		// Redo the request with the new redirect url if http 307 is returned, quit the loop otherwise
-		if resp != nil && resp.StatusCode == http.StatusTemporaryRedirect {
-			newURL, uErr := url.Parse(resp.Header.Get("Location"))
-			if uErr != nil {
-				break
-			}
-			req.URL = newURL
-		} else {
-			break
-		}
+		return nil, err
 	}
 
 	// Response cannot be non-nil, report if its the case.
@@ -319,8 +318,8 @@ func (c AdminClient) do(req *http.Request) (*http.Response, error) {
 	}
 
 	// If trace is enabled, dump http request and response.
-	if c.isTraceEnabled {
-		err = c.dumpHTTP(req, resp)
+	if adm.isTraceEnabled {
+		err = adm.dumpHTTP(req, resp)
 		if err != nil {
 			return nil, err
 		}
@@ -338,131 +337,163 @@ var successStatus = []int{
 // executeMethod - instantiates a given method, and retries the
 // request upon any error up to maxRetries attempts in a binomially
 // delayed manner using a standard back off algorithm.
-func (c AdminClient) executeMethod(method string, reqData requestData) (res *http.Response, err error) {
+func (adm AdminClient) executeMethod(ctx context.Context, method string, reqData requestData) (res *http.Response, err error) {
+	var reqRetry = MaxRetry // Indicates how many times we can retry the request
 
-	// Create a done channel to control 'ListObjects' go routine.
-	doneCh := make(chan struct{}, 1)
+	defer func() {
+		if err != nil {
+			// close idle connections before returning, upon error.
+			adm.httpClient.CloseIdleConnections()
+		}
+	}()
+
+	// Create cancel context to control 'newRetryTimer' go routine.
+	retryCtx, cancel := context.WithCancel(ctx)
 
 	// Indicate to our routine to exit cleanly upon return.
-	defer close(doneCh)
+	defer cancel()
 
-	// Instantiate a new request.
-	var req *http.Request
-	req, err = c.newRequest(method, reqData)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initiate the request.
-	res, err = c.do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	// For any known successful http status, return quickly.
-	for _, httpStatus := range successStatus {
-		if httpStatus == res.StatusCode {
-			return res, nil
+	for range adm.newRetryTimer(retryCtx, reqRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter) {
+		// Instantiate a new request.
+		var req *http.Request
+		req, err = adm.newRequest(ctx, method, reqData)
+		if err != nil {
+			return nil, err
 		}
+
+		// Initiate the request.
+		res, err = adm.do(req)
+		if err != nil {
+			if err == context.Canceled || err == context.DeadlineExceeded {
+				return nil, err
+			}
+			// retry all network errors.
+			continue
+		}
+
+		// For any known successful http status, return quickly.
+		for _, httpStatus := range successStatus {
+			if httpStatus == res.StatusCode {
+				return res, nil
+			}
+		}
+
+		// Read the body to be saved later.
+		errBodyBytes, err := ioutil.ReadAll(res.Body)
+		// res.Body should be closed
+		closeResponse(res)
+		if err != nil {
+			return nil, err
+		}
+
+		// Save the body.
+		errBodySeeker := bytes.NewReader(errBodyBytes)
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// For errors verify if its retryable otherwise fail quickly.
+		errResponse := ToErrorResponse(httpRespToErrorResponse(res))
+
+		// Save the body back again.
+		errBodySeeker.Seek(0, 0) // Seek back to starting point.
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// Verify if error response code is retryable.
+		if isS3CodeRetryable(errResponse.Code) {
+			continue // Retry.
+		}
+
+		// Verify if http status code is retryable.
+		if isHTTPStatusRetryable(res.StatusCode) {
+			continue // Retry.
+		}
+
+		break
 	}
 
-	// Read the body to be saved later.
-	errBodyBytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return nil, err
+	// Return an error when retry is canceled or deadlined
+	if e := retryCtx.Err(); e != nil {
+		return nil, e
 	}
-	// Save the body.
-	errBodySeeker := bytes.NewReader(errBodyBytes)
-	res.Body = ioutil.NopCloser(errBodySeeker)
-
-	// Save the body back again.
-	errBodySeeker.Seek(0, 0) // Seek back to starting point.
-	res.Body = ioutil.NopCloser(errBodySeeker)
 
 	return res, err
 }
 
 // set User agent.
-func (c AdminClient) setUserAgent(req *http.Request) {
+func (adm AdminClient) setUserAgent(req *http.Request) {
 	req.Header.Set("User-Agent", libraryUserAgent)
-	if c.appInfo.appName != "" && c.appInfo.appVersion != "" {
-		req.Header.Set("User-Agent", libraryUserAgent+" "+c.appInfo.appName+"/"+c.appInfo.appVersion)
+	if adm.appInfo.appName != "" && adm.appInfo.appVersion != "" {
+		req.Header.Set("User-Agent", libraryUserAgent+" "+adm.appInfo.appName+"/"+adm.appInfo.appVersion)
 	}
 }
 
+func (adm AdminClient) getSecretKey() string {
+	value, err := adm.credsProvider.Get()
+	if err != nil {
+		// Return empty, call will fail.
+		return ""
+	}
+
+	return value.SecretAccessKey
+}
+
 // newRequest - instantiate a new HTTP request for a given method.
-func (c AdminClient) newRequest(method string, reqData requestData) (req *http.Request, err error) {
+func (adm AdminClient) newRequest(ctx context.Context, method string, reqData requestData) (req *http.Request, err error) {
 	// If no method is supplied default to 'POST'.
 	if method == "" {
 		method = "POST"
 	}
 
-	// Default all requests to "us-east-1"
-	location := "us-east-1"
+	// Default all requests to ""
+	location := ""
 
 	// Construct a new target URL.
-	targetURL, err := c.makeTargetURL(reqData.queryValues)
+	targetURL, err := adm.makeTargetURL(reqData)
 	if err != nil {
 		return nil, err
 	}
 
 	// Initialize a new HTTP request for the method.
-	req, err = http.NewRequest(method, targetURL.String(), nil)
+	req, err = http.NewRequestWithContext(ctx, method, targetURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set content body if available.
-	if reqData.contentBody != nil {
-		req.Body = ioutil.NopCloser(reqData.contentBody)
+	value, err := adm.credsProvider.Get()
+	if err != nil {
+		return nil, err
 	}
 
-	// Set 'User-Agent' header for the request.
-	c.setUserAgent(req)
+	var (
+		accessKeyID     = value.AccessKeyID
+		secretAccessKey = value.SecretAccessKey
+		sessionToken    = value.SessionToken
+	)
 
-	// Set all headers.
+	adm.setUserAgent(req)
 	for k, v := range reqData.customHeaders {
 		req.Header.Set(k, v[0])
 	}
-
-	// set incoming content-length.
-	if reqData.contentLength > 0 {
-		req.ContentLength = reqData.contentLength
+	if length := len(reqData.content); length > 0 {
+		req.ContentLength = int64(length)
 	}
+	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(reqData.content)))
+	req.Body = ioutil.NopCloser(bytes.NewReader(reqData.content))
 
-	shaHeader := unsignedPayload
-	if !c.secure {
-		if reqData.contentSHA256Bytes == nil {
-			shaHeader = hex.EncodeToString(sum256([]byte{}))
-		} else {
-			shaHeader = hex.EncodeToString(reqData.contentSHA256Bytes)
-		}
-	}
-	req.Header.Set("X-Amz-Content-Sha256", shaHeader)
-
-	// set md5Sum for content protection.
-	if reqData.contentMD5Bytes != nil {
-		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(reqData.contentMD5Bytes))
-	}
-
-	// Add signature version '4' authorization header.
-	req = s3signer.SignV4(*req, c.accessKeyID, c.secretAccessKey, location)
-
-	// Return request.
+	req = signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)
 	return req, nil
 }
 
 // makeTargetURL make a new target url.
-func (c AdminClient) makeTargetURL(queryValues url.Values) (*url.URL, error) {
+func (adm AdminClient) makeTargetURL(r requestData) (*url.URL, error) {
 
-	host := c.endpointURL.Host
-	scheme := c.endpointURL.Scheme
+	host := adm.endpointURL.Host
+	scheme := adm.endpointURL.Scheme
 
-	urlStr := scheme + "://" + host + "/"
+	urlStr := scheme + "://" + host + libraryAdminURLPrefix + r.relPath
 
 	// If there are any query values, add them to the end.
-	if len(queryValues) > 0 {
-		urlStr = urlStr + "?" + s3utils.QueryEncode(queryValues)
+	if len(r.queryValues) > 0 {
+		urlStr = urlStr + "?" + s3utils.QueryEncode(r.queryValues)
 	}
 	u, err := url.Parse(urlStr)
 	if err != nil {

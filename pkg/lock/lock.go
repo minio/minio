@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,8 +19,14 @@
 package lock
 
 import (
+	"errors"
 	"os"
 	"sync"
+)
+
+var (
+	// ErrAlreadyLocked is returned if the underlying fd is already locked.
+	ErrAlreadyLocked = errors.New("file already locked")
 )
 
 // RLockedFile represents a read locked file, implements a special

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,9 +70,9 @@ async.waterfall([
       commitId = stdout.replace('\n', '')
       if (commitId.length !== 40) throw new Error('commitId invalid : ' + commitId)
       assetsFileName = 'ui-assets.go';
-      var cmd = 'go-bindata-assetfs -pkg browser -nocompress=true production/...'
+      var cmd = 'go-bindata-assetfs -o bindata_assetfs.go -pkg browser -nocompress=true production/...'
       if (!isProduction) {
-        cmd = 'go-bindata-assetfs -pkg browser -nocompress=true dev/...'
+        cmd = 'go-bindata-assetfs -o bindata_assetfs.go -pkg browser -nocompress=true dev/...'
       }
       console.log('Running', cmd)
       exec(cmd, cb)

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,25 +20,33 @@ package cmd
 type SetupType int
 
 const (
+	// UnknownSetupType - starts with unknown setup type.
+	UnknownSetupType SetupType = iota
+
 	// FSSetupType - FS setup type enum.
-	FSSetupType SetupType = iota + 1
+	FSSetupType
 
-	// XLSetupType - XL setup type enum.
-	XLSetupType
+	// ErasureSetupType - Erasure setup type enum.
+	ErasureSetupType
 
-	// DistXLSetupType - Distributed XL setup type enum.
-	DistXLSetupType
+	// DistErasureSetupType - Distributed Erasure setup type enum.
+	DistErasureSetupType
+
+	// GatewaySetupType - gateway setup type enum.
+	GatewaySetupType
 )
 
 func (setupType SetupType) String() string {
 	switch setupType {
 	case FSSetupType:
 		return globalMinioModeFS
-	case XLSetupType:
-		return globalMinioModeXL
-	case DistXLSetupType:
-		return globalMinioModeDistXL
+	case ErasureSetupType:
+		return globalMinioModeErasure
+	case DistErasureSetupType:
+		return globalMinioModeDistErasure
+	case GatewaySetupType:
+		return globalMinioModeGatewayPrefix
 	}
 
-	return ""
+	return "unknown"
 }

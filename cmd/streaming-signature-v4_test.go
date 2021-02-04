@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,7 +184,7 @@ func TestParseHexUint(t *testing.T) {
 	for _, tt := range tests {
 		got, err := parseHexUint([]byte(tt.in))
 		if tt.wantErr != "" {
-			if !strings.Contains(fmt.Sprint(err), tt.wantErr) {
+			if err != nil && !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("parseHexUint(%q) = %v, %v; want error %q", tt.in, got, err, tt.wantErr)
 			}
 		} else {

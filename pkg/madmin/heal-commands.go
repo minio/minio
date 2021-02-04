@@ -1,10 +1,8 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
-
-
  * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -20,8 +18,8 @@
 package madmin
 
 import (
+	"context"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -29,701 +27,308 @@ import (
 	"time"
 )
 
-const (
-	maxUploadsList = 1000
-)
-
-// listBucketHealResult container for listObjects response.
-type listBucketHealResult struct {
-	// A response can contain CommonPrefixes only if you have
-	// specified a delimiter.
-	CommonPrefixes []commonPrefix
-	// Metadata about each object returned.
-	Contents  []ObjectInfo
-	Delimiter string
-
-	// Encoding type used to encode object keys in the response.
-	EncodingType string
-
-	// A flag that indicates whether or not ListObjects returned all of the results
-	// that satisfied the search criteria.
-	IsTruncated bool
-	Marker      string
-	MaxKeys     int64
-	Name        string
-
-	// When response is truncated (the IsTruncated element value in
-	// the response is true), you can use the key name in this field
-	// as marker in the subsequent request to get next set of objects.
-	// Object storage lists objects in alphabetical order Note: This
-	// element is returned only if you have delimiter request
-	// parameter specified. If response does not include the NextMaker
-	// and it is truncated, you can use the value of the last Key in
-	// the response as the marker in the subsequent request to get the
-	// next set of object keys.
-	NextMarker string
-	Prefix     string
-}
-
-// commonPrefix container for prefix response.
-type commonPrefix struct {
-	Prefix string
-}
-
-// Owner - bucket owner/principal
-type Owner struct {
-	ID          string
-	DisplayName string
-}
-
-// Bucket container for bucket metadata
-type Bucket struct {
-	Name         string
-	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
-
-	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
-}
-
-// ListBucketsHealResponse - format for list buckets response
-type ListBucketsHealResponse struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult" json:"-"`
-
-	Owner Owner
-
-	// Container for one or more buckets.
-	Buckets struct {
-		Buckets []Bucket `xml:"Bucket"`
-	} // Buckets are nested
-}
-
-// HealStatus - represents different states of healing an object could be in.
-type HealStatus int
+// HealScanMode represents the type of healing scan
+type HealScanMode int
 
 const (
-	// Healthy - Object that is already healthy
-	Healthy HealStatus = iota
-	// CanHeal - Object can be healed
-	CanHeal
-	// Corrupted - Object can't be healed
-	Corrupted
-	// QuorumUnavailable - Object can't be healed until read
-	// quorum is available
-	QuorumUnavailable
-	// CanPartiallyHeal - Object can't be healed completely until
-	// disks with missing parts come online
-	CanPartiallyHeal
+	// HealUnknownScan default is unknown
+	HealUnknownScan HealScanMode = iota
+
+	// HealNormalScan checks if parts are present and not outdated
+	HealNormalScan
+
+	// HealDeepScan checks for parts bitrot checksums
+	HealDeepScan
 )
 
-// HealBucketInfo - represents healing related information of a bucket.
-type HealBucketInfo struct {
-	Status HealStatus
+// HealOpts - collection of options for a heal sequence
+type HealOpts struct {
+	Recursive bool         `json:"recursive"`
+	DryRun    bool         `json:"dryRun"`
+	Remove    bool         `json:"remove"`
+	Recreate  bool         `json:"recreate"` // only used when bucket needs to be healed
+	ScanMode  HealScanMode `json:"scanMode"`
 }
 
-// BucketInfo - represents bucket metadata.
-type BucketInfo struct {
-	// Name of the bucket.
-	Name string
-
-	// Date and time when the bucket was created.
-	Created time.Time
-
-	// Healing information
-	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
+// Equal returns true if no is same as o.
+func (o HealOpts) Equal(no HealOpts) bool {
+	if o.Recursive != no.Recursive {
+		return false
+	}
+	if o.DryRun != no.DryRun {
+		return false
+	}
+	if o.Remove != no.Remove {
+		return false
+	}
+	return o.ScanMode == no.ScanMode
 }
 
-// HealObjectInfo - represents healing related information of an object.
-type HealObjectInfo struct {
-	Status             HealStatus
-	MissingDataCount   int
-	MissingParityCount int
+// HealStartSuccess - holds information about a successfully started
+// heal operation
+type HealStartSuccess struct {
+	ClientToken   string    `json:"clientToken"`
+	ClientAddress string    `json:"clientAddress"`
+	StartTime     time.Time `json:"startTime"`
 }
 
-// ObjectInfo container for object metadata.
-type ObjectInfo struct {
-	// An ETag is optionally set to md5sum of an object.  In case of multipart objects,
-	// ETag is of the form MD5SUM-N where MD5SUM is md5sum of all individual md5sums of
-	// each parts concatenated into one string.
-	ETag string `json:"etag"`
+// HealStopSuccess - holds information about a successfully stopped
+// heal operation.
+type HealStopSuccess HealStartSuccess
 
-	Key          string    `json:"name"`         // Name of the object
-	LastModified time.Time `json:"lastModified"` // Date and time the object was last modified.
-	Size         int64     `json:"size"`         // Size in bytes of the object.
-	ContentType  string    `json:"contentType"`  // A standard MIME type describing the format of the object data.
+// HealTaskStatus - status struct for a heal task
+type HealTaskStatus struct {
+	Summary       string    `json:"summary"`
+	FailureDetail string    `json:"detail"`
+	StartTime     time.Time `json:"startTime"`
+	HealSettings  HealOpts  `json:"settings"`
 
-	// Collection of additional metadata on the object.
-	// eg: x-amz-meta-*, content-encoding etc.
-	Metadata http.Header `json:"metadata"`
-
-	// Owner name.
-	Owner struct {
-		DisplayName string `json:"name"`
-		ID          string `json:"id"`
-	} `json:"owner"`
-
-	// The class of storage used to store the object.
-	StorageClass string `json:"storageClass"`
-
-	// Error
-	Err            error           `json:"-"`
-	HealObjectInfo *HealObjectInfo `json:"healObjectInfo,omitempty"`
+	Items []HealResultItem `json:"items,omitempty"`
 }
 
-// UploadInfo - represents an ongoing upload that needs to be healed.
-type UploadInfo struct {
-	Key string `json:"name"` // Name of the object being uploaded.
+// HealItemType - specify the type of heal operation in a healing
+// result
+type HealItemType string
 
-	UploadID string `json:"uploadId"` // UploadID
-	// Owner name.
-	Owner struct {
-		DisplayName string `json:"name"`
-		ID          string `json:"id"`
-	} `json:"owner"`
-
-	// The class of storage used to store the object.
-	StorageClass string `json:"storageClass"`
-
-	Initiated time.Time `json:"initiated"` // Time at which upload was initiated.
-
-	// Error
-	Err            error           `json:"-"`
-	HealUploadInfo *HealObjectInfo `json:"healObjectInfo,omitempty"`
-}
-
-// Initiator - has same properties as Owner.
-type Initiator Owner
-
-// upload - represents an ongoing multipart upload.
-type upload struct {
-	Key            string
-	UploadID       string `xml:"UploadId"`
-	Initiator      Initiator
-	Owner          Owner
-	StorageClass   string
-	Initiated      time.Time
-	HealUploadInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
-}
-
-// listUploadsHealResponse - represents ListUploadsHeal response.
-type listUploadsHealResponse struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListMultipartUploadsResult" json:"-"`
-
-	Bucket             string
-	KeyMarker          string
-	UploadIDMarker     string `xml:"UploadIdMarker"`
-	NextKeyMarker      string
-	NextUploadIDMarker string `xml:"NextUploadIdMarker"`
-	Delimiter          string
-	Prefix             string
-	EncodingType       string `xml:"EncodingType,omitempty"`
-	MaxUploads         int
-	IsTruncated        bool
-
-	// List of pending uploads.
-	Uploads []upload `xml:"Upload"`
-
-	// Delimed common prefixes.
-	CommonPrefixes []commonPrefix
-}
-
-type healQueryKey string
-
+// HealItemType constants
 const (
-	healBucket         healQueryKey = "bucket"
-	healObject         healQueryKey = "object"
-	healPrefix         healQueryKey = "prefix"
-	healMarker         healQueryKey = "marker"
-	healDelimiter      healQueryKey = "delimiter"
-	healMaxKey         healQueryKey = "max-key"
-	healDryRun         healQueryKey = "dry-run"
-	healUploadIDMarker healQueryKey = "upload-id-marker"
-	healMaxUpload      healQueryKey = "max-uploads"
-	healUploadID       healQueryKey = "upload-id"
+	HealItemMetadata       HealItemType = "metadata"
+	HealItemBucket                      = "bucket"
+	HealItemBucketMetadata              = "bucket-metadata"
+	HealItemObject                      = "object"
 )
 
-// mkHealQueryVal - helper function to construct heal REST API query params.
-func mkHealQueryVal(bucket, prefix, marker, delimiter, maxKeyStr string) url.Values {
-	queryVal := make(url.Values)
-	queryVal.Set("heal", "")
-	queryVal.Set(string(healBucket), bucket)
-	queryVal.Set(string(healPrefix), prefix)
-	queryVal.Set(string(healMarker), marker)
-	queryVal.Set(string(healDelimiter), delimiter)
-	queryVal.Set(string(healMaxKey), maxKeyStr)
-	return queryVal
+// Drive state constants
+const (
+	DriveStateOk          string = "ok"
+	DriveStateOffline            = "offline"
+	DriveStateCorrupt            = "corrupt"
+	DriveStateMissing            = "missing"
+	DriveStatePermission         = "permission-denied"
+	DriveStateFaulty             = "faulty"
+	DriveStateUnknown            = "unknown"
+	DriveStateUnformatted        = "unformatted" // only returned by disk
+)
+
+// HealDriveInfo - struct for an individual drive info item.
+type HealDriveInfo struct {
+	UUID     string `json:"uuid"`
+	Endpoint string `json:"endpoint"`
+	State    string `json:"state"`
 }
 
-// listObjectsHeal - issues heal list API request for a batch of maxKeys objects to be healed.
-func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (listBucketHealResult, error) {
-	// Construct query params.
-	maxKeyStr := fmt.Sprintf("%d", maxKeys)
-	queryVal := mkHealQueryVal(bucket, prefix, marker, delimiter, maxKeyStr)
-
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "list-objects")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Empty 'list' of objects to be healed.
-	toBeHealedObjects := listBucketHealResult{}
-
-	// Execute GET on /?heal to list objects needing heal.
-	resp, err := adm.executeMethod("GET", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return listBucketHealResult{}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return toBeHealedObjects, httpRespToErrorResponse(resp)
-
-	}
-
-	err = xml.NewDecoder(resp.Body).Decode(&toBeHealedObjects)
-	return toBeHealedObjects, err
+// HealResultItem - struct for an individual heal result item
+type HealResultItem struct {
+	ResultIndex  int64        `json:"resultId"`
+	Type         HealItemType `json:"type"`
+	Bucket       string       `json:"bucket"`
+	Object       string       `json:"object"`
+	VersionID    string       `json:"versionId"`
+	Detail       string       `json:"detail"`
+	ParityBlocks int          `json:"parityBlocks,omitempty"`
+	DataBlocks   int          `json:"dataBlocks,omitempty"`
+	DiskCount    int          `json:"diskCount"`
+	SetCount     int          `json:"setCount"`
+	// below slices are from drive info.
+	Before struct {
+		Drives []HealDriveInfo `json:"drives"`
+	} `json:"before"`
+	After struct {
+		Drives []HealDriveInfo `json:"drives"`
+	} `json:"after"`
+	ObjectSize int64 `json:"objectSize"`
 }
 
-// ListObjectsHeal - Lists upto maxKeys objects that needing heal matching bucket, prefix, marker, delimiter.
-func (adm *AdminClient) ListObjectsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan ObjectInfo, error) {
-	// Allocate new list objects channel.
-	objectStatCh := make(chan ObjectInfo, 1)
-	// Default listing is delimited at "/"
-	delimiter := "/"
-	if recursive {
-		// If recursive we do not delimit.
-		delimiter = ""
+// GetMissingCounts - returns the number of missing disks before
+// and after heal
+func (hri *HealResultItem) GetMissingCounts() (b, a int) {
+	if hri == nil {
+		return
 	}
-
-	// Initiate list objects goroutine here.
-	go func(objectStatCh chan<- ObjectInfo) {
-		defer close(objectStatCh)
-		// Save marker for next request.
-		var marker string
-		for {
-			// Get list of objects a maximum of 1000 per request.
-			result, err := adm.listObjectsHeal(bucket, prefix, marker, delimiter, 1000)
-			if err != nil {
-				objectStatCh <- ObjectInfo{
-					Err: err,
-				}
-				return
-			}
-
-			// If contents are available loop through and send over channel.
-			for _, object := range result.Contents {
-				// Save the marker.
-				marker = object.Key
-				select {
-				// Send object content.
-				case objectStatCh <- object:
-				// If receives done from the caller, return here.
-				case <-doneCh:
-					return
-				}
-			}
-
-			// Send all common prefixes if any.
-			// NOTE: prefixes are only present if the request is delimited.
-			for _, obj := range result.CommonPrefixes {
-				object := ObjectInfo{}
-				object.Key = obj.Prefix
-				object.Size = 0
-				select {
-				// Send object prefixes.
-				case objectStatCh <- object:
-				// If receives done from the caller, return here.
-				case <-doneCh:
-					return
-				}
-			}
-
-			// If next marker present, save it for next request.
-			if result.NextMarker != "" {
-				marker = result.NextMarker
-			}
-
-			// Listing ends result is not truncated, return right here.
-			if !result.IsTruncated {
-				return
-			}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateMissing {
+			b++
 		}
-	}(objectStatCh)
-	return objectStatCh, nil
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateMissing {
+			a++
+		}
+	}
+	return
 }
 
-const timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+// GetOfflineCounts - returns the number of offline disks before
+// and after heal
+func (hri *HealResultItem) GetOfflineCounts() (b, a int) {
+	if hri == nil {
+		return
+	}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateOffline {
+			b++
+		}
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateOffline {
+			a++
+		}
+	}
+	return
+}
 
-// ListBucketsHeal - issues heal bucket list API request
-func (adm *AdminClient) ListBucketsHeal() ([]BucketInfo, error) {
-	queryVal := url.Values{}
-	queryVal.Set("heal", "")
+// GetCorruptedCounts - returns the number of corrupted disks before
+// and after heal
+func (hri *HealResultItem) GetCorruptedCounts() (b, a int) {
+	if hri == nil {
+		return
+	}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateCorrupt {
+			b++
+		}
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateCorrupt {
+			a++
+		}
+	}
+	return
+}
 
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "list-buckets")
+// GetOnlineCounts - returns the number of online disks before
+// and after heal
+func (hri *HealResultItem) GetOnlineCounts() (b, a int) {
+	if hri == nil {
+		return
+	}
+	for _, v := range hri.Before.Drives {
+		if v.State == DriveStateOk {
+			b++
+		}
+	}
+	for _, v := range hri.After.Drives {
+		if v.State == DriveStateOk {
+			a++
+		}
+	}
+	return
+}
 
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
+// Heal - API endpoint to start heal and to fetch status
+// forceStart and forceStop are mutually exclusive, you can either
+// set one of them to 'true'. If both are set 'forceStart' will be
+// honored.
+func (adm *AdminClient) Heal(ctx context.Context, bucket, prefix string,
+	healOpts HealOpts, clientToken string, forceStart, forceStop bool) (
+	healStart HealStartSuccess, healTaskStatus HealTaskStatus, err error) {
+
+	if forceStart && forceStop {
+		return healStart, healTaskStatus, ErrInvalidArgument("forceStart and forceStop set to true is not allowed")
 	}
 
-	// Execute GET on /?heal to list objects needing heal.
-	resp, err := adm.executeMethod("GET", reqData)
+	body, err := json.Marshal(healOpts)
+	if err != nil {
+		return healStart, healTaskStatus, err
+	}
 
+	path := fmt.Sprintf(adminAPIPrefix+"/heal/%s", bucket)
+	if bucket != "" && prefix != "" {
+		path += "/" + prefix
+	}
+
+	// execute POST request to heal api
+	queryVals := make(url.Values)
+	if clientToken != "" {
+		queryVals.Set("clientToken", clientToken)
+		body = []byte{}
+	}
+
+	// Anyone can be set, either force start or forceStop.
+	if forceStart {
+		queryVals.Set("forceStart", "true")
+	} else if forceStop {
+		queryVals.Set("forceStop", "true")
+	}
+
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost, requestData{
+			relPath:     path,
+			content:     body,
+			queryValues: queryVals,
+		})
 	defer closeResponse(resp)
 	if err != nil {
-		return []BucketInfo{}, err
+		return healStart, healTaskStatus, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return []BucketInfo{}, httpRespToErrorResponse(resp)
+		return healStart, healTaskStatus, httpRespToErrorResponse(resp)
 	}
 
-	var listBucketsHealResult ListBucketsHealResponse
-
-	err = xml.NewDecoder(resp.Body).Decode(&listBucketsHealResult)
+	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return []BucketInfo{}, err
+		return healStart, healTaskStatus, err
 	}
 
-	var bucketsToBeHealed []BucketInfo
-
-	for _, bucket := range listBucketsHealResult.Buckets.Buckets {
-		creationDate, err := time.Parse(timeFormatAMZLong, bucket.CreationDate)
+	// Was it a status request?
+	if clientToken == "" {
+		// As a special operation forceStop would return a
+		// similar struct as healStart will have the
+		// heal sequence information about the heal which
+		// was stopped.
+		err = json.Unmarshal(respBytes, &healStart)
+	} else {
+		err = json.Unmarshal(respBytes, &healTaskStatus)
+	}
+	if err != nil {
+		// May be the server responded with error after success
+		// message, handle it separately here.
+		var errResp ErrorResponse
+		err = json.Unmarshal(respBytes, &errResp)
 		if err != nil {
-			return []BucketInfo{}, err
+			// Unknown structure return error anyways.
+			return healStart, healTaskStatus, err
 		}
-		bucketsToBeHealed = append(bucketsToBeHealed,
-			BucketInfo{
-				Name:           bucket.Name,
-				Created:        creationDate,
-				HealBucketInfo: bucket.HealBucketInfo,
-			})
+		return healStart, healTaskStatus, errResp
 	}
-
-	return bucketsToBeHealed, nil
+	return healStart, healTaskStatus, nil
 }
 
-// HealBucket - Heal the given bucket
-func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
-	// Construct query params.
-	queryVal := url.Values{}
-	queryVal.Set("heal", "")
-	queryVal.Set(string(healBucket), bucket)
-	if dryrun {
-		queryVal.Set(string(healDryRun), "")
-	}
+// BgHealState represents the status of the background heal
+type BgHealState struct {
+	ScannedItemsCount int64
+	LastHealActivity  time.Time
+	NextHealRound     time.Time
+	HealDisks         []string
+}
 
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "bucket")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Execute POST on /?heal&bucket=mybucket to heal a bucket.
-	resp, err := adm.executeMethod("POST", reqData)
-
-	defer closeResponse(resp)
+// BackgroundHealStatus returns the background heal status of the
+// current server or cluster.
+func (adm *AdminClient) BackgroundHealStatus(ctx context.Context) (BgHealState, error) {
+	// Execute POST request to background heal status api
+	resp, err := adm.executeMethod(ctx,
+		http.MethodPost,
+		requestData{relPath: adminAPIPrefix + "/background-heal/status"})
 	if err != nil {
-		return err
+		return BgHealState{}, err
 	}
+	defer closeResponse(resp)
 
 	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
+		return BgHealState{}, httpRespToErrorResponse(resp)
 	}
 
-	return nil
-}
-
-// HealUpload - Heal the given upload.
-func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) (HealResult, error) {
-	// Construct query params.
-	queryVal := url.Values{}
-	queryVal.Set("heal", "")
-	queryVal.Set(string(healBucket), bucket)
-	queryVal.Set(string(healObject), object)
-	queryVal.Set(string(healUploadID), uploadID)
-	if dryrun {
-		queryVal.Set(string(healDryRun), "")
-	}
-
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "upload")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Execute POST on
-	// /?heal&bucket=mybucket&object=myobject&upload-id=uploadID
-	// to heal an upload.
-	resp, err := adm.executeMethod("POST", reqData)
-
-	defer closeResponse(resp)
+	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return HealResult{}, err
+		return BgHealState{}, err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return HealResult{}, httpRespToErrorResponse(resp)
-	}
+	var healState BgHealState
 
-	// Healing is not performed so heal object result is empty.
-	if dryrun {
-		return HealResult{}, nil
-	}
-
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(respBytes, &healState)
 	if err != nil {
-		return HealResult{}, err
+		return BgHealState{}, err
 	}
-
-	healResult := HealResult{}
-	err = json.Unmarshal(jsonBytes, &healResult)
-	if err != nil {
-		return HealResult{}, err
-	}
-
-	return healResult, nil
-}
-
-// HealResult - represents result of heal-object admin API.
-type HealResult struct {
-	State HealState `json:"state"`
-}
-
-// HealState - different states of heal operation
-type HealState int
-
-const (
-	// HealNone - none of the disks healed
-	HealNone HealState = iota
-	// HealPartial - some disks were healed, others were offline
-	HealPartial
-	// HealOK - all disks were healed
-	HealOK
-)
-
-// HealObject - Heal the given object.
-func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealResult, error) {
-	// Construct query params.
-	queryVal := url.Values{}
-	queryVal.Set("heal", "")
-	queryVal.Set(string(healBucket), bucket)
-	queryVal.Set(string(healObject), object)
-	if dryrun {
-		queryVal.Set(string(healDryRun), "")
-	}
-
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "object")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Execute POST on /?heal&bucket=mybucket&object=myobject to heal an object.
-	resp, err := adm.executeMethod("POST", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return HealResult{}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return HealResult{}, httpRespToErrorResponse(resp)
-	}
-
-	// Healing is not performed so heal object result is empty.
-	if dryrun {
-		return HealResult{}, nil
-	}
-
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return HealResult{}, err
-	}
-
-	healResult := HealResult{}
-	err = json.Unmarshal(jsonBytes, &healResult)
-	if err != nil {
-		return HealResult{}, err
-	}
-
-	return healResult, nil
-}
-
-// HealFormat - heal storage format on available disks.
-func (adm *AdminClient) HealFormat(dryrun bool) error {
-	queryVal := url.Values{}
-	queryVal.Set("heal", "")
-	if dryrun {
-		queryVal.Set(string(healDryRun), "")
-	}
-
-	// Set x-minio-operation to format.
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "format")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Execute POST on /?heal to heal storage format.
-	resp, err := adm.executeMethod("POST", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
-	}
-
-	return nil
-}
-
-// mkUploadsHealQuery - helper function to construct query params for
-// ListUploadsHeal API.
-func mkUploadsHealQuery(bucket, prefix, marker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
-
-	queryVal := make(url.Values)
-	queryVal.Set("heal", "")
-	queryVal.Set(string(healBucket), bucket)
-	queryVal.Set(string(healPrefix), prefix)
-	queryVal.Set(string(healMarker), marker)
-	queryVal.Set(string(healUploadIDMarker), uploadIDMarker)
-	queryVal.Set(string(healDelimiter), delimiter)
-	queryVal.Set(string(healMaxUpload), maxUploadsStr)
-	return queryVal
-}
-
-func (adm *AdminClient) listUploadsHeal(bucket, prefix, marker, uploadIDMarker, delimiter string, maxUploads int) (listUploadsHealResponse, error) {
-	// Construct query params.
-	maxUploadsStr := fmt.Sprintf("%d", maxUploads)
-	queryVal := mkUploadsHealQuery(bucket, prefix, marker, uploadIDMarker, delimiter, maxUploadsStr)
-
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "list-uploads")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
-	}
-
-	// Empty 'list' of objects to be healed.
-	toBeHealedUploads := listUploadsHealResponse{}
-
-	// Execute GET on /?heal to list objects needing heal.
-	resp, err := adm.executeMethod("GET", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return listUploadsHealResponse{}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return toBeHealedUploads, httpRespToErrorResponse(resp)
-
-	}
-
-	err = xml.NewDecoder(resp.Body).Decode(&toBeHealedUploads)
-	if err != nil {
-		return listUploadsHealResponse{}, err
-	}
-
-	return toBeHealedUploads, nil
-}
-
-// ListUploadsHeal - issues list heal uploads API request
-func (adm *AdminClient) ListUploadsHeal(bucket, prefix string, recursive bool,
-	doneCh <-chan struct{}) (<-chan UploadInfo, error) {
-
-	// Default listing is delimited at "/"
-	delimiter := "/"
-	if recursive {
-		// If recursive we do not delimit.
-		delimiter = ""
-	}
-
-	uploadIDMarker := ""
-
-	// Allocate new list objects channel.
-	uploadStatCh := make(chan UploadInfo, maxUploadsList)
-
-	// Initiate list objects goroutine here.
-	go func(uploadStatCh chan<- UploadInfo) {
-		defer close(uploadStatCh)
-		// Save marker for next request.
-		var marker string
-		for {
-			// Get list of objects a maximum of 1000 per request.
-			result, err := adm.listUploadsHeal(bucket, prefix, marker,
-				uploadIDMarker, delimiter, maxUploadsList)
-			if err != nil {
-				uploadStatCh <- UploadInfo{
-					Err: err,
-				}
-				return
-			}
-
-			// If contents are available loop through and
-			// send over channel.
-			for _, upload := range result.Uploads {
-				select {
-				// Send upload info.
-				case uploadStatCh <- UploadInfo{
-					Key:            upload.Key,
-					UploadID:       upload.UploadID,
-					Initiated:      upload.Initiated,
-					HealUploadInfo: upload.HealUploadInfo,
-				}:
-				// If receives done from the caller, return here.
-				case <-doneCh:
-					return
-				}
-			}
-
-			// Send all common prefixes if any.  NOTE:
-			// prefixes are only present if the request is
-			// delimited.
-			for _, prefix := range result.CommonPrefixes {
-				upload := UploadInfo{}
-				upload.Key = prefix.Prefix
-				select {
-				// Send object prefixes.
-				case uploadStatCh <- upload:
-				// If receives done from the caller, return here.
-				case <-doneCh:
-					return
-				}
-			}
-
-			// If next uploadID marker is present, set it
-			// for the next request.
-			if result.NextUploadIDMarker != "" {
-				uploadIDMarker = result.NextUploadIDMarker
-			}
-
-			// If next marker present, save it for next request.
-			if result.KeyMarker != "" {
-				marker = result.KeyMarker
-			}
-
-			// Listing ends result is not truncated,
-			// return right here.
-			if !result.IsTruncated {
-				return
-			}
-		}
-	}(uploadStatCh)
-	return uploadStatCh, nil
+	return healState, nil
 }

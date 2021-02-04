@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -29,36 +31,37 @@ func TestFSV1MetadataObjInfo(t *testing.T) {
 	if objInfo.Size != 0 {
 		t.Fatal("Unexpected object info value for Size", objInfo.Size)
 	}
-	if objInfo.ModTime != timeSentinel {
+	if !objInfo.ModTime.Equal(timeSentinel) {
 		t.Fatal("Unexpected object info value for ModTime ", objInfo.ModTime)
 	}
 	if objInfo.IsDir {
 		t.Fatal("Unexpected object info value for IsDir", objInfo.IsDir)
+	}
+	if !objInfo.Expires.IsZero() {
+		t.Fatal("Unexpected object info value for Expires ", objInfo.Expires)
 	}
 }
 
 // TestReadFSMetadata - readFSMetadata testing with a healthy and faulty disk
 func TestReadFSMetadata(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	sha256sum := ""
-	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
-		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
+	if _, err := obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
 	// Construct the full path of fs.json
-	fsPath := pathJoin("buckets", bucketName, objectName, "fs.json")
+	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectName, "fs.json")
 	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
 	rlk, err := fs.rwPool.Open(fsPath)
@@ -69,7 +72,7 @@ func TestReadFSMetadata(t *testing.T) {
 
 	// Regular fs metadata reading, no errors expected
 	fsMeta := fsMetaV1{}
-	if _, err = fsMeta.ReadFrom(rlk.LockedFile); err != nil {
+	if _, err = fsMeta.ReadFrom(GlobalContext, rlk.LockedFile); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 }
@@ -77,25 +80,23 @@ func TestReadFSMetadata(t *testing.T) {
 // TestWriteFSMetadata - tests of writeFSMetadata with healthy disk.
 func TestWriteFSMetadata(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(*fsObjects)
+	fs := obj.(*FSObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(GlobalContext, bucketName, BucketOptions{}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	sha256sum := ""
-	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
-		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
+	if _, err := obj.PutObject(GlobalContext, bucketName, objectName, mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
 	// Construct the full path of fs.json
-	fsPath := pathJoin("buckets", bucketName, objectName, "fs.json")
+	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectName, "fs.json")
 	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
 	rlk, err := fs.rwPool.Open(fsPath)
@@ -106,14 +107,54 @@ func TestWriteFSMetadata(t *testing.T) {
 
 	// FS metadata reading, no errors expected (healthy disk)
 	fsMeta := fsMetaV1{}
-	_, err = fsMeta.ReadFrom(rlk.LockedFile)
+	_, err = fsMeta.ReadFrom(GlobalContext, rlk.LockedFile)
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
-	if fsMeta.Version != "1.0.0" {
+	if fsMeta.Version != fsMetaVersion {
 		t.Fatalf("Unexpected version %s", fsMeta.Version)
 	}
-	if fsMeta.Format != "fs" {
-		t.Fatalf("Unexpected format %s", fsMeta.Format)
+}
+
+func TestFSChecksumV1MarshalJSON(t *testing.T) {
+	var cs FSChecksumInfoV1
+
+	testCases := []struct {
+		checksum       FSChecksumInfoV1
+		expectedResult string
+	}{
+		{cs, `{"algorithm":"","blocksize":0,"hashes":null}`},
+		{FSChecksumInfoV1{Algorithm: "highwayhash", Blocksize: 500}, `{"algorithm":"highwayhash","blocksize":500,"hashes":null}`},
+		{FSChecksumInfoV1{Algorithm: "highwayhash", Blocksize: 10, Hashes: [][]byte{[]byte("hello")}}, `{"algorithm":"highwayhash","blocksize":10,"hashes":["68656c6c6f"]}`},
+	}
+
+	for _, testCase := range testCases {
+		data, _ := testCase.checksum.MarshalJSON()
+		if testCase.expectedResult != string(data) {
+			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, string(data))
+		}
+	}
+}
+
+func TestFSChecksumV1UnMarshalJSON(t *testing.T) {
+	var cs FSChecksumInfoV1
+
+	testCases := []struct {
+		data           []byte
+		expectedResult FSChecksumInfoV1
+	}{
+		{[]byte(`{"algorithm":"","blocksize":0,"hashes":null}`), cs},
+		{[]byte(`{"algorithm":"highwayhash","blocksize":500,"hashes":null}`), FSChecksumInfoV1{Algorithm: "highwayhash", Blocksize: 500}},
+		{[]byte(`{"algorithm":"highwayhash","blocksize":10,"hashes":["68656c6c6f"]}`), FSChecksumInfoV1{Algorithm: "highwayhash", Blocksize: 10, Hashes: [][]byte{[]byte("hello")}}},
+	}
+
+	for _, testCase := range testCases {
+		err := (&cs).UnmarshalJSON(testCase.data)
+		if err != nil {
+			t.Fatal("Unexpected error during checksum unmarshalling ", err)
+		}
+		if !reflect.DeepEqual(testCase.expectedResult, cs) {
+			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, cs)
+		}
 	}
 }

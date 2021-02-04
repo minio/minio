@@ -1,5 +1,11 @@
+// Original work https://github.com/oxtoacart/bpool borrowed
+// only bpool.go licensed under Apache 2.0.
+
+// This file modifies original bpool.go to add one more option
+// to provide []byte capacity for better GC management.
+
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,36 +24,73 @@ package bpool
 
 import "testing"
 
+// Tests - bytePool functionality.
 func TestBytePool(t *testing.T) {
-	size := int64(10)
-	n := 16
-	pool := NewBytePool(size, n)
-	enBlocks := make([][]byte, n)
+	var size = 4
+	var width = 10
+	var capWidth = 16
 
-	// Allocates all the 16 byte slices in the pool.
-	alloc := func() {
-		for i := range enBlocks {
-			var err error
-			enBlocks[i], err = pool.Get()
-			if err != nil {
-				t.Fatal("expected nil, got", err)
-			}
-			// Make sure the slice length is as expected.
-			if len(enBlocks[i]) != int(size) {
-				t.Fatalf("expected size %d, got %d", len(enBlocks[i]), size)
-			}
-		}
+	bufPool := NewBytePoolCap(size, width, capWidth)
+
+	// Check the width
+	if bufPool.Width() != width {
+		t.Fatalf("bytepool width invalid: got %v want %v", bufPool.Width(), width)
 	}
 
-	// Allocate everything in the pool.
-	alloc()
-	// Any Get() will fail when the pool does not have any free buffer.
-	_, err := pool.Get()
-	if err == nil {
-		t.Fatalf("expected %s, got nil", err)
+	// Check with width cap
+	if bufPool.WidthCap() != capWidth {
+		t.Fatalf("bytepool capWidth invalid: got %v want %v", bufPool.WidthCap(), capWidth)
 	}
-	// Reset - so that all the buffers are marked as unused.
-	pool.Reset()
-	// Allocation of all the buffers in the pool should succeed now.
-	alloc()
+
+	// Check that retrieved buffer are of the expected width
+	b := bufPool.Get()
+	if len(b) != width {
+		t.Fatalf("bytepool length invalid: got %v want %v", len(b), width)
+	}
+	if cap(b) != capWidth {
+		t.Fatalf("bytepool length invalid: got %v want %v", cap(b), capWidth)
+	}
+
+	bufPool.Put(b)
+
+	// Fill the pool beyond the capped pool size.
+	for i := 0; i < size*2; i++ {
+		bufPool.Put(make([]byte, bufPool.w))
+	}
+
+	b = bufPool.Get()
+	if len(b) != width {
+		t.Fatalf("bytepool length invalid: got %v want %v", len(b), width)
+	}
+	if cap(b) != capWidth {
+		t.Fatalf("bytepool length invalid: got %v want %v", cap(b), capWidth)
+	}
+
+	bufPool.Put(b)
+
+	// Close the channel so we can iterate over it.
+	close(bufPool.c)
+
+	// Check the size of the pool.
+	if len(bufPool.c) != size {
+		t.Fatalf("bytepool size invalid: got %v want %v", len(bufPool.c), size)
+	}
+
+	bufPoolNoCap := NewBytePoolCap(size, width, 0)
+	// Check the width
+	if bufPoolNoCap.Width() != width {
+		t.Fatalf("bytepool width invalid: got %v want %v", bufPool.Width(), width)
+	}
+
+	// Check with width cap
+	if bufPoolNoCap.WidthCap() != 0 {
+		t.Fatalf("bytepool capWidth invalid: got %v want %v", bufPool.WidthCap(), 0)
+	}
+	b = bufPoolNoCap.Get()
+	if len(b) != width {
+		t.Fatalf("bytepool length invalid: got %v want %v", len(b), width)
+	}
+	if cap(b) != width {
+		t.Fatalf("bytepool length invalid: got %v want %v", cap(b), width)
+	}
 }

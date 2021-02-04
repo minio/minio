@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"testing"
 )
@@ -39,17 +40,23 @@ func TestResourceListSorting(t *testing.T) {
 
 // Tests presigned v2 signature.
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatal("Unable to initialize test config.")
+		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
 	now := UTCNow()
 
+	var (
+		accessKey = globalActiveCred.AccessKey
+		secretKey = globalActiveCred.SecretKey
+	)
 	testCases := []struct {
 		queryParams map[string]string
-		headers     map[string]string
 		expected    APIErrorCode
 	}{
 		// (0) Should error without a set URL query.
@@ -70,7 +77,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60s",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrMalformedExpires,
 		},
@@ -79,7 +86,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrExpiredPresignRequest,
 		},
@@ -88,7 +95,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
@@ -97,9 +104,21 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "zOM2YrY/yAQe15VWmT78OlBrK6g=",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
+		},
+		// (6) Should not error signature matches with extra query params.
+		{
+			queryParams: map[string]string{
+				"response-content-disposition": "attachment; filename=\"4K%2d4M.txt\"",
+			},
+			expected: ErrNone,
+		},
+		// (7) Should not error signature matches with no special query params.
+		{
+			queryParams: map[string]string{},
+			expected:    ErrNone,
 		},
 	}
 
@@ -110,37 +129,47 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 		for key, value := range testCase.queryParams {
 			query.Set(key, value)
 		}
-
 		// Create a request to use.
-		req, e := http.NewRequest(http.MethodGet, "http://host/a/b?"+query.Encode(), nil)
-		if e != nil {
-			t.Errorf("(%d) failed to create http.Request, got %v", i, e)
+		req, err := http.NewRequest(http.MethodGet, "http://host/a/b?"+query.Encode(), nil)
+		if err != nil {
+			t.Errorf("(%d) failed to create http.Request, got %v", i, err)
 		}
-		// Should be set since we are simulating a http server.
-		req.RequestURI = req.URL.RequestURI()
+		if testCase.expected != ErrNone {
+			// Should be set since we are simulating a http server.
+			req.RequestURI = req.URL.RequestURI()
+			// Check if it matches!
+			errCode := doesPresignV2SignatureMatch(req)
+			if errCode != testCase.expected {
+				t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(errCode))
+			}
+		} else {
+			err = preSignV2(req, accessKey, secretKey, now.Unix()+60)
+			if err != nil {
+				t.Fatalf("(%d) failed to preSignV2 http request, got %v", i, err)
+			}
+			// Should be set since we are simulating a http server.
+			req.RequestURI = req.URL.RequestURI()
+			errCode := doesPresignV2SignatureMatch(req)
+			if errCode != testCase.expected {
+				t.Errorf("(%d) expected to get success, instead got %s", i, niceError(errCode))
+			}
+		}
 
-		// Do the same for the headers.
-		for key, value := range testCase.headers {
-			req.Header.Set(key, value)
-		}
-
-		// Check if it matches!
-		err := doesPresignV2SignatureMatch(req)
-		if err != testCase.expected {
-			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
-		}
 	}
 }
 
 // TestValidateV2AuthHeader - Tests validate the logic of V2 Authorization header validator.
 func TestValidateV2AuthHeader(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatal("Unable to initialize test config.")
+		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
 
-	accessID := serverConfig.GetCredential().AccessKey
+	accessID := globalActiveCred.AccessKey
 	testCases := []struct {
 		authString    string
 		expectedError APIErrorCode
@@ -194,7 +223,12 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Case %d AuthStr \"%s\".", i+1, testCase.authString), func(t *testing.T) {
 
-			actualErrCode := validateV2AuthHeader(testCase.authString)
+			req := &http.Request{
+				Header: make(http.Header),
+				URL:    &url.URL{},
+			}
+			req.Header.Set("Authorization", testCase.authString)
+			_, actualErrCode := validateV2AuthHeader(req)
 
 			if testCase.expectedError != actualErrCode {
 				t.Errorf("Expected the error code to be %v, got %v.", testCase.expectedError, actualErrCode)
@@ -205,12 +239,16 @@ func TestValidateV2AuthHeader(t *testing.T) {
 }
 
 func TestDoesPolicySignatureV2Match(t *testing.T) {
-	root, err := newTestConfig(globalMinioDefaultRegion)
+	obj, fsDir, err := prepareFS()
 	if err != nil {
-		t.Fatal("Unable to initialize test config.")
+		t.Fatal(err)
 	}
-	defer removeAll(root)
-	creds := serverConfig.GetCredential()
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
+
+	creds := globalActiveCred
 	policy := "policy"
 	testCases := []struct {
 		accessKey string

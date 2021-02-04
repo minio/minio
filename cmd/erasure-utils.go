@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,71 +18,12 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
-	"hash"
+	"context"
 	"io"
-	"sync"
 
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/sha256-simd"
-	"golang.org/x/crypto/blake2b"
+	"github.com/minio/minio/cmd/logger"
 )
-
-// newHashWriters - inititialize a slice of hashes for the disk count.
-func newHashWriters(diskCount int, algo string) []hash.Hash {
-	hashWriters := make([]hash.Hash, diskCount)
-	for index := range hashWriters {
-		hashWriters[index] = newHash(algo)
-	}
-	return hashWriters
-}
-
-// newHash - gives you a newly allocated hash depending on the input algorithm.
-func newHash(algo string) (h hash.Hash) {
-	switch algo {
-	case sha256Algo:
-		// sha256 checksum specially on ARM64 platforms or whenever
-		// requested as dictated by `xl.json` entry.
-		h = sha256.New()
-	case blake2bAlgo:
-		// ignore the error, because New512 without a key never fails
-		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
-	// Add new hashes here.
-	default:
-		// Default to blake2b.
-		// ignore the error, because New512 without a key never fails
-		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
-	}
-	return h
-}
-
-// Hash buffer pool is a pool of reusable
-// buffers used while checksumming a stream.
-var hashBufferPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, readSizeV1)
-		return &b
-	},
-}
-
-// hashSum calculates the hash of the entire path and returns.
-func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	// Fetch staging a new staging buffer from the pool.
-	bufp := hashBufferPool.Get().(*[]byte)
-	defer hashBufferPool.Put(bufp)
-
-	// Copy entire buffer to writer.
-	if err := copyBuffer(writer, disk, volume, path, *bufp); err != nil {
-		return nil, err
-	}
-
-	// Return the final hash sum.
-	return writer.Sum(nil), nil
-}
 
 // getDataBlockLen - get length of data blocks from encoded blocks.
 func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
@@ -96,20 +37,23 @@ func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
 
 // Writes all the data blocks from encoded blocks until requested
 // outSize length. Provides a way to skip bytes until the offset.
-func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset int64, length int64) (int64, error) {
+func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, dataBlocks int, offset int64, length int64) (int64, error) {
 	// Offset and out size cannot be negative.
 	if offset < 0 || length < 0 {
-		return 0, traceError(errUnexpected)
+		logger.LogIf(ctx, errUnexpected)
+		return 0, errUnexpected
 	}
 
 	// Do we have enough blocks?
 	if len(enBlocks) < dataBlocks {
-		return 0, traceError(reedsolomon.ErrTooFewShards)
+		logger.LogIf(ctx, reedsolomon.ErrTooFewShards)
+		return 0, reedsolomon.ErrTooFewShards
 	}
 
 	// Do we have enough data?
 	if int64(getDataBlockLen(enBlocks, dataBlocks)) < length {
-		return 0, traceError(reedsolomon.ErrShortData)
+		logger.LogIf(ctx, reedsolomon.ErrShortData)
+		return 0, reedsolomon.ErrShortData
 	}
 
 	// Counter to decrement total left to write.
@@ -133,19 +77,28 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 			// from subsequent blocks.
 			offset = 0
 		}
+
 		// We have written all the blocks, write the last remaining block.
 		if write < int64(len(block)) {
 			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
 			if err != nil {
-				return 0, traceError(err)
+				if err != io.ErrClosedPipe {
+					logger.LogIf(ctx, err)
+				}
+				return 0, err
 			}
 			totalWritten += n
 			break
 		}
+
 		// Copy the block.
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {
-			return 0, traceError(err)
+			// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
+			if err != io.ErrClosedPipe {
+				logger.LogIf(ctx, err)
+			}
+			return 0, err
 		}
 
 		// Decrement output size.
@@ -157,53 +110,4 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 
 	// Success.
 	return totalWritten, nil
-}
-
-// chunkSize is roughly BlockSize/DataBlocks.
-// chunkSize is calculated such that chunkSize*DataBlocks accommodates BlockSize bytes.
-// So chunkSize*DataBlocks can be slightly larger than BlockSize if BlockSize is not divisible by
-// DataBlocks. The extra space will have 0-padding.
-func getChunkSize(blockSize int64, dataBlocks int) int64 {
-	return (blockSize + int64(dataBlocks) - 1) / int64(dataBlocks)
-}
-
-// copyBuffer - copies from disk, volume, path to input writer until either EOF
-// is reached at volume, path or an error occurs. A success copyBuffer returns
-// err == nil, not err == EOF. Because copyBuffer is defined to read from path
-// until EOF. It does not treat an EOF from ReadFile an error to be reported.
-// Additionally copyBuffer stages through the provided buffer; otherwise if it
-// has zero length, returns error.
-func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, buf []byte) error {
-	// Error condition of zero length buffer.
-	if buf != nil && len(buf) == 0 {
-		return errors.New("empty buffer in readBuffer")
-	}
-
-	// Starting offset for Reading the file.
-	var startOffset int64
-
-	// Read until io.EOF.
-	for {
-		n, err := disk.ReadFile(volume, path, startOffset, buf)
-		if n > 0 {
-			m, wErr := writer.Write(buf[:n])
-			if wErr != nil {
-				return wErr
-			}
-			if int64(m) != n {
-				return io.ErrShortWrite
-			}
-		}
-		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				break
-			}
-			return err
-		}
-		// Progress the offset.
-		startOffset += n
-	}
-
-	// Success.
-	return nil
 }

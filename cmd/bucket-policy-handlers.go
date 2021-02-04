@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015, 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,206 +17,84 @@
 package cmd
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"runtime"
-	"strings"
 
 	humanize "github.com/dustin/go-humanize"
-	mux "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/set"
-	"github.com/minio/minio/pkg/wildcard"
+	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/bucket/policy"
 )
 
-// maximum supported access policy size.
-const maxAccessPolicySize = 20 * humanize.KiByte
+const (
+	// As per AWS S3 specification, 20KiB policy JSON data is allowed.
+	maxBucketPolicySize = 20 * humanize.KiByte
 
-// Verify if a given action is valid for the url path based on the
-// existing bucket access policy.
-func bucketPolicyEvalStatements(action string, resource string, conditions map[string]set.StringSet, statements []policyStatement) bool {
-	for _, statement := range statements {
-		if bucketPolicyMatchStatement(action, resource, conditions, statement) {
-			if statement.Effect == "Allow" {
-				return true
-			}
-			// Do not uncomment kept here for readability.
-			// else statement.Effect == "Deny"
-			return false
-		}
-	}
-	// None match so deny.
-	return false
-}
+	// Policy configuration file.
+	bucketPolicyConfig = "policy.json"
+)
 
-// Verify if action, resource and conditions match input policy statement.
-func bucketPolicyMatchStatement(action string, resource string, conditions map[string]set.StringSet, statement policyStatement) bool {
-	// Verify if action, resource and condition match in given statement.
-	return (bucketPolicyActionMatch(action, statement) &&
-		bucketPolicyResourceMatch(resource, statement) &&
-		bucketPolicyConditionMatch(conditions, statement))
-}
-
-// Verify if given action matches with policy statement.
-func bucketPolicyActionMatch(action string, statement policyStatement) bool {
-	return !statement.Actions.FuncMatch(actionMatch, action).IsEmpty()
-}
-
-// Match function matches wild cards in 'pattern' for resource.
-func resourceMatch(pattern, resource string) bool {
-	if runtime.GOOS == "windows" {
-		// For windows specifically make sure we are case insensitive.
-		return wildcard.Match(strings.ToLower(pattern), strings.ToLower(resource))
-	}
-	return wildcard.Match(pattern, resource)
-}
-
-// Match function matches wild cards in 'pattern' for action.
-func actionMatch(pattern, action string) bool {
-	return wildcard.MatchSimple(pattern, action)
-}
-
-func refererMatch(pattern, referer string) bool {
-	return wildcard.MatchSimple(pattern, referer)
-}
-
-// Verify if given resource matches with policy statement.
-func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
-	// the resource rule for object could contain "*" wild card.
-	// the requested object can be given access based on the already set bucket policy if
-	// the match is successful.
-	// More info: http://docs.aws.amazon.com/AmazonS3/latest/dev/s3-arn-format.html.
-	return !statement.Resources.FuncMatch(resourceMatch, resource).IsEmpty()
-}
-
-// Verify if given condition matches with policy statement.
-func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement policyStatement) bool {
-	// Supports following conditions.
-	// - StringEquals
-	// - StringNotEquals
-	// - StringLike
-	// - StringNotLike
-	//
-	// Supported applicable condition keys for each conditions.
-	// - s3:prefix
-	// - s3:max-keys
-	// - s3:aws-Referer
-
-	// The following loop evaluates the logical AND of all the
-	// conditions in the statement. Note: we can break out of the
-	// loop if and only if a condition evaluates to false.
-	for condition, conditionKeyVal := range statement.Conditions {
-		prefixConditon := conditionKeyVal["s3:prefix"]
-		maxKeyCondition := conditionKeyVal["s3:max-keys"]
-		if condition == "StringEquals" {
-			// If there is no condition with "s3:prefix" or "s3:max-keys" condition key
-			// then there is nothing to check condition against.
-			if !prefixConditon.IsEmpty() && !prefixConditon.Equals(conditions["prefix"]) {
-				return false
-			}
-			if !maxKeyCondition.IsEmpty() && !maxKeyCondition.Equals(conditions["max-keys"]) {
-				return false
-			}
-		} else if condition == "StringNotEquals" {
-			// If there is no condition with "s3:prefix" or "s3:max-keys" condition key
-			// then there is nothing to check condition against.
-			if !prefixConditon.IsEmpty() && prefixConditon.Equals(conditions["prefix"]) {
-				return false
-			}
-			if !maxKeyCondition.IsEmpty() && maxKeyCondition.Equals(conditions["max-keys"]) {
-				return false
-			}
-		} else if condition == "StringLike" {
-			awsReferers := conditionKeyVal["aws:Referer"]
-			// Skip empty condition, it is trivially satisfied.
-			if awsReferers.IsEmpty() {
-				continue
-			}
-			// wildcard match of referer in statement was not empty.
-			// StringLike has a match, i.e, condition evaluates to true.
-			refererFound := false
-			for referer := range conditions["referer"] {
-				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
-					refererFound = true
-					break
-				}
-			}
-			// No matching referer found, so the condition is false.
-			if !refererFound {
-				return false
-			}
-		} else if condition == "StringNotLike" {
-			awsReferers := conditionKeyVal["aws:Referer"]
-			// Skip empty condition, it is trivially satisfied.
-			if awsReferers.IsEmpty() {
-				continue
-			}
-			// wildcard match of referer in statement was not empty.
-			// StringNotLike has a match, i.e, condition evaluates to false.
-			for referer := range conditions["referer"] {
-				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
-					return false
-				}
-			}
-		}
-	}
-
-	return true
-}
-
-// PutBucketPolicyHandler - PUT Bucket policy
-// -----------------
-// This implementation of the PUT operation uses the policy
-// subresource to add to or replace a policy on a bucket
+// PutBucketPolicyHandler - This HTTP handler stores given bucket policy configuration as per
+// https://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "PutBucketPolicy")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(bucket)
+	if s3Error := checkRequestAuthType(ctx, r, policy.PutBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Error out if Content-Length is missing.
+	// PutBucketPolicy always needs Content-Length.
+	if r.ContentLength <= 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Error out if Content-Length is beyond allowed size.
+	if r.ContentLength > maxBucketPolicySize {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPolicyTooLarge), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	bucketPolicy, err := policy.ParseConfig(io.LimitReader(r.Body, r.ContentLength), bucket)
 	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	// If Content-Length is unknown or zero, deny the
-	// request. PutBucketPolicy always needs a Content-Length.
-	if r.ContentLength == -1 || r.ContentLength == 0 {
-		writeErrorResponse(w, ErrMissingContentLength, r.URL)
-		return
-	}
-	// If Content-Length is greater than maximum allowed policy size.
-	if r.ContentLength > maxAccessPolicySize {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+	// Version in policy must not be empty
+	if bucketPolicy.Version == "" {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPolicy), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	// Read access policy up to maxAccessPolicySize.
-	// http://docs.aws.amazon.com/AmazonS3/latest/dev/access-policy-language-overview.html
-	// bucket policies are limited to 20KB in size, using a limit reader.
-	policyBytes, err := ioutil.ReadAll(io.LimitReader(r.Body, maxAccessPolicySize))
+	configData, err := json.Marshal(bucketPolicy)
 	if err != nil {
-		errorIf(err, "Unable to read from client.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	// Parse validate and save bucket policy.
-	if s3Error := parseAndPersistBucketPolicy(bucket, policyBytes, objAPI); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+	if err = globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, configData); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -224,42 +102,34 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	writeSuccessNoContent(w)
 }
 
-// DeleteBucketPolicyHandler - DELETE Bucket policy
-// -----------------
-// This implementation of the DELETE operation uses the policy
-// subresource to add to remove a policy on a bucket.
+// DeleteBucketPolicyHandler - This HTTP handler removes bucket policy configuration.
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "DeleteBucketPolicy")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(bucket)
-	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+	if s3Error := checkRequestAuthType(ctx, r, policy.DeleteBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
-	// Delete bucket access policy, by passing an empty policy
-	// struct.
-	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
-		switch err.(type) {
-		case BucketPolicyNotFound:
-			writeErrorResponse(w, ErrNoSuchBucketPolicy, r.URL)
-		default:
-			writeErrorResponse(w, ErrInternalError, r.URL)
-		}
+	// Check if bucket exists.
+	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	if err := globalBucketMetadataSys.Update(bucket, bucketPolicyConfig, nil); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
@@ -267,46 +137,45 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	writeSuccessNoContent(w)
 }
 
-// GetBucketPolicyHandler - GET Bucket policy
-// -----------------
-// This operation uses the policy
-// subresource to return the policy of a specified bucket.
+// GetBucketPolicyHandler - This HTTP handler returns bucket policy configuration.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketPolicy")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Before proceeding validate if bucket exists.
-	_, err := objAPI.GetBucketInfo(bucket)
-	if err != nil {
-		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Read bucket access policy.
-	policy, err := readBucketPolicy(bucket, objAPI)
+	config, err := globalPolicySys.Get(bucket)
 	if err != nil {
-		errorIf(err, "Unable to read bucket policy.")
-		switch err.(type) {
-		case BucketPolicyNotFound:
-			writeErrorResponse(w, ErrNoSuchBucketPolicy, r.URL)
-		default:
-			writeErrorResponse(w, ErrInternalError, r.URL)
-		}
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	configData, err := json.Marshal(config)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
 
 	// Write to client.
-	fmt.Fprint(w, policy)
+	writeSuccessResponseJSON(w, configData)
 }

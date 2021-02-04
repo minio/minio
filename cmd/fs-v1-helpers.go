@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017, 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,52 +17,62 @@
 package cmd
 
 import (
+	"context"
 	"io"
 	"os"
 	pathutil "path"
 	"runtime"
+
+	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/pkg/lock"
 )
 
 // Removes only the file at given path does not remove
 // any parent directories, handles long paths for
 // windows automatically.
-func fsRemoveFile(filePath string) (err error) {
+func fsRemoveFile(ctx context.Context, filePath string) (err error) {
 	if filePath == "" {
-		return traceError(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
 	}
 
 	if err = checkPathLength(filePath); err != nil {
-		return traceError(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
-	if err = os.Remove(preparePath(filePath)); err != nil {
-		if os.IsNotExist(err) {
-			return traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return traceError(errFileAccessDenied)
+	if err = os.Remove(filePath); err != nil {
+		if err = osErrToFileErr(err); err != errFileNotFound {
+			logger.LogIf(ctx, err)
 		}
-		return traceError(err)
 	}
 
-	return nil
+	return err
 }
 
 // Removes all files and folders at a given path, handles
 // long paths for windows automatically.
-func fsRemoveAll(dirPath string) (err error) {
+func fsRemoveAll(ctx context.Context, dirPath string) (err error) {
 	if dirPath == "" {
-		return traceError(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return traceError(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
 	if err = removeAll(dirPath); err != nil {
-		if os.IsPermission(err) {
-			return traceError(errVolumeAccessDenied)
+		if osIsPermission(err) {
+			logger.LogIf(ctx, errVolumeAccessDenied)
+			return errVolumeAccessDenied
+		} else if isSysErrNotEmpty(err) {
+			logger.LogIf(ctx, errVolumeNotEmpty)
+			return errVolumeNotEmpty
 		}
-		return traceError(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
 	return nil
@@ -70,22 +80,25 @@ func fsRemoveAll(dirPath string) (err error) {
 
 // Removes a directory only if its empty, handles long
 // paths for windows automatically.
-func fsRemoveDir(dirPath string) (err error) {
+func fsRemoveDir(ctx context.Context, dirPath string) (err error) {
 	if dirPath == "" {
-		return traceError(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return traceError(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
-	if err = os.Remove(preparePath(dirPath)); err != nil {
-		if os.IsNotExist(err) {
-			return traceError(errVolumeNotFound)
+	if err = os.Remove((dirPath)); err != nil {
+		if osIsNotExist(err) {
+			return errVolumeNotFound
 		} else if isSysErrNotEmpty(err) {
-			return traceError(errVolumeNotEmpty)
+			return errVolumeNotEmpty
 		}
-		return traceError(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
 	return nil
@@ -95,132 +108,162 @@ func fsRemoveDir(dirPath string) (err error) {
 // otherwise returns an error. If directory already
 // exists returns an error. Windows long paths
 // are handled automatically.
-func fsMkdir(dirPath string) (err error) {
+func fsMkdir(ctx context.Context, dirPath string) (err error) {
 	if dirPath == "" {
-		return traceError(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return errInvalidArgument
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return traceError(err)
+		logger.LogIf(ctx, err)
+		return err
 	}
 
-	if err = os.Mkdir(preparePath(dirPath), 0777); err != nil {
-		if os.IsExist(err) {
-			return traceError(errVolumeExists)
-		} else if os.IsPermission(err) {
-			return traceError(errDiskAccessDenied)
-		} else if isSysErrNotDir(err) {
+	if err = os.Mkdir((dirPath), 0777); err != nil {
+		switch {
+		case osIsExist(err):
+			return errVolumeExists
+		case osIsPermission(err):
+			logger.LogIf(ctx, errDiskAccessDenied)
+			return errDiskAccessDenied
+		case isSysErrNotDir(err):
 			// File path cannot be verified since
 			// one of the parents is a file.
-			return traceError(errDiskAccessDenied)
-		} else if isSysErrPathNotFound(err) {
+			logger.LogIf(ctx, errDiskAccessDenied)
+			return errDiskAccessDenied
+		case isSysErrPathNotFound(err):
 			// Add specific case for windows.
-			return traceError(errDiskAccessDenied)
+			logger.LogIf(ctx, errDiskAccessDenied)
+			return errDiskAccessDenied
+		default:
+			logger.LogIf(ctx, err)
+			return err
 		}
-		return traceError(err)
 	}
 
 	return nil
 }
 
-// Lookup if directory exists, returns directory
-// attributes upon success.
-func fsStatDir(statDir string) (os.FileInfo, error) {
-	if statDir == "" {
-		return nil, traceError(errInvalidArgument)
+// fsStat is a low level call which validates input arguments
+// and checks input length upto supported maximum. Does
+// not perform any higher layer interpretation of files v/s
+// directories. For higher level interpretation look at
+// fsStatFileDir, fsStatFile, fsStatDir.
+func fsStat(ctx context.Context, statLoc string) (os.FileInfo, error) {
+	if statLoc == "" {
+		logger.LogIf(ctx, errInvalidArgument)
+		return nil, errInvalidArgument
 	}
-	if err := checkPathLength(statDir); err != nil {
-		return nil, traceError(err)
+	if err := checkPathLength(statLoc); err != nil {
+		logger.LogIf(ctx, err)
+		return nil, err
 	}
-
-	fi, err := os.Stat(preparePath(statDir))
+	fi, err := os.Stat(statLoc)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, traceError(errVolumeNotFound)
-		} else if os.IsPermission(err) {
-			return nil, traceError(errVolumeAccessDenied)
-		}
-		return nil, traceError(err)
-	}
-
-	if !fi.IsDir() {
-		return nil, traceError(errVolumeAccessDenied)
+		return nil, err
 	}
 
 	return fi, nil
 }
 
-// Lookup if file exists, returns file attributes upon success
-func fsStatFile(statFile string) (os.FileInfo, error) {
-	if statFile == "" {
-		return nil, traceError(errInvalidArgument)
-	}
-
-	if err := checkPathLength(statFile); err != nil {
-		return nil, traceError(err)
-	}
-
-	fi, err := os.Stat(preparePath(statFile))
+// Lookup if volume exists, returns volume attributes upon success.
+func fsStatVolume(ctx context.Context, volume string) (os.FileInfo, error) {
+	fi, err := fsStat(ctx, volume)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return nil, traceError(errFileAccessDenied)
-		} else if isSysErrNotDir(err) {
-			return nil, traceError(errFileAccessDenied)
-		} else if isSysErrPathNotFound(err) {
-			return nil, traceError(errFileNotFound)
+		if osIsNotExist(err) {
+			return nil, errVolumeNotFound
+		} else if osIsPermission(err) {
+			return nil, errVolumeAccessDenied
 		}
-		return nil, traceError(err)
+		return nil, err
 	}
-	if fi.IsDir() {
-		return nil, traceError(errFileNotFound)
+
+	if !fi.IsDir() {
+		return nil, errVolumeAccessDenied
+	}
+
+	return fi, nil
+}
+
+// Lookup if directory exists, returns directory attributes upon success.
+func fsStatDir(ctx context.Context, statDir string) (os.FileInfo, error) {
+	fi, err := fsStat(ctx, statDir)
+	if err != nil {
+		err = osErrToFileErr(err)
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
+		return nil, err
+	}
+	if !fi.IsDir() {
+		return nil, errFileNotFound
 	}
 	return fi, nil
+}
+
+// Lookup if file exists, returns file attributes upon success.
+func fsStatFile(ctx context.Context, statFile string) (os.FileInfo, error) {
+	fi, err := fsStat(ctx, statFile)
+	if err != nil {
+		err = osErrToFileErr(err)
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
+		return nil, err
+	}
+	if fi.IsDir() {
+		return nil, errFileNotFound
+	}
+	return fi, nil
+}
+
+// Returns if the filePath is a regular file.
+func fsIsFile(ctx context.Context, filePath string) bool {
+	fi, err := fsStat(ctx, filePath)
+	if err != nil {
+		return false
+	}
+	return fi.Mode().IsRegular()
 }
 
 // Opens the file at given path, optionally from an offset. Upon success returns
 // a readable stream and the size of the readable stream.
-func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
+func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadCloser, int64, error) {
 	if readPath == "" || offset < 0 {
-		return nil, 0, traceError(errInvalidArgument)
+		logger.LogIf(ctx, errInvalidArgument)
+		return nil, 0, errInvalidArgument
 	}
 	if err := checkPathLength(readPath); err != nil {
-		return nil, 0, traceError(err)
+		logger.LogIf(ctx, err)
+		return nil, 0, err
 	}
 
-	fr, err := os.Open(preparePath(readPath))
+	fr, err := os.Open(readPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, 0, traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return nil, 0, traceError(errFileAccessDenied)
-		} else if isSysErrNotDir(err) {
-			// File path cannot be verified since one of the parents is a file.
-			return nil, 0, traceError(errFileAccessDenied)
-		} else if isSysErrPathNotFound(err) {
-			// Add specific case for windows.
-			return nil, 0, traceError(errFileNotFound)
-		}
-		return nil, 0, traceError(err)
+		return nil, 0, osErrToFileErr(err)
 	}
 
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
-		return nil, 0, traceError(err)
+		err = osErrToFileErr(err)
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
+		return nil, 0, err
 	}
 
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		return nil, 0, traceError(errIsNotRegular)
+		return nil, 0, errIsNotRegular
 	}
 
 	// Seek to the requested offset.
 	if offset > 0 {
-		_, err = fr.Seek(offset, os.SEEK_SET)
+		_, err = fr.Seek(offset, io.SeekStart)
 		if err != nil {
-			return nil, 0, traceError(err)
+			logger.LogIf(ctx, err)
+			return nil, 0, err
 		}
 	}
 
@@ -228,81 +271,74 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 	return fr, st.Size(), nil
 }
 
-// Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
-func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
-	if filePath == "" || reader == nil || buf == nil {
-		return 0, traceError(errInvalidArgument)
+// Creates a file and copies data from incoming reader.
+func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, fallocSize int64) (int64, error) {
+	if filePath == "" || reader == nil {
+		logger.LogIf(ctx, errInvalidArgument)
+		return 0, errInvalidArgument
 	}
 
 	if err := checkPathLength(filePath); err != nil {
-		return 0, traceError(err)
+		logger.LogIf(ctx, err)
+		return 0, err
 	}
 
 	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
-		return 0, traceError(err)
-	}
-
-	if err := checkDiskFree(pathutil.Dir(filePath), fallocSize); err != nil {
-		return 0, traceError(err)
-	}
-
-	writer, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		// File path cannot be verified since one of the parents is a file.
-		if isSysErrNotDir(err) {
-			return 0, traceError(errFileAccessDenied)
+		switch {
+		case osIsPermission(err):
+			return 0, errFileAccessDenied
+		case osIsExist(err):
+			return 0, errFileAccessDenied
+		case isSysErrIO(err):
+			return 0, errFaultyDisk
+		case isSysErrInvalidArg(err):
+			return 0, errUnsupportedDisk
+		case isSysErrNoSpace(err):
+			return 0, errDiskFull
 		}
 		return 0, err
+	}
+
+	flags := os.O_CREATE | os.O_WRONLY
+	if globalFSOSync {
+		flags = flags | os.O_SYNC
+	}
+	writer, err := lock.Open(filePath, flags, 0666)
+	if err != nil {
+		return 0, osErrToFileErr(err)
 	}
 	defer writer.Close()
 
 	// Fallocate only if the size is final object is known.
 	if fallocSize > 0 {
 		if err = fsFAllocate(int(writer.Fd()), 0, fallocSize); err != nil {
-			return 0, traceError(err)
+			logger.LogIf(ctx, err)
+			return 0, err
 		}
 	}
 
-	bytesWritten, err := io.CopyBuffer(writer, reader, buf)
+	bytesWritten, err := io.Copy(writer, reader)
 	if err != nil {
-		return 0, traceError(err)
+		logger.LogIf(ctx, err)
+		return 0, err
 	}
 
 	return bytesWritten, nil
-}
-
-// Removes uploadID at destination path.
-func fsRemoveUploadIDPath(basePath, uploadIDPath string) error {
-	if basePath == "" || uploadIDPath == "" {
-		return traceError(errInvalidArgument)
-	}
-
-	// List all the entries in uploadID.
-	entries, err := readDir(uploadIDPath)
-	if err != nil && err != errFileNotFound {
-		return traceError(err)
-	}
-
-	// Delete all the entries obtained from previous readdir.
-	for _, entryPath := range entries {
-		err = fsDeleteFile(basePath, pathJoin(uploadIDPath, entryPath))
-		if err != nil && err != errFileNotFound {
-			return traceError(err)
-		}
-	}
-
-	return nil
 }
 
 // fsFAllocate is similar to Fallocate but provides a convenient
 // wrapper to handle various operating system specific errors.
 func fsFAllocate(fd int, offset int64, len int64) (err error) {
 	e := Fallocate(fd, offset, len)
-	// Ignore errors when Fallocate is not supported in the current system
-	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
+	if e != nil {
 		switch {
 		case isSysErrNoSpace(e):
 			err = errDiskFull
+		case isSysErrNoSys(e) || isSysErrOpNotSupported(e):
+			// Ignore errors when Fallocate is not supported in the current system
+		case isSysErrInvalidArg(e):
+			// Workaround for Windows Docker Engine 19.03.8.
+			// See https://github.com/minio/minio/issues/9726
 		case isSysErrIO(e):
 			err = e
 		default:
@@ -316,71 +352,69 @@ func fsFAllocate(fd int, offset int64, len int64) (err error) {
 	return nil
 }
 
-// Renames source path to destination path, creates all the
-// missing parents if they don't exist.
-func fsRenameFile(sourcePath, destPath string) error {
-	if err := mkdirAll(pathutil.Dir(destPath), 0777); err != nil {
-		return traceError(err)
+// Renames source path to destination path, fails if the destination path
+// parents are not already created.
+func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error {
+	if err := checkPathLength(sourcePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
 	}
-	if err := os.Rename(preparePath(sourcePath), preparePath(destPath)); err != nil {
-		return traceError(err)
+	if err := checkPathLength(destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
 	}
+
+	if err := os.Rename(sourcePath, destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return osErrToFileErr(err)
+	}
+
 	return nil
 }
 
-// Delete a file and its parent if it is empty at the destination path.
-// this function additionally protects the basePath from being deleted.
-func fsDeleteFile(basePath, deletePath string) error {
-	if err := checkPathLength(basePath); err != nil {
-		return traceError(err)
+// Renames source path to destination path, creates all the
+// missing parents if they don't exist.
+func fsRenameFile(ctx context.Context, sourcePath, destPath string) error {
+	if err := checkPathLength(sourcePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	if err := checkPathLength(destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
 	}
 
-	if err := checkPathLength(deletePath); err != nil {
-		return traceError(err)
-	}
-
-	if basePath == deletePath {
-		return nil
-	}
-
-	// Verify if the path exists.
-	pathSt, err := os.Stat(preparePath(deletePath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return traceError(errFileAccessDenied)
-		}
-		return traceError(err)
-	}
-
-	if pathSt.IsDir() && !isDirEmpty(deletePath) {
-		// Verify if directory is empty.
-		return nil
-	}
-
-	// Attempt to remove path.
-	if err = os.Remove(preparePath(deletePath)); err != nil {
-		if os.IsNotExist(err) {
-			return traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return traceError(errFileAccessDenied)
-		} else if isSysErrNotEmpty(err) {
-			return traceError(errVolumeNotEmpty)
-		}
-		return traceError(err)
-	}
-
-	// Recursively go down the next path and delete again.
-	if err := fsDeleteFile(basePath, pathutil.Dir(deletePath)); err != nil {
+	if err := renameAll(sourcePath, destPath); err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 
 	return nil
 }
 
+// fsDeleteFile is a wrapper for deleteFile(), after checking the path length.
+func fsDeleteFile(ctx context.Context, basePath, deletePath string) error {
+	if err := checkPathLength(basePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err := checkPathLength(deletePath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err := deleteFile(basePath, deletePath, false); err != nil {
+		if err != errFileNotFound {
+			logger.LogIf(ctx, err)
+		}
+		return err
+	}
+	return nil
+}
+
 // fsRemoveMeta safely removes a locked file and takes care of Windows special case
-func fsRemoveMeta(basePath, deletePath, tmpDir string) error {
+func fsRemoveMeta(ctx context.Context, basePath, deletePath, tmpDir string) error {
 	// Special case for windows please read through.
 	if runtime.GOOS == globalWindowsOSName {
 		// Ordinarily windows does not permit deletion or renaming of files still
@@ -414,13 +448,13 @@ func fsRemoveMeta(basePath, deletePath, tmpDir string) error {
 
 		tmpPath := pathJoin(tmpDir, mustGetUUID())
 
-		fsRenameFile(deletePath, tmpPath)
+		fsRenameFile(ctx, deletePath, tmpPath)
 
 		// Proceed to deleting the directory if empty
-		fsDeleteFile(basePath, pathutil.Dir(deletePath))
+		fsDeleteFile(ctx, basePath, pathutil.Dir(deletePath))
 
 		// Finally delete the renamed file.
-		return fsDeleteFile(tmpDir, tmpPath)
+		return fsDeleteFile(ctx, tmpDir, tmpPath)
 	}
-	return fsDeleteFile(basePath, deletePath)
+	return fsDeleteFile(ctx, basePath, deletePath)
 }

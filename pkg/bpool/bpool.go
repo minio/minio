@@ -1,5 +1,11 @@
+// Original work https://github.com/oxtoacart/bpool borrowed
+// only bpool.go licensed under Apache 2.0.
+
+// This file modifies original bpool.go to add one more option
+// to provide []byte capacity for better GC management.
+
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage (C) 2018 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,56 +20,58 @@
  * limitations under the License.
  */
 
-// Package bpool implements a fixed size pool of byte slices.
 package bpool
 
-import (
-	"errors"
-	"sync"
-)
-
-// ErrBpoolNoFree - Normally this error should never be returned, this error
-// indicates a bug in the package consumer.
-var ErrBpoolNoFree = errors.New("no free byte slice in pool")
-
-// BytePool - temporary pool of byte slices.
-type BytePool struct {
-	buf  [][]byte // array of byte slices
-	used []bool   // indicates if a buf[i] is in use
-	size int64    // size of buf[i]
-	mu   sync.Mutex
+// BytePoolCap implements a leaky pool of []byte in the form of a bounded channel.
+type BytePoolCap struct {
+	c    chan []byte
+	w    int
+	wcap int
 }
 
-// Get - Returns an unused byte slice.
-func (b *BytePool) Get() (buf []byte, err error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i := 0; i < len(b.used); i++ {
-		if !b.used[i] {
-			b.used[i] = true
-			if b.buf[i] == nil {
-				b.buf[i] = make([]byte, b.size)
-			}
-			return b.buf[i], nil
+// NewBytePoolCap creates a new BytePool bounded to the given maxSize, with new
+// byte arrays sized based on width.
+func NewBytePoolCap(maxSize int, width int, capwidth int) (bp *BytePoolCap) {
+	return &BytePoolCap{
+		c:    make(chan []byte, maxSize),
+		w:    width,
+		wcap: capwidth,
+	}
+}
+
+// Get gets a []byte from the BytePool, or creates a new one if none are
+// available in the pool.
+func (bp *BytePoolCap) Get() (b []byte) {
+	select {
+	case b = <-bp.c:
+	// reuse existing buffer
+	default:
+		// create new buffer
+		if bp.wcap > 0 {
+			b = make([]byte, bp.w, bp.wcap)
+		} else {
+			b = make([]byte, bp.w)
 		}
 	}
-	return nil, ErrBpoolNoFree
+	return
 }
 
-// Reset - Marks all slices as unused.
-func (b *BytePool) Reset() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for i := 0; i < len(b.used); i++ {
-		b.used[i] = false
+// Put returns the given Buffer to the BytePool.
+func (bp *BytePoolCap) Put(b []byte) {
+	select {
+	case bp.c <- b:
+		// buffer went back into pool
+	default:
+		// buffer didn't go back into pool, just discard
 	}
 }
 
-// NewBytePool - Returns new pool.
-// size - length of each slice.
-// n - number of slices in the pool.
-func NewBytePool(size int64, n int) *BytePool {
-	used := make([]bool, n)
-	buf := make([][]byte, n)
-	return &BytePool{buf, used, size, sync.Mutex{}}
+// Width returns the width of the byte arrays in this pool.
+func (bp *BytePoolCap) Width() (n int) {
+	return bp.w
+}
+
+// WidthCap returns the cap width of the byte arrays in this pool.
+func (bp *BytePoolCap) WidthCap() (n int) {
+	return bp.wcap
 }

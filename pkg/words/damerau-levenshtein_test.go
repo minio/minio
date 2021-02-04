@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ func TestMinimum(t *testing.T) {
 	type testCase struct {
 		listval  []int
 		expected int
-		pass     bool
 	}
 	testCases := []testCase{
 		{listval: []int{3, 4, 15}, expected: 3},

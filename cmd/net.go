@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,17 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
-	"os"
+	"net/url"
 	"sort"
-	"strconv"
-	"syscall"
+	"strings"
 
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/cmd/config"
+	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 // IPv4 addresses of local host.
@@ -32,16 +35,18 @@ var localIP4 = mustGetLocalIP4()
 
 // mustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
 func mustSplitHostPort(hostPort string) (host, port string) {
-	host, port, err := net.SplitHostPort(hostPort)
-	fatalIf(err, "Unable to split host port %s", hostPort)
-	return host, port
+	xh, err := xnet.ParseHost(hostPort)
+	if err != nil {
+		logger.FatalIf(err, "Unable to split host port %s", hostPort)
+	}
+	return xh.Name, xh.Port.String()
 }
 
-// mustGetLocalIP4 returns IPv4 addresses of local host.  It panics on error.
+// mustGetLocalIP4 returns IPv4 addresses of localhost.  It panics on error.
 func mustGetLocalIP4() (ipList set.StringSet) {
 	ipList = set.NewStringSet()
 	addrs, err := net.InterfaceAddrs()
-	fatalIf(err, "Unable to get IP addresses of this host.")
+	logger.FatalIf(err, "Unable to get IP addresses of this host")
 
 	for _, addr := range addrs {
 		var ip net.IP
@@ -60,18 +65,40 @@ func mustGetLocalIP4() (ipList set.StringSet) {
 	return ipList
 }
 
-// getHostIP4 returns IPv4 address of given host.
-func getHostIP4(host string) (ipList set.StringSet, err error) {
+// mustGetLocalIP6 returns IPv6 addresses of localhost.  It panics on error.
+func mustGetLocalIP6() (ipList set.StringSet) {
 	ipList = set.NewStringSet()
-	ips, err := net.LookupIP(host)
-	if err != nil {
+	addrs, err := net.InterfaceAddrs()
+	logger.FatalIf(err, "Unable to get IP addresses of this host")
+
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+
+		if ip.To4() == nil {
+			ipList.Add(ip.String())
+		}
+	}
+
+	return ipList
+}
+
+// getHostIP returns IP address of given host.
+func getHostIP(host string) (ipList set.StringSet, err error) {
+	var ips []net.IP
+
+	if ips, err = net.LookupIP(host); err != nil {
 		return ipList, err
 	}
 
+	ipList = set.NewStringSet()
 	for _, ip := range ips {
-		if ip.To4() != nil {
-			ipList.Add(ip.String())
-		}
+		ipList.Add(ip.String())
 	}
 
 	return ipList, err
@@ -87,10 +114,10 @@ func (n byLastOctetValue) Less(i, j int) bool {
 	// This case is needed when all ips in the list
 	// have same last octets, Following just ensures that
 	// 127.0.0.1 is moved to the end of the list.
-	if n[i].String() == "127.0.0.1" {
+	if n[i].IsLoopback() {
 		return false
 	}
-	if n[j].String() == "127.0.0.1" {
+	if n[j].IsLoopback() {
 		return true
 	}
 	return []byte(n[i].To4())[3] > []byte(n[j].To4())[3]
@@ -128,87 +155,201 @@ func sortIPs(ipList []string) []string {
 	return append(nonIPs, ips...)
 }
 
-func getAPIEndpoints(serverAddr string) (apiEndpoints []string) {
-	host, port := mustSplitHostPort(serverAddr)
-
+func getAPIEndpoints() (apiEndpoints []string) {
 	var ipList []string
-	if host == "" {
-		ipList = sortIPs(localIP4.ToSlice())
+	if globalMinioHost == "" {
+		ipList = sortIPs(mustGetLocalIP4().ToSlice())
+		ipList = append(ipList, mustGetLocalIP6().ToSlice()...)
 	} else {
-		ipList = []string{host}
-	}
-
-	scheme := httpScheme
-	if globalIsSSL {
-		scheme = httpsScheme
+		ipList = []string{globalMinioHost}
 	}
 
 	for _, ip := range ipList {
-		apiEndpoints = append(apiEndpoints, fmt.Sprintf("%s://%s:%s", scheme, ip, port))
+		endpoint := fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(ip, globalMinioPort))
+		apiEndpoints = append(apiEndpoints, endpoint)
 	}
 
 	return apiEndpoints
 }
 
-// checkPortAvailability - check if given port is already in use.
+// isHostIP - helper for validating if the provided arg is an ip address.
+func isHostIP(ipAddress string) bool {
+	host, _, err := net.SplitHostPort(ipAddress)
+	if err != nil {
+		host = ipAddress
+	}
+	// Strip off IPv6 zone information.
+	if i := strings.Index(host, "%"); i > -1 {
+		host = host[:i]
+	}
+	return net.ParseIP(host) != nil
+}
+
+// checkPortAvailability - check if given host and port is already in use.
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
-func checkPortAvailability(port string) (err error) {
-	// Return true if err is "address already in use" error.
-	isAddrInUseErr := func(err error) (b bool) {
-		if opErr, ok := err.(*net.OpError); ok {
-			if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
-				if errno, ok := sysErr.Err.(syscall.Errno); ok {
-					b = (errno == syscall.EADDRINUSE)
-				}
-			}
-		}
+func checkPortAvailability(host, port string) (err error) {
+	l, err := net.Listen("tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		return err
+	}
+	// As we are able to listen on this network, the port is not in use.
+	// Close the listener and continue check other networks.
+	return l.Close()
+}
 
-		return b
+// extractHostPort - extracts host/port from many address formats
+// such as, ":9000", "localhost:9000", "http://localhost:9000/"
+func extractHostPort(hostAddr string) (string, string, error) {
+	var addr, scheme string
+
+	if hostAddr == "" {
+		return "", "", errors.New("unable to process empty address")
 	}
 
-	network := []string{"tcp", "tcp4", "tcp6"}
-	for _, n := range network {
-		l, err := net.Listen(n, net.JoinHostPort("", port))
-		if err == nil {
-			// As we are able to listen on this network, the port is not in use.
-			// Close the listener and continue check other networks.
-			if err = l.Close(); err != nil {
-				return err
-			}
-		} else if isAddrInUseErr(err) {
-			// As we got EADDRINUSE error, the port is in use by other process.
-			// Return the error.
-			return err
+	// Simplify the work of url.Parse() and always send a url with
+	if !strings.HasPrefix(hostAddr, "http://") && !strings.HasPrefix(hostAddr, "https://") {
+		hostAddr = "//" + hostAddr
+	}
+
+	// Parse address to extract host and scheme field
+	u, err := url.Parse(hostAddr)
+	if err != nil {
+		return "", "", err
+	}
+
+	addr = u.Host
+	scheme = u.Scheme
+
+	// Use the given parameter again if url.Parse()
+	// didn't return any useful result.
+	if addr == "" {
+		addr = hostAddr
+		scheme = "http"
+	}
+
+	// At this point, addr can be one of the following form:
+	//	":9000"
+	//	"localhost:9000"
+	//	"localhost" <- in this case, we check for scheme
+
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		if !strings.Contains(err.Error(), "missing port in address") {
+			return "", "", err
+		}
+
+		host = addr
+
+		switch scheme {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		default:
+			return "", "", errors.New("unable to guess port from scheme")
 		}
 	}
 
-	return nil
+	return host, port, nil
+}
+
+// isLocalHost - checks if the given parameter
+// correspond to one of the local IP of the
+// current machine
+func isLocalHost(host string, port string, localPort string) (bool, error) {
+	hostIPs, err := getHostIP(host)
+	if err != nil {
+		return false, err
+	}
+
+	nonInterIPV4s := mustGetLocalIP4().Intersection(hostIPs)
+	if nonInterIPV4s.IsEmpty() {
+		hostIPs = hostIPs.ApplyFunc(func(ip string) string {
+			if net.ParseIP(ip).IsLoopback() {
+				// Any loopback IP which is not 127.0.0.1
+				// convert it to check for intersections.
+				return "127.0.0.1"
+			}
+			return ip
+		})
+		nonInterIPV4s = mustGetLocalIP4().Intersection(hostIPs)
+	}
+	nonInterIPV6s := mustGetLocalIP6().Intersection(hostIPs)
+
+	// If intersection of two IP sets is not empty, then the host is localhost.
+	isLocalv4 := !nonInterIPV4s.IsEmpty()
+	isLocalv6 := !nonInterIPV6s.IsEmpty()
+	if port != "" {
+		return (isLocalv4 || isLocalv6) && (port == localPort), nil
+	}
+	return isLocalv4 || isLocalv6, nil
+}
+
+// sameLocalAddrs - returns true if two addresses, even with different
+// formats, point to the same machine, e.g:
+//  ':9000' and 'http://localhost:9000/' will return true
+func sameLocalAddrs(addr1, addr2 string) (bool, error) {
+
+	// Extract host & port from given parameters
+	host1, port1, err := extractHostPort(addr1)
+	if err != nil {
+		return false, err
+	}
+	host2, port2, err := extractHostPort(addr2)
+	if err != nil {
+		return false, err
+	}
+
+	var addr1Local, addr2Local bool
+
+	if host1 == "" {
+		// If empty host means it is localhost
+		addr1Local = true
+	} else {
+		// Host not empty, check if it is local
+		if addr1Local, err = isLocalHost(host1, port1, port1); err != nil {
+			return false, err
+		}
+	}
+
+	if host2 == "" {
+		// If empty host means it is localhost
+		addr2Local = true
+	} else {
+		// Host not empty, check if it is local
+		if addr2Local, err = isLocalHost(host2, port2, port2); err != nil {
+			return false, err
+		}
+	}
+
+	// If both of addresses point to the same machine, check if
+	// have the same port
+	if addr1Local && addr2Local {
+		if port1 == port2 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // CheckLocalServerAddr - checks if serverAddr is valid and local host.
 func CheckLocalServerAddr(serverAddr string) error {
-	host, port, err := net.SplitHostPort(serverAddr)
+	host, err := xnet.ParseHost(serverAddr)
 	if err != nil {
-		return err
+		return config.ErrInvalidAddressFlag(err)
 	}
 
-	// Check whether port is a valid port number.
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return fmt.Errorf("invalid port number")
-	} else if p < 1 || p > 65535 {
-		return fmt.Errorf("port number must be between 1 to 65535")
-	}
-
-	if host != "" {
-		hostIPs, err := getHostIP4(host)
+	// 0.0.0.0 is a wildcard address and refers to local network
+	// addresses. I.e, 0.0.0.0:9000 like ":9000" refers to port
+	// 9000 on localhost.
+	if host.Name != "" && host.Name != net.IPv4zero.String() && host.Name != net.IPv6zero.String() {
+		localHost, err := isLocalHost(host.Name, host.Port.String(), host.Port.String())
 		if err != nil {
 			return err
 		}
-
-		if localIP4.Intersection(hostIPs).IsEmpty() {
-			return fmt.Errorf("host in server address should be this server")
+		if !localHost {
+			return config.ErrInvalidAddressFlag(nil).Msg("host in server address should be this server")
 		}
 	}
 

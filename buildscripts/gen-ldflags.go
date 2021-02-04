@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2015 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,13 @@ import (
 )
 
 func genLDFlags(version string) string {
-	var ldflagsStr string
-	ldflagsStr = "-X github.com/minio/minio/cmd.Version=" + version
+	ldflagsStr := "-s -w"
+	ldflagsStr += " -X github.com/minio/minio/cmd.Version=" + version
 	ldflagsStr += " -X github.com/minio/minio/cmd.ReleaseTag=" + releaseTag(version)
 	ldflagsStr += " -X github.com/minio/minio/cmd.CommitID=" + commitID()
 	ldflagsStr += " -X github.com/minio/minio/cmd.ShortCommitID=" + commitID()[:12]
 	ldflagsStr += " -X github.com/minio/minio/cmd.GOPATH=" + os.Getenv("GOPATH")
+	ldflagsStr += " -X github.com/minio/minio/cmd.GOROOT=" + os.Getenv("GOROOT")
 	return ldflagsStr
 }
 
@@ -43,10 +44,21 @@ func releaseTag(version string) string {
 		relPrefix = prefix
 	}
 
+	relSuffix := ""
+	if hotfix := os.Getenv("MINIO_HOTFIX"); hotfix != "" {
+		relSuffix = hotfix
+	}
+
 	relTag := strings.Replace(version, " ", "-", -1)
 	relTag = strings.Replace(relTag, ":", "-", -1)
 	relTag = strings.Replace(relTag, ",", "", -1)
-	return relPrefix + "." + relTag
+	relTag = relPrefix + "." + relTag
+
+	if relSuffix != "" {
+		relTag += "." + relSuffix
+	}
+
+	return relTag
 }
 
 // commitID returns the abbreviated commit-id hash of the last commit.
@@ -67,5 +79,12 @@ func commitID() string {
 }
 
 func main() {
-	fmt.Println(genLDFlags(time.Now().UTC().Format(time.RFC3339)))
+	var version string
+	if len(os.Args) > 1 {
+		version = os.Args[1]
+	} else {
+		version = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	fmt.Println(genLDFlags(version))
 }

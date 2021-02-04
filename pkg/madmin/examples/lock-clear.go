@@ -1,7 +1,7 @@
 // +build ignore
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -30,8 +31,8 @@ func main() {
 	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
 	// dummy values, please replace them with original values.
 
-	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
-	// New returns an Minio Admin client object.
+	// API requests are secure (HTTPS) if secure=true and insecure (HTTP) otherwise.
+	// New returns an MinIO Admin client object.
 	madmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETACCESSKEY", true)
 	if err != nil {
 		log.Fatalln(err)
@@ -39,7 +40,7 @@ func main() {
 
 	// Clear locks held on mybucket/myprefix for longer than 30s.
 	olderThan := time.Duration(30 * time.Second)
-	locksCleared, err := madmClnt.ClearLocks("mybucket", "myprefix", olderThan)
+	locksCleared, err := madmClnt.ClearLocks(context.Background(), "mybucket", "myprefix", olderThan)
 	if err != nil {
 		log.Fatalln(err)
 	}

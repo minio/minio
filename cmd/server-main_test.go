@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,15 @@
 package cmd
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
 
 // Tests initializing new object layer.
 func TestNewObjectLayer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	// Tests for FS object layer.
 	nDisks := 1
 	disks, err := getRandomDisks(nDisks)
@@ -31,17 +34,16 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	endpoints := mustGetNewEndpointList(disks...)
-	obj, err := newObjectLayer(endpoints)
+	obj, err := newObjectLayer(ctx, mustGetPoolEndpoints(disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
-	_, ok := obj.(*fsObjects)
+	_, ok := obj.(*FSObjects)
 	if !ok {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}
 
-	// Tests for XL object layer initialization.
+	// Tests for Erasure object layer initialization.
 
 	// Create temporary backend for the test server.
 	nDisks = 16
@@ -51,13 +53,12 @@ func TestNewObjectLayer(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
-	endpoints = mustGetNewEndpointList(disks...)
-	obj, err = newObjectLayer(endpoints)
+	obj, err = newObjectLayer(ctx, mustGetPoolEndpoints(disks...))
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
 
-	_, ok = obj.(*xlObjects)
+	_, ok = obj.(*erasureServerPools)
 	if !ok {
 		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
 	}

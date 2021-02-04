@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * MinIO Cloud Storage, (C) 2016, 2017 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,37 @@
 
 package cmd
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 // Test printing Gateway common message.
 func TestPrintGatewayCommonMessage(t *testing.T) {
-	apiEndpoints := []string{"127.0.0.1:9000"}
-	printGatewayCommonMsg(apiEndpoints, "abcd1", "abcd123")
+	obj, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
+
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
+	printGatewayCommonMsg(apiEndpoints)
 }
 
 // Test print gateway startup message.
 func TestPrintGatewayStartupMessage(t *testing.T) {
-	apiEndpoints := []string{"127.0.0.1:9000"}
-	printGatewayStartupMessage(apiEndpoints, "abcd1", "abcd123", "azure")
+	obj, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(fsDir)
+	if err = newTestConfig(globalMinioDefaultRegion, obj); err != nil {
+		t.Fatal(err)
+	}
+
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
+	printGatewayStartupMessage(apiEndpoints, "azure")
 }

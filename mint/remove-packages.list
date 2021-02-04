@@ -1,0 +1,8 @@
+wget
+git
+python3-pip
+ruby-dev
+ruby-bundler
+openjdk-8-jdk
+ant
+dotnet
