@@ -365,7 +365,7 @@ func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object 
 
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, s, d minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	cpSrcDstSame := strings.EqualFold(path.Join(srcBucket, srcObject), path.Join(dstBucket, dstObject))
+	cpSrcDstSame := path.Join(srcBucket, srcObject) == path.Join(dstBucket, dstObject)
 	if cpSrcDstSame {
 		var gwMeta gwMetaV1
 		if s.ServerSideEncryption != nil && d.ServerSideEncryption != nil &&

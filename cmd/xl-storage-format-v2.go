@@ -363,10 +363,10 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		Deleted:   true,
 	}
 	for k, v := range j.MetaSys {
-		if strings.EqualFold(k, xhttp.AmzBucketReplicationStatus) {
+		switch {
+		case equals(k, xhttp.AmzBucketReplicationStatus):
 			fi.DeleteMarkerReplicationStatus = string(v)
-		}
-		if strings.EqualFold(k, VersionPurgeStatusKey) {
+		case equals(k, VersionPurgeStatusKey):
 			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
 		}
 	}
@@ -408,20 +408,19 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 	fi.Metadata = make(map[string]string, len(j.MetaUser)+len(j.MetaSys))
 	for k, v := range j.MetaUser {
 		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
 
 		fi.Metadata[k] = v
 	}
 	for k, v := range j.MetaSys {
-		if strings.EqualFold(strings.ToLower(k), ReservedMetadataPrefixLower+"transition-status") {
+		switch {
+		case equals(k, ReservedMetadataPrefixLower+"transition-status"):
 			fi.TransitionStatus = string(v)
-		}
-		if strings.EqualFold(k, VersionPurgeStatusKey) {
+		case equals(k, VersionPurgeStatusKey):
 			fi.VersionPurgeStatus = VersionPurgeStatusType(string(v))
-		}
-		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
+		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower):
 			fi.Metadata[k] = string(v)
 		}
 	}
