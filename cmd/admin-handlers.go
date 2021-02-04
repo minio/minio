@@ -1043,6 +1043,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusConflict,
 			}
+		case errors.Is(err, errWarmBackendInUse):
+			apiErr = APIError{
+				Code:           "XMinioWarmBackendInUse",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusConflict,
+			}
 		default:
 			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}

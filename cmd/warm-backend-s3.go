@@ -15,6 +15,7 @@ import (
 
 type warmBackendS3 struct {
 	client       *minio.Client
+	core         *minio.Core
 	Bucket       string
 	Prefix       string
 	StorageClass string
@@ -48,6 +49,17 @@ func (s3 *warmBackendS3) Remove(ctx context.Context, object string) error {
 	return s3.client.RemoveObject(ctx, s3.Bucket, s3.getDest(object), minio.RemoveObjectOptions{})
 }
 
+func (s3 *warmBackendS3) InUse(ctx context.Context) (bool, error) {
+	result, err := s3.core.ListObjectsV2(s3.Bucket, s3.Prefix, "", false, "/", 1)
+	if err != nil {
+		return false, err
+	}
+	if len(result.CommonPrefixes) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
 func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 	u, err := url.Parse(conf.Endpoint)
 	if err != nil {
@@ -66,8 +78,13 @@ func newWarmBackendS3(conf madmin.TierS3) (*warmBackendS3, error) {
 	if err != nil {
 		return nil, err
 	}
+	core, err := minio.NewCore(u.Host, opts)
+	if err != nil {
+		return nil, err
+	}
 	return &warmBackendS3{
 		client:       client,
+		core:         core,
 		Bucket:       conf.Bucket,
 		Prefix:       strings.TrimSuffix(conf.Prefix, slashSeparator),
 		StorageClass: conf.StorageClass,
