@@ -259,13 +259,15 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 	for i, pool := range z.serverPools {
 		objInfo, err := pool.GetObjectInfo(ctx, bucket, object, opts)
 		switch err.(type) {
+		case VersionNotFound:
+			// VersionId not found, versionId was specified
 		case ObjectNotFound:
 			// VersionId was not specified but found delete marker or no versions exist.
 		case MethodNotAllowed:
 			// VersionId was specified but found delete marker
 		default:
+			// All other unhandled errors return right here.
 			if err != nil {
-				// any other un-handled errors return right here.
 				return -1, err
 			}
 		}
@@ -531,6 +533,13 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		}
 		return gr, nil
 	}
+	if isProxyable(ctx, bucket) {
+		// proxy to replication target if active-active replication is in place.
+		reader, proxy := proxyGetToReplicationTarget(ctx, bucket, object, rs, h, opts)
+		if reader != nil && proxy {
+			return reader, nil
+		}
+	}
 	if opts.VersionID != "" {
 		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -576,6 +585,13 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 		return objInfo, nil
 	}
 	object = decodeDirObject(object)
+	// proxy HEAD to replication target if active-active replication configured on bucket
+	if isProxyable(ctx, bucket) {
+		oi, proxy, err := proxyHeadToReplicationTarget(ctx, bucket, object, opts)
+		if proxy {
+			return oi, err
+		}
+	}
 	if opts.VersionID != "" {
 		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}

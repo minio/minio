@@ -265,19 +265,17 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsEncrypted(objInfo.UserDefined) {
-			switch {
-			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				// Validate the SSE-C Key set in the header.
-				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
-					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-					return
-				}
-				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+		switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
+		case crypto.S3:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.SSEC:
+			// Validate the SSE-C Key set in the header.
+			if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
 			}
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
 	}
 
@@ -450,14 +448,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsEncrypted(objInfo.UserDefined) {
-			switch {
-			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
-			}
+		switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
+		case crypto.S3:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.SSEC:
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
 	}
 
@@ -654,19 +650,17 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set encryption response headers
 	if objectAPI.IsEncryptionSupported() {
-		if crypto.IsEncrypted(objInfo.UserDefined) {
-			switch {
-			case crypto.S3.IsEncrypted(objInfo.UserDefined):
-				w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
-				// Validate the SSE-C Key set in the header.
-				if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
-					writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-					return
-				}
-				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-				w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+		switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
+		case crypto.S3:
+			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		case crypto.SSEC:
+			// Validate the SSE-C Key set in the header.
+			if _, err = crypto.SSEC.UnsealObjectKey(r.Header, objInfo.UserDefined, bucket, object); err != nil {
+				writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+				return
 			}
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
 	}
 
@@ -1047,7 +1041,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		// Encryption parameters not applicable for this object.
-		if !crypto.IsEncrypted(srcInfo.UserDefined) && crypto.SSECopy.IsRequested(r.Header) {
+		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); ok && crypto.SSECopy.IsRequested(r.Header) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -1290,7 +1284,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
-		scheduleReplication(ctx, objInfo, objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
 
 	setPutObjHeaders(w, objInfo, false)
@@ -1584,13 +1578,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	switch {
-	case crypto.IsEncrypted(objInfo.UserDefined):
-		switch {
-		case crypto.S3.IsEncrypted(objInfo.UserDefined):
+	switch kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); {
+	case encrypted:
+		switch kind {
+		case crypto.S3:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
 			objInfo.ETag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: objInfo.ETag})
-		case crypto.SSEC.IsEncrypted(objInfo.UserDefined):
+		case crypto.SSEC:
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 
@@ -1604,7 +1598,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
-		scheduleReplication(ctx, objInfo, objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
 	setPutObjHeaders(w, objInfo, false)
 
@@ -1912,7 +1906,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	srcInfo := gr.ObjInfo
 
 	actualPartSize := srcInfo.Size
-	if crypto.IsEncrypted(srcInfo.UserDefined) {
+	if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); ok {
 		actualPartSize, err = srcInfo.GetActualSize()
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -2010,7 +2004,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	rawReader := srcInfo.Reader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
-	isEncrypted := crypto.IsEncrypted(mi.UserDefined)
+	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() && isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
@@ -2250,7 +2244,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader, nil, nil)
 
-	isEncrypted := crypto.IsEncrypted(mi.UserDefined)
+	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
 	if objectAPI.IsEncryptionSupported() && isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
@@ -2416,7 +2410,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	}
 
 	var ssec bool
-	if objectAPI.IsEncryptionSupported() && crypto.IsEncrypted(listPartsInfo.UserDefined) {
+	if _, ok := crypto.IsEncrypted(listPartsInfo.UserDefined); ok && objectAPI.IsEncryptionSupported() {
 		var key []byte
 		if crypto.SSEC.IsEncrypted(listPartsInfo.UserDefined) {
 			ssec = true
@@ -2580,7 +2574,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		if crypto.IsEncrypted(mi.UserDefined) {
+		if _, ok := crypto.IsEncrypted(mi.UserDefined); ok {
 			var key []byte
 			isEncrypted = true
 			ssec = crypto.SSEC.IsEncrypted(mi.UserDefined)
@@ -2683,7 +2677,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	setPutObjHeaders(w, objInfo, false)
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
-		scheduleReplication(ctx, objInfo, objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
 
 	// Write success response.
@@ -2936,10 +2930,11 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 	if replicate {
-		scheduleReplication(ctx, objInfo, objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
 	writeSuccessResponseHeadersOnly(w)
-	// Notify object  event.
+
+	// Notify object event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPutLegalHold,
 		BucketName:   bucket,
@@ -3108,7 +3103,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 	if replicate {
-		scheduleReplication(ctx, objInfo, objectAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
 
 	writeSuccessNoContent(w)
@@ -3291,7 +3286,7 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 	}
 
 	if replicate {
-		scheduleReplication(ctx, objInfo, objAPI, sync)
+		scheduleReplication(ctx, objInfo.Clone(), objAPI, sync)
 	}
 
 	if objInfo.VersionID != "" {
@@ -3346,6 +3341,7 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	oi, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
@@ -3357,14 +3353,14 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		opts.UserDefined[xhttp.AmzBucketReplicationStatus] = replication.Pending.String()
 	}
 
-	if _, err = objAPI.DeleteObjectTags(ctx, bucket, object, opts); err != nil {
+	oi, err = objAPI.DeleteObjectTags(ctx, bucket, object, opts)
+	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	oi.UserTags = ""
 
 	if replicate {
-		scheduleReplication(ctx, oi, objAPI, sync)
+		scheduleReplication(ctx, oi.Clone(), objAPI, sync)
 	}
 
 	if oi.VersionID != "" {

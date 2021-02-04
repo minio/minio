@@ -62,12 +62,6 @@ func (sses3) IsEncrypted(metadata map[string]string) bool {
 	if _, ok := metadata[MetaSealedKeyS3]; ok {
 		return true
 	}
-	if _, ok := metadata[MetaKeyID]; ok {
-		return true
-	}
-	if _, ok := metadata[MetaDataEncryptionKey]; ok {
-		return true
-	}
 	return false
 }
 

@@ -404,7 +404,7 @@ func (o ObjectInfo) IsCompressedOK() (bool, error) {
 // GetActualETag - returns the actual etag of the stored object
 // decrypts SSE objects.
 func (o ObjectInfo) GetActualETag(h http.Header) string {
-	if !crypto.IsEncrypted(o.UserDefined) {
+	if _, ok := crypto.IsEncrypted(o.UserDefined); !ok {
 		return o.ETag
 	}
 	return getDecryptedETag(h, o, false)
@@ -423,7 +423,7 @@ func (o ObjectInfo) GetActualSize() (int64, error) {
 		}
 		return size, nil
 	}
-	if crypto.IsEncrypted(o.UserDefined) {
+	if _, ok := crypto.IsEncrypted(o.UserDefined); ok {
 		return o.DecryptedSize()
 	}
 
@@ -600,7 +600,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 		}
 	}()
 
-	isEncrypted := crypto.IsEncrypted(oi.UserDefined)
+	_, isEncrypted := crypto.IsEncrypted(oi.UserDefined)
 	isCompressed, err := oi.IsCompressedOK()
 	if err != nil {
 		return nil, 0, 0, err
