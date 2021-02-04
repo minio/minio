@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
+	ldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/minio/cmd/config"
 	"github.com/minio/minio/pkg/env"
-	ldap "gopkg.in/ldap.v3"
 )
 
 const (
