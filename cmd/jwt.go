@@ -32,10 +32,10 @@ const (
 	jwtAlgorithm = "Bearer"
 
 	// Default JWT token for web handlers is one day.
-	defaultJWTExpiry = 24 * time.Hour
+	defaultJWTExpiry = 5 * time.Minute
 
 	// Inter-node JWT token expiry is 15 minutes.
-	defaultInterNodeJWTExpiry = 15 * time.Minute
+	defaultInterNodeJWTExpiry = 5 * time.Minute
 
 	// URL JWT token expiry is one minute (might be exposed).
 	defaultURLJWTExpiry = time.Minute
