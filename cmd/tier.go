@@ -31,6 +31,8 @@ import (
 
 var TierConfigPath string = path.Join(minioConfigPrefix, "tier-config.json")
 
+var errTierInsufficientCreds = errors.New("insufficient tier credentials supplied")
+
 type TierConfigMgr struct {
 	sync.RWMutex
 	drivercache map[string]warmBackend
@@ -159,29 +161,37 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 	config.Lock()
 	defer config.Unlock()
 
-	// check if storage-class by this name exists
+	// check if tier by this name exists
 	var (
-		scType madmin.TierType
-		exists bool
+		tierType madmin.TierType
+		exists   bool
 	)
-	if scType, exists = config.isTierNameInUse(tierName); !exists {
+	if tierType, exists = config.isTierNameInUse(tierName); !exists {
 		return errTierNotFound
 	}
 
-	switch scType {
+	switch tierType {
 	case madmin.S3:
+		if creds.AccessKey == "" || creds.SecretKey == "" {
+			return errTierInsufficientCreds
+		}
 		sc := config.S3[tierName]
 		sc.AccessKey = creds.AccessKey
 		sc.SecretKey = creds.SecretKey
 		config.S3[tierName] = sc
 
 	case madmin.Azure:
+		if creds.AccessKey == "" || creds.SecretKey == "" {
+			return errTierInsufficientCreds
+		}
 		sc := config.Azure[tierName]
 		sc.AccountName = creds.AccessKey
 		sc.AccountKey = creds.SecretKey
 		config.Azure[tierName] = sc
-
 	case madmin.GCS:
+		if creds.CredsJSON == nil {
+			return errTierInsufficientCreds
+		}
 		sc := config.GCS[tierName]
 		sc.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
 		config.GCS[tierName] = sc
