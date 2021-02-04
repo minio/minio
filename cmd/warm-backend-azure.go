@@ -68,6 +68,21 @@ func (az *warmBackendAzure) Remove(ctx context.Context, object string) error {
 	return azureToObjectError(err, az.Bucket, object)
 }
 
+func (az *warmBackendAzure) InUse(ctx context.Context) (bool, error) {
+	containerURL := az.serviceURL.NewContainerURL(az.Bucket)
+	resp, err := containerURL.ListBlobsHierarchySegment(ctx, azblob.Marker{}, "/", azblob.ListBlobsSegmentOptions{
+		Prefix:     az.Prefix,
+		MaxResults: int32(1),
+	})
+	if err != nil {
+		return false, azureToObjectError(err, az.Bucket, az.Prefix)
+	}
+	if len(resp.Segment.BlobPrefixes) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
 func newWarmBackendAzure(conf madmin.TierAzure) (*warmBackendAzure, error) {
 	credential, err := azblob.NewSharedKeyCredential(conf.AccountName, conf.AccountKey)
 	if err != nil {
