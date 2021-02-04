@@ -38,6 +38,7 @@ func TestInvalidRules(t *testing.T) {
 		{ // Rule with empty ID
 			inputXML: `<Rule>
 							<ID></ID>
+							<Filter><Prefix></Prefix></Filter>
 							<Expiration>
 								<Days>365</Days>
 							</Expiration>

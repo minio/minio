@@ -25,72 +25,6 @@ import (
 )
 
 func TestParseAndValidateLifecycleConfig(t *testing.T) {
-	// Test for  lifecycle config with more than 1000 rules
-	var manyRules []Rule
-	for i := 0; i < 1001; i++ {
-		rule := Rule{
-			ID:         fmt.Sprintf("toManyRule%d", i),
-			Status:     "Enabled",
-			Expiration: Expiration{Days: ExpirationDays(i)},
-		}
-		manyRules = append(manyRules, rule)
-	}
-
-	manyRuleLcConfig, err := xml.Marshal(Lifecycle{Rules: manyRules})
-	if err != nil {
-		t.Fatal("Failed to marshal lifecycle config with more than 1000 rules")
-	}
-
-	// Test for lifecycle config with rules containing overlapping prefixes
-	rule1 := Rule{
-		ID:         "rule1",
-		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(3)},
-		Filter: Filter{
-			Prefix: "/a/b",
-		},
-	}
-	rule2 := Rule{
-		ID:         "rule2",
-		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(3)},
-		Filter: Filter{
-			And: And{
-				Prefix: "/a/b/c",
-			},
-		},
-	}
-	overlappingRules := []Rule{rule1, rule2}
-	overlappingLcConfig, err := xml.Marshal(Lifecycle{Rules: overlappingRules})
-	if err != nil {
-		t.Fatal("Failed to marshal lifecycle config with rules having overlapping prefix")
-	}
-
-	// Test for lifecycle rules with duplicate IDs
-	rule3 := Rule{
-		ID:         "duplicateID",
-		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(3)},
-		Filter: Filter{
-			Prefix: "/a/b",
-		},
-	}
-	rule4 := Rule{
-		ID:         "duplicateID",
-		Status:     "Enabled",
-		Expiration: Expiration{Days: ExpirationDays(4)},
-		Filter: Filter{
-			And: And{
-				Prefix: "/x/z",
-			},
-		},
-	}
-	duplicateIDRules := []Rule{rule3, rule4}
-	duplicateIDLcConfig, err := xml.Marshal(Lifecycle{Rules: duplicateIDRules})
-	if err != nil {
-		t.Fatal("Failed to marshal lifecycle config of rules with duplicate ID.")
-	}
-
 	testCases := []struct {
 		inputConfig           string
 		expectedParsingErr    error
@@ -136,20 +70,27 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: errLifecycleNoRule,
 		},
-		{ // lifecycle config with more than 1000 rules
-			inputConfig:           string(manyRuleLcConfig),
-			expectedParsingErr:    nil,
-			expectedValidationErr: errLifecycleTooManyRules,
-		},
 		{ // lifecycle config with rules having overlapping prefix
-			inputConfig:           string(overlappingLcConfig),
+			inputConfig:           `<LifecycleConfiguration><Rule><ID>rule1</ID><Status>Enabled</Status><Filter><Prefix>/a/b</Prefix></Filter><Expiration><Days>3</Days></Expiration></Rule><Rule><ID>rule2</ID><Status>Enabled</Status><Filter><And><Prefix>/a/b/c</Prefix><Tag><Key>key1</Key><Value>val1</Value></Tag></And></Filter><Expiration><Days>3</Days></Expiration></Rule></LifecycleConfiguration> `,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
 		{ // lifecycle config with rules having duplicate ID
-			inputConfig:           string(duplicateIDLcConfig),
+			inputConfig:           `<LifecycleConfiguration><Rule><ID>duplicateID</ID><Status>Enabled</Status><Filter><Prefix>/a/b</Prefix></Filter><Expiration><Days>3</Days></Expiration></Rule><Rule><ID>duplicateID</ID><Status>Enabled</Status><Filter><And><Prefix>/x/z</Prefix><Tag><Key>key1</Key><Value>val1</Value></Tag></And></Filter><Expiration><Days>4</Days></Expiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errLifecycleDuplicateID,
+		},
+		// Missing <Tag> in <And>
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>sample-rule-2</ID><Filter><And><Prefix>/a/b/c</Prefix></And></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errXMLNotWellFormed,
+		},
+		// Legitimate lifecycle
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Prefix /><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
 		},
 	}
 
@@ -181,17 +122,17 @@ func TestMarshalLifecycleConfig(t *testing.T) {
 		Rules: []Rule{
 			{
 				Status:     "Enabled",
-				Filter:     Filter{Prefix: "prefix-1"},
+				Filter:     Filter{Prefix: Prefix{string: "prefix-1", set: true}},
 				Expiration: Expiration{Days: ExpirationDays(3)},
 			},
 			{
 				Status:     "Enabled",
-				Filter:     Filter{Prefix: "prefix-1"},
+				Filter:     Filter{Prefix: Prefix{string: "prefix-1", set: true}},
 				Expiration: Expiration{Date: ExpirationDate(midnightTS)},
 			},
 			{
 				Status:                      "Enabled",
-				Filter:                      Filter{Prefix: "prefix-1"},
+				Filter:                      Filter{Prefix: Prefix{string: "prefix-1", set: true}},
 				Expiration:                  Expiration{Date: ExpirationDate(midnightTS)},
 				NoncurrentVersionTransition: NoncurrentVersionTransition{NoncurrentDays: 2, StorageClass: "TEST"},
 			},
