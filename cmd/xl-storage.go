@@ -974,9 +974,16 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 		}
 
 		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, s.isLeaf, s.isLeafDir, endWalkCh)
+		dirObjects := make(map[string]struct{})
 		for walkResult := range walkResultCh {
 			var fiv FileInfoVersions
 			if HasSuffix(walkResult.entry, SlashSeparator) {
+				_, dirObj := dirObjects[walkResult.entry]
+				if dirObj {
+					continue
+				}
+				dirObjects[walkResult.entry] = struct{}{}
+
 				fiv = FileInfoVersions{
 					Volume: volume,
 					Name:   walkResult.entry,
@@ -997,6 +1004,18 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 				fiv, err = getFileInfoVersions(xlMetaBuf, volume, walkResult.entry)
 				if err != nil {
 					continue
+				}
+				if HasSuffix(fiv.Name, globalDirSuffix) {
+					entry := strings.TrimSuffix(fiv.Name, globalDirSuffix) + slashSeparator
+					_, dirObj := dirObjects[entry]
+					if dirObj {
+						continue
+					}
+					if !recursive && len(fiv.Versions) >= 2 {
+						// Remove multiple versions for directory objects, in non-recursive
+						fiv.Versions = fiv.Versions[:1]
+					}
+					dirObjects[entry] = struct{}{}
 				}
 			}
 			select {
@@ -1059,14 +1078,20 @@ func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, re
 		}
 
 		walkResultCh := startTreeWalk(GlobalContext, volume, dirPath, marker, recursive, listDir, s.isLeaf, s.isLeafDir, endWalkCh)
+		dirObjects := make(map[string]struct{})
 		for walkResult := range walkResultCh {
 			var fi FileInfo
 			if HasSuffix(walkResult.entry, SlashSeparator) {
+				_, dirObj := dirObjects[walkResult.entry]
+				if dirObj {
+					continue
+				}
 				fi = FileInfo{
 					Volume: volume,
 					Name:   walkResult.entry,
 					Mode:   os.ModeDir,
 				}
+				dirObjects[walkResult.entry] = struct{}{}
 			} else {
 				var err error
 				var xlMetaBuf []byte
@@ -1081,6 +1106,13 @@ func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, re
 				if fi.Deleted {
 					// Ignore delete markers.
 					continue
+				}
+				if HasSuffix(fi.Name, globalDirSuffix) {
+					entry := strings.TrimSuffix(fi.Name, globalDirSuffix) + slashSeparator
+					if _, dirObj := dirObjects[entry]; dirObj {
+						continue
+					}
+					dirObjects[entry] = struct{}{}
 				}
 			}
 			select {

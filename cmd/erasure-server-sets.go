@@ -1155,7 +1155,7 @@ func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, se
 		serverSetsEntriesInfos = append(serverSetsEntriesInfos, make([]FileInfo, len(entryChs)))
 		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
-	var prevEntry string
+
 	for {
 		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
@@ -1168,17 +1168,12 @@ func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, se
 			continue
 		}
 
-		if HasSuffix(fi.Name, slashSeparator) && fi.Name == prevEntry {
-			continue
-		}
-
 		entries.Files = append(entries.Files, fi)
 		i++
 		if i == maxKeys {
 			entries.IsTruncated = isTruncatedServerSets(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 			break
 		}
-		prevEntry = fi.Name
 	}
 	return entries
 }
@@ -1319,15 +1314,11 @@ func (z *erasureServerSets) listObjectVersions(ctx context.Context, bucket, pref
 		loi.NextMarker = entries.FilesVersions[len(entries.FilesVersions)-1].Name
 	}
 
-	var prevPrefix string
 	for _, entry := range entries.FilesVersions {
 		for _, version := range entry.Versions {
 			objInfo := version.ToObjectInfo(bucket, entry.Name)
 			if HasSuffix(objInfo.Name, SlashSeparator) && !recursive {
-				if objInfo.Name != prevPrefix {
-					loi.Prefixes = append(loi.Prefixes, objInfo.Name)
-					prevPrefix = objInfo.Name
-				}
+				loi.Prefixes = append(loi.Prefixes, objInfo.Name)
 				continue
 			}
 			loi.Objects = append(loi.Objects, objInfo)
