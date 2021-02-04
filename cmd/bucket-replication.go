@@ -472,43 +472,62 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo) replicationActio
 				return replicateMetadata
 			}
 		}
-		if strings.Join(enc, "") != oi1.ContentEncoding {
-			return replicateMetadata
-		}
-	}
-
-	// Do not compare oi2.UserMetadata - it does not contain `x-amz-meta-` prefix.
-
-	// compare metadata on both maps to see if meta is identical
-	for k1, v1 := range oi1.UserDefined {
-		if v2, ok := oi2.Metadata[strings.ToLower(k1)]; ok && v1 == strings.Join(v2, "") {
-			continue
-		}
-		if v2, ok := oi2.Metadata[k1]; ok && v1 == strings.Join(v2, "") {
-			continue
-		}
-		return replicateMetadata
-	}
-
-	for k1, v1slc := range oi2.Metadata {
-		v1 := strings.Join(v1slc, "")
-		if equals(k1, xhttp.ContentEncoding, xhttp.ContentType, xhttp.AmzTagCount, xhttp.AmzStorageClass) {
-			continue
-		}
-		v2, ok := oi1.UserDefined[k1]
-		if !ok {
-			v2, ok = oi1.UserDefined[strings.ToLower(k1)]
-			if !ok {
-				return replicateMetadata
-			}
-		}
-		if v1 != v2 {
+		if strings.Join(enc, ",") != oi1.ContentEncoding {
 			return replicateMetadata
 		}
 	}
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
 	if !reflect.DeepEqual(oi2.UserTags, t.ToMap()) {
+		return replicateMetadata
+	}
+
+	// Compare only necessary headers
+	compareKeys := []string{
+		"Expires",
+		"Cache-Control",
+		"Content-Language",
+		"Content-Disposition",
+		"X-Amz-Storage-Class",
+		"X-Amz-Object-Lock-Mode",
+		"X-Amz-Object-Lock-Retain-Until-Date",
+		"X-Amz-Object-Lock-Legal-Hold",
+		"X-Amz-Website-Redirect-Location",
+		"X-Amz-Meta-",
+	}
+
+	// compare metadata on both maps to see if meta is identical
+	compareMeta1 := make(map[string]string)
+	for k, v := range oi1.UserDefined {
+		var found bool
+		for _, prefix := range compareKeys {
+			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+				continue
+			}
+			found = true
+			break
+		}
+		if found {
+			compareMeta1[strings.ToLower(k)] = v
+		}
+	}
+
+	compareMeta2 := make(map[string]string)
+	for k, v := range oi2.Metadata {
+		var found bool
+		for _, prefix := range compareKeys {
+			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(prefix)) {
+				continue
+			}
+			found = true
+			break
+		}
+		if found {
+			compareMeta1[strings.ToLower(k)] = strings.Join(v, ",")
+		}
+	}
+
+	if !reflect.DeepEqual(compareMeta1, compareMeta2) {
 		return replicateMetadata
 	}
 
