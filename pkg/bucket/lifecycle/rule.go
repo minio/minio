@@ -38,6 +38,7 @@ type Rule struct {
 	ID         string     `xml:"ID,omitempty"`
 	Status     Status     `xml:"Status"`
 	Filter     Filter     `xml:"Filter,omitempty"`
+	Prefix     Prefix     `xml:"Prefix,omitempty"`
 	Expiration Expiration `xml:"Expiration,omitempty"`
 	Transition Transition `xml:"Transition,omitempty"`
 	// FIXME: add a type to catch unsupported AbortIncompleteMultipartUpload AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
@@ -92,27 +93,44 @@ func (r Rule) validateStatus() error {
 	return nil
 }
 
-func (r Rule) validateAction() error {
+func (r Rule) validateExpiration() error {
 	return r.Expiration.Validate()
 }
 
-func (r Rule) validateFilter() error {
-	return r.Filter.Validate()
+func (r Rule) validateNoncurrentExpiration() error {
+	return r.NoncurrentVersionExpiration.Validate()
+}
+
+func (r Rule) validatePrefixAndFilter() error {
+	if !r.Prefix.set && r.Filter.IsEmpty() || r.Prefix.set && !r.Filter.IsEmpty() {
+		return errXMLNotWellFormed
+	}
+	if !r.Prefix.set {
+		return r.Filter.Validate()
+	}
+	return nil
 }
 
 func (r Rule) validateTransition() error {
 	return r.Transition.Validate()
 }
 
-// Prefix - a rule can either have prefix under <filter></filter> or under
-// <filter><and></and></filter>. This method returns the prefix from the
-// location where it is available
-func (r Rule) Prefix() string {
-	if r.Filter.Prefix != "" {
-		return r.Filter.Prefix
+func (r Rule) validateNoncurrentTransition() error {
+	return r.NoncurrentVersionTransition.Validate()
+}
+
+// GetPrefix - a rule can either have prefix under <rule></rule>, <filter></filter>
+// or under <filter><and></and></filter>. This method returns the prefix from the
+// location where it is available.
+func (r Rule) GetPrefix() string {
+	if p := r.Prefix.String(); p != "" {
+		return p
 	}
-	if r.Filter.And.Prefix != "" {
-		return r.Filter.And.Prefix
+	if p := r.Filter.Prefix.String(); p != "" {
+		return p
+	}
+	if p := r.Filter.And.Prefix.String(); p != "" {
+		return p
 	}
 	return ""
 }
@@ -145,14 +163,23 @@ func (r Rule) Validate() error {
 	if err := r.validateStatus(); err != nil {
 		return err
 	}
-	if err := r.validateAction(); err != nil {
+	if err := r.validateExpiration(); err != nil {
 		return err
 	}
-	if err := r.validateFilter(); err != nil {
+	if err := r.validateNoncurrentExpiration(); err != nil {
+		return err
+	}
+	if err := r.validatePrefixAndFilter(); err != nil {
 		return err
 	}
 	if err := r.validateTransition(); err != nil {
 		return err
+	}
+	if err := r.validateNoncurrentTransition(); err != nil {
+		return err
+	}
+	if !r.Expiration.set && !r.Transition.set && !r.NoncurrentVersionExpiration.set && !r.NoncurrentVersionTransition.set {
+		return errXMLNotWellFormed
 	}
 	return nil
 }

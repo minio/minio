@@ -20,22 +20,33 @@ import (
 	"encoding/xml"
 )
 
+var errDuplicateTagKey = Errorf("Duplicate Tag Keys are not allowed")
+
 // And - a tag to combine a prefix and multiple tags for lifecycle configuration rule.
 type And struct {
 	XMLName xml.Name `xml:"And"`
-	Prefix  string   `xml:"Prefix,omitempty"`
+	Prefix  Prefix   `xml:"Prefix,omitempty"`
 	Tags    []Tag    `xml:"Tag,omitempty"`
 }
 
-var errDuplicateTagKey = Errorf("Duplicate Tag Keys are not allowed")
-
 // isEmpty returns true if Tags field is null
 func (a And) isEmpty() bool {
-	return len(a.Tags) == 0 && a.Prefix == ""
+	return len(a.Tags) == 0 && !a.Prefix.set
 }
 
 // Validate - validates the And field
 func (a And) Validate() error {
+	emptyPrefix := !a.Prefix.set
+	emptyTags := len(a.Tags) == 0
+
+	if emptyPrefix && emptyTags {
+		return nil
+	}
+
+	if emptyPrefix && !emptyTags || !emptyPrefix && emptyTags {
+		return errXMLNotWellFormed
+	}
+
 	if a.ContainsDuplicateTag() {
 		return errDuplicateTagKey
 	}

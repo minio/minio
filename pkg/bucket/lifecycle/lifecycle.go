@@ -79,16 +79,16 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 			continue
 		}
 
-		if len(prefix) > 0 && len(rule.Filter.Prefix) > 0 {
+		if len(prefix) > 0 && len(rule.GetPrefix()) > 0 {
 			if !recursive {
 				// If not recursive, incoming prefix must be in rule prefix
-				if !strings.HasPrefix(prefix, rule.Filter.Prefix) {
+				if !strings.HasPrefix(prefix, rule.GetPrefix()) {
 					continue
 				}
 			}
 			if recursive {
 				// If recursive, we can skip this rule if it doesn't match the tested prefix.
-				if !strings.HasPrefix(prefix, rule.Filter.Prefix) && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
+				if !strings.HasPrefix(prefix, rule.GetPrefix()) && !strings.HasPrefix(rule.GetPrefix(), prefix) {
 					continue
 				}
 			}
@@ -167,7 +167,7 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 		if rule.Status == Disabled {
 			continue
 		}
-		if !strings.HasPrefix(obj.Name, rule.Prefix()) {
+		if !strings.HasPrefix(obj.Name, rule.GetPrefix()) {
 			continue
 		}
 		// Indicates whether MinIO will remove a delete marker with no
