@@ -434,7 +434,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 
 		// User DN search configuration
 		userDNSearchBaseDN := env.Get(EnvUserDNSearchBaseDN, kvs.Get(UserDNSearchBaseDN))
-		userDNSearchFilter := env.Get(EnvUserDNSearchFilter, kvs.Get(EnvUserDNSearchFilter))
+		userDNSearchFilter := env.Get(EnvUserDNSearchFilter, kvs.Get(UserDNSearchFilter))
 		if userDNSearchFilter == "" || userDNSearchBaseDN == "" {
 			return l, errors.New("In lookup bind mode, userDN search base DN and userDN search filter are both required")
 		}
