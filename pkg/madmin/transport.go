@@ -30,8 +30,9 @@ var DefaultTransport = func(secure bool) http.RoundTripper {
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 15 * time.Second,
+			Timeout:       5 * time.Second,
+			KeepAlive:     15 * time.Second,
+			FallbackDelay: 100 * time.Millisecond,
 		}).DialContext,
 		MaxIdleConns:          1024,
 		MaxIdleConnsPerHost:   1024,

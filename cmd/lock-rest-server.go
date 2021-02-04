@@ -302,7 +302,7 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 		for _, c := range lockers {
 			go func(lrip lockRequesterInfo, c dsync.NetLocker) {
 				defer wg.Done()
-				ctx, cancel := context.WithTimeout(GlobalContext, 3*time.Second)
+				ctx, cancel := context.WithTimeout(GlobalContext, 5*time.Second)
 
 				// Call back to all participating servers, verify
 				// if each of those servers think lock is still

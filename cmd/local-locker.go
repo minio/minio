@@ -258,7 +258,7 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 				ep := globalRemoteEndpoints[args.Owner]
 				if !ep.IsLocal {
 					// check if the owner is online
-					return isServerResolvable(ep, 250*time.Millisecond) != nil, nil
+					return isServerResolvable(ep, 1*time.Second) != nil, nil
 				}
 				return false, nil
 			}
