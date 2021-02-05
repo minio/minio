@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"path"
 	"sync"
 
@@ -238,7 +237,7 @@ func (config *TierConfigMgr) GetDriver(tierName string) (d warmBackend, err erro
 		return nil, err
 	}
 	if d == nil {
-		return nil, fmt.Errorf("No tier configured for %s", tierName)
+		return nil, errTierNotFound
 	}
 	config.drivercache[tierName] = d
 	return d, nil

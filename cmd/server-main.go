@@ -514,6 +514,7 @@ func serverMain(ctx *cli.Context) {
 	if globalIsErasure { // to be done after config init
 		initBackgroundReplication(GlobalContext, newObject)
 	}
+
 	loadGlobalTransitionTierConfig()
 
 	if globalCacheConfig.Enabled {
