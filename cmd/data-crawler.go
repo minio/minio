@@ -23,6 +23,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -84,16 +85,19 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 
 	// Load current bloom cycle
 	nextBloomCycle := intDataUpdateTracker.current() + 1
-	var buf bytes.Buffer
-	err := objAPI.GetObject(ctx, dataUsageBucket, dataUsageBloomName, 0, -1, &buf, "", ObjectOptions{})
+
+	br, err := objAPI.GetObjectNInfo(ctx, dataUsageBucket, dataUsageBloomName, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		if !isErrObjectNotFound(err) && !isErrBucketNotFound(err) {
 			logger.LogIf(ctx, err)
 		}
 	} else {
-		if buf.Len() == 8 {
-			nextBloomCycle = binary.LittleEndian.Uint64(buf.Bytes())
+		if br.ObjInfo.Size == 8 {
+			if err = binary.Read(br, binary.LittleEndian, &nextBloomCycle); err != nil {
+				logger.LogIf(ctx, err)
+			}
 		}
+		br.Close()
 	}
 
 	crawlTimer := time.NewTimer(dataCrawlStartDelay)
