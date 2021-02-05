@@ -68,6 +68,9 @@ func NewInternodeDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
+			// If zero, Go defaults to '300ms', we will default to 100ms instead.
+			// https://tools.ietf.org/html/rfc6555
+			FallbackDelay: 100 * time.Millisecond,
 			Control: func(network, address string, c syscall.RawConn) error {
 				return setInternalTCPParameters(c)
 			},
@@ -81,6 +84,9 @@ func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
+			// If zero, Go defaults to '300ms', we will default to 100ms instead.
+			// https://tools.ietf.org/html/rfc6555
+			FallbackDelay: 100 * time.Millisecond,
 			Control: func(network, address string, c syscall.RawConn) error {
 				return c.Control(func(fdPtr uintptr) {
 					// got socket file descriptor to set parameters.
