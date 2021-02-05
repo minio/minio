@@ -708,40 +708,40 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		return FileInfo{}, errFileNotFound
 	}
 
-	var i = -1
-	var version xlMetaV2Version
+	var foundIndex = -1
 
-findVersion:
-	for i, version = range orderedVersions {
-		switch version.Type {
+	for i := range orderedVersions {
+		switch orderedVersions[i].Type {
 		case ObjectType:
-			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
-				fi, err = version.ObjectV2.ToFileInfo(volume, path)
-				break findVersion
+			if bytes.Equal(orderedVersions[i].ObjectV2.VersionID[:], uv[:]) {
+				fi, err = orderedVersions[i].ObjectV2.ToFileInfo(volume, path)
+				foundIndex = i
+				break
 			}
 		case LegacyType:
-			if version.ObjectV1.VersionID == versionID {
-				fi, err = version.ObjectV1.ToFileInfo(volume, path)
-				break findVersion
+			if orderedVersions[i].ObjectV1.VersionID == versionID {
+				fi, err = orderedVersions[i].ObjectV1.ToFileInfo(volume, path)
+				foundIndex = i
+				break
 			}
 		case DeleteType:
-			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
-				fi, err = version.DeleteMarker.ToFileInfo(volume, path)
-				break findVersion
+			if bytes.Equal(orderedVersions[i].DeleteMarker.VersionID[:], uv[:]) {
+				fi, err = orderedVersions[i].DeleteMarker.ToFileInfo(volume, path)
+				foundIndex = i
+				break
 			}
 		}
 	}
-
 	if err != nil {
 		return fi, err
 	}
 
-	if i >= 0 {
+	if foundIndex >= 0 {
 		// A version is found, fill dynamic fields
-		fi.IsLatest = i == 0
+		fi.IsLatest = foundIndex == 0
 		fi.NumVersions = len(z.Versions)
-		if i > 0 {
-			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[i-1])
+		if foundIndex > 0 {
+			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[foundIndex-1])
 		}
 		return fi, nil
 	}
