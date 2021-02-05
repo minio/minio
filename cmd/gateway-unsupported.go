@@ -208,9 +208,9 @@ func (a GatewayUnsupported) GetMetrics(ctx context.Context) (*BackendMetrics, er
 }
 
 // PutObjectTags - not implemented.
-func (a GatewayUnsupported) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (a GatewayUnsupported) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
+	return ObjectInfo{}, NotImplemented{}
 }
 
 // GetObjectTags - not implemented.
@@ -220,9 +220,9 @@ func (a GatewayUnsupported) GetObjectTags(ctx context.Context, bucket, object st
 }
 
 // DeleteObjectTags - not implemented.
-func (a GatewayUnsupported) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (a GatewayUnsupported) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	logger.LogIf(ctx, NotImplemented{})
-	return NotImplemented{}
+	return ObjectInfo{}, NotImplemented{}
 }
 
 // IsNotificationSupported returns whether bucket notification is applicable for this layer.

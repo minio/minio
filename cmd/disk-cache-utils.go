@@ -173,7 +173,11 @@ func backendDownError(err error) bool {
 
 // IsCacheable returns if the object should be saved in the cache.
 func (o ObjectInfo) IsCacheable() bool {
-	return !crypto.IsEncrypted(o.UserDefined) || globalCacheKMS != nil
+	if globalCacheKMS != nil {
+		return true
+	}
+	_, ok := crypto.IsEncrypted(o.UserDefined)
+	return !ok
 }
 
 // reads file cached on disk from offset upto length

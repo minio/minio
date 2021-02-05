@@ -35,7 +35,7 @@ func TestUnsupportedFilters(t *testing.T) {
 							<Prefix>key-prefix</Prefix>
 						</And>
 						</Filter>`,
-			expectedErr: nil,
+			expectedErr: errXMLNotWellFormed,
 		},
 		{ // Filter with Tag tags
 			inputXML: ` <Filter>
@@ -85,6 +85,7 @@ func TestUnsupportedFilters(t *testing.T) {
 		{ // Filter with And and multiple Tag tags
 			inputXML: ` <Filter>
 							<And>
+							<Prefix></Prefix>
 							<Tag>
 								<Key>key1</Key>
 								<Value>value1</Value>

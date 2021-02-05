@@ -390,6 +390,16 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "Data")
 		return
 	}
+	z.NumVersions, err = dc.ReadInt()
+	if err != nil {
+		err = msgp.WrapError(err, "NumVersions")
+		return
+	}
+	z.SuccessorModTime, err = dc.ReadTime()
+	if err != nil {
+		err = msgp.WrapError(err, "SuccessorModTime")
+		return
+	}
 	return
 }
 
@@ -519,6 +529,16 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Data")
 		return
 	}
+	err = en.WriteInt(z.NumVersions)
+	if err != nil {
+		err = msgp.WrapError(err, "NumVersions")
+		return
+	}
+	err = en.WriteTime(z.SuccessorModTime)
+	if err != nil {
+		err = msgp.WrapError(err, "SuccessorModTime")
+		return
+	}
 	return
 }
 
@@ -562,6 +582,8 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.DeleteMarkerReplicationStatus)
 	o = msgp.AppendString(o, string(z.VersionPurgeStatus))
 	o = msgp.AppendBytes(o, z.Data)
+	o = msgp.AppendInt(o, z.NumVersions)
+	o = msgp.AppendTime(o, z.SuccessorModTime)
 	return
 }
 
@@ -718,6 +740,16 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Data")
 		return
 	}
+	z.NumVersions, bts, err = msgp.ReadIntBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "NumVersions")
+		return
+	}
+	z.SuccessorModTime, bts, err = msgp.ReadTimeBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "SuccessorModTime")
+		return
+	}
 	o = bts
 	return
 }
@@ -735,7 +767,7 @@ func (z *FileInfo) Msgsize() (s int) {
 	for za0003 := range z.Parts {
 		s += z.Parts[za0003].Msgsize()
 	}
-	s += z.Erasure.Msgsize() + msgp.BoolSize + msgp.StringPrefixSize + len(z.DeleteMarkerReplicationStatus) + msgp.StringPrefixSize + len(string(z.VersionPurgeStatus)) + msgp.BytesPrefixSize + len(z.Data)
+	s += z.Erasure.Msgsize() + msgp.BoolSize + msgp.StringPrefixSize + len(z.DeleteMarkerReplicationStatus) + msgp.StringPrefixSize + len(string(z.VersionPurgeStatus)) + msgp.BytesPrefixSize + len(z.Data) + msgp.IntSize + msgp.TimeSize
 	return
 }
 

@@ -783,11 +783,11 @@ func (i *crawlItem) transformMetaDir() {
 
 // actionMeta contains information used to apply actions.
 type actionMeta struct {
-	oi               ObjectInfo
-	successorModTime time.Time // The modtime of the successor version
-	numVersions      int       // The number of versions of this object
-	bitRotScan       bool      // indicates if bitrot check was requested.
+	oi         ObjectInfo
+	bitRotScan bool // indicates if bitrot check was requested.
 }
+
+var applyActionsLogPrefix = color.Green("applyActions:")
 
 // applyActions will apply lifecycle checks on to a scanned item.
 // The resulting size on disk will always be returned.
@@ -798,7 +798,6 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	if i.debug {
 		logger.LogIf(ctx, err)
 	}
-	applyActionsLogPrefix := color.Green("applyActions:")
 	if i.heal {
 		if i.debug {
 			if meta.oi.VersionID != "" {
@@ -831,17 +830,18 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	versionID := meta.oi.VersionID
 	action := i.lifeCycle.ComputeAction(
 		lifecycle.ObjectOpts{
-			Name:             i.objectPath(),
-			UserTags:         meta.oi.UserTags,
-			ModTime:          meta.oi.ModTime,
-			VersionID:        meta.oi.VersionID,
-			DeleteMarker:     meta.oi.DeleteMarker,
-			IsLatest:         meta.oi.IsLatest,
-			NumVersions:      meta.numVersions,
-			SuccessorModTime: meta.successorModTime,
-			RestoreOngoing:   meta.oi.RestoreOngoing,
-			RestoreExpires:   meta.oi.RestoreExpires,
-			TransitionStatus: meta.oi.TransitionStatus,
+			Name:                   i.objectPath(),
+			UserTags:               meta.oi.UserTags,
+			ModTime:                meta.oi.ModTime,
+			VersionID:              meta.oi.VersionID,
+			DeleteMarker:           meta.oi.DeleteMarker,
+			IsLatest:               meta.oi.IsLatest,
+			NumVersions:            meta.oi.NumVersions,
+			SuccessorModTime:       meta.oi.SuccessorModTime,
+			RestoreOngoing:         meta.oi.RestoreOngoing,
+			RestoreExpires:         meta.oi.RestoreExpires,
+			TransitionStatus:       meta.oi.TransitionStatus,
+			RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
 		})
 	if i.debug {
 		if versionID != "" {
@@ -882,94 +882,132 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 			return size
 		}
 	}
-	size = obj.Size
 
-	// Recalculate action.
+	var applied bool
+	action = evalActionFromLifecycle(ctx, *i.lifeCycle, obj, i.debug)
+	if action != lifecycle.NoneAction {
+		applied = applyLifecycleAction(ctx, action, o, obj)
+	}
+
+	if applied {
+		return 0
+	}
+	return size
+}
+
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, obj ObjectInfo, debug bool) (action lifecycle.Action) {
 	lcOpts := lifecycle.ObjectOpts{
-		Name:             i.objectPath(),
+		Name:                   obj.Name,
+		UserTags:               obj.UserTags,
+		ModTime:                obj.ModTime,
+		VersionID:              obj.VersionID,
+		DeleteMarker:           obj.DeleteMarker,
+		IsLatest:               obj.IsLatest,
+		NumVersions:            obj.NumVersions,
+		SuccessorModTime:       obj.SuccessorModTime,
+		RestoreOngoing:         obj.RestoreOngoing,
+		RestoreExpires:         obj.RestoreExpires,
+		TransitionStatus:       obj.TransitionStatus,
+		RemoteTiersImmediately: globalDebugRemoteTiersImmediately,
+	}
+
+	action = lc.ComputeAction(lcOpts)
+	if debug {
+		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
+	}
+
+	if action == lifecycle.NoneAction {
+		return action
+	}
+
+	switch action {
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
+		// Defensive code, should never happen
+		if obj.VersionID == "" {
+			return lifecycle.NoneAction
+		}
+		if rcfg, _ := globalBucketObjectLockSys.Get(obj.Bucket); rcfg.LockEnabled {
+			locked := enforceRetentionForDeletion(ctx, obj)
+			if locked {
+				if debug {
+					if obj.VersionID != "" {
+						console.Debugf(applyActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", obj.Name, obj.VersionID)
+					} else {
+						console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", obj.Name)
+					}
+				}
+				return lifecycle.NoneAction
+			}
+		}
+	}
+
+	return action
+}
+
+func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) bool {
+	srcOpts := ObjectOptions{}
+	if obj.TransitionStatus == "" {
+		srcOpts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
+		srcOpts.VersionID = obj.VersionID
+		// mark transition as pending
+		obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
+		obj.metadataOnly = true // Perform only metadata updates.
+		if _, err := objLayer.CopyObject(ctx, obj.Bucket, obj.Name, obj.Bucket, obj.Name, obj, srcOpts, ObjectOptions{
+			VersionID: obj.VersionID,
+			Versioned: globalBucketVersioningSys.Enabled(obj.Bucket),
+			MTime:     obj.ModTime,
+		}); err != nil {
+			logger.LogIf(ctx, err)
+			return false
+		}
+	}
+	globalTransitionState.queueTransitionTask(obj)
+	return true
+
+}
+
+func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {
+	lcOpts := lifecycle.ObjectOpts{
+		Name:             obj.Name,
 		UserTags:         obj.UserTags,
 		ModTime:          obj.ModTime,
 		VersionID:        obj.VersionID,
 		DeleteMarker:     obj.DeleteMarker,
 		IsLatest:         obj.IsLatest,
-		NumVersions:      meta.numVersions,
-		SuccessorModTime: meta.successorModTime,
+		NumVersions:      obj.NumVersions,
+		SuccessorModTime: obj.SuccessorModTime,
 		RestoreOngoing:   obj.RestoreOngoing,
 		RestoreExpires:   obj.RestoreExpires,
 		TransitionStatus: obj.TransitionStatus,
 	}
-	action = i.lifeCycle.ComputeAction(lcOpts)
-	if i.debug {
-		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", action)
+
+	if err := deleteTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, obj.transitionedObjName, obj.TransitionTier, restoredObject, false); err != nil {
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			return false
+		}
+		logger.LogIf(ctx, err)
+		return false
 	}
-	switch action {
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
-	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
-	default:
-		// No action.
-		return size
+	// Notification already sent at *deleteTransitionedObject*, just return 'true' here.
+	return true
+}
+
+func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo) bool {
+	opts := ObjectOptions{}
+
+	opts.VersionID = obj.VersionID
+	if opts.VersionID == "" {
+		opts.Versioned = globalBucketVersioningSys.Enabled(obj.Bucket)
 	}
 
-	opts := ObjectOptions{}
-	switch action {
-	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
-		// Defensive code, should never happen
-		if obj.VersionID == "" {
-			return size
-		}
-		if rcfg, _ := globalBucketObjectLockSys.Get(i.bucket); rcfg.LockEnabled {
-			locked := enforceRetentionForDeletion(ctx, obj)
-			if locked {
-				if i.debug {
-					if obj.VersionID != "" {
-						console.Debugf(applyActionsLogPrefix+" lifecycle: %s v(%s) is locked, not deleting\n", i.objectPath(), obj.VersionID)
-					} else {
-						console.Debugf(applyActionsLogPrefix+" lifecycle: %s is locked, not deleting\n", i.objectPath())
-					}
-				}
-				return size
-			}
-		}
-		opts.VersionID = obj.VersionID
-	case lifecycle.DeleteAction, lifecycle.DeleteRestoredAction:
-		opts.Versioned = globalBucketVersioningSys.Enabled(i.bucket)
-	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		if obj.TransitionStatus == "" {
-			// mark transition as pending
-			obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
-			obj.metadataOnly = true // Perform only metadata updates.
-			if _, err = o.CopyObject(ctx, obj.Bucket, obj.Name, obj.Bucket, obj.Name, obj, ObjectOptions{
-				VersionID: opts.VersionID,
-			}, ObjectOptions{
-				VersionID: obj.VersionID,
-				MTime:     obj.ModTime,
-			}); err != nil {
-				logger.LogIf(ctx, err)
-				return size
-			}
-		}
-		if obj.TransitionStatus != lifecycle.TransitionComplete {
-			globalTransitionState.queueTransitionTask(obj)
-		}
-		return 0
-	}
-	if obj.TransitionStatus != "" {
-		if err := deleteTransitionedObject(ctx, o, i.bucket, i.objectPath(), lcOpts, action, obj.transitionedObjName, obj.TransitionTier, true); err != nil {
-			logger.LogIf(ctx, err)
-			return size
-		}
-		// Notification already sent at *deleteTransitionedObject*, return '0' here.
-		return 0
-	}
-	obj, err = o.DeleteObject(ctx, i.bucket, i.objectPath(), opts)
+	obj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-			return 0
+			return false
 		}
 		// Assume it is still there.
 		logger.LogIf(ctx, err)
-		return size
+		return false
 	}
 
 	eventName := event.ObjectRemovedDelete
@@ -980,11 +1018,33 @@ func (i *crawlItem) applyActions(ctx context.Context, o ObjectLayer, meta action
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  eventName,
-		BucketName: i.bucket,
+		BucketName: obj.Bucket,
 		Object:     obj,
 		Host:       "Internal: [ILM-EXPIRY]",
 	})
-	return 0
+
+	return true
+}
+
+// Apply object, object version, restored object or restored object version action on the given object
+func applyExpiryRule(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, restoredObject bool) bool {
+	if obj.TransitionStatus != "" {
+		return applyExpiryOnTransitionedObject(ctx, objLayer, obj, restoredObject)
+	}
+	return applyExpiryOnNonTransitionedObjects(ctx, objLayer, obj)
+}
+
+// Perform actions (removal of transitioning of objects), return true the action is successfully performed
+func applyLifecycleAction(ctx context.Context, action lifecycle.Action, objLayer ObjectLayer, obj ObjectInfo) (success bool) {
+	switch action {
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction:
+		success = applyExpiryRule(ctx, objLayer, obj, false)
+	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+		success = applyExpiryRule(ctx, objLayer, obj, true)
+	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+		success = applyTransitionAction(ctx, action, objLayer, obj)
+	}
+	return
 }
 
 // objectPath returns the prefix and object name.

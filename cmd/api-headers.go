@@ -133,18 +133,20 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 		}
 
 		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-		if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
+
 		var isSet bool
 		for _, userMetadataPrefix := range userMetadataKeyPrefixes {
-			if !strings.HasPrefix(k, userMetadataPrefix) {
+			if !strings.HasPrefix(strings.ToLower(k), strings.ToLower(userMetadataPrefix)) {
 				continue
 			}
 			w.Header()[strings.ToLower(k)] = []string{v}
 			isSet = true
 			break
 		}
+
 		if !isSet {
 			w.Header().Set(k, v)
 		}

@@ -107,18 +107,21 @@ func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	}
 
 	objInfo := ObjectInfo{
-		IsDir:           HasSuffix(object, SlashSeparator),
-		Bucket:          bucket,
-		Name:            object,
-		VersionID:       versionID,
-		IsLatest:        fi.IsLatest,
-		DeleteMarker:    fi.Deleted,
-		Size:            fi.Size,
-		ModTime:         fi.ModTime,
-		Legacy:          fi.XLV1,
-		ContentType:     fi.Metadata["content-type"],
-		ContentEncoding: fi.Metadata["content-encoding"],
+		IsDir:            HasSuffix(object, SlashSeparator),
+		Bucket:           bucket,
+		Name:             object,
+		VersionID:        versionID,
+		IsLatest:         fi.IsLatest,
+		DeleteMarker:     fi.Deleted,
+		Size:             fi.Size,
+		ModTime:          fi.ModTime,
+		Legacy:           fi.XLV1,
+		ContentType:      fi.Metadata["content-type"],
+		ContentEncoding:  fi.Metadata["content-encoding"],
+		NumVersions:      fi.NumVersions,
+		SuccessorModTime: fi.SuccessorModTime,
 	}
+
 	// Update expires
 	var (
 		t time.Time

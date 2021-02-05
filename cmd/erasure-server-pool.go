@@ -57,7 +57,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		deploymentID       string
 		distributionAlgo   string
 		commonParityDrives int
-		drivesPerSet       int
 		err                error
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
@@ -75,26 +74,17 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			}
 		}
 
-		if drivesPerSet == 0 {
-			drivesPerSet = ep.DrivesPerSet
-		}
-
+		// If storage class is not set during startup, default values are used
+		// -- Default for Reduced Redundancy Storage class is, parity = 2
+		// -- Default for Standard Storage class is, parity = 2 - disks 4, 5
+		// -- Default for Standard Storage class is, parity = 3 - disks 6, 7
+		// -- Default for Standard Storage class is, parity = 4 - disks 8 to 16
 		if commonParityDrives == 0 {
 			commonParityDrives = ecDrivesNoConfig(ep.DrivesPerSet)
 		}
 
-		// Once distribution algo is set, validate it for the next pool,
-		// before proceeding to write to drives.
-		switch distributionAlgo {
-		case formatErasureVersionV3DistributionAlgoV2:
-			if drivesPerSet != 0 && drivesPerSet != ep.DrivesPerSet {
-				return nil, fmt.Errorf("All legacy serverPools should have same drive per set ratio - expected %d, got %d", drivesPerSet, ep.DrivesPerSet)
-			}
-		case formatErasureVersionV3DistributionAlgoV3:
-			parityDrives := ecDrivesNoConfig(ep.DrivesPerSet)
-			if commonParityDrives != 0 && commonParityDrives != parityDrives {
-				return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, parityDrives)
-			}
+		if err = storageclass.ValidateParity(commonParityDrives, ep.DrivesPerSet); err != nil {
+			return nil, fmt.Errorf("All current serverPools should have same parity ratio - expected %d, got %d", commonParityDrives, ecDrivesNoConfig(ep.DrivesPerSet))
 		}
 
 		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
@@ -122,7 +112,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("All serverPools should have same distributionAlgo expected %s, got %s", distributionAlgo, formats[i].Erasure.DistributionAlgo)
 		}
 
-		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i])
+		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives)
 		if err != nil {
 			return nil, err
 		}
@@ -269,13 +259,15 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 	for i, pool := range z.serverPools {
 		objInfo, err := pool.GetObjectInfo(ctx, bucket, object, opts)
 		switch err.(type) {
+		case VersionNotFound:
+			// VersionId not found, versionId was specified
 		case ObjectNotFound:
 			// VersionId was not specified but found delete marker or no versions exist.
 		case MethodNotAllowed:
 			// VersionId was specified but found delete marker
 		default:
+			// All other unhandled errors return right here.
 			if err != nil {
-				// any other un-handled errors return right here.
 				return -1, err
 			}
 		}
@@ -541,6 +533,13 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		}
 		return gr, nil
 	}
+	if isProxyable(ctx, bucket) {
+		// proxy to replication target if active-active replication is in place.
+		reader, proxy := proxyGetToReplicationTarget(ctx, bucket, object, rs, h, opts)
+		if reader != nil && proxy {
+			return reader, nil
+		}
+	}
 	if opts.VersionID != "" {
 		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -586,6 +585,13 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 		return objInfo, nil
 	}
 	object = decodeDirObject(object)
+	// proxy HEAD to replication target if active-active replication configured on bucket
+	if isProxyable(ctx, bucket) {
+		oi, proxy, err := proxyHeadToReplicationTarget(ctx, bucket, object, opts)
+		if proxy {
+			return oi, err
+		}
+	}
 	if opts.VersionID != "" {
 		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
@@ -1552,59 +1558,59 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	object = encodeDirObject(object)
 	if z.SinglePool() {
 		return z.serverPools[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
 
 	for _, pool := range z.serverPools {
-		err := pool.PutObjectTags(ctx, bucket, object, tags, opts)
+		objInfo, err := pool.PutObjectTags(ctx, bucket, object, tags, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
-			return err
+			return ObjectInfo{}, err
 		}
-		return nil
+		return objInfo, nil
 	}
 	if opts.VersionID != "" {
-		return VersionNotFound{
+		return ObjectInfo{}, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: opts.VersionID,
 		}
 	}
-	return ObjectNotFound{
+	return ObjectInfo{}, ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
 	}
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	object = encodeDirObject(object)
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 	for _, pool := range z.serverPools {
-		err := pool.DeleteObjectTags(ctx, bucket, object, opts)
+		objInfo, err := pool.DeleteObjectTags(ctx, bucket, object, opts)
 		if err != nil {
 			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 				continue
 			}
-			return err
+			return ObjectInfo{}, err
 		}
-		return nil
+		return objInfo, nil
 	}
 	if opts.VersionID != "" {
-		return VersionNotFound{
+		return ObjectInfo{}, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: opts.VersionID,
 		}
 	}
-	return ObjectNotFound{
+	return ObjectInfo{}, ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
 	}

@@ -491,8 +491,8 @@ func serverMain(ctx *cli.Context) {
 	// Enable background operations for erasure coding
 	if globalIsErasure {
 		initAutoHeal(GlobalContext, newObject)
-		initBackgroundReplication(GlobalContext, newObject)
 		initBackgroundTransition(GlobalContext, newObject)
+		initBackgroundExpiry(GlobalContext, newObject)
 	}
 
 	initDataCrawler(GlobalContext, newObject)
@@ -509,6 +509,10 @@ func serverMain(ctx *cli.Context) {
 		if errors.Is(err, context.Canceled) {
 			logger.FatalIf(err, "Server startup canceled upon user request")
 		}
+	}
+
+	if globalIsErasure { // to be done after config init
+		initBackgroundReplication(GlobalContext, newObject)
 	}
 
 	loadGlobalTransitionTierConfig()

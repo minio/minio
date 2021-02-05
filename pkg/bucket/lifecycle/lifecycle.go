@@ -79,16 +79,16 @@ func (lc Lifecycle) HasActiveRules(prefix string, recursive bool) bool {
 			continue
 		}
 
-		if len(prefix) > 0 && len(rule.Filter.Prefix) > 0 {
+		if len(prefix) > 0 && len(rule.GetPrefix()) > 0 {
 			if !recursive {
 				// If not recursive, incoming prefix must be in rule prefix
-				if !strings.HasPrefix(prefix, rule.Filter.Prefix) {
+				if !strings.HasPrefix(prefix, rule.GetPrefix()) {
 					continue
 				}
 			}
 			if recursive {
 				// If recursive, we can skip this rule if it doesn't match the tested prefix.
-				if !strings.HasPrefix(prefix, rule.Filter.Prefix) && !strings.HasPrefix(rule.Filter.Prefix, prefix) {
+				if !strings.HasPrefix(prefix, rule.GetPrefix()) && !strings.HasPrefix(rule.GetPrefix(), prefix) {
 					continue
 				}
 			}
@@ -167,7 +167,7 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 		if rule.Status == Disabled {
 			continue
 		}
-		if !strings.HasPrefix(obj.Name, rule.Prefix()) {
+		if !strings.HasPrefix(obj.Name, rule.GetPrefix()) {
 			continue
 		}
 		// Indicates whether MinIO will remove a delete marker with no
@@ -207,17 +207,18 @@ func (lc Lifecycle) FilterActionableRules(obj ObjectOpts) []Rule {
 // ObjectOpts provides information to deduce the lifecycle actions
 // which can be triggered on the resultant object.
 type ObjectOpts struct {
-	Name             string
-	UserTags         string
-	ModTime          time.Time
-	VersionID        string
-	IsLatest         bool
-	DeleteMarker     bool
-	NumVersions      int
-	SuccessorModTime time.Time
-	TransitionStatus string
-	RestoreOngoing   bool
-	RestoreExpires   time.Time
+	Name                   string
+	UserTags               string
+	ModTime                time.Time
+	VersionID              string
+	IsLatest               bool
+	DeleteMarker           bool
+	NumVersions            int
+	SuccessorModTime       time.Time
+	TransitionStatus       string
+	RestoreOngoing         bool
+	RestoreExpires         time.Time
+	RemoteTiersImmediately []string // strictly for debug only
 }
 
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
@@ -277,6 +278,16 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					case !rule.Transition.IsDaysNull():
 						if time.Now().UTC().After(ExpectedExpiryTime(obj.ModTime, int(rule.Transition.Days))) {
 							action = TransitionAction
+						}
+					}
+					// this if condition is strictly for debug purposes to force immediate
+					// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
+					if action == NoneAction && (!rule.Transition.IsDateNull() || !rule.Transition.IsDaysNull()) {
+						for _, t := range obj.RemoteTiersImmediately {
+							if strings.ToUpper(t) == strings.ToUpper(rule.Transition.StorageClass) {
+								action = TransitionAction
+								break
+							}
 						}
 					}
 				}

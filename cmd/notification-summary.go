@@ -18,22 +18,22 @@
 package cmd
 
 import (
-	"context"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // GetTotalCapacity gets the total capacity in the cluster.
-func GetTotalCapacity(ctx context.Context) (capacity uint64) {
-	d := globalNotificationSys.DiskHwInfo(ctx)
-	for _, s := range d {
-		capacity += s.GetTotalCapacity()
+func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
+
+	for _, disk := range diskInfo {
+		capacity += disk.TotalSpace
 	}
 	return
 }
 
 // GetTotalUsableCapacity gets the total usable capacity in the cluster.
 // This value is not an accurate representation of total usable in a multi-tenant deployment.
-func GetTotalUsableCapacity(ctx context.Context, s StorageInfo) (capacity float64) {
-	raw := GetTotalCapacity(ctx)
+func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity float64) {
+	raw := GetTotalCapacity(diskInfo)
 	var approxDataBlocks float64
 	var actualDisks float64
 	for _, scData := range s.Backend.StandardSCData {
@@ -45,18 +45,17 @@ func GetTotalUsableCapacity(ctx context.Context, s StorageInfo) (capacity float6
 }
 
 // GetTotalCapacityFree gets the total capacity free in the cluster.
-func GetTotalCapacityFree(ctx context.Context) (capacity uint64) {
-	d := globalNotificationSys.DiskHwInfo(ctx)
-	for _, s := range d {
-		capacity += s.GetTotalFreeCapacity()
+func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
+	for _, d := range diskInfo {
+		capacity += d.AvailableSpace
 	}
 	return
 }
 
 // GetTotalUsableCapacityFree gets the total usable capacity free in the cluster.
 // This value is not an accurate representation of total free in a multi-tenant deployment.
-func GetTotalUsableCapacityFree(ctx context.Context, s StorageInfo) (capacity float64) {
-	raw := GetTotalCapacityFree(ctx)
+func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity float64) {
+	raw := GetTotalCapacityFree(diskInfo)
 	var approxDataBlocks float64
 	var actualDisks float64
 	for _, scData := range s.Backend.StandardSCData {

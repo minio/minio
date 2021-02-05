@@ -69,6 +69,41 @@ func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
 }
 
+type expiryState struct {
+	expiryCh chan ObjectInfo
+}
+
+func (es *expiryState) queueExpiryTask(oi ObjectInfo) {
+	select {
+	case es.expiryCh <- oi:
+	default:
+	}
+}
+
+var (
+	globalExpiryState *expiryState
+)
+
+func newExpiryState() *expiryState {
+	es := &expiryState{
+		expiryCh: make(chan ObjectInfo, 10000),
+	}
+	go func() {
+		<-GlobalContext.Done()
+		close(es.expiryCh)
+	}()
+	return es
+}
+
+func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
+	globalExpiryState = newExpiryState()
+	go func() {
+		for oi := range globalExpiryState.expiryCh {
+			applyExpiryRule(ctx, objectAPI, oi, false)
+		}
+	}()
+}
+
 type transitionState struct {
 	// add future metrics here
 	transitionCh chan ObjectInfo
@@ -149,11 +184,11 @@ func validateLifecycleTransition(ctx context.Context, bucket string, lfc *lifecy
 // validateTransitionDestination returns error if transition destination bucket missing or not configured
 // It also returns true if transition destination is same as this server.
 func validateTransitionDestination(sc string) error {
-	client, err := globalTierConfigMgr.GetDriver(sc)
+	backend, err := globalTierConfigMgr.GetDriver(sc)
 	if err != nil {
-		return err
+		return TransitionStorageClassNotFound{}
 	}
-	_, err = client.Get(context.Background(), "probeobject", warmBackendGetOpts{})
+	_, err = backend.Get(context.Background(), "probeobject", warmBackendGetOpts{})
 	if isErrBucketNotFound(err) || !isErrObjectNotFound(err) {
 		return err
 	}
@@ -169,14 +204,8 @@ func validateTransitionDestination(sc string) error {
 // 1. temporarily restored copies of objects (restored with the PostRestoreObject API) expired.
 // 2. life cycle expiry date is met on the object.
 // 3. Object is removed through DELETE api call
-func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, action lifecycle.Action, tgtObjName, transitionSC string, expiryEvent bool) error {
-	lc, err := globalLifecycleSys.Get(bucket)
-	if err != nil {
-		return err
-	}
-
-	tierName := getLifeCycleTransitionTier(ctx, lc, bucket, lcOpts)
-	tgtClient, err := globalTierConfigMgr.GetDriver(tierName)
+func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, tgtObjName, transitionSC string, restoredObject, expiryEvent bool) error {
+	tgtClient, err := globalTierConfigMgr.GetDriver(transitionSC)
 	if err != nil {
 		return err
 	}
@@ -184,47 +213,48 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.Enabled(bucket)
 	opts.VersionID = lcOpts.VersionID
-	switch action {
-	case lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction:
+	if restoredObject {
 		// delete locally restored copy of object or object version
 		// from the source, while leaving metadata behind. The data on
 		// transitioned tier lies untouched and still accessible
 		opts.Transition.Status = lcOpts.TransitionStatus
 		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
 		return err
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction:
-		// When an objectglobalTierConfigMgr transitioned tier and
-		// metadata from source
-		if err := tgtClient.Remove(GlobalContext, tgtObjName); err != nil {
-			logger.LogIf(ctx, err)
-			return err
-		}
-		// Delete metadata on source, now that transition tier has been cleaned up.
-		if _, err = objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
-			return err
-		}
-
-		if expiryEvent {
-			eventName := event.ObjectRemovedDelete
-			if lcOpts.DeleteMarker {
-				eventName = event.ObjectRemovedDeleteMarkerCreated
-			}
-			objInfo := ObjectInfo{
-				Name:         object,
-				VersionID:    lcOpts.VersionID,
-				DeleteMarker: lcOpts.DeleteMarker,
-			}
-			// Notify object deleted event.
-			sendEvent(eventArgs{
-				EventName:  eventName,
-				BucketName: bucket,
-				Object:     objInfo,
-				Host:       "Internal: [ILM-EXPIRY]",
-			})
-		}
 	}
 
-	// should never reach here
+	// When an object is past expiry, delete the data from transitioned tier and
+	// metadata from source
+	// When an objectglobalTierConfigMgr transitioned tier and
+	// metadata from source
+	if err := tgtClient.Remove(GlobalContext, tgtObjName); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	// Delete metadata on source, now that transition tier has been cleaned up.
+	if _, err = objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if expiryEvent {
+		eventName := event.ObjectRemovedDelete
+		if lcOpts.DeleteMarker {
+			eventName = event.ObjectRemovedDeleteMarkerCreated
+		}
+		objInfo := ObjectInfo{
+			Name:         object,
+			VersionID:    lcOpts.VersionID,
+			DeleteMarker: lcOpts.DeleteMarker,
+		}
+		// Notify object deleted event.
+		sendEvent(eventArgs{
+			EventName:  eventName,
+			BucketName: bucket,
+			Object:     objInfo,
+			Host:       "Internal: [ILM-EXPIRY]",
+		})
+	}
 	return nil
 }
 

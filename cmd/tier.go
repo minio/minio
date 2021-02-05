@@ -236,7 +236,9 @@ func (config *TierConfigMgr) GetDriver(tierName string) (d warmBackend, err erro
 	if err != nil {
 		return nil, err
 	}
-
+	if d == nil {
+		return nil, errTierNotFound
+	}
 	config.drivercache[tierName] = d
 	return d, nil
 }

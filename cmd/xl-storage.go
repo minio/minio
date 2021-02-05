@@ -377,23 +377,16 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		}
 
 		var totalSize int64
-		var numVersions = len(fivs.Versions)
 
 		sizeS := sizeSummary{}
-		for i, version := range fivs.Versions {
-			var successorModTime time.Time
-			if i > 0 {
-				successorModTime = fivs.Versions[i-1].ModTime
-			}
+		for _, version := range fivs.Versions {
 			oi := version.ToObjectInfo(item.bucket, item.objectPath())
 			if objAPI != nil {
 				totalSize += item.applyActions(ctx, objAPI, actionMeta{
-					numVersions:      numVersions,
-					successorModTime: successorModTime,
-					oi:               oi,
-					bitRotScan:       healOpts.Bitrot,
+					oi:         oi,
+					bitRotScan: healOpts.Bitrot,
 				})
-				item.healReplication(ctx, objAPI, oi, &sizeS)
+				item.healReplication(ctx, objAPI, oi.Clone(), &sizeS)
 			}
 		}
 		sizeS.totalSize = totalSize
@@ -885,7 +878,7 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions []FileInfo) []error {
 	errs := make([]error, len(versions))
 	for i, version := range versions {
-		if err := s.DeleteVersion(ctx, volume, version.Name, version); err != nil {
+		if err := s.DeleteVersion(ctx, volume, version.Name, version, false); err != nil {
 			errs[i] = err
 		}
 	}
@@ -893,18 +886,26 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 	return errs
 }
 
-// DeleteVersion - deletes FileInfo metadata for path at `xl.meta`
-func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) error {
+// DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. forceDelMarker
+// will force creating a new `xl.meta` to create a new delete marker
+func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
 	if HasSuffix(path, SlashSeparator) {
 		return s.Delete(ctx, volume, path, false)
 	}
 
 	buf, err := s.ReadAll(ctx, volume, pathJoin(path, xlStorageFormatFile))
 	if err != nil {
-		if err == errFileNotFound && fi.VersionID != "" {
-			err = errFileVersionNotFound
+		if err != errFileNotFound {
+			return err
 		}
-		return err
+		if fi.Deleted && forceDelMarker {
+			// Create a new xl.meta with a delete marker in it
+			return s.WriteMetadata(ctx, volume, path, fi)
+		}
+		if fi.VersionID != "" {
+			return errFileVersionNotFound
+		}
+		return errFileNotFound
 	}
 
 	if len(buf) == 0 {

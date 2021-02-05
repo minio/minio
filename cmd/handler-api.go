@@ -36,7 +36,8 @@ type apiConfig struct {
 	extendListLife   time.Duration
 	corsAllowOrigins []string
 	// total drives per erasure set across pools.
-	totalDriveCount int
+	totalDriveCount    int
+	replicationWorkers int
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
@@ -78,6 +79,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.requestsDeadline = cfg.RequestsDeadline
 	t.listQuorum = cfg.GetListQuorum()
 	t.extendListLife = cfg.ExtendListLife
+	t.replicationWorkers = cfg.ReplicationWorkers
 }
 
 func (t *apiConfig) getListQuorum() int {
@@ -151,4 +153,11 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 	}
+}
+
+func (t *apiConfig) getReplicationWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.replicationWorkers
 }

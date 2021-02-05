@@ -53,18 +53,19 @@ const (
 	capacityRawSubsystem    MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem MetricSubsystem = "capacity_usable"
 	diskSubsystem           MetricSubsystem = "disk"
+	fileDescriptorSubsystem MetricSubsystem = "file_descriptor"
 	goRoutines              MetricSubsystem = "go_routine"
+	ioSubsystem             MetricSubsystem = "io"
 	nodesSubsystem          MetricSubsystem = "nodes"
 	objectsSubsystem        MetricSubsystem = "objects"
-	fileDescriptorSubsystem MetricSubsystem = "file_descriptor"
-	ioSubsystem             MetricSubsystem = "io"
+	processSubsystem        MetricSubsystem = "process"
 	replicationSubsystem    MetricSubsystem = "replication"
 	requestsSubsystem       MetricSubsystem = "requests"
 	timeSubsystem           MetricSubsystem = "time"
 	trafficSubsystem        MetricSubsystem = "traffic"
+	softwareSubsystem       MetricSubsystem = "software"
 	sysCallSubsystem        MetricSubsystem = "syscall"
 	usageSubsystem          MetricSubsystem = "usage"
-	softwareSubsystem       MetricSubsystem = "software"
 )
 
 // MetricName are the individual names for the metric.
@@ -107,6 +108,7 @@ const (
 	ttfbDistribution = "ttbf_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
+	startTime        = "starttime_seconds"
 )
 
 const (
@@ -385,7 +387,7 @@ func getS3RequestsInFlightMD() MetricDescription {
 		Subsystem: requestsSubsystem,
 		Name:      inflightTotal,
 		Help:      "Total number of S3 requests currently in flight.",
-		Type:      counterMetric,
+		Type:      gaugeMetric,
 	}
 }
 func getS3RequestsTotalMD() MetricDescription {
@@ -631,6 +633,15 @@ func getMinIOGORoutineCountMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
+func getMinIOProcessStartTimeMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      startTime,
+		Help:      "Start time for MinIO process per node in seconds.",
+		Type:      gaugeMetric,
+	}
+}
 func getMinioProcMetrics() MetricsGroup {
 	return MetricsGroup{
 		Metrics: []Metric{},
@@ -654,6 +665,16 @@ func getMinioProcMetrics() MetricsGroup {
 			io, err := p.IO()
 			if err != nil {
 				logger.LogOnceIf(ctx, err, ioSubsystem)
+				return
+			}
+			stat, err := p.Stat()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, processSubsystem)
+				return
+			}
+			startTime, err := stat.StartTime()
+			if err != nil {
+				logger.LogOnceIf(ctx, err, startTime)
 				return
 			}
 
@@ -697,6 +718,11 @@ func getMinioProcMetrics() MetricsGroup {
 				Metric{
 					Description: getMinioProcessIOWriteCachedBytesMD(),
 					Value:       float64(io.WChar),
+				})
+			metrics.Metrics = append(metrics.Metrics,
+				Metric{
+					Description: getMinIOProcessStartTimeMD(),
+					Value:       startTime,
 				})
 		},
 	}
@@ -1080,23 +1106,23 @@ func getClusterStorageMetrics() MetricsGroup {
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityTotalBytesMD(),
-				Value:       float64(GetTotalCapacity(ctx)),
+				Value:       float64(GetTotalCapacity(storageInfo.Disks)),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityFreeBytesMD(),
-				Value:       float64(GetTotalCapacityFree(ctx)),
+				Value:       float64(GetTotalCapacityFree(storageInfo.Disks)),
 			})
 
 			s, _ := objLayer.StorageInfo(GlobalContext)
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityUsageBytesMD(),
-				Value:       GetTotalUsableCapacity(ctx, s),
+				Value:       GetTotalUsableCapacity(storageInfo.Disks, s),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityUsageFreeBytesMD(),
-				Value:       GetTotalUsableCapacityFree(ctx, s),
+				Value:       GetTotalUsableCapacityFree(storageInfo.Disks, s),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{

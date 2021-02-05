@@ -188,7 +188,7 @@ type InfoMessage struct {
 
 // Services contains different services information
 type Services struct {
-	Vault         Vault                         `json:"vault,omitempty"`
+	KMS           KMS                           `json:"kms,omitempty"`
 	LDAP          LDAP                          `json:"ldap,omitempty"`
 	Logger        []Logger                      `json:"logger,omitempty"`
 	Audit         []Audit                       `json:"audit,omitempty"`
@@ -210,8 +210,8 @@ type Usage struct {
 	Size uint64 `json:"size,omitempty"`
 }
 
-// Vault - Fetches the Vault status
-type Vault struct {
+// KMS contains KMS status information
+type KMS struct {
 	Status  string `json:"status,omitempty"`
 	Encrypt string `json:"encrypt,omitempty"`
 	Decrypt string `json:"decrypt,omitempty"`

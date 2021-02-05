@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
+	"net/textproto"
 	"os"
 	"reflect"
 	"strings"
@@ -197,7 +198,7 @@ func TestExtractMetadataHeaders(t *testing.T) {
 	// Validate if the extracting headers.
 	for i, testCase := range testCases {
 		metadata := make(map[string]string)
-		err := extractMetadataFromMap(context.Background(), testCase.header, metadata)
+		err := extractMetadataFromMime(context.Background(), textproto.MIMEHeader(testCase.header), metadata)
 		if err != nil && !testCase.shouldFail {
 			t.Fatalf("Test %d failed to extract metadata: %v", i+1, err)
 		}

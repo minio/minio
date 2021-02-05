@@ -103,7 +103,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		modTime = dstOpts.MTime
 		fi.ModTime = dstOpts.MTime
 	}
-
+	fi.Metadata = srcInfo.UserDefined
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 
 	// Update `xl.meta` content on each disks.
@@ -164,14 +164,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {
-		if isProxyable(ctx, bucket) && (errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound)) {
-			// proxy to replication target if active-active replication is in place.
-			reader, proxy := proxyGetToReplicationTarget(ctx, bucket, object, rs, h, opts)
-			if reader == nil || !proxy {
-				return nil, toObjectErr(err, bucket, object)
-			}
-			return reader, nil
-		}
 		return nil, toObjectErr(err, bucket, object)
 	}
 
@@ -416,7 +408,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 					er.deleteObjectVersion(ctx, bucket, object, 1, FileInfo{
 						Name:      object,
 						VersionID: opts.VersionID,
-					})
+					}, false)
 				}
 			}
 		}
@@ -456,13 +448,6 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {
-		// proxy HEAD to replication target if active-active replication configured on bucket
-		if isProxyable(ctx, bucket) && (errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound)) {
-			oi, proxy, err := proxyHeadToReplicationTarget(ctx, bucket, object, opts)
-			if proxy {
-				return oi, err
-			}
-		}
 		return objInfo, toObjectErr(err, bucket, object)
 
 	}
@@ -796,7 +781,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object), nil
 }
 
-func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo) error {
+func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, writeQuorum int, fi FileInfo, forceDelMarker bool) error {
 	defer ObjectPathUpdated(pathJoin(bucket, object))
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
@@ -806,7 +791,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return disks[index].DeleteVersion(ctx, bucket, object, fi)
+			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
 		}, index)
 	}
 	// return errors if any during deletion
@@ -1071,7 +1056,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			deleteMarker = false
 		}
 	}
-
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
@@ -1085,6 +1069,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				ModTime:                       modTime,
 				DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 				VersionPurgeStatus:            opts.VersionPurgeStatus,
+				TransitionStatus:              opts.Transition.Status,
 			}
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
@@ -1092,13 +1077,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					fi.VersionID = opts.VersionID
 				}
 			}
-			//			fi.TransitionStatus = opts.Transition.Status
-
 			// versioning suspended means we add `null`
 			// version as delete marker
 			// Add delete marker, since we don't have any version specified explicitly.
 			// Or if a particular version id needs to be replicated.
-			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
+			if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, opts.DeleteMarker); err != nil {
 				return objInfo, toObjectErr(err, bucket, object)
 			}
 			return fi.ToObjectInfo(bucket, object), nil
@@ -1114,7 +1097,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ModTime:                       modTime,
 		DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
-	}); err != nil {
+		TransitionStatus:              opts.Transition.Status,
+	}, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 
@@ -1145,7 +1129,14 @@ func (er erasureObjects) addPartial(bucket, object, versionID string) {
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) error {
+func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
+	// Lock the object before updating tags.
+	lk := er.NewNSLock(bucket, object)
+	if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		return ObjectInfo{}, err
+	}
+	defer lk.Unlock()
+
 	disks := er.getDisks()
 
 	// Read metadata associated with the object from all disks.
@@ -1153,7 +1144,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// List all online disks.
@@ -1162,13 +1153,13 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	// Pick latest valid metadata.
 	fi, err := pickValidFileInfo(ctx, metaArr, modTime, readQuorum)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 	if fi.Deleted {
 		if opts.VersionID == "" {
-			return toObjectErr(errFileNotFound, bucket, object)
+			return ObjectInfo{}, toObjectErr(errFileNotFound, bucket, object)
 		}
-		return toObjectErr(errMethodNotAllowed, bucket, object)
+		return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
 	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi.Erasure.Distribution)
@@ -1191,15 +1182,18 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	// Write unique `xl.meta` for each disk.
 	if onlineDisks, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, metaArr, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Atomically rename metadata from tmp location to destination for each disk.
 	if _, err = renameFileInfo(ctx, onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, writeQuorum); err != nil {
-		return toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	return nil
+	objInfo := fi.ToObjectInfo(bucket, object)
+	objInfo.UserTags = tags
+
+	return objInfo, nil
 }
 
 // updateObjectMeta will update the metadata of a file.
@@ -1263,7 +1257,7 @@ func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object st
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (er erasureObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (er erasureObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	return er.PutObjectTags(ctx, bucket, object, "", opts)
 }
 
@@ -1335,7 +1329,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 
 	storageDisks := er.getDisks()
 	writeQuorum := len(storageDisks)/2 + 1
-	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi); err != nil {
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
 		eventName = event.ObjectTransitionFailed
 	}
 	for _, disk := range storageDisks {

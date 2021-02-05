@@ -316,7 +316,7 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	if err != nil {
 		return l.s3Objects.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
 	}
-	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, o)
+	fn, off, length, err := minio.NewGetObjectReader(rs, objInfo, opts)
 	if err != nil {
 		return nil, minio.ErrorRespToObjectError(err, bucket, object)
 	}
@@ -325,7 +325,20 @@ func (l *s3EncObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	}
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.getObject(ctx, bucket, object, off, length, pw, objInfo.ETag, opts)
+		// Do not set an `If-Match` header for the ETag when
+		// the ETag is encrypted. The ETag at the backend never
+		// matches an encrypted ETag and there is in any case
+		// no way to make two consecutive S3 calls safe for concurrent
+		// access.
+		// However,  the encrypted object changes concurrently then the
+		// gateway will not be able to decrypt it since the key (obtained
+		// from dare.meta) will not work for any new created object. Therefore,
+		// we will in any case not return invalid data to the client.
+		etag := objInfo.ETag
+		if len(etag) > 32 && strings.Count(etag, "-") == 0 {
+			etag = ""
+		}
+		err := l.getObject(ctx, bucket, object, off, length, pw, etag, opts)
 		pw.CloseWithError(err)
 	}()
 
@@ -352,7 +365,7 @@ func (l *s3EncObjects) GetObjectInfo(ctx context.Context, bucket string, object 
 
 // CopyObject copies an object from source bucket to a destination bucket.
 func (l *s3EncObjects) CopyObject(ctx context.Context, srcBucket string, srcObject string, dstBucket string, dstObject string, srcInfo minio.ObjectInfo, s, d minio.ObjectOptions) (objInfo minio.ObjectInfo, err error) {
-	cpSrcDstSame := strings.EqualFold(path.Join(srcBucket, srcObject), path.Join(dstBucket, dstObject))
+	cpSrcDstSame := path.Join(srcBucket, srcObject) == path.Join(dstBucket, dstObject)
 	if cpSrcDstSame {
 		var gwMeta gwMetaV1
 		if s.ServerSideEncryption != nil && d.ServerSideEncryption != nil &&

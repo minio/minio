@@ -17,7 +17,7 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v25" // Add more small file optimization
+	storageRESTVersion       = "v27" // Add force-delete-marker to DeleteVersion
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -58,6 +58,7 @@ const (
 	storageRESTVolumes        = "volumes"
 	storageRESTDirPath        = "dir-path"
 	storageRESTFilePath       = "file-path"
+	storageRESTForceDelMarker = "force-delete-marker"
 	storageRESTVersionID      = "version-id"
 	storageRESTReadData       = "read-data"
 	storageRESTTotalVersions  = "total-versions"
