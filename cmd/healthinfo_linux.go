@@ -21,6 +21,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"syscall"
@@ -41,7 +42,7 @@ func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 	if err != nil {
 		return madmin.ServerOsInfo{
 			Addr:  addr,
-			Error: err.Error(),
+			Error: fmt.Sprintf("info: %v", err),
 		}
 	}
 
@@ -49,7 +50,7 @@ func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 	if err != nil {
 		return madmin.ServerOsInfo{
 			Addr:  addr,
-			Error: err.Error(),
+			Error: fmt.Sprintf("sensors-temp: %v", err),
 		}
 	}
 
@@ -74,7 +75,7 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 	if err != nil {
 		return madmin.ServerDiskHwInfo{
 			Addr:  addr,
-			Error: err.Error(),
+			Error: fmt.Sprintf("partitions: %v", err),
 		}
 	}
 
@@ -99,11 +100,11 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 			smartInfo, err := smart.GetInfo(device)
 			if err != nil {
 				if syscall.EACCES == err {
-					smartInfo.Error = err.Error()
+					smartInfo.Error = fmt.Sprintf("smart: %v", err)
 				} else {
 					return madmin.ServerDiskHwInfo{
 						Addr:  addr,
-						Error: err.Error(),
+						Error: fmt.Sprintf("smart: %v", err),
 					}
 				}
 			}
@@ -122,7 +123,7 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 	if err != nil {
 		return madmin.ServerDiskHwInfo{
 			Addr:  addr,
-			Error: err.Error(),
+			Error: fmt.Sprintf("iocounters: %v", err),
 		}
 	}
 	usages := []*diskhw.UsageStat{}
@@ -131,7 +132,7 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 		if err != nil {
 			return madmin.ServerDiskHwInfo{
 				Addr:  addr,
-				Error: err.Error(),
+				Error: fmt.Sprintf("usage: %v", err),
 			}
 		}
 		usages = append(usages, usage)
