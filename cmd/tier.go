@@ -19,19 +19,28 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"path"
+	"strings"
 	"sync"
 
+	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/sio"
 )
 
 var TierConfigPath string = path.Join(minioConfigPrefix, "tier-config.json")
 
-var errTierInsufficientCreds = errors.New("insufficient tier credentials supplied")
+var (
+	errTierInsufficientCreds = errors.New("insufficient tier credentials supplied")
+	errWarmBackendInUse      = errors.New("Backend warm tier already in use")
+	errTierTypeUnsupported   = errors.New("Unsupported tier type")
+)
 
 type TierConfigMgr struct {
 	sync.RWMutex
@@ -40,8 +49,6 @@ type TierConfigMgr struct {
 	Azure       map[string]madmin.TierAzure `json:"azure"`
 	GCS         map[string]madmin.TierGCS   `json:"gcs"`
 }
-
-var errWarmBackendInUse = errors.New("Backend warm tier already in use")
 
 func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, bool) {
 	for name := range config.S3 {
@@ -76,7 +83,7 @@ func tierBackendInUse(sc madmin.TierConfig) (bool, error) {
 	case madmin.GCS:
 		d, err = newWarmBackendGCS(*sc.GCS)
 	default:
-		return false, errors.New("Unsupported tier type")
+		return false, errTierTypeUnsupported
 	}
 	if err != nil {
 		return false, err
@@ -84,17 +91,22 @@ func tierBackendInUse(sc madmin.TierConfig) (bool, error) {
 	return d.InUse(context.Background())
 }
 
-func (config *TierConfigMgr) Add(sc madmin.TierConfig) error {
+func (config *TierConfigMgr) Add(tier madmin.TierConfig) error {
 	config.Lock()
 	defer config.Unlock()
 
-	tierName := sc.Name()
-	// storage-class name already in use
+	// check if tier name is in all caps
+	tierName := tier.Name()
+	if tierName != strings.ToUpper(tierName) {
+		return errTierNameNotUppercase
+	}
+
+	// check if tier name already in use
 	if _, exists := config.isTierNameInUse(tierName); exists {
 		return errTierAlreadyExists
 	}
 
-	inuse, err := tierBackendInUse(sc)
+	inuse, err := tierBackendInUse(tier)
 	if err != nil {
 		return err
 	}
@@ -102,18 +114,18 @@ func (config *TierConfigMgr) Add(sc madmin.TierConfig) error {
 		return errWarmBackendInUse
 	}
 
-	switch sc.Type {
+	switch tier.Type {
 	case madmin.S3:
-		config.S3[tierName] = *sc.S3
+		config.S3[tierName] = *tier.S3
 
 	case madmin.Azure:
-		config.Azure[tierName] = *sc.Azure
+		config.Azure[tierName] = *tier.Azure
 
 	case madmin.GCS:
-		config.GCS[tierName] = *sc.GCS
+		config.GCS[tierName] = *tier.GCS
 
 	default:
-		return errors.New("Unsupported tier type")
+		return errTierTypeUnsupported
 	}
 
 	return nil
@@ -243,22 +255,75 @@ func (config *TierConfigMgr) GetDriver(tierName string) (d warmBackend, err erro
 	return d, nil
 }
 
+// configReader returns a PutObjReader and ObjectOptions needed to save config
+// using a PutObject API. PutObjReader encrypts json encoded tier configurations
+// if KMS is enabled, otherwise simply yields the json encoded bytes as is.
+// Similarly, ObjectOptions value depends on KMS' status.
+func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, error) {
+	b, err := config.Bytes()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	payloadSize := int64(len(b))
+	br := bytes.NewReader(b)
+	hr, err := hash.NewReader(br, payloadSize, "", "", payloadSize, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if GlobalKMS == nil {
+		return NewPutObjReader(hr, nil, nil), &ObjectOptions{}, nil
+	}
+
+	// Note: Local variables with names ek, oek, etc are named inline with
+	// acronyms defined here -
+	// https://github.com/minio/minio/blob/master/docs/security/README.md#acronyms
+
+	// Encrypt json encoded tier configurations
+	metadata := make(map[string]string)
+	kmsContext := crypto.Context{minioMetaBucket: path.Join(minioMetaBucket, TierConfigPath)}
+
+	ek, encEK, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), kmsContext)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	oek := crypto.GenerateKey(ek, rand.Reader)
+	encOEK := oek.Seal(ek, crypto.GenerateIV(rand.Reader), crypto.S3.String(), minioMetaBucket, TierConfigPath)
+	crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encEK, encOEK)
+	encBr, err := sio.EncryptReader(br, sio.Config{Key: oek[:], MinVersion: sio.Version20})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	info := ObjectInfo{
+		Size: payloadSize,
+	}
+	encSize := info.EncryptedSize()
+
+	encHr, err := hash.NewReader(encBr, encSize, "", "", encSize, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts := &ObjectOptions{
+		UserDefined: metadata,
+		MTime:       UTCNow(),
+	}
+	return NewPutObjReader(hr, encHr, &oek), opts, nil
+}
+
 func saveGlobalTierConfig() error {
-	b, err := globalTierConfigMgr.Bytes()
+	pr, opts, err := globalTierConfigMgr.configReader()
 	if err != nil {
 		return err
 	}
-	r, err := hash.NewReader(bytes.NewReader(b), int64(len(b)), "", "", int64(len(b)), false)
-	if err != nil {
-		return err
-	}
-	_, err = globalObjectAPI.PutObject(context.Background(), minioMetaBucket, TierConfigPath, NewPutObjReader(r, nil, nil), ObjectOptions{})
+
+	_, err = globalObjectAPI.PutObject(context.Background(), minioMetaBucket, TierConfigPath, pr, *opts)
 	return err
 }
 
 func loadGlobalTransitionTierConfig() error {
-	var buf bytes.Buffer
-	err := globalObjectAPI.GetObject(context.Background(), minioMetaBucket, TierConfigPath, 0, -1, &buf, "", ObjectOptions{})
+	objReadCloser, err := globalObjectAPI.GetObjectNInfo(context.Background(), minioMetaBucket, TierConfigPath, nil, http.Header{}, readLock, ObjectOptions{})
 	if err != nil {
 		if isErrObjectNotFound(err) {
 			globalTierConfigMgr = &TierConfigMgr{
@@ -272,8 +337,11 @@ func loadGlobalTransitionTierConfig() error {
 		}
 		return err
 	}
+
+	defer objReadCloser.Close()
+
 	var config TierConfigMgr
-	err = json.Unmarshal(buf.Bytes(), &config)
+	err = json.NewDecoder(objReadCloser).Decode(&config)
 	if err != nil {
 		return err
 	}
