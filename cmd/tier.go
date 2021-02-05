@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -28,10 +27,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/sio"
 )
 
 var TierConfigPath string = path.Join(minioConfigPrefix, "tier-config.json")
@@ -281,17 +278,9 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 
 	// Encrypt json encoded tier configurations
 	metadata := make(map[string]string)
-	kmsContext := crypto.Context{minioMetaBucket: path.Join(minioMetaBucket, TierConfigPath)}
-
-	ek, encEK, err := GlobalKMS.GenerateKey(GlobalKMS.DefaultKeyID(), kmsContext)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	oek := crypto.GenerateKey(ek, rand.Reader)
-	encOEK := oek.Seal(ek, crypto.GenerateIV(rand.Reader), crypto.S3.String(), minioMetaBucket, TierConfigPath)
-	crypto.S3.CreateMetadata(metadata, GlobalKMS.DefaultKeyID(), encEK, encOEK)
-	encBr, err := sio.EncryptReader(br, sio.Config{Key: oek[:], MinVersion: sio.Version20})
+	sseS3 := true
+	var extKey [32]byte
+	encBr, oek, err := newEncryptReader(br, extKey[:], minioMetaBucket, TierConfigPath, metadata, sseS3)
 	if err != nil {
 		return nil, nil, err
 	}
