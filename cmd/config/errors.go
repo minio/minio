@@ -30,6 +30,12 @@ var (
 		"Can only accept `on` and `off` values. To enable O_SYNC for fs backend, set this value to `on`",
 	)
 
+	ErrInvalidFSODirectValue = newErrFn(
+		"Invalid O_DIRECT value",
+		"Please check the passed value",
+		"Can only accept `on` and `off` values. To enable O_DIRECT for fs backend, set this value to `on`",
+	)
+
 	ErrInvalidDomainValue = newErrFn(
 		"Invalid domain value",
 		"Please check the passed value",

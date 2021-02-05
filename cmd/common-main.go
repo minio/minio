@@ -232,6 +232,11 @@ func handleCommonEnvVars() {
 		logger.Fatal(config.ErrInvalidFSOSyncValue(err), "Invalid MINIO_FS_OSYNC value in environment variable")
 	}
 
+	globalFSODirect, err = config.ParseBool(env.Get(config.EnvFSODirect, config.EnableOff))
+	if err != nil {
+		logger.Fatal(config.ErrInvalidFSODirectValue(err), "Invalid MINIO_FS_ODIRECT value in environment variable")
+	}
+
 	domains := env.Get(config.EnvDomain, "")
 	if len(domains) != 0 {
 		for _, domainName := range strings.Split(domains, config.ValueSeparator) {

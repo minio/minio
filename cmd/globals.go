@@ -276,6 +276,9 @@ var (
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
+	// If writes to FS backend should be O_DIRECT.
+	globalFSODirect bool
+
 	globalProxyEndpoints []ProxyEndpoint
 
 	globalInternodeTransport http.RoundTripper
