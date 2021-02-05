@@ -49,6 +49,9 @@ type WalkDirOptions struct {
 	// FilterPrefix will only return results with given prefix within folder.
 	// Should never contain a slash.
 	FilterPrefix string
+
+	// ForwardTo will forward to the given object.
+	ForwardTo string
 }
 
 // WalkDir will traverse a directory and return all entries found.
