@@ -2844,7 +2844,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		case !globalBucketVersioningSys.Enabled(bucket):
 			delTier = true
 		}
-
 		if delTier {
 			deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, object, lifecycle.ObjectOpts{
 				Name:             object,
