@@ -98,7 +98,7 @@ func getLocalBackgroundHealStatus() (madmin.BgHealState, bool) {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, setDriveCount int, maxIO int, maxSleep time.Duration, buckets []BucketInfo, disks []StorageAPI) error {
+func healErasureSet(ctx context.Context, prefix string, setIndex int, maxIO int, maxSleep time.Duration, buckets []BucketInfo, disks []StorageAPI) error {
 	// Get background heal sequence to send elements to heal
 	var bgSeq *healSequence
 	var ok bool
@@ -114,6 +114,13 @@ func healErasureSet(ctx context.Context, setIndex int, setDriveCount int, maxIO 
 			continue
 		}
 	}
+
+	obj := newObjectLayerFn()
+	if obj == nil {
+		return errServerNotInitialized
+	}
+
+	setDriveCount := obj.SetDriveCount()
 
 	// Try to pro-actively heal backend-encrypted file.
 	bgSeq.sourceCh <- healSource{
@@ -146,7 +153,11 @@ func healErasureSet(ctx context.Context, setIndex int, setDriveCount int, maxIO 
 				wwg.Add(1)
 				go func(disk StorageAPI) {
 					defer wwg.Done()
-					entryCh, err := disk.WalkVersions(ctx, bucket.Name, "", "", true, ctx.Done())
+					if disk == nil {
+						// disk is nil and not available.
+						return
+					}
+					entryCh, err := disk.WalkVersions(ctx, bucket.Name, prefix, "", true, ctx.Done())
 					if err != nil {
 						// Disk walk returned error, ignore it.
 						return

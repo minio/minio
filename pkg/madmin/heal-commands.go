@@ -213,6 +213,7 @@ func (hri *HealResultItem) GetOnlineCounts() (b, a int) {
 type HealSetsOpts struct {
 	TaskID     string
 	Sets       string // comma separated list of set numbers
+	Prefix     string // folder at which healing should trigger
 	SleepMaxIO string // maximum IO tolerance after which healing would sleep
 	// maximum sleep duration between objects to slow down heal operation
 	// only applied in conjunction with maxIO.
@@ -245,6 +246,7 @@ func (adm *AdminClient) CancelHealSets(ctx context.Context, opts HealSetsOpts) e
 func (adm *AdminClient) HealSets(ctx context.Context, opts HealSetsOpts) (string, error) {
 	queryVals := make(url.Values)
 	queryVals.Set("healSetsList", opts.Sets)
+	queryVals.Set("healSetsPrefix", opts.Prefix)
 	queryVals.Set("healSleepMaxIO", opts.SleepMaxIO)
 	queryVals.Set("healSleepDuration", opts.SleepMax)
 

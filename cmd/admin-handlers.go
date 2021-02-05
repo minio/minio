@@ -63,6 +63,7 @@ const (
 
 	healSetsUUID      = "healSetsUUID"
 	healSetsList      = "healSetsList"
+	healSetsPrefix    = "healSetsPrefix"
 	healSleepDuration = "healSleepDuration"
 	healSleepMaxIO    = "healSleepMaxIO"
 )
@@ -779,9 +780,8 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 			wg.Add(1)
 			go func(setNumber int) {
 				defer wg.Done()
-				lbDisks := z.serverSets[0].sets[setNumber].getOnlineDisks()
-				setDriveCount := z.SetDriveCount()
-				if err := healErasureSet(ctx, setNumber, setDriveCount, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
+				lbDisks := z.serverSets[0].sets[setNumber].getDisks()
+				if err := healErasureSet(ctx, vars[healSetsPrefix], setNumber, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
 					logger.LogIf(ctx, err)
 				}
 			}(setNumber)
@@ -791,7 +791,11 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 		opts.cancel()
 		delete(a.healSetsMap, opts.taskUUID)
 		a.mu.Unlock()
-		logger.Info("Healing finished for %v", vars[healSetsList])
+		if vars[healSetsPrefix] != "" {
+			logger.Info("Healing finished for %v at %s", vars[healSetsList], vars[healSetsPrefix])
+		} else {
+			logger.Info("Healing finished for %v", vars[healSetsList])
+		}
 	}()
 
 	a.mu.Lock()

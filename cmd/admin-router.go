@@ -85,7 +85,10 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 				Queries(healSetsUUID, "{healSetsUUID:.*}")
 			adminRouter.Methods(http.MethodPost).Path(adminVersion+"/heal-sets").
 				HandlerFunc(httpTraceHdrs(adminAPI.HealSetsHandler)).
-				Queries(healSetsList, "{healSetsList:.*}", healSleepMaxIO, "{healSleepMaxIO:.*}", healSleepDuration, "{healSleepDuration:.*}")
+				Queries(healSetsList, "{healSetsList:.*}",
+					healSetsPrefix, "{healSetsPrefix:.*}",
+					healSleepMaxIO, "{healSleepMaxIO:.*}",
+					healSleepDuration, "{healSleepDuration:.*}")
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/background-heal/status").HandlerFunc(httpTraceHdrs(adminAPI.BackgroundHealStatusHandler))
 
 			/// Health operations
