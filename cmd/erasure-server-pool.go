@@ -782,7 +782,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
-		if obj.IsDir && delimiter != "" {
+		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
 		} else {
 			loi.Objects = append(loi.Objects, obj)
@@ -821,7 +821,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
-		if obj.IsDir && delimiter != "" {
+		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
 		} else {
 			loi.Objects = append(loi.Objects, obj)
