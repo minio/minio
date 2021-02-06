@@ -92,7 +92,10 @@ func newWarmBackendAzure(conf madmin.TierAzure) (*warmBackendAzure, error) {
 		return nil, err
 	}
 	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
-	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", conf.AccountKey))
+	u, err := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", conf.AccountName))
+	if err != nil {
+		return nil, err
+	}
 	serviceURL := azblob.NewServiceURL(*u, p)
 	return &warmBackendAzure{
 		serviceURL:   serviceURL,
