@@ -92,8 +92,7 @@ func (dm *DRWMutex) Lock(id, source string) {
 
 // Options lock options.
 type Options struct {
-	Timeout   time.Duration
-	Tolerance int
+	Timeout time.Duration
 }
 
 // GetLock tries to get a write lock on dm before the timeout elapses.
@@ -155,10 +154,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, id, source string, isReadL
 	defer cancel()
 
 	// Tolerance is not set, defaults to half of the locker clients.
-	tolerance := opts.Tolerance
-	if tolerance == 0 {
-		tolerance = len(restClnts) / 2
-	}
+	tolerance := len(restClnts) / 2
 
 	// Quorum is effectively = total clients subtracted with tolerance limit
 	quorum := len(restClnts) - tolerance
