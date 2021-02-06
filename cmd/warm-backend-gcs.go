@@ -7,7 +7,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/minio/minio/pkg/madmin"
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -86,16 +85,10 @@ func newWarmBackendGCS(conf madmin.TierGCS) (*warmBackendGCS, error) {
 		return nil, err
 	}
 
-	creds, err := google.CredentialsFromJSON(context.Background(), []byte(credsJSON))
+	client, err := storage.NewClient(context.Background(), option.WithCredentialsJSON(credsJSON), option.WithScopes(storage.ScopeReadWrite))
 	if err != nil {
 		return nil, err
 	}
-
-	client, err := storage.NewClient(context.Background(), option.WithCredentials(creds))
-	if err != nil {
-		return nil, err
-	}
-
 	return &warmBackendGCS{client, conf.Bucket, conf.Prefix, conf.StorageClass}, nil
 }
 
