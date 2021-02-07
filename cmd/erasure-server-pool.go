@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -368,7 +367,6 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	}
 
 	if len(allBuckets) == 0 {
-		logger.Info(color.Green("data-crawl:") + " No buckets found, skipping crawl")
 		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
 		return nil
 	}
