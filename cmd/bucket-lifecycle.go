@@ -65,13 +65,18 @@ func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
 }
 
-type expiryState struct {
-	expiryCh chan ObjectInfo
+type expiryTask struct {
+	objInfo       ObjectInfo
+	versionExpiry bool
 }
 
-func (es *expiryState) queueExpiryTask(oi ObjectInfo) {
+type expiryState struct {
+	expiryCh chan expiryTask
+}
+
+func (es *expiryState) queueExpiryTask(oi ObjectInfo, rmVersion bool) {
 	select {
-	case es.expiryCh <- oi:
+	case es.expiryCh <- expiryTask{objInfo: oi, versionExpiry: rmVersion}:
 	default:
 	}
 }
@@ -82,7 +87,7 @@ var (
 
 func newExpiryState() *expiryState {
 	es := &expiryState{
-		expiryCh: make(chan ObjectInfo, 10000),
+		expiryCh: make(chan expiryTask, 10000),
 	}
 	go func() {
 		<-GlobalContext.Done()
@@ -94,8 +99,8 @@ func newExpiryState() *expiryState {
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	globalExpiryState = newExpiryState()
 	go func() {
-		for oi := range globalExpiryState.expiryCh {
-			applyExpiryRule(ctx, objectAPI, oi, false)
+		for t := range globalExpiryState.expiryCh {
+			applyExpiryRule(ctx, objectAPI, t.objInfo, false, t.versionExpiry)
 		}
 	}()
 }
