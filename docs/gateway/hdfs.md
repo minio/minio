@@ -30,6 +30,44 @@ docker run -p 9000:9000 \
  minio/minio gateway hdfs hdfs://namenode:8200
 ```
 
+### Setup Kerberos
+
+MinIO supports two kerberos authentication methods, keytab and ccache.
+
+To enable kerberos authentication, you need to set `hadoop.security.authentication=kerberos` in the HDFS config file.
+
+```xml
+<property>
+  <name>hadoop.security.authentication</name>
+  <value>kerberos</value>
+</property>
+```
+
+MinIO will load `krb5.conf` from environment variable `KRB5_CONFIG` or default location `/etc/krb5.conf`.
+```sh
+export KRB5_CONFIG=/path/to/krb5.conf
+```
+
+If you want MinIO to use ccache for authentication, set environment variable `KRB5CCNAME` to the credential cache file path,
+or MinIO will use the default location `/tmp/krb5cc_%{uid}`.
+```sh
+export KRB5CCNAME=/path/to/krb5cc
+```
+
+If you prefer to use keytab, with automatically renewal, you need to config three environment variables:
+
+- `KRB5KEYTAB`: the location of keytab file
+- `KRB5USERNAME`: the username
+- `KRB5REALM`: the realm
+
+Please note that the username is not principal name.
+
+```sh
+export KRB5KEYTAB=/path/to/keytab
+export KRB5USERNAME=hdfs
+export KRB5REALM=REALM.COM
+```
+
 ## Test using MinIO Browser
 *MinIO gateway* comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 to ensure that your server has started successfully.
 
