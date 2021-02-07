@@ -30,6 +30,15 @@ docker run -p 9000:9000 \
  minio/minio gateway hdfs hdfs://namenode:8200
 ```
 
+### Subdirectory
+
+If you don't want to expose the entire HDFS, you can configure environment variable `HDFS_GATEWAY_PREFIX` to ensure that
+the gateway can only access specific subdirectories.
+
+```sh
+export HDFS_GATEWAY_PREFIX=/subdir
+```
+
 ### Setup Kerberos
 
 MinIO supports two kerberos authentication methods, keytab and ccache.

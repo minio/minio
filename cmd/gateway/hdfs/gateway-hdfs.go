@@ -175,7 +175,7 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 	opts.DatanodeDialFunc = dialFunc
 
 	// Not addresses found, load it from command line.
-	var commonPath string
+	commonPath := env.Get("HDFS_GATEWAY_PREFIX", "")
 	if len(opts.Addresses) == 0 {
 		var addresses []string
 		for _, s := range g.args {
@@ -497,7 +497,7 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 	}
 
 	for _, fileInfo := range infos {
-		filePath := n.hdfsPathJoin(filePath, fileInfo.Name())
+		filePath := minio.PathJoin(filePath, fileInfo.Name())
 		fileInfos[filePath] = fileInfo
 	}
 
