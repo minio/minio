@@ -64,6 +64,9 @@ type BackendInfo struct {
 	// Represents various backend types, currently on FS, Erasure and Gateway
 	Type BackendType
 
+	// Following fields are only meaningful if BackendType is Gateway.
+	GatewayOnline bool
+
 	// Following fields are only meaningful if BackendType is Erasure.
 	OnlineDisks  BackendDisks // Online disks during server startup.
 	OfflineDisks BackendDisks // Offline disks during server startup.
