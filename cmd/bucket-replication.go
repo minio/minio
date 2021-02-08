@@ -914,6 +914,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, opts Objec
 		ReplicationStatus: replication.StatusType(objInfo.ReplicationStatus),
 		UserTags:          tags.String(),
 	}
+	oi.UserDefined = make(map[string]string, len(objInfo.Metadata))
 	for k, v := range objInfo.Metadata {
 		oi.UserDefined[k] = v[0]
 	}
