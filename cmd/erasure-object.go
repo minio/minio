@@ -1319,6 +1319,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 
 	if err = tgtClient.Put(ctx, destObj, pr, fi.Size); err != nil {
 		pr.Close()
+		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
 		return err
 	}
 	pr.Close()

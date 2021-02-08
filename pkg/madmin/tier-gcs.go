@@ -66,7 +66,7 @@ func NewTierGCS(name string, credsJSON []byte, bucket string, options ...GCSOpti
 		Bucket: bucket,
 		// Defaults
 		// endpoint is meant only for client-side display purposes
-		Endpoint:     "https://storage.googleapis.com/storage/v1/",
+		Endpoint:     "https://storage.googleapis.com/",
 		Prefix:       "",
 		Region:       "",
 		StorageClass: "",

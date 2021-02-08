@@ -150,7 +150,7 @@ func TestGCSStorageClass(t *testing.T) {
 		Creds:  encodedCreds,
 
 		// custom values
-		Endpoint: "https://storage.googleapis.com/storage/v1/",
+		Endpoint: "https://storage.googleapis.com/",
 		Prefix:   prefix,
 		Region:   region,
 	}
