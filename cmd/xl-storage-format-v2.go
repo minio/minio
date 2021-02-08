@@ -611,12 +611,13 @@ func (z xlMetaV2) TotalSize() int64 {
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
-	var latestModTime time.Time
-	var latestVersionID string
+func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, error) {
+	var versions []FileInfo
+	var err error
+
 	for _, version := range z.Versions {
 		if !version.Valid() {
-			return nil, latestModTime, errFileCorrupt
+			return nil, time.Time{}, errFileCorrupt
 		}
 		var fi FileInfo
 		switch version.Type {
@@ -628,27 +629,22 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 			fi, err = version.ObjectV1.ToFileInfo(volume, path)
 		}
 		if err != nil {
-			return nil, latestModTime, err
-		}
-		if fi.ModTime.After(latestModTime) {
-			latestModTime = fi.ModTime
-			latestVersionID = fi.VersionID
+			return nil, time.Time{}, err
 		}
 		versions = append(versions, fi)
 	}
 
-	// We didn't find the version in delete markers so latest version
-	// is indeed one of the actual version of the object with data.
+	sort.Sort(versionsSorter(versions))
+
 	for i := range versions {
-		if versions[i].VersionID != latestVersionID {
-			continue
+		versions[i].NumVersions = len(versions)
+		if i > 0 {
+			versions[i].SuccessorModTime = versions[i-1].ModTime
 		}
-		versions[i].IsLatest = true
-		break
 	}
 
-	sort.Sort(versionsSorter(versions))
-	return versions, latestModTime, nil
+	versions[0].IsLatest = true
+	return versions, versions[0].ModTime, nil
 }
 
 func getModTimeFromVersion(v xlMetaV2Version) time.Time {
@@ -712,40 +708,40 @@ func (z xlMetaV2) ToFileInfo(volume, path, versionID string) (fi FileInfo, err e
 		return FileInfo{}, errFileNotFound
 	}
 
-	var i = -1
-	var version xlMetaV2Version
+	var foundIndex = -1
 
-findVersion:
-	for i, version = range orderedVersions {
-		switch version.Type {
+	for i := range orderedVersions {
+		switch orderedVersions[i].Type {
 		case ObjectType:
-			if bytes.Equal(version.ObjectV2.VersionID[:], uv[:]) {
-				fi, err = version.ObjectV2.ToFileInfo(volume, path)
-				break findVersion
+			if bytes.Equal(orderedVersions[i].ObjectV2.VersionID[:], uv[:]) {
+				fi, err = orderedVersions[i].ObjectV2.ToFileInfo(volume, path)
+				foundIndex = i
+				break
 			}
 		case LegacyType:
-			if version.ObjectV1.VersionID == versionID {
-				fi, err = version.ObjectV1.ToFileInfo(volume, path)
-				break findVersion
+			if orderedVersions[i].ObjectV1.VersionID == versionID {
+				fi, err = orderedVersions[i].ObjectV1.ToFileInfo(volume, path)
+				foundIndex = i
+				break
 			}
 		case DeleteType:
-			if bytes.Equal(version.DeleteMarker.VersionID[:], uv[:]) {
-				fi, err = version.DeleteMarker.ToFileInfo(volume, path)
-				break findVersion
+			if bytes.Equal(orderedVersions[i].DeleteMarker.VersionID[:], uv[:]) {
+				fi, err = orderedVersions[i].DeleteMarker.ToFileInfo(volume, path)
+				foundIndex = i
+				break
 			}
 		}
 	}
-
 	if err != nil {
 		return fi, err
 	}
 
-	if i >= 0 {
+	if foundIndex >= 0 {
 		// A version is found, fill dynamic fields
-		fi.IsLatest = i == 0
+		fi.IsLatest = foundIndex == 0
 		fi.NumVersions = len(z.Versions)
-		if i < len(orderedVersions)-1 {
-			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[i+1])
+		if foundIndex > 0 {
+			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[foundIndex-1])
 		}
 		return fi, nil
 	}

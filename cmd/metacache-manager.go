@@ -65,6 +65,8 @@ func (m *metacacheManager) initManager() {
 		}
 
 		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+
 		var exit bool
 		bg := context.Background()
 		for !exit {

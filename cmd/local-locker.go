@@ -249,7 +249,10 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 		// Lock found, proceed to verify if belongs to given uid.
 		lri, ok := l.lockMap[resource]
 		if !ok {
-			return true, nil
+			// lock doesn't exist yet not reason to
+			// expire that doesn't exist yet - it may be
+			// racing with other active lock requests.
+			return false, nil
 		}
 
 		// Check whether uid is still active
@@ -258,7 +261,7 @@ func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired
 				ep := globalRemoteEndpoints[args.Owner]
 				if !ep.IsLocal {
 					// check if the owner is online
-					return isServerResolvable(ep, 1*time.Second) != nil, nil
+					return isServerResolvable(ep, 3*time.Second) != nil, nil
 				}
 				return false, nil
 			}

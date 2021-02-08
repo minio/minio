@@ -107,11 +107,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
 		}
 
-		// Validate if users brought different different distribution algo pools.
-		if distributionAlgo != formats[i].Erasure.DistributionAlgo {
-			return nil, fmt.Errorf("All serverPools should have same distributionAlgo expected %s, got %s", distributionAlgo, formats[i].Erasure.DistributionAlgo)
-		}
-
 		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives)
 		if err != nil {
 			return nil, err
@@ -782,7 +777,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
-		if obj.IsDir && delimiter != "" {
+		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
 		} else {
 			loi.Objects = append(loi.Objects, obj)
@@ -821,7 +816,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
-		if obj.IsDir && delimiter != "" {
+		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
 		} else {
 			loi.Objects = append(loi.Objects, obj)

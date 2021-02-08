@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"net/http"
 	"path"
 	"runtime/debug"
 	"sort"
@@ -96,25 +96,19 @@ func loadBucketMetaCache(ctx context.Context, bucket string) (*bucketMetacache, 
 			logger.LogIf(ctx, fmt.Errorf("loadBucketMetaCache: object layer not ready. bucket: %q", bucket))
 		}
 	}
+
 	var meta bucketMetacache
 	var decErr error
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	r, w := io.Pipe()
-	go func() {
-		defer wg.Done()
+	// Use global context for this.
+	r, err := objAPI.GetObjectNInfo(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), nil, http.Header{}, readLock, ObjectOptions{})
+	if err == nil {
 		dec := s2DecPool.Get().(*s2.Reader)
 		dec.Reset(r)
 		decErr = meta.DecodeMsg(msgp.NewReader(dec))
 		dec.Reset(nil)
+		r.Close()
 		s2DecPool.Put(dec)
-		r.CloseWithError(decErr)
-	}()
-	// Use global context for this.
-	err := objAPI.GetObject(GlobalContext, minioMetaBucket, pathJoin("buckets", bucket, ".metacache", "index.s2"), 0, -1, w, "", ObjectOptions{})
-	logger.LogIf(ctx, w.CloseWithError(err))
-	wg.Wait()
+	}
 	if err != nil {
 		switch err.(type) {
 		case ObjectNotFound:
