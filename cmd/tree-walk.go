@@ -24,8 +24,9 @@ import (
 
 // TreeWalkResult - Tree walk result carries results of tree walking.
 type TreeWalkResult struct {
-	entry string
-	end   bool
+	entry    string
+	emptyDir bool
+	end      bool
 }
 
 // Return entries that have prefix prefixEntry.
@@ -254,7 +255,7 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 		select {
 		case <-endWalkCh:
 			return false, errWalkAbort
-		case resultCh <- TreeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
+		case resultCh <- TreeWalkResult{entry: pathJoin(prefixDir, entry), emptyDir: leafDir, end: isEOF}:
 		}
 	}
 

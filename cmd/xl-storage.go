@@ -977,7 +977,7 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 		dirObjects := make(map[string]struct{})
 		for walkResult := range walkResultCh {
 			var fiv FileInfoVersions
-			if HasSuffix(walkResult.entry, SlashSeparator) {
+			if HasSuffix(walkResult.entry, SlashSeparator) && !walkResult.emptyDir {
 				_, dirObj := dirObjects[walkResult.entry]
 				if dirObj {
 					continue
@@ -1081,7 +1081,7 @@ func (s *xlStorage) Walk(ctx context.Context, volume, dirPath, marker string, re
 		dirObjects := make(map[string]struct{})
 		for walkResult := range walkResultCh {
 			var fi FileInfo
-			if HasSuffix(walkResult.entry, SlashSeparator) {
+			if HasSuffix(walkResult.entry, SlashSeparator) && !walkResult.emptyDir {
 				_, dirObj := dirObjects[walkResult.entry]
 				if dirObj {
 					continue
