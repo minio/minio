@@ -179,7 +179,7 @@ func (b *bucketMetacache) save(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	_, err = objAPI.PutObject(ctx, minioMetaBucket, pathJoin("buckets", b.bucket, ".metacache", "index.s2"), NewPutObjReader(hr, nil, nil), ObjectOptions{})
+	_, err = objAPI.PutObject(ctx, minioMetaBucket, pathJoin("buckets", b.bucket, ".metacache", "index.s2"), NewPutObjReader(hr), ObjectOptions{})
 	logger.LogIf(ctx, err)
 	return err
 }

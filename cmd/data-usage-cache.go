@@ -521,7 +521,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 	_, err = store.PutObject(ctx,
 		dataUsageBucket,
 		name,
-		NewPutObjReader(r, nil, nil),
+		NewPutObjReader(r),
 		ObjectOptions{})
 	if isErrBucketNotFound(err) {
 		return nil
