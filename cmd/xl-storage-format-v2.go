@@ -611,12 +611,13 @@ func (z xlMetaV2) TotalSize() int64 {
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTime time.Time, err error) {
-	var latestModTime time.Time
-	var latestVersionID string
+func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, error) {
+	var versions []FileInfo
+	var err error
+
 	for _, version := range z.Versions {
 		if !version.Valid() {
-			return nil, latestModTime, errFileCorrupt
+			return nil, time.Time{}, errFileCorrupt
 		}
 		var fi FileInfo
 		switch version.Type {
@@ -628,27 +629,22 @@ func (z xlMetaV2) ListVersions(volume, path string) (versions []FileInfo, modTim
 			fi, err = version.ObjectV1.ToFileInfo(volume, path)
 		}
 		if err != nil {
-			return nil, latestModTime, err
-		}
-		if fi.ModTime.After(latestModTime) {
-			latestModTime = fi.ModTime
-			latestVersionID = fi.VersionID
+			return nil, time.Time{}, err
 		}
 		versions = append(versions, fi)
 	}
 
-	// We didn't find the version in delete markers so latest version
-	// is indeed one of the actual version of the object with data.
+	sort.Sort(versionsSorter(versions))
+
 	for i := range versions {
-		if versions[i].VersionID != latestVersionID {
-			continue
+		versions[i].NumVersions = len(versions)
+		if i > 0 {
+			versions[i].SuccessorModTime = versions[i-1].ModTime
 		}
-		versions[i].IsLatest = true
-		break
 	}
 
-	sort.Sort(versionsSorter(versions))
-	return versions, latestModTime, nil
+	versions[0].IsLatest = true
+	return versions, versions[0].ModTime, nil
 }
 
 func getModTimeFromVersion(v xlMetaV2Version) time.Time {
@@ -744,8 +740,8 @@ findVersion:
 		// A version is found, fill dynamic fields
 		fi.IsLatest = i == 0
 		fi.NumVersions = len(z.Versions)
-		if i < len(orderedVersions)-1 {
-			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[i+1])
+		if i > 0 {
+			fi.SuccessorModTime = getModTimeFromVersion(orderedVersions[i-1])
 		}
 		return fi, nil
 	}
