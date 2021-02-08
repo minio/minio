@@ -284,6 +284,8 @@ var (
 
 	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.
+
+	globalFSOTmpfile bool
 )
 
 // Returns minio global information, as a key value map.

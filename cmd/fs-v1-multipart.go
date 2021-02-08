@@ -319,16 +319,22 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	}
 	buf := make([]byte, bufSize)
 
-	tmpPartPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
-	bytesWritten, err := fsCreateFile(ctx, tmpPartPath, data, buf, data.Size())
+	var bytesWritten int64;
+	var file os.File
+	var tmpPartPath string
 
-	// Delete temporary part in case of failure. If
-	// PutObjectPart succeeds then there would be nothing to
-	// delete in which case we just ignore the error.
-	defer fsRemoveFile(ctx, tmpPartPath)
+	if globalFSOTmpfile {
+		tmpPartDir := pathJoin(fs.fsPath, minioMetaTmpBucket)
+		bytesWritten, err, file = fsCreateAndGetFile(ctx, tmpPartDir, data, buf, data.Size())
+		defer file.Close()
+	} else {
+		tmpPartPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
+		bytesWritten, err = fsCreateFile(ctx, tmpPartPath, data, buf, data.Size())
+		defer fsRemoveFile(ctx, tmpPartPath)
+	}
 
 	if err != nil {
-		return pi, toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
+		return pi, toObjectErr(err, fs.fsPath)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer
@@ -343,6 +349,7 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		etag = GenETag()
 	}
 
+	// Make sure not to create parent directories if they don't exist - the upload might have been aborted.
 	partPath := pathJoin(uploadIDDir, fs.encodePartFile(partID, etag, data.ActualSize()))
 
 	// Make sure not to create parent directories if they don't exist - the upload might have been aborted.
@@ -353,8 +360,23 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
+	if globalFSOTmpfile {
+		filename := fmt.Sprintf("/proc/self/fd/%d", file.Fd())
+		err = fsLinkat(ctx, AT_FDCWD, filename, AT_FDCWD, partPath, AT_SYMLINK_FOLLOW);
+	} else {
+		err = fsSimpleRenameFile(ctx, tmpPartPath, partPath)
+	}
+
+	if err != nil {
+		if err == errFileNotFound || err == errFileAccessDenied {
+			return pi, InvalidUploadID{Bucket: bucket, Object: object, UploadID: uploadID}
+		}
+		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
+	}
+
 	go fs.backgroundAppend(ctx, bucket, object, uploadID)
 
+	// gershon todo : stat should be replace by values returned from fsLink
 	fi, err := fsStatFile(ctx, partPath)
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)

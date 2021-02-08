@@ -18,13 +18,22 @@ package cmd
 
 import (
 	"context"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	pathutil "path"
 	"runtime"
+	"syscall"
+	_ "syscall"
+	"unsafe"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
+)
+
+const(
+	AT_SYMLINK_FOLLOW = 0x400
+	AT_FDCWD = -100
 )
 
 // Removes only the file at given path does not remove
@@ -271,49 +280,74 @@ func fsOpenFile(ctx context.Context, readPath string, offset int64) (io.ReadClos
 	return fr, st.Size(), nil
 }
 
-// Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
 func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
+	bytesWritten, err, _ := createFile(ctx, filePath, reader, buf, fallocSize, false)
+	return bytesWritten, err
+}
+
+func fsCreateAndGetFile(ctx context.Context, tmpPartDir string, reader io.Reader, buf []byte, fallocSize int64) (int64, error, os.File) {
+	return createFile(ctx, tmpPartDir, reader, buf, fallocSize, true)
+}
+
+// Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
+func createFile(ctx context.Context, filePath string, reader io.Reader, buf []byte, fallocSize int64, getFile bool) (int64, error, os.File) {
 	if filePath == "" || reader == nil {
 		logger.LogIf(ctx, errInvalidArgument)
-		return 0, errInvalidArgument
+		return 0, errInvalidArgument, os.File {}
 	}
 
 	if err := checkPathLength(filePath); err != nil {
 		logger.LogIf(ctx, err)
-		return 0, err
+		return 0, err, os.File {}
 	}
 
 	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
 		switch {
 		case osIsPermission(err):
-			return 0, errFileAccessDenied
+			return 0, errFileAccessDenied, os.File {}
 		case osIsExist(err):
-			return 0, errFileAccessDenied
+			return 0, errFileAccessDenied, os.File {}
 		case isSysErrIO(err):
-			return 0, errFaultyDisk
+			return 0, errFaultyDisk, os.File {}
 		case isSysErrInvalidArg(err):
-			return 0, errUnsupportedDisk
+			return 0, errUnsupportedDisk, os.File {}
 		case isSysErrNoSpace(err):
-			return 0, errDiskFull
+			return 0, errDiskFull, os.File {}
 		}
-		return 0, err
+		return 0, err, os.File {}
 	}
 
-	flags := os.O_CREATE | os.O_WRONLY
-	if globalFSOSync {
-		flags = flags | os.O_SYNC
+	var writer *os.File
+	var err error
+
+	if getFile && globalFSOTmpfile {
+		flags := os.O_WRONLY | unix.O_TMPFILE
+		writer, err = lock.Open(filePath, flags, 0666)
+		if err != nil {
+			return 0, osErrToFileErr(err), os.File {}
+		}
+	} else {
+		flags := os.O_CREATE | os.O_WRONLY
+		if globalFSOSync {
+			flags = flags | os.O_SYNC
+		}
+		writer, err = lock.Open(filePath, flags, 0666)
+		if err != nil {
+			if writer != nil {
+				_ = writer.Close()
+			}
+			return 0, osErrToFileErr(err), os.File {}
+		}
 	}
-	writer, err := lock.Open(filePath, flags, 0666)
-	if err != nil {
-		return 0, osErrToFileErr(err)
-	}
-	defer writer.Close()
 
 	// Fallocate only if the size is final object is known.
 	if fallocSize > 0 {
 		if err = fsFAllocate(int(writer.Fd()), 0, fallocSize); err != nil {
 			logger.LogIf(ctx, err)
-			return 0, err
+			if writer != nil {
+				_ = writer.Close()
+			}
+			return 0, err, os.File {}
 		}
 	}
 
@@ -322,19 +356,25 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 		bytesWritten, err = io.CopyBuffer(writer, reader, buf)
 		if err != nil {
 			if err != io.ErrUnexpectedEOF {
+				if writer != nil {
+					_ = writer.Close()
+				}
 				logger.LogIf(ctx, err)
 			}
-			return 0, err
+			return 0, err, os.File {}
 		}
 	} else {
 		bytesWritten, err = io.Copy(writer, reader)
 		if err != nil {
 			logger.LogIf(ctx, err)
-			return 0, err
+			if writer != nil {
+				_ = writer.Close()
+			}
+			return 0, err, os.File {}
 		}
 	}
 
-	return bytesWritten, nil
+	return bytesWritten, nil, *writer
 }
 
 // fsFAllocate is similar to Fallocate but provides a convenient
@@ -376,6 +416,42 @@ func fsSimpleRenameFile(ctx context.Context, sourcePath, destPath string) error 
 	}
 
 	if err := os.Rename(sourcePath, destPath); err != nil {
+		logger.LogIf(ctx, err)
+		return osErrToFileErr(err)
+	}
+
+	return nil
+}
+
+func linkat(olddirfd int, oldpath string, newdirfd int, newpath string, flags int) (err error) {
+	var _p0 *byte
+	_p0, err = syscall.BytePtrFromString(oldpath)
+	if err != nil {
+		return
+	}
+	var _p1 *byte
+	_p1, err = syscall.BytePtrFromString(newpath)
+	if err != nil {
+		return
+	}
+	_, _, e1 := syscall.Syscall6(syscall.SYS_LINKAT, uintptr(olddirfd), uintptr(unsafe.Pointer(_p0)), uintptr(newdirfd), uintptr(unsafe.Pointer(_p1)), uintptr(flags), 0)
+	if e1 != 0 {
+		err = error(e1)
+	}
+	return
+}
+
+func fsLinkat(ctx context.Context, oldDirFD int64, oldPath string, newDirFD int64, newPath string, flags int) error {
+	if err := checkPathLength(oldPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+	if err := checkPathLength(newPath); err != nil {
+		logger.LogIf(ctx, err)
+		return err
+	}
+
+	if err := linkat(int(oldDirFD), oldPath , int(newDirFD), newPath, flags); err != nil {
 		logger.LogIf(ctx, err)
 		return osErrToFileErr(err)
 	}
