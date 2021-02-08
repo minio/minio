@@ -367,7 +367,19 @@ func getCopyObjMetadata(oi ObjectInfo, dest replication.Destination) map[string]
 	return meta
 }
 
-func putReplicationOpts(ctx context.Context, dest replication.Destination, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
+// lookup map entry case insensitively.
+func getMapValue(m map[string]string, key string) (string, bool) {
+	if v, ok := m[key]; ok {
+		return v, ok
+	}
+	if v, ok := m[strings.ToLower(key)]; ok {
+		return v, ok
+	}
+	v, ok := m[http.CanonicalHeaderKey(key)]
+	return v, ok
+}
+
+func putReplicationOpts(ctx context.Context, dest replication.Destination, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
 		if strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower) {
@@ -401,33 +413,32 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 			putOpts.UserTags = tag.ToMap()
 		}
 	}
-	if lang, ok := objInfo.UserDefined[xhttp.ContentLanguage]; ok {
+	if lang, ok := getMapValue(objInfo.UserDefined, xhttp.ContentLanguage); ok {
 		putOpts.ContentLanguage = lang
 	}
-	if disp, ok := objInfo.UserDefined[xhttp.ContentDisposition]; ok {
+	if disp, ok := getMapValue(objInfo.UserDefined, xhttp.ContentDisposition); ok {
 		putOpts.ContentDisposition = disp
 	}
-	if cc, ok := objInfo.UserDefined[xhttp.CacheControl]; ok {
+	if cc, ok := getMapValue(objInfo.UserDefined, xhttp.CacheControl); ok {
 		putOpts.CacheControl = cc
 	}
-	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
+	if mode, ok := getMapValue(objInfo.UserDefined, xhttp.AmzObjectLockMode); ok {
 		rmode := miniogo.RetentionMode(mode)
 		putOpts.Mode = rmode
 	}
-	if retainDateStr, ok := objInfo.UserDefined[xhttp.AmzObjectLockRetainUntilDate]; ok {
+	if retainDateStr, ok := getMapValue(objInfo.UserDefined, xhttp.AmzObjectLockRetainUntilDate); ok {
 		rdate, err := time.Parse(time.RFC3339Nano, retainDateStr)
 		if err != nil {
-			return
+			return miniogo.PutObjectOptions{}, err
 		}
 		putOpts.RetainUntilDate = rdate
 	}
-	if lhold, ok := objInfo.UserDefined[xhttp.AmzObjectLockLegalHold]; ok {
+	if lhold, ok := getMapValue(objInfo.UserDefined, xhttp.AmzObjectLockLegalHold); ok {
 		putOpts.LegalHold = miniogo.LegalHoldStatus(lhold)
 	}
 	if crypto.S3.IsEncrypted(objInfo.UserDefined) {
 		putOpts.ServerSideEncryption = encrypt.NewSSE()
 	}
-
 	return
 }
 
@@ -627,7 +638,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		c := &miniogo.Core{Client: tgt.Client}
 		if _, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts); err != nil {
 			replicationStatus = replication.Failed
-			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
+			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
 	} else {
 		target, err := globalBucketMetadataSys.GetBucketTarget(bucket, cfg.RoleArn)
@@ -642,7 +653,11 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			return
 		}
 
-		putOpts := putReplicationOpts(ctx, dest, objInfo)
+		putOpts, err := putReplicationOpts(ctx, dest, objInfo)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to replicate object %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
+			return
+		}
 		// Setup bandwidth throttling
 		peers, _ := globalEndpoints.peers()
 		totalNodesCount := len(peers)
