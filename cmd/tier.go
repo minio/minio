@@ -69,25 +69,6 @@ func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, 
 	return madmin.Unsupported, false
 }
 
-func tierBackendInUse(sc madmin.TierConfig) (bool, error) {
-	var d warmBackend
-	var err error
-	switch sc.Type {
-	case madmin.S3:
-		d, err = newWarmBackendS3(*sc.S3)
-	case madmin.Azure:
-		d, err = newWarmBackendAzure(*sc.Azure)
-	case madmin.GCS:
-		d, err = newWarmBackendGCS(*sc.GCS)
-	default:
-		return false, errTierTypeUnsupported
-	}
-	if err != nil {
-		return false, err
-	}
-	return d.InUse(context.Background())
-}
-
 func (config *TierConfigMgr) Add(tier madmin.TierConfig) error {
 	config.Lock()
 	defer config.Unlock()
@@ -103,23 +84,69 @@ func (config *TierConfigMgr) Add(tier madmin.TierConfig) error {
 		return errTierAlreadyExists
 	}
 
-	inuse, err := tierBackendInUse(tier)
-	if err != nil {
-		return err
-	}
-	if inuse {
-		return errWarmBackendInUse
-	}
-
 	switch tier.Type {
 	case madmin.S3:
+		d, err := newWarmBackendS3(*tier.S3)
+		if err != nil {
+			return err
+		}
+		err = checkWarmBackend(context.TODO(), d)
+		if err != nil {
+			return err
+		}
+		// Check if warmbackend is in use by other MinIO tenants
+		inUse, err := d.InUse(context.TODO())
+		if err != nil {
+			return err
+		}
+		if inUse {
+			return errWarmBackendInUse
+		}
+
 		config.S3[tierName] = *tier.S3
+		config.drivercache[tierName] = d
 
 	case madmin.Azure:
+		d, err := newWarmBackendAzure(*tier.Azure)
+		if err != nil {
+			return err
+		}
+		err = checkWarmBackend(context.TODO(), d)
+		if err != nil {
+			return err
+		}
+		// Check if warmbackend is in use by other MinIO tenants
+		inUse, err := d.InUse(context.TODO())
+		if err != nil {
+			return err
+		}
+		if inUse {
+			return errWarmBackendInUse
+		}
+
 		config.Azure[tierName] = *tier.Azure
+		config.drivercache[tierName] = d
 
 	case madmin.GCS:
+		d, err := newWarmBackendGCS(*tier.GCS)
+		if err != nil {
+			return err
+		}
+		err = checkWarmBackend(context.TODO(), d)
+		if err != nil {
+			return err
+		}
+		// Check if warmbackend is in use by other MinIO tenants
+		inUse, err := d.InUse(context.TODO())
+		if err != nil {
+			return err
+		}
+		if inUse {
+			return errWarmBackendInUse
+		}
+
 		config.GCS[tierName] = *tier.GCS
+		config.drivercache[tierName] = d
 
 	default:
 		return errTierTypeUnsupported
@@ -171,11 +198,8 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 	defer config.Unlock()
 
 	// check if tier by this name exists
-	var (
-		tierType madmin.TierType
-		exists   bool
-	)
-	if tierType, exists = config.isTierNameInUse(tierName); !exists {
+	tierType, exists := config.isTierNameInUse(tierName)
+	if !exists {
 		return errTierNotFound
 	}
 
@@ -184,26 +208,53 @@ func (config *TierConfigMgr) Edit(tierName string, creds madmin.TierCreds) error
 		if creds.AccessKey == "" || creds.SecretKey == "" {
 			return errTierInsufficientCreds
 		}
-		sc := config.S3[tierName]
-		sc.AccessKey = creds.AccessKey
-		sc.SecretKey = creds.SecretKey
-		config.S3[tierName] = sc
+		newCfg := config.S3[tierName]
+		newCfg.AccessKey = creds.AccessKey
+		newCfg.SecretKey = creds.SecretKey
+		d, err := newWarmBackendS3(newCfg)
+		if err != nil {
+			return err
+		}
+		err = checkWarmBackend(context.TODO(), d)
+		if err != nil {
+			return err
+		}
+		config.S3[tierName] = newCfg
+		config.drivercache[tierName] = d
 
 	case madmin.Azure:
 		if creds.AccessKey == "" || creds.SecretKey == "" {
 			return errTierInsufficientCreds
 		}
-		sc := config.Azure[tierName]
-		sc.AccountName = creds.AccessKey
-		sc.AccountKey = creds.SecretKey
-		config.Azure[tierName] = sc
+		newCfg := config.Azure[tierName]
+		newCfg.AccountName = creds.AccessKey
+		newCfg.AccountKey = creds.SecretKey
+		d, err := newWarmBackendAzure(newCfg)
+		if err != nil {
+			return err
+		}
+		err = checkWarmBackend(context.TODO(), d)
+		if err != nil {
+			return err
+		}
+		config.Azure[tierName] = newCfg
+		config.drivercache[tierName] = d
 	case madmin.GCS:
 		if creds.CredsJSON == nil {
 			return errTierInsufficientCreds
 		}
-		sc := config.GCS[tierName]
-		sc.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
-		config.GCS[tierName] = sc
+		newCfg := config.GCS[tierName]
+		newCfg.Creds = base64.URLEncoding.EncodeToString(creds.CredsJSON)
+		d, err := newWarmBackendGCS(newCfg)
+		if err != nil {
+			return err
+		}
+		err = checkWarmBackend(context.TODO(), d)
+		if err != nil {
+			return err
+		}
+		config.GCS[tierName] = newCfg
+		config.drivercache[tierName] = d
 	}
 
 	return nil
@@ -215,39 +266,38 @@ func (config *TierConfigMgr) Bytes() ([]byte, error) {
 	return json.Marshal(config)
 }
 
+// GetDriver returns a warmbackend interface object initialized with remote tier config matching tierName
 func (config *TierConfigMgr) GetDriver(tierName string) (d warmBackend, err error) {
 	config.Lock()
 	defer config.Unlock()
 
-	d = config.drivercache[tierName]
-	if d != nil {
+	var ok bool
+	// Lookup in-memory drivercache
+	d, ok = config.drivercache[tierName]
+	if ok {
 		return d, nil
 	}
-	for k, v := range config.S3 {
-		if k == tierName {
-			d, err = newWarmBackendS3(v)
-			break
-		}
-	}
-	for k, v := range config.Azure {
-		if k == tierName {
-			d, err = newWarmBackendAzure(v)
-			break
-		}
-	}
-	for k, v := range config.GCS {
-		if k == tierName {
-			d, err = newWarmBackendGCS(v)
-			break
-		}
-	}
 
-	if err != nil {
-		return nil, err
-	}
-	if d == nil {
+	// Intialize driver from tier config matching tierName
+	if s3, ok := config.S3[tierName]; ok {
+		d, err = newWarmBackendS3(s3)
+		if err != nil {
+			return d, err
+		}
+	} else if az, ok := config.Azure[tierName]; ok {
+		d, err = newWarmBackendAzure(az)
+		if err != nil {
+			return d, err
+		}
+	} else if gcs, ok := config.GCS[tierName]; ok {
+		d, err = newWarmBackendGCS(gcs)
+		if err != nil {
+			return d, err
+		}
+	} else { // No matching driver config found
 		return nil, errTierNotFound
 	}
+
 	config.drivercache[tierName] = d
 	return d, nil
 }

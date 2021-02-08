@@ -17,3 +17,18 @@ type warmBackend interface {
 	InUse(ctx context.Context) (bool, error)
 	// GetTarget() (string, string)
 }
+
+func checkWarmBackend(ctx context.Context, w warmBackend) error {
+	// TODO: requires additional checks to ensure that warmBackend
+	// configuration has sufficient privileges to Put/Remove objects as well.
+	_, err := w.Get(ctx, "probeobject", warmBackendGetOpts{})
+	switch {
+	case isErrObjectNotFound(err):
+		return nil
+	case isErrBucketNotFound(err):
+		return errTierBucketNotFound
+	default:
+		return err
+	}
+	return nil
+}
