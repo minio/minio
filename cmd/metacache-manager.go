@@ -43,7 +43,7 @@ type metacacheManager struct {
 }
 
 const metacacheManagerTransientBucket = "**transient**"
-const metacacheMaxEntries = 10000
+const metacacheMaxEntries = 5000
 
 // initManager will start async saving the cache.
 func (m *metacacheManager) initManager() {
