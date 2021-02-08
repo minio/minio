@@ -226,6 +226,51 @@ type ObjectInfo struct {
 	SuccessorModTime time.Time
 }
 
+// Clone - Returns a cloned copy of current objectInfo
+func (o ObjectInfo) Clone() (cinfo ObjectInfo) {
+	cinfo = ObjectInfo{
+		Bucket:             o.Bucket,
+		Name:               o.Name,
+		ModTime:            o.ModTime,
+		Size:               o.Size,
+		IsDir:              o.IsDir,
+		ETag:               o.ETag,
+		InnerETag:          o.InnerETag,
+		VersionID:          o.VersionID,
+		IsLatest:           o.IsLatest,
+		DeleteMarker:       o.DeleteMarker,
+		TransitionStatus:   o.TransitionStatus,
+		RestoreExpires:     o.RestoreExpires,
+		RestoreOngoing:     o.RestoreOngoing,
+		ContentType:        o.ContentType,
+		ContentEncoding:    o.ContentEncoding,
+		Expires:            o.Expires,
+		CacheStatus:        o.CacheStatus,
+		CacheLookupStatus:  o.CacheLookupStatus,
+		StorageClass:       o.StorageClass,
+		ReplicationStatus:  o.ReplicationStatus,
+		UserTags:           o.UserTags,
+		Parts:              o.Parts,
+		Writer:             o.Writer,
+		Reader:             o.Reader,
+		PutObjReader:       o.PutObjReader,
+		metadataOnly:       o.metadataOnly,
+		versionOnly:        o.versionOnly,
+		keyRotation:        o.keyRotation,
+		backendType:        o.backendType,
+		AccTime:            o.AccTime,
+		Legacy:             o.Legacy,
+		VersionPurgeStatus: o.VersionPurgeStatus,
+		NumVersions:        o.NumVersions,
+		SuccessorModTime:   o.SuccessorModTime,
+	}
+	cinfo.UserDefined = make(map[string]string, len(o.UserDefined))
+	for k, v := range o.UserDefined {
+		cinfo.UserDefined[k] = v
+	}
+	return cinfo
+}
+
 // MultipartInfo captures metadata information about the uploadId
 // this data structure is used primarily for some internal purposes
 // for verifying upload type such as was the upload

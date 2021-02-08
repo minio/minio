@@ -59,7 +59,7 @@ var isEncryptedTests = []struct {
 
 func TestIsEncrypted(t *testing.T) {
 	for i, test := range isEncryptedTests {
-		if isEncrypted := IsEncrypted(test.Metadata); isEncrypted != test.Encrypted {
+		if _, isEncrypted := IsEncrypted(test.Metadata); isEncrypted != test.Encrypted {
 			t.Errorf("Test %d: got '%v' - want '%v'", i, isEncrypted, test.Encrypted)
 		}
 	}
@@ -74,8 +74,8 @@ var s3IsEncryptedTests = []struct {
 	{Encrypted: false, Metadata: map[string]string{MetaAlgorithm: ""}},                             // 2
 	{Encrypted: false, Metadata: map[string]string{MetaSealedKeySSEC: ""}},                         // 3
 	{Encrypted: true, Metadata: map[string]string{MetaSealedKeyS3: ""}},                            // 4
-	{Encrypted: true, Metadata: map[string]string{MetaKeyID: ""}},                                  // 5
-	{Encrypted: true, Metadata: map[string]string{MetaDataEncryptionKey: ""}},                      // 6
+	{Encrypted: false, Metadata: map[string]string{MetaKeyID: ""}},                                 // 5
+	{Encrypted: false, Metadata: map[string]string{MetaDataEncryptionKey: ""}},                     // 6
 	{Encrypted: false, Metadata: map[string]string{"": ""}},                                        // 7
 	{Encrypted: false, Metadata: map[string]string{"X-Minio-Internal-Server-Side-Encryption": ""}}, // 8
 }

@@ -44,6 +44,15 @@ const (
 	// MetaDataEncryptionKey is the sealed data encryption key (DEK) received from
 	// the KMS.
 	MetaDataEncryptionKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
+
+	// MetaContext is the KMS context provided by a client when encrypting an
+	// object with SSE-KMS. A client may not send a context in which case the
+	// MetaContext will not be present.
+	// MetaContext only contains the bucket/object name if the client explicitly
+	// added it. However, when decrypting an object the bucket/object name must
+	// be part of the object. Therefore, the bucket/object name must be added
+	// to the context, if not present, whenever a decryption is performed.
+	MetaContext = "X-Minio-Internal-Server-Side-Encryption-Context"
 )
 
 // IsMultiPart returns true if the object metadata indicates
@@ -109,26 +118,35 @@ func IsSourceEncrypted(metadata map[string]string) bool {
 //
 // IsEncrypted only checks whether the metadata contains at least
 // one entry indicating SSE-C or SSE-S3.
-func IsEncrypted(metadata map[string]string) bool {
-	if _, ok := metadata[MetaIV]; ok {
-		return true
-	}
-	if _, ok := metadata[MetaAlgorithm]; ok {
-		return true
-	}
-	if IsMultiPart(metadata) {
-		return true
+func IsEncrypted(metadata map[string]string) (Type, bool) {
+	if S3KMS.IsEncrypted(metadata) {
+		return S3KMS, true
 	}
 	if S3.IsEncrypted(metadata) {
-		return true
+		return S3, true
 	}
 	if SSEC.IsEncrypted(metadata) {
-		return true
+		return SSEC, true
 	}
-	if S3KMS.IsEncrypted(metadata) {
-		return true
+	if IsMultiPart(metadata) {
+		return nil, true
 	}
-	return false
+	if _, ok := metadata[MetaIV]; ok {
+		return nil, true
+	}
+	if _, ok := metadata[MetaAlgorithm]; ok {
+		return nil, true
+	}
+	if _, ok := metadata[MetaKeyID]; ok {
+		return nil, true
+	}
+	if _, ok := metadata[MetaDataEncryptionKey]; ok {
+		return nil, true
+	}
+	if _, ok := metadata[MetaContext]; ok {
+		return nil, true
+	}
+	return nil, false
 }
 
 // CreateMultipartMetadata adds the multipart flag entry to metadata

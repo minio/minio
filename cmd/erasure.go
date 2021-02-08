@@ -246,6 +246,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			disk := disks[i-1]
 
 			if disk == nil {
+				infos[i-1].Error = "nil disk"
 				return
 			}
 
@@ -256,6 +257,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 				//
 				//
 				// - Future: skip busy disks
+				infos[i-1].Error = err.Error()
 				return
 			}
 
@@ -268,7 +270,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 		// Check if one of the drives in the set is being healed.
 		// this information is used by crawler to skip healing
 		// this erasure set while it calculates the usage.
-		if info.Healing {
+		if info.Healing || info.Error != "" {
 			healing = true
 			continue
 		}
@@ -282,7 +284,6 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 // Updates are sent on a regular basis and the caller *must* consume them.
 func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	if len(buckets) == 0 {
-		logger.Info(color.Green("data-crawl:") + " No buckets found, skipping crawl")
 		return nil
 	}
 

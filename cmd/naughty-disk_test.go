@@ -251,11 +251,11 @@ func (d *naughtyDisk) WriteMetadata(ctx context.Context, volume, path string, fi
 	return d.disk.WriteMetadata(ctx, volume, path, fi)
 }
 
-func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.DeleteVersion(ctx, volume, path, fi)
+	return d.disk.DeleteVersion(ctx, volume, path, fi, forceDelMarker)
 }
 
 func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {

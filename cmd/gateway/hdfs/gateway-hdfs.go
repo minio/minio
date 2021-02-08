@@ -33,6 +33,10 @@ import (
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
+	krb "github.com/jcmturner/gokrb5/v8/client"
+	"github.com/jcmturner/gokrb5/v8/config"
+	"github.com/jcmturner/gokrb5/v8/credentials"
+	"github.com/jcmturner/gokrb5/v8/keytab"
 	"github.com/minio/cli"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	minio "github.com/minio/minio/cmd"
@@ -41,9 +45,6 @@ import (
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
 	xnet "github.com/minio/minio/pkg/net"
-	krb "gopkg.in/jcmturner/gokrb5.v7/client"
-	"gopkg.in/jcmturner/gokrb5.v7/config"
-	"gopkg.in/jcmturner/gokrb5.v7/credentials"
 )
 
 const (
@@ -121,6 +122,23 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
+	keytabPath := env.Get("KRB5KEYTAB", "")
+	if keytabPath != "" {
+		kt, err := keytab.Load(keytabPath)
+		if err != nil {
+			return nil, err
+		}
+
+		username := env.Get("KRB5USERNAME", "")
+		realm := env.Get("KRB5REALM", "")
+		if username == "" || realm == "" {
+			return nil, errors.New("empty KRB5USERNAME or KRB5REALM")
+
+		}
+
+		return krb.NewWithKeytab(username, realm, kt, cfg), nil
+	}
+
 	// Determine the ccache location from the environment, falling back to the default location.
 	ccachePath := env.Get("KRB5CCNAME", fmt.Sprintf("/tmp/krb5cc_%s", u.Uid))
 	if strings.Contains(ccachePath, ":") {
@@ -136,7 +154,7 @@ func getKerberosClient() (*krb.Client, error) {
 		return nil, err
 	}
 
-	return krb.NewClientFromCCache(ccache, cfg)
+	return krb.NewFromCCache(ccache, cfg)
 }
 
 // NewGatewayLayer returns hdfs gatewaylayer.
@@ -195,7 +213,7 @@ func (g *HDFS) NewGatewayLayer(creds auth.Credentials) (minio.ObjectLayer, error
 
 	clnt, err := hdfs.NewClient(opts)
 	if err != nil {
-		return nil, fmt.Errorf("unable to initialize hdfsClient")
+		return nil, fmt.Errorf("unable to initialize hdfsClient: %v", err)
 	}
 
 	if err = clnt.MkdirAll(minio.PathJoin(commonPath, hdfsSeparator, minioMetaTmpBucket), os.FileMode(0755)); err != nil {

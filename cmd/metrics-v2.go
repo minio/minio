@@ -387,7 +387,7 @@ func getS3RequestsInFlightMD() MetricDescription {
 		Subsystem: requestsSubsystem,
 		Name:      inflightTotal,
 		Help:      "Total number of S3 requests currently in flight.",
-		Type:      counterMetric,
+		Type:      gaugeMetric,
 	}
 }
 func getS3RequestsTotalMD() MetricDescription {
@@ -1106,23 +1106,23 @@ func getClusterStorageMetrics() MetricsGroup {
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityTotalBytesMD(),
-				Value:       float64(GetTotalCapacity(ctx)),
+				Value:       float64(GetTotalCapacity(storageInfo.Disks)),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityFreeBytesMD(),
-				Value:       float64(GetTotalCapacityFree(ctx)),
+				Value:       float64(GetTotalCapacityFree(storageInfo.Disks)),
 			})
 
 			s, _ := objLayer.StorageInfo(GlobalContext)
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityUsageBytesMD(),
-				Value:       GetTotalUsableCapacity(ctx, s),
+				Value:       GetTotalUsableCapacity(storageInfo.Disks, s),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityUsageFreeBytesMD(),
-				Value:       GetTotalUsableCapacityFree(ctx, s),
+				Value:       GetTotalUsableCapacityFree(storageInfo.Disks, s),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{

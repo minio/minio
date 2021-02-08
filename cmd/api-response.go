@@ -565,7 +565,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 					continue
 				}
 				// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-				if strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentLength) || strings.EqualFold(k, xhttp.AmzMetaUnencryptedContentMD5) {
+				if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 					continue
 				}
 				content.UserMetadata[k] = v
@@ -639,8 +639,16 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 	listPartsResponse.Key = s3EncodeName(partsInfo.Object, encodingType)
 	listPartsResponse.UploadID = partsInfo.UploadID
 	listPartsResponse.StorageClass = globalMinioDefaultStorageClass
-	listPartsResponse.Initiator.ID = globalMinioDefaultOwnerID
-	listPartsResponse.Owner.ID = globalMinioDefaultOwnerID
+
+	// Dumb values not meaningful
+	listPartsResponse.Initiator = Initiator{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: globalMinioDefaultOwnerID,
+	}
+	listPartsResponse.Owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: globalMinioDefaultOwnerID,
+	}
 
 	listPartsResponse.MaxParts = partsInfo.MaxParts
 	listPartsResponse.PartNumberMarker = partsInfo.PartNumberMarker

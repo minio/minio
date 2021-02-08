@@ -38,6 +38,10 @@ func setInternalTCPParameters(c syscall.RawConn) error {
 		// since Linux 4.11.
 		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
 
+		// Enable TCP quick ACK, John Nagle says
+		// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
+		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
+
 		// The time (in seconds) the connection needs to remain idle before
 		// TCP starts sending keepalive probes, set this to 5 secs
 		// system defaults to 7200 secs!!!
@@ -52,6 +56,7 @@ func setInternalTCPParameters(c syscall.RawConn) error {
 		// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 3 secs)
 		// 75
 		_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
+
 	})
 }
 
@@ -63,6 +68,9 @@ func NewInternodeDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
+			// If zero, Go defaults to '300ms', we will default to 100ms instead.
+			// https://tools.ietf.org/html/rfc6555
+			FallbackDelay: 100 * time.Millisecond,
 			Control: func(network, address string, c syscall.RawConn) error {
 				return setInternalTCPParameters(c)
 			},
@@ -76,6 +84,9 @@ func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,
+			// If zero, Go defaults to '300ms', we will default to 100ms instead.
+			// https://tools.ietf.org/html/rfc6555
+			FallbackDelay: 100 * time.Millisecond,
 			Control: func(network, address string, c syscall.RawConn) error {
 				return c.Control(func(fdPtr uintptr) {
 					// got socket file descriptor to set parameters.
@@ -86,6 +97,10 @@ func NewCustomDialContext(dialTimeout time.Duration) DialContext {
 					// the TCP fast open connect. This feature is supported
 					// since Linux 4.11.
 					_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_FASTOPEN_CONNECT, 1)
+
+					// Enable TCP quick ACK, John Nagle says
+					// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
+					_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
 				})
 			},
 		}
