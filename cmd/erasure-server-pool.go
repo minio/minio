@@ -1135,22 +1135,24 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 // data is not distributed across sets.
 // Errors are logged but individual disk failures are not returned.
 func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix string) {
-	var wg sync.WaitGroup
 	for _, servers := range z.serverPools {
 		for _, set := range servers.sets {
-			for _, disk := range set.getDisks() {
-				if disk == nil {
-					continue
-				}
-				wg.Add(1)
-				go func(disk StorageAPI) {
-					defer wg.Done()
-					disk.Delete(ctx, bucket, prefix, true)
-				}(disk)
-			}
+			set.deleteAll(ctx, bucket, prefix)
 		}
 	}
-	wg.Wait()
+}
+
+// renameAll will rename bucket+prefix unconditionally across all disks to
+// minioMetaTmpBucket + unique uuid,
+// Note that set distribution is ignored so it should only be used in cases where
+// data is not distributed across sets. Errors are logged but individual
+// disk failures are not returned.
+func (z *erasureServerPools) renameAll(ctx context.Context, bucket, prefix string) {
+	for _, servers := range z.serverPools {
+		for _, set := range servers.sets {
+			set.renameAll(ctx, bucket, prefix)
+		}
+	}
 }
 
 // This function is used to undo a successful DeleteBucket operation.
