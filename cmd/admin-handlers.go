@@ -1582,9 +1582,13 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		// Load data usage
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err == nil {
-			buckets = madmin.Buckets{Count: &dataUsageInfo.BucketsCount}
-			objects = madmin.Objects{Count: &dataUsageInfo.ObjectsTotalCount}
-			usage = madmin.Usage{Size: &dataUsageInfo.ObjectsTotalSize}
+			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
+			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
+			usage = madmin.Usage{Size: dataUsageInfo.ObjectsTotalSize}
+		} else {
+			buckets = madmin.Buckets{Error: err.Error()}
+			objects = madmin.Objects{Error: err.Error()}
+			usage = madmin.Usage{Error: err.Error()}
 		}
 
 		// Fetching the backend information
