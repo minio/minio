@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
@@ -42,8 +43,8 @@ func newBgHealSequence() *healSequence {
 	}
 
 	return &healSequence{
-		sourceCh:    make(chan healSource),
-		respCh:      make(chan healResult),
+		sourceCh:    make(chan healSource, runtime.GOMAXPROCS(0)),
+		respCh:      make(chan healResult, runtime.GOMAXPROCS(0)),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		// run-background heal with reserved bucket
@@ -180,6 +181,8 @@ func healErasureSet(ctx context.Context, prefix string, setIndex int, maxIO int,
 			for {
 				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
 				if !ok {
+					logger.Info("Healing finished for bucket '%s' on erasure set %d", setIndex+1)
+					// We are finished with this bucket return.
 					return
 				}
 

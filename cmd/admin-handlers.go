@@ -753,26 +753,23 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 		opts.setNumbers = append(opts.setNumbers, i-1)
 	}
 
+	opts.sleepDuration = time.Second
 	var err error
-
 	if v := vars[healSleepDuration]; v != "" {
 		opts.sleepDuration, err = time.ParseDuration(v)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-	} else {
-		opts.sleepDuration = 100 * time.Millisecond
 	}
 
+	opts.sleepForIO = 10
 	if v := vars[healSleepMaxIO]; v != "" {
 		opts.sleepForIO, err = strconv.Atoi(v)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-	} else {
-		opts.sleepForIO = 1000
 	}
 
 	buckets, _ := objectAPI.ListBucketsHeal(ctx)
