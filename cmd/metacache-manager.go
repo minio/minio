@@ -43,6 +43,7 @@ type metacacheManager struct {
 }
 
 const metacacheManagerTransientBucket = "**transient**"
+const metacacheMaxEntries = 5000
 
 // initManager will start async saving the cache.
 func (m *metacacheManager) initManager() {
@@ -64,6 +65,8 @@ func (m *metacacheManager) initManager() {
 		}
 
 		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+
 		var exit bool
 		bg := context.Background()
 		for !exit {

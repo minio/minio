@@ -362,6 +362,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	api, err := minio.New(tcfg.Endpoint, &miniogo.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,
+		Region:    tcfg.Region,
 		Transport: getRemoteTargetInstanceTransport,
 	})
 	if err != nil {

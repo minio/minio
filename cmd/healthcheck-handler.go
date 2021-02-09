@@ -64,6 +64,29 @@ func ClusterCheckHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
+// ClusterReadCheckHandler returns if the server is ready for requests.
+func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "ClusterReadCheckHandler")
+
+	if shouldProxy() {
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+
+	objLayer := newObjectLayerFn()
+
+	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
+	defer cancel()
+
+	result := objLayer.ReadHealth(ctx)
+	if !result {
+		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		return
+	}
+	writeResponse(w, http.StatusOK, nil, mimeNone)
+}
+
 // ReadinessCheckHandler Checks if the process is up. Always returns success.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if shouldProxy() {

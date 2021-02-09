@@ -20,10 +20,29 @@ livenessProbe:
 ```
 
 ### Cluster probe
-This probe is not useful in almost all cases, this is meant for administrators to see if quorum is available in any given cluster. The reply is '200 OK' if cluster has quorum if not it returns '503 Service Unavailable'.
+#### Cluster-writeable probe
+This probe is not useful in almost all cases, this is meant for administrators to see if write quorum is available in any given cluster. The reply is '200 OK' if cluster has write quorum if not it returns '503 Service Unavailable'.
 
 ```
 curl http://minio1:9001/minio/health/cluster
+HTTP/1.1 503 Service Unavailable
+Accept-Ranges: bytes
+Content-Length: 0
+Content-Security-Policy: block-all-mixed-content
+Server: MinIO/GOGET.GOGET
+Vary: Origin
+X-Amz-Bucket-Region: us-east-1
+X-Minio-Write-Quorum: 3
+X-Amz-Request-Id: 16239D6AB80EBECF
+X-Xss-Protection: 1; mode=block
+Date: Tue, 21 Jul 2020 00:36:14 GMT
+```
+
+#### Clustr-readable probe
+This probe is not useful in almost all cases, this is meant for administrators to see if read quorum is available in any given cluster. The reply is '200 OK' if cluster has read quorum if not it returns '503 Service Unavailable'.
+
+```
+curl http://minio1:9001/minio/health/cluster/read
 HTTP/1.1 503 Service Unavailable
 Accept-Ranges: bytes
 Content-Length: 0

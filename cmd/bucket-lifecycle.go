@@ -65,13 +65,18 @@ func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
 }
 
-type expiryState struct {
-	expiryCh chan ObjectInfo
+type expiryTask struct {
+	objInfo       ObjectInfo
+	versionExpiry bool
 }
 
-func (es *expiryState) queueExpiryTask(oi ObjectInfo) {
+type expiryState struct {
+	expiryCh chan expiryTask
+}
+
+func (es *expiryState) queueExpiryTask(oi ObjectInfo, rmVersion bool) {
 	select {
-	case es.expiryCh <- oi:
+	case es.expiryCh <- expiryTask{objInfo: oi, versionExpiry: rmVersion}:
 	default:
 	}
 }
@@ -82,7 +87,7 @@ var (
 
 func newExpiryState() *expiryState {
 	es := &expiryState{
-		expiryCh: make(chan ObjectInfo, 10000),
+		expiryCh: make(chan expiryTask, 10000),
 	}
 	go func() {
 		<-GlobalContext.Done()
@@ -94,8 +99,8 @@ func newExpiryState() *expiryState {
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 	globalExpiryState = newExpiryState()
 	go func() {
-		for oi := range globalExpiryState.expiryCh {
-			applyExpiryRule(ctx, objectAPI, oi, false)
+		for t := range globalExpiryState.expiryCh {
+			applyExpiryRule(ctx, objectAPI, t.objInfo, false, t.versionExpiry)
 		}
 	}()
 }
@@ -240,16 +245,11 @@ func transitionSCInUse(ctx context.Context, lfc *lifecycle.Lifecycle, bucket, ar
 }
 
 // set PutObjectOptions for PUT operation to transition data to target cluster
-func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
+func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 
-	tag, err := tags.ParseObjectTags(objInfo.UserTags)
-	if err != nil {
-		return
-	}
 	putOpts = miniogo.PutObjectOptions{
 		UserMetadata:    meta,
-		UserTags:        tag.ToMap(),
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
 		StorageClass:    objInfo.StorageClass,
@@ -259,22 +259,40 @@ func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 			SourceETag:      objInfo.ETag,
 		},
 	}
-	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
+
+	if objInfo.UserTags != "" {
+		tag, _ := tags.ParseObjectTags(objInfo.UserTags)
+		if tag != nil {
+			putOpts.UserTags = tag.ToMap()
+		}
+	}
+
+	lkMap := caseInsensitiveMap(objInfo.UserDefined)
+	if lang, ok := lkMap.Lookup(xhttp.ContentLanguage); ok {
+		putOpts.ContentLanguage = lang
+	}
+	if disp, ok := lkMap.Lookup(xhttp.ContentDisposition); ok {
+		putOpts.ContentDisposition = disp
+	}
+	if cc, ok := lkMap.Lookup(xhttp.CacheControl); ok {
+		putOpts.CacheControl = cc
+	}
+	if mode, ok := lkMap.Lookup(xhttp.AmzObjectLockMode); ok {
 		rmode := miniogo.RetentionMode(mode)
 		putOpts.Mode = rmode
 	}
-	if retainDateStr, ok := objInfo.UserDefined[xhttp.AmzObjectLockRetainUntilDate]; ok {
+	if retainDateStr, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
 		rdate, err := time.Parse(time.RFC3339, retainDateStr)
 		if err != nil {
-			return
+			return putOpts, err
 		}
 		putOpts.RetainUntilDate = rdate
 	}
-	if lhold, ok := objInfo.UserDefined[xhttp.AmzObjectLockLegalHold]; ok {
+	if lhold, ok := lkMap.Lookup(xhttp.AmzObjectLockLegalHold); ok {
 		putOpts.LegalHold = miniogo.LegalHoldStatus(lhold)
 	}
 
-	return
+	return putOpts, nil
 }
 
 // handle deletes of transitioned objects or object versions when one of the following is true:
@@ -375,7 +393,12 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 		return nil
 	}
 
-	putOpts := putTransitionOpts(oi)
+	putOpts, err := putTransitionOpts(oi)
+	if err != nil {
+		gr.Close()
+		return err
+
+	}
 	if _, err = tgt.PutObject(ctx, arn.Bucket, oi.Name, gr, oi.Size, putOpts); err != nil {
 		gr.Close()
 		return err
@@ -400,6 +423,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 		Object:     objInfo,
 		Host:       "Internal: [ILM-Transition]",
 	})
+
 	return err
 }
 

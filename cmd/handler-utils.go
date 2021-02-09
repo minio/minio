@@ -419,20 +419,65 @@ func getResource(path string, host string, domains []string) (string, error) {
 	return path, nil
 }
 
-var regexVersion = regexp.MustCompile(`(\w\d+)`)
+var regexVersion = regexp.MustCompile(`^/minio.*/(v\d+)/.*`)
 
 func extractAPIVersion(r *http.Request) string {
-	return regexVersion.FindString(r.URL.Path)
+	if matches := regexVersion.FindStringSubmatch(r.URL.Path); len(matches) > 1 {
+		return matches[1]
+	}
+	return "unknown"
 }
 
 func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		code := "XMinio" + api + "VersionMismatch"
-		writeErrorResponseString(r.Context(), w, APIError{
-			Code:           code,
-			Description:    "Not allowed (" + r.Method + " " + r.URL.String() + " on " + api + " API)",
-			HTTPStatusCode: http.StatusMethodNotAllowed,
-		}, r.URL)
+		if r.Method == http.MethodOptions {
+			return
+		}
+		version := extractAPIVersion(r)
+		switch {
+		case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
+			desc := fmt.Sprintf("Server expects 'peer' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", peerRESTVersion, version, ReleaseTag)
+			writeErrorResponseString(r.Context(), w, APIError{
+				Code:           "XMinioPeerVersionMismatch",
+				Description:    desc,
+				HTTPStatusCode: http.StatusUpgradeRequired,
+			}, r.URL)
+		case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
+			desc := fmt.Sprintf("Server expects 'storage' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", storageRESTVersion, version, ReleaseTag)
+			writeErrorResponseString(r.Context(), w, APIError{
+				Code:           "XMinioStorageVersionMismatch",
+				Description:    desc,
+				HTTPStatusCode: http.StatusUpgradeRequired,
+			}, r.URL)
+		case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
+			desc := fmt.Sprintf("Server expects 'lock' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", lockRESTVersion, version, ReleaseTag)
+			writeErrorResponseString(r.Context(), w, APIError{
+				Code:           "XMinioLockVersionMismatch",
+				Description:    desc,
+				HTTPStatusCode: http.StatusUpgradeRequired,
+			}, r.URL)
+		case strings.HasPrefix(r.URL.Path, adminPathPrefix):
+			var desc string
+			if version == "v1" {
+				desc = fmt.Sprintf("Server expects client requests with 'admin' API version '%s', found '%s', please upgrade the client to latest releases", madmin.AdminAPIVersion, version)
+			} else if version == madmin.AdminAPIVersion {
+				desc = fmt.Sprintf("This 'admin' API is not supported by server in '%s'", getMinioMode())
+			} else {
+				desc = fmt.Sprintf("Unexpected client 'admin' API version found '%s', expected '%s', please downgrade the client to older releases", version, madmin.AdminAPIVersion)
+			}
+			writeErrorResponseJSON(r.Context(), w, APIError{
+				Code:           "XMinioAdminVersionMismatch",
+				Description:    desc,
+				HTTPStatusCode: http.StatusUpgradeRequired,
+			}, r.URL)
+		default:
+			desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
+			writeErrorResponse(r.Context(), w, APIError{
+				Code:           "XMinioUnknownAPIRequest",
+				Description:    desc,
+				HTTPStatusCode: http.StatusBadRequest,
+			}, r.URL, guessIsBrowserReq(r))
+		}
 	}
 }
 
@@ -444,24 +489,21 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	version := extractAPIVersion(r)
 	switch {
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
-		desc := fmt.Sprintf("Expected 'peer' API version '%s', instead found '%s', please upgrade the servers",
-			peerRESTVersion, version)
+		desc := fmt.Sprintf("Server expects 'peer' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", peerRESTVersion, version, ReleaseTag)
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioPeerVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
-		desc := fmt.Sprintf("Expected 'storage' API version '%s', instead found '%s', please upgrade the servers",
-			storageRESTVersion, version)
+		desc := fmt.Sprintf("Server expects 'storage' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", storageRESTVersion, version, ReleaseTag)
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioStorageVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
-		desc := fmt.Sprintf("Expected 'lock' API version '%s', instead found '%s', please upgrade the servers",
-			lockRESTVersion, version)
+		desc := fmt.Sprintf("Server expects 'lock' API version '%s', instead found '%s' - *rolling upgrade is not allowed* - please make sure all servers are running the same MinIO version (%s)", lockRESTVersion, version, ReleaseTag)
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioLockVersionMismatch",
 			Description:    desc,
@@ -489,6 +531,7 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL, guessIsBrowserReq(r))
 	}
+
 }
 
 // gets host name for current node

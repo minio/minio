@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"path"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -340,6 +341,29 @@ func (b *bucketMetacache) cleanup() {
 				break
 			} else {
 				b.debugf("cache %s can be NOT replaced by %s", id, cache2.id)
+			}
+		}
+	}
+
+	// If above limit, remove the caches with the oldest handout time.
+	if len(caches)-len(remove) > metacacheMaxEntries {
+		remainCaches := make([]metacache, 0, len(caches)-len(remove))
+		for id, cache := range caches {
+			if _, ok := remove[id]; ok {
+				continue
+			}
+			remainCaches = append(remainCaches, cache)
+		}
+		if len(remainCaches) > metacacheMaxEntries {
+			// Sort oldest last...
+			sort.Slice(remainCaches, func(i, j int) bool {
+				return remainCaches[i].lastHandout.Before(remainCaches[j].lastHandout)
+			})
+			// Keep first metacacheMaxEntries...
+			for _, cache := range remainCaches[metacacheMaxEntries:] {
+				if time.Since(cache.lastHandout) > time.Hour {
+					remove[cache.id] = struct{}{}
+				}
 			}
 		}
 	}

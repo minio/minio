@@ -28,8 +28,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
-	slashpath "path"
+	pathutil "path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -625,26 +624,12 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	}
 	volsInfo := make([]VolInfo, 0, len(entries))
 	for _, entry := range entries {
-		if !HasSuffix(entry, SlashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
+		if !HasSuffix(entry, SlashSeparator) || !isValidVolname(pathutil.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
-		var fi os.FileInfo
-		fi, err = os.Lstat(pathJoin(dirPath, entry))
-		if err != nil {
-			// If the file does not exist, skip the entry.
-			if osIsNotExist(err) {
-				continue
-			} else if isSysErrIO(err) {
-				return nil, errFaultyDisk
-			}
-			return nil, err
-		}
 		volsInfo = append(volsInfo, VolInfo{
-			Name: fi.Name(),
-			// As os.Lstat() doesn't carry other than ModTime(), use
-			// ModTime() as CreatedTime.
-			Created: fi.ModTime(),
+			Name: pathutil.Clean(entry),
 		})
 	}
 	return volsInfo, nil
@@ -1373,7 +1358,7 @@ func (s *xlStorage) openFile(volume, path string, mode int) (f *os.File, err err
 	} else {
 		// Create top level directories if they don't exist.
 		// with mode 0777 mkdir honors system umask.
-		if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
 			return nil, err
 		}
 	}
@@ -1599,7 +1584,7 @@ func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSiz
 
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
 		switch {
 		case osIsPermission(err):
 			return errFileAccessDenied
@@ -1827,7 +1812,7 @@ func (s *xlStorage) CheckFile(ctx context.Context, volume string, path string) e
 			return nil
 		}
 
-		return checkFile(slashpath.Dir(p))
+		return checkFile(pathutil.Dir(p))
 	}
 
 	return checkFile(path)
@@ -1843,8 +1828,8 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 		return nil
 	}
 	isObjectDir := HasSuffix(deletePath, SlashSeparator)
-	basePath = slashpath.Clean(basePath)
-	deletePath = slashpath.Clean(deletePath)
+	basePath = pathutil.Clean(basePath)
+	deletePath = pathutil.Clean(deletePath)
 	if !strings.HasPrefix(deletePath, basePath) || deletePath == basePath {
 		return nil
 	}
@@ -1878,7 +1863,7 @@ func deleteFile(basePath, deletePath string, recursive bool) error {
 		}
 	}
 
-	deletePath = slashpath.Dir(deletePath)
+	deletePath = pathutil.Dir(deletePath)
 
 	// Delete parent directory obviously not recursively. Errors for
 	// parent directories shouldn't trickle down.
@@ -1990,8 +1975,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	_, err = os.Lstat(dstVolumeDir)
-	if err != nil {
+	if _, err = os.Lstat(dstVolumeDir); err != nil {
 		if osIsNotExist(err) {
 			return errVolumeNotFound
 		} else if isSysErrIO(err) {
@@ -2000,8 +1984,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	srcFilePath := slashpath.Join(srcVolumeDir, pathJoin(srcPath, xlStorageFormatFile))
-	dstFilePath := slashpath.Join(dstVolumeDir, pathJoin(dstPath, xlStorageFormatFile))
+	srcFilePath := pathutil.Join(srcVolumeDir, pathJoin(srcPath, xlStorageFormatFile))
+	dstFilePath := pathutil.Join(dstVolumeDir, pathJoin(dstPath, xlStorageFormatFile))
 
 	var srcDataPath string
 	var dstDataPath string
@@ -2010,7 +1994,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		// make sure to always use path.Join here, do not use pathJoin as
 		// it would additionally add `/` at the end and it comes in the
 		// way of renameAll(), parentDir creation.
-		dstDataPath = slashpath.Join(dstVolumeDir, dstPath, dataDir)
+		dstDataPath = pathutil.Join(dstVolumeDir, dstPath, dataDir)
 	}
 
 	if err = checkPathLength(srcFilePath); err != nil {
@@ -2064,12 +2048,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			// bucket1/name1/xl.meta --> this should never
 			// be allowed.
 			{
-				entries, err := readDirN(path.Dir(dstFilePath), 1)
+				entries, err := readDirN(pathutil.Dir(dstFilePath), 1)
 				if err != nil && err != errFileNotFound {
 					return err
 				}
 				if len(entries) > 0 {
-					entry := path.Clean(entries[0])
+					entry := pathutil.Clean(entries[0])
 					if entry != legacyDataDir {
 						_, uerr := uuid.Parse(entry)
 						if uerr != nil {
@@ -2204,12 +2188,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := slashpath.Dir(srcFilePath); isDirEmpty(parentDir) {
+	if parentDir := pathutil.Dir(srcFilePath); isDirEmpty(parentDir) {
 		deleteFile(srcVolumeDir, parentDir, false)
 	}
 
 	if srcDataPath != "" {
-		if parentDir := slashpath.Dir(srcDataPath); isDirEmpty(parentDir) {
+		if parentDir := pathutil.Dir(srcDataPath); isDirEmpty(parentDir) {
 			deleteFile(srcVolumeDir, parentDir, false)
 		}
 	}
@@ -2258,11 +2242,11 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
 		return errFileAccessDenied
 	}
-	srcFilePath := slashpath.Join(srcVolumeDir, srcPath)
+	srcFilePath := pathutil.Join(srcVolumeDir, srcPath)
 	if err = checkPathLength(srcFilePath); err != nil {
 		return err
 	}
-	dstFilePath := slashpath.Join(dstVolumeDir, dstPath)
+	dstFilePath := pathutil.Join(dstVolumeDir, dstPath)
 	if err = checkPathLength(dstFilePath); err != nil {
 		return err
 	}
@@ -2296,7 +2280,7 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := slashpath.Dir(srcFilePath); isDirEmpty(parentDir) {
+	if parentDir := pathutil.Dir(srcFilePath); isDirEmpty(parentDir) {
 		deleteFile(srcVolumeDir, parentDir, false)
 	}
 

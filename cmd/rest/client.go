@@ -60,6 +60,8 @@ func (n *NetworkError) Unwrap() error {
 
 // Client - http based RPC client.
 type Client struct {
+	connected int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+
 	// HealthCheckFn is the function set to test for health.
 	// If not set the client will not keep track of health.
 	// Calling this returns true or false if the target
@@ -84,7 +86,6 @@ type Client struct {
 	httpClient   *http.Client
 	url          *url.URL
 	newAuthToken func(audience string) string
-	connected    int32
 }
 
 // URL query separator constants
