@@ -1034,11 +1034,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if goi.VersionID != "" {
 		markDelete = true
 	}
+
 	// Default deleteMarker to true if object is under versioning
-	deleteMarker := true
-	if gerr == nil {
-		deleteMarker = goi.VersionID != ""
-	}
+	deleteMarker := opts.Versioned
+
 	if opts.VersionID != "" {
 		// case where replica version needs to be deleted on target cluster
 		if versionFound && opts.DeleteMarkerReplicationStatus == replication.Replica.String() {
@@ -1047,7 +1046,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus.Empty() && opts.DeleteMarkerReplicationStatus == "" {
 			markDelete = false
 		}
-		if opts.DeleteMarker && opts.VersionPurgeStatus == Complete {
+		if opts.VersionPurgeStatus == Complete {
 			markDelete = false
 		}
 		// determine if the version represents an object delete
