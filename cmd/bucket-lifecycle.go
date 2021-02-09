@@ -245,16 +245,11 @@ func transitionSCInUse(ctx context.Context, lfc *lifecycle.Lifecycle, bucket, ar
 }
 
 // set PutObjectOptions for PUT operation to transition data to target cluster
-func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
+func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 
-	tag, err := tags.ParseObjectTags(objInfo.UserTags)
-	if err != nil {
-		return
-	}
 	putOpts = miniogo.PutObjectOptions{
 		UserMetadata:    meta,
-		UserTags:        tag.ToMap(),
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
 		StorageClass:    objInfo.StorageClass,
@@ -264,22 +259,30 @@ func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 			SourceETag:      objInfo.ETag,
 		},
 	}
-	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
+	if objInfo.UserTags != "" {
+		tag, err := tags.ParseObjectTags(objInfo.UserTags)
+		if err != nil {
+			return miniogo.PutObjectOptions{}, err
+		}
+		putOpts.UserTags = tag.ToMap()
+	}
+
+	if mode, ok := getMapValue(objInfo.UserDefined, xhttp.AmzObjectLockMode); ok {
 		rmode := miniogo.RetentionMode(mode)
 		putOpts.Mode = rmode
 	}
-	if retainDateStr, ok := objInfo.UserDefined[xhttp.AmzObjectLockRetainUntilDate]; ok {
+	if retainDateStr, ok := getMapValue(objInfo.UserDefined, xhttp.AmzObjectLockRetainUntilDate); ok {
 		rdate, err := time.Parse(time.RFC3339, retainDateStr)
 		if err != nil {
-			return
+			return miniogo.PutObjectOptions{}, err
 		}
 		putOpts.RetainUntilDate = rdate
 	}
-	if lhold, ok := objInfo.UserDefined[xhttp.AmzObjectLockLegalHold]; ok {
+	if lhold, ok := getMapValue(objInfo.UserDefined, xhttp.AmzObjectLockLegalHold); ok {
 		putOpts.LegalHold = miniogo.LegalHoldStatus(lhold)
 	}
 
-	return
+	return putOpts, nil
 }
 
 // handle deletes of transitioned objects or object versions when one of the following is true:
@@ -380,7 +383,12 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 		return nil
 	}
 
-	putOpts := putTransitionOpts(oi)
+	putOpts, err := putTransitionOpts(oi)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("Unable to transition object %s/%s(%s): %w", oi.Bucket, oi.Name, oi.VersionID, err))
+		return err
+
+	}
 	if _, err = tgt.PutObject(ctx, arn.Bucket, oi.Name, gr, oi.Size, putOpts); err != nil {
 		gr.Close()
 		return err
