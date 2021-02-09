@@ -623,17 +623,14 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
 	}
-	for _, pool := range z.serverPools {
-		objInfo, err = pool.DeleteObject(ctx, bucket, object, opts)
-		if err == nil {
-			return objInfo, nil
-		}
-		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			break
-		}
+
+	// We don't know the size here set 1GiB atleast.
+	idx, err := z.getPoolIdx(ctx, bucket, object, opts, 1<<30)
+	if err != nil {
+		return objInfo, err
 	}
 
-	return objInfo, err
+	return z.serverPools[idx].DeleteObject(ctx, bucket, object, opts)
 }
 
 func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {

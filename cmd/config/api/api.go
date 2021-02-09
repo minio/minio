@@ -79,7 +79,7 @@ var (
 		},
 		config.KV{
 			Key:   apiListQuorum,
-			Value: "optimal",
+			Value: "strict",
 		},
 		config.KV{
 			Key:   apiExtendListCacheLife,
@@ -178,13 +178,16 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
+
 	replicationWorkers, err := strconv.Atoi(env.Get(EnvAPIReplicationWorkers, kvs.Get(apiReplicationWorkers)))
 	if err != nil {
 		return cfg, err
 	}
+
 	if replicationWorkers <= 0 {
 		return cfg, config.ErrInvalidReplicationWorkersValue(nil).Msg("Minimum number of replication workers should be 1")
 	}
+
 	return Config{
 		RequestsMax:             requestsMax,
 		RequestsDeadline:        requestsDeadline,
