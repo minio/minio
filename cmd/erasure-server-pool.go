@@ -1461,6 +1461,40 @@ type HealthResult struct {
 	WriteQuorum   int
 }
 
+// ReadHealth returns if the cluster can serve read requests
+func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
+	erasureSetUpCount := make([][]int, len(z.serverPools))
+	for i := range z.serverPools {
+		erasureSetUpCount[i] = make([]int, len(z.serverPools[i].sets))
+	}
+
+	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
+	diskIDs = append(diskIDs, getLocalDiskIDs(z))
+
+	for _, localDiskIDs := range diskIDs {
+		for _, id := range localDiskIDs {
+			poolIdx, setIdx, err := z.getPoolAndSet(id)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+			erasureSetUpCount[poolIdx][setIdx]++
+		}
+	}
+
+	b := z.BackendInfo()
+	readQuorum := b.StandardSCData[0]
+
+	for poolIdx := range erasureSetUpCount {
+		for setIdx := range erasureSetUpCount[poolIdx] {
+			if erasureSetUpCount[poolIdx][setIdx] < readQuorum {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Health - returns current status of the object layer health,
 // provides if write access exists across sets, additionally
 // can be used to query scenarios if health may be lost
