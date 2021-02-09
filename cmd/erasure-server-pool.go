@@ -1420,18 +1420,18 @@ func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, e
 	return &BackendMetrics{}, NotImplemented{}
 }
 
-func (z *erasureServerPools) getPoolAndSet(id string) (int, int, error) {
+func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx int, err error) {
 	for poolIdx := range z.serverPools {
 		format := z.serverPools[poolIdx].format
 		for setIdx, set := range format.Erasure.Sets {
-			for _, diskID := range set {
+			for i, diskID := range set {
 				if diskID == id {
-					return poolIdx, setIdx, nil
+					return poolIdx, setIdx, i, nil
 				}
 			}
 		}
 	}
-	return 0, 0, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
+	return -1, -1, -1, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
 }
 
 // HealthOptions takes input options to return sepcific information
@@ -1466,7 +1466,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for _, localDiskIDs := range diskIDs {
 		for _, id := range localDiskIDs {
-			poolIdx, setIdx, err := z.getPoolAndSet(id)
+			poolIdx, setIdx, _, err := z.getPoolAndSet(id)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				continue

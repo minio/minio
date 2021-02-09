@@ -140,6 +140,14 @@ func (h *healingTracker) update(ctx context.Context) error {
 
 // save will unconditionally save the tracker and will be created if not existing.
 func (h *healingTracker) save(ctx context.Context) error {
+	if h.PoolIndex < 0 || h.SetIndex < 0 || h.DiskIndex < 0 {
+		// Attempt to get location.
+		if api := newObjectLayerFn(); api != nil {
+			if ep, ok := api.(*erasureServerPools); ok {
+				h.PoolIndex, h.SetIndex, h.DiskIndex, _ = ep.getPoolAndSet(h.ID)
+			}
+		}
+	}
 	h.LastUpdate = time.Now().UTC()
 	htrackerBytes, err := h.MarshalMsg(nil)
 	if err != nil {

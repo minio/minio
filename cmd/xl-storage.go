@@ -328,6 +328,16 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	// If unset, see if we can locate it.
+	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
+		if api := newObjectLayerFn(); api != nil {
+			if ep, ok := api.(*erasureServerPools); ok {
+				if pool, set, disk, err := ep.getPoolAndSet(s.diskID); err == nil {
+					return pool, set, disk
+				}
+			}
+		}
+	}
 	return s.poolIndex, s.setIndex, s.diskIndex
 }
 
