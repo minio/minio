@@ -862,6 +862,12 @@ func (s *erasureSets) PutObject(ctx context.Context, bucket string, object strin
 	return set.PutObject(ctx, bucket, object, data, opts)
 }
 
+// GetObjectDebugInfo - gets per object debug information.
+func (s *erasureSets) GetObjectDebugInfo(ctx context.Context, bucket, object string, opts ObjectOptions, prefix string) map[string]string {
+	set := s.getHashedSet(object)
+	return set.GetObjectDebugInfo(ctx, bucket, object, opts, prefix)
+}
+
 // GetObjectInfo - reads object metadata from the hashedSet based on the object name.
 func (s *erasureSets) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	set := s.getHashedSet(object)

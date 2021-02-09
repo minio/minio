@@ -18,11 +18,13 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -374,8 +376,52 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 	return er.getObjectWithFileInfo(ctx, bucket, object, startOffset, length, writer, fi, metaArr, onlineDisks)
 }
 
+func (er erasureObjects) GetObjectDebugInfo(c context.Context, bucket, object string, opts ObjectOptions, prefix string) (debugInfo map[string]string) {
+	lk := er.NewNSLock(bucket, object)
+	ctx, err := lk.GetRLock(c, globalOperationTimeout)
+	if err != nil {
+		return nil
+	}
+	defer lk.RUnlock()
+
+	disks := er.getDisks()
+	debugInfo = make(map[string]string)
+
+	fileInfos, errs := readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false)
+
+	modTimes := listObjectModtimes(fileInfos, errs)
+
+	modTime, count := commonTime(modTimes)
+
+	debugInfo[prefix+"/commonTimeStamp"] = modTime.String()
+	debugInfo[prefix+"/commonTimeStampCount"] = strconv.Itoa(count)
+
+	// Get the quorum agreed upon time stamp
+	// Get a list of online drives
+
+	onlineDisks, m := listOnlineDisks(disks, fileInfos, errs)
+	for i, disk := range onlineDisks {
+		debugInfo[prefix+"/onlineDisk-"+strconv.Itoa(i)] = disk.String()
+	}
+	debugInfo[prefix+"/onlineDiskModeTime"] = m.String()
+
+	for i, f := range fileInfos {
+		s, err := json.Marshal(f)
+		if err != nil {
+			debugInfo[prefix+"/fileinfo-"+strconv.Itoa(i)] = err.Error()
+		}
+		if errs[i] != nil {
+			debugInfo[prefix+"/fileinfo-err-"+strconv.Itoa(i)] = errs[i].Error()
+			continue
+		}
+		debugInfo[prefix+"/fileinfo-"+strconv.Itoa(i)] = string(s)
+	}
+	return debugInfo
+}
+
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
+
 	if !opts.NoLock {
 		// Lock the object before reading.
 		lk := er.NewNSLock(bucket, object)

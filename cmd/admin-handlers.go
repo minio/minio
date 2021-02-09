@@ -1646,6 +1646,32 @@ func assignPoolNumbers(servers []madmin.ServerProperties) {
 	}
 }
 
+// GetObjectDebugInfoHandler - GET /minio/admin/v3/object
+// Get the entire set of metadata for an object.
+func (a adminAPIHandlers) GetObjectDebugInfoHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetObjectDebugInfoHandler")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.StorageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+	bucket := r.URL.Query().Get("bucket")
+	object := r.URL.Query().Get("object")
+	debugInfo, err := objectAPI.GetObjectDebugInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	enc := json.NewEncoder(w)
+	err = enc.Encode(debugInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	w.(http.Flusher).Flush()
+	return
+}
+
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)

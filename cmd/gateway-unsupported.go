@@ -266,3 +266,7 @@ func (a GatewayUnsupported) Health(_ context.Context, _ HealthOptions) HealthRes
 func (a GatewayUnsupported) ReadHealth(_ context.Context) bool {
 	return true
 }
+// GetObjectDebugInfo
+func (a GatewayUnsupported) GetObjectDebugInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objectDebugInfo map[string]string, err error) {
+	return nil, NotImplemented{}
+}

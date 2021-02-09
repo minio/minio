@@ -216,6 +216,8 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 				HandlerFunc(httpTraceHdrs(adminAPI.HealthInfoHandler))
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
 				HandlerFunc(httpTraceHdrs(adminAPI.BandwidthMonitorHandler))
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/object").
+				HandlerFunc(httpTraceHdrs(adminAPI.GetObjectDebugInfoHandler))
 		}
 	}
 

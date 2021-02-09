@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -623,6 +624,35 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
 	return gr, ObjectNotFound{Bucket: bucket, Object: object}
+}
+
+func (z *erasureServerPools) GetObjectDebugInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (map[string]string, error) {
+	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
+		return nil, err
+	}
+	object = encodeDirObject(object)
+	var objectDebugInfo map[string]string
+	for _, pool := range z.serverPools {
+		objectDebugInfo = pool.GetObjectDebugInfo(ctx, bucket, object, opts, strconv.Itoa(pool.poolIndex))
+	}
+	if objectDebugInfo == nil {
+		objectDebugInfo = make(map[string]string)
+	}
+	object = decodeDirObject(object)
+	if isProxyable(ctx, bucket) {
+		objectInfo, proxy, err := proxyHeadToReplicationTarget(ctx, bucket, object, opts)
+		if err != nil {
+			objectDebugInfo["proxy-error"] = err.Error()
+			return objectDebugInfo, nil
+		}
+		o, err := json.Marshal(objectInfo)
+		if err != nil {
+			objectDebugInfo["proxy-error"] = err.Error()
+		}
+		objectDebugInfo["proxy-objectInfo"] = string(o)
+		objectDebugInfo["proxy"] = fmt.Sprint(proxy)
+	}
+	return objectDebugInfo, nil
 }
 
 func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
