@@ -30,6 +30,12 @@ var (
 		Message:    "Tier name must be in uppercase",
 		StatusCode: http.StatusBadRequest,
 	}
+	// error returned when remote tier bucket is not found
+	errTierBucketNotFound = AdminError{
+		Code:       "XMinioAdminTierBucketNotFound",
+		Message:    "Remote tier bucket not found",
+		StatusCode: http.StatusBadRequest,
+	}
 )
 
 func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Request) {

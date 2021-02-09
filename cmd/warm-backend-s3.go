@@ -21,6 +21,15 @@ type warmBackendS3 struct {
 	StorageClass string
 }
 
+func (s3 *warmBackendS3) ToObjectError(err error, params ...string) error {
+	object := ""
+	if len(params) >= 1 {
+		object = params[0]
+	}
+
+	return ErrorRespToObjectError(err, s3.Bucket, s3.getDest(object))
+}
+
 func (s3 *warmBackendS3) getDest(object string) string {
 	destObj := object
 	if s3.Prefix != "" {
@@ -28,31 +37,41 @@ func (s3 *warmBackendS3) getDest(object string) string {
 	}
 	return destObj
 }
+
 func (s3 *warmBackendS3) Put(ctx context.Context, object string, r io.Reader, length int64) error {
 	_, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{StorageClass: s3.StorageClass})
-	return err
+	return s3.ToObjectError(err, object)
 }
 
-func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts warmBackendGetOpts) (r io.ReadCloser, err error) {
+func (s3 *warmBackendS3) Get(ctx context.Context, object string, opts warmBackendGetOpts) (io.ReadCloser, error) {
 	gopts := minio.GetObjectOptions{}
 
 	if opts.startOffset >= 0 && opts.length >= 0 {
 		if err := gopts.SetRange(opts.startOffset, opts.startOffset+opts.length-1); err != nil {
-			return nil, err
+			return nil, s3.ToObjectError(err, object)
 		}
 	}
 
-	return s3.client.GetObject(ctx, s3.Bucket, s3.getDest(object), gopts)
+	r, err := s3.client.GetObject(ctx, s3.Bucket, s3.getDest(object), gopts)
+	if err != nil {
+		return nil, s3.ToObjectError(err, object)
+	}
+	if _, err = r.Stat(); err != nil {
+		r.Close()
+		return nil, s3.ToObjectError(err, object)
+	}
+	return r, nil
 }
 
 func (s3 *warmBackendS3) Remove(ctx context.Context, object string) error {
-	return s3.client.RemoveObject(ctx, s3.Bucket, s3.getDest(object), minio.RemoveObjectOptions{})
+	err := s3.client.RemoveObject(ctx, s3.Bucket, s3.getDest(object), minio.RemoveObjectOptions{})
+	return s3.ToObjectError(err, object)
 }
 
 func (s3 *warmBackendS3) InUse(ctx context.Context) (bool, error) {
 	result, err := s3.core.ListObjectsV2(s3.Bucket, s3.Prefix, "", false, "/", 1)
 	if err != nil {
-		return false, err
+		return false, s3.ToObjectError(err)
 	}
 	if len(result.CommonPrefixes) > 0 {
 		return true, nil

@@ -189,14 +189,9 @@ func validateTransitionDestination(sc string) error {
 		return TransitionStorageClassNotFound{}
 	}
 	_, err = backend.Get(context.Background(), "probeobject", warmBackendGetOpts{})
-	if isErrBucketNotFound(err) || !isErrObjectNotFound(err) {
+	if !isErrObjectNotFound(err) {
 		return err
 	}
-	//!!
-	//TODO: validate if bucket still present on the target and if target endpoint + bucket happens to be this bucket we are creating
-	// lfc config for.
-	// sameTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
-	// return sameTarget, arn.Bucket, nil
 	return nil
 }
 
