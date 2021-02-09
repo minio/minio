@@ -200,11 +200,6 @@ func validateTransitionDestination(sc string) error {
 // 2. life cycle expiry date is met on the object.
 // 3. Object is removed through DELETE api call
 func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, tgtObjName, transitionSC string, restoredObject, expiryEvent bool) error {
-	tgtClient, err := globalTierConfigMgr.GetDriver(transitionSC)
-	if err != nil {
-		return err
-	}
-
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.Enabled(bucket)
 	opts.VersionID = lcOpts.VersionID
@@ -213,26 +208,31 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 		// from the source, while leaving metadata behind. The data on
 		// transitioned tier lies untouched and still accessible
 		opts.Transition.Status = lcOpts.TransitionStatus
-		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
+		_, err := objectAPI.DeleteObject(ctx, bucket, object, opts)
 		return err
 	}
 
-	// When an object is past expiry, delete the data from transitioned tier and
-	// metadata from source
-	// When an objectglobalTierConfigMgr transitioned tier and
-	// metadata from source
-	if err := tgtClient.Remove(GlobalContext, tgtObjName); err != nil {
-		logger.LogIf(ctx, err)
+	// Request to delete transitioned object comes from DeleteObject API or
+	// an expiry lifecycle event. In case of a DeleteObject API, simply
+	// delete the transitioned object in the remote tier. In case of an
+	// expiry event we should also remove the object metadata in source.
+	tgtClient, err := globalTierConfigMgr.GetDriver(transitionSC)
+	if err != nil {
 		return err
 	}
 
-	// Delete metadata on source, now that transition tier has been cleaned up.
-	if _, err = objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
+	if err = tgtClient.Remove(GlobalContext, tgtObjName); err != nil {
 		logger.LogIf(ctx, err)
 		return err
 	}
 
 	if expiryEvent {
+		// Delete metadata on source, now that transition tier has been cleaned up.
+		if _, err = objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}
+
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
 			eventName = event.ObjectRemovedDeleteMarkerCreated
