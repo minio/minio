@@ -181,7 +181,7 @@ func healErasureSet(ctx context.Context, prefix string, setIndex int, maxIO int,
 			for {
 				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
 				if !ok {
-					logger.Info("Healing finished for bucket '%s' on erasure set %d", setIndex+1)
+					logger.Info("Healing finished for bucket '%s' on erasure set %d", bucket.Name, setIndex+1)
 					// We are finished with this bucket return.
 					return
 				}
