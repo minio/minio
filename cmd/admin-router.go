@@ -65,15 +65,14 @@ func registerAdminRouter(router *mux.Router, enableConfigOps, enableIAMOps bool)
 		if globalIsDistErasure || globalIsErasure {
 			/// Heal operations
 
+			// Heal informational output.
+			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/heal/{bucket}/{prefix.*}").HandlerFunc(httpTraceHdrs(adminAPI.HealInspectHandler))
+
 			// Heal processing endpoint.
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/heal/").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/heal/{bucket}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/heal/{bucket}/{prefix:.*}").HandlerFunc(httpTraceAll(adminAPI.HealHandler))
-
 			adminRouter.Methods(http.MethodPost).Path(adminVersion + "/background-heal/status").HandlerFunc(httpTraceAll(adminAPI.BackgroundHealStatusHandler))
-
-			/// Health operations
-
 		}
 
 		// Profiling operations

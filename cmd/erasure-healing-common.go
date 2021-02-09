@@ -27,18 +27,18 @@ import (
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
 	var maxima int // Counter for remembering max occurrence of elements.
-	timeOccurenceMap := make(map[int64]int)
+	timeOccurrenceMap := make(map[int64]int)
 	// Ignore the uuid sentinel and count the rest.
-	for _, time := range modTimes {
-		if time.Equal(timeSentinel) {
+	for _, t := range modTimes {
+		if t.Equal(timeSentinel) || t.IsZero() {
 			continue
 		}
-		timeOccurenceMap[time.UnixNano()]++
+		timeOccurrenceMap[t.UnixNano()]++
 	}
 
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
-	for nano, count := range timeOccurenceMap {
+	for nano, count := range timeOccurrenceMap {
 		t := time.Unix(0, nano)
 		if count > maxima || (count == maxima && t.After(modTime)) {
 			maxima = count
@@ -110,9 +110,14 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error)
 	// Reduce list of UUIDs to a single common value.
 	modTime, _ = commonTime(modTimes)
 
+	// invalid situation
+	if modTime.IsZero() {
+		return onlineDisks, modTime
+	}
+
 	// Create a new online disks slice, which have common uuid.
 	for index, t := range modTimes {
-		if t.Equal(modTime) {
+		if t.Equal(modTime) && partsMetadata[index].IsValid() {
 			onlineDisks[index] = disks[index]
 		} else {
 			onlineDisks[index] = nil

@@ -1,5 +1,5 @@
 /*
- * MinIO Cloud Storage, (C) 2016-2020 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2016-2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1696,6 +1696,35 @@ func assignPoolNumbers(servers []madmin.ServerProperties) {
 			}
 		}
 	}
+}
+
+// HealInspectObjectHandler - GET /minio/admin/heal/{bucket}/{prefix:.*}
+// fetch metadata information for object(s)
+func (a adminAPIHandlers) HealInspectHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "HealInspectHandler")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.StorageInfoAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	bucket := mux.Vars(r)["bucket"]
+	prefix := mux.Vars(r)["prefix"]
+
+	debugInfo, err := objectAPI.GetObjectDebugInfo(ctx, bucket, object, ObjectOptions{})
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	enc := json.NewEncoder(w)
+	err = enc.Encode(debugInfo)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(toAPIErrorCode(ctx, err)), r.URL)
+		return
+	}
+	w.(http.Flusher).Flush()
+	return
 }
 
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {

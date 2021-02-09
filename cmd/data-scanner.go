@@ -779,15 +779,16 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder,
 
 // scannerItem represents each file while walking.
 type scannerItem struct {
-	Path string
-	Typ  os.FileMode
+	heal  bool // Has the object been selected for heal check?
+	debug bool
 
+	Typ  os.FileMode
+	Path string
+
+	lifeCycle  *lifecycle.Lifecycle
 	bucket     string // Bucket.
 	prefix     string // Only the prefix if any, does not have final object name.
 	objectName string // Only the object name without prefixes.
-	lifeCycle  *lifecycle.Lifecycle
-	heal       bool // Has the object been selected for heal check?
-	debug      bool
 }
 
 type sizeSummary struct {
