@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"context"
-	"runtime"
 	"sync"
 	"time"
 
@@ -43,8 +42,8 @@ func newBgHealSequence() *healSequence {
 	}
 
 	return &healSequence{
-		sourceCh:    make(chan healSource, runtime.GOMAXPROCS(0)),
-		respCh:      make(chan healResult, runtime.GOMAXPROCS(0)),
+		sourceCh:    make(chan healSource),
+		respCh:      make(chan healResult),
 		startTime:   UTCNow(),
 		clientToken: bgHealingUUID,
 		// run-background heal with reserved bucket
