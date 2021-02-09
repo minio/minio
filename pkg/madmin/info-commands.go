@@ -195,17 +195,17 @@ type Services struct {
 
 // Buckets contains the number of buckets
 type Buckets struct {
-	Count uint64 `json:"count,omitempty"`
+	Count *uint64 `json:"count,omitempty"`
 }
 
 // Objects contains the number of objects
 type Objects struct {
-	Count uint64 `json:"count,omitempty"`
+	Count *uint64 `json:"count,omitempty"`
 }
 
-// Usage contains the tottal size used
+// Usage contains the total size used
 type Usage struct {
-	Size uint64 `json:"size,omitempty"`
+	Size *uint64 `json:"size,omitempty"`
 }
 
 // KMS contains KMS status information
