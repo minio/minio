@@ -909,12 +909,12 @@ func lexicallySortedEntryVersions(entryChs []FileInfoVersionsCh, entries []FileI
 		if !found {
 			lentry = entries[i]
 			found = true
-			setIndex = i
+			setIndex = entryChs[i].SetIndex
 			continue
 		}
 		if entries[i].Name < lentry.Name {
 			lentry = entries[i]
-			setIndex = i
+			setIndex = entryChs[i].SetIndex
 		}
 	}
 
