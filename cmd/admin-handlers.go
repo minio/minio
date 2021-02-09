@@ -785,9 +785,7 @@ func (a adminAPIHandlers) HealSetsHandler(w http.ResponseWriter, r *http.Request
 				defer wg.Done()
 				lbDisks := z.serverSets[0].sets[setNumber].getDisks()
 				if err := healErasureSet(ctx, vars[healSetsPrefix], setNumber, opts.sleepForIO, opts.sleepDuration, buckets, lbDisks); err != nil {
-					if !isErrBucketNotFound(err) {
-						logger.LogIf(ctx, err)
-					}
+					logger.LogIf(ctx, err)
 				}
 			}(setNumber)
 		}

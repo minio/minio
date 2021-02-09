@@ -127,11 +127,14 @@ func healErasureSet(ctx context.Context, prefix string, setIndex int, maxIO int,
 		object: backendEncryptedFile,
 	}
 
-	buckets = append(buckets, BucketInfo{
-		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
-	}, BucketInfo{
-		Name: pathJoin(minioMetaBucket, bucketConfigPrefix),
-	}) // add metadata .minio.sys/ bucket prefixes to heal
+	// Heal config prefix.
+	bgSeq.sourceCh <- healSource{
+		bucket: pathJoin(minioMetaBucket, minioConfigPrefix),
+	}
+
+	bgSeq.sourceCh <- healSource{
+		bucket: pathJoin(minioMetaBucket, bucketConfigPrefix),
+	}
 
 	// Heal all buckets with all objects
 	var wg sync.WaitGroup
@@ -177,7 +180,7 @@ func healErasureSet(ctx context.Context, prefix string, setIndex int, maxIO int,
 			for {
 				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
 				if !ok {
-					break
+					return
 				}
 
 				if quorumCount == setDriveCount {
