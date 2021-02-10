@@ -283,9 +283,9 @@ type Disk struct {
 	State           string  `json:"state,omitempty"`
 	UUID            string  `json:"uuid,omitempty"`
 	Model           string  `json:"model,omitempty"`
-	TotalSpace      uint64  `json:"totalspace,omitempty"`
-	UsedSpace       uint64  `json:"usedspace,omitempty"`
-	AvailableSpace  uint64  `json:"availspace,omitempty"`
+	TotalSpace      float64 `json:"totalspace,omitempty"`
+	UsedSpace       float64 `json:"usedspace,omitempty"`
+	AvailableSpace  float64 `json:"availspace,omitempty"`
 	ReadThroughput  float64 `json:"readthroughput,omitempty"`
 	WriteThroughPut float64 `json:"writethroughput,omitempty"`
 	ReadLatency     float64 `json:"readlatency,omitempty"`

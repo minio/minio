@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -42,6 +43,7 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
+	xmath "github.com/minio/minio/pkg/math"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/mountinfo"
 )
@@ -219,9 +221,9 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	storageInfo := StorageInfo{
 		Disks: []madmin.Disk{
 			{
-				TotalSpace:     di.Total,
-				UsedSpace:      di.Used,
-				AvailableSpace: di.Free,
+				TotalSpace:     xmath.Round(float64(di.Total)/humanize.GiByte, 1),
+				UsedSpace:      xmath.Round(float64(di.Used)/humanize.GiByte, 1),
+				AvailableSpace: xmath.Round(float64(di.Free)/humanize.GiByte, 1),
 				DrivePath:      fs.fsPath,
 			},
 		},

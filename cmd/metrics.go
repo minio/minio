@@ -596,7 +596,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total disk storage used on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(disk.UsedSpace),
+			disk.UsedSpace,
 			disk.DrivePath,
 		)
 
@@ -607,7 +607,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total available space left on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(disk.AvailableSpace),
+			disk.AvailableSpace,
 			disk.DrivePath,
 		)
 
@@ -618,7 +618,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 				"Total space on the disk",
 				[]string{"disk"}, nil),
 			prometheus.GaugeValue,
-			float64(disk.TotalSpace),
+			disk.TotalSpace,
 			disk.DrivePath,
 		)
 	}

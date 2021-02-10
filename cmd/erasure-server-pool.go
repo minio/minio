@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
@@ -216,11 +217,10 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, s
 	g.Wait()
 
 	for i, zinfo := range storageInfos {
-		var available uint64
-		var total uint64
+		var available, total uint64
 		for _, disk := range zinfo.Disks {
-			total += disk.TotalSpace
-			available += disk.TotalSpace - disk.UsedSpace
+			total += uint64(disk.TotalSpace * humanize.GiByte)
+			available += uint64((disk.TotalSpace - disk.UsedSpace) * humanize.GiByte)
 		}
 		// Make sure we can fit "size" on to the disk without getting above the diskFillFraction
 		if available < uint64(size) {

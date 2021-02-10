@@ -24,11 +24,13 @@ import (
 	"sync"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
+	xmath "github.com/minio/minio/pkg/math"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -184,16 +186,16 @@ func getDisksInfo(disks []StorageAPI, endpoints []string) (disksInfo []madmin.Di
 			di := madmin.Disk{
 				Endpoint:       endpoints[index],
 				DrivePath:      info.MountPath,
-				TotalSpace:     info.Total,
-				UsedSpace:      info.Used,
-				AvailableSpace: info.Free,
+				TotalSpace:     xmath.Round(float64(info.Total)/humanize.GiByte, 1),
+				UsedSpace:      xmath.Round(float64(info.Used)/humanize.GiByte, 1),
+				AvailableSpace: xmath.Round(float64(info.Free)/humanize.GiByte, 1),
 				UUID:           info.ID,
 				RootDisk:       info.RootDisk,
 				Healing:        info.Healing,
 				State:          diskErrToDriveState(err),
 			}
 			if info.Total > 0 {
-				di.Utilization = float64(info.Used / info.Total * 100)
+				di.Utilization = xmath.Round(float64(info.Used/info.Total*100), 0)
 			}
 			disksInfo[index] = di
 			return err

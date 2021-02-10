@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -25,7 +26,7 @@ import (
 func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
 
 	for _, disk := range diskInfo {
-		capacity += disk.TotalSpace
+		capacity += uint64(disk.TotalSpace * humanize.GiByte)
 	}
 	return
 }
@@ -47,7 +48,7 @@ func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity flo
 // GetTotalCapacityFree gets the total capacity free in the cluster.
 func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
 	for _, d := range diskInfo {
-		capacity += d.AvailableSpace
+		capacity += uint64(d.AvailableSpace * humanize.GiByte)
 	}
 	return
 }

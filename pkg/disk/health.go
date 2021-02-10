@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	xmath "github.com/minio/minio/pkg/math"
 	"github.com/montanaflynn/stats"
 )
 
@@ -125,12 +126,12 @@ func GetHealthInfo(ctx context.Context, drive, fsPath string) (Latency, Throughp
 		return Latency{}, Throughput{}, err
 	}
 	l := Latency{
-		Avg:          avgLatency,
-		Percentile50: percentile50Latency,
-		Percentile90: percentile90Latency,
-		Percentile99: percentile99Latency,
-		Min:          minLatency,
-		Max:          maxLatency,
+		Avg:          xmath.Round(avgLatency, 3),
+		Percentile50: xmath.Round(percentile50Latency, 3),
+		Percentile90: xmath.Round(percentile90Latency, 3),
+		Percentile99: xmath.Round(percentile99Latency, 3),
+		Min:          xmath.Round(minLatency, 3),
+		Max:          xmath.Round(maxLatency, 3),
 	}
 
 	if avgThroughput, err = stats.Mean(throughputs); err != nil {
@@ -153,12 +154,12 @@ func GetHealthInfo(ctx context.Context, drive, fsPath string) (Latency, Throughp
 	}
 
 	t := Throughput{
-		Avg:          avgThroughput,
-		Percentile50: percentile50Throughput,
-		Percentile90: percentile90Throughput,
-		Percentile99: percentile99Throughput,
-		Min:          minThroughput,
-		Max:          maxThroughput,
+		Avg:          xmath.Round(avgThroughput, 3),
+		Percentile50: xmath.Round(percentile50Throughput, 3),
+		Percentile90: xmath.Round(percentile90Throughput, 3),
+		Percentile99: xmath.Round(percentile99Throughput, 3),
+		Min:          xmath.Round(minThroughput, 3),
+		Max:          xmath.Round(maxThroughput, 3),
 	}
 
 	return l, t, nil

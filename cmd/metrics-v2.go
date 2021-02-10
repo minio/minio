@@ -1069,19 +1069,19 @@ func getLocalStorageMetrics() MetricsGroup {
 
 				metrics.Metrics = append(metrics.Metrics, Metric{
 					Description:    getNodeDiskUsedBytesMD(),
-					Value:          float64(disk.UsedSpace),
+					Value:          disk.UsedSpace,
 					VariableLabels: map[string]string{"disk": disk.DrivePath},
 				})
 
 				metrics.Metrics = append(metrics.Metrics, Metric{
 					Description:    getNodeDiskFreeBytesMD(),
-					Value:          float64(disk.AvailableSpace),
+					Value:          disk.AvailableSpace,
 					VariableLabels: map[string]string{"disk": disk.DrivePath},
 				})
 
 				metrics.Metrics = append(metrics.Metrics, Metric{
 					Description:    getNodeDiskTotalBytesMD(),
-					Value:          float64(disk.TotalSpace),
+					Value:          disk.TotalSpace,
 					VariableLabels: map[string]string{"disk": disk.DrivePath},
 				})
 			}

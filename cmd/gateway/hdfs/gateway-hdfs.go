@@ -33,6 +33,7 @@ import (
 
 	"github.com/colinmarc/hdfs/v2"
 	"github.com/colinmarc/hdfs/v2/hadoopconf"
+	humanize "github.com/dustin/go-humanize"
 	krb "github.com/jcmturner/gokrb5/v8/client"
 	"github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/credentials"
@@ -44,6 +45,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
+	xmath "github.com/minio/minio/pkg/math"
 	xnet "github.com/minio/minio/pkg/net"
 )
 
@@ -238,7 +240,7 @@ func (n *hdfsObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, er
 		return minio.StorageInfo{}, []error{err}
 	}
 	si.Disks = []madmin.Disk{{
-		UsedSpace: fsInfo.Used,
+		UsedSpace: xmath.Round(float64(fsInfo.Used)/humanize.GiByte, 1),
 	}}
 	si.Backend.Type = minio.BackendGateway
 	si.Backend.GatewayOnline = true
