@@ -639,6 +639,23 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		objSets.Add(objects[i].ObjectName)
 	}
 
+	poolObjIdxMap := map[int][]ObjectToDelete{}
+	origIndexMap := map[int][]int{}
+	if !z.SinglePool() {
+		for j, obj := range objects {
+			idx, err := z.getPoolIdx(ctx, bucket, obj.ObjectName, 1<<30)
+			if err != nil {
+				// Unhandled errors return right here.
+				for i := range derrs {
+					derrs[i] = err
+				}
+				return dobjects, derrs
+			}
+			poolObjIdxMap[idx] = append(poolObjIdxMap[idx], obj)
+			origIndexMap[idx] = append(origIndexMap[idx], j)
+		}
+	}
+
 	// Acquire a bulk write lock across 'objects'
 	multiDeleteLock := z.NewNSLock(bucket, objSets.ToSlice()...)
 	if err := multiDeleteLock.GetLock(ctx, globalOperationTimeout); err != nil {
@@ -653,13 +670,15 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 		return z.serverPools[0].DeleteObjects(ctx, bucket, objects, opts)
 	}
 
-	for _, pool := range z.serverPools {
-		deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objects, opts)
+	for idx, pool := range z.serverPools {
+		objs := poolObjIdxMap[idx]
+		orgIndexes := origIndexMap[idx]
+		deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
 		for i, derr := range errs {
 			if derr != nil {
-				derrs[i] = derr
+				derrs[orgIndexes[i]] = derr
 			}
-			dobjects[i] = deletedObjects[i]
+			dobjects[orgIndexes[i]] = deletedObjects[i]
 		}
 	}
 	return dobjects, derrs
