@@ -164,7 +164,7 @@ func mustGetPutObjReader(t TestErrHandler, data io.Reader, size int64, md5hex, s
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewPutObjReader(hr, nil, nil)
+	return NewPutObjReader(hr)
 }
 
 // calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)

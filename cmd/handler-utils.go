@@ -128,7 +128,7 @@ func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]
 
 	// Set content-type to default value if it is not set.
 	if _, ok := metadata[strings.ToLower(xhttp.ContentType)]; !ok {
-		metadata[strings.ToLower(xhttp.ContentType)] = "application/octet-stream"
+		metadata[strings.ToLower(xhttp.ContentType)] = "binary/octet-stream"
 	}
 
 	// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
