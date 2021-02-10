@@ -172,5 +172,5 @@ func getGWMetadata(ctx context.Context, bucket, prefix string, gwMeta gwMetaV1) 
 	if err != nil {
 		return nil, err
 	}
-	return minio.NewPutObjReader(hashReader, nil, nil), nil
+	return minio.NewPutObjReader(hashReader), nil
 }

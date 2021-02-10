@@ -1234,7 +1234,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if mustReplicate {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
 	}
-	pReader = NewPutObjReader(hashReader, nil, nil)
+	pReader = NewPutObjReader(hashReader)
 	// get gateway encryption options
 	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
@@ -1244,7 +1244,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if objectAPI.IsEncryptionSupported() {
 		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
-			rawReader := hashReader
 			var objectEncryptionKey crypto.ObjectKey
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
@@ -1258,7 +1257,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 	}
 
