@@ -986,8 +986,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.metadataOnly = false
 	}
 
-	var reader io.Reader
-
 	// Set the actual size to the compressed/decrypted size if encrypted.
 	actualSize, err := srcInfo.GetActualSize()
 	if err != nil {
@@ -1004,6 +1002,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	var compressMetadata map[string]string
+	reader := io.Reader(gr)
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
 	isDstCompressed := objectAPI.IsCompressionSupported() &&
@@ -1014,16 +1013,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Preserving the compression metadata.
 		compressMetadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		compressMetadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
-		// Remove all source encrypted related metadata to
-		// avoid copying them in target object.
-		crypto.RemoveInternalEntries(srcInfo.UserDefined)
 
 		s2c := newS2CompressReader(gr, actualSize)
 		defer s2c.Close()
 		reader = s2c
 		length = -1
-	} else {
-		reader = gr
 	}
 
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize, globalCLIContext.StrictS3Compat)
@@ -1281,6 +1275,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 	objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
+
+	// If the destination is compressed, make sure that etag isn't md5.
+	if objInfo.IsCompressed() && !strings.HasSuffix(objInfo.ETag, "-1") {
+		objInfo.ETag = objInfo.ETag + "-1"
+	}
+
 	response := generateCopyObjectResponse(objInfo.ETag, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	if replicate, sync := mustReplicate(ctx, r, dstBucket, dstObject, objInfo.UserDefined, objInfo.ReplicationStatus.String()); replicate {
@@ -1578,8 +1578,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	switch kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); {
-	case encrypted:
+	if kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); encrypted {
 		switch kind {
 		case crypto.S3:
 			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
@@ -1592,11 +1591,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				objInfo.ETag = objInfo.ETag[len(objInfo.ETag)-32:]
 			}
 		}
-	case objInfo.IsCompressed():
+	}
+
+	if objInfo.IsCompressed() {
 		if !strings.HasSuffix(objInfo.ETag, "-1") {
 			objInfo.ETag = objInfo.ETag + "-1"
 		}
 	}
+
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
