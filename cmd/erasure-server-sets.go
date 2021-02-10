@@ -1011,8 +1011,8 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 
 			// Entries are duplicated across disks,
 			// we should simply skip such entries.
-			if lentry.Name == zoneEntryName && setIndex == zoneEntryChs[i][j].SetIndex {
-				if HasSuffix(lentry.Name, slashSeparator) || lentry.ModTime.Equal(zoneEntries[i][j].ModTime) {
+			if HasSuffix(lentry.Name, slashSeparator) || lentry.ModTime.Equal(zoneEntries[i][j].ModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
+				if lentry.Name == zoneEntryName {
 					lexicallySortedEntryCount++
 					continue
 				}
@@ -1112,8 +1112,8 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 
 			// Entries are duplicated across disks,
 			// we should simply skip such entries.
-			if lentry.Name == zoneEntryName && setIndex == zoneEntryChs[i][j].SetIndex {
-				if HasSuffix(lentry.Name, slashSeparator) || lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) {
+			if HasSuffix(lentry.Name, slashSeparator) || lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
+				if lentry.Name == zoneEntryName {
 					lexicallySortedEntryCount++
 					continue
 				}
