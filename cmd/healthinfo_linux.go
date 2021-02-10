@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"syscall"
 
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/smart"
@@ -99,14 +98,7 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 			paths = append(paths, path)
 			smartInfo, err := smart.GetInfo(device)
 			if err != nil {
-				if syscall.EACCES == err {
-					smartInfo.Error = fmt.Sprintf("smart: %v", err)
-				} else {
-					return madmin.ServerDiskHwInfo{
-						Addr:  addr,
-						Error: fmt.Sprintf("smart: %v", err),
-					}
-				}
+				smartInfo.Error = fmt.Sprintf("smart: %v", err)
 			}
 			partition := madmin.PartitionStat{
 				Device:     part.Device,
