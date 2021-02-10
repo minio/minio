@@ -246,31 +246,26 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, s
 
 // getPoolIdx returns the found previous object and its corresponding pool idx,
 // if none are found falls back to most available space pool.
-func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, opts ObjectOptions, size int64) (idx int, err error) {
+func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
 	if z.SinglePool() {
 		return 0, nil
 	}
 	for i, pool := range z.serverPools {
-		objInfo, err := pool.GetObjectInfo(ctx, bucket, object, opts)
-		switch err.(type) {
-		case VersionNotFound:
-			// VersionId not found, versionId was specified
-		case ObjectNotFound:
-			// VersionId was not specified but found delete marker or no versions exist.
-		case MethodNotAllowed:
-			// VersionId was specified but found delete marker
-		default:
-			// All other unhandled errors return right here.
-			if err != nil {
-				return -1, err
-			}
+		objInfo, err := pool.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+		if err != nil && !isErrObjectNotFound(err) {
+			return -1, err
 		}
-		// delete marker not specified means no versions
-		// exist continue to next pool.
-		if !objInfo.DeleteMarker && err != nil {
+		if isErrObjectNotFound(err) {
+			// No object exists or its a delete marker,
+			// check objInfo to confirm.
+			if objInfo.DeleteMarker && objInfo.Name != "" {
+				return i, nil
+			}
+			// objInfo is not valid, truly the object doesn't
+			// exist proceed to next pool.
 			continue
 		}
-		// Success case and when DeleteMarker is true return.
+		// object exists at this pool.
 		return i, nil
 	}
 
@@ -604,7 +599,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
-	idx, err := z.getPoolIdx(ctx, bucket, object, opts, data.Size())
+	idx, err := z.getPoolIdx(ctx, bucket, object, data.Size())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -625,7 +620,7 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	}
 
 	// We don't know the size here set 1GiB atleast.
-	idx, err := z.getPoolIdx(ctx, bucket, object, opts, 1<<30)
+	idx, err := z.getPoolIdx(ctx, bucket, object, 1<<30)
 	if err != nil {
 		return objInfo, err
 	}
@@ -676,7 +671,7 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 
 	cpSrcDstSame := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 
-	poolIdx, err := z.getPoolIdx(ctx, dstBucket, dstObject, dstOpts, srcInfo.Size)
+	poolIdx, err := z.getPoolIdx(ctx, dstBucket, dstObject, srcInfo.Size)
 	if err != nil {
 		return objInfo, err
 	}
@@ -860,7 +855,7 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	// We don't know the exact size, so we ask for at least 1GiB file.
-	idx, err := z.getPoolIdx(ctx, bucket, object, opts, 1<<30)
+	idx, err := z.getPoolIdx(ctx, bucket, object, 1<<30)
 	if err != nil {
 		return "", err
 	}
