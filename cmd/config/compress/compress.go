@@ -45,7 +45,7 @@ const (
 
 	// Include-list for compression.
 	DefaultExtensions = ".txt,.log,.csv,.json,.tar,.xml,.bin"
-	DefaultMimeTypes  = "text/*,application/json,application/xml"
+	DefaultMimeTypes  = "text/*,application/json,application/xml,binary/octet-stream"
 )
 
 // DefaultKVS - default KV config for compression settings
