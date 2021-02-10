@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	xhttp "github.com/minio/minio/cmd/http"
@@ -60,6 +61,15 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 	// and don't process the If-Modified-Since header.
 	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
 		return false
+	}
+
+	// The ETag of a compressed object is never the content MD5. Therefore,
+	// we add a "-1" if the ETag does not already have a "-X" suffix.
+	//
+	// This has to be done before setting the response headers since
+	// a client may send a If-Match condition for the ETag.
+	if objInfo.IsCompressed() && !strings.Contains(objInfo.ETag, "-") {
+		objInfo.ETag += "-1"
 	}
 
 	// Headers to be set of object content is not going to be written to the client.
@@ -145,6 +155,15 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// and don't process the If-Modified-Since header.
 	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
 		return false
+	}
+
+	// The ETag of a compressed object is never the content MD5. Therefore,
+	// we add a "-1" if the ETag does not already have a "-X" suffix.
+	//
+	// This has to be done before setting the response headers since
+	// a client may send a If-Match condition for the ETag.
+	if objInfo.IsCompressed() && !strings.Contains(objInfo.ETag, "-") {
+		objInfo.ETag += "-1"
 	}
 
 	// Headers to be set of object content is not going to be written to the client.
@@ -245,6 +264,12 @@ func isETagEqual(left, right string) bool {
 // upon a success Put/Copy/CompleteMultipart/Delete requests
 // to activate delete only headers set delete as true
 func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
+	// The ETag of a compressed object is never the content MD5. Therefore,
+	// we add a "-1" if the ETag does not already have a "-X" suffix.
+	if objInfo.IsCompressed() && !strings.Contains(objInfo.ETag, "-") {
+		objInfo.ETag += "-1"
+	}
+
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
 	// Therefore, we have to set the ETag directly as map entry.

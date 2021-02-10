@@ -1578,23 +1578,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	switch kind, encrypted := crypto.IsEncrypted(objInfo.UserDefined); {
-	case encrypted:
-		switch kind {
-		case crypto.S3:
-			w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
-			objInfo.ETag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: objInfo.ETag})
-		case crypto.SSEC:
-			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
-			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
+	switch kind, _ := crypto.IsEncrypted(objInfo.UserDefined); kind {
+	case crypto.S3:
+		w.Header().Set(xhttp.AmzServerSideEncryption, xhttp.AmzEncryptionAES)
+		objInfo.ETag, _ = DecryptETag(objectEncryptionKey, ObjectInfo{ETag: objInfo.ETag})
+	case crypto.SSEC:
+		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
+		w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 
-			if len(objInfo.ETag) >= 32 && strings.Count(objInfo.ETag, "-") != 1 {
-				objInfo.ETag = objInfo.ETag[len(objInfo.ETag)-32:]
-			}
-		}
-	case objInfo.IsCompressed():
-		if !strings.HasSuffix(objInfo.ETag, "-1") {
-			objInfo.ETag = objInfo.ETag + "-1"
+		if len(objInfo.ETag) >= 32 && strings.Count(objInfo.ETag, "-") != 1 {
+			objInfo.ETag = objInfo.ETag[len(objInfo.ETag)-32:]
 		}
 	}
 	if replicate, sync := mustReplicate(ctx, r, bucket, object, metadata, ""); replicate {

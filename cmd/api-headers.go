@@ -96,6 +96,12 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 
 	// Set Etag if available.
 	if objInfo.ETag != "" {
+		// The ETag of a compressed object is never its content MD5.
+		// Therefore, we add a "-1" if the ETag does not already have
+		// a "-X" suffix.
+		if objInfo.IsCompressed() && !strings.Contains(objInfo.ETag, "-") {
+			objInfo.ETag += "-1"
+		}
 		w.Header()[xhttp.ETag] = []string{"\"" + objInfo.ETag + "\""}
 	}
 
