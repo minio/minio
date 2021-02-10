@@ -714,9 +714,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	}
 
 	// This lower level implementation is necessary to avoid write locks from CopyObject.
-	poolIdx, err := z.getPoolIdx(ctx, bucket, object, ObjectOptions{
-		VersionID: objInfo.VersionID,
-	}, objInfo.Size)
+	poolIdx, err := z.getPoolIdx(ctx, bucket, object, objInfo.Size)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to update replication metadata for %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 	} else {
