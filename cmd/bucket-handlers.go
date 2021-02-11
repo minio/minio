@@ -547,7 +547,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		dindex := objectsToDelete[ObjectToDelete{
 			ObjectName:                    dObjects[i].ObjectName,
 			VersionID:                     dObjects[i].VersionID,
-			DeleteMarkerVersionID:         dObjects[i].DeleteMarkerVersionID,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
