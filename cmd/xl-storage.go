@@ -53,7 +53,7 @@ import (
 
 const (
 	nullVersionID  = "null"
-	blockSizeLarge = 1 * humanize.MiByte   // Default r/w block size for larger objects.
+	blockSizeLarge = 2 * humanize.MiByte   // Default r/w block size for larger objects.
 	blockSizeSmall = 128 * humanize.KiByte // Default r/w block size for smaller objects.
 
 	// On regular files bigger than this;
