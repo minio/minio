@@ -103,7 +103,6 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 	}
 
 	// We set file info only if its valid.
-	o.ModTime = m.Stat.ModTime
 	o.Size = m.Stat.Size
 	o.ETag = extractETag(m.Meta)
 	o.ContentType = m.Meta["content-type"]
@@ -122,6 +121,12 @@ func (m *cacheMeta) ToObjectInfo(bucket, object string) (o ObjectInfo) {
 			o.Expires = t.UTC()
 		}
 	}
+	if mtime, ok := m.Meta["last-modified"]; ok {
+		if t, e = time.Parse(http.TimeFormat, mtime); e == nil {
+			o.ModTime = t.UTC()
+		}
+	}
+
 	// etag/md5Sum has already been extracted. We need to
 	// remove to avoid it from appearing as part of user-defined metadata
 	o.UserDefined = cleanMetadata(m.Meta)
@@ -506,9 +511,7 @@ func (c *diskCache) statCache(ctx context.Context, cacheObjPath string) (meta *c
 	}
 	// get metadata of part.1 if full file has been cached.
 	partial = true
-	fi, err := os.Stat(pathJoin(cacheObjPath, cacheDataFile))
-	if err == nil {
-		meta.Stat.ModTime = atime.Get(fi)
+	if _, err := os.Stat(pathJoin(cacheObjPath, cacheDataFile)); err == nil {
 		partial = false
 	}
 	return meta, partial, meta.Hits, nil
@@ -570,7 +573,6 @@ func (c *diskCache) saveMetadata(ctx context.Context, bucket, object string, met
 		}
 	}
 	m.Stat.Size = actualSize
-	m.Stat.ModTime = UTCNow()
 	if !incHitsOnly {
 		// reset meta
 		m.Meta = meta

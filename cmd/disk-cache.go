@@ -200,6 +200,7 @@ func getMetadata(objInfo ObjectInfo) map[string]string {
 	if !objInfo.Expires.Equal(timeSentinel) {
 		metadata["expires"] = objInfo.Expires.Format(http.TimeFormat)
 	}
+	metadata["last-modified"] = objInfo.ModTime.Format(http.TimeFormat)
 	for k, v := range objInfo.UserDefined {
 		metadata[k] = v
 	}
