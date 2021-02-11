@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
+	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
 // ServerFlags - server command specific flags
@@ -346,10 +347,22 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 				logger.Info(fmt.Sprintf("Verifying if %d buckets are consistent across drives...", len(buckets)))
 			}
 		}
-		for _, bucket := range buckets {
-			if _, err = newObject.HealBucket(ctx, bucket.Name, madmin.HealOpts{Recreate: true}); err != nil {
-				return fmt.Errorf("Unable to list buckets to heal: %w", err)
-			}
+
+		// Limit to no more than 50 concurrent buckets.
+		g := errgroup.WithNErrs(len(buckets)).WithConcurrency(50)
+		ctx, cancel := g.WithCancelOnError(ctx)
+		defer cancel()
+		for index := range buckets {
+			index := index
+			g.Go(func() error {
+				if _, berr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true}); berr != nil {
+					return fmt.Errorf("Unable to list buckets to heal: %w", berr)
+				}
+				return nil
+			}, index)
+		}
+		if err := g.WaitErr(); err != nil {
+			return err
 		}
 	}
 

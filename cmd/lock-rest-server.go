@@ -33,7 +33,7 @@ import (
 
 const (
 	// Lock maintenance interval.
-	lockMaintenanceInterval = 10 * time.Second
+	lockMaintenanceInterval = 15 * time.Second
 
 	// Lock validity check interval.
 	lockValidityCheckInterval = 30 * time.Second
@@ -254,15 +254,15 @@ func getLongLivedLocks(interval time.Duration) []lockRequesterInfo {
 // - some network error (and server is up normally)
 //
 // We will ignore the error, and we will retry later to get a resolve on this lock
-func lockMaintenance(ctx context.Context, interval time.Duration) error {
+func lockMaintenance(ctx context.Context, interval time.Duration) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		return nil
+		return
 	}
 
 	z, ok := objAPI.(*erasureServerPools)
 	if !ok {
-		return nil
+		return
 	}
 
 	type nlock struct {
@@ -295,14 +295,15 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 		if lrip.Group {
 			lockers, _ = z.serverPools[0].getHashedSet("").getLockers()
 		} else {
-			lockers, _ = z.serverPools[0].getHashedSet(lrip.Name).getLockers()
+			_, objName := path2BucketObject(lrip.Name)
+			lockers, _ = z.serverPools[0].getHashedSet(objName).getLockers()
 		}
 		var wg sync.WaitGroup
 		wg.Add(len(lockers))
 		for _, c := range lockers {
 			go func(lrip lockRequesterInfo, c dsync.NetLocker) {
 				defer wg.Done()
-				ctx, cancel := context.WithTimeout(GlobalContext, 3*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 				// Call back to all participating servers, verify
 				// if each of those servers think lock is still
@@ -336,8 +337,6 @@ func lockMaintenance(ctx context.Context, interval time.Duration) error {
 			globalLockServer.removeEntryIfExists(lrip)
 		}
 	}
-
-	return nil
 }
 
 // Start lock maintenance from all lock servers.
@@ -354,27 +353,28 @@ func startLockMaintenance(ctx context.Context) {
 		break
 	}
 
-	// Initialize a new ticker with a minute between each ticks.
-	ticker := time.NewTicker(lockMaintenanceInterval)
-	// Stop the timer upon service closure and cleanup the go-routine.
-	defer ticker.Stop()
+	// Initialize a new ticker with 15secs between each ticks.
+	lkTimer := time.NewTimer(lockMaintenanceInterval)
+	// Stop the timer upon returning.
+	defer lkTimer.Stop()
 
 	r := rand.New(rand.NewSource(UTCNow().UnixNano()))
+
+	// Start with random sleep time, so as to avoid
+	// "synchronous checks" between servers
+	duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
+	time.Sleep(duration)
+
 	for {
 		// Verifies every minute for locks held more than 2 minutes.
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			// Start with random sleep time, so as to avoid
-			// "synchronous checks" between servers
-			duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
-			time.Sleep(duration)
-			if err := lockMaintenance(ctx, lockValidityCheckInterval); err != nil {
-				// Sleep right after an error.
-				duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
-				time.Sleep(duration)
-			}
+		case <-lkTimer.C:
+			// Reset the timer for next cycle.
+			lkTimer.Reset(time.Duration(r.Float64() * float64(lockMaintenanceInterval)))
+
+			lockMaintenance(ctx, lockValidityCheckInterval)
 		}
 	}
 }

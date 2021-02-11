@@ -126,7 +126,10 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 	// Add/update buckets that are not registered with the DNS
 	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
-	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice))
+	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice)).WithConcurrency(50)
+	ctx, cancel := g.WithCancelOnError(GlobalContext)
+	defer cancel()
+
 	for index := range bucketsToBeUpdatedSlice {
 		index := index
 		g.Go(func() error {
@@ -134,14 +137,13 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}, index)
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
-		}
+	if err := g.WaitErr(); err != nil {
+		logger.LogIf(ctx, err)
+		return
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
-		logger.LogIf(GlobalContext, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket.", bucket, globalDomainIPs.ToSlice()))
+		logger.LogIf(ctx, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket", bucket, globalDomainIPs.ToSlice()))
 	}
 
 	var wg sync.WaitGroup

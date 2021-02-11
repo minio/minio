@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
@@ -105,11 +104,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		// Validate if users brought different DeploymentID pools.
 		if deploymentID != formats[i].ID {
 			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
-		}
-
-		// Validate if users brought different different distribution algo pools.
-		if distributionAlgo != formats[i].Erasure.DistributionAlgo {
-			return nil, fmt.Errorf("All serverPools should have same distributionAlgo expected %s, got %s", distributionAlgo, formats[i].Erasure.DistributionAlgo)
 		}
 
 		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives)
@@ -373,7 +367,6 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 	}
 
 	if len(allBuckets) == 0 {
-		logger.Info(color.Green("data-crawl:") + " No buckets found, skipping crawl")
 		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
 		return nil
 	}
@@ -630,17 +623,14 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	if z.SinglePool() {
 		return z.serverPools[0].DeleteObject(ctx, bucket, object, opts)
 	}
-	for _, pool := range z.serverPools {
-		objInfo, err = pool.DeleteObject(ctx, bucket, object, opts)
-		if err == nil {
-			return objInfo, nil
-		}
-		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-			break
-		}
+
+	// We don't know the size here set 1GiB atleast.
+	idx, err := z.getPoolIdx(ctx, bucket, object, opts, 1<<30)
+	if err != nil {
+		return objInfo, err
 	}
 
-	return objInfo, err
+	return z.serverPools[idx].DeleteObject(ctx, bucket, object, opts)
 }
 
 func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
@@ -782,7 +772,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
-		if obj.IsDir && delimiter != "" {
+		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
 		} else {
 			loi.Objects = append(loi.Objects, obj)
@@ -821,7 +811,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
-		if obj.IsDir && delimiter != "" {
+		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
 		} else {
 			loi.Objects = append(loi.Objects, obj)
@@ -1469,6 +1459,40 @@ type HealthResult struct {
 	HealingDrives int
 	PoolID, SetID int
 	WriteQuorum   int
+}
+
+// ReadHealth returns if the cluster can serve read requests
+func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
+	erasureSetUpCount := make([][]int, len(z.serverPools))
+	for i := range z.serverPools {
+		erasureSetUpCount[i] = make([]int, len(z.serverPools[i].sets))
+	}
+
+	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
+	diskIDs = append(diskIDs, getLocalDiskIDs(z))
+
+	for _, localDiskIDs := range diskIDs {
+		for _, id := range localDiskIDs {
+			poolIdx, setIdx, err := z.getPoolAndSet(id)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+			erasureSetUpCount[poolIdx][setIdx]++
+		}
+	}
+
+	b := z.BackendInfo()
+	readQuorum := b.StandardSCData[0]
+
+	for poolIdx := range erasureSetUpCount {
+		for setIdx := range erasureSetUpCount[poolIdx] {
+			if erasureSetUpCount[poolIdx][setIdx] < readQuorum {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Health - returns current status of the object layer health,

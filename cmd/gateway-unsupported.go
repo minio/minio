@@ -254,3 +254,8 @@ func (a GatewayUnsupported) IsCompressionSupported() bool {
 func (a GatewayUnsupported) Health(_ context.Context, _ HealthOptions) HealthResult {
 	return HealthResult{}
 }
+
+// ReadHealth - No Op.
+func (a GatewayUnsupported) ReadHealth(_ context.Context) bool {
+	return true
+}

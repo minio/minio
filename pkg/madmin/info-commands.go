@@ -61,9 +61,7 @@ type StorageInfo struct {
 		// Following fields are only meaningful if BackendType is Erasure.
 		OnlineDisks      BackendDisks // Online disks during server startup.
 		OfflineDisks     BackendDisks // Offline disks during server startup.
-		StandardSCData   int          // Data disks for currently configured Standard storage class.
 		StandardSCParity int          // Parity disks for currently configured Standard storage class.
-		RRSCData         int          // Data disks for currently configured Reduced Redundancy storage class.
 		RRSCParity       int          // Parity disks for currently configured Reduced Redundancy storage class.
 	}
 }
@@ -197,17 +195,20 @@ type Services struct {
 
 // Buckets contains the number of buckets
 type Buckets struct {
-	Count uint64 `json:"count,omitempty"`
+	Count uint64 `json:"count"`
+	Error string `json:"error,omitempty"`
 }
 
 // Objects contains the number of objects
 type Objects struct {
-	Count uint64 `json:"count,omitempty"`
+	Count uint64 `json:"count"`
+	Error string `json:"error,omitempty"`
 }
 
-// Usage contains the tottal size used
+// Usage contains the total size used
 type Usage struct {
-	Size uint64 `json:"size,omitempty"`
+	Size  uint64 `json:"size"`
+	Error string `json:"error,omitempty"`
 }
 
 // KMS contains KMS status information

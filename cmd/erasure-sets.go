@@ -423,14 +423,17 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 }
 
 func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
-	ticker := time.NewTicker(cleanupInterval)
-	defer ticker.Stop()
+	timer := time.NewTimer(cleanupInterval)
+	defer timer.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-timer.C:
+			// Reset for the next interval
+			timer.Reset(cleanupInterval)
+
 			for _, set := range s.sets {
 				set.cleanupStaleUploads(ctx, expiry)
 			}

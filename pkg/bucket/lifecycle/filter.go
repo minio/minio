@@ -18,6 +18,7 @@ package lifecycle
 
 import (
 	"encoding/xml"
+	"io"
 )
 
 var (
@@ -27,10 +28,14 @@ var (
 // Filter - a filter for a lifecycle configuration Rule.
 type Filter struct {
 	XMLName xml.Name `xml:"Filter"`
-	Prefix  string
-	And     And
-	Tag     Tag
 
+	Prefix Prefix
+
+	And    And
+	andSet bool
+
+	Tag    Tag
+	tagSet bool
 	// Caching tags, only once
 	cachedTags []string
 }
@@ -61,11 +66,62 @@ func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 	return e.EncodeToken(xml.EndElement{Name: start.Name})
 }
 
+// UnmarshalXML - decodes XML data.
+func (f *Filter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error) {
+	for {
+		// Read tokens from the XML document in a stream.
+		t, err := d.Token()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		switch se := t.(type) {
+		case xml.StartElement:
+			switch se.Name.Local {
+			case "Prefix":
+				var p Prefix
+				if err = d.DecodeElement(&p, &se); err != nil {
+					return err
+				}
+				f.Prefix = p
+			case "And":
+				var and And
+				if err = d.DecodeElement(&and, &se); err != nil {
+					return err
+				}
+				f.And = and
+				f.andSet = true
+			case "Tag":
+				var tag Tag
+				if err = d.DecodeElement(&tag, &se); err != nil {
+					return err
+				}
+				f.Tag = tag
+				f.tagSet = true
+			default:
+				return errUnknownXMLTag
+			}
+		}
+	}
+	return nil
+}
+
+// IsEmpty returns true if Filter is not specified in the XML
+func (f Filter) IsEmpty() bool {
+	return !f.Prefix.set && !f.andSet && !f.tagSet
+}
+
 // Validate - validates the filter element
 func (f Filter) Validate() error {
+	if !f.Prefix.set && !f.andSet && !f.tagSet {
+		return errXMLNotWellFormed
+	}
 	// A Filter must have exactly one of Prefix, Tag, or And specified.
 	if !f.And.isEmpty() {
-		if f.Prefix != "" {
+		if f.Prefix.set {
 			return errInvalidFilter
 		}
 		if !f.Tag.IsEmpty() {
@@ -75,12 +131,15 @@ func (f Filter) Validate() error {
 			return err
 		}
 	}
-	if f.Prefix != "" {
+	if f.Prefix.set {
 		if !f.Tag.IsEmpty() {
 			return errInvalidFilter
 		}
 	}
 	if !f.Tag.IsEmpty() {
+		if f.Prefix.set {
+			return errInvalidFilter
+		}
 		if err := f.Tag.Validate(); err != nil {
 			return err
 		}

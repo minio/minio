@@ -31,27 +31,21 @@ import (
 )
 
 func concurrentDecryptETag(ctx context.Context, objects []ObjectInfo) {
-	inParallel := func(objects []ObjectInfo) {
-		g := errgroup.WithNErrs(len(objects))
-		for index := range objects {
-			index := index
-			g.Go(func() error {
-				objects[index].ETag = objects[index].GetActualETag(nil)
-				objects[index].Size, _ = objects[index].GetActualSize()
-				return nil
-			}, index)
-		}
-		g.Wait()
+	g := errgroup.WithNErrs(len(objects)).WithConcurrency(500)
+	_, cancel := g.WithCancelOnError(ctx)
+	defer cancel()
+	for index := range objects {
+		index := index
+		g.Go(func() error {
+			size, err := objects[index].GetActualSize()
+			if err == nil {
+				objects[index].Size = size
+			}
+			objects[index].ETag = objects[index].GetActualETag(nil)
+			return nil
+		}, index)
 	}
-	const maxConcurrent = 500
-	for {
-		if len(objects) < maxConcurrent {
-			inParallel(objects)
-			return
-		}
-		inParallel(objects[:maxConcurrent])
-		objects = objects[maxConcurrent:]
-	}
+	g.WaitErr()
 }
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode

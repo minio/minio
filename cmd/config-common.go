@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/ioutil"
+	"net/http"
 
 	"github.com/minio/minio/pkg/hash"
 )
@@ -27,9 +29,9 @@ import (
 var errConfigNotFound = errors.New("config file not found")
 
 func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]byte, error) {
-	var buffer bytes.Buffer
 	// Read entire content by setting size to -1
-	if err := objAPI.GetObject(ctx, minioMetaBucket, configFile, 0, -1, &buffer, "", ObjectOptions{}); err != nil {
+	r, err := objAPI.GetObjectNInfo(ctx, minioMetaBucket, configFile, nil, http.Header{}, readLock, ObjectOptions{})
+	if err != nil {
 		// Treat object not found as config not found.
 		if isErrObjectNotFound(err) {
 			return nil, errConfigNotFound
@@ -37,13 +39,16 @@ func readConfig(ctx context.Context, objAPI ObjectLayer, configFile string) ([]b
 
 		return nil, err
 	}
+	defer r.Close()
 
-	// Return config not found on empty content.
-	if buffer.Len() == 0 {
+	buf, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	if len(buf) == 0 {
 		return nil, errConfigNotFound
 	}
-
-	return buffer.Bytes(), nil
+	return buf, nil
 }
 
 type objectDeleter interface {

@@ -69,7 +69,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	}
 
 	// Stat a volume entry.
-	_, err = os.Stat(volumeDir)
+	_, err = os.Lstat(volumeDir)
 	if err != nil {
 		if osIsNotExist(err) {
 			return errVolumeNotFound
@@ -79,13 +79,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		return err
 	}
 
-	// Fast exit track to check if we are listing an object with
-	// a trailing slash, this will avoid to list the object content.
-	if HasSuffix(opts.BaseDir, SlashSeparator) {
-		if st, err := os.Stat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
-			return errFileNotFound
-		}
-	}
 	// Use a small block size to start sending quickly
 	w := newMetacacheWriter(wr, 16<<10)
 	defer w.Close()
@@ -94,6 +87,27 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		return err
 	}
 	defer close(out)
+
+	// Fast exit track to check if we are listing an object with
+	// a trailing slash, this will avoid to list the object content.
+	if HasSuffix(opts.BaseDir, SlashSeparator) {
+		metadata, err := ioutil.ReadFile(pathJoin(volumeDir,
+			opts.BaseDir[:len(opts.BaseDir)-1]+globalDirSuffix,
+			xlStorageFormatFile))
+		if err == nil {
+			// if baseDir is already a directory object, consider it
+			// as part of the list call, this is a AWS S3 specific
+			// behavior.
+			out <- metaCacheEntry{
+				name:     opts.BaseDir,
+				metadata: metadata,
+			}
+		} else {
+			if st, err := os.Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
+				return errFileNotFound
+			}
+		}
+	}
 
 	prefix := opts.FilterPrefix
 	var scanDir func(path string) error

@@ -65,36 +65,36 @@ type ServerProcInfo struct {
 
 // SysProcess - Includes process lvl information about a single process
 type SysProcess struct {
-	Pid            int32                       `json:"pid"`
-	Background     bool                        `json:"background,omitempty"`
-	CPUPercent     float64                     `json:"cpupercent,omitempty"`
-	Children       []int32                     `json:"children,omitempty"`
-	CmdLine        string                      `json:"cmd,omitempty"`
-	Connections    []nethw.ConnectionStat      `json:"connections,omitempty"`
-	CreateTime     int64                       `json:"createtime,omitempty"`
-	Cwd            string                      `json:"cwd,omitempty"`
-	Exe            string                      `json:"exe,omitempty"`
-	Gids           []int32                     `json:"gids,omitempty"`
-	IOCounters     *process.IOCountersStat     `json:"iocounters,omitempty"`
-	IsRunning      bool                        `json:"isrunning,omitempty"`
-	MemInfo        *process.MemoryInfoStat     `json:"meminfo,omitempty"`
-	MemMaps        *[]process.MemoryMapsStat   `json:"memmaps,omitempty"`
-	MemPercent     float32                     `json:"mempercent,omitempty"`
-	Name           string                      `json:"name,omitempty"`
-	NetIOCounters  []nethw.IOCountersStat      `json:"netiocounters,omitempty"`
-	Nice           int32                       `json:"nice,omitempty"`
-	NumCtxSwitches *process.NumCtxSwitchesStat `json:"numctxswitches,omitempty"`
-	NumFds         int32                       `json:"numfds,omitempty"`
-	NumThreads     int32                       `json:"numthreads,omitempty"`
-	PageFaults     *process.PageFaultsStat     `json:"pagefaults,omitempty"`
-	Parent         int32                       `json:"parent,omitempty"`
-	Ppid           int32                       `json:"ppid,omitempty"`
-	Rlimit         []process.RlimitStat        `json:"rlimit,omitempty"`
-	Status         string                      `json:"status,omitempty"`
-	Tgid           int32                       `json:"tgid,omitempty"`
-	Times          *cpu.TimesStat              `json:"cputimes,omitempty"`
-	Uids           []int32                     `json:"uids,omitempty"`
-	Username       string                      `json:"username,omitempty"`
+	Pid             int32                       `json:"pid"`
+	Background      bool                        `json:"background,omitempty"`
+	CPUPercent      float64                     `json:"cpupercent,omitempty"`
+	Children        []int32                     `json:"children,omitempty"`
+	CmdLine         string                      `json:"cmd,omitempty"`
+	ConnectionCount int                         `json:"connection_count,omitempty"`
+	CreateTime      int64                       `json:"createtime,omitempty"`
+	Cwd             string                      `json:"cwd,omitempty"`
+	Exe             string                      `json:"exe,omitempty"`
+	Gids            []int32                     `json:"gids,omitempty"`
+	IOCounters      *process.IOCountersStat     `json:"iocounters,omitempty"`
+	IsRunning       bool                        `json:"isrunning,omitempty"`
+	MemInfo         *process.MemoryInfoStat     `json:"meminfo,omitempty"`
+	MemMaps         *[]process.MemoryMapsStat   `json:"memmaps,omitempty"`
+	MemPercent      float32                     `json:"mempercent,omitempty"`
+	Name            string                      `json:"name,omitempty"`
+	NetIOCounters   []nethw.IOCountersStat      `json:"netiocounters,omitempty"`
+	Nice            int32                       `json:"nice,omitempty"`
+	NumCtxSwitches  *process.NumCtxSwitchesStat `json:"numctxswitches,omitempty"`
+	NumFds          int32                       `json:"numfds,omitempty"`
+	NumThreads      int32                       `json:"numthreads,omitempty"`
+	PageFaults      *process.PageFaultsStat     `json:"pagefaults,omitempty"`
+	Parent          int32                       `json:"parent,omitempty"`
+	Ppid            int32                       `json:"ppid,omitempty"`
+	Rlimit          []process.RlimitStat        `json:"rlimit,omitempty"`
+	Status          string                      `json:"status,omitempty"`
+	Tgid            int32                       `json:"tgid,omitempty"`
+	Times           *cpu.TimesStat              `json:"cputimes,omitempty"`
+	Uids            []int32                     `json:"uids,omitempty"`
+	Username        string                      `json:"username,omitempty"`
 }
 
 // ServerMemInfo - Includes host virtual and swap mem information

@@ -498,6 +498,7 @@ func setAuthHandler(h http.Handler) http.Handler {
 			// Validate Authorization header if its valid for JWT request.
 			if _, _, authErr := webRequestAuthenticate(r); authErr != nil {
 				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(authErr.Error()))
 				return
 			}
 			h.ServeHTTP(w, r)

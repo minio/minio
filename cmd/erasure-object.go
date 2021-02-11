@@ -179,7 +179,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	}
 	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
 		// If transitioned, stream from transition tier unless object is restored locally or restore date is past.
-		restoreHdr, ok := objInfo.UserDefined[xhttp.AmzRestore]
+		restoreHdr, ok := caseInsensitiveMap(objInfo.UserDefined).Lookup(xhttp.AmzRestore)
 		if !ok || !strings.HasPrefix(restoreHdr, "ongoing-request=false") || (!objInfo.RestoreExpires.IsZero() && time.Now().After(objInfo.RestoreExpires)) {
 			return getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
 		}
@@ -1034,11 +1034,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if goi.VersionID != "" {
 		markDelete = true
 	}
+
 	// Default deleteMarker to true if object is under versioning
-	deleteMarker := true
-	if gerr == nil {
-		deleteMarker = goi.VersionID != ""
-	}
+	deleteMarker := opts.Versioned
+
 	if opts.VersionID != "" {
 		// case where replica version needs to be deleted on target cluster
 		if versionFound && opts.DeleteMarkerReplicationStatus == replication.Replica.String() {
@@ -1047,7 +1046,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus.Empty() && opts.DeleteMarkerReplicationStatus == "" {
 			markDelete = false
 		}
-		if opts.DeleteMarker && opts.VersionPurgeStatus == Complete {
+		if opts.VersionPurgeStatus == Complete {
 			markDelete = false
 		}
 		// determine if the version represents an object delete

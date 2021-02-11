@@ -1279,8 +1279,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if retentionMode != "" {
-		opts.UserDefined[xhttp.AmzObjectLockMode] = string(retentionMode)
-		opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(iso8601TimeFormat)
+		opts.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
+		opts.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
 	}
 
 	objInfo, err := putObject(GlobalContext, bucket, object, pReader, opts)

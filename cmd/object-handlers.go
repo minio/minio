@@ -433,7 +433,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
 		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
-			globalExpiryState.queueExpiryTask(objInfo)
+			globalExpiryState.queueExpiryTask(objInfo, action == lifecycle.DeleteVersionAction)
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 			return
 		}
@@ -600,7 +600,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	if lc, err := globalLifecycleSys.Get(bucket); err == nil {
 		action := evalActionFromLifecycle(ctx, *lc, objInfo, false)
 		if action == lifecycle.DeleteAction || action == lifecycle.DeleteVersionAction {
-			globalExpiryState.queueExpiryTask(objInfo)
+			globalExpiryState.queueExpiryTask(objInfo, action == lifecycle.DeleteVersionAction)
 			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrNoSuchKey))
 			return
 		}
@@ -1041,7 +1041,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		// Encryption parameters not applicable for this object.
-		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); ok && crypto.SSECopy.IsRequested(r.Header) {
+		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); !ok && crypto.SSECopy.IsRequested(r.Header) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 			return
 		}
