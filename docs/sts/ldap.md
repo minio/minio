@@ -57,7 +57,6 @@ MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search f
 MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
 MINIO_IDENTITY_LDAP_USERNAME_FORMAT         (list)      ";" separated list of username bind DNs e.g. "uid=%s,cn=accounts,dc=myldapserver,dc=com"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
-MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE    (string)    search attribute for group name e.g. "cn"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
 MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification, defaults to "off" (verify)
 MINIO_IDENTITY_LDAP_SERVER_INSECURE         (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
@@ -104,11 +103,10 @@ MinIO can be configured to find the groups of a user from AD/LDAP by specifying 
 
 ```
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
-MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE    (string)    search attribute for group name e.g. "cn"
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
 ```
 
-When a user logs in via the STS API, the MinIO server queries the AD/LDAP server with the given search filter and extracts the given attribute from the search results. These values represent the groups that the user is a member of. On each access MinIO applies the IAM policies attached to these groups in MinIO.
+When a user logs in via the STS API, the MinIO server queries the AD/LDAP server with the given search filter and extracts the DN from the search results. These values represent the groups that the user is a member of. On each access MinIO applies the IAM policies attached to these groups in MinIO.
 
 **MinIO sends LDAP credentials to LDAP server for validation. So we _strongly recommend_ to use MinIO with AD/LDAP server over TLS or StartTLS _only_. Using plain-text connection between MinIO and LDAP server means _credentials can be compromised_ by anyone listening to network traffic.**
 
@@ -119,7 +117,6 @@ export MINIO_IDENTITY_LDAP_SERVER_ADDR=myldapserver.com:636
 export MINIO_IDENTITY_LDAP_USERNAME_FORMAT="uid=%s,cn=accounts,dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN="dc=myldapserver,dc=com"
 export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER="(&(objectclass=groupOfNames)(memberUid=%s)$)"
-export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE=cn
 export MINIO_IDENTITY_LDAP_STS_EXPIRY=60h
 export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 ```
@@ -140,14 +137,14 @@ To define a new policy, you can use the [AWS policy generator](https://awspolicy
 mc admin policy add myminio mypolicy mypolicy.json
 ```
 
-To assign the policy to a user or group, use:
+To assign the policy to a user or group, use the full DN of the user or group:
 
 ```sh
-mc admin policy set myminio mypolicy user=james
+mc admin policy set myminio mypolicy user='uid=james,cn=accounts,dc=myldapserver,dc=com'
 ```
 
 ```sh
-mc admin policy set myminio mypolicy group=bigdatausers
+mc admin policy set myminio mypolicy group='cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io'
 ```
 
 **Please note that when AD/LDAP is configured, MinIO will not support long term users defined internally.** Only AD/LDAP users are allowed. In addition to this, the server will not support operations on users or groups using `mc admin user` or `mc admin group` commands except `mc admin user info` and `mc admin group info` to list set policies for users and groups. This is because users and groups are defined externally in AD/LDAP.
@@ -232,7 +229,6 @@ $ export MINIO_IDENTITY_LDAP_SERVER_ADDR='my.ldap-active-dir-server.com:636'
 $ export MINIO_IDENTITY_LDAP_USERNAME_FORMAT='cn=%s,ou=Users,ou=BUS1,ou=LOB,dc=somedomain,dc=com;cn=%s,ou=Users,ou=BUS2,ou=LOB,dc=somedomain,dc=com'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN='dc=minioad,dc=local;dc=somedomain,dc=com'
 $ export MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER='(&(objectclass=group)(member=%s))'
-$ export MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE='cn'
 $ minio server ~/test
 ```
 You can make sure it works appropriately using our [example program](https://raw.githubusercontent.com/minio/minio/master/docs/sts/ldap.go):

@@ -58,7 +58,6 @@ type Config struct {
 	GroupSearchBaseDistName  string   `json:"groupSearchBaseDN"`
 	GroupSearchBaseDistNames []string `json:"-"`
 	GroupSearchFilter        string   `json:"groupSearchFilter"`
-	GroupNameAttribute       string   `json:"groupNameAttribute"`
 
 	// Lookup bind LDAP service account
 	LookupBindDN       string `json:"lookupBindDN"`
@@ -82,7 +81,6 @@ const (
 	UserDNSearchFilter = "user_dn_search_filter"
 	UsernameFormat     = "username_format"
 	GroupSearchFilter  = "group_search_filter"
-	GroupNameAttribute = "group_name_attribute"
 	GroupSearchBaseDN  = "group_search_base_dn"
 	TLSSkipVerify      = "tls_skip_verify"
 	ServerInsecure     = "server_insecure"
@@ -97,7 +95,6 @@ const (
 	EnvUserDNSearchBaseDN = "MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN"
 	EnvUserDNSearchFilter = "MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER"
 	EnvGroupSearchFilter  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER"
-	EnvGroupNameAttribute = "MINIO_IDENTITY_LDAP_GROUP_NAME_ATTRIBUTE"
 	EnvGroupSearchBaseDN  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN"
 	EnvLookupBindDN       = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN"
 	EnvLookupBindPassword = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD"
@@ -106,6 +103,7 @@ const (
 var removedKeys = []string{
 	"username_search_filter",
 	"username_search_base_dn",
+	"group_name_attribute",
 }
 
 // DefaultKVS - default config for LDAP config
@@ -129,10 +127,6 @@ var (
 		},
 		config.KV{
 			Key:   GroupSearchFilter,
-			Value: "",
-		},
-		config.KV{
-			Key:   GroupNameAttribute,
 			Value: "",
 		},
 		config.KV{
@@ -180,7 +174,7 @@ func getGroups(conn *ldap.Conn, sreq *ldap.SearchRequest) ([]string, error) {
 	for _, entry := range sres.Entries {
 		// We only queried one attribute,
 		// so we only look up the first one.
-		groups = append(groups, entry.Attributes[0].Values...)
+		groups = append(groups, entry.DN)
 	}
 	return groups, nil
 }
@@ -312,7 +306,7 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 				groupSearchBase,
 				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 				filter,
-				[]string{l.GroupNameAttribute},
+				nil,
 				nil,
 			)
 
@@ -463,21 +457,15 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 
 	// Group search params configuration
 	grpSearchFilter := env.Get(EnvGroupSearchFilter, kvs.Get(GroupSearchFilter))
-	grpSearchNameAttr := env.Get(EnvGroupNameAttribute, kvs.Get(GroupNameAttribute))
 	grpSearchBaseDN := env.Get(EnvGroupSearchBaseDN, kvs.Get(GroupSearchBaseDN))
 
 	// Either all group params must be set or none must be set.
-	var allSet bool
-	if grpSearchFilter != "" {
-		if grpSearchNameAttr == "" || grpSearchBaseDN == "" {
-			return l, errors.New("All group related parameters must be set")
-		}
-		allSet = true
+	if (grpSearchFilter != "" && grpSearchBaseDN == "") || (grpSearchFilter == "" && grpSearchBaseDN != "") {
+		return l, errors.New("All group related parameters must be set")
 	}
 
-	if allSet {
+	if grpSearchFilter != "" {
 		l.GroupSearchFilter = grpSearchFilter
-		l.GroupNameAttribute = grpSearchNameAttr
 		l.GroupSearchBaseDistName = grpSearchBaseDN
 		l.GroupSearchBaseDistNames = strings.Split(l.GroupSearchBaseDistName, dnDelimiter)
 	}
