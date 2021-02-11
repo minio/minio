@@ -184,6 +184,8 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if gerr != nil {
 		validReplStatus := false
 		switch oi.ReplicationStatus {
+		// Point to note: even if two way replication with Deletemarker or Delete sync is enabled,
+		// deletion of a REPLICA object/deletemarker will not trigger a replication to the other cluster.
 		case replication.Pending, replication.Completed, replication.Failed:
 			validReplStatus = true
 		}
@@ -648,9 +650,14 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 	replicationStatus := replication.Completed
 	if rtype != replicateAll {
 		// replicate metadata for object tagging/copy with metadata replacement
+		srcOpts := miniogo.CopySrcOptions{
+			Bucket:    dest.Bucket,
+			Object:    object,
+			VersionID: objInfo.VersionID}
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
 		c := &miniogo.Core{Client: tgt.Client}
-		if _, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), dstOpts); err != nil {
+
+		if _, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), srcOpts, dstOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
 		}
@@ -876,6 +883,7 @@ func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs 
 	if err != nil {
 		return nil, false
 	}
+	reader.ObjInfo = oi.Clone()
 	return reader, true
 }
 
