@@ -50,7 +50,7 @@ type WalkDirOptions struct {
 	// Should never contain a slash.
 	FilterPrefix string
 
-	// ForwardTo will forward to the given object.
+	// ForwardTo will forward to the given object path.
 	ForwardTo string
 }
 
@@ -110,6 +110,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	}
 
 	prefix := opts.FilterPrefix
+	forward := opts.ForwardTo
 	var scanDir func(path string) error
 	scanDir = func(current string) error {
 		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
@@ -127,6 +128,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		dirObjects := make(map[string]struct{})
 		for i, entry := range entries {
 			if len(prefix) > 0 && !strings.HasPrefix(entry, prefix) {
+				continue
+			}
+			if len(forward) > 0 && entry < forward {
 				continue
 			}
 			if strings.HasSuffix(entry, slashSeparator) {
@@ -180,6 +184,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		sort.Strings(entries)
 		dirStack := make([]string, 0, 5)
 		prefix = "" // Remove prefix after first level.
+
 		for _, entry := range entries {
 			if entry == "" {
 				continue
@@ -192,8 +197,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				out <- metaCacheEntry{name: pop}
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
-					err := scanDir(pop)
-					logger.LogIf(ctx, err)
+					forward = ""
+					if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, pop) {
+						forward = strings.TrimPrefix(opts.ForwardTo, pop)
+					}
+					logger.LogIf(ctx, scanDir(pop))
 				}
 				dirStack = dirStack[:len(dirStack)-1]
 			}
@@ -242,8 +250,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			out <- metaCacheEntry{name: pop}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
-				err := scanDir(pop)
-				logger.LogIf(ctx, err)
+				forward = ""
+				if len(opts.ForwardTo) > 0 && strings.HasPrefix(opts.ForwardTo, pop) {
+					forward = strings.TrimPrefix(opts.ForwardTo, pop)
+				}
+				logger.LogIf(ctx, scanDir(pop))
 			}
 			dirStack = dirStack[:len(dirStack)-1]
 		}
@@ -270,6 +281,7 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 	values.Set(storageRESTRecursive, strconv.FormatBool(opts.Recursive))
 	values.Set(storageRESTReportNotFound, strconv.FormatBool(opts.ReportNotFound))
 	values.Set(storageRESTPrefixFilter, opts.FilterPrefix)
+	values.Set(storageRESTForwardFilter, opts.ForwardTo)
 	respBody, err := client.call(ctx, storageRESTMethodWalkDir, values, nil, -1)
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -302,6 +314,7 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	prefix := r.URL.Query().Get(storageRESTPrefixFilter)
+	forward := r.URL.Query().Get(storageRESTForwardFilter)
 	writer := streamHTTPResponse(w)
 	writer.CloseWithError(s.storage.WalkDir(r.Context(), WalkDirOptions{
 		Bucket:         volume,
@@ -309,5 +322,6 @@ func (s *storageRESTServer) WalkDirHandler(w http.ResponseWriter, r *http.Reques
 		Recursive:      recursive,
 		ReportNotFound: reportNotFound,
 		FilterPrefix:   prefix,
+		ForwardTo:      forward,
 	}, writer))
 }

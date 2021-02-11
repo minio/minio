@@ -160,7 +160,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 			fivs, err := entry.fileInfoVersions(bucket.Name)
 			if err == nil {
 				for _, version := range fivs.Versions {
-					if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{Remove: true}); err != nil {
+					if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true}); err != nil {
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 							logger.LogIf(ctx, err)
 						}
@@ -172,9 +172,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
 			bucket:         bucket.Name,
-			path:           "",
 			recursive:      true,
-			filterPrefix:   "",
+			forwardTo:      "", //TODO(klauspost): Set this to last known offset when resuming.
 			minDisks:       1,
 			reportNotFound: false,
 			agreed:         healEntry,
