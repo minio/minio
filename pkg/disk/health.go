@@ -40,12 +40,12 @@ type Latency struct {
 
 // Throughput holds throughput information for write operations to the drive
 type Throughput struct {
-	Avg          float64 `json:"avg_bytes_per_sec,omitempty"`
-	Percentile50 float64 `json:"percentile50_bytes_per_sec,omitempty"`
-	Percentile90 float64 `json:"percentile90_bytes_per_sec,omitempty"`
-	Percentile99 float64 `json:"percentile99_bytes_per_sec,omitempty"`
-	Min          float64 `json:"min_bytes_per_sec,omitempty"`
-	Max          float64 `json:"max_bytes_per_sec,omitempty"`
+	Avg          float64 `json:"avg_mbps,omitempty"`
+	Percentile50 float64 `json:"percentile50_mbps,omitempty"`
+	Percentile90 float64 `json:"percentile90_mbps,omitempty"`
+	Percentile99 float64 `json:"percentile99_mbps,omitempty"`
+	Min          float64 `json:"min_mbps,omitempty"`
+	Max          float64 `json:"max_mbps,omitempty"`
 }
 
 // GetHealthInfo about the drive
@@ -154,12 +154,12 @@ func GetHealthInfo(ctx context.Context, drive, fsPath string) (Latency, Throughp
 	}
 
 	t := Throughput{
-		Avg:          xmath.Round(avgThroughput, 3),
-		Percentile50: xmath.Round(percentile50Throughput, 3),
-		Percentile90: xmath.Round(percentile90Throughput, 3),
-		Percentile99: xmath.Round(percentile99Throughput, 3),
-		Min:          xmath.Round(minThroughput, 3),
-		Max:          xmath.Round(maxThroughput, 3),
+		Avg:          xmath.Round(avgThroughput/humanize.MByte, 0),
+		Percentile50: xmath.Round(percentile50Throughput/humanize.MByte, 0),
+		Percentile90: xmath.Round(percentile90Throughput/humanize.MByte, 0),
+		Percentile99: xmath.Round(percentile99Throughput/humanize.MByte, 0),
+		Min:          xmath.Round(minThroughput/humanize.MByte, 0),
+		Max:          xmath.Round(maxThroughput/humanize.MByte, 0),
 	}
 
 	return l, t, nil
