@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -91,12 +92,47 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 // Clean-up the old multipart uploads. Should be run in a Go routine.
 func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
 	// run multiple cleanup's local to this server.
+	var wg sync.WaitGroup
 	for _, disk := range er.getLoadBalancedLocalDisks() {
 		if disk != nil {
-			er.cleanupStaleUploadsOnDisk(ctx, disk, expiry)
-			return
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				er.cleanupStaleUploadsOnDisk(ctx, disk, expiry)
+			}(disk)
 		}
 	}
+	wg.Wait()
+}
+
+func (er erasureObjects) renameAll(ctx context.Context, bucket, prefix string) {
+	var wg sync.WaitGroup
+	for _, disk := range er.getDisks() {
+		if disk == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(disk StorageAPI) {
+			defer wg.Done()
+			disk.RenameFile(ctx, bucket, prefix, minioMetaTmpBucket, mustGetUUID())
+		}(disk)
+	}
+	wg.Wait()
+}
+
+func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
+	var wg sync.WaitGroup
+	for _, disk := range er.getDisks() {
+		if disk == nil {
+			continue
+		}
+		wg.Add(1)
+		go func(disk StorageAPI) {
+			defer wg.Done()
+			disk.Delete(ctx, bucket, prefix, true)
+		}(disk)
+	}
+	wg.Wait()
 }
 
 // Remove the old multipart uploads on the given disk.
@@ -118,7 +154,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 				continue
 			}
 			if now.Sub(fi.ModTime) > expiry {
-				er.deleteObject(ctx, minioMetaMultipartBucket, uploadIDPath, fi.Erasure.DataBlocks+1)
+				er.renameAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 			}
 		}
 	}
@@ -127,12 +163,12 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		return
 	}
 	for _, tmpDir := range tmpDirs {
-		fi, err := disk.ReadVersion(ctx, minioMetaTmpBucket, tmpDir, "", false)
+		vi, err := disk.StatVol(ctx, pathJoin(minioMetaTmpBucket, tmpDir))
 		if err != nil {
 			continue
 		}
-		if now.Sub(fi.ModTime) > expiry {
-			er.deleteObject(ctx, minioMetaTmpBucket, tmpDir, fi.Erasure.DataBlocks+1)
+		if now.Sub(vi.Created) > expiry {
+			er.deleteAll(ctx, minioMetaTmpBucket, tmpDir)
 		}
 	}
 }
