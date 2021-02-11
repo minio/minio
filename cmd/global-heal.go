@@ -121,6 +121,7 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 
 // healErasureSet lists and heals all objects in a specific erasure set
 func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketInfo) error {
+	bgSeq := mustGetHealSequence(ctx)
 	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
 	})
@@ -166,6 +167,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 							logger.LogIf(ctx, err)
 						}
 					}
+					bgSeq.logHeal(madmin.HealItemObject)
 				}
 			}
 			logger.LogIf(ctx, err)
