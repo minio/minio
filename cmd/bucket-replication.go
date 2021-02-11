@@ -283,7 +283,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 		} else {
 			versionPurgeStatus = Failed
 		}
-		logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %s", rcfg.GetDestination().Bucket, dobj.ObjectName, versionID, err))
+		logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %s", rcfg.GetDestination().Bucket, dobj.ObjectName, versionID, rmErr))
 	} else {
 		if dobj.VersionID == "" {
 			replicationStatus = string(replication.Completed)

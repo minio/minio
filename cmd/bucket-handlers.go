@@ -583,6 +583,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 	for _, dobj := range deletedObjects {
+		if dobj.ObjectName == "" {
+			continue
+		}
+
 		if replicateDeletes {
 			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
 				dv := DeletedObjectVersionInfo{
@@ -594,18 +598,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if hasLifecycleConfig && dobj.PurgeTransitioned == lifecycle.TransitionComplete { // clean up transitioned tier
-			deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, dobj.ObjectName, lifecycle.ObjectOpts{
+			deleteTransitionedObject(ctx, objectAPI, bucket, dobj.ObjectName, lifecycle.ObjectOpts{
 				Name:         dobj.ObjectName,
 				VersionID:    dobj.VersionID,
 				DeleteMarker: dobj.DeleteMarker,
 			}, false, true)
 		}
 
-	}
-	// Notify deleted event for objects.
-	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
-
 		objInfo := ObjectInfo{
 			Name:      dobj.ObjectName,
 			VersionID: dobj.VersionID,

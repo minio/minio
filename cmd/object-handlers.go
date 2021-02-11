@@ -2848,8 +2848,13 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	deleteObject := objectAPI.DeleteObject
+	if api.CacheAPI() != nil {
+		deleteObject = api.CacheAPI().DeleteObject
+	}
+
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	objInfo, err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, w, r, opts)
+	objInfo, err := deleteObject(ctx, bucket, object, opts)
 	if err != nil {
 		switch err.(type) {
 		case BucketNotFound:
@@ -2857,8 +2862,31 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
 	}
+
+	if objInfo.Name == "" {
+		writeSuccessNoContent(w)
+		return
+	}
+
+	setPutObjHeaders(w, objInfo, true)
+	writeSuccessNoContent(w)
+
+	eventName := event.ObjectRemovedDelete
+	if objInfo.DeleteMarker {
+		eventName = event.ObjectRemovedDeleteMarkerCreated
+	}
+
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:    eventName,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 
 	if replicateDel {
 		dmVersionID := ""
@@ -2884,7 +2912,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
-		deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, object, lifecycle.ObjectOpts{
+		deleteTransitionedObject(ctx, objectAPI, bucket, object, lifecycle.ObjectOpts{
 			Name:             object,
 			UserTags:         goi.UserTags,
 			VersionID:        goi.VersionID,
@@ -2893,9 +2921,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			IsLatest:         goi.IsLatest,
 		}, false, true)
 	}
-
-	setPutObjHeaders(w, objInfo, true)
-	writeSuccessNoContent(w)
 }
 
 // PutObjectLegalHoldHandler - set legal hold configuration to object,

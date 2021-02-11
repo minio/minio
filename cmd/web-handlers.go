@@ -761,8 +761,39 @@ next:
 				}
 			}
 
-			oi, err := deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
-			if replicateDel && err == nil {
+			deleteObject := objectAPI.DeleteObject
+			if web.CacheAPI() != nil {
+				deleteObject = web.CacheAPI().DeleteObject
+			}
+
+			oi, err := deleteObject(ctx, args.BucketName, objectName, opts)
+			if err != nil {
+				switch err.(type) {
+				case BucketNotFound:
+					return toJSONError(ctx, err)
+				}
+			}
+			if oi.Name == "" {
+				logger.LogIf(ctx, err)
+				continue
+			}
+
+			eventName := event.ObjectRemovedDelete
+			if oi.DeleteMarker {
+				eventName = event.ObjectRemovedDeleteMarkerCreated
+			}
+
+			// Notify object deleted event.
+			sendEvent(eventArgs{
+				EventName:  eventName,
+				BucketName: args.BucketName,
+				Object:     oi,
+				ReqParams:  extractReqParams(r),
+				UserAgent:  r.UserAgent(),
+				Host:       handlers.GetSourceIP(r),
+			})
+
+			if replicateDel {
 				dobj := DeletedObjectVersionInfo{
 					DeletedObject: DeletedObject{
 						ObjectName:                    objectName,
@@ -776,13 +807,14 @@ next:
 				}
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
-			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
-				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
-					Name:         objectName,
-					UserTags:     goi.UserTags,
-					VersionID:    goi.VersionID,
-					DeleteMarker: goi.DeleteMarker,
-					IsLatest:     goi.IsLatest,
+			if goi.TransitionStatus == lifecycle.TransitionComplete {
+				deleteTransitionedObject(ctx, objectAPI, args.BucketName, objectName, lifecycle.ObjectOpts{
+					Name:             objectName,
+					UserTags:         goi.UserTags,
+					VersionID:        goi.VersionID,
+					DeleteMarker:     goi.DeleteMarker,
+					TransitionStatus: goi.TransitionStatus,
+					IsLatest:         goi.IsLatest,
 				}, false, true)
 			}
 
