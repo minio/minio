@@ -194,7 +194,7 @@ func NewServer(addrs []string, handler http.Handler, getCert certs.GetCertificat
 			// TLS hardening
 			PreferServerCipherSuites: true,
 			MinVersion:               tls.VersionTLS12,
-			NextProtos:               []string{"h2", "http/1.1"},
+			NextProtos:               []string{"http/1.1", "h2"},
 		}
 		tlsConfig.GetCertificate = getCert
 	}
