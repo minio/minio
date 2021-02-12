@@ -114,8 +114,13 @@ func (statement Statement) isValid() error {
 			return Errorf("unsupported Resource found %v for action %v", statement.Resources, action)
 		}
 
+		condKeys, ok := iamActionConditionKeyMap.Lookup(action)
+		if !ok {
+			return Errorf("conditions are not supported for action %v", action)
+		}
+
 		keys := statement.Conditions.Keys()
-		keyDiff := keys.Difference(actionConditionKeyMap[action])
+		keyDiff := keys.Difference(condKeys)
 		if !keyDiff.IsEmpty() {
 			return Errorf("unsupported condition keys '%v' used for action '%v'", keyDiff, action)
 		}
