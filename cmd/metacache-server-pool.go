@@ -116,7 +116,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 	// will be generated due to the marker without ID and this check failing.
 	if o.Limit < 10 && o.Marker == "" && o.Create && o.Recursive {
 		o.discardResult = true
-		o.Transient = true
 	}
 
 	var cache metacache
@@ -127,12 +126,13 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		var cache metacache
 		rpc := globalNotificationSys.restClientFromHash(o.Bucket)
 		if isReservedOrInvalidBucket(o.Bucket, false) {
+			// discard all list caches for reserved buckets.
+			o.discardResult = true
 			rpc = nil
-			o.Transient = true
 		}
 		// Apply prefix filter if enabled.
 		o.SetFilter()
-		if rpc == nil || o.Transient {
+		if rpc == nil {
 			// Local
 			cache = localMetacacheMgr.findCache(ctx, o)
 		} else {
@@ -148,7 +148,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 				if !errors.Is(err, context.DeadlineExceeded) {
 					logger.LogIf(ctx, err)
 				}
-				o.Transient = true
 				cache = localMetacacheMgr.findCache(ctx, o)
 			} else {
 				cache = *c
