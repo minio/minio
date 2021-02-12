@@ -32,6 +32,12 @@ type metaCacheEntry struct {
 	// Entries without metadata will only be present in non-recursive scans.
 	metadata []byte
 
+	// this value is set to '-1' in most common scenarios,
+	// it is only set for this entry if the version needs
+	// to be skipped by the caller. check relevant code in
+	// fileInfoVersions() on how this is used.
+	versionIdx int
+
 	// cached contains the metadata if decoded.
 	cached *FileInfo
 }
@@ -335,12 +341,8 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 			}
 
 			fiVersions := fiv.Versions
-			if afterV != "" {
-				vidMarkerIdx := fiv.findVersionIndex(afterV)
-				if vidMarkerIdx >= 0 {
-					fiVersions = fiVersions[vidMarkerIdx+1:]
-				}
-				afterV = ""
+			if entry.versionIdx >= 0 {
+				fiVersions = fiVersions[entry.versionIdx+1:]
 			}
 
 			for _, version := range fiVersions {

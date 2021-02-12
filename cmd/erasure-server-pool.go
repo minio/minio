@@ -826,15 +826,15 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	if marker == "" && versionMarker != "" {
 		return loi, NotImplemented{}
 	}
-
 	opts := listPathOptions{
-		Bucket:      bucket,
-		Prefix:      prefix,
-		Separator:   delimiter,
-		Limit:       maxKeys,
-		Marker:      marker,
-		InclDeleted: true,
-		AskDisks:    globalAPIConfig.getListQuorum(),
+		Bucket:        bucket,
+		Prefix:        prefix,
+		Separator:     delimiter,
+		Limit:         maxKeys,
+		Marker:        marker,
+		VersionMarker: versionMarker,
+		InclDeleted:   true,
+		AskDisks:      globalAPIConfig.getListQuorum(),
 	}
 
 	// Shortcut for APN/1.0 Veeam/1.0 Backup/10.0

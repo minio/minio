@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/tinylib/msgp/msgp"
 )
 
 var (
@@ -177,20 +178,20 @@ type xlMetaV2Version struct {
 }
 
 // Valid xl meta xlMetaV2Version is valid
-func (j xlMetaV2Version) Valid() bool {
-	switch j.Type {
+func (z xlMetaV2Version) Valid() bool {
+	switch z.Type {
 	case LegacyType:
-		return j.ObjectV1 != nil &&
-			j.ObjectV1.valid()
+		return z.ObjectV1 != nil &&
+			z.ObjectV1.valid()
 	case ObjectType:
-		return j.ObjectV2 != nil &&
-			j.ObjectV2.ErasureAlgorithm.valid() &&
-			j.ObjectV2.BitrotChecksumAlgo.valid() &&
-			isXLMetaErasureInfoValid(j.ObjectV2.ErasureM, j.ObjectV2.ErasureN) &&
-			j.ObjectV2.ModTime > 0
+		return z.ObjectV2 != nil &&
+			z.ObjectV2.ErasureAlgorithm.valid() &&
+			z.ObjectV2.BitrotChecksumAlgo.valid() &&
+			isXLMetaErasureInfoValid(z.ObjectV2.ErasureM, z.ObjectV2.ErasureN) &&
+			z.ObjectV2.ModTime > 0
 	case DeleteType:
-		return j.DeleteMarker != nil &&
-			j.DeleteMarker.ModTime > 0
+		return z.DeleteMarker != nil &&
+			z.DeleteMarker.ModTime > 0
 	}
 	return false
 }
@@ -216,6 +217,109 @@ func (z *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 		},
 	}
 	return nil
+}
+
+// FindNextVersion returns the index for the input 'vid'
+// when the 'vid' matches and if there are more than '1' version
+// for an object. In all other situations this function returns
+// '-1' and an appropriate error is set.
+func (z *xlMetaV2) FindNextVersion(buf []byte, vid string) (int, error) {
+	var uv uuid.UUID
+	var err error
+	if vid != nullVersionID && vid != "" {
+		uv, err = uuid.Parse(vid)
+		if err != nil {
+			return -1, err
+		}
+	}
+
+	if err = checkXL2V1(buf); err != nil {
+		return -1, err
+	}
+
+	return z.findNextVersion(buf[8:], uv)
+}
+
+// findNextVersion returns the index for the input 'vid'
+// when the 'vid' matches and if there are more than '1' version
+// for an object. In all other situations this function returns
+// '-1' and an appropriate error is set.
+func (z *xlMetaV2) findNextVersion(bts []byte, vid [16]byte) (i int, err error) {
+	i = -1
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Versions":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Versions")
+				return
+			}
+			if cap(z.Versions) >= int(zb0002) {
+				z.Versions = (z.Versions)[:zb0002]
+			} else {
+				z.Versions = make([]xlMetaV2Version, zb0002)
+			}
+
+			type findVersion struct {
+				t   time.Time
+				vid [16]byte
+			}
+
+			findVersions := make([]findVersion, len(z.Versions))
+			for za0001 := range z.Versions {
+				bts, err = z.Versions[za0001].UnmarshalMsg(bts)
+				if err != nil {
+					continue
+				}
+				v := z.Versions[za0001]
+				if !v.Valid() {
+					continue
+				}
+				findVersions[za0001] = findVersion{
+					t:   getModTimeFromVersion(v),
+					vid: getVersionIDFromVersion(v),
+				}
+			}
+
+			sort.Slice(findVersions, func(i, j int) bool {
+				return findVersions[i].t.After(findVersions[j].t)
+			})
+
+			for za0001 := range findVersions {
+				if !bytes.Equal(findVersions[za0001].vid[:], vid[:]) {
+					continue
+				}
+				if len(z.Versions) == 1 && za0001 == 0 {
+					// There are no next versions if total versions
+					// is 1, we will be returning '-1'
+					continue
+				}
+				return za0001, nil
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return i, errFileVersionNotFound
 }
 
 // Load unmarshal and load the entire message pack.
@@ -254,7 +358,6 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 	}
 
 	ventry := xlMetaV2Version{}
-
 	if fi.Deleted {
 		ventry.Type = DeleteType
 		ventry.DeleteMarker = &xlMetaV2DeleteMarker{
@@ -645,6 +748,18 @@ func (z xlMetaV2) ListVersions(volume, path string) ([]FileInfo, time.Time, erro
 
 	versions[0].IsLatest = true
 	return versions, versions[0].ModTime, nil
+}
+
+func getVersionIDFromVersion(v xlMetaV2Version) [16]byte {
+	switch v.Type {
+	case ObjectType:
+		return v.ObjectV2.VersionID
+	case DeleteType:
+		return v.DeleteMarker.VersionID
+	case LegacyType:
+		return uuid.UUID{}
+	}
+	return uuid.UUID{}
 }
 
 func getModTimeFromVersion(v xlMetaV2Version) time.Time {

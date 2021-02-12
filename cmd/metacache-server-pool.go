@@ -60,14 +60,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		return entries, err
 	}
 
-	// Marker is set validate pre-condition.
-	if o.Marker != "" && o.Prefix != "" {
-		// Marker not common with prefix is not implemented. Send an empty response
-		if !HasPrefix(o.Marker, o.Prefix) {
-			return entries, io.EOF
-		}
-	}
-
 	// With max keys of zero we have reached eof, return right here.
 	if o.Limit == 0 {
 		return entries, io.EOF

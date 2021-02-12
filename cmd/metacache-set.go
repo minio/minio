@@ -59,6 +59,10 @@ type listPathOptions struct {
 	// The response will be the first entry AFTER this object name.
 	Marker string
 
+	// VersionMarker to resume listing.
+	// The response will be the first entry AFTER this version ID.
+	VersionMarker string
+
 	// Limit the number of results.
 	Limit int
 
@@ -157,10 +161,28 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				continue
 			}
 			o.debugln("gather got:", entry.name)
-			if o.Marker != "" && entry.name <= o.Marker {
+			if o.Marker != "" && entry.name <= o.Marker && o.VersionMarker == "" {
 				o.debugln("pre marker")
 				continue
 			}
+
+			entry.versionIdx = -1
+			if o.Marker != "" && entry.name <= o.Marker && o.VersionMarker != "" {
+				var xlMeta xlMetaV2
+				idx, err := xlMeta.FindNextVersion(entry.metadata, o.VersionMarker)
+				if err != nil {
+					o.debugln(fmt.Sprintf("unreadable object meta? %s/%s %v", o.Bucket, entry.name, err))
+					continue
+				}
+				if idx == -1 {
+					o.debugln("pre marker and version marker not found")
+					continue
+				}
+				entry.versionIdx = idx
+				// Reset versionMarker since we have already found the right versionId for the marker.
+				o.VersionMarker = ""
+			}
+
 			if !strings.HasPrefix(entry.name, o.Prefix) {
 				o.debugln("not in prefix")
 				continue
