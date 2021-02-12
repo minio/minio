@@ -45,7 +45,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
-	"golang.org/x/net/http2"
 )
 
 const (
@@ -481,10 +480,6 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		DisableCompression: true,
 	}
 
-	if tlsConfig != nil {
-		http2.ConfigureTransport(tr)
-	}
-
 	return func() *http.Transport {
 		return tr
 	}
@@ -530,10 +525,6 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		// gzip disable this feature, as we are always interested
 		// in raw stream.
 		DisableCompression: true,
-	}
-
-	if tlsConfig != nil {
-		http2.ConfigureTransport(tr)
 	}
 
 	return func() *http.Transport {
