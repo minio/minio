@@ -416,9 +416,11 @@ func getObjectLocation(r *http.Request, domains []string, bucket, object string)
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	listbuckets := make([]Bucket, 0, len(buckets))
 	var data = ListBucketsResponse{}
-	var owner = Owner{}
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
+	}
 
-	owner.ID = globalMinioDefaultOwnerID
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
@@ -435,10 +437,12 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
-	var owner = Owner{}
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
+	}
 	var data = ListVersionsResponse{}
 
-	owner.ID = globalMinioDefaultOwnerID
 	for _, object := range resp.Objects {
 		var content = ObjectVersion{}
 		if object.Name == "" {
@@ -491,10 +495,12 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
 func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	contents := make([]Object, 0, len(resp.Objects))
-	var owner = Owner{}
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
+	}
 	var data = ListObjectsResponse{}
 
-	owner.ID = globalMinioDefaultOwnerID
 	for _, object := range resp.Objects {
 		var content = Object{}
 		if object.Name == "" {
@@ -538,12 +544,11 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
 func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata bool) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
-	var owner = Owner{}
-	var data = ListObjectsV2Response{}
-
-	if fetchOwner {
-		owner.ID = globalMinioDefaultOwnerID
+	var owner = Owner{
+		ID:          globalMinioDefaultOwnerID,
+		DisplayName: "minio",
 	}
+	var data = ListObjectsV2Response{}
 
 	for _, object := range objects {
 		var content = Object{}
