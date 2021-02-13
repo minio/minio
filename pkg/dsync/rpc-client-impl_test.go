@@ -114,9 +114,9 @@ func (rpcClient *ReconnectRPCClient) Unlock(args LockArgs) (status bool, err err
 	return status, err
 }
 
-func (rpcClient *ReconnectRPCClient) Expired(ctx context.Context, args LockArgs) (expired bool, err error) {
-	err = rpcClient.Call("Dsync.Expired", &args, &expired)
-	return expired, err
+func (rpcClient *ReconnectRPCClient) Refresh(ctx context.Context, args LockArgs) (refreshed bool, err error) {
+	err = rpcClient.Call("Dsync.Refresh", &args, &refreshed)
+	return refreshed, err
 }
 
 func (rpcClient *ReconnectRPCClient) ForceUnlock(ctx context.Context, args LockArgs) (reply bool, err error) {
