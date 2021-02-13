@@ -427,6 +427,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		deleteObjectsFn = api.CacheAPI().DeleteObjects
 	}
 
+	// Return Malformed XML as S3 spec if the list of objects is empty
+	if len(deleteObjects.Objects) == 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	var objectsToDelete = map[ObjectToDelete]int{}
 	getObjectInfoFn := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
