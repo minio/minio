@@ -124,6 +124,7 @@ var AllSupportedKeys = append([]Key{
 	S3Prefix,
 	S3Delimiter,
 	S3MaxKeys,
+	S3VersionID,
 	S3ObjectLockRemainingRetentionDays,
 	S3ObjectLockMode,
 	S3ObjectLockLegalHold,
@@ -143,6 +144,8 @@ var AllSupportedKeys = append([]Key{
 
 // CommonKeys - is list of all common condition keys.
 var CommonKeys = append([]Key{
+	S3XAmzContentSha256,
+	S3LocationConstraint,
 	AWSReferer,
 	AWSSourceIP,
 	AWSUserAgent,
@@ -152,7 +155,6 @@ var CommonKeys = append([]Key{
 	AWSPrincipalType,
 	AWSUserID,
 	AWSUsername,
-	S3XAmzContentSha256,
 	LDAPUser,
 }, JWTKeys...)
 
@@ -239,6 +241,13 @@ type KeySet map[Key]struct{}
 // Add - add a key to key set.
 func (set KeySet) Add(key Key) {
 	set[key] = struct{}{}
+}
+
+// Merge merges two key sets, duplicates are overwritten
+func (set KeySet) Merge(mset KeySet) {
+	for k, v := range mset {
+		set[k] = v
+	}
 }
 
 // Difference - returns a key set contains difference of two keys.
