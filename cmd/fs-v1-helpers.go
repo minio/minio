@@ -385,12 +385,14 @@ func createFile(ctx context.Context, filePath string, reader io.Reader, buf []by
 	var writer *os.File
 	var err error
 
-  if globalFSODirect {
+	var flags int
+
+	if globalFSODirect {
 		flags = flags | syscall.O_DIRECT
 	}
   
 	if getFile && globalFSOTmpfile {
-		flags := os.O_WRONLY | unix.O_TMPFILE
+		flags = flags | os.O_WRONLY | unix.O_TMPFILE
 		writer, err = lock.Open(filePath, flags, 0666)
 		if err != nil {
 			return 0, osErrToFileErr(err), os.File {}
