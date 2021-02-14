@@ -276,6 +276,9 @@ var (
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool
 
+	// If writes to FS backend should be O_DIRECT.
+	globalFSODirect bool
+
 	globalProxyEndpoints []ProxyEndpoint
 
 	globalInternodeTransport http.RoundTripper
@@ -284,6 +287,8 @@ var (
 
 	globalDNSCache *xhttp.DNSCache
 	// Add new variable global values here.
+
+	globalFSOTmpfile bool
 )
 
 // Returns minio global information, as a key value map.

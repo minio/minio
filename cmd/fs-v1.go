@@ -1198,7 +1198,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// Uploaded object will first be written to the temporary location which will eventually
 	// be renamed to the actual location. It is first written to the temporary location
 	// so that cleaning it up will be easy if the server goes down.
-	tempObj := mustGetUUID()
 
 	// Allocate a buffer to Read() from request body
 	bufSize := int64(readSizeV1)
@@ -1207,11 +1206,22 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	}
 
 	buf := make([]byte, int(bufSize))
-	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
 
-	// Delete the temporary object in the case of a
-	// failure. If PutObject succeeds, the removal should be skipped:
+	var fsTmpObjPath string
+
+	var bytesWritten int64;
+	var file os.File
+
+	if globalFSOTmpfile {
+		fsTmpObjPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
+		bytesWritten, err, file = fsCreateAndGetFile(ctx, fsTmpObjPath, data, buf, data.Size())
+	} else {
+		fsTmpObjPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, mustGetUUID())
+		bytesWritten, err = fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
+	}
+
+	// Delete the temporary object in the case of a failure. 
+  // If PutObject succeeds, the removal should be skipped:
 	// although the original code ignored likely ENOENT error, the
 	// attempt to remove would take parent dir semaphore for writing
 	// while looking up for file to be deleted. Such writelock would
@@ -1221,9 +1231,10 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	// d_move() on the file's dentry.
 	defer func() {
 		if err != nil {
-			fsRemoveFile(ctx, fsTmpObjPath)
+      fsRemoveFile(ctx, file.Name())
 		}
 	} ()
+
 
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -1238,8 +1249,19 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
-	if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+
+	if globalFSOTmpfile {
+		filename := fmt.Sprintf("/proc/self/fd/%d", file.Fd())
+		if err = reliableMkdirAll(path.Dir(fsNSObjPath), 0777); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		if err = fsLinkat(ctx, AT_FDCWD, filename, AT_FDCWD, fsNSObjPath, AT_SYMLINK_FOLLOW); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+	} else {
+		if err = fsRenameFile(ctx, fsTmpObjPath, fsNSObjPath); err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 	}
 
 	if bucket != minioMetaBucket {

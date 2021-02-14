@@ -68,6 +68,8 @@ const (
 	compReadAheadBuffers = 5
 	// Size of each buffer.
 	compReadAheadBufSize = 1 << 20
+	// Default read size
+	defaultReadBufSize = 1 << 20
 )
 
 // isMinioBucket returns true if given bucket is a MinIO internal
@@ -756,7 +758,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			}
 			r = &GetObjectReader{
 				ObjInfo:    oi,
-				pReader:    bufio.NewReaderSize(inputReader, compReadAheadBufSize),
+				pReader:    bufio.NewReaderSize(inputReader, defaultReadBufSize),
 				cleanUpFns: cFns,
 				opts:       opts,
 			}
