@@ -16,95 +16,12 @@
 
 package cmd
 
-/*
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/ioctl.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
-
-struct full_inode_id {
-	ulong inode_id;
-	ulong inode_supplemental;
-};
-
-struct rename_ioctl_pack {
-	ulong inode_id;
-	ulong inode_supplemental;
-	char target_name[256];
-};
-
-static int WekaRenameFast(char *src_fullname, char *dst_dir, char *dst_name) {
-	int fd, err;
-	struct full_inode_id dst_dir_inode;
-	struct rename_ioctl_pack dst_ioctl_pack;
-
-	fd = open(dst_dir, O_RDONLY | O_DIRECTORY);
-	if (fd < 0) {
-		printf("Failed to open dest dir %s\n", dst_dir);
-		return -1;
-	}
-
-	memset(&dst_dir_inode, 0, sizeof(dst_dir_inode));
-	err = ioctl(fd, 'STAT', &dst_dir_inode);
-	close(fd);
-	if (err) {
-		printf("Failed to perform internal ioctl: base %s. Status %d errno %d.\n", dst_dir, err, errno);
-		return -1;
-	}
-
-	fd = open(src_fullname, O_RDONLY);
-	if (fd < 0) {
-		printf("Failed to open src file %s\n", src_fullname);
-		return -1;
-	}
-
-	memset(&dst_ioctl_pack, 0, sizeof(dst_ioctl_pack));
-	dst_ioctl_pack.inode_id = dst_dir_inode.inode_id;
-	dst_ioctl_pack.inode_supplemental = dst_dir_inode.inode_supplemental;
-	strcpy(&dst_ioctl_pack.target_name[0], dst_name);
-	err = ioctl(fd, 'RNME', &dst_ioctl_pack);
-	close(fd);
-	if (err) {
-		printf("Failed to perform internal ioctl: target %s. Status %d errno %d.\n", src_fullname, err, errno);
-		return -1;
-	}
-
-	return err;
-}
-*/
 import "C"
-import "unsafe"
-
 import (
 	"fmt"
 	"os"
 	"path"
 )
-
-func fsRenameFast(srcPath, dstPath string) (err error){
-	dstDir, dstFile := path.Split(dstPath)
-
-	cSrcPath := C.CString(srcPath)
-	cDstDir := C.CString(dstDir)
-	cDstFile := C.CString(dstFile)
-
-	rv, err := C.WekaRenameFast(cSrcPath, cDstDir, cDstFile)
-
-	C.free(unsafe.Pointer(cSrcPath))
-	C.free(unsafe.Pointer(cDstDir))
-	C.free(unsafe.Pointer(cDstFile))
-
-	if rv == 0 {
-		return nil
-	}
-
-	return err;
-}
 
 // Wrapper functions to os.RemoveAll, which calls reliableRemoveAll
 // this is to ensure that if there is a racy parent directory
@@ -246,10 +163,6 @@ func renameAll(srcFilePath, dstFilePath string) (err error) {
 func reliableRename(srcFilePath, dstFilePath string) (err error) {
 	if err = reliableMkdirAll(path.Dir(dstFilePath), 0777); err != nil {
 		return err
-	}
-
-	if err = fsRenameFast(srcFilePath, dstFilePath); err == nil {
-		return nil;
 	}
 
 	i := 0

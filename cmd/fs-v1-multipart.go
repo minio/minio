@@ -326,7 +326,12 @@ func (fs *FSObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID
 	if globalFSOTmpfile {
 		tmpPartDir := pathJoin(fs.fsPath, minioMetaTmpBucket)
 		bytesWritten, err, file = fsCreateAndGetFile(ctx, tmpPartDir, data, buf, data.Size())
-		defer file.Close()
+
+		defer func() {
+			if err != nil {
+				file.Close()
+			}
+		} ()
 	} else {
 		tmpPartPath = pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"."+mustGetUUID()+"."+strconv.Itoa(partID))
 		bytesWritten, err = fsCreateFile(ctx, tmpPartPath, data, buf, data.Size())

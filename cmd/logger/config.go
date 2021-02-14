@@ -323,7 +323,7 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		}
 	}
 
-	enable, err := config.ParseBool(env.Get(EnvAuditStdoutEnable, ""))
+	enable, err := config.ParseBool(env.Get(EnvAuditStdoutEnable, "False"))
 	if err != nil {
 		return cfg, err
 	}
