@@ -16,8 +16,11 @@
 
 package cmd
 
+import "C"
 import (
 	"context"
+	"errors"
+	"fmt"
 	"golang.org/x/sys/unix"
 	"io"
 	"os"
@@ -34,6 +37,69 @@ const(
 	AT_SYMLINK_FOLLOW = 0x400
 	AT_FDCWD = -100
 )
+
+var globalIsFastFS = true
+
+type makefileParam struct
+{
+	InodeId uint64
+	InodeSupplemental uint64
+	Mode int32
+	Filename [256]uint8
+}
+
+func ioctl(fd uintptr, operation int32, param uintptr) (result uintptr, err error){
+	result, _, err = syscall.Syscall(syscall.SYS_IOCTL, fd, uintptr(operation), param)
+	return result, err
+}
+
+func wekaIoctl(operation int32, root string, filename string, mode int32) (err error){
+	if !globalIsFastFS {
+		return fmt.Errorf("the specific ioctl operation is unsupported on the current filesystem")
+	}
+
+	f, err := os.Open(root)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var fd = f.Fd()
+	var param makefileParam
+	copy(param.Filename[:], filename)
+	param.Mode = mode
+
+	_, err = ioctl(fd, operation, uintptr(unsafe.Pointer(&param)))
+
+	if errors.Is(err, unix.ENOTTY) || errors.Is(err, unix.ENOTSUP) {
+		globalIsFastFS = false
+	}
+
+	return err
+}
+func wekaMakeInodeFast(root string, filename string, mode int32) (err error) {
+	var MKND = int32(0x4D4B4E44) // = 'MKND'
+	err = wekaIoctl(MKND, root, filename, mode)
+	return err
+}
+
+func wekaDeleteFileFast(root string, filename string) (err error) {
+	var ULNK = int32(0x554C4E4B) // = 'ULNK'
+	err = wekaIoctl(ULNK, root, filename, 0)
+	return err
+}
+
+func fsMakeInodeFast(filePath string, mode int32) (err error) {
+	dir, file := pathutil.Split(filePath)
+	err = wekaMakeInodeFast(dir, file, mode)
+	return err
+}
+
+func fsDeleteFileFast(filePath string) (err error) {
+	dir, file := pathutil.Split(filePath)
+	err = wekaDeleteFileFast(dir, file)
+	return err
+}
 
 // Removes only the file at given path does not remove
 // any parent directories, handles long paths for
@@ -493,6 +559,9 @@ func fsDeleteFile(ctx context.Context, basePath, deletePath string) error {
 		logger.LogIf(ctx, err)
 		return err
 	}
+
+	// ignore that error in case we're not running on a supported fs
+	_ = fsDeleteFileFast(deletePath)
 
 	if err := deleteFile(basePath, deletePath, false); err != nil {
 		if err != errFileNotFound {
