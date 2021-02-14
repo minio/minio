@@ -1211,9 +1211,19 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	bytesWritten, err := fsCreateFile(ctx, fsTmpObjPath, data, buf, data.Size())
 
 	// Delete the temporary object in the case of a
-	// failure. If PutObject succeeds, then there would be
-	// nothing to delete.
-	defer fsRemoveFile(ctx, fsTmpObjPath)
+	// failure. If PutObject succeeds, the removal should be skipped:
+	// although the original code ignored likely ENOENT error, the
+	// attempt to remove would take parent dir semaphore for writing
+	// while looking up for file to be deleted. Such writelock would
+	// stall _ANY_ access to the parent dir (which is tmp bucket) for
+	// the whole duration of lookup. And lookup would always be not cached
+	// in case of successful rename below as the kernel would perform
+	// d_move() on the file's dentry.
+	defer func() {
+		if err != nil {
+			fsRemoveFile(ctx, fsTmpObjPath)
+		}
+	} ()
 
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)

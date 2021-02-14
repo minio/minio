@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"bufio"
 	"math/rand"
 	"net"
 	"net/http"
@@ -755,7 +756,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 			}
 			r = &GetObjectReader{
 				ObjInfo:    oi,
-				pReader:    inputReader,
+				pReader:    bufio.NewReaderSize(inputReader, compReadAheadBufSize),
 				cleanUpFns: cFns,
 				opts:       opts,
 			}
