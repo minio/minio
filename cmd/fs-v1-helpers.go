@@ -325,7 +325,7 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 
 	var bytesWritten int64
 	if buf != nil {
-		bytesWritten, err = io.CopyBuffer(writer, reader, buf)
+		bytesWritten, err = io.CopyBuffer(struct {io.Writer} {writer}, struct {io.Reader} {reader}, buf)
 		if err != nil {
 			if err != io.ErrUnexpectedEOF {
 				logger.LogIf(ctx, err)
