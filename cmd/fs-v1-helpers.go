@@ -24,7 +24,6 @@ import (
 	pathutil "path"
 	"runtime"
 	"syscall"
-	_ "syscall"
 	"unsafe"
 
 	"github.com/minio/minio/cmd/logger"
@@ -320,6 +319,10 @@ func createFile(ctx context.Context, filePath string, reader io.Reader, buf []by
 	var writer *os.File
 	var err error
 
+  if globalFSODirect {
+		flags = flags | syscall.O_DIRECT
+	}
+  
 	if getFile && globalFSOTmpfile {
 		flags := os.O_WRONLY | unix.O_TMPFILE
 		writer, err = lock.Open(filePath, flags, 0666)
@@ -353,7 +356,7 @@ func createFile(ctx context.Context, filePath string, reader io.Reader, buf []by
 
 	var bytesWritten int64
 	if buf != nil {
-		bytesWritten, err = io.CopyBuffer(writer, reader, buf)
+		bytesWritten, err = io.CopyBuffer(struct {io.Writer} {writer}, struct {io.Reader} {reader}, buf)
 		if err != nil {
 			if err != io.ErrUnexpectedEOF {
 				if writer != nil {
