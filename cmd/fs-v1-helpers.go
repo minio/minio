@@ -22,6 +22,7 @@ import (
 	"os"
 	pathutil "path"
 	"runtime"
+	"syscall"
 
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/lock"
@@ -303,6 +304,11 @@ func fsCreateFile(ctx context.Context, filePath string, reader io.Reader, buf []
 	if globalFSOSync {
 		flags = flags | os.O_SYNC
 	}
+
+	if globalFSODirect {
+		flags = flags | syscall.O_DIRECT
+	}
+
 	writer, err := lock.Open(filePath, flags, 0666)
 	if err != nil {
 		return 0, osErrToFileErr(err)
