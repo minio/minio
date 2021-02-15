@@ -306,7 +306,7 @@ func (m *metaCacheEntriesSorted) iterate(fn func(entry metaCacheEntry) (cont boo
 
 // fileInfoVersions converts the metadata to FileInfoVersions where possible.
 // Metadata that cannot be decoded is skipped.
-func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, afterV string) (versions []ObjectInfo) {
+func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, firstV string) (versions []ObjectInfo) {
 	versions = make([]ObjectInfo, 0, m.len())
 	prevPrefix := ""
 	for _, entry := range m.o {
@@ -335,12 +335,12 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 			}
 
 			fiVersions := fiv.Versions
-			if afterV != "" {
-				vidMarkerIdx := fiv.findVersionIndex(afterV)
+			if firstV != "" {
+				vidMarkerIdx := fiv.findVersionIndex(firstV)
 				if vidMarkerIdx >= 0 {
-					fiVersions = fiVersions[vidMarkerIdx+1:]
+					fiVersions = fiVersions[vidMarkerIdx:]
 				}
-				afterV = ""
+				firstV = ""
 			}
 
 			for _, version := range fiVersions {

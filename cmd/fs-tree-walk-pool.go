@@ -50,6 +50,7 @@ type treeWalk struct {
 	resultCh   chan TreeWalkResult
 	endWalkCh  chan struct{}   // To signal when treeWalk go-routine should end.
 	endTimerCh chan<- struct{} // To signal when timer go-routine should end.
+	marker     *TreeWalkResult
 }
 
 // TreeWalkPool - pool of treeWalk go routines.
@@ -76,13 +77,13 @@ func NewTreeWalkPool(timeout time.Duration) *TreeWalkPool {
 // listParams, removes it from the pool, and returns the TreeWalkResult
 // channel.
 // Returns nil if listParams does not have an associated treeWalk.
-func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
+func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult, endWalkCh chan struct{}, marker *TreeWalkResult) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	walks, ok := t.pool[params] // Pick the valid walks.
 	if !ok || len(walks) == 0 {
 		// Release return nil if params not found.
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Pop out the first valid walk entry.
@@ -94,7 +95,7 @@ func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult,
 		delete(t.pool, params)
 	}
 	walk.endTimerCh <- struct{}{}
-	return walk.resultCh, walk.endWalkCh
+	return walk.resultCh, walk.endWalkCh, walk.marker
 }
 
 // Set - adds a treeWalk to the treeWalkPool.
@@ -105,7 +106,7 @@ func (t *TreeWalkPool) Release(params listParams) (resultCh chan TreeWalkResult,
 // 2) Release() signals the timer go-routine to end on endTimerCh.
 //    During listing the timer should not timeout and end the treeWalk go-routine, hence the
 //    timer go-routine should be ended.
-func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}) {
+func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endWalkCh chan struct{}, marker *TreeWalkResult) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// If we are above the limit delete at least one entry from the pool.
@@ -155,6 +156,7 @@ func (t *TreeWalkPool) Set(params listParams, resultCh chan TreeWalkResult, endW
 		resultCh:   resultCh,
 		endWalkCh:  endWalkCh,
 		endTimerCh: endTimerCh,
+		marker:     marker,
 	}
 
 	// Append new walk info.

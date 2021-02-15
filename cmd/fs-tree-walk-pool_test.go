@@ -35,23 +35,23 @@ func TestTreeWalkPoolBasic(t *testing.T) {
 	// Add a treeWalk to the pool
 	resultCh := make(chan TreeWalkResult)
 	endWalkCh := make(chan struct{})
-	tw.Set(params, resultCh, endWalkCh)
+	tw.Set(params, resultCh, endWalkCh, nil)
 
 	// Wait for treeWalkPool timeout to happen
 	<-time.After(2 * time.Second)
-	if c1, _ := tw.Release(params); c1 != nil {
+	if c1, _, _ := tw.Release(params); c1 != nil {
 		t.Error("treeWalk go-routine must have been freed")
 	}
 
 	// Add the treeWalk back to the pool
-	tw.Set(params, resultCh, endWalkCh)
+	tw.Set(params, resultCh, endWalkCh, nil)
 
 	// Release the treeWalk before timeout
 	select {
 	case <-time.After(1 * time.Second):
 		break
 	default:
-		if c1, _ := tw.Release(params); c1 == nil {
+		if c1, _, _ := tw.Release(params); c1 == nil {
 			t.Error("treeWalk go-routine got freed before timeout")
 		}
 	}
@@ -77,7 +77,7 @@ func TestManyWalksSameParam(t *testing.T) {
 		for i := 0; i < treeWalkSameEntryLimit; i++ {
 			resultCh := make(chan TreeWalkResult)
 			endWalkCh := make(chan struct{})
-			tw.Set(params, resultCh, endWalkCh)
+			tw.Set(params, resultCh, endWalkCh, nil)
 		}
 
 		tw.mu.Lock()
@@ -122,7 +122,7 @@ func TestManyWalksSameParamPrune(t *testing.T) {
 		for i := 0; i < treeWalkSameEntryLimit*4; i++ {
 			resultCh := make(chan TreeWalkResult)
 			endWalkCh := make(chan struct{})
-			tw.Set(params, resultCh, endWalkCh)
+			tw.Set(params, resultCh, endWalkCh, nil)
 		}
 
 		tw.mu.Lock()

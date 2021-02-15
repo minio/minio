@@ -203,6 +203,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
 				{Name: "obj0"},
@@ -215,6 +216,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
 				{Name: "obj0"},
 				{Name: "obj1"},
@@ -226,6 +228,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
 			},
@@ -235,6 +238,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "obj1"},
 				{Name: "obj2"},
 			},
 		},
@@ -272,6 +276,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
@@ -286,6 +291,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
@@ -301,9 +307,9 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
-				{Name: "obj0"},
 			},
 		},
 		// ListObjectsResult-18.
@@ -312,7 +318,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "newPrefix1"},
 			},
 		},
 		// ListObjectsResult-19.
@@ -321,7 +327,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "obj1"},
+				{Name: "obj0"},
 			},
 		},
 		// ListObjectsResult-20.
@@ -329,8 +335,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "obj0"},
 				{Name: "obj1"},
-				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-21.
@@ -338,7 +344,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				{Name: "obj2"},
+				{Name: "obj1"},
 			},
 		},
 		// ListObjectsResult-22.
@@ -346,8 +352,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
-				{Name: "newzen/zen/recurse/again/again/again/pics"},
 			},
 		},
 		// ListObjectsResult-23.
@@ -492,133 +498,133 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
+		0: {".test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: ".test"}, false},
+		1: {"Test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "Test"}, false},
+		2: {"---", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "---"}, false},
+		3: {"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
 		// Using an existing file for bucket name, but its not a directory (5).
-		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
+		4: {"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
 		// Valid bucket names, but they donot exist (6-8).
-		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		5: {"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		6: {"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		7: {"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Testing for failure cases with both perfix and marker (11).
 		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
-		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
+		8: {"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (12-13).
-		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},
-		{"empty-bucket", "africa/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
+		9:  {"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},
+		10: {"empty-bucket", "africa/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
 		// Testing on empty bucket, that is, bucket without any objects in it (14).
-		{"empty-bucket", "", "", "", 0, ListObjectsInfo{}, nil, true},
+		11: {"empty-bucket", "", "", "", 0, ListObjectsInfo{}, nil, true},
 		// Setting maxKeys to negative value (15-16).
-		{"empty-bucket", "", "", "", -1, ListObjectsInfo{}, nil, true},
-		{"empty-bucket", "", "", "", 1, ListObjectsInfo{}, nil, true},
+		12: {"empty-bucket", "", "", "", -1, ListObjectsInfo{}, nil, true},
+		13: {"empty-bucket", "", "", "", 1, ListObjectsInfo{}, nil, true},
 		// Setting maxKeys to a very large value (17).
-		{"empty-bucket", "", "", "", 111100000, ListObjectsInfo{}, nil, true},
+		14: {"empty-bucket", "", "", "", 111100000, ListObjectsInfo{}, nil, true},
 		// Testing for all 10 objects in the bucket (18).
-		{"test-bucket-list-object", "", "", "", 10, resultCases[0], nil, true},
+		15: {"test-bucket-list-object", "", "", "", 10, resultCases[0], nil, true},
 		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (19).
-		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
+		16: {"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (20).
-		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
+		17: {"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
 		// Testing for trancated value (21-24).
-		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
-		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
-		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
-		{"test-bucket-list-object", "", "", "", 1, resultCases[4], nil, true},
+		18: {"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
+		19: {"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
+		20: {"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
+		21: {"test-bucket-list-object", "", "", "", 1, resultCases[4], nil, true},
 		// Testing with prefix (25-28).
-		{"test-bucket-list-object", "new", "", "", 3, resultCases[5], nil, true},
-		{"test-bucket-list-object", "new", "", "", 4, resultCases[5], nil, true},
-		{"test-bucket-list-object", "new", "", "", 5, resultCases[5], nil, true},
-		{"test-bucket-list-object", "obj", "", "", 3, resultCases[6], nil, true},
-		{"test-bucket-list-object", "/obj", "", "", 0, ListObjectsInfo{}, nil, true},
+		22: {"test-bucket-list-object", "new", "", "", 3, resultCases[5], nil, true},
+		23: {"test-bucket-list-object", "new", "", "", 4, resultCases[5], nil, true},
+		24: {"test-bucket-list-object", "new", "", "", 5, resultCases[5], nil, true},
+		25: {"test-bucket-list-object", "obj", "", "", 3, resultCases[6], nil, true},
+		26: {"test-bucket-list-object", "/obj", "", "", 0, ListObjectsInfo{}, nil, true},
 		// Testing with prefix and truncation (29-30).
-		{"test-bucket-list-object", "new", "", "", 1, resultCases[7], nil, true},
-		{"test-bucket-list-object", "obj", "", "", 2, resultCases[8], nil, true},
+		27: {"test-bucket-list-object", "new", "", "", 1, resultCases[7], nil, true},
+		28: {"test-bucket-list-object", "obj", "", "", 2, resultCases[8], nil, true},
 		// Testing with marker, but without prefix and truncation (31-35).
-		{"test-bucket-list-object", "", "newPrefix0", "", 6, resultCases[9], nil, true},
-		{"test-bucket-list-object", "", "newPrefix1", "", 5, resultCases[10], nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 4, resultCases[11], nil, true},
-		{"test-bucket-list-object", "", "obj1", "", 2, resultCases[12], nil, true},
-		{"test-bucket-list-object", "", "man", "", 11, resultCases[13], nil, true},
+		29: {"test-bucket-list-object", "", "newPrefix0", "", 6, resultCases[9], nil, true},
+		30: {"test-bucket-list-object", "", "newPrefix1", "", 5, resultCases[10], nil, true},
+		31: {"test-bucket-list-object", "", "obj0", "", 4, resultCases[11], nil, true},
+		32: {"test-bucket-list-object", "", "obj1", "", 2, resultCases[12], nil, true},
+		33: {"test-bucket-list-object", "", "man", "", 11, resultCases[13], nil, true},
 		// Marker being set to a value which is greater than and all object names when sorted (36).
 		// Expected to send an empty response in this case.
-		{"test-bucket-list-object", "", "zen", "", 10, ListObjectsInfo{}, nil, true},
+		34: {"test-bucket-list-object", "", "zen", "", 10, ListObjectsInfo{}, nil, true},
 		// Marker being set to a value which is lesser than and all object names when sorted (37).
 		// Expected to send all the objects in the bucket in this case.
-		{"test-bucket-list-object", "", "Abc", "", 10, resultCases[14], nil, true},
+		35: {"test-bucket-list-object", "", "Abc", "", 10, resultCases[14], nil, true},
 		// Marker is to a hierarhical value (38-39).
-		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "", 10, resultCases[15], nil, true},
-		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "", 10, resultCases[16], nil, true},
+		36: {"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "", 10, resultCases[15], nil, true},
+		37: {"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "", 10, resultCases[16], nil, true},
 		// Testing with marker and truncation, but no prefix (40-42).
-		{"test-bucket-list-object", "", "newPrefix0", "", 3, resultCases[17], nil, true},
-		{"test-bucket-list-object", "", "newPrefix1", "", 1, resultCases[18], nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 1, resultCases[19], nil, true},
+		38: {"test-bucket-list-object", "", "newPrefix0", "", 3, resultCases[17], nil, true},
+		39: {"test-bucket-list-object", "", "newPrefix1", "", 1, resultCases[18], nil, true},
+		40: {"test-bucket-list-object", "", "obj0", "", 1, resultCases[19], nil, true},
 		// Testing with both marker and prefix, but without truncation (43-45).
 		// The valid combination of marker and prefix should satisfy strings.HasPrefix(marker, prefix).
-		{"test-bucket-list-object", "obj", "obj0", "", 2, resultCases[20], nil, true},
-		{"test-bucket-list-object", "obj", "obj1", "", 1, resultCases[21], nil, true},
-		{"test-bucket-list-object", "new", "newPrefix0", "", 2, resultCases[22], nil, true},
+		41: {"test-bucket-list-object", "obj", "obj0", "", 2, resultCases[20], nil, true},
+		42: {"test-bucket-list-object", "obj", "obj1", "", 1, resultCases[21], nil, true},
+		43: {"test-bucket-list-object", "new", "newPrefix0", "", 2, resultCases[22], nil, true},
 		// Testing with maxKeys set to 0 (46-52).
 		// The parameters have to valid.
-		{"test-bucket-list-object", "", "obj1", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "new", "", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "obj", "", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "obj", "obj0", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "obj", "obj1", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "new", "newPrefix0", "", 0, ListObjectsInfo{}, nil, true},
+		44: {"test-bucket-list-object", "", "obj1", "", 0, ListObjectsInfo{}, nil, true},
+		45: {"test-bucket-list-object", "", "obj0", "", 0, ListObjectsInfo{}, nil, true},
+		46: {"test-bucket-list-object", "new", "", "", 0, ListObjectsInfo{}, nil, true},
+		47: {"test-bucket-list-object", "obj", "", "", 0, ListObjectsInfo{}, nil, true},
+		48: {"test-bucket-list-object", "obj", "obj0", "", 0, ListObjectsInfo{}, nil, true},
+		49: {"test-bucket-list-object", "obj", "obj1", "", 0, ListObjectsInfo{}, nil, true},
+		50: {"test-bucket-list-object", "new", "newPrefix0", "", 0, ListObjectsInfo{}, nil, true},
 		// Tests on hierarchical key names as prefix.
 		// Without delimteter the code should recurse into the prefix Dir.
 		// Tests with prefix, but without delimiter (53-54).
-		{"test-bucket-list-object", "Asia/India/", "", "", 10, resultCases[23], nil, true},
-		{"test-bucket-list-object", "Asia", "", "", 10, resultCases[24], nil, true},
+		51: {"test-bucket-list-object", "Asia/India/", "", "", 10, resultCases[23], nil, true},
+		52: {"test-bucket-list-object", "Asia", "", "", 10, resultCases[24], nil, true},
 		// Tests with prefix and delimiter (55-57).
 		// With delimiter the code should not recurse into the sub-directories of prefix Dir.
-		{"test-bucket-list-object", "Asia", "", SlashSeparator, 10, resultCases[25], nil, true},
-		{"test-bucket-list-object", "new", "", SlashSeparator, 10, resultCases[26], nil, true},
-		{"test-bucket-list-object", "Asia/India/", "", SlashSeparator, 10, resultCases[27], nil, true},
+		53: {"test-bucket-list-object", "Asia", "", SlashSeparator, 10, resultCases[25], nil, true},
+		54: {"test-bucket-list-object", "new", "", SlashSeparator, 10, resultCases[26], nil, true},
+		55: {"test-bucket-list-object", "Asia/India/", "", SlashSeparator, 10, resultCases[27], nil, true},
 		// Test with marker set as hierarhical value and with delimiter. (58-59)
-		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", SlashSeparator, 10, resultCases[28], nil, true},
-		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", SlashSeparator, 10, resultCases[29], nil, true},
+		56: {"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", SlashSeparator, 10, resultCases[28], nil, true},
+		57: {"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", SlashSeparator, 10, resultCases[29], nil, true},
 		// Test with prefix and delimiter set to '/'. (60)
-		{"test-bucket-list-object", SlashSeparator, "", SlashSeparator, 10, resultCases[30], nil, true},
+		58: {"test-bucket-list-object", SlashSeparator, "", SlashSeparator, 10, resultCases[30], nil, true},
 		// Test with invalid prefix (61)
-		{"test-bucket-list-object", "\\", "", SlashSeparator, 10, ListObjectsInfo{}, nil, true},
+		59: {"test-bucket-list-object", "\\", "", SlashSeparator, 10, ListObjectsInfo{}, nil, true},
 		// Test listing an empty directory in recursive mode (62)
-		{"test-bucket-empty-dir", "", "", "", 10, resultCases[31], nil, true},
+		60: {"test-bucket-empty-dir", "", "", "", 10, resultCases[31], nil, true},
 		// Test listing an empty directory in a non recursive mode (63)
-		{"test-bucket-empty-dir", "", "", SlashSeparator, 10, resultCases[32], nil, true},
+		61: {"test-bucket-empty-dir", "", "", SlashSeparator, 10, resultCases[32], nil, true},
 		// Test listing a directory which contains an empty directory (64)
-		{"test-bucket-empty-dir", "", "temporary/", "", 10, resultCases[33], nil, true},
+		62: {"test-bucket-empty-dir", "", "temporary/", "", 10, resultCases[33], nil, true},
 		// Test listing with marker > last object such that response should be empty (65)
-		{"test-bucket-single-object", "", "A/C", "", 1000, resultCases[34], nil, true},
+		63: {"test-bucket-single-object", "", "A/C", "", 1000, resultCases[34], nil, true},
 		// Test listing an object with a trailing slash and a slash delimiter (66)
-		{"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, resultCases[34], nil, true},
+		64: {"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, resultCases[34], nil, true},
 		// Test listing an object with uncommon delimiter
-		{testBuckets[4], "", "", "guidSplunk", 1000, resultCases[35], nil, true},
+		65: {testBuckets[4], "", "", "guidSplunk", 1000, resultCases[35], nil, true},
 		// Test listing an object with uncommon delimiter and matching prefix
-		{testBuckets[4], "file1/", "", "guidSplunk", 1000, resultCases[35], nil, true},
+		66: {testBuckets[4], "file1/", "", "guidSplunk", 1000, resultCases[35], nil, true},
 		// Test listing at prefix with expected prefix markers
-		{testBuckets[5], "dir/", "", SlashSeparator, 1, resultCases[36], nil, true},
+		67: {testBuckets[5], "dir/", "", SlashSeparator, 1, resultCases[36], nil, true},
 	}
 
 	for i, testCase := range testCases {
 		testCase := testCase
-		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i), func(t *testing.T) {
 			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:", testCase.prefix, "marker:", testCase.marker, "delimiter:", testCase.delimiter, "maxkeys:", testCase.maxKeys)
 			result, err := obj.ListObjects(context.Background(), testCase.bucketName,
 				testCase.prefix, testCase.marker, testCase.delimiter, int(testCase.maxKeys))
 			if err != nil && testCase.shouldPass {
-				t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
+				t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i, instanceType, err.Error())
 			}
 			if err == nil && !testCase.shouldPass {
-				t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, instanceType, testCase.err.Error())
+				t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead", i, instanceType, testCase.err.Error())
 			}
 			// Failed as expected, but does it fail for the expected reason.
 			if err != nil && !testCase.shouldPass {
 				if !strings.Contains(err.Error(), testCase.err.Error()) {
-					t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.err.Error(), err.Error())
+					t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i, instanceType, testCase.err.Error(), err.Error())
 				}
 			}
 			// Since there are cases for which ListObjects fails, this is
@@ -633,19 +639,19 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				if len(testCase.result.Objects) != len(result.Objects) {
 					t.Logf("want: %v", objInfoNames(testCase.result.Objects))
 					t.Logf("got: %v", objInfoNames(result.Objects))
-					t.Errorf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i+1, instanceType, len(testCase.result.Objects), len(result.Objects))
+					t.Errorf("Test %d: %s: Expected number of object in the result to be '%d', but found '%d' objects instead", i, instanceType, len(testCase.result.Objects), len(result.Objects))
 				}
 				for j := 0; j < len(testCase.result.Objects); j++ {
 					if j >= len(result.Objects) {
-						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but not nothing instead", i+1, instanceType, testCase.result.Objects[j].Name)
+						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but not nothing instead", i, instanceType, testCase.result.Objects[j].Name)
 						continue
 					}
 					if testCase.result.Objects[j].Name != result.Objects[j].Name {
-						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
+						t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 					}
 					// FIXME: we should always check for ETag
 					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, SlashSeparator) {
-						t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead (%v)", i+1, instanceType, result.Objects[j].Name)
+						t.Errorf("Test %d: %s: Expected ETag to be not empty, but found empty instead (%v)", i, instanceType, result.Objects[j].Name)
 					}
 
 				}
@@ -653,32 +659,32 @@ func testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
 				if len(testCase.result.Prefixes) != len(result.Prefixes) {
 					t.Logf("want: %v", testCase.result.Prefixes)
 					t.Logf("got: %v", result.Prefixes)
-					t.Errorf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i+1, instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
+					t.Errorf("Test %d: %s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", i, instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
 				}
 				for j := 0; j < len(testCase.result.Prefixes); j++ {
 					if j >= len(result.Prefixes) {
-						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found no result", i+1, instanceType, testCase.result.Prefixes[j])
+						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found no result", i, instanceType, testCase.result.Prefixes[j])
 						continue
 					}
 					if testCase.result.Prefixes[j] != result.Prefixes[j] {
-						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Prefixes[j], result.Prefixes[j])
+						t.Errorf("Test %d: %s: Expected prefix name to be \"%s\", but found \"%s\" instead", i, instanceType, testCase.result.Prefixes[j], result.Prefixes[j])
 					}
 				}
 
 				if testCase.result.IsTruncated != result.IsTruncated {
 					// Allow an extra continuation token.
 					if !result.IsTruncated || len(result.Objects) == 0 {
-						t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i+1, instanceType, testCase.result.IsTruncated, result.IsTruncated)
+						t.Errorf("Test %d: %s: Expected IsTruncated flag to be %v, but instead found it to be %v", i, instanceType, testCase.result.IsTruncated, result.IsTruncated)
 					}
 				}
 
 				if testCase.result.IsTruncated && result.NextMarker == "" {
-					t.Errorf("Test %d: %s: Expected NextMarker to contain a string since listing is truncated, but instead found it to be empty", i+1, instanceType)
+					t.Errorf("Test %d: %s: Expected NextMarker to contain a string since listing is truncated, but instead found it to be empty", i, instanceType)
 				}
 
 				if !testCase.result.IsTruncated && result.NextMarker != "" {
 					if !result.IsTruncated || len(result.Objects) == 0 {
-						t.Errorf("Test %d: %s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
+						t.Errorf("Test %d: %s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", i, instanceType, result.NextMarker)
 					}
 				}
 
@@ -698,6 +704,14 @@ func objInfoNames(o []ObjectInfo) []string {
 // Wrapper for calling ListObjectVersions tests for both Erasure multiple disks and single node setup.
 func TestListObjectVersions(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjectVersions)
+}
+
+func objectInfosAsString(v []ObjectInfo) string {
+	var res []string
+	for _, oi := range v {
+		res = append(res, fmt.Sprintf("%q", oi.Name))
+	}
+	return "[" + strings.Join(res, ",") + "]"
 }
 
 // Unit test for ListObjectVersions
@@ -775,7 +789,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 	resultCases := []ListObjectsInfo{
 		// ListObjectsResult-0.
 		// Testing for listing all objects in the bucket, (testCase 20,21,22).
-		{
+		0: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -791,7 +805,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-1.
 		// Used for asserting the truncated case, (testCase 23).
-		{
+		1: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -803,7 +817,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-2.
 		// (TestCase 24).
-		{
+		2: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -814,7 +828,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-3.
 		// (TestCase 25).
-		{
+		3: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -825,7 +839,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-4.
 		// Again used for truncated case.
 		// (TestCase 26).
-		{
+		4: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -834,7 +848,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-5.
 		// Used for Asserting prefixes.
 		// Used for test case with prefix "new", (testCase 27-29).
-		{
+		5: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "newPrefix0"},
@@ -845,7 +859,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-6.
 		// Used for Asserting prefixes.
 		// Used for test case with prefix = "obj", (testCase 30).
-		{
+		6: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "obj0"},
@@ -856,7 +870,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-7.
 		// Used for Asserting prefixes and truncation.
 		// Used for test case with prefix = "new" and maxKeys = 1, (testCase 31).
-		{
+		7: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
 				{Name: "newPrefix0"},
@@ -865,7 +879,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-8.
 		// Used for Asserting prefixes.
 		// Used for test case with prefix = "obj" and maxKeys = 2, (testCase 32).
-		{
+		8: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
 				{Name: "obj0"},
@@ -875,9 +889,10 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-9.
 		// Used for asserting the case with marker, but without prefix.
 		//marker is set to "newPrefix0" in the testCase, (testCase 33).
-		{
+		9: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
 				{Name: "obj0"},
@@ -887,9 +902,10 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-10.
 		//marker is set to "newPrefix1" in the testCase, (testCase 34).
-		{
+		10: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
 				{Name: "obj0"},
 				{Name: "obj1"},
@@ -898,24 +914,26 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-11.
 		//marker is set to "obj0" in the testCase, (testCase 35).
-		{
+		11: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "obj0"},
 				{Name: "obj1"},
 				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-12.
 		// Marker is set to "obj1" in the testCase, (testCase 36).
-		{
+		12: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "obj1"},
 				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-13.
 		// Marker is set to "man" in the testCase, (testCase37).
-		{
+		13: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "newPrefix0"},
@@ -928,7 +946,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-14.
 		// Marker is set to "Abc" in the testCase, (testCase 39).
-		{
+		14: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -944,9 +962,10 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-15.
 		// Marker is set to "Asia/India/India-summer-photos-1" in the testCase, (testCase 40).
-		{
+		15: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
@@ -958,9 +977,10 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-16.
 		// Marker is set to "Asia/India/Karnataka/Bangalore/Koramangala/pics" in the testCase, (testCase 41).
-		{
+		16: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
@@ -973,61 +993,62 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// Used for asserting the case with marker, without prefix but with truncation.
 		// Marker =  "newPrefix0" & maxKeys = 3 in the testCase, (testCase42).
 		// Output truncated to 3 values.
-		{
+		17: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
-				{Name: "obj0"},
 			},
 		},
 		// ListObjectsResult-18.
 		// Marker = "newPrefix1" & maxkeys = 1 in the testCase, (testCase43).
 		// Output truncated to 1 value.
-		{
+		18: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "newzen/zen/recurse/again/again/again/pics"},
+				{Name: "newPrefix1"},
 			},
 		},
 		// ListObjectsResult-19.
 		// Marker = "obj0" & maxKeys = 1 in the testCase, (testCase44).
 		// Output truncated to 1 value.
-		{
+		19: {
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "obj1"},
+				{Name: "obj0"},
 			},
 		},
 		// ListObjectsResult-20.
 		// Marker = "obj0" & prefix = "obj" in the testCase, (testCase 45).
-		{
+		20: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "obj0"},
 				{Name: "obj1"},
-				{Name: "obj2"},
 			},
 		},
 		// ListObjectsResult-21.
 		// Marker = "obj1" & prefix = "obj" in the testCase, (testCase 46).
-		{
+		21: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				{Name: "obj2"},
+				{Name: "obj1"},
 			},
 		},
 		// ListObjectsResult-22.
 		// Marker = "newPrefix0" & prefix = "new" in the testCase,, (testCase 47).
-		{
+		22: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
+				{Name: "newPrefix0"},
 				{Name: "newPrefix1"},
 				{Name: "newzen/zen/recurse/again/again/again/pics"},
 			},
 		},
 		// ListObjectsResult-23.
 		// Prefix is set to "Asia/India/" in the testCase, and delimiter is not set (testCase 55).
-		{
+		23: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "Asia/India/India-summer-photos-1"},
@@ -1037,7 +1058,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 
 		// ListObjectsResult-24.
 		// Prefix is set to "Asia" in the testCase, and delimiter is not set (testCase 56).
-		{
+		24: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -1048,7 +1069,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 
 		// ListObjectsResult-25.
 		// Prefix is set to "Asia" in the testCase, and delimiter is set (testCase 57).
-		{
+		25: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "Asia-maps.png"},
@@ -1057,7 +1078,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-26.
 		// prefix = "new" and delimiter is set in the testCase.(testCase 58).
-		{
+		26: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "newPrefix0"},
@@ -1067,7 +1088,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-27.
 		// Prefix is set to "Asia/India/" in the testCase, and delimiter is set to forward slash '/' (testCase 59).
-		{
+		27: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "Asia/India/India-summer-photos-1"},
@@ -1076,7 +1097,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-28.
 		// Marker is set to "Asia/India/India-summer-photos-1" and delimiter set in the testCase, (testCase 60).
-		{
+		28: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "newPrefix0"},
@@ -1089,7 +1110,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-29.
 		// Marker is set to "Asia/India/Karnataka/Bangalore/Koramangala/pics" in the testCase and delimiter set, (testCase 61).
-		{
+		29: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "newPrefix0"},
@@ -1102,12 +1123,12 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		},
 		// ListObjectsResult-30.
 		// Prefix and Delimiter is set to '/', (testCase 62).
-		{
+		30: {
 			IsTruncated: false,
 			Objects:     []ObjectInfo{},
 		},
 		// ListObjectsResult-31 Empty directory, recursive listing
-		{
+		31: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "obj1"},
@@ -1116,7 +1137,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			},
 		},
 		// ListObjectsResult-32 Empty directory, non recursive listing
-		{
+		32: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "obj1"},
@@ -1125,7 +1146,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			Prefixes: []string{"temporary/"},
 		},
 		// ListObjectsResult-33 Listing empty directory only
-		{
+		33: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "temporary/0/"},
@@ -1134,12 +1155,12 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		// ListObjectsResult-34:
 		//    * Listing with marker > last object should return empty
 		//    * Listing an object with a trailing slash and '/' delimiter
-		{
+		34: {
 			IsTruncated: false,
 			Objects:     []ObjectInfo{},
 		},
 		// ListObjectsResult-35 list with custom uncommon delimiter
-		{
+		35: {
 			IsTruncated: false,
 			Objects: []ObjectInfo{
 				{Name: "file1/receipt.json"},
@@ -1147,9 +1168,9 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			Prefixes: []string{"file1/guidSplunk"},
 		},
 		// ListObjectsResult-36 list with nextmarker prefix and maxKeys set to 1.
-		{
-			IsTruncated: true,
-			Prefixes:    []string{"dir/day_id=2017-10-10/"},
+		36: {
+			IsTruncated: false,
+			Prefixes:    []string{"dir/day_id=2017-10-10/", "dir/day_id=2017-10-11/"},
 		},
 	}
 
@@ -1160,126 +1181,128 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		marker     string
 		delimiter  string
 		maxKeys    int32
-		// Expected output of ListObjects.
-		result ListObjectsInfo
-		err    error
+		// Expected output of ListObjects as index into resultCases. -1 for empty result.
+		resultIdx int
+		err       error
 		// Flag indicating whether the test is expected to pass or not.
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4).
-		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
+		0: {".test", "", "", "", 0, -1, BucketNotFound{Bucket: ".test"}, false},
+		1: {"Test", "", "", "", 0, -1, BucketNotFound{Bucket: "Test"}, false},
+		2: {"---", "", "", "", 0, -1, BucketNotFound{Bucket: "---"}, false},
+		3: {"ad", "", "", "", 0, -1, BucketNotFound{Bucket: "ad"}, false},
 		// Using an existing file for bucket name, but its not a directory (5).
-		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
+		4: {"simple-file.txt", "", "", "", 0, -1, BucketNotFound{Bucket: "simple-file.txt"}, false},
 		// Valid bucket names, but they donot exist (6-8).
-		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		5: {"volatile-bucket-1", "", "", "", 0, -1, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		6: {"volatile-bucket-2", "", "", "", 0, -1, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		7: {"volatile-bucket-3", "", "", "", 0, -1, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Testing for failure cases with both perfix and marker (9).
 		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
-		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
+		8: {"test-bucket-list-object", "asia", "europe-object", "", 0, -1, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (10-11).
-		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},
-		{"empty-bucket", "africa/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
+		9:  {"empty-bucket", "europe/france/", "", "", 1, -1, nil, true},
+		10: {"empty-bucket", "africa/tunisia/", "", "", 1, -1, nil, true},
 		// Testing on empty bucket, that is, bucket without any objects in it (12).
-		{"empty-bucket", "", "", "", 0, ListObjectsInfo{}, nil, true},
+		11: {"empty-bucket", "", "", "", 0, -1, nil, true},
 		// Setting maxKeys to negative value (13-14).
-		{"empty-bucket", "", "", "", -1, ListObjectsInfo{}, nil, true},
-		{"empty-bucket", "", "", "", 1, ListObjectsInfo{}, nil, true},
+		12: {"empty-bucket", "", "", "", -1, -1, nil, true},
+		13: {"empty-bucket", "", "", "", 1, -1, nil, true},
 		// Setting maxKeys to a very large value (15).
-		{"empty-bucket", "", "", "", 111100000, ListObjectsInfo{}, nil, true},
+		14: {"empty-bucket", "", "", "", 111100000, -1, nil, true},
 		// Testing for all 10 objects in the bucket (16).
-		{"test-bucket-list-object", "", "", "", 10, resultCases[0], nil, true},
+		15: {"test-bucket-list-object", "", "", "", 10, 0, nil, true},
 		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (17).
-		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
+		16: {"test-bucket-list-object", "", "", "", -1, 0, nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (18).
-		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
+		17: {"test-bucket-list-object", "", "", "", 1234567890, 0, nil, true},
 		// Testing for trancated value (19-22).
-		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
-		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
-		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
-		{"test-bucket-list-object", "", "", "", 1, resultCases[4], nil, true},
+		18: {"test-bucket-list-object", "", "", "", 5, 1, nil, true},
+		19: {"test-bucket-list-object", "", "", "", 4, 2, nil, true},
+		20: {"test-bucket-list-object", "", "", "", 3, 3, nil, true},
+		21: {"test-bucket-list-object", "", "", "", 1, 4, nil, true},
 		// Testing with prefix (23-26).
-		{"test-bucket-list-object", "new", "", "", 3, resultCases[5], nil, true},
-		{"test-bucket-list-object", "new", "", "", 4, resultCases[5], nil, true},
-		{"test-bucket-list-object", "new", "", "", 5, resultCases[5], nil, true},
-		{"test-bucket-list-object", "obj", "", "", 3, resultCases[6], nil, true},
+		22: {"test-bucket-list-object", "new", "", "", 3, 5, nil, true},
+		23: {"test-bucket-list-object", "new", "", "", 4, 5, nil, true},
+		24: {"test-bucket-list-object", "new", "", "", 5, 5, nil, true},
+		25: {"test-bucket-list-object", "obj", "", "", 3, 6, nil, true},
 		// Testing with prefix and truncation (27-28).
-		{"test-bucket-list-object", "new", "", "", 1, resultCases[7], nil, true},
-		{"test-bucket-list-object", "obj", "", "", 2, resultCases[8], nil, true},
+		26: {"test-bucket-list-object", "new", "", "", 1, 7, nil, true},
+		27: {"test-bucket-list-object", "obj", "", "", 2, 8, nil, true},
 		// Testing with marker, but without prefix and truncation (29-33).
-		{"test-bucket-list-object", "", "newPrefix0", "", 6, resultCases[9], nil, true},
-		{"test-bucket-list-object", "", "newPrefix1", "", 5, resultCases[10], nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 4, resultCases[11], nil, true},
-		{"test-bucket-list-object", "", "obj1", "", 2, resultCases[12], nil, true},
-		{"test-bucket-list-object", "", "man", "", 11, resultCases[13], nil, true},
+		28: {"test-bucket-list-object", "", "newPrefix0", "", 6, 9, nil, true},
+		29: {"test-bucket-list-object", "", "newPrefix1", "", 5, 10, nil, true},
+		30: {"test-bucket-list-object", "", "obj0", "", 4, 11, nil, true},
+		31: {"test-bucket-list-object", "", "obj1", "", 2, 12, nil, true},
+		32: {"test-bucket-list-object", "", "man", "", 11, 13, nil, true},
 		// Marker being set to a value which is greater than and all object names when sorted (34).
 		// Expected to send an empty response in this case.
-		{"test-bucket-list-object", "", "zen", "", 10, ListObjectsInfo{}, nil, true},
+		33: {"test-bucket-list-object", "", "zen", "", 10, -1, nil, true},
 		// Marker being set to a value which is lesser than and all object names when sorted (35).
 		// Expected to send all the objects in the bucket in this case.
-		{"test-bucket-list-object", "", "Abc", "", 10, resultCases[14], nil, true},
+		34: {"test-bucket-list-object", "", "Abc", "", 10, 14, nil, true},
 		// Marker is to a hierarhical value (36-37).
-		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "", 10, resultCases[15], nil, true},
-		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "", 10, resultCases[16], nil, true},
+		35: {"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", "", 10, 15, nil, true},
+		36: {"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "", 10, 16, nil, true},
 		// Testing with marker and truncation, but no prefix (38-40).
-		{"test-bucket-list-object", "", "newPrefix0", "", 3, resultCases[17], nil, true},
-		{"test-bucket-list-object", "", "newPrefix1", "", 1, resultCases[18], nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 1, resultCases[19], nil, true},
+		37: {"test-bucket-list-object", "", "newPrefix0", "", 3, 17, nil, true},
+		38: {"test-bucket-list-object", "", "newPrefix1", "", 1, 18, nil, true},
+		39: {"test-bucket-list-object", "", "obj0", "", 1, 19, nil, true},
 		// Testing with both marker and prefix, but without truncation (41-43).
 		// The valid combination of marker and prefix should satisfy strings.HasPrefix(marker, prefix).
-		{"test-bucket-list-object", "obj", "obj0", "", 2, resultCases[20], nil, true},
-		{"test-bucket-list-object", "obj", "obj1", "", 1, resultCases[21], nil, true},
-		{"test-bucket-list-object", "new", "newPrefix0", "", 2, resultCases[22], nil, true},
+		40: {"test-bucket-list-object", "obj", "obj0", "", 2, 20, nil, true},
+		41: {"test-bucket-list-object", "obj", "obj1", "", 1, 21, nil, true},
+		42: {"test-bucket-list-object", "new", "newPrefix0", "", 3, 22, nil, true},
 		// Testing with maxKeys set to 0 (44-50).
 		// The parameters have to valid.
-		{"test-bucket-list-object", "", "obj1", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "", "obj0", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "new", "", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "obj", "", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "obj", "obj0", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "obj", "obj1", "", 0, ListObjectsInfo{}, nil, true},
-		{"test-bucket-list-object", "new", "newPrefix0", "", 0, ListObjectsInfo{}, nil, true},
+		43: {"test-bucket-list-object", "", "obj1", "", 0, -1, nil, true},
+		44: {"test-bucket-list-object", "", "obj0", "", 0, -1, nil, true},
+		45: {"test-bucket-list-object", "new", "", "", 0, -1, nil, true},
+		46: {"test-bucket-list-object", "obj", "", "", 0, -1, nil, true},
+		47: {"test-bucket-list-object", "obj", "obj0", "", 0, -1, nil, true},
+		48: {"test-bucket-list-object", "obj", "obj1", "", 0, -1, nil, true},
+		49: {"test-bucket-list-object", "new", "newPrefix0", "", 0, -1, nil, true},
 		// Tests on hierarchical key names as prefix.
 		// Without delimteter the code should recurse into the prefix Dir.
 		// Tests with prefix, but without delimiter (51-52).
-		{"test-bucket-list-object", "Asia/India/", "", "", 10, resultCases[23], nil, true},
-		{"test-bucket-list-object", "Asia", "", "", 10, resultCases[24], nil, true},
+		50: {"test-bucket-list-object", "Asia/India/", "", "", 10, 23, nil, true},
+		51: {"test-bucket-list-object", "Asia", "", "", 10, 24, nil, true},
 		// Tests with prefix and delimiter (53-55).
 		// With delimiter the code should not recurse into the sub-directories of prefix Dir.
-		{"test-bucket-list-object", "Asia", "", SlashSeparator, 10, resultCases[25], nil, true},
-		{"test-bucket-list-object", "new", "", SlashSeparator, 10, resultCases[26], nil, true},
-		{"test-bucket-list-object", "Asia/India/", "", SlashSeparator, 10, resultCases[27], nil, true},
+		52: {"test-bucket-list-object", "Asia", "", SlashSeparator, 10, 25, nil, true},
+		53: {"test-bucket-list-object", "new", "", SlashSeparator, 10, 26, nil, true},
+		54: {"test-bucket-list-object", "Asia/India/", "", SlashSeparator, 10, 27, nil, true},
 		// Test with marker set as hierarhical value and with delimiter. (56-57)
-		{"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", SlashSeparator, 10, resultCases[28], nil, true},
-		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", SlashSeparator, 10, resultCases[29], nil, true},
+		55: {"test-bucket-list-object", "", "Asia/India/India-summer-photos-1", SlashSeparator, 10, 28, nil, true},
+		56: {"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", SlashSeparator, 10, 29, nil, true},
 		// Test with prefix and delimiter set to '/'. (58)
-		{"test-bucket-list-object", SlashSeparator, "", SlashSeparator, 10, resultCases[30], nil, true},
+		57: {"test-bucket-list-object", SlashSeparator, "", SlashSeparator, 10, 30, nil, true},
 		// Test with invalid prefix (59)
-		{"test-bucket-list-object", "\\", "", SlashSeparator, 10, ListObjectsInfo{}, nil, true},
+		58: {"test-bucket-list-object", "\\", "", SlashSeparator, 10, -1, nil, true},
 		// Test listing an empty directory in recursive mode (60)
-		{"test-bucket-empty-dir", "", "", "", 10, resultCases[31], nil, true},
+		59: {"test-bucket-empty-dir", "", "", "", 10, 31, nil, true},
 		// Test listing an empty directory in a non recursive mode (61)
-		{"test-bucket-empty-dir", "", "", SlashSeparator, 10, resultCases[32], nil, true},
+		60: {"test-bucket-empty-dir", "", "", SlashSeparator, 10, 32, nil, true},
 		// Test listing a directory which contains an empty directory (62)
-		{"test-bucket-empty-dir", "", "temporary/", "", 10, resultCases[33], nil, true},
+		61: {"test-bucket-empty-dir", "", "temporary/", "", 10, 33, nil, true},
 		// Test listing with marker > last object such that response should be empty (63)
-		{"test-bucket-single-object", "", "A/C", "", 1000, resultCases[34], nil, true},
+		62: {"test-bucket-single-object", "", "A/C", "", 1000, 34, nil, true},
 		// Test listing an object with a trailing slash and a slash delimiter (64)
-		{"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, resultCases[34], nil, true},
+		63: {"test-bucket-list-object", "Asia-maps.png/", "", "/", 1000, 34, nil, true},
 		// Test listing an object with uncommon delimiter
-		{testBuckets[4], "", "", "guidSplunk", 1000, resultCases[35], nil, true},
+		64: {testBuckets[4], "", "", "guidSplunk", 1000, 35, nil, true},
 		// Test listing an object with uncommon delimiter and matching prefix
-		{testBuckets[4], "file1/", "", "guidSplunk", 1000, resultCases[35], nil, true},
+		65: {testBuckets[4], "file1/", "", "guidSplunk", 1000, 35, nil, true},
 		// Test listing at prefix with expected prefix markers
-		{testBuckets[5], "dir/", "", SlashSeparator, 1, resultCases[36], nil, true},
+		66: {testBuckets[5], "dir/", "", SlashSeparator, 1, 36, nil, true},
 	}
 
 	for i, testCase := range testCases {
 		testCase := testCase
-		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i), func(t *testing.T) {
+			t.Log("ListObjectVersions, bucket:", testCase.bucketName, "prefix:", testCase.prefix, "marker:", testCase.marker, "delimiter:", testCase.delimiter, "maxkeys:", testCase.maxKeys)
+
 			result, err := obj.ListObjectVersions(context.Background(), testCase.bucketName,
 				testCase.prefix, testCase.marker, "", testCase.delimiter, int(testCase.maxKeys))
 			if _, ok := err.(NotImplemented); ok {
@@ -1302,17 +1325,24 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 			// necessary. Test passes as expected, but the output values
 			// are verified for correctness here.
 			if err == nil && testCase.shouldPass {
+				var want ListObjectsInfo
+				t.Logf("resultCase index: %d", testCase.resultIdx)
+				if testCase.resultIdx >= 0 {
+					want = resultCases[testCase.resultIdx]
+				}
 				// The length of the expected ListObjectsResult.Objects
 				// should match in both expected result from test cases
 				// and in the output. On failure calling t.Fatalf,
 				// otherwise it may lead to index out of range error in
 				// assertion following this.
-				if len(testCase.result.Objects) != len(result.Objects) {
-					t.Fatalf("%s: Expected number of object in the result to be '%d', but found '%d' objects instead", instanceType, len(testCase.result.Objects), len(result.Objects))
+				if len(want.Objects) != len(result.Objects) {
+					t.Errorf("%s: Expected number of object in the result to be '%d', but found '%d' objects instead", instanceType, len(want.Objects), len(result.Objects))
+					t.Errorf("%s: Want %s (resultCases idx %d),\n got %s", instanceType, objectInfosAsString(want.Objects), testCase.resultIdx, objectInfosAsString(result.Objects))
+					return
 				}
-				for j := 0; j < len(testCase.result.Objects); j++ {
-					if testCase.result.Objects[j].Name != result.Objects[j].Name {
-						t.Errorf("%s: Expected object name to be \"%s\", but found \"%s\" instead", instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
+				for j := 0; j < len(want.Objects); j++ {
+					if want.Objects[j].Name != result.Objects[j].Name {
+						t.Errorf("%s: Expected object name to be %s (resultCases idx %d), but found %s instead", instanceType, want.Objects[j].Name, testCase.resultIdx, result.Objects[j].Name)
 					}
 					// FIXME: we should always check for ETag
 					if result.Objects[j].ETag == "" && !strings.HasSuffix(result.Objects[j].Name, SlashSeparator) {
@@ -1321,28 +1351,28 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 
 				}
 
-				if len(testCase.result.Prefixes) != len(result.Prefixes) {
-					t.Log(testCase, testCase.result.Prefixes, result.Prefixes)
-					t.Fatalf("%s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", instanceType, len(testCase.result.Prefixes), len(result.Prefixes))
+				if len(want.Prefixes) != len(result.Prefixes) {
+					t.Log(testCase, want.Prefixes, result.Prefixes)
+					t.Fatalf("%s: Expected number of prefixes in the result to be '%d', but found '%d' prefixes instead", instanceType, len(want.Prefixes), len(result.Prefixes))
 				}
-				for j := 0; j < len(testCase.result.Prefixes); j++ {
-					if testCase.result.Prefixes[j] != result.Prefixes[j] {
-						t.Errorf("%s: Expected prefix name to be \"%s\", but found \"%s\" instead", instanceType, testCase.result.Prefixes[j], result.Prefixes[j])
+				for j := 0; j < len(want.Prefixes); j++ {
+					if want.Prefixes[j] != result.Prefixes[j] {
+						t.Errorf("%s: Expected prefix name to be \"%s\", but found \"%s\" instead", instanceType, want.Prefixes[j], result.Prefixes[j])
 					}
 				}
 
-				if testCase.result.IsTruncated != result.IsTruncated {
+				if want.IsTruncated != result.IsTruncated {
 					// Allow an extra continuation token.
 					if !result.IsTruncated || len(result.Objects) == 0 {
-						t.Errorf("%s: Expected IsTruncated flag to be %v, but instead found it to be %v", instanceType, testCase.result.IsTruncated, result.IsTruncated)
+						t.Errorf("%s: Expected IsTruncated flag to be %v, but instead found it to be %v", instanceType, want.IsTruncated, result.IsTruncated)
 					}
 				}
 
-				if testCase.result.IsTruncated && result.NextMarker == "" {
+				if want.IsTruncated && result.NextMarker == "" {
 					t.Errorf("%s: Expected NextMarker to contain a string since listing is truncated, but instead found it to be empty", instanceType)
 				}
 
-				if !testCase.result.IsTruncated && result.NextMarker != "" {
+				if !want.IsTruncated && result.NextMarker != "" {
 					if !result.IsTruncated || len(result.Objects) == 0 {
 						t.Errorf("%s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", instanceType, result.NextMarker)
 					}

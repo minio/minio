@@ -156,9 +156,6 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 	var prevPrefix string
 
 	for {
-		if len(objInfos) == maxKeys {
-			break
-		}
 		result, ok := <-walkResultCh
 		if !ok {
 			eof = true
@@ -198,7 +195,7 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 			}
 		}
 
-		if objInfo.Name <= marker {
+		if objInfo.Name < marker {
 			continue
 		}
 
@@ -207,22 +204,26 @@ func listObjectsNonSlash(ctx context.Context, bucket, prefix, marker, delimiter 
 			eof = true
 			break
 		}
+		if maxKeys > 0 && len(objInfos) > maxKeys {
+			break
+		}
 	}
 
 	result := ListObjectsInfo{}
+	if !eof && len(objInfos) > maxKeys {
+		result.IsTruncated = true
+		if len(objInfos) > 0 {
+			result.NextMarker = objInfos[len(objInfos)-1].Name
+			objInfos = objInfos[:len(objInfos)-1]
+		}
+	}
+
 	for _, objInfo := range objInfos {
 		if objInfo.IsDir {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
 		result.Objects = append(result.Objects, objInfo)
-	}
-
-	if !eof {
-		result.IsTruncated = true
-		if len(objInfos) > 0 {
-			result.NextMarker = objInfos[len(objInfos)-1].Name
-		}
 	}
 
 	return result, nil
@@ -325,7 +326,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		recursive = false
 	}
 
-	walkResultCh, endWalkCh := tpool.Release(listParams{bucket, recursive, marker, prefix})
+	walkResultCh, endWalkCh, next := tpool.Release(listParams{bucket, recursive, marker, prefix})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		walkResultCh = startTreeWalk(ctx, bucket, prefix, marker, recursive, listDir, isLeaf, isLeafDir, endWalkCh)
@@ -333,22 +334,28 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 	var objInfos []ObjectInfo
 	var eof bool
-	var nextMarker string
 
 	// List until maxKeys requested.
-	for i := 0; i < maxKeys; {
-		walkResult, ok := <-walkResultCh
-		if !ok {
-			// Closed channel.
-			eof = true
-			break
+	for {
+		if next == nil {
+			walkResult, ok := <-walkResultCh
+			if !ok {
+				// Closed channel.
+				eof = true
+				break
+			}
+			next = &walkResult
+		}
+		if marker != "" && next.entry < marker {
+			next = nil
+			continue
 		}
 
 		var objInfo ObjectInfo
 		var err error
-		if HasSuffix(walkResult.entry, SlashSeparator) {
+		if HasSuffix(next.entry, SlashSeparator) {
 			for _, getObjectInfoDir := range getObjectInfoDirs {
-				objInfo, err = getObjectInfoDir(ctx, bucket, walkResult.entry)
+				objInfo, err = getObjectInfoDir(ctx, bucket, next.entry)
 				if err == nil {
 					break
 				}
@@ -356,13 +363,13 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 					err = nil
 					objInfo = ObjectInfo{
 						Bucket: bucket,
-						Name:   walkResult.entry,
+						Name:   next.entry,
 						IsDir:  true,
 					}
 				}
 			}
 		} else {
-			objInfo, err = getObjInfo(ctx, bucket, walkResult.entry)
+			objInfo, err = getObjInfo(ctx, bucket, next.entry)
 		}
 		if err != nil {
 			// Ignore errFileNotFound as the object might have got
@@ -376,35 +383,35 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 			}
 			return loi, toObjectErr(err, bucket, prefix)
 		}
-		nextMarker = objInfo.Name
+		if len(objInfos) == maxKeys {
+			eof = false
+			break
+		}
 		objInfos = append(objInfos, objInfo)
-		if walkResult.end {
+		if next.end {
 			eof = true
 			break
 		}
-		i++
+		next = nil
+	}
+
+	result := ListObjectsInfo{
+		IsTruncated: !eof,
 	}
 
 	// Save list routine for the next marker if we haven't reached EOF.
-	params := listParams{bucket, recursive, nextMarker, prefix}
 	if !eof {
-		tpool.Set(params, walkResultCh, endWalkCh)
+		params := listParams{bucket, recursive, next.name(), prefix}
+		tpool.Set(params, walkResultCh, endWalkCh, next)
+		result.NextMarker = next.name()
 	}
 
-	result := ListObjectsInfo{}
 	for _, objInfo := range objInfos {
 		if objInfo.IsDir && delimiter == SlashSeparator {
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
 		result.Objects = append(result.Objects, objInfo)
-	}
-
-	if !eof {
-		result.IsTruncated = true
-		if len(objInfos) > 0 {
-			result.NextMarker = objInfos[len(objInfos)-1].Name
-		}
 	}
 
 	// Success.

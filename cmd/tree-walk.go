@@ -29,6 +29,13 @@ type TreeWalkResult struct {
 	end        bool
 }
 
+func (t *TreeWalkResult) name() string {
+	if t == nil {
+		return ""
+	}
+	return t.entry
+}
+
 // Return entries that have prefix prefixEntry.
 // The supplied entries are modified and the returned string is a subslice of entries.
 func filterMatchingPrefix(entries []string, prefixEntry string) []string {
@@ -182,10 +189,14 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 	// example:
 	// If markerDir="four/" Search() returns the index of "four/" in the sorted
 	// entries list so we skip all the entries till "four/"
-	idx := sort.Search(len(entries), func(i int) bool {
-		return entries[i] >= markerDir
-	})
-	entries = entries[idx:]
+	if len(markerDir) > 0 && len(entries) > 0 {
+		idx := sort.Search(len(entries), func(i int) bool {
+			return entries[i] >= markerDir
+		})
+		if idx > 0 {
+			entries = entries[idx:]
+		}
+	}
 	// For an empty list after search through the entries, return right here.
 	if len(entries) == 0 {
 		return false, nil
@@ -210,20 +221,6 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 
 		isDir := !leafDir && !leaf
 
-		if i == 0 && markerDir == entry {
-			if !recursive {
-				// Skip as the marker would already be listed in the previous listing.
-				continue
-			}
-			if recursive && !isDir {
-				// We should not skip for recursive listing and if markerDir is a directory
-				// for ex. if marker is "four/five.txt" markerDir will be "four/" which
-				// should not be skipped, instead it will need to be treeWalk()'ed into.
-
-				// Skip if it is a file though as it would be listed in previous listing.
-				continue
-			}
-		}
 		if recursive && isDir {
 			// If the entry is a directory, we will need recurse into it.
 			markerArg := ""
@@ -250,6 +247,10 @@ func doTreeWalk(ctx context.Context, bucket, prefixDir, entryPrefixMatch, marker
 			}
 		}
 
+		// Return only if at or after marker.
+		if entry < marker {
+			continue
+		}
 		// EOF is set if we are at last entry and the caller indicated we at the end.
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {

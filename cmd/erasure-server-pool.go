@@ -745,7 +745,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
-		Limit:       maxKeys,
+		Limit:       maxKeysPlusOne(maxKeys),
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
@@ -767,8 +767,10 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	}
 	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
 	loi.IsTruncated = err == nil && len(objects) > 0
-	if maxKeys > 0 && len(objects) > maxKeys {
-		objects = objects[:maxKeys]
+
+	// Truncate before converting to versions
+	if maxKeys > 0 && len(objects) > maxKeysPlusOne(maxKeys) {
+		objects = objects[:maxKeysPlusOne(maxKeys)]
 		loi.IsTruncated = true
 	}
 	for _, obj := range objects {
@@ -778,12 +780,26 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 			loi.Objects = append(loi.Objects, obj)
 		}
 	}
-	if loi.IsTruncated {
-		last := objects[len(objects)-1]
-		loi.NextMarker = encodeMarker(last.Name, merged.listID)
+	if maxKeys > 0 && len(loi.Objects) > maxKeys {
+		loi.Objects = loi.Objects[:maxKeys+1]
+		loi.IsTruncated = true
+	}
+
+	loi.IsTruncated = loi.IsTruncated && len(loi.Objects) > 0
+	if loi.IsTruncated && len(loi.Objects) > 0 {
+		last := loi.Objects[len(loi.Objects)-1]
 		loi.NextVersionIDMarker = last.VersionID
+		loi.NextMarker = last.Name
+		loi.Objects = loi.Objects[:len(loi.Objects)-1] // Truncate last
 	}
 	return loi, nil
+}
+
+func maxKeysPlusOne(keys int) int {
+	if keys <= 0 {
+		return keys
+	}
+	return keys + 1
 }
 
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
@@ -793,7 +809,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
-		Limit:       maxKeys,
+		Limit:       maxKeysPlusOne(maxKeys),
 		Marker:      marker,
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
@@ -807,9 +823,12 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	objects := merged.fileInfos(bucket, prefix, delimiter)
 	loi.IsTruncated = err == nil && len(objects) > 0
 	if maxKeys > 0 && len(objects) > maxKeys {
+		// Encode the first we truncate...
+		loi.NextMarker = encodeMarker(objects[maxKeys].Name, merged.listID)
 		objects = objects[:maxKeys]
 		loi.IsTruncated = true
 	}
+
 	for _, obj := range objects {
 		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
 			loi.Prefixes = append(loi.Prefixes, obj.Name)
@@ -817,8 +836,9 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			loi.Objects = append(loi.Objects, obj)
 		}
 	}
-	if loi.IsTruncated {
-		last := objects[len(objects)-1]
+
+	if loi.NextMarker == "" && loi.IsTruncated && len(loi.Objects) > 1 {
+		last := loi.Objects[len(loi.Objects)-1]
 		loi.NextMarker = encodeMarker(last.Name, merged.listID)
 	}
 	return loi, nil

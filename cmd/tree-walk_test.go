@@ -126,7 +126,8 @@ func testTreeWalkMarker(t *testing.T, listDir ListDirFunc, isLeaf IsLeafFunc, is
 	// Check if only 3 entries, namely d/g/h, i/j/k, lmn are received on the channel.
 	expectedCount := 3
 	actualCount := 0
-	for range twResultCh {
+	for e := range twResultCh {
+		t.Log(e.entry)
 		actualCount++
 	}
 	if expectedCount != actualCount {
@@ -227,7 +228,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 		recursive: recursive,
 	}
 	// Add Treewalk to the pool.
-	pool.Set(params, resultCh, endWalkCh)
+	pool.Set(params, resultCh, endWalkCh, nil)
 
 	// Wait for the Treewalk to timeout.
 	<-time.After(3 * time.Second)
@@ -303,13 +304,13 @@ func TestRecursiveTreeWalk(t *testing.T) {
 		expected  map[string]struct{}
 	}{
 		// with no prefix, no marker and no recursive traversal
-		{"", "", false, map[string]struct{}{
+		0: {"", "", false, map[string]struct{}{
 			"d/":  {},
 			"i/":  {},
 			"lmn": {},
 		}},
 		// with no prefix, no marker and recursive traversal
-		{"", "", true, map[string]struct{}{
+		1: {"", "", true, map[string]struct{}{
 			"d/f":   {},
 			"d/g/h": {},
 			"d/e":   {},
@@ -317,51 +318,59 @@ func TestRecursiveTreeWalk(t *testing.T) {
 			"lmn":   {},
 		}},
 		// with no prefix, marker and no recursive traversal
-		{"", "d/e", false, map[string]struct{}{
-			"d/f":  {},
-			"d/g/": {},
-			"i/":   {},
-			"lmn":  {},
+		2: {"", "d/e", false, map[string]struct{}{
+			//"d/f":  {}, // Not recursive, so not returned.
+			//"d/g/": {},
+			"i/":  {},
+			"lmn": {},
 		}},
 		// with no prefix, marker and recursive traversal
-		{"", "d/e", true, map[string]struct{}{
+		3: {"", "d/e", true, map[string]struct{}{
+			"d/e":   {},
 			"d/f":   {},
 			"d/g/h": {},
 			"i/j/k": {},
 			"lmn":   {},
 		}},
 		// with prefix, no marker and no recursive traversal
-		{"d/", "", false, map[string]struct{}{
+		4: {"d/", "", false, map[string]struct{}{
 			"d/e":  {},
 			"d/f":  {},
 			"d/g/": {},
 		}},
 		// with prefix, no marker and no recursive traversal
-		{"d/", "", true, map[string]struct{}{
+		5: {"d/", "", true, map[string]struct{}{
 			"d/e":   {},
 			"d/f":   {},
 			"d/g/h": {},
 		}},
 		// with prefix, marker and no recursive traversal
-		{"d/", "d/e", false, map[string]struct{}{
+		6: {"d/", "d/e", false, map[string]struct{}{
+			"d/e":  {},
 			"d/f":  {},
 			"d/g/": {},
 		}},
 		// with prefix, marker and recursive traversal
-		{"d/", "d/e", true, map[string]struct{}{
+		7: {"d/", "d/e", true, map[string]struct{}{
+			"d/e":   {},
 			"d/f":   {},
 			"d/g/h": {},
 		}},
 	}
 	for i, testCase := range testCases {
 		testCase := testCase
-		t.Run(fmt.Sprintf("Test%d", i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Test%d", i), func(t *testing.T) {
+			t.Logf("Prefix:%q, marker:%s, recursive:%v", testCase.prefix, testCase.marker, testCase.recursive)
 			for entry := range startTreeWalk(context.Background(), volume,
 				testCase.prefix, testCase.marker, testCase.recursive,
 				listDir, isLeaf, isLeafDir, endWalkCh) {
 				if _, found := testCase.expected[entry.entry]; !found {
-					t.Errorf("Expected %s, but couldn't find", entry.entry)
+					t.Errorf("Got unexpected result: %s", entry.entry)
 				}
+				delete(testCase.expected, entry.entry)
+			}
+			if len(testCase.expected) > 0 {
+				t.Errorf("Did not receive expected entries: %v", testCase.expected)
 			}
 		})
 	}

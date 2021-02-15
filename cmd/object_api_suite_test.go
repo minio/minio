@@ -382,7 +382,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check results with Marker.
 	{
 
-		result, err = obj.ListObjects(context.Background(), "bucket", "", "newPrefix", "", 3)
+		result, err = obj.ListObjects(context.Background(), "bucket", "", "newPrefix2", "", 3)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}

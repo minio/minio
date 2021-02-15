@@ -56,7 +56,7 @@ type listPathOptions struct {
 	FilterPrefix string
 
 	// Marker to resume listing.
-	// The response will be the first entry AFTER this object name.
+	// The response will be the first entry at or after this object name.
 	Marker string
 
 	// Limit the number of results.
@@ -157,7 +157,7 @@ func (o *listPathOptions) gatherResults(in <-chan metaCacheEntry) func() (metaCa
 				continue
 			}
 			o.debugln("gather got:", entry.name)
-			if o.Marker != "" && entry.name <= o.Marker {
+			if o.Marker != "" && entry.name < o.Marker {
 				o.debugln("pre marker")
 				continue
 			}
@@ -310,16 +310,6 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 		err = r.forwardTo(o.Marker)
 		if err != nil {
 			return entries, err
-		}
-		next, err := r.peek()
-		if err != nil {
-			return entries, err
-		}
-		if next.name == o.Marker {
-			err := r.skip(1)
-			if err != nil {
-				return entries, err
-			}
 		}
 	}
 	o.debugln("forwarded to ", o.Prefix, "marker:", o.Marker, "sep:", o.Separator)
