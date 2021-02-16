@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package crawler
+package scanner
 
 import (
 	"strconv"
@@ -29,8 +29,10 @@ const (
 	Delay   = "delay"
 	MaxWait = "max_wait"
 
-	EnvDelay   = "MINIO_CRAWLER_DELAY"
-	EnvMaxWait = "MINIO_CRAWLER_MAX_WAIT"
+	EnvDelay         = "MINIO_SCANNER_DELAY"
+	EnvDelayLegacy   = "MINIO_CRAWLER_DELAY"
+	EnvMaxWait       = "MINIO_SCANNER_MAX_WAIT"
+	EnvMaxWaitLegacy = "MINIO_CRAWLER_MAX_WAIT"
 )
 
 // Config represents the heal settings.
@@ -58,7 +60,7 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Delay,
-			Description: `crawler delay multiplier, defaults to '10.0'`,
+			Description: `scanner delay multiplier, defaults to '10.0'`,
 			Optional:    true,
 			Type:        "float",
 		},
@@ -73,14 +75,22 @@ var (
 
 // LookupConfig - lookup config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	if err = config.CheckValidKeys(config.CrawlerSubSys, kvs, DefaultKVS); err != nil {
+	if err = config.CheckValidKeys(config.ScannerSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
-	cfg.Delay, err = strconv.ParseFloat(env.Get(EnvDelay, kvs.Get(Delay)), 64)
+	delay := env.Get(EnvDelayLegacy, "")
+	if delay == "" {
+		delay = env.Get(EnvDelay, kvs.Get(Delay))
+	}
+	cfg.Delay, err = strconv.ParseFloat(delay, 64)
 	if err != nil {
 		return cfg, err
 	}
-	cfg.MaxWait, err = time.ParseDuration(env.Get(EnvMaxWait, kvs.Get(MaxWait)))
+	maxWait := env.Get(EnvMaxWaitLegacy, "")
+	if maxWait == "" {
+		maxWait = env.Get(EnvMaxWait, kvs.Get(MaxWait))
+	}
+	cfg.MaxWait, err = time.ParseDuration(maxWait)
 	if err != nil {
 		return cfg, err
 	}

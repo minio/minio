@@ -260,7 +260,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
-		// this information is used by crawler to skip healing
+		// this information is used by scanner to skip healing
 		// this erasure set while it calculates the usage.
 		if info.Healing || info.Error != "" {
 			healing = true
@@ -378,7 +378,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		}
 	}()
 
-	// Start one crawler per disk
+	// Start one scanner per disk
 	var wg sync.WaitGroup
 	wg.Add(len(disks))
 	for i := range disks {
