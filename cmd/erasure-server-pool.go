@@ -1458,7 +1458,7 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 
 	for _, localDiskIDs := range diskIDs {
 		for _, id := range localDiskIDs {
-			poolIdx, setIdx, err := z.getPoolAndSet(id)
+			poolIdx, setIdx, _, err := z.getPoolAndSet(id)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				continue
