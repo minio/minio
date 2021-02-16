@@ -77,6 +77,39 @@ func wekaIoctl(operation int32, root string, filename string, mode int32) (err e
 
 	return err
 }
+
+func wekaLinkFileFast(fullPath string, file os.File) (err error) {
+	var LINK = int32(0x4C494E4B) // = 'LINK'
+	var STAT = int32(0x53544154) // = 'STAT'
+
+	dirname, filename := pathutil.Split(fullPath)
+
+	if !globalIsFastFS {
+		return fmt.Errorf("the specific ioctl operation is unsupported on the current filesystem")
+	}
+
+	f, err := os.Open(dirname)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var fd = f.Fd()
+	var param makefileParam
+
+	// STAT fills dir inode data in makefile param
+	_, err = ioctl(fd, STAT, uintptr(unsafe.Pointer(&param)))
+
+	// No reason to check error + set globalIsFastFS flag:
+	// no way link is the first op in the sequence, if fast op not supported
+	// we're not supposed to get here.
+	param.Mode = 0
+	copy(param.Filename[:], filename)
+	_, err = ioctl(file.Fd(), LINK, uintptr(unsafe.Pointer(&param)))
+
+	return nil
+}
+
 func wekaMakeInodeFast(root string, filename string, mode int32) (err error) {
 	var MKND = int32(0x4D4B4E44) // = 'MKND'
 	err = wekaIoctl(MKND, root, filename, mode)

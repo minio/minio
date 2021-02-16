@@ -1242,11 +1242,10 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
 
 	if globalFSOTmpfile {
-		filename := fmt.Sprintf("/proc/self/fd/%d", file.Fd())
 		if err = reliableMkdirAll(path.Dir(fsNSObjPath), 0777); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		if err = fsLinkat(ctx, AT_FDCWD, filename, AT_FDCWD, fsNSObjPath, AT_SYMLINK_FOLLOW); err != nil {
+		if err = wekaLinkFileFast(fsNSObjPath, file); err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	} else {
