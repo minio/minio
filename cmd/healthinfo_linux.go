@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"syscall"
 
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/smart"
@@ -38,7 +37,10 @@ func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 		addr = GetLocalPeer(globalEndpoints)
 	}
 
-	info, err := host.InfoWithContext(ctx)
+	srvrOsInfo := madmin.ServerOsInfo{Addr: addr}
+	var err error
+
+	srvrOsInfo.Info, err = host.InfoWithContext(ctx)
 	if err != nil {
 		return madmin.ServerOsInfo{
 			Addr:  addr,
@@ -46,23 +48,18 @@ func getLocalOsInfo(ctx context.Context, r *http.Request) madmin.ServerOsInfo {
 		}
 	}
 
-	sensors, err := host.SensorsTemperaturesWithContext(ctx)
+	srvrOsInfo.Sensors, err = host.SensorsTemperaturesWithContext(ctx)
 	if err != nil {
-		return madmin.ServerOsInfo{
-			Addr:  addr,
-			Error: fmt.Sprintf("sensors-temp: %v", err),
+		// Set error only when it's not of WARNINGS type
+		if _, isWarning := err.(*host.Warnings); !isWarning {
+			srvrOsInfo.Error = fmt.Sprintf("sensors-temp: %v", err)
 		}
 	}
 
 	// ignore user err, as it cannot be obtained reliably inside containers
-	users, _ := host.UsersWithContext(ctx)
+	srvrOsInfo.Users, _ = host.UsersWithContext(ctx)
 
-	return madmin.ServerOsInfo{
-		Addr:    addr,
-		Info:    info,
-		Sensors: sensors,
-		Users:   users,
-	}
+	return srvrOsInfo
 }
 
 func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskHwInfo {
@@ -99,14 +96,7 @@ func getLocalDiskHwInfo(ctx context.Context, r *http.Request) madmin.ServerDiskH
 			paths = append(paths, path)
 			smartInfo, err := smart.GetInfo(device)
 			if err != nil {
-				if syscall.EACCES == err {
-					smartInfo.Error = fmt.Sprintf("smart: %v", err)
-				} else {
-					return madmin.ServerDiskHwInfo{
-						Addr:  addr,
-						Error: fmt.Sprintf("smart: %v", err),
-					}
-				}
+				smartInfo.Error = fmt.Sprintf("smart: %v", err)
 			}
 			partition := madmin.PartitionStat{
 				Device:     part.Device,

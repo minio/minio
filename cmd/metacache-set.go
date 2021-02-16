@@ -675,7 +675,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 				r, err := hash.NewReader(bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)), false)
 				logger.LogIf(ctx, err)
 				custom := b.headerKV()
-				_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r, nil, nil), ObjectOptions{
+				_, err = er.putObject(ctx, minioMetaBucket, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
 					UserDefined:    custom,
 					NoLock:         true, // No need to hold namespace lock, each prefix caches uniquely.
 					ParentIsObject: nil,

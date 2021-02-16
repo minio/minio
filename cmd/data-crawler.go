@@ -134,7 +134,7 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 					continue
 				}
 
-				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r, nil, nil), ObjectOptions{})
+				_, err = objAPI.PutObject(ctx, dataUsageBucket, dataUsageBloomName, NewPutObjReader(r), ObjectOptions{})
 				if !isErrBucketNotFound(err) {
 					logger.LogIf(ctx, err)
 				}

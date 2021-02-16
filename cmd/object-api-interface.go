@@ -155,6 +155,7 @@ type ObjectLayer interface {
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult
+	ReadHealth(ctx context.Context) bool
 
 	// ObjectTagging operations
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)

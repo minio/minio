@@ -245,16 +245,11 @@ func transitionSCInUse(ctx context.Context, lfc *lifecycle.Lifecycle, bucket, ar
 }
 
 // set PutObjectOptions for PUT operation to transition data to target cluster
-func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
+func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 
-	tag, err := tags.ParseObjectTags(objInfo.UserTags)
-	if err != nil {
-		return
-	}
 	putOpts = miniogo.PutObjectOptions{
 		UserMetadata:    meta,
-		UserTags:        tag.ToMap(),
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
 		StorageClass:    objInfo.StorageClass,
@@ -264,22 +259,40 @@ func putTransitionOpts(objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions) {
 			SourceETag:      objInfo.ETag,
 		},
 	}
-	if mode, ok := objInfo.UserDefined[xhttp.AmzObjectLockMode]; ok {
+
+	if objInfo.UserTags != "" {
+		tag, _ := tags.ParseObjectTags(objInfo.UserTags)
+		if tag != nil {
+			putOpts.UserTags = tag.ToMap()
+		}
+	}
+
+	lkMap := caseInsensitiveMap(objInfo.UserDefined)
+	if lang, ok := lkMap.Lookup(xhttp.ContentLanguage); ok {
+		putOpts.ContentLanguage = lang
+	}
+	if disp, ok := lkMap.Lookup(xhttp.ContentDisposition); ok {
+		putOpts.ContentDisposition = disp
+	}
+	if cc, ok := lkMap.Lookup(xhttp.CacheControl); ok {
+		putOpts.CacheControl = cc
+	}
+	if mode, ok := lkMap.Lookup(xhttp.AmzObjectLockMode); ok {
 		rmode := miniogo.RetentionMode(mode)
 		putOpts.Mode = rmode
 	}
-	if retainDateStr, ok := objInfo.UserDefined[xhttp.AmzObjectLockRetainUntilDate]; ok {
+	if retainDateStr, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
 		rdate, err := time.Parse(time.RFC3339, retainDateStr)
 		if err != nil {
-			return
+			return putOpts, err
 		}
 		putOpts.RetainUntilDate = rdate
 	}
-	if lhold, ok := objInfo.UserDefined[xhttp.AmzObjectLockLegalHold]; ok {
+	if lhold, ok := lkMap.Lookup(xhttp.AmzObjectLockLegalHold); ok {
 		putOpts.LegalHold = miniogo.LegalHoldStatus(lhold)
 	}
 
-	return
+	return putOpts, nil
 }
 
 // handle deletes of transitioned objects or object versions when one of the following is true:
@@ -380,7 +393,12 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 		return nil
 	}
 
-	putOpts := putTransitionOpts(oi)
+	putOpts, err := putTransitionOpts(oi)
+	if err != nil {
+		gr.Close()
+		return err
+
+	}
 	if _, err = tgt.PutObject(ctx, arn.Bucket, oi.Name, gr, oi.Size, putOpts); err != nil {
 		gr.Close()
 		return err
@@ -405,6 +423,7 @@ func transitionObject(ctx context.Context, objectAPI ObjectLayer, objInfo Object
 		Object:     objInfo,
 		Host:       "Internal: [ILM-Transition]",
 	})
+
 	return err
 }
 
@@ -677,7 +696,7 @@ func restoreTransitionedObject(ctx context.Context, bucket, object string, objAP
 	if err != nil {
 		return err
 	}
-	pReader := NewPutObjReader(hashReader, nil, nil)
+	pReader := NewPutObjReader(hashReader)
 	opts := putRestoreOpts(bucket, object, rreq, objInfo)
 	opts.UserDefined[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t, expiry-date=%s", false, restoreExpiry.Format(http.TimeFormat))
 	if _, err := objAPI.PutObject(ctx, bucket, object, pReader, opts); err != nil {

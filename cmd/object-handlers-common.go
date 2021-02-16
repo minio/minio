@@ -26,8 +26,6 @@ import (
 
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
-	"github.com/minio/minio/pkg/event"
-	"github.com/minio/minio/pkg/handlers"
 )
 
 var (
@@ -261,7 +259,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 		}
 	}
 
-	if objInfo.Bucket != "" {
+	if objInfo.Bucket != "" && objInfo.Name != "" {
 		if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil && !delete {
 			ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
 				Name:         objInfo.Name,
@@ -278,33 +276,4 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 			}
 		}
 	}
-}
-
-// deleteObject is a convenient wrapper to delete an object, this
-// is a common function to be called from object handlers and
-// web handlers.
-func deleteObject(ctx context.Context, obj ObjectLayer, cache CacheObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	deleteObject := obj.DeleteObject
-	if cache != nil {
-		deleteObject = cache.DeleteObject
-	}
-	// Proceed to delete the object.
-	objInfo, err = deleteObject(ctx, bucket, object, opts)
-	if objInfo.Name != "" {
-		eventName := event.ObjectRemovedDelete
-		if objInfo.DeleteMarker {
-			eventName = event.ObjectRemovedDeleteMarkerCreated
-		}
-		// Notify object deleted marker event.
-		sendEvent(eventArgs{
-			EventName:    eventName,
-			BucketName:   bucket,
-			Object:       objInfo,
-			ReqParams:    extractReqParams(r),
-			RespElements: extractRespElements(w),
-			UserAgent:    r.UserAgent(),
-			Host:         handlers.GetSourceIP(r),
-		})
-	}
-	return objInfo, err
 }

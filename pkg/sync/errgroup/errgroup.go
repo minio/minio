@@ -27,10 +27,10 @@ import (
 //
 // A zero Group can be used if errors should not be tracked.
 type Group struct {
+	firstErr  int64 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	wg        sync.WaitGroup
 	bucket    chan struct{}
 	errs      []error
-	firstErr  int64
 	cancel    context.CancelFunc
 	ctxCancel <-chan struct{} // nil if no context.
 	ctxErr    func() error

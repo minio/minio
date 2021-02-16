@@ -411,19 +411,40 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	gr, err := getObjectNInfo(ctx, bucket, object, rs, r.Header, readLock, opts)
 	if err != nil {
-		if isErrPreconditionFailed(err) {
-			return
-		}
-		if globalBucketVersioningSys.Enabled(bucket) && gr != nil {
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+		var (
+			reader *GetObjectReader
+			proxy  bool
+		)
+		if isProxyable(ctx, bucket) {
+			// proxy to replication target if active-active replication is in place.
+			reader, proxy = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts)
+			if reader != nil && proxy {
+				gr = reader
 			}
 		}
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
-		return
+		if reader == nil || !proxy {
+			if isErrPreconditionFailed(err) {
+				return
+			}
+			if globalBucketVersioningSys.Enabled(bucket) && gr != nil {
+				if !gr.ObjInfo.VersionPurgeStatus.Empty() {
+					// Shows the replication status of a permanent delete of a version
+					w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(gr.ObjInfo.VersionPurgeStatus)}
+				}
+				if !gr.ObjInfo.ReplicationStatus.Empty() && gr.ObjInfo.DeleteMarker {
+					w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(gr.ObjInfo.ReplicationStatus)}
+				}
+
+				// Versioning enabled quite possibly object is deleted might be delete-marker
+				// if present set the headers, no idea why AWS S3 sets these headers.
+				if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
+					w.Header()[xhttp.AmzVersionID] = []string{gr.ObjInfo.VersionID}
+					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(gr.ObjInfo.DeleteMarker)}
+				}
+			}
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 	defer gr.Close()
 
@@ -577,23 +598,37 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
-		if globalBucketVersioningSys.Enabled(bucket) {
-			if !objInfo.VersionPurgeStatus.Empty() {
-				// Shows the replication status of a permanent delete of a version
-				w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
-			}
-			if !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker {
-				w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
-			}
-			// Versioning enabled quite possibly object is deleted might be delete-marker
-			// if present set the headers, no idea why AWS S3 sets these headers.
-			if objInfo.VersionID != "" && objInfo.DeleteMarker {
-				w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
-				w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+		var (
+			proxy bool
+			perr  error
+			oi    ObjectInfo
+		)
+		// proxy HEAD to replication target if active-active replication configured on bucket
+		if isProxyable(ctx, bucket) {
+			oi, proxy, perr = proxyHeadToReplicationTarget(ctx, bucket, object, opts)
+			if proxy && perr == nil {
+				objInfo = oi
 			}
 		}
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-		return
+		if !proxy || perr != nil {
+			if globalBucketVersioningSys.Enabled(bucket) {
+				if !objInfo.VersionPurgeStatus.Empty() {
+					// Shows the replication status of a permanent delete of a version
+					w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
+				}
+				if !objInfo.ReplicationStatus.Empty() && objInfo.DeleteMarker {
+					w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(objInfo.ReplicationStatus)}
+				}
+				// Versioning enabled quite possibly object is deleted might be delete-marker
+				// if present set the headers, no idea why AWS S3 sets these headers.
+				if objInfo.VersionID != "" && objInfo.DeleteMarker {
+					w.Header()[xhttp.AmzVersionID] = []string{objInfo.VersionID}
+					w.Header()[xhttp.AmzDeleteMarker] = []string{strconv.FormatBool(objInfo.DeleteMarker)}
+				}
+			}
+			writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+			return
+		}
 	}
 
 	// Automatically remove the object/version is an expiry lifecycle rule can be applied
@@ -1032,8 +1067,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rawReader := srcInfo.Reader
-	pReader := NewPutObjReader(srcInfo.Reader, nil, nil)
+	pReader := NewPutObjReader(srcInfo.Reader)
 
 	// Check if either the source is encrypted or the destination will be encrypted.
 	_, objectEncryption := crypto.IsRequested(r.Header)
@@ -1041,7 +1075,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	var encMetadata = make(map[string]string)
 	if objectAPI.IsEncryptionSupported() {
 		// Encryption parameters not applicable for this object.
-		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); ok && crypto.SSECopy.IsRequested(r.Header) {
+		if _, ok := crypto.IsEncrypted(srcInfo.UserDefined); !ok && crypto.SSECopy.IsRequested(r.Header) {
 			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParameters), r.URL, guessIsBrowserReq(r))
 			return
 		}
@@ -1145,7 +1179,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			if isTargetEncrypted {
-				pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objEncKey)
+				pReader, err = pReader.WithEncryption(srcInfo.Reader, &objEncKey)
+				if err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+					return
+				}
 			}
 		}
 	}
@@ -1495,7 +1533,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	rawReader := hashReader
-	pReader := NewPutObjReader(rawReader, nil, nil)
+	pReader := NewPutObjReader(rawReader)
 
 	// get gateway encryption options
 	var opts ObjectOptions
@@ -1564,7 +1602,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 	}
 
@@ -2002,7 +2044,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	rawReader := srcInfo.Reader
-	pReader := NewPutObjReader(rawReader, nil, nil)
+	pReader := NewPutObjReader(rawReader)
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
@@ -2048,7 +2090,11 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		pReader = NewPutObjReader(rawReader, srcInfo.Reader, &objectEncryptionKey)
+		pReader, err = pReader.WithEncryption(srcInfo.Reader, &objectEncryptionKey)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	srcInfo.PutObjReader = pReader
@@ -2242,7 +2288,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 	rawReader := hashReader
-	pReader := NewPutObjReader(rawReader, nil, nil)
+	pReader := NewPutObjReader(rawReader)
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	var objectEncryptionKey crypto.ObjectKey
@@ -2298,7 +2344,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
+		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	putObjectPart := objectAPI.PutObjectPart
@@ -2798,8 +2848,13 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
+	deleteObject := objectAPI.DeleteObject
+	if api.CacheAPI() != nil {
+		deleteObject = api.CacheAPI().DeleteObject
+	}
+
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	objInfo, err := deleteObject(ctx, objectAPI, api.CacheAPI(), bucket, object, w, r, opts)
+	objInfo, err := deleteObject(ctx, bucket, object, opts)
 	if err != nil {
 		switch err.(type) {
 		case BucketNotFound:
@@ -2807,8 +2862,31 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
-		// Ignore delete object errors while replying to client, since we are suppposed to reply only 204.
 	}
+
+	if objInfo.Name == "" {
+		writeSuccessNoContent(w)
+		return
+	}
+
+	setPutObjHeaders(w, objInfo, true)
+	writeSuccessNoContent(w)
+
+	eventName := event.ObjectRemovedDelete
+	if objInfo.DeleteMarker {
+		eventName = event.ObjectRemovedDeleteMarkerCreated
+	}
+
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:    eventName,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
 
 	if replicateDel {
 		dmVersionID := ""
@@ -2834,7 +2912,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 
 	if goi.TransitionStatus == lifecycle.TransitionComplete { // clean up transitioned tier
-		deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, object, lifecycle.ObjectOpts{
+		deleteTransitionedObject(ctx, objectAPI, bucket, object, lifecycle.ObjectOpts{
 			Name:             object,
 			UserTags:         goi.UserTags,
 			VersionID:        goi.VersionID,
@@ -2843,9 +2921,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			IsLatest:         goi.IsLatest,
 		}, false, true)
 	}
-
-	setPutObjHeaders(w, objInfo, true)
-	writeSuccessNoContent(w)
 }
 
 // PutObjectLegalHoldHandler - set legal hold configuration to object,

@@ -19,7 +19,9 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -27,6 +29,24 @@ import (
 
 	"github.com/minio/minio/cmd/logger"
 )
+
+func renameAllBucketMetacache(epPath string) error {
+	// Rename all previous `.minio.sys/buckets/<bucketname>/.metacache` to
+	// to `.minio.sys/tmp/` for deletion.
+	return readDirFilterFn(pathJoin(epPath, minioMetaBucket, bucketMetaPrefix), func(name string, typ os.FileMode) error {
+		if typ == os.ModeDir {
+			tmpMetacacheOld := pathJoin(epPath, minioMetaTmpBucket+"-old", mustGetUUID())
+			if err := renameAll(pathJoin(epPath, minioMetaBucket, metacachePrefixForID(name, slashSeparator)),
+				tmpMetacacheOld); err != nil && err != errFileNotFound {
+				return fmt.Errorf("unable to rename (%s -> %s) %w",
+					pathJoin(epPath, minioMetaBucket+metacachePrefixForID(minioMetaBucket, slashSeparator)),
+					tmpMetacacheOld,
+					osErrToFileErr(err))
+			}
+		}
+		return nil
+	})
+}
 
 // listPath will return the requested entries.
 // If no more entries are in the listing io.EOF is returned,

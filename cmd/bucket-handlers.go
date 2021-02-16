@@ -126,7 +126,10 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 
 	// Add/update buckets that are not registered with the DNS
 	bucketsToBeUpdatedSlice := bucketsToBeUpdated.ToSlice()
-	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice))
+	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice)).WithConcurrency(50)
+	ctx, cancel := g.WithCancelOnError(GlobalContext)
+	defer cancel()
+
 	for index := range bucketsToBeUpdatedSlice {
 		index := index
 		g.Go(func() error {
@@ -134,14 +137,13 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 		}, index)
 	}
 
-	for _, err := range g.Wait() {
-		if err != nil {
-			logger.LogIf(GlobalContext, err)
-		}
+	if err := g.WaitErr(); err != nil {
+		logger.LogIf(ctx, err)
+		return
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
-		logger.LogIf(GlobalContext, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket.", bucket, globalDomainIPs.ToSlice()))
+		logger.LogIf(ctx, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket", bucket, globalDomainIPs.ToSlice()))
 	}
 
 	var wg sync.WaitGroup
@@ -425,6 +427,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		deleteObjectsFn = api.CacheAPI().DeleteObjects
 	}
 
+	// Return Malformed XML as S3 spec if the list of objects is empty
+	if len(deleteObjects.Objects) == 0 {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedXML), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
 	var objectsToDelete = map[ObjectToDelete]int{}
 	getObjectInfoFn := objectAPI.GetObjectInfo
 	if api.CacheAPI() != nil {
@@ -545,7 +553,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		dindex := objectsToDelete[ObjectToDelete{
 			ObjectName:                    dObjects[i].ObjectName,
 			VersionID:                     dObjects[i].VersionID,
-			DeleteMarkerVersionID:         dObjects[i].DeleteMarkerVersionID,
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus,
 			DeleteMarkerReplicationStatus: dObjects[i].DeleteMarkerReplicationStatus,
 			PurgeTransitioned:             dObjects[i].PurgeTransitioned,
@@ -581,6 +588,10 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 	for _, dobj := range deletedObjects {
+		if dobj.ObjectName == "" {
+			continue
+		}
+
 		if replicateDeletes {
 			if dobj.DeleteMarkerReplicationStatus == string(replication.Pending) || dobj.VersionPurgeStatus == Pending {
 				dv := DeletedObjectVersionInfo{
@@ -592,18 +603,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 
 		if hasLifecycleConfig && dobj.PurgeTransitioned == lifecycle.TransitionComplete { // clean up transitioned tier
-			deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, dobj.ObjectName, lifecycle.ObjectOpts{
+			deleteTransitionedObject(ctx, objectAPI, bucket, dobj.ObjectName, lifecycle.ObjectOpts{
 				Name:         dobj.ObjectName,
 				VersionID:    dobj.VersionID,
 				DeleteMarker: dobj.DeleteMarker,
 			}, false, true)
 		}
 
-	}
-	// Notify deleted event for objects.
-	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete
-
 		objInfo := ObjectInfo{
 			Name:      dobj.ObjectName,
 			VersionID: dobj.VersionID,
@@ -917,7 +924,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 	rawReader := hashReader
-	pReader := NewPutObjReader(rawReader, nil, nil)
+	pReader := NewPutObjReader(rawReader)
 	var objectEncryptionKey crypto.ObjectKey
 
 	// Check if bucket encryption is enabled
@@ -962,7 +969,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 	}
 

@@ -23,8 +23,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path"
+	"sort"
 
 	"github.com/gorilla/mux"
+	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
@@ -688,17 +690,38 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	buckets, err := objectAPI.ListBuckets(ctx)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
 	// Load the latest calculated data usage
 	dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 	if err != nil {
 		// log the error, continue with the accounting response
 		logger.LogIf(ctx, err)
+	}
+
+	// If etcd, dns federation configured list buckets from etcd.
+	var buckets []BucketInfo
+	if globalDNSConfig != nil && globalBucketFederation {
+		dnsBuckets, err := globalDNSConfig.List()
+		if err != nil && !IsErrIgnored(err,
+			dns.ErrNoEntriesFound,
+			dns.ErrDomainMissing) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		for _, dnsRecords := range dnsBuckets {
+			buckets = append(buckets, BucketInfo{
+				Name:    dnsRecords[0].Key,
+				Created: dnsRecords[0].CreationDate,
+			})
+		}
+		sort.Slice(buckets, func(i, j int) bool {
+			return buckets[i].Name < buckets[j].Name
+		})
+	} else {
+		buckets, err = objectAPI.ListBuckets(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	accountName := cred.AccessKey

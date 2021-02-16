@@ -761,8 +761,39 @@ next:
 				}
 			}
 
-			oi, err := deleteObject(ctx, objectAPI, web.CacheAPI(), args.BucketName, objectName, nil, r, opts)
-			if replicateDel && err == nil {
+			deleteObject := objectAPI.DeleteObject
+			if web.CacheAPI() != nil {
+				deleteObject = web.CacheAPI().DeleteObject
+			}
+
+			oi, err := deleteObject(ctx, args.BucketName, objectName, opts)
+			if err != nil {
+				switch err.(type) {
+				case BucketNotFound:
+					return toJSONError(ctx, err)
+				}
+			}
+			if oi.Name == "" {
+				logger.LogIf(ctx, err)
+				continue
+			}
+
+			eventName := event.ObjectRemovedDelete
+			if oi.DeleteMarker {
+				eventName = event.ObjectRemovedDeleteMarkerCreated
+			}
+
+			// Notify object deleted event.
+			sendEvent(eventArgs{
+				EventName:  eventName,
+				BucketName: args.BucketName,
+				Object:     oi,
+				ReqParams:  extractReqParams(r),
+				UserAgent:  r.UserAgent(),
+				Host:       handlers.GetSourceIP(r),
+			})
+
+			if replicateDel {
 				dobj := DeletedObjectVersionInfo{
 					DeletedObject: DeletedObject{
 						ObjectName:                    objectName,
@@ -776,13 +807,14 @@ next:
 				}
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
-			if goi.TransitionStatus == lifecycle.TransitionComplete && err == nil && goi.VersionID == "" {
-				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
-					Name:         objectName,
-					UserTags:     goi.UserTags,
-					VersionID:    goi.VersionID,
-					DeleteMarker: goi.DeleteMarker,
-					IsLatest:     goi.IsLatest,
+			if goi.TransitionStatus == lifecycle.TransitionComplete {
+				deleteTransitionedObject(ctx, objectAPI, args.BucketName, objectName, lifecycle.ObjectOpts{
+					Name:             objectName,
+					UserTags:         goi.UserTags,
+					VersionID:        goi.VersionID,
+					DeleteMarker:     goi.DeleteMarker,
+					TransitionStatus: goi.TransitionStatus,
+					IsLatest:         goi.IsLatest,
 				}, false, true)
 			}
 
@@ -1234,7 +1266,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if mustReplicate {
 		metadata[xhttp.AmzBucketReplicationStatus] = string(replication.Pending)
 	}
-	pReader = NewPutObjReader(hashReader, nil, nil)
+	pReader = NewPutObjReader(hashReader)
 	// get gateway encryption options
 	opts, err := putOpts(ctx, r, bucket, object, metadata)
 	if err != nil {
@@ -1244,7 +1276,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if objectAPI.IsEncryptionSupported() {
 		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
-			rawReader := hashReader
 			var objectEncryptionKey crypto.ObjectKey
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
@@ -1258,7 +1289,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
-			pReader = NewPutObjReader(rawReader, hashReader, &objectEncryptionKey)
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+				return
+			}
 		}
 	}
 
@@ -1279,8 +1314,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if retentionMode != "" {
-		opts.UserDefined[xhttp.AmzObjectLockMode] = string(retentionMode)
-		opts.UserDefined[xhttp.AmzObjectLockRetainUntilDate] = retentionDate.UTC().Format(iso8601TimeFormat)
+		opts.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
+		opts.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
 	}
 
 	objInfo, err := putObject(GlobalContext, bucket, object, pReader, opts)

@@ -69,12 +69,6 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         GroupNameAttribute,
-			Description: `search attribute for group name e.g. "cn"`,
-			Optional:    true,
-			Type:        "string",
-		},
-		config.HelpKV{
 			Key:         GroupSearchBaseDN,
 			Description: `";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"`,
 			Optional:    true,

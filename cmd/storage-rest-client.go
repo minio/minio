@@ -244,27 +244,18 @@ func (client *storageRESTClient) SetDiskID(id string) {
 
 // DiskInfo - fetch disk information for a remote disk.
 func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, err error) {
-	client.diskInfoCache.Once.Do(func() {
-		client.diskInfoCache.TTL = time.Second
-		client.diskInfoCache.Update = func() (interface{}, error) {
-			var info DiskInfo
-			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
-			if err != nil {
-				return info, err
-			}
-			defer http.DrainBody(respBody)
-			if err = msgp.Decode(respBody, &info); err != nil {
-				return info, err
-			}
-			if info.Error != "" {
-				return info, toStorageErr(errors.New(info.Error))
-			}
-			return info, nil
-		}
-	})
-	v, err := client.diskInfoCache.Get()
-	info = v.(DiskInfo)
-	return info, err
+	respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
+	if err != nil {
+		return info, err
+	}
+	defer http.DrainBody(respBody)
+	if err = msgp.Decode(respBody, &info); err != nil {
+		return info, err
+	}
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
+	}
+	return info, nil
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.

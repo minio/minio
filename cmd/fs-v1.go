@@ -1623,3 +1623,9 @@ func (fs *FSObjects) Health(ctx context.Context, opts HealthOptions) HealthResul
 		Healthy: newObjectLayerFn() != nil,
 	}
 }
+
+// ReadHealth returns "read" health of the object layer
+func (fs *FSObjects) ReadHealth(ctx context.Context) bool {
+	_, err := os.Stat(fs.fsPath)
+	return err == nil
+}

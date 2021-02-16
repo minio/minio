@@ -44,9 +44,6 @@ func DialContextWithDNSCache(cache *DNSCache, baseDialCtx DialContext) DialConte
 		baseDialCtx = (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
-			// If zero, Go defaults to '300ms', we will default to 100ms instead.
-			// https://tools.ietf.org/html/rfc6555
-			FallbackDelay: 100 * time.Millisecond,
 		}).DialContext
 	}
 	return func(ctx context.Context, network, host string) (net.Conn, error) {
