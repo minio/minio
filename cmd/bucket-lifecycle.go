@@ -696,7 +696,7 @@ func restoreTransitionedObject(ctx context.Context, bucket, object string, objAP
 	if err != nil {
 		return err
 	}
-	pReader := NewPutObjReader(hashReader, nil, nil)
+	pReader := NewPutObjReader(hashReader)
 	opts := putRestoreOpts(bucket, object, rreq, objInfo)
 	opts.UserDefined[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t, expiry-date=%s", false, restoreExpiry.Format(http.TimeFormat))
 	if _, err := objAPI.PutObject(ctx, bucket, object, pReader, opts); err != nil {

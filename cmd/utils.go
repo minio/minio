@@ -474,21 +474,26 @@ func newInternodeHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration)
 		DisableCompression: true,
 	}
 
-	if tlsConfig != nil {
-		trhttp2, _ := http2.ConfigureTransports(tr)
-		if trhttp2 != nil {
-			// ReadIdleTimeout is the timeout after which a health check using ping
-			// frame will be carried out if no frame is received on the
-			// connection. 5 minutes is sufficient time for any idle connection.
-			trhttp2.ReadIdleTimeout = 5 * time.Minute
-			// PingTimeout is the timeout after which the connection will be closed
-			// if a response to Ping is not received.
-			trhttp2.PingTimeout = dialTimeout
-			// DisableCompression, if true, prevents the Transport from
-			// requesting compression with an "Accept-Encoding: gzip"
-			trhttp2.DisableCompression = true
-		}
-	}
+	// https://github.com/golang/go/issues/23559
+	// https://github.com/golang/go/issues/42534
+	// https://github.com/golang/go/issues/43989
+	// https://github.com/golang/go/issues/33425
+	// https://github.com/golang/go/issues/29246
+	// if tlsConfig != nil {
+	// 	trhttp2, _ := http2.ConfigureTransports(tr)
+	// 	if trhttp2 != nil {
+	// 		// ReadIdleTimeout is the timeout after which a health check using ping
+	// 		// frame will be carried out if no frame is received on the
+	// 		// connection. 5 minutes is sufficient time for any idle connection.
+	// 		trhttp2.ReadIdleTimeout = 5 * time.Minute
+	// 		// PingTimeout is the timeout after which the connection will be closed
+	// 		// if a response to Ping is not received.
+	// 		trhttp2.PingTimeout = dialTimeout
+	// 		// DisableCompression, if true, prevents the Transport from
+	// 		// requesting compression with an "Accept-Encoding: gzip"
+	// 		trhttp2.DisableCompression = true
+	// 	}
+	// }
 
 	return func() http.RoundTripper {
 		return tr
@@ -519,6 +524,45 @@ func newCustomHTTPProxyTransport(tlsConfig *tls.Config, dialTimeout time.Duratio
 	}
 }
 
+func newCustomHTTPTransportWithHTTP2(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
+	// For more details about various values used here refer
+	// https://golang.org/pkg/net/http/#Transport documentation
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           xhttp.DialContextWithDNSCache(globalDNSCache, xhttp.NewInternodeDialContext(dialTimeout)),
+		MaxIdleConnsPerHost:   1024,
+		IdleConnTimeout:       15 * time.Second,
+		ResponseHeaderTimeout: 1 * time.Minute,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 10 * time.Second,
+		TLSClientConfig:       tlsConfig,
+		// Go net/http automatically unzip if content-type is
+		// gzip disable this feature, as we are always interested
+		// in raw stream.
+		DisableCompression: true,
+	}
+
+	if tlsConfig != nil {
+		trhttp2, _ := http2.ConfigureTransports(tr)
+		if trhttp2 != nil {
+			// ReadIdleTimeout is the timeout after which a health check using ping
+			// frame will be carried out if no frame is received on the
+			// connection. 5 minutes is sufficient time for any idle connection.
+			trhttp2.ReadIdleTimeout = 5 * time.Minute
+			// PingTimeout is the timeout after which the connection will be closed
+			// if a response to Ping is not received.
+			trhttp2.PingTimeout = dialTimeout
+			// DisableCompression, if true, prevents the Transport from
+			// requesting compression with an "Accept-Encoding: gzip"
+			trhttp2.DisableCompression = true
+		}
+	}
+
+	return func() *http.Transport {
+		return tr
+	}
+}
+
 func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) func() *http.Transport {
 	// For more details about various values used here refer
 	// https://golang.org/pkg/net/http/#Transport documentation
@@ -537,24 +581,26 @@ func newCustomHTTPTransport(tlsConfig *tls.Config, dialTimeout time.Duration) fu
 		DisableCompression: true,
 	}
 
-	if tlsConfig != nil {
-		trhttp2, _ := http2.ConfigureTransports(tr)
-		if trhttp2 != nil {
-			// ReadIdleTimeout is the timeout after which a health check using ping
-			// frame will be carried out if no frame is received on the
-			// connection. 5 minutes is above maximum sane scrape interval,
-			// we should not have this small overhead on the scrape connections.
-			// For other cases, this is used to validate that the connection can
-			// still be used.
-			trhttp2.ReadIdleTimeout = 5 * time.Minute
-			// PingTimeout is the timeout after which the connection will be closed
-			// if a response to Ping is not received.
-			trhttp2.PingTimeout = dialTimeout
-			// DisableCompression, if true, prevents the Transport from
-			// requesting compression with an "Accept-Encoding: gzip"
-			trhttp2.DisableCompression = true
-		}
-	}
+	// https://github.com/golang/go/issues/23559
+	// https://github.com/golang/go/issues/42534
+	// https://github.com/golang/go/issues/43989
+	// https://github.com/golang/go/issues/33425
+	// https://github.com/golang/go/issues/29246
+	// if tlsConfig != nil {
+	// 	trhttp2, _ := http2.ConfigureTransports(tr)
+	// 	if trhttp2 != nil {
+	// 		// ReadIdleTimeout is the timeout after which a health check using ping
+	// 		// frame will be carried out if no frame is received on the
+	// 		// connection. 5 minutes is sufficient time for any idle connection.
+	// 		trhttp2.ReadIdleTimeout = 5 * time.Minute
+	// 		// PingTimeout is the timeout after which the connection will be closed
+	// 		// if a response to Ping is not received.
+	// 		trhttp2.PingTimeout = dialTimeout
+	// 		// DisableCompression, if true, prevents the Transport from
+	// 		// requesting compression with an "Accept-Encoding: gzip"
+	// 		trhttp2.DisableCompression = true
+	// 	}
+	// }
 
 	return func() *http.Transport {
 		return tr
@@ -761,38 +807,45 @@ type timedValue struct {
 	// Managed values.
 	value      interface{}
 	lastUpdate time.Time
-	mu         sync.Mutex
+	mu         sync.RWMutex
 }
 
 // Get will return a cached value or fetch a new one.
 // If the Update function returns an error the value is forwarded as is and not cached.
 func (t *timedValue) Get() (interface{}, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.TTL <= 0 {
-		t.TTL = time.Second
+	v := t.get()
+	if v != nil {
+		return v, nil
 	}
-	if t.value != nil {
-		if time.Since(t.lastUpdate) < t.TTL {
-			v := t.value
-			return v, nil
-		}
-		t.value = nil
-	}
+
 	v, err := t.Update()
 	if err != nil {
 		return v, err
 	}
-	t.value = v
-	t.lastUpdate = time.Now()
+
+	t.update(v)
 	return v, nil
 }
 
-// Invalidate the value in the cache.
-func (t *timedValue) Invalidate() {
+func (t *timedValue) get() (v interface{}) {
+	ttl := t.TTL
+	if ttl <= 0 {
+		ttl = time.Second
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	v = t.value
+	if time.Since(t.lastUpdate) < ttl {
+		return v
+	}
+	return nil
+}
+
+func (t *timedValue) update(v interface{}) {
 	t.mu.Lock()
-	t.value = nil
-	t.mu.Unlock()
+	defer t.mu.Unlock()
+	t.value = v
+	t.lastUpdate = time.Now()
 }
 
 // On MinIO a directory object is stored as a regular object with "__XLDIR__" suffix.

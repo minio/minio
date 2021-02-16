@@ -490,10 +490,28 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		}
 	}
 
-	ldapUserDN, groups, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
+	ldapUserDN, groupDistNames, err := globalLDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
 		err = fmt.Errorf("LDAP server error: %w", err)
 		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, err)
+		return
+	}
+
+	// Check if this user or their groups have a policy applied.
+	globalIAMSys.Lock()
+	found := false
+	if _, ok := globalIAMSys.iamUserPolicyMap[ldapUserDN]; ok {
+		found = true
+	}
+	for _, groupDistName := range groupDistNames {
+		if _, ok := globalIAMSys.iamGroupPolicyMap[groupDistName]; ok {
+			found = true
+			break
+		}
+	}
+	globalIAMSys.Unlock()
+	if !found {
+		writeSTSErrorResponse(ctx, w, true, ErrSTSInvalidParameterValue, fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request", ldapUserDN, strings.Join(groupDistNames, "`,`")))
 		return
 	}
 
@@ -520,7 +538,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	// Set this value to LDAP groups, LDAP user can be part
 	// of large number of groups
-	cred.Groups = groups
+	cred.Groups = groupDistNames
 
 	// Set the newly generated credentials, policyName is empty on purpose
 	// LDAP policies are applied automatically using their ldapUser, ldapGroups

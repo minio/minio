@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"testing"
+	"time"
 )
 
 // Tests ToObjectInfo function.
@@ -27,7 +28,7 @@ func TestCacheMetadataObjInfo(t *testing.T) {
 	if objInfo.Size != 0 {
 		t.Fatal("Unexpected object info value for Size", objInfo.Size)
 	}
-	if !objInfo.ModTime.Equal(timeSentinel) {
+	if !objInfo.ModTime.Equal(time.Time{}) {
 		t.Fatal("Unexpected object info value for ModTime ", objInfo.ModTime)
 	}
 	if objInfo.IsDir {

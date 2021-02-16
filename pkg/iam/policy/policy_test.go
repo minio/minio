@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/pkg/bucket/policy"
@@ -429,6 +431,259 @@ func TestPolicyIsValid(t *testing.T) {
 		if expectErr != testCase.expectErr {
 			t.Fatalf("case %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
 		}
+	}
+}
+
+// Parse config with location constraints
+func TestPolicyParseConfig(t *testing.T) {
+	policy1LocationConstraint := `{
+   "Version":"2012-10-17",
+   "Statement":[
+      {
+         "Sid":"statement1",
+         "Effect":"Allow",
+         "Action": "s3:CreateBucket",
+         "Resource": "arn:aws:s3:::*",
+         "Condition": {
+             "StringLike": {
+                 "s3:LocationConstraint": "us-east-1"
+             }
+         }
+       },
+      {
+         "Sid":"statement2",
+         "Effect":"Deny",
+         "Action": "s3:CreateBucket",
+         "Resource": "arn:aws:s3:::*",
+         "Condition": {
+             "StringNotLike": {
+                 "s3:LocationConstraint": "us-east-1"
+             }
+         }
+       }
+    ]
+}`
+	policy2Condition := `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "statement1",
+            "Effect": "Allow",
+            "Action": "s3:GetObjectVersion",
+            "Resource": "arn:aws:s3:::test/HappyFace.jpg"
+        },
+        {
+            "Sid": "statement2",
+            "Effect": "Deny",
+            "Action": "s3:GetObjectVersion",
+            "Resource": "arn:aws:s3:::test/HappyFace.jpg",
+            "Condition": {
+                "StringNotEquals": {
+                    "s3:versionid": "AaaHbAQitwiL_h47_44lRO2DDfLlBO5e"
+                }
+            }
+        }
+    ]
+}`
+
+	policy3ConditionActionRegex := `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "statement2",
+            "Effect": "Allow",
+            "Action": "s3:Get*",
+            "Resource": "arn:aws:s3:::test/HappyFace.jpg",
+            "Condition": {
+                "StringEquals": {
+                    "s3:versionid": "AaaHbAQitwiL_h47_44lRO2DDfLlBO5e"
+                }
+            }
+        }
+    ]
+}`
+
+	policy4ConditionAction := `{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "statement2",
+            "Effect": "Allow",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::test/HappyFace.jpg",
+            "Condition": {
+                "StringEquals": {
+                    "s3:versionid": "AaaHbAQitwiL_h47_44lRO2DDfLlBO5e"
+                }
+            }
+        }
+    ]
+}`
+
+	policy5ConditionCurrenTime := `{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:Get*",
+    "s3:Put*"
+   ],
+   "Resource": [
+    "arn:aws:s3:::test/*"
+   ],
+   "Condition": {
+    "DateGreaterThan": {
+     "aws:CurrentTime": [
+      "2017-02-28T00:00:00Z"
+     ]
+    }
+   }
+  }
+ ]
+}`
+
+	policy5ConditionCurrenTimeLesser := `{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:Get*",
+    "s3:Put*"
+   ],
+   "Resource": [
+    "arn:aws:s3:::test/*"
+   ],
+   "Condition": {
+    "DateLessThan": {
+     "aws:CurrentTime": [
+      "2017-02-28T00:00:00Z"
+     ]
+    }
+   }
+  }
+ ]
+}`
+
+	tests := []struct {
+		p       string
+		args    Args
+		allowed bool
+	}{
+		{
+			p:       policy1LocationConstraint,
+			allowed: true,
+			args: Args{
+				AccountName:     "allowed",
+				Action:          CreateBucketAction,
+				BucketName:      "test",
+				ConditionValues: map[string][]string{"LocationConstraint": {"us-east-1"}},
+			},
+		},
+		{
+			p:       policy1LocationConstraint,
+			allowed: false,
+			args: Args{
+				AccountName:     "disallowed",
+				Action:          CreateBucketAction,
+				BucketName:      "test",
+				ConditionValues: map[string][]string{"LocationConstraint": {"us-east-2"}},
+			},
+		},
+		{
+			p:       policy2Condition,
+			allowed: true,
+			args: Args{
+				AccountName:     "allowed",
+				Action:          GetObjectAction,
+				BucketName:      "test",
+				ObjectName:      "HappyFace.jpg",
+				ConditionValues: map[string][]string{"versionid": {"AaaHbAQitwiL_h47_44lRO2DDfLlBO5e"}},
+			},
+		},
+		{
+			p:       policy2Condition,
+			allowed: false,
+			args: Args{
+				AccountName:     "disallowed",
+				Action:          GetObjectAction,
+				BucketName:      "test",
+				ObjectName:      "HappyFace.jpg",
+				ConditionValues: map[string][]string{"versionid": {"AaaHbAQitwiL_h47_44lRO2DDfLlBO5f"}},
+			},
+		},
+		{
+			p:       policy3ConditionActionRegex,
+			allowed: true,
+			args: Args{
+				AccountName:     "allowed",
+				Action:          GetObjectAction,
+				BucketName:      "test",
+				ObjectName:      "HappyFace.jpg",
+				ConditionValues: map[string][]string{"versionid": {"AaaHbAQitwiL_h47_44lRO2DDfLlBO5e"}},
+			},
+		},
+		{
+			p:       policy3ConditionActionRegex,
+			allowed: false,
+			args: Args{
+				AccountName:     "disallowed",
+				Action:          GetObjectAction,
+				BucketName:      "test",
+				ObjectName:      "HappyFace.jpg",
+				ConditionValues: map[string][]string{"versionid": {"AaaHbAQitwiL_h47_44lRO2DDfLlBO5f"}},
+			},
+		},
+		{
+			p:       policy4ConditionAction,
+			allowed: true,
+			args: Args{
+				AccountName:     "allowed",
+				Action:          GetObjectAction,
+				BucketName:      "test",
+				ObjectName:      "HappyFace.jpg",
+				ConditionValues: map[string][]string{"versionid": {"AaaHbAQitwiL_h47_44lRO2DDfLlBO5e"}},
+			},
+		},
+		{
+			p:       policy5ConditionCurrenTime,
+			allowed: true,
+			args: Args{
+				AccountName: "allowed",
+				Action:      GetObjectAction,
+				BucketName:  "test",
+				ObjectName:  "HappyFace.jpg",
+				ConditionValues: map[string][]string{
+					"CurrentTime": {time.Now().Format(time.RFC3339)},
+				},
+			},
+		},
+		{
+			p:       policy5ConditionCurrenTimeLesser,
+			allowed: false,
+			args: Args{
+				AccountName: "disallowed",
+				Action:      GetObjectAction,
+				BucketName:  "test",
+				ObjectName:  "HappyFace.jpg",
+				ConditionValues: map[string][]string{
+					"CurrentTime": {time.Now().Format(time.RFC3339)},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.args.AccountName, func(t *testing.T) {
+			ip, err := ParseConfig(strings.NewReader(test.p))
+			if err != nil {
+				t.Error(err)
+			}
+			if got := ip.IsAllowed(test.args); got != test.allowed {
+				t.Errorf("Expected %t, got %t", test.allowed, got)
+			}
+		})
 	}
 }
 

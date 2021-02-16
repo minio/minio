@@ -330,16 +330,23 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 			}
 
 			fiv, err := entry.fileInfoVersions(bucket)
+			if err != nil {
+				continue
+			}
+
+			fiVersions := fiv.Versions
 			if afterV != "" {
-				// Forward first entry to specified version
-				fiv.forwardPastVersion(afterV)
+				vidMarkerIdx := fiv.findVersionIndex(afterV)
+				if vidMarkerIdx >= 0 {
+					fiVersions = fiVersions[vidMarkerIdx+1:]
+				}
 				afterV = ""
 			}
-			if err == nil {
-				for _, version := range fiv.Versions {
-					versions = append(versions, version.ToObjectInfo(bucket, entry.name))
-				}
+
+			for _, version := range fiVersions {
+				versions = append(versions, version.ToObjectInfo(bucket, entry.name))
 			}
+
 			continue
 		}
 

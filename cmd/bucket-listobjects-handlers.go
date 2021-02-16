@@ -26,7 +26,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 
 	"github.com/minio/minio/pkg/bucket/policy"
-	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -295,10 +294,6 @@ func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http
 	return proxyRequest(ctx, w, r, ep)
 }
 
-func proxyRequestByStringHash(ctx context.Context, w http.ResponseWriter, r *http.Request, str string) (success bool) {
-	return proxyRequestByNodeIndex(ctx, w, r, crcHashMod(str, len(globalProxyEndpoints)))
-}
-
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
 // --------------------------
 // This implementation of the GET operation returns some or all (up to 10000)
@@ -334,15 +329,6 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	// Validate all the query params before beginning to serve the request.
 	if s3Error := validateListObjectsArgs(marker, delimiter, encodingType, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
-		return
-	}
-
-	// Forward the request using Source IP or bucket
-	forwardStr := handlers.GetSourceIPFromHeaders(r)
-	if forwardStr == "" {
-		forwardStr = bucket
-	}
-	if proxyRequestByStringHash(ctx, w, r, forwardStr) {
 		return
 	}
 

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -257,7 +258,7 @@ func cleanMetadata(metadata map[string]string) map[string]string {
 	// Remove STANDARD StorageClass
 	metadata = removeStandardStorageClass(metadata)
 	// Clean meta etag keys 'md5Sum', 'etag', "expires", "x-amz-tagging".
-	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires", xhttp.AmzObjectTagging)
+	return cleanMetadataKeys(metadata, "md5Sum", "etag", "expires", xhttp.AmzObjectTagging, "last-modified")
 }
 
 // Filter X-Amz-Storage-Class field only if it is set to STANDARD.
@@ -865,17 +866,23 @@ func (p *PutObjReader) MD5CurrentHexString() string {
 	return hex.EncodeToString(md5sumCurr)
 }
 
-// NewPutObjReader returns a new PutObjReader and holds
-// reference to underlying data stream from client and the encrypted
-// data reader
-func NewPutObjReader(rawReader *hash.Reader, encReader *hash.Reader, key *crypto.ObjectKey) *PutObjReader {
-	p := PutObjReader{Reader: rawReader, rawReader: rawReader}
-
-	if key != nil && encReader != nil {
-		p.sealMD5Fn = sealETagFn(*key)
-		p.Reader = encReader
+// WithEncryption sets up encrypted reader and the sealing for content md5sum
+// using objEncKey. Unsealed md5sum is computed from the rawReader setup when
+// NewPutObjReader was called. It returns an error if called on an uninitialized
+// PutObjReader.
+func (p *PutObjReader) WithEncryption(encReader *hash.Reader, objEncKey *crypto.ObjectKey) (*PutObjReader, error) {
+	if p.Reader == nil {
+		return nil, errors.New("put-object reader uninitialized")
 	}
-	return &p
+	p.Reader = encReader
+	p.sealMD5Fn = sealETagFn(*objEncKey)
+	return p, nil
+}
+
+// NewPutObjReader returns a new PutObjReader. It uses given hash.Reader's
+// MD5Current method to construct md5sum when requested downstream.
+func NewPutObjReader(rawReader *hash.Reader) *PutObjReader {
+	return &PutObjReader{Reader: rawReader, rawReader: rawReader}
 }
 
 func sealETag(encKey crypto.ObjectKey, md5CurrSum []byte) []byte {

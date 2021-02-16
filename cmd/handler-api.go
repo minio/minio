@@ -60,7 +60,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		}
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
-		// ram_per_request is 1MiB * driveCount + 2 * 10MiB (default erasure block size)
+		// ram_per_request is (2MiB+128KiB) * driveCount + 2 * 10MiB (default erasure block size)
 		apiRequestsMaxPerNode = int(stats.TotalRAM / uint64(t.totalDriveCount*(blockSizeLarge+blockSizeSmall)+blockSizeV1*2))
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
