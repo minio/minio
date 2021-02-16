@@ -159,18 +159,19 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketIn
 				return
 			}
 			fivs, err := entry.fileInfoVersions(bucket.Name)
-			if err == nil {
-				waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
-				for _, version := range fivs.Versions {
-					if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true}); err != nil {
-						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
-						}
-					}
-					bgSeq.logHeal(madmin.HealItemObject)
-				}
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return
 			}
-			logger.LogIf(ctx, err)
+			waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
+			for _, version := range fivs.Versions {
+				if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: true}); err != nil {
+					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+						logger.LogIf(ctx, err)
+					}
+				}
+				bgSeq.logHeal(madmin.HealItemObject)
+			}
 		}
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
