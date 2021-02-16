@@ -291,33 +291,19 @@ func (action Action) IsValid() bool {
 
 type actionConditionKeyMap map[Action]condition.KeySet
 
-func (a actionConditionKeyMap) Lookup(action Action) (condition.KeySet, bool) {
-	var ckeysMerged = condition.KeySet{}
-	var found bool
+func (a actionConditionKeyMap) Lookup(action Action) condition.KeySet {
+	var ckeysMerged = condition.NewKeySet(condition.CommonKeys...)
 	for act, ckey := range a {
 		if action.Match(act) {
 			ckeysMerged.Merge(ckey)
-			found = true
 		}
 	}
-	return ckeysMerged, found
+	return ckeysMerged
 }
 
 // iamActionConditionKeyMap - holds mapping of supported condition key for an action.
 var iamActionConditionKeyMap = actionConditionKeyMap{
 	AllActions: condition.NewKeySet(condition.AllSupportedKeys...),
-
-	AbortMultipartUploadAction: condition.NewKeySet(condition.CommonKeys...),
-
-	CreateBucketAction: condition.NewKeySet(condition.CommonKeys...),
-
-	DeleteBucketPolicyAction: condition.NewKeySet(condition.CommonKeys...),
-
-	GetBucketLocationAction: condition.NewKeySet(condition.CommonKeys...),
-
-	GetBucketNotificationAction: condition.NewKeySet(condition.CommonKeys...),
-
-	GetBucketPolicyAction: condition.NewKeySet(condition.CommonKeys...),
 
 	GetObjectAction: condition.NewKeySet(
 		append([]condition.Key{
@@ -325,10 +311,6 @@ var iamActionConditionKeyMap = actionConditionKeyMap{
 			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
 			condition.S3VersionID,
 		}, condition.CommonKeys...)...),
-
-	HeadBucketAction: condition.NewKeySet(condition.CommonKeys...),
-
-	ListAllMyBucketsAction: condition.NewKeySet(condition.CommonKeys...),
 
 	ListBucketAction: condition.NewKeySet(
 		append([]condition.Key{
@@ -343,18 +325,6 @@ var iamActionConditionKeyMap = actionConditionKeyMap{
 			condition.S3Delimiter,
 			condition.S3MaxKeys,
 		}, condition.CommonKeys...)...),
-
-	ListBucketMultipartUploadsAction: condition.NewKeySet(condition.CommonKeys...),
-
-	ListenNotificationAction: condition.NewKeySet(condition.CommonKeys...),
-
-	ListenBucketNotificationAction: condition.NewKeySet(condition.CommonKeys...),
-
-	ListMultipartUploadPartsAction: condition.NewKeySet(condition.CommonKeys...),
-
-	PutBucketNotificationAction: condition.NewKeySet(condition.CommonKeys...),
-
-	PutBucketPolicyAction: condition.NewKeySet(condition.CommonKeys...),
 
 	DeleteObjectAction: condition.NewKeySet(
 		append([]condition.Key{
@@ -385,12 +355,14 @@ var iamActionConditionKeyMap = actionConditionKeyMap{
 			condition.S3ObjectLockMode,
 			condition.S3VersionID,
 		}, condition.CommonKeys...)...),
+
 	GetObjectRetentionAction: condition.NewKeySet(
 		append([]condition.Key{
 			condition.S3XAmzServerSideEncryption,
 			condition.S3XAmzServerSideEncryptionCustomerAlgorithm,
 			condition.S3VersionID,
 		}, condition.CommonKeys...)...),
+
 	PutObjectLegalHoldAction: condition.NewKeySet(
 		append([]condition.Key{
 			condition.S3XAmzServerSideEncryption,
@@ -409,11 +381,6 @@ var iamActionConditionKeyMap = actionConditionKeyMap{
 			condition.S3ObjectLockMode,
 			condition.S3ObjectLockLegalHold,
 		}, condition.CommonKeys...)...),
-
-	GetBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
-	PutBucketObjectLockConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
-	GetBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
-	PutBucketTaggingAction:                 condition.NewKeySet(condition.CommonKeys...),
 
 	PutObjectTaggingAction: condition.NewKeySet(
 		append([]condition.Key{
@@ -448,8 +415,6 @@ var iamActionConditionKeyMap = actionConditionKeyMap{
 		append([]condition.Key{
 			condition.S3VersionID,
 		}, condition.CommonKeys...)...),
-	GetReplicationConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
-	PutReplicationConfigurationAction: condition.NewKeySet(condition.CommonKeys...),
 	ReplicateObjectAction: condition.NewKeySet(
 		append([]condition.Key{
 			condition.S3VersionID,
