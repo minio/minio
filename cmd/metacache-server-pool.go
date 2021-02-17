@@ -81,11 +81,6 @@ func (z *erasureServerPools) listPath(ctx context.Context, o listPathOptions) (e
 		return entries, io.EOF
 	}
 
-	// Over flowing count - reset to maxObjectList.
-	if o.Limit < 0 || o.Limit > maxObjectList {
-		o.Limit = maxObjectList
-	}
-
 	// If delimiter is slashSeparator we must return directories of
 	// the non-recursive scan unless explicitly requested.
 	o.IncludeDirectories = o.Separator == slashSeparator

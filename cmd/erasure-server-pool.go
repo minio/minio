@@ -844,7 +844,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
-		Limit:       maxKeys,
+		Limit:       maxKeysPlusOne(maxKeys, marker != "" && versionMarker == ""),
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
@@ -863,6 +863,11 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	merged, err := z.listPath(ctx, opts)
 	if err != nil && err != io.EOF {
 		return loi, err
+	}
+	if versionMarker == "" {
+		// If we are not looking for a specific version skip it.
+		marker, _ = parseMarker(marker)
+		merged.forwardPast(marker)
 	}
 	objects := merged.fileInfoVersions(bucket, prefix, delimiter, versionMarker)
 	loi.IsTruncated = err == nil && len(objects) > 0
@@ -885,6 +890,16 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	return loi, nil
 }
 
+func maxKeysPlusOne(maxKeys int, addOne bool) int {
+	if maxKeys < 0 || maxKeys > maxObjectList {
+		maxKeys = maxObjectList
+	}
+	if addOne {
+		maxKeys++
+	}
+	return maxKeys
+}
+
 func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
 
@@ -892,7 +907,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
-		Limit:       maxKeys,
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
 		Marker:      marker,
 		InclDeleted: false,
 		AskDisks:    globalAPIConfig.getListQuorum(),
@@ -901,6 +916,8 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		logger.LogIf(ctx, err)
 		return loi, err
 	}
+	marker, _ = parseMarker(marker)
+	merged.forwardPast(marker)
 
 	// Default is recursive, if delimiter is set then list non recursive.
 	objects := merged.fileInfos(bucket, prefix, delimiter)
