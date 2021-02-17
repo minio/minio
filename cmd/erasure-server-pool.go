@@ -250,15 +250,28 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 	if z.SinglePool() {
 		return 0, nil
 	}
+
+	errs := make([]error, len(z.serverPools))
+	objInfos := make([]ObjectInfo, len(z.serverPools))
+
+	var wg sync.WaitGroup
 	for i, pool := range z.serverPools {
-		objInfo, err := pool.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+		wg.Add(1)
+		go func(i int, pool *erasureSets) {
+			defer wg.Done()
+			objInfos[i], errs[i] = pool.GetObjectInfo(ctx, bucket, object, ObjectOptions{})
+		}(i, pool)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
 		if err != nil && !isErrObjectNotFound(err) {
 			return -1, err
 		}
 		if isErrObjectNotFound(err) {
 			// No object exists or its a delete marker,
 			// check objInfo to confirm.
-			if objInfo.DeleteMarker && objInfo.Name != "" {
+			if objInfos[i].DeleteMarker && objInfos[i].Name != "" {
 				return i, nil
 			}
 			// objInfo is not valid, truly the object doesn't
