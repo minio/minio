@@ -23,7 +23,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -269,10 +268,6 @@ func (c *diskCache) toClear() uint64 {
 	return bytesToClear(int64(di.Total), int64(di.Free), uint64(c.quotaPct), uint64(c.lowWatermark), uint64(c.highWatermark))
 }
 
-var (
-	errDoneForNow = errors.New("done for now")
-)
-
 func (c *diskCache) purgeWait(ctx context.Context) {
 	for {
 		select {
@@ -382,7 +377,7 @@ func (c *diskCache) purge(ctx context.Context) {
 		return nil
 	}
 
-	if err := readDirFilterFn(c.dir, filterFn); err != nil {
+	if err := readDirFn(c.dir, filterFn); err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
@@ -1025,7 +1020,7 @@ func (c *diskCache) scanCacheWritebackFailures(ctx context.Context) {
 		return nil
 	}
 
-	if err := readDirFilterFn(c.dir, filterFn); err != nil {
+	if err := readDirFn(c.dir, filterFn); err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
