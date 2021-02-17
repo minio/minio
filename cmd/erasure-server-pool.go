@@ -401,7 +401,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 						mu.Unlock()
 					}
 				}()
-				// Start crawler. Blocks until done.
+				// Start scanner. Blocks until done.
 				err := erObj.crawlAndGetDataUsage(ctx, allBuckets, bf, updates)
 				if err != nil {
 					logger.LogIf(ctx, err)

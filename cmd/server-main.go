@@ -509,7 +509,7 @@ func serverMain(ctx *cli.Context) {
 		initBackgroundExpiry(GlobalContext, newObject)
 	}
 
-	initDataCrawler(GlobalContext, newObject)
+	initDataScanner(GlobalContext, newObject)
 
 	if err = initServer(GlobalContext, newObject); err != nil {
 		var cerr config.Err

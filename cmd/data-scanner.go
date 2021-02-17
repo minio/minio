@@ -56,25 +56,25 @@ var (
 	globalHealConfig   heal.Config
 	globalHealConfigMu sync.Mutex
 
-	dataCrawlerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
+	dataScannerLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 	// Sleeper values are updated when config is loaded.
-	crawlerSleeper = newDynamicSleeper(10, 10*time.Second)
+	scannerSleeper = newDynamicSleeper(10, 10*time.Second)
 )
 
-// initDataCrawler will start the crawler in the background.
-func initDataCrawler(ctx context.Context, objAPI ObjectLayer) {
-	go runDataCrawler(ctx, objAPI)
+// initDataScanner will start the scanner in the background.
+func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
+	go runDataScanner(ctx, objAPI)
 }
 
-// runDataCrawler will start a data crawler.
+// runDataScanner will start a data scanner.
 // The function will block until the context is canceled.
-// There should only ever be one crawler running per cluster.
-func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
-	// Make sure only 1 crawler is running on the cluster.
-	locker := objAPI.NewNSLock(minioMetaBucket, "runDataCrawler.lock")
+// There should only ever be one scanner running per cluster.
+func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
+	// Make sure only 1 scanner is running on the cluster.
+	locker := objAPI.NewNSLock(minioMetaBucket, "runDataScanner.lock")
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		err := locker.GetLock(ctx, dataCrawlerLeaderLockTimeout)
+		err := locker.GetLock(ctx, dataScannerLeaderLockTimeout)
 		if err != nil {
 			time.Sleep(time.Duration(r.Float64() * float64(dataCrawlStartDelay)))
 			continue
@@ -112,7 +112,7 @@ func runDataCrawler(ctx context.Context, objAPI ObjectLayer) {
 			crawlTimer.Reset(dataCrawlStartDelay)
 
 			if intDataUpdateTracker.debug {
-				console.Debugln("starting crawler cycle")
+				console.Debugln("starting scanner cycle")
 			}
 
 			// Wait before starting next cycle and wait on startup.
@@ -167,7 +167,7 @@ type folderScanner struct {
 
 // crawlDataFolder will crawl the basepath+cache.Info.Name and return an updated cache.
 // The returned cache will always be valid, but may not be updated from the existing.
-// Before each operation sleepDuration is called which can be used to temporarily halt the crawler.
+// Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
 func crawlDataFolder(ctx context.Context, basePath string, cache dataUsageCache, getSize getSizeFn) (dataUsageCache, error) {
 	t := UTCNow()
@@ -390,12 +390,12 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					if f.dataUsageCrawlDebug {
 						console.Debugf(scannerLogPrefix+" Adding non-updated folder to heal check: %v\n", folder.name)
 					}
-					// If probability was already crawlerHealFolderInclude, keep it.
+					// If probability was already scannerHealFolderInclude, keep it.
 					folder.objectHealProbDiv = f.healFolderInclude
 				}
 			}
 		}
-		crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
+		scannerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 
 		cache := dataUsageEntry{}
 
@@ -447,7 +447,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			wait := crawlerSleeper.Timer(ctx)
+			wait := scannerSleeper.Timer(ctx)
 
 			// Get file size, ignore errors.
 			item := crawlItem{
@@ -537,7 +537,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 			}
 
 			// Dynamic time delay.
-			wait := crawlerSleeper.Timer(ctx)
+			wait := scannerSleeper.Timer(ctx)
 			resolver.bucket = bucket
 
 			foundObjs := false
@@ -567,7 +567,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 					// Sleep and reset.
 					wait()
-					wait = crawlerSleeper.Timer(ctx)
+					wait = scannerSleeper.Timer(ctx)
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						for _, err := range errs {
@@ -604,7 +604,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					for _, ver := range fiv.Versions {
 						// Sleep and reset.
 						wait()
-						wait = crawlerSleeper.Timer(ctx)
+						wait = scannerSleeper.Timer(ctx)
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    fiv.Name,
@@ -640,9 +640,9 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 					Remove:    true,
 				},
 					func(bucket, object, versionID string) error {
-						// Wait for each heal as per crawler frequency.
+						// Wait for each heal as per scanner frequency.
 						wait()
-						wait = crawlerSleeper.Timer(ctx)
+						wait = scannerSleeper.Timer(ctx)
 						return bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    object,
@@ -690,12 +690,12 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder,
 			dirStack = append(dirStack, entName)
 			err := readDirFn(path.Join(dirStack...), addDir)
 			dirStack = dirStack[:len(dirStack)-1]
-			crawlerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
+			scannerSleeper.Sleep(ctx, dataCrawlSleepPerFolder)
 			return err
 		}
 
 		// Dynamic time delay.
-		wait := crawlerSleeper.Timer(ctx)
+		wait := scannerSleeper.Timer(ctx)
 
 		// Get file size, ignore errors.
 		dirStack = append(dirStack, entName)
