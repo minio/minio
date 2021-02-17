@@ -1,4 +1,4 @@
-# Bucket Replication Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
+# Bucket Replication Guide [![slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/)
 
 Bucket replication is designed to replicate selected objects in a bucket to a destination bucket.
 
@@ -172,8 +172,7 @@ Status of delete marker replication can be viewed by doing a GET/HEAD on the obj
 
 The status of replication can be monitored by configuring event notifications on the source and target buckets using `mc event add`.On the source side, the `s3:PutObject`, `s3:Replication:OperationCompletedReplication` and `s3:Replication:OperationFailedReplication` events show the status of replication in the `X-Amz-Replication-Status` metadata.
 
-On the target bucket, `s3:PutObject` event shows `X-Amz-Replication-Status` status of `REPLICA` in the metadata. Additional metrics to monitor backlog state for the purpose of bandwidth management and resource allocation are
-an upcoming feature.
+On the target bucket, `s3:PutObject` event shows `X-Amz-Replication-Status` status of `REPLICA` in the metadata. Additional metrics to monitor backlog state for the purpose of bandwidth management and resource allocation are exposed via Prometheus - see https://github.com/minio/minio/blob/master/docs/metrics/prometheus/list.md for more details.
 
 ### Sync/Async Replication
 By default, replication is completed asynchronously. If synchronous replication is desired, set the --sync flag while adding a
@@ -183,5 +182,6 @@ remote replication target using the `mc admin bucket remote add` command
 ```
 
 ## Explore Further
+- [MinIO Bucket Replication Design](https://raw.githubusercontent.com/minio/minio/master/docs/bucket/replication/DESIGN.md)
 - [MinIO Bucket Versioning Implementation](https://docs.minio.io/docs/minio-bucket-versioning-guide.html)
 - [MinIO Client Quickstart Guide](https://docs.minio.io/docs/minio-client-quickstart-guide.html)

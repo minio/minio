@@ -80,7 +80,6 @@ func (name Name) Expand() []Name {
 			ObjectCreatedPost, ObjectCreatedPut,
 			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold,
 			ObjectCreatedPutTagging, ObjectCreatedDeleteTagging,
-			ObjectReplicationComplete, ObjectReplicationFailed,
 		}
 	case ObjectRemovedAll:
 		return []Name{
