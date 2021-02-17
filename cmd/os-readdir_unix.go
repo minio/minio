@@ -84,11 +84,15 @@ func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
 }
 
-// readDir applies the filter function on each entries at dirPath, doesn't recurse into
-// the directory itself.
-func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+// readDirFn applies the fn() function on each entries at dirPath, doesn't recurse into
+// the directory itself, if the dirPath doesn't exist this function doesn't return
+// an error.
+func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) error {
 	f, err := os.Open(dirPath)
 	if err != nil {
+		if osErrToFileErr(err) == errFileNotFound {
+			return nil
+		}
 		return osErrToFileErr(err)
 	}
 	defer f.Close()
@@ -103,7 +107,7 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
 			if err != nil {
 				if isSysErrNotDir(err) {
-					return errFileNotFound
+					return nil
 				}
 				return err
 			}
@@ -122,8 +126,8 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 		if typ&os.ModeSymlink == os.ModeSymlink {
 			continue
 		}
-		if err = filter(string(name), typ); err == errDoneForNow {
-			// filtering requested to return by caller.
+		if err = fn(string(name), typ); err == errDoneForNow {
+			// fn() requested to return by caller.
 			return nil
 		}
 	}

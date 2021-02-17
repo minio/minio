@@ -407,19 +407,19 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 				if f.dataUsageCrawlDebug {
 					console.Debugf(scannerLogPrefix+" no bucket (%s,%s)\n", f.root, entName)
 				}
-				return nil
+				return errDoneForNow
 			}
 
 			if isReservedOrInvalidBucket(bucket, false) {
 				if f.dataUsageCrawlDebug {
 					console.Debugf(scannerLogPrefix+" invalid bucket: %v, entry: %v\n", bucket, entName)
 				}
-				return nil
+				return errDoneForNow
 			}
 
 			select {
 			case <-done:
-				return ctx.Err()
+				return errDoneForNow
 			default:
 			}
 
@@ -682,7 +682,7 @@ func (f *folderScanner) deepScanFolder(ctx context.Context, folder cachedFolder,
 	addDir = func(entName string, typ os.FileMode) error {
 		select {
 		case <-done:
-			return ctx.Err()
+			return errDoneForNow
 		default:
 		}
 
