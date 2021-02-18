@@ -637,7 +637,7 @@ func (f *folderScanner) scanQueuedLevels(ctx context.Context, folders []cachedFo
 
 				objAPI.HealObjects(ctx, bucket, prefix, madmin.HealOpts{
 					Recursive: true,
-					Remove:    true,
+					Remove:    healDeleteDangling,
 				},
 					func(bucket, object, versionID string) error {
 						// Wait for each heal as per scanner frequency.
