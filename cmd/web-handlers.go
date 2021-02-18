@@ -50,6 +50,7 @@ import (
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/etag"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
@@ -1233,7 +1234,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	var reader io.Reader = r.Body
 	actualSize := size
 
-	hashReader, err := hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(reader, size, "", "", actualSize)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -1244,7 +1245,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(actualSize, 10)
 
-		actualReader, err := hash.NewReader(reader, actualSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, actualSize, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -1254,8 +1255,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		size = -1 // Since compressed size is un-predictable.
 		s2c := newS2CompressReader(actualReader, actualSize)
 		defer s2c.Close()
-		reader = s2c
-		hashReader, err = hash.NewReader(reader, size, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		reader = etag.Wrap(s2c, actualReader)
+		hashReader, err = hash.NewReader(reader, size, "", "", actualSize)
 		if err != nil {
 			writeWebErrorResponse(w, err)
 			return
@@ -1276,15 +1277,18 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	if objectAPI.IsEncryptionSupported() {
 		if _, ok := crypto.IsRequested(r.Header); ok && !HasSuffix(object, SlashSeparator) { // handle SSE requests
-			var objectEncryptionKey crypto.ObjectKey
-			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
+			var (
+				objectEncryptionKey crypto.ObjectKey
+				encReader           io.Reader
+			)
+			encReader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
 			}
 			info := ObjectInfo{Size: size}
 			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, info.EncryptedSize(), "", "", size, globalCLIContext.StrictS3Compat)
+			hashReader, err = hash.NewReader(etag.Wrap(encReader, hashReader), info.EncryptedSize(), "", "", size)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
