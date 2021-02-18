@@ -32,8 +32,7 @@ func TestNameExpand(t *testing.T) {
 		{BucketRemoved, []Name{BucketRemoved}},
 		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}},
 		{ObjectCreatedAll, []Name{ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut,
-			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold, ObjectCreatedPutTagging, ObjectCreatedDeleteTagging,
-			ObjectReplicationComplete, ObjectReplicationFailed}},
+			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold, ObjectCreatedPutTagging, ObjectCreatedDeleteTagging}},
 		{ObjectRemovedAll, []Name{ObjectRemovedDelete, ObjectRemovedDeleteMarkerCreated}},
 		{ObjectAccessedHead, []Name{ObjectAccessedHead}},
 	}
