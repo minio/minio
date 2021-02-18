@@ -357,9 +357,14 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 	mutex := newNSLock(globalIsDistErasure)
 
+	// Number of buffers, max 2GB.
+	n := setCount * setDriveCount
+	if n > 100 {
+		n = 100
+	}
 	// Initialize byte pool once for all sets, bpool size is set to
 	// setCount * setDriveCount with each memory upto blockSizeV1.
-	bp := bpool.NewBytePoolCap(setCount*setDriveCount, blockSizeV1, blockSizeV1*2)
+	bp := bpool.NewBytePoolCap(n, blockSizeV1, blockSizeV1*2)
 
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)

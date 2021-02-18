@@ -91,7 +91,7 @@ type dataUsageCacheInfo struct {
 	Name       string
 	LastUpdate time.Time
 	NextCycle  uint32
-	// indicates if the disk is being healed and crawler
+	// indicates if the disk is being healed and scanner
 	// should skip healing the disk
 	SkipHealing bool
 	BloomFilter []byte               `msg:"BloomFilter,omitempty"`
@@ -522,7 +522,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		dataUsageBucket,
 		name,
 		NewPutObjReader(r),
-		ObjectOptions{})
+		ObjectOptions{NoLock: true})
 	if isErrBucketNotFound(err) {
 		return nil
 	}

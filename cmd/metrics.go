@@ -419,7 +419,7 @@ func networkMetricsPrometheus(ch chan<- prometheus.Metric) {
 }
 
 // Populates prometheus with bucket usage metrics, this metrics
-// is only enabled if crawler is enabled.
+// is only enabled if scanner is enabled.
 func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	objLayer := newObjectLayerFn()
 	// Service not initialized yet

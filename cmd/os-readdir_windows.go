@@ -29,11 +29,15 @@ func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
 }
 
-// readDir applies the filter function on each entries at dirPath, doesn't recurse into
-// the directory itself.
-func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+// readDirFn applies the fn() function on each entries at dirPath, doesn't recurse into
+// the directory itself, if the dirPath doesn't exist this function doesn't return
+// an error.
+func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
 	f, err := os.Open(dirPath)
 	if err != nil {
+		if osErrToFileErr(err) == errFileNotFound {
+			return nil
+		}
 		return osErrToFileErr(err)
 	}
 	defer f.Close()
@@ -45,6 +49,9 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 			if e == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
+				if isSysErrPathNotFound(e) {
+					return nil
+				}
 				return osErrToFileErr(&os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
@@ -69,7 +76,7 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 		}
 	}
 
-	return err
+	return nil
 }
 
 // Return N entries at the directory dirPath. If count is -1, return all entries

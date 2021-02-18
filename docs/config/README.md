@@ -263,36 +263,36 @@ The following sub-systems are dynamic i.e., configuration parameters for each su
 ```
 api                   manage global HTTP API call specific features, such as throttling, authentication types, etc.
 heal                  manage object healing frequency and bitrot verification checks
-crawler               manage crawling for usage calculation, lifecycle, healing and more
+scanner               manage crawling for usage calculation, lifecycle, healing and more
 ```
 
 > NOTE: if you set any of the following sub-system configuration using ENVs, dynamic behavior is not supported.
 
-### Usage crawler
+### Usage scanner
 
-Data usage crawler is enabled by default. The following configuration settings allow for more staggered delay in terms of usage calculation. The crawler adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the crawler and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `mc admin config set alias/ delay=15.0`. By default the value is `10.0`. This means the crawler will sleep *10x* the time each operation takes.
+Data usage scanner is enabled by default. The following configuration settings allow for more staggered delay in terms of usage calculation. The scanner adapts to the system speed and completely pauses when the system is under load. It is possible to adjust the speed of the scanner and thereby the latency of updates being reflected. The delays between each operation of the crawl can be adjusted by the `mc admin config set alias/ delay=15.0`. By default the value is `10.0`. This means the scanner will sleep *10x* the time each operation takes.
 
-In most setups this will keep the crawler slow enough to not impact overall system performance. Setting the `delay` key to a *lower* value will make the crawler faster and setting it to 0 will make the crawler run at full speed (not recommended in production). Setting it to a higher value will make the crawler slower, consuming less resources with the trade off of not collecting metrics for operations like healing and disk usage as fast.
+In most setups this will keep the scanner slow enough to not impact overall system performance. Setting the `delay` key to a *lower* value will make the scanner faster and setting it to 0 will make the scanner run at full speed (not recommended in production). Setting it to a higher value will make the scanner slower, consuming less resources with the trade off of not collecting metrics for operations like healing and disk usage as fast.
 
 ```
-~ mc admin config set alias/ crawler
+~ mc admin config set alias/ scanner
 KEY:
-crawler  manage crawling for usage calculation, lifecycle, healing and more
+scanner  manage crawling for usage calculation, lifecycle, healing and more
 
 ARGS:
-delay     (float)     crawler delay multiplier, defaults to '10.0'
+delay     (float)     scanner delay multiplier, defaults to '10.0'
 max_wait  (duration)  maximum wait time between operations, defaults to '15s'
 ```
 
-Example: Following setting will decrease the crawler speed by a factor of 3, reducing the system resource use, but increasing the latency of updates being reflected.
+Example: Following setting will decrease the scanner speed by a factor of 3, reducing the system resource use, but increasing the latency of updates being reflected.
 
 ```sh
-~ mc admin config set alias/ crawler delay=30.0
+~ mc admin config set alias/ scanner delay=30.0
 ```
 
-Once set the crawler settings are automatically applied without the need for server restarts.
+Once set the scanner settings are automatically applied without the need for server restarts.
 
-> NOTE: Data usage crawler is not supported under Gateway deployments.
+> NOTE: Data usage scanner is not supported under Gateway deployments.
 
 ### Healing
 

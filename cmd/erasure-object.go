@@ -328,7 +328,9 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				}
 				if scan != madmin.HealUnknownScan {
 					healOnce.Do(func() {
-						go healObject(bucket, object, fi.VersionID, scan)
+						if _, healing := er.getOnlineDisksWithHealing(); !healing {
+							go healObject(bucket, object, fi.VersionID, scan)
+						}
 					})
 				}
 			}
@@ -438,7 +440,9 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	// if missing metadata can be reconstructed, attempt to reconstruct.
 	if missingBlocks > 0 && missingBlocks < readQuorum {
-		go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
+		if _, healing := er.getOnlineDisksWithHealing(); !healing {
+			go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
+		}
 	}
 
 	return fi, metaArr, onlineDisks, nil

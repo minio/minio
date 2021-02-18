@@ -184,19 +184,15 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if gerr != nil {
 		validReplStatus := false
 		switch oi.ReplicationStatus {
-		// Point to note: even if two way replication with Deletemarker or Delete sync is enabled,
-		// deletion of a REPLICA object/deletemarker will not trigger a replication to the other cluster.
 		case replication.Pending, replication.Completed, replication.Failed:
 			validReplStatus = true
 		}
 		if oi.DeleteMarker && validReplStatus {
 			return oi.DeleteMarker, true, sync
 		}
-		return oi.DeleteMarker, false, sync
-	}
-	if oi.ReplicationStatus == replication.Replica {
-		// avoid replicating a replica in bi-directional replication
-		return oi.DeleteMarker, false, sync
+		// can be the case that other cluster is down and duplicate `mc rm --vid`
+		// is issued - this still needs to be replicated back to the other target
+		return oi.DeleteMarker, oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed, sync
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
 	// the target online status should not be used here while deciding
