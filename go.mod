@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.14
+go 1.15
 
 require (
 	cloud.google.com/go v0.39.0
