@@ -782,7 +782,13 @@ type listPathRawOptions struct {
 	disks        []StorageAPI
 	bucket, path string
 	recursive    bool
+
+	// Only return results with this prefix.
 	filterPrefix string
+
+	// Forward to this prefix before returning results.
+	forwardTo string
+
 	// Minimum number of good disks to continue.
 	// An error will be returned if this many disks returned an error.
 	minDisks       int
@@ -836,7 +842,9 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				BaseDir:        opts.path,
 				Recursive:      opts.recursive,
 				ReportNotFound: opts.reportNotFound,
-				FilterPrefix:   opts.filterPrefix}, w)
+				FilterPrefix:   opts.filterPrefix,
+				ForwardTo:      opts.forwardTo,
+			}, w)
 			w.CloseWithError(werr)
 			if werr != io.EOF && werr != nil && werr.Error() != errFileNotFound.Error() && werr.Error() != errVolumeNotFound.Error() {
 				logger.LogIf(ctx, werr)
