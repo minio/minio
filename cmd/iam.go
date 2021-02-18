@@ -1703,8 +1703,15 @@ func (sys *IAMSys) PolicyDBGet(name string, isGroup bool) ([]string, error) {
 // This call assumes that caller has the sys.RLock()
 func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 	if isGroup {
-		if _, ok := sys.iamGroupsMap[name]; !ok {
+		g, ok := sys.iamGroupsMap[name]
+		if !ok {
 			return nil, errNoSuchGroup
+		}
+
+		// Group is disabled, so we return no policy - this
+		// ensures the request is denied.
+		if g.Status == statusDisabled {
+			return nil, nil
 		}
 
 		mp := sys.iamGroupPolicyMap[name]
@@ -1713,17 +1720,24 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 
 	// When looking for a user's policies, we also check if the
 	// user and the groups they are member of are enabled.
-	if u, ok := sys.iamUsersMap[name]; !ok {
+	u, ok := sys.iamUsersMap[name]
+	if !ok {
 		return nil, errNoSuchUser
-	} else if u.Status == statusDisabled {
-		// User is disabled, so we return no policy - this
-		// ensures the request is denied.
+	}
+
+	if !u.IsValid() {
 		return nil, nil
 	}
 
 	var policies []string
 
-	mp := sys.iamUserPolicyMap[name]
+	mp, ok := sys.iamUserPolicyMap[name]
+	if !ok {
+		if u.ParentUser != "" {
+			mp = sys.iamUserPolicyMap[u.ParentUser]
+		}
+	}
+
 	// returned policy could be empty
 	policies = append(policies, mp.toSlice()...)
 

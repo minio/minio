@@ -725,10 +725,6 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	accountName := cred.AccessKey
-	if cred.ParentUser != "" {
-		accountName = cred.ParentUser
-	}
-
 	policies, err := globalIAMSys.PolicyDBGet(accountName, false)
 	if err != nil {
 		logger.LogIf(ctx, err)
