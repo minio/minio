@@ -844,7 +844,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
-		Limit:       maxKeysPlusOne(maxKeys, marker != "" && versionMarker == ""),
+		Limit:       maxKeysPlusOne(maxKeys, marker != ""),
 		Marker:      marker,
 		InclDeleted: true,
 		AskDisks:    globalAPIConfig.getListQuorum(),
