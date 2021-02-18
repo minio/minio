@@ -179,6 +179,14 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if err != nil || rcfg == nil {
 		return false, false, sync
 	}
+	opts := replication.ObjectOpts{
+		Name:         dobj.ObjectName,
+		SSEC:         crypto.SSEC.IsEncrypted(oi.UserDefined),
+		UserTags:     oi.UserTags,
+		DeleteMarker: oi.DeleteMarker,
+		VersionID:    dobj.VersionID,
+	}
+	replicate = rcfg.Replicate(opts)
 	// when incoming delete is removal of a delete marker( a.k.a versioned delete),
 	// GetObjectInfo returns extra information even though it returns errFileNotFound
 	if gerr != nil {
@@ -187,7 +195,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		case replication.Pending, replication.Completed, replication.Failed:
 			validReplStatus = true
 		}
-		if oi.DeleteMarker && validReplStatus {
+		if oi.DeleteMarker && (validReplStatus || replicate) {
 			return oi.DeleteMarker, true, sync
 		}
 		// can be the case that other cluster is down and duplicate `mc rm --vid`
@@ -200,14 +208,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if tgt == nil {
 		return oi.DeleteMarker, false, false
 	}
-	opts := replication.ObjectOpts{
-		Name:         dobj.ObjectName,
-		SSEC:         crypto.SSEC.IsEncrypted(oi.UserDefined),
-		UserTags:     oi.UserTags,
-		DeleteMarker: oi.DeleteMarker,
-		VersionID:    dobj.VersionID,
-	}
-	return oi.DeleteMarker, rcfg.Replicate(opts), tgt.replicateSync
+	return oi.DeleteMarker, replicate, tgt.replicateSync
 }
 
 // replicate deletes to the designated replication target if replication configuration
