@@ -123,7 +123,13 @@ export MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY=on
 
 ### Variable substitution in AD/LDAP configuration strings ###
 
-`%s` is replaced with *username* automatically for construction bind_dn, search_filter and group_search_filter.
+In the configuration variables, `%s` is substituted with the *username* from the STS request and `%d` is substituted with the *distinguished username (user DN)* of the LDAP user. Please see the following table for which configuration variables support these substitution variables:
+
+| Variable                                    | Supported substitutions |
+|---------------------------------------------|-------------------------|
+| `MINIO_IDENTITY_LDAP_USERNAME_FORMAT`       | `%s`                    |
+| `MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER` | `%s`                    |
+| `MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER`   | `%s` and `%d`           |
 
 ## Managing User/Group Access Policy
 
