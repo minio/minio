@@ -81,8 +81,8 @@ require (
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	go.etcd.io/etcd/v3 v3.3.0-rc.0.0.20200707003333-58bb8ae09f8e
 	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
-	golang.org/x/net v0.0.0-20200904194848-62affa334b73
-	golang.org/x/sys v0.0.0-20200915084602-288bc346aa39
+	golang.org/x/net v0.0.0-20210119194325-5f4716e94777
+	golang.org/x/sys v0.0.0-20201119102817-f84b799fce68
 	golang.org/x/tools v0.0.0-20200929223013-bf155c11ec6f // indirect
 	google.golang.org/api v0.5.0
 	gopkg.in/jcmturner/gokrb5.v7 v7.3.0
