@@ -304,6 +304,16 @@ func (z *xlMetaV2) AddVersion(fi FileInfo) error {
 				ventry.ObjectV2.MetaUser[k] = v
 			}
 		}
+
+		if fi.TransitionStatus != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionStatus] = []byte(fi.TransitionStatus)
+		}
+		if fi.TransitionedObjName != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionedObjectName] = []byte(fi.TransitionedObjName)
+		}
+		if fi.TransitionTier != "" {
+			ventry.ObjectV2.MetaSys[ReservedMetadataPrefixLower+TransitionTier] = []byte(fi.TransitionTier)
+		}
 	}
 
 	if !ventry.Valid() {
