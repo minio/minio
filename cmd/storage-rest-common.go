@@ -72,6 +72,7 @@ const (
 	storageRESTCount          = "count"
 	storageRESTMarkerPath     = "marker"
 	storageRESTPrefixFilter   = "prefix"
+	storageRESTForwardFilter  = "forward"
 	storageRESTRecursive      = "recursive"
 	storageRESTReportNotFound = "report-notfound"
 	storageRESTBitrotAlgo     = "bitrot-algo"
