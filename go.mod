@@ -49,7 +49,7 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.1
 	github.com/minio/md5-simd v1.1.1 // indirect
-	github.com/minio/minio-go/v7 v7.0.9-0.20210210235136-83423dddb072
+	github.com/minio/minio-go/v7 v7.0.10
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v0.1.1
 	github.com/minio/simdjson-go v0.2.1
@@ -70,17 +70,16 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.2.0
-	github.com/quasilyte/go-ruleguard v0.2.1 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil v3.20.11+incompatible
+	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v1.0.0
 	github.com/tidwall/gjson v1.6.7
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible
