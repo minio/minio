@@ -188,6 +188,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			isSuffixLength = true
 		}
 
+		if length > 0 {
+			length--
+		}
+
 		rs := &HTTPRangeSpec{
 			IsSuffixLength: isSuffixLength,
 			Start:          offset,
