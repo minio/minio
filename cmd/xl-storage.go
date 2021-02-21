@@ -1121,7 +1121,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 	return fi, nil
 }
 
-func (s *xlStorage) readAllData(volumeDir, filePath string, requireDirectIO bool) (buf []byte, err error) {
+func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirectIO bool) (buf []byte, err error) {
 	var f *os.File
 	if requireDirectIO {
 		f, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
@@ -1156,7 +1156,7 @@ func (s *xlStorage) readAllData(volumeDir, filePath string, requireDirectIO bool
 
 	atomic.AddInt32(&s.activeIOCount, 1)
 	rd := &odirectReader{f, nil, nil, true, true, s, nil}
-	defer rd.Close()
+	defer rd.Close() // activeIOCount is decremented in Close()
 
 	buf, err = ioutil.ReadAll(rd)
 	if err != nil {
@@ -1172,11 +1172,6 @@ func (s *xlStorage) readAllData(volumeDir, filePath string, requireDirectIO bool
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
 func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error) {
-	atomic.AddInt32(&s.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt32(&s.activeIOCount, -1)
-	}()
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -1188,34 +1183,8 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 		return nil, err
 	}
 
-	buf, err = ioutil.ReadFile(filePath)
-	if err != nil {
-		if osIsNotExist(err) {
-			// Check if the object doesn't exist because its bucket
-			// is missing in order to return the correct error.
-			_, err = os.Lstat(volumeDir)
-			if err != nil && osIsNotExist(err) {
-				return nil, errVolumeNotFound
-			}
-			return nil, errFileNotFound
-		} else if osIsPermission(err) {
-			return nil, errFileAccessDenied
-		} else if isSysErrNotDir(err) || isSysErrIsDir(err) {
-			return nil, errFileNotFound
-		} else if isSysErrHandleInvalid(err) {
-			// This case is special and needs to be handled for windows.
-			return nil, errFileNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		} else if isSysErrTooManyFiles(err) {
-			return nil, errTooManyOpenFiles
-		} else if isSysErrInvalidArg(err) {
-			return nil, errUnsupportedDisk
-		}
-		return nil, err
-	}
-
-	return buf, nil
+	requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported
+	return s.readAllData(volumeDir, filePath, requireDirectIO)
 }
 
 // ReadFile reads exactly len(buf) bytes into buf. It returns the

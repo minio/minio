@@ -143,7 +143,7 @@ func osErrToFileErr(err error) error {
 	if osIsPermission(err) {
 		return errFileAccessDenied
 	}
-	if isSysErrNotDir(err) {
+	if isSysErrNotDir(err) || isSysErrIsDir(err) {
 		return errFileNotFound
 	}
 	if isSysErrPathNotFound(err) {
