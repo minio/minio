@@ -51,7 +51,7 @@ require (
 	github.com/minio/md5-simd v1.1.1 // indirect
 	github.com/minio/minio-go/v7 v7.0.10
 	github.com/minio/selfupdate v0.3.1
-	github.com/minio/sha256-simd v0.1.1
+	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
 	github.com/minio/sio v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
