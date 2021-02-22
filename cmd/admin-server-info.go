@@ -17,9 +17,11 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"time"
 
+	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/madmin"
 )
 
@@ -46,10 +48,12 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			}
 			_, present := network[nodeName]
 			if !present {
-				if err := isServerResolvable(endpoint, time.Second); err == nil {
+				if err := isServerResolvable(endpoint, 2*time.Second); err == nil {
 					network[nodeName] = "online"
 				} else {
 					network[nodeName] = "offline"
+					// log once the error
+					logger.LogOnceIf(context.Background(), err, nodeName)
 				}
 			}
 		}
@@ -73,30 +77,15 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 
 func getLocalDisks(endpointServerPools EndpointServerPools) []madmin.Disk {
 	var localEndpoints Endpoints
-	network := make(map[string]string)
-
 	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
-			nodeName := endpoint.Host
-			if nodeName == "" {
-				nodeName = "localhost"
-			}
-			if endpoint.IsLocal {
-				// Only proceed for local endpoints
-				network[nodeName] = "online"
-				localEndpoints = append(localEndpoints, endpoint)
+			if !endpoint.IsLocal {
 				continue
 			}
-			_, present := network[nodeName]
-			if !present {
-				if err := isServerResolvable(endpoint, time.Second); err == nil {
-					network[nodeName] = "online"
-				} else {
-					network[nodeName] = "offline"
-				}
-			}
+			localEndpoints = append(localEndpoints, endpoint)
 		}
 	}
+
 	localDisks, _ := initStorageDisksWithErrors(localEndpoints)
 	defer closeStorageDisks(localDisks)
 	storageInfo, _ := getStorageInfo(localDisks, localEndpoints.GetAllStrings())
