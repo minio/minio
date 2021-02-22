@@ -217,9 +217,35 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 	if env.Get("MINIO_CI_CD", "") != "" {
 		rootDisk = true
 	} else {
-		rootDisk, err = disk.IsRootDisk(path, "/")
-		if err != nil {
-			return nil, err
+		if IsDocker() || IsKubernetes() {
+			// Start with overlay "/" to check if
+			// possible the path has device id as
+			// "overlay" that would mean the path
+			// is emphemeral and we should treat it
+			// as root disk from the baremetal
+			// terminology.
+			rootDisk, err = disk.IsRootDisk(path, "/")
+			if err != nil {
+				return nil, err
+			}
+			if !rootDisk {
+				// No root disk was found, its possible that
+				// path is referenced at "/data" which has
+				// different device ID that points to the original
+				// "/" on the host system, fall back to that instead
+				// to verify of the device id is same.
+				rootDisk, err = disk.IsRootDisk(path, "/data")
+				if err != nil {
+					return nil, err
+				}
+			}
+
+		} else {
+			// On baremetal setups its always "/" is the root disk.
+			rootDisk, err = disk.IsRootDisk(path, "/")
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
