@@ -420,9 +420,10 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
 				cache.Info.BloomFilter = nil
 				if err != nil {
-					logger.LogIf(ctx, err)
-					if cache.Info.LastUpdate.After(before) {
+					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
 						logger.LogIf(ctx, cache.save(ctx, er, cacheName))
+					} else {
+						logger.LogIf(ctx, err)
 					}
 					continue
 				}
