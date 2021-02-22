@@ -167,8 +167,7 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	var tlsConfig *tls.Config
 	if globalIsTLS {
 		tlsConfig = &tls.Config{
-			ServerName: endpoint.Hostname(),
-			RootCAs:    globalRootCAs,
+			RootCAs: globalRootCAs,
 		}
 	}
 

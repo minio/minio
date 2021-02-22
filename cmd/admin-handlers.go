@@ -259,6 +259,7 @@ type ServerHTTPAPIStats struct {
 // ServerHTTPStats holds all type of http operations performed to/from the server
 // including their average execution time.
 type ServerHTTPStats struct {
+	S3RequestsInQueue int32              `json:"s3RequestsInQueue"`
 	CurrentS3Requests ServerHTTPAPIStats `json:"currentS3Requests"`
 	TotalS3Requests   ServerHTTPAPIStats `json:"totalS3Requests"`
 	TotalS3Errors     ServerHTTPAPIStats `json:"totalS3Errors"`

@@ -137,23 +137,26 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 // HTTPStats holds statistics information about
 // HTTP requests made by all clients
 type HTTPStats struct {
+	s3RequestsInQueue int32
 	currentS3Requests HTTPAPIStats
 	totalS3Requests   HTTPAPIStats
 	totalS3Errors     HTTPAPIStats
 }
 
+func (st *HTTPStats) addRequestsInQueue(i int32) {
+	atomic.AddInt32(&st.s3RequestsInQueue, i)
+}
+
 // Converts http stats into struct to be sent back to the client.
 func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats := ServerHTTPStats{}
-
+	serverStats.S3RequestsInQueue = atomic.LoadInt32(&st.s3RequestsInQueue)
 	serverStats.CurrentS3Requests = ServerHTTPAPIStats{
 		APIStats: st.currentS3Requests.Load(),
 	}
-
 	serverStats.TotalS3Requests = ServerHTTPAPIStats{
 		APIStats: st.totalS3Requests.Load(),
 	}
-
 	serverStats.TotalS3Errors = ServerHTTPAPIStats{
 		APIStats: st.totalS3Errors.Load(),
 	}

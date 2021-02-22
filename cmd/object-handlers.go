@@ -189,6 +189,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 			isSuffixLength = true
 		}
 
+		if length > 0 {
+			length--
+		}
+
 		rs := &HTTPRangeSpec{
 			IsSuffixLength: isSuffixLength,
 			Start:          offset,
@@ -1996,8 +2000,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 
-		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID,
-			gr, length, "", "", dstOpts.ServerSideEncryption)
+		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, "", "", dstOpts.ServerSideEncryption)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2012,7 +2015,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	actualPartSize = length
-	var reader io.Reader = gr
+	var reader io.Reader = etag.NewReader(gr, nil)
 
 	mi, err := objectAPI.GetMultipartInfo(ctx, dstBucket, dstObject, uploadID, dstOpts)
 	if err != nil {
@@ -2028,8 +2031,6 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		defer s2c.Close()
 		reader = etag.Wrap(s2c, reader)
 		length = -1
-	} else {
-		reader = gr
 	}
 
 	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize)

@@ -1,5 +1,7 @@
+// +build windows
+
 /*
- * MinIO Cloud Storage, (C) 2018-2020 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +18,7 @@
 
 package disk
 
-// Info stat fs struct is container which holds following values
-// Total - total size of the volume / disk
-// Free - free size of the volume / disk
-// Files - total inodes available
-// Ffree - free inodes available
-// FSType - file system type
-type Info struct {
-	Total  uint64
-	Free   uint64
-	Used   uint64
-	Files  uint64
-	Ffree  uint64
-	FSType string
+// SameDisk reports whether di1 and di2 describe the same disk.
+func SameDisk(disk1, disk2 string) (bool, error) {
+	return false, nil
 }

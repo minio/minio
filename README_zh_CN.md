@@ -89,7 +89,7 @@ service minio start
 
 ## 使用源码安装
 
-采用源码安装仅供开发人员和高级用户使用,如果你还没有Golang环境， 请参考 [How to install Golang](https://golang.org/doc/install)。最低需要Golang版本为 [go1.14](https://golang.org/dl/#stable)
+采用源码安装仅供开发人员和高级用户使用,如果你还没有Golang环境， 请参考 [How to install Golang](https://golang.org/doc/install)。最低需要Golang版本为 [go1.15](https://golang.org/dl/#stable)
 
 ```sh
 GO111MODULE=on go get github.com/minio/minio

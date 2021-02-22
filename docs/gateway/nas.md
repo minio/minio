@@ -79,6 +79,23 @@ export MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_1=/tmp/webhk
 
 > NOTE: Please check the docs for the corresponding ENV setting. Alternatively, We can obtain other ENVs in the form `mc admin config set alias/ <sub-sys> --env`
 
+## Symlink support
+
+NAS gateway implementation allows symlinks on regular files,
+
+### Behavior
+
+- For reads symlink resolves to file symlink points to.
+- For deletes
+  - Delete of symlink deletes the symlink but not the real file to which the symlink points.
+  - Delete of actual file automatically makes symlink'ed file invisible, dangling symlinks won't be visible.
+
+#### Caveats
+- Disallows follow of directory symlinks to avoid security issues, and leaving them as is on namespace makes them very inconsistent.
+- Dangling symlinks are ignored automatically.
+
+*Directory symlinks is not and will not be supported as there are no safe ways to handle them.*
+
 ## Explore Further
 - [`mc` command-line interface](https://docs.min.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.min.io/docs/aws-cli-with-minio)
