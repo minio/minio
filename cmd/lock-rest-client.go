@@ -43,8 +43,6 @@ func toLockError(err error) error {
 	switch err.Error() {
 	case errLockConflict.Error():
 		return errLockConflict
-	case errLockNotExpired.Error():
-		return errLockNotExpired
 	}
 	return err
 }
@@ -103,7 +101,7 @@ func (client *lockRESTClient) restCall(ctx context.Context, call string, args ds
 	switch err {
 	case nil:
 		return true, nil
-	case errLockConflict, errLockNotExpired:
+	case errLockConflict:
 		return false, nil
 	default:
 		return false, err
@@ -128,11 +126,6 @@ func (client *lockRESTClient) RUnlock(args dsync.LockArgs) (reply bool, err erro
 // Unlock calls write unlock RPC.
 func (client *lockRESTClient) Unlock(args dsync.LockArgs) (reply bool, err error) {
 	return client.restCall(context.Background(), lockRESTMethodUnlock, args)
-}
-
-// Expired calls expired handler to check if lock args have expired.
-func (client *lockRESTClient) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
-	return client.restCall(ctx, lockRESTMethodExpired, args)
 }
 
 // ForceUnlock calls force unlock handler to forcibly unlock an active lock.

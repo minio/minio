@@ -236,56 +236,6 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 	}
 }
 
-func (l *localLocker) Expired(ctx context.Context, args dsync.LockArgs) (expired bool, err error) {
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	default:
-		l.mutex.Lock()
-		defer l.mutex.Unlock()
-
-		resource := args.Resources[0] // expiry check is always per resource.
-
-		// Lock found, proceed to verify if belongs to given uid.
-		lri, ok := l.lockMap[resource]
-		if !ok {
-			// lock doesn't exist yet not reason to
-			// expire that doesn't exist yet - it may be
-			// racing with other active lock requests.
-			return false, nil
-		}
-
-		// Check whether uid is still active
-		for _, entry := range lri {
-			if entry.UID == args.UID && entry.Owner == args.Owner {
-				ep := globalRemoteEndpoints[args.Owner]
-				if !ep.IsLocal {
-					// check if the owner is online
-					return isServerResolvable(ep, 3*time.Second) != nil, nil
-				}
-				return false, nil
-			}
-		}
-
-		return true, nil
-	}
-}
-
-// Similar to removeEntry but only removes an entry only if the lock entry exists in map.
-// Caller must hold 'l.mutex' lock.
-func (l *localLocker) removeEntryIfExists(lrip lockRequesterInfo) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)
-	if lri, ok := l.lockMap[lrip.Name]; ok {
-		// Even if the entry exists, it may not be the same entry which was
-		// considered as expired, so we simply an attempt to remove it if its
-		// not possible there is nothing we need to do.
-		l.removeEntry(lrip.Name, dsync.LockArgs{Owner: lrip.Owner, UID: lrip.UID}, &lri)
-	}
-}
-
 func newLocker() *localLocker {
 	return &localLocker{
 		lockMap: make(map[string][]lockRequesterInfo),
