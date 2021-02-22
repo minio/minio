@@ -29,8 +29,8 @@ import (
 
 // Report includes the bandwidth report or the error encountered.
 type Report struct {
-	Report bandwidth.Report
-	Err    error
+	Report bandwidth.Report `json:"report"`
+	Err    error            `json:"error,omitempty"`
 }
 
 // GetBucketBandwidth - Gets a channel reporting bandwidth measurements for replication buckets. If no buckets
