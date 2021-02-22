@@ -793,6 +793,10 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 		return nil, err
 	}
 
+	if startOffset != 0 || length != objInfo.Size {
+		delete(objInfo.UserDefined, "Content-MD5")
+	}
+
 	pr, pw := io.Pipe()
 	go func() {
 		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.InnerETag, opts)
