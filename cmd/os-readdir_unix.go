@@ -109,6 +109,10 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 				if isSysErrNotDir(err) {
 					return nil
 				}
+				err = osErrToFileErr(err)
+				if err == errFileNotFound {
+					return nil
+				}
 				return err
 			}
 			if nbuf <= 0 {
@@ -183,7 +187,7 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 				if isSysErrNotDir(err) {
 					return nil, errFileNotFound
 				}
-				return nil, err
+				return nil, osErrToFileErr(err)
 			}
 			if nbuf <= 0 {
 				break
