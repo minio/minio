@@ -205,14 +205,6 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	}
 	xhttp.DrainBody(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		return StorageErr(resp.Status)
-	}
-
-	if resp.Header.Get(xhttp.MinIOServerStatus) == unavailable {
-		return StorageErr(unavailable)
-	}
-
 	return nil
 }
 
