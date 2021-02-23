@@ -47,7 +47,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 			continue
 		}
 		size := int64(len(dataUsageJSON))
-		r, err := hash.NewReader(bytes.NewReader(dataUsageJSON), size, "", "", size, false)
+		r, err := hash.NewReader(bytes.NewReader(dataUsageJSON), size, "", "", size)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			continue
