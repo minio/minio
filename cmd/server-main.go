@@ -311,6 +311,8 @@ func initServer(ctx context.Context, newObject ObjectLayer) error {
 		if errors.Is(err, errDiskNotFound) ||
 			errors.Is(err, errConfigNotFound) ||
 			errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, errErasureWriteQuorum) ||
+			errors.Is(err, errErasureReadQuorum) ||
 			errors.As(err, &rquorum) ||
 			errors.As(err, &wquorum) ||
 			isErrBucketNotFound(err) {
@@ -355,14 +357,12 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		for index := range buckets {
 			index := index
 			g.Go(func() error {
-				if _, berr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true}); berr != nil {
-					return fmt.Errorf("Unable to list buckets to heal: %w", berr)
-				}
-				return nil
+				_, berr := newObject.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true})
+				return berr
 			}, index)
 		}
 		if err := g.WaitErr(); err != nil {
-			return err
+			return fmt.Errorf("Unable to list buckets to heal: %w", err)
 		}
 	}
 
@@ -371,6 +371,8 @@ func initAllSubsystems(ctx context.Context, newObject ObjectLayer) (err error) {
 		if errors.Is(err, errDiskNotFound) ||
 			errors.Is(err, errConfigNotFound) ||
 			errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, errErasureWriteQuorum) ||
+			errors.Is(err, errErasureReadQuorum) ||
 			errors.As(err, &rquorum) ||
 			errors.As(err, &wquorum) ||
 			isErrBucketNotFound(err) {
