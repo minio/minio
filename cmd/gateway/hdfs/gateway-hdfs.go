@@ -497,7 +497,7 @@ func (n *hdfsObjects) populateDirectoryListing(filePath string, fileInfos map[st
 	}
 
 	for _, fileInfo := range infos {
-		filePath := n.hdfsPathJoin(filePath, fileInfo.Name())
+		filePath := minio.PathJoin(filePath, fileInfo.Name())
 		fileInfos[filePath] = fileInfo
 	}
 

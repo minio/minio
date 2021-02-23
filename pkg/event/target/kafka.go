@@ -160,6 +160,9 @@ func (target *KafkaTarget) Save(eventData event.Event) error {
 
 // send - sends an event to the kafka.
 func (target *KafkaTarget) send(eventData event.Event) error {
+	if target.producer == nil {
+		return errNotConnected
+	}
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err

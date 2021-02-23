@@ -179,31 +179,6 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 	if err != nil || rcfg == nil {
 		return false, false, sync
 	}
-	// when incoming delete is removal of a delete marker( a.k.a versioned delete),
-	// GetObjectInfo returns extra information even though it returns errFileNotFound
-	if gerr != nil {
-		validReplStatus := false
-		switch oi.ReplicationStatus {
-		// Point to note: even if two way replication with Deletemarker or Delete sync is enabled,
-		// deletion of a REPLICA object/deletemarker will not trigger a replication to the other cluster.
-		case replication.Pending, replication.Completed, replication.Failed:
-			validReplStatus = true
-		}
-		if oi.DeleteMarker && validReplStatus {
-			return oi.DeleteMarker, true, sync
-		}
-		return oi.DeleteMarker, false, sync
-	}
-	if oi.ReplicationStatus == replication.Replica {
-		// avoid replicating a replica in bi-directional replication
-		return oi.DeleteMarker, false, sync
-	}
-	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
-	// the target online status should not be used here while deciding
-	// whether to replicate deletes as the target could be temporarily down
-	if tgt == nil {
-		return oi.DeleteMarker, false, false
-	}
 	opts := replication.ObjectOpts{
 		Name:         dobj.ObjectName,
 		SSEC:         crypto.SSEC.IsEncrypted(oi.UserDefined),
@@ -211,7 +186,29 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 		DeleteMarker: oi.DeleteMarker,
 		VersionID:    dobj.VersionID,
 	}
-	return oi.DeleteMarker, rcfg.Replicate(opts), tgt.replicateSync
+	replicate = rcfg.Replicate(opts)
+	// when incoming delete is removal of a delete marker( a.k.a versioned delete),
+	// GetObjectInfo returns extra information even though it returns errFileNotFound
+	if gerr != nil {
+		validReplStatus := false
+		switch oi.ReplicationStatus {
+		case replication.Pending, replication.Completed, replication.Failed:
+			validReplStatus = true
+		}
+		if oi.DeleteMarker && (validReplStatus || replicate) {
+			return oi.DeleteMarker, true, sync
+		}
+		// can be the case that other cluster is down and duplicate `mc rm --vid`
+		// is issued - this still needs to be replicated back to the other target
+		return oi.DeleteMarker, oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed, sync
+	}
+	tgt := globalBucketTargetSys.GetRemoteTargetClient(ctx, rcfg.RoleArn)
+	// the target online status should not be used here while deciding
+	// whether to replicate deletes as the target could be temporarily down
+	if tgt == nil {
+		return oi.DeleteMarker, false, false
+	}
+	return oi.DeleteMarker, replicate, tgt.replicateSync
 }
 
 // replicate deletes to the designated replication target if replication configuration
@@ -648,6 +645,8 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 		}
 	}
 	replicationStatus := replication.Completed
+	// use core client to avoid doing multipart on PUT
+	c := &miniogo.Core{Client: tgt.Client}
 	if rtype != replicateAll {
 		// replicate metadata for object tagging/copy with metadata replacement
 		srcOpts := miniogo.CopySrcOptions{
@@ -655,8 +654,6 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			Object:    object,
 			VersionID: objInfo.VersionID}
 		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
-		c := &miniogo.Core{Client: tgt.Client}
-
 		if _, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), srcOpts, dstOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))
@@ -700,7 +697,7 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 
 		// r takes over closing gr.
 		r := bandwidth.NewMonitoredReader(ctx, globalBucketMonitor, objInfo.Bucket, objInfo.Name, gr, headerSize, b, target.BandwidthLimit)
-		if _, err = tgt.PutObject(ctx, dest.Bucket, object, r, size, putOpts); err != nil {
+		if _, err = c.PutObject(ctx, dest.Bucket, object, r, size, "", "", putOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate for object %s/%s(%s): %w", bucket, objInfo.Name, objInfo.VersionID, err))
 		}

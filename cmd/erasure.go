@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -268,7 +269,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
-		// this information is used by crawler to skip healing
+		// this information is used by scanner to skip healing
 		// this erasure set while it calculates the usage.
 		if info.Healing || info.Error != "" {
 			healing = true
@@ -353,7 +354,8 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	var saverWg sync.WaitGroup
 	saverWg.Add(1)
 	go func() {
-		const updateTime = 30 * time.Second
+		// Add jitter to the update time so multiple sets don't sync up.
+		var updateTime = 30*time.Second + time.Duration(float64(10*time.Second)*rand.Float64())
 		t := time.NewTicker(updateTime)
 		defer t.Stop()
 		defer saverWg.Done()
@@ -386,7 +388,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 		}
 	}()
 
-	// Start one crawler per disk
+	// Start one scanner per disk
 	var wg sync.WaitGroup
 	wg.Add(len(disks))
 	for i := range disks {
@@ -426,9 +428,10 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
 				cache.Info.BloomFilter = nil
 				if err != nil {
-					logger.LogIf(ctx, err)
-					if cache.Info.LastUpdate.After(before) {
+					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
 						logger.LogIf(ctx, cache.save(ctx, er, cacheName))
+					} else {
+						logger.LogIf(ctx, err)
 					}
 					continue
 				}
@@ -437,11 +440,15 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				if r := cache.root(); r != nil {
 					root = cache.flatten(*r)
 				}
+				t := time.Now()
 				bucketResults <- dataUsageEntryInfo{
 					Name:   cache.Info.Name,
 					Parent: dataUsageRoot,
 					Entry:  root,
 				}
+				// We want to avoid synchronizing up all writes in case
+				// the results are piled up.
+				time.Sleep(time.Duration(float64(time.Since(t)) * rand.Float64()))
 				// Save cache
 				logger.LogIf(ctx, cache.save(ctx, er, cacheName))
 			}

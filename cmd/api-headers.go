@@ -184,12 +184,13 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	}
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
 		ruleID, expiryTime := lc.PredictExpiryTime(lifecycle.ObjectOpts{
-			Name:         objInfo.Name,
-			UserTags:     objInfo.UserTags,
-			VersionID:    objInfo.VersionID,
-			ModTime:      objInfo.ModTime,
-			IsLatest:     objInfo.IsLatest,
-			DeleteMarker: objInfo.DeleteMarker,
+			Name:             objInfo.Name,
+			UserTags:         objInfo.UserTags,
+			VersionID:        objInfo.VersionID,
+			ModTime:          objInfo.ModTime,
+			IsLatest:         objInfo.IsLatest,
+			DeleteMarker:     objInfo.DeleteMarker,
+			SuccessorModTime: objInfo.SuccessorModTime,
 		})
 		if !expiryTime.IsZero() {
 			w.Header()[xhttp.AmzExpiration] = []string{

@@ -29,14 +29,27 @@ func readDir(dirPath string) (entries []string, err error) {
 	return readDirN(dirPath, -1)
 }
 
-// readDir applies the filter function on each entries at dirPath, doesn't recurse into
-// the directory itself.
-func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
+// readDirFn applies the fn() function on each entries at dirPath, doesn't recurse into
+// the directory itself, if the dirPath doesn't exist this function doesn't return
+// an error.
+func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) error {
 	f, err := os.Open(dirPath)
 	if err != nil {
+		if osErrToFileErr(err) == errFileNotFound {
+			return nil
+		}
 		return osErrToFileErr(err)
 	}
 	defer f.Close()
+
+	// Check if file or dir. This is the quickest way.
+	// Do not remove this check, on windows syscall.FindNextFile
+	// would throw an exception if Fd() points to a file
+	// instead of a directory, we need to quickly fail
+	// in such situations - this workadound is expected.
+	if _, err = f.Seek(0, io.SeekStart); err == nil {
+		return errFileNotFound
+	}
 
 	data := &syscall.Win32finddata{}
 	for {
@@ -45,6 +58,9 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 			if e == syscall.ERROR_NO_MORE_FILES {
 				break
 			} else {
+				if isSysErrPathNotFound(e) {
+					return nil
+				}
 				return osErrToFileErr(&os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
@@ -56,20 +72,40 @@ func readDirFilterFn(dirPath string, filter func(name string, typ os.FileMode) e
 		if name == "" || name == "." || name == ".." { // Useless names
 			continue
 		}
-		if data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-			continue
-		}
+
 		var typ os.FileMode = 0 // regular file
-		if data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0 {
+		switch {
+		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
+			// Reparse point is a symlink
+			fi, err := os.Stat(pathJoin(dirPath, string(name)))
+			if err != nil {
+				// It got deleted in the meantime, not found
+				// or returns too many symlinks ignore this
+				// file/directory.
+				if osIsNotExist(err) || isSysErrPathNotFound(err) ||
+					isSysErrTooManySymlinks(err) {
+					continue
+				}
+				return err
+			}
+
+			if fi.IsDir() {
+				// Ignore symlinked directories.
+				continue
+			}
+
+			typ = fi.Mode()
+		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
 			typ = os.ModeDir
 		}
+
 		if e = filter(name, typ); e == errDoneForNow {
 			// filtering requested to return by caller.
 			return nil
 		}
 	}
 
-	return err
+	return nil
 }
 
 // Return N entries at the directory dirPath. If count is -1, return all entries
@@ -81,10 +117,14 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 	defer f.Close()
 
 	// Check if file or dir. This is the quickest way.
-	_, err = f.Seek(0, io.SeekStart)
-	if err == nil {
+	// Do not remove this check, on windows syscall.FindNextFile
+	// would throw an exception if Fd() points to a file
+	// instead of a directory, we need to quickly fail
+	// in such situations - this workadound is expected.
+	if _, err = f.Seek(0, io.SeekStart); err == nil {
 		return nil, errFileNotFound
 	}
+
 	data := &syscall.Win32finddata{}
 	handle := syscall.Handle(f.Fd())
 
@@ -106,15 +146,33 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 		if name == "" || name == "." || name == ".." { // Useless names
 			continue
 		}
+
 		switch {
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_REPARSE_POINT != 0:
-			continue
+			// Reparse point is a symlink
+			fi, err := os.Stat(pathJoin(dirPath, string(name)))
+			if err != nil {
+				// It got deleted in the meantime, not found
+				// or returns too many symlinks ignore this
+				// file/directory.
+				if osIsNotExist(err) || isSysErrPathNotFound(err) ||
+					isSysErrTooManySymlinks(err) {
+					continue
+				}
+				return nil, err
+			}
+
+			if fi.IsDir() {
+				// directory symlinks are ignored.
+				continue
+			}
 		case data.FileAttributes&syscall.FILE_ATTRIBUTE_DIRECTORY != 0:
-			entries = append(entries, name+SlashSeparator)
-		default:
-			entries = append(entries, name)
+			name = name + SlashSeparator
 		}
+
 		count--
+		entries = append(entries, name)
+
 	}
 
 	return entries, nil

@@ -328,7 +328,9 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				}
 				if scan != madmin.HealUnknownScan {
 					healOnce.Do(func() {
-						go healObject(bucket, object, fi.VersionID, scan)
+						if _, healing := er.getOnlineDisksWithHealing(); !healing {
+							go healObject(bucket, object, fi.VersionID, scan)
+						}
 					})
 				}
 			}
@@ -370,12 +372,14 @@ func (er erasureObjects) getObject(ctx context.Context, bucket, object string, s
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
-	// Lock the object before reading.
-	lk := er.NewNSLock(bucket, object)
-	if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
+	if !opts.NoLock {
+		// Lock the object before reading.
+		lk := er.NewNSLock(bucket, object)
+		if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
+			return ObjectInfo{}, err
+		}
+		defer lk.RUnlock()
 	}
-	defer lk.RUnlock()
 
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
@@ -436,7 +440,9 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 	// if missing metadata can be reconstructed, attempt to reconstruct.
 	if missingBlocks > 0 && missingBlocks < readQuorum {
-		go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
+		if _, healing := er.getOnlineDisksWithHealing(); !healing {
+			go healObject(bucket, object, fi.VersionID, madmin.HealNormalScan)
+		}
 	}
 
 	return fi, metaArr, onlineDisks, nil
@@ -456,7 +462,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 			objInfo.StorageClass = sc
 		}
 	}
-	if !fi.VersionPurgeStatus.Empty() {
+	if !fi.VersionPurgeStatus.Empty() && opts.VersionID != "" {
 		// Make sure to return object info to provide extra information.
 		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}

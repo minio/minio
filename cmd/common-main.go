@@ -50,10 +50,14 @@ import (
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
 func init() {
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
-	rand.Seed(time.Now().UTC().UnixNano())
+	// Inject into config package.
+	config.Logger.Info = logger.Info
+	config.Logger.LogIf = logger.LogIf
 
 	globalDNSCache = xhttp.NewDNSCache(10*time.Second, 10*time.Second, logger.LogOnceIf)
 

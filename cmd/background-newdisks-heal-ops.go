@@ -424,8 +424,9 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 								// disks to be healed again, we cannot proceed further.
 								return
 							}
-							lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
-							if err := healErasureSet(ctx, buckets, lbDisks, tracker); err != nil {
+
+							err = z.serverPools[i].sets[setIndex].healErasureSet(ctx, buckets, tracker)
+							if err != nil {
 								logger.LogIf(ctx, err)
 								continue
 							}

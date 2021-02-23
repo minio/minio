@@ -27,7 +27,6 @@ import (
 	"github.com/minio/minio/cmd/config/api"
 	"github.com/minio/minio/cmd/config/cache"
 	"github.com/minio/minio/cmd/config/compress"
-	"github.com/minio/minio/cmd/config/crawler"
 	"github.com/minio/minio/cmd/config/dns"
 	"github.com/minio/minio/cmd/config/etcd"
 	"github.com/minio/minio/cmd/config/heal"
@@ -35,6 +34,7 @@ import (
 	"github.com/minio/minio/cmd/config/identity/openid"
 	"github.com/minio/minio/cmd/config/notify"
 	"github.com/minio/minio/cmd/config/policy/opa"
+	"github.com/minio/minio/cmd/config/scanner"
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
@@ -60,7 +60,7 @@ func initHelp() {
 		config.LoggerWebhookSubSys:  logger.DefaultKVS,
 		config.AuditWebhookSubSys:   logger.DefaultAuditKVS,
 		config.HealSubSys:           heal.DefaultKVS,
-		config.CrawlerSubSys:        crawler.DefaultKVS,
+		config.ScannerSubSys:        scanner.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -117,8 +117,8 @@ func initHelp() {
 			Description: "manage object healing frequency and bitrot verification checks",
 		},
 		config.HelpKV{
-			Key:         config.CrawlerSubSys,
-			Description: "manage crawling for usage calculation, lifecycle, healing and more",
+			Key:         config.ScannerSubSys,
+			Description: "manage scanner for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,
@@ -200,7 +200,7 @@ func initHelp() {
 		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
 		config.HealSubSys:           heal.Help,
-		config.CrawlerSubSys:        crawler.Help,
+		config.ScannerSubSys:        scanner.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
 		config.PolicyOPASubSys:      opa.Help,
@@ -274,11 +274,11 @@ func validateConfig(s config.Config, setDriveCounts []int) error {
 		}
 	}
 
-	if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
+	if _, err = heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
 		return err
 	}
 
-	if _, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default]); err != nil {
+	if _, err = scanner.LookupConfig(s[config.ScannerSubSys][config.Default]); err != nil {
 		return err
 	}
 
@@ -606,10 +606,10 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 		return fmt.Errorf("Unable to apply heal config: %w", err)
 	}
 
-	// Crawler
-	crawlerCfg, err := crawler.LookupConfig(s[config.CrawlerSubSys][config.Default])
+	// Scanner
+	scannerCfg, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
 	if err != nil {
-		return fmt.Errorf("Unable to apply crawler config: %w", err)
+		return fmt.Errorf("Unable to apply scanner config: %w", err)
 	}
 
 	// Apply configurations.
@@ -624,7 +624,7 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 	globalHealConfig = healCfg
 	globalHealConfigMu.Unlock()
 
-	logger.LogIf(ctx, crawlerSleeper.Update(crawlerCfg.Delay, crawlerCfg.MaxWait))
+	logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 
 	// Update all dynamic config values in memory.
 	globalServerConfigMu.Lock()

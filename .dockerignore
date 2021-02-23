@@ -1,2 +1,10 @@
 .git
 .github
+docs
+CREDITS
+default.etcd
+browser
+*.gz
+*.tar.gz
+*.bzip2
+*.zip
