@@ -1367,11 +1367,11 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin
 		SetCount:  s.setCount,
 	}
 
-	for _, s := range s.sets {
+	for _, set := range s.sets {
 		var healResult madmin.HealResultItem
-		healResult, err = s.HealBucket(ctx, bucket, opts)
+		healResult, err = set.HealBucket(ctx, bucket, opts)
 		if err != nil {
-			return result, err
+			return result, toObjectErr(err, bucket)
 		}
 		result.Before.Drives = append(result.Before.Drives, healResult.Before.Drives...)
 		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)
