@@ -99,6 +99,8 @@ type erasureSets struct {
 
 	mrfMU         sync.Mutex
 	mrfOperations map[healSource]int
+
+	zoneIndex int
 }
 
 func isEndpointConnected(diskMap map[string]StorageAPI, endpoint string) bool {
@@ -832,10 +834,11 @@ func (s *erasureSets) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 
 // FileInfoVersionsCh - file info versions channel
 type FileInfoVersionsCh struct {
-	Ch       chan FileInfoVersions
-	Prev     FileInfoVersions
-	Valid    bool
-	SetIndex int
+	Ch        chan FileInfoVersions
+	Prev      FileInfoVersions
+	Valid     bool
+	SetIndex  int
+	ZoneIndex int
 }
 
 // Pop - pops a cached entry if any, or from the cached channel.
@@ -856,10 +859,11 @@ func (f *FileInfoVersionsCh) Push(fi FileInfoVersions) {
 
 // FileInfoCh - file info channel
 type FileInfoCh struct {
-	Ch       chan FileInfo
-	Prev     FileInfo
-	Valid    bool
-	SetIndex int
+	Ch        chan FileInfo
+	Prev      FileInfo
+	Valid     bool
+	SetIndex  int
+	ZoneIndex int
 }
 
 // Pop - pops a cached entry if any, or from the cached channel.
@@ -973,8 +977,9 @@ func (s *erasureSets) startMergeWalksVersionsN(ctx context.Context, bucket, pref
 
 				mutex.Lock()
 				entryChs = append(entryChs, FileInfoVersionsCh{
-					Ch:       entryCh,
-					SetIndex: i,
+					Ch:        entryCh,
+					SetIndex:  i,
+					ZoneIndex: s.zoneIndex,
 				})
 				mutex.Unlock()
 			}(i, disk)
@@ -1010,8 +1015,9 @@ func (s *erasureSets) startMergeWalksN(ctx context.Context, bucket, prefix, mark
 				}
 				mutex.Lock()
 				entryChs = append(entryChs, FileInfoCh{
-					Ch:       entryCh,
-					SetIndex: i,
+					Ch:        entryCh,
+					SetIndex:  i,
+					ZoneIndex: s.zoneIndex,
 				})
 				mutex.Unlock()
 			}(i, disk)
