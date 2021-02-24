@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -31,8 +32,8 @@ import (
 	"github.com/minio/minio/cmd/config/storageclass"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/color"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 const (
@@ -156,7 +157,7 @@ func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
 // successfully the version only if the backend is Erasure.
 func formatGetBackendErasureVersion(formatPath string) (string, error) {
 	meta := &formatMetaV1{}
-	b, err := ioutil.ReadFile(formatPath)
+	b, err := xioutil.ReadFile(formatPath)
 	if err != nil {
 		return "", err
 	}
@@ -218,7 +219,7 @@ func formatErasureMigrateV1ToV2(export, version string) error {
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 
 	formatV1 := &formatErasureV1{}
-	b, err := ioutil.ReadFile(formatPath)
+	b, err := xioutil.ReadFile(formatPath)
 	if err != nil {
 		return err
 	}
@@ -251,7 +252,7 @@ func formatErasureMigrateV2ToV3(export, version string) error {
 
 	formatPath := pathJoin(export, minioMetaBucket, formatConfigFile)
 	formatV2 := &formatErasureV2{}
-	b, err := ioutil.ReadFile(formatPath)
+	b, err := xioutil.ReadFile(formatPath)
 	if err != nil {
 		return err
 	}

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -32,7 +33,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	"github.com/minio/minio/pkg/bucket/versioning"
 	"github.com/minio/minio/pkg/madmin"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 const (

@@ -50,10 +50,11 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 			if err == io.EOF {
 				break
 			}
-			if osErrToFileErr(err) == errFileNotFound {
+			err = osErrToFileErr(err)
+			if err == errFileNotFound {
 				return nil
 			}
-			return osErrToFileErr(err)
+			return err
 		}
 		for _, fi := range fis {
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {

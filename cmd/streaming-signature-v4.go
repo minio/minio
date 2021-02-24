@@ -21,6 +21,7 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"hash"
@@ -31,7 +32,6 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/pkg/auth"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 // Streaming AWS Signature Version '4' constants.
