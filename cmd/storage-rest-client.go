@@ -184,13 +184,15 @@ func (client *storageRESTClient) Healing() *healingTracker {
 		// Update at least every second.
 		client.diskHealCache.TTL = time.Second
 		client.diskHealCache.Update = func() (interface{}, error) {
-			var h healingTracker
-			b, err := client.ReadAll(GlobalContext, minioMetaBucket,
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			b, err := client.ReadAll(ctx, minioMetaBucket,
 				pathJoin(bucketMetaPrefix, healingTrackerFilename))
 			if err != nil {
 				// If error, likely not healing.
 				return (*healingTracker)(nil), nil
 			}
+			var h healingTracker
 			_, err = h.UnmarshalMsg(b)
 			return &h, err
 		}
@@ -242,7 +244,9 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context) (info DiskInfo, e
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
 		client.diskInfoCache.Update = func() (interface{}, error) {
-			respBody, err := client.call(context.Background(), storageRESTMethodDiskInfo, nil, nil, -1)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			respBody, err := client.call(ctx, storageRESTMethodDiskInfo, nil, nil, -1)
 			if err != nil {
 				return info, err
 			}

@@ -100,24 +100,17 @@ func loadHealingTracker(ctx context.Context, disk StorageAPI) (*healingTracker, 
 	if err != nil {
 		return nil, err
 	}
-	if h.ID != diskID {
-		return nil, errors.New("loadHealingTracker: disk id mismatch")
+	if h.ID != diskID && h.ID != "" {
+		return nil, fmt.Errorf("loadHealingTracker: disk id mismatch expected %s, got %s", h.ID, diskID)
 	}
 	h.disk = disk
+	h.ID = diskID
 	return &h, nil
 }
 
 // newHealingTracker will create a new healing tracker for the disk.
-func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
-	if disk == nil {
-		return nil, errors.New("newHealingTracker: nil disk given")
-	}
-
-	diskID, err := disk.GetDiskID()
-	if err != nil {
-		return nil, err
-	}
-
+func newHealingTracker(disk StorageAPI) *healingTracker {
+	diskID, _ := disk.GetDiskID()
 	h := healingTracker{
 		disk:     disk,
 		ID:       diskID,
@@ -126,7 +119,7 @@ func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
 		Started:  time.Now().UTC(),
 	}
 	h.PoolIndex, h.SetIndex, h.DiskIndex = disk.GetDiskLoc()
-	return &h, err
+	return &h
 }
 
 // update will update the tracker on the disk.
@@ -134,6 +127,10 @@ func newHealingTracker(disk StorageAPI) (*healingTracker, error) {
 func (h *healingTracker) update(ctx context.Context) error {
 	if h.disk.Healing() == nil {
 		return fmt.Errorf("healingTracker: disk %q is not marked as healing", h.ID)
+	}
+	if h.ID == "" || h.PoolIndex < 0 || h.SetIndex < 0 || h.DiskIndex < 0 {
+		h.ID, _ = h.disk.GetDiskID()
+		h.PoolIndex, h.SetIndex, h.DiskIndex = h.disk.GetDiskLoc()
 	}
 	return h.save(ctx)
 }
@@ -406,13 +403,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools, bgSeq 
 							tracker, err := loadHealingTracker(ctx, disk)
 							if err != nil {
 								logger.Info("Healing tracker missing on '%s', disk was swapped again on %s pool", disk, humanize.Ordinal(i+1))
-								tracker, err = newHealingTracker(disk)
-								if err != nil {
-									logger.LogIf(ctx, err)
-									// reading format.json failed or not found, proceed to look
-									// for new disks to be healed again, we cannot proceed further.
-									return
-								}
+								tracker = newHealingTracker(disk)
 							}
 
 							tracker.PoolIndex, tracker.SetIndex, tracker.DiskIndex = disk.GetDiskLoc()
