@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	envDataUsageCrawlDebug = "MINIO_DISK_USAGE_CRAWL_DEBUG"
+	envDataUsageScannerDebug = "MINIO_DISK_USAGE_SCANNER_DEBUG"
 
 	dataUsageRoot   = SlashSeparator
 	dataUsageBucket = minioMetaBucket + SlashSeparator + bucketMetaPrefix

@@ -170,12 +170,12 @@ func (client *storageRESTClient) Healing() bool {
 	return false
 }
 
-func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (client *storageRESTClient) ScannerAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
 	}()
-	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, pr, -1)
+	respBody, err := client.call(ctx, storageRESTMethodScannerAndGetDataUsage, url.Values{}, pr, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		pr.Close()
@@ -186,14 +186,9 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	var newCache dataUsageCache
 	pr, pw = io.Pipe()
 	go func() {
-		pr.CloseWithError(newCache.deserialize(pr))
+		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
-	err = waitForHTTPStream(respBody, pw)
-	pw.CloseWithError(err)
-	if err != nil {
-		return cache, err
-	}
-	return newCache, nil
+	return newCache, newCache.deserialize(pr)
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {

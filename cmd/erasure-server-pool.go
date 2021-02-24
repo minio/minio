@@ -360,7 +360,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 	return storageInfo, errs
 }
 
-func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+func (z *erasureServerPools) ScannerAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -379,7 +379,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 		return nil
 	}
 
-	// Crawl latest allBuckets first.
+	// Scanner latest allBuckets first.
 	sort.Slice(allBuckets, func(i, j int) bool {
 		return allBuckets[i].Created.After(allBuckets[j].Created)
 	})
@@ -402,7 +402,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 					}
 				}()
 				// Start scanner. Blocks until done.
-				err := erObj.crawlAndGetDataUsage(ctx, allBuckets, bf, updates)
+				err := erObj.scannerAndGetDataUsage(ctx, allBuckets, bf, updates)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()

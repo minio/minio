@@ -98,8 +98,8 @@ func (d *naughtyDisk) SetDiskID(id string) {
 	d.disk.SetDiskID(id)
 }
 
-func (d *naughtyDisk) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (info dataUsageCache, err error) {
-	return d.disk.CrawlAndGetDataUsage(ctx, cache)
+func (d *naughtyDisk) ScannerAndGetDataUsage(ctx context.Context, cache dataUsageCache) (info dataUsageCache, err error) {
+	return d.disk.ScannerAndGetDataUsage(ctx, cache)
 }
 
 func (d *naughtyDisk) DiskInfo(ctx context.Context) (info DiskInfo, err error) {

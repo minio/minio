@@ -353,7 +353,7 @@ func (s *xlStorage) Healing() bool {
 	return err == nil
 }
 
-func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (s *xlStorage) ScannerAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	var lc *lifecycle.Lifecycle
 	var err error
 
@@ -363,7 +363,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		if err == nil && lc.HasActiveRules("", true) {
 			cache.Info.lifeCycle = lc
 			if intDataUpdateTracker.debug {
-				console.Debugln(color.Green("crawlDisk:") + " lifecycle: Active rules found")
+				console.Debugln(color.Green("scannerDisk:") + " lifecycle: Active rules found")
 			}
 		}
 	}
@@ -375,7 +375,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 	healOpts := globalHealConfig
 	globalHealConfigMu.Unlock()
 
-	dataUsageInfo, err := crawlDataFolder(ctx, s.diskPath, cache, func(item crawlItem) (sizeSummary, error) {
+	dataUsageInfo, err := scannerDataFolder(ctx, s.diskPath, cache, func(item scannerItem) (sizeSummary, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFile) &&
 			!strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFileV1) {
@@ -386,7 +386,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		buf, err := xioutil.ReadFile(item.Path)
 		if err != nil {
 			if intDataUpdateTracker.debug {
-				console.Debugf(color.Green("crawlBucket:")+" object path missing: %v: %w\n", item.Path, err)
+				console.Debugf(color.Green("scannerBucket:")+" object path missing: %v: %w\n", item.Path, err)
 			}
 			return sizeSummary{}, errSkipFile
 		}
@@ -397,7 +397,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath())
 		if err != nil {
 			if intDataUpdateTracker.debug {
-				console.Debugf(color.Green("crawlBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
+				console.Debugf(color.Green("scannerBucket:")+" reading xl.meta failed: %v: %w\n", item.Path, err)
 			}
 			return sizeSummary{}, errSkipFile
 		}

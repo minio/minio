@@ -273,9 +273,9 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 	return newDisks, healing
 }
 
-// CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
+// ScannerAndGetDataUsage will start scannering buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
+func (er erasureObjects) scannerAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	if len(buckets) == 0 {
 		return nil
 	}
@@ -283,7 +283,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	// Collect disks we can use.
 	disks, healing := er.getOnlineDisksWithHealing()
 	if len(disks) == 0 {
-		logger.Info(color.Green("data-crawl:") + " all disks are offline or being healed, skipping crawl")
+		logger.Info(color.Green("data-scanner:") + " all disks are offline or being healed, skipping scanner")
 		return nil
 	}
 
@@ -417,7 +417,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				// Calc usage
 				before := cache.Info.LastUpdate
 				var err error
-				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
+				cache, err = disk.ScannerAndGetDataUsage(ctx, cache)
 				cache.Info.BloomFilter = nil
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
