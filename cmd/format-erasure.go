@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -33,7 +34,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 const (
