@@ -39,8 +39,8 @@ func (a GatewayUnsupported) BackendInfo() BackendInfo {
 	return BackendInfo{Type: BackendGateway}
 }
 
-// CrawlAndGetDataUsage - crawl is not implemented for gateway
-func (a GatewayUnsupported) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+// NSScanner - scanner is not implemented for gateway
+func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))
 	return NotImplemented{}
 }

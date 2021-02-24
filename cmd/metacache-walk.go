@@ -34,7 +34,7 @@ import (
 
 // WalkDirOptions provides options for WalkDir operations.
 type WalkDirOptions struct {
-	// Bucket to crawl
+	// Bucket to scanner
 	Bucket string
 
 	// Directory inside the bucket.
