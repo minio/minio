@@ -17,14 +17,9 @@
 package cmd
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"path"
 	"strings"
 	"time"
-
-	"github.com/minio/minio/cmd/logger"
 )
 
 type scanStatus uint8
@@ -230,22 +225,4 @@ func (m *metacache) update(update metacache) {
 		m.ended = UTCNow()
 	}
 	m.fileNotFound = m.fileNotFound || update.fileNotFound
-}
-
-// delete all cache data on disks.
-func (m *metacache) delete(ctx context.Context) {
-	if m.bucket == "" || m.id == "" {
-		logger.LogIf(ctx, fmt.Errorf("metacache.delete: bucket (%s) or id (%s) empty", m.bucket, m.id))
-	}
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		logger.LogIf(ctx, errors.New("metacache.delete: no object layer"))
-		return
-	}
-	ez, ok := objAPI.(*erasureServerPools)
-	if !ok {
-		logger.LogIf(ctx, errors.New("metacache.delete: expected objAPI to be *erasureServerPools"))
-		return
-	}
-	ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(m.bucket, m.id))
 }

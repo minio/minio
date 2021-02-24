@@ -6,7 +6,7 @@ import (
 )
 
 func Benchmark_bucketMetacache_findCache(b *testing.B) {
-	bm := newBucketMetacache("", false)
+	bm := newBucketMetacache("")
 	const elements = 50000
 	const paths = 100
 	if elements%paths != 0 {
