@@ -25,8 +25,6 @@ import (
 	"net/url"
 	"strings"
 
-	sha256 "github.com/minio/sha256-simd"
-
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 )
 
@@ -36,13 +34,6 @@ const (
 	AdminAPIVersionV2 = "v2"
 	adminAPIPrefix    = "/" + AdminAPIVersion
 )
-
-// sum256 calculate sha256 sum for an input byte array.
-func sum256(data []byte) []byte {
-	hash := sha256.New()
-	hash.Write(data)
-	return hash.Sum(nil)
-}
 
 // jsonDecoder decode json to go type.
 func jsonDecoder(body io.Reader, v interface{}) error {
