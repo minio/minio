@@ -184,20 +184,13 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	pr.Close()
 
 	var newCache dataUsageCache
-	var wg sync.WaitGroup
-	wg.Add(1)
 	pr, pw = io.Pipe()
 	go func() {
-		defer wg.Done()
-		pr.CloseWithError(newCache.deserialize(pr))
+		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
-	err = waitForHTTPStream(respBody, pw)
-	pw.CloseWithError(err)
-	if err != nil {
-		return cache, err
-	}
-	wg.Wait()
-	return newCache, nil
+	err = newCache.deserialize(pr)
+	pr.CloseWithError(err)
+	return newCache, err
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
