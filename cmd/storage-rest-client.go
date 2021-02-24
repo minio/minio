@@ -184,8 +184,11 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	pr.Close()
 
 	var newCache dataUsageCache
+	var wg sync.WaitGroup
+	wg.Add(1)
 	pr, pw = io.Pipe()
 	go func() {
+		defer wg.Done()
 		pr.CloseWithError(newCache.deserialize(pr))
 	}()
 	err = waitForHTTPStream(respBody, pw)
@@ -193,6 +196,7 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	if err != nil {
 		return cache, err
 	}
+	wg.Wait()
 	return newCache, nil
 }
 
