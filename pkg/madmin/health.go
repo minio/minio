@@ -29,12 +29,11 @@ import (
 	"github.com/minio/minio/pkg/net"
 
 	smart "github.com/minio/minio/pkg/smart"
-	"github.com/shirou/gopsutil/cpu"
-	diskhw "github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/mem"
-	nethw "github.com/shirou/gopsutil/net"
-	"github.com/shirou/gopsutil/process"
+	"github.com/shirou/gopsutil/v3/cpu"
+	diskhw "github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 // HealthInfo - MinIO cluster's health Info
@@ -81,7 +80,6 @@ type SysProcess struct {
 	MemMaps         *[]process.MemoryMapsStat   `json:"memmaps,omitempty"`
 	MemPercent      float32                     `json:"mempercent,omitempty"`
 	Name            string                      `json:"name,omitempty"`
-	NetIOCounters   []nethw.IOCountersStat      `json:"netiocounters,omitempty"`
 	Nice            int32                       `json:"nice,omitempty"`
 	NumCtxSwitches  *process.NumCtxSwitchesStat `json:"numctxswitches,omitempty"`
 	NumFds          int32                       `json:"numfds,omitempty"`
@@ -89,7 +87,6 @@ type SysProcess struct {
 	PageFaults      *process.PageFaultsStat     `json:"pagefaults,omitempty"`
 	Parent          int32                       `json:"parent,omitempty"`
 	Ppid            int32                       `json:"ppid,omitempty"`
-	Rlimit          []process.RlimitStat        `json:"rlimit,omitempty"`
 	Status          string                      `json:"status,omitempty"`
 	Tgid            int32                       `json:"tgid,omitempty"`
 	Times           *cpu.TimesStat              `json:"cputimes,omitempty"`
