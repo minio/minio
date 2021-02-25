@@ -153,7 +153,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				var meta metaCacheEntry
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
-					logger.LogIf(ctx, err)
+					if osErrToFileErr(err) != errFileNotFound {
+						logger.LogIf(ctx, err)
+					}
 					continue
 				}
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
@@ -168,7 +170,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				var meta metaCacheEntry
 				meta.metadata, err = xioutil.ReadFile(pathJoin(volumeDir, current, entry))
 				if err != nil {
-					logger.LogIf(ctx, err)
+					if osErrToFileErr(err) != errFileNotFound {
+						logger.LogIf(ctx, err)
+					}
 					continue
 				}
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFileV1)

@@ -341,7 +341,10 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions) (entr
 	}
 
 	meta := o.newMetacache()
-	rpc := globalNotificationSys.restClientFromHash(o.Bucket)
+	var rpc *peerRESTClient
+	if !o.discardResult {
+		rpc = globalNotificationSys.restClientFromHash(o.Bucket)
+	}
 	var metaMu sync.Mutex
 
 	o.debugln(color.Green("listPath:")+" scanning bucket:", o.Bucket, "basedir:", o.BaseDir, "prefix:", o.Prefix, "marker:", o.Marker)
