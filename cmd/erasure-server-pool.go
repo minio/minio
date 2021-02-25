@@ -595,27 +595,6 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	return gr, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
-func (z *erasureServerPools) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
-
-	object = encodeDirObject(object)
-	for _, pool := range z.serverPools {
-		if err := pool.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
-			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-				continue
-			}
-			return err
-		}
-		return nil
-	}
-	if opts.VersionID != "" {
-		return VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
-	}
-	return ObjectNotFound{Bucket: bucket, Object: object}
-}
-
 func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
 		return objInfo, err

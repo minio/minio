@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -782,13 +781,6 @@ func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string,
 	set := s.getHashedSet(object)
 	auditObjectErasureSet(ctx, object, set, s.poolNumber)
 	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
-}
-
-// GetObject - reads an object from the hashedSet based on the object name.
-func (s *erasureSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	set := s.getHashedSet(object)
-	auditObjectErasureSet(ctx, object, set, s.poolNumber)
-	return set.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {

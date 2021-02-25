@@ -768,41 +768,6 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 	return objReaderFn(reader, h, opts.CheckPrecondFn, closeFn)
 }
 
-// GetObject - reads an object from the disk.
-// Supports additional parameters like offset and length
-// which are synonymous with HTTP Range requests.
-//
-// startOffset indicates the starting read location of the object.
-// length indicates the total length of the object.
-func (fs *FSObjects) GetObject(ctx context.Context, bucket, object string, offset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
-	if opts.VersionID != "" && opts.VersionID != nullVersionID {
-		return VersionNotFound{
-			Bucket:    bucket,
-			Object:    object,
-			VersionID: opts.VersionID,
-		}
-	}
-
-	if err = checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
-
-	// Lock the object before reading.
-	lk := fs.NewNSLock(bucket, object)
-	if err := lk.GetRLock(ctx, globalOperationTimeout); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-	defer lk.RUnlock()
-
-	atomic.AddInt64(&fs.activeIOCount, 1)
-	defer func() {
-		atomic.AddInt64(&fs.activeIOCount, -1)
-	}()
-
-	return fs.getObject(ctx, bucket, object, offset, length, writer, etag, true)
-}
-
 // getObject - wrapper for GetObject
 func (fs *FSObjects) getObject(ctx context.Context, bucket, object string, offset int64, length int64, writer io.Writer, etag string, lock bool) (err error) {
 	if _, err = fs.statBucketDir(ctx, bucket); err != nil {
