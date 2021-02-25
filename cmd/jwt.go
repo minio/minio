@@ -104,7 +104,7 @@ func webTokenCallback(claims *xjwt.MapClaims) ([]byte, error) {
 	if claims.AccessKey == globalActiveCred.AccessKey {
 		return []byte(globalActiveCred.SecretKey), nil
 	}
-	ok, err := globalIAMSys.IsTempUser(claims.AccessKey)
+	ok, _, err := globalIAMSys.IsTempUser(claims.AccessKey)
 	if err != nil {
 		if err == errNoSuchUser {
 			return nil, errInvalidAccessKeyID

@@ -948,9 +948,9 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 }
 
 // IsTempUser - returns if given key is a temporary user.
-func (sys *IAMSys) IsTempUser(name string) (bool, error) {
+func (sys *IAMSys) IsTempUser(name string) (bool, string, error) {
 	if !sys.Initialized() {
-		return false, errServerNotInitialized
+		return false, "", errServerNotInitialized
 	}
 
 	sys.store.rlock()
@@ -958,10 +958,14 @@ func (sys *IAMSys) IsTempUser(name string) (bool, error) {
 
 	cred, found := sys.iamUsersMap[name]
 	if !found {
-		return false, errNoSuchUser
+		return false, "", errNoSuchUser
 	}
 
-	return cred.IsTemp(), nil
+	if cred.IsTemp() {
+		return true, cred.ParentUser, nil
+	}
+
+	return false, "", nil
 }
 
 // IsServiceAccount - returns if given key is a service account
@@ -1085,7 +1089,7 @@ func (sys *IAMSys) SetUserStatus(accessKey string, status madmin.AccountStatus) 
 }
 
 // NewServiceAccount - create a new service account
-func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, sessionPolicy *iampolicy.Policy) (auth.Credentials, error) {
+func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, groups []string, sessionPolicy *iampolicy.Policy) (auth.Credentials, error) {
 	if !sys.Initialized() {
 		return auth.Credentials{}, errServerNotInitialized
 	}
@@ -1114,7 +1118,24 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 
 	cr, ok := sys.iamUsersMap[parentUser]
 	if !ok {
-		return auth.Credentials{}, errNoSuchUser
+		// For LDAP users we would need this fallback
+		if sys.usersSysType != MinIOUsersSysType {
+			_, ok = sys.iamUserPolicyMap[parentUser]
+			if !ok {
+				var found bool
+				for _, group := range groups {
+					_, ok = sys.iamGroupPolicyMap[group]
+					if !ok {
+						continue
+					}
+					found = true
+					break
+				}
+				if !found {
+					return auth.Credentials{}, errNoSuchUser
+				}
+			}
+		}
 	}
 
 	// Disallow service accounts to further create more service accounts.
@@ -1138,6 +1159,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, ses
 		return auth.Credentials{}, err
 	}
 	cred.ParentUser = parentUser
+	cred.Groups = groups
 
 	u := newUserIdentity(cred)
 
@@ -1751,6 +1773,18 @@ func (sys *IAMSys) policyDBGet(name string, isGroup bool) ([]string, error) {
 		p := sys.iamGroupPolicyMap[group]
 		policies = append(policies, p.toSlice()...)
 	}
+
+	for _, group := range u.Groups {
+		// Skip missing or disabled groups
+		gi, ok := sys.iamGroupsMap[group]
+		if !ok || gi.Status == statusDisabled {
+			continue
+		}
+
+		p := sys.iamGroupPolicyMap[group]
+		policies = append(policies, p.toSlice()...)
+	}
+
 	return policies, nil
 }
 
@@ -1777,13 +1811,13 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 		return false
 	}
 
-	// Check if the parent is allowed to perform this action, reject if not
-	parentUserPolicies, err := sys.PolicyDBGet(parent, false)
+	// Check policy for this service account.
+	svcPolicies, err := sys.PolicyDBGet(args.AccountName, false)
 	if err != nil {
 		return false
 	}
 
-	if len(parentUserPolicies) == 0 {
+	if len(svcPolicies) == 0 {
 		return false
 	}
 
@@ -1791,7 +1825,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 
 	// Policies were found, evaluate all of them.
 	sys.store.rlock()
-	for _, pname := range parentUserPolicies {
+	for _, pname := range svcPolicies {
 		p, found := sys.iamPolicyDocsMap[pname]
 		if found {
 			availablePolicies = append(availablePolicies, p)
@@ -1858,74 +1892,68 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parent string) b
 }
 
 // IsAllowedLDAPSTS - checks for LDAP specific claims and values
-func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args) bool {
-	userIface, ok := args.Claims[ldapUser]
-	if !ok {
-		return false
-	}
-	user, ok := userIface.(string)
-	if !ok {
-		return false
-	}
-
-	sys.store.rlock()
-	defer sys.store.runlock()
-
-	var groups []string
-	cred, ok := sys.iamUsersMap[args.AccountName]
-	if !ok {
-		return false
-	}
-	groups = cred.Groups
-
-	// We look up the policy mapping directly to bypass
-	// users exists, group exists validations that do not
-	// apply here.
-	var policies []iampolicy.Policy
-	if mp, ok := sys.iamUserPolicyMap[user]; ok {
-		for _, pname := range mp.toSlice() {
-			p, found := sys.iamPolicyDocsMap[pname]
-			if !found {
-				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing for the LDAPUser %s, rejecting the request", pname, user))
-				return false
-			}
-			policies = append(policies, p)
-		}
-	}
-	for _, group := range groups {
-		mp, ok := sys.iamGroupPolicyMap[group]
+func (sys *IAMSys) IsAllowedLDAPSTS(args iampolicy.Args, parentUser string) bool {
+	parentInClaimIface, ok := args.Claims[ldapUser]
+	if ok {
+		parentInClaim, ok := parentInClaimIface.(string)
 		if !ok {
-			continue
+			// ldap parentInClaim name is not a string reject it.
+			return false
 		}
-		for _, pname := range mp.toSlice() {
-			p, found := sys.iamPolicyDocsMap[pname]
-			if !found {
-				logger.LogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing for the LDAPGroup %s, rejecting the request", pname, group))
-				return false
-			}
-			policies = append(policies, p)
+
+		if parentInClaim != parentUser {
+			// ldap claim has been modified maliciously reject it.
+			return false
 		}
-	}
-	if len(policies) == 0 {
+	} else {
+		// no ldap parentInClaim claim present reject it.
 		return false
 	}
-	combinedPolicy := policies[0]
-	for i := 1; i < len(policies); i++ {
+
+	// Check policy for this LDAP user.
+	ldapPolicies, err := sys.PolicyDBGet(args.AccountName, false)
+	if err != nil {
+		return false
+	}
+
+	if len(ldapPolicies) == 0 {
+		return false
+	}
+
+	var availablePolicies []iampolicy.Policy
+
+	// Policies were found, evaluate all of them.
+	sys.store.rlock()
+	for _, pname := range ldapPolicies {
+		p, found := sys.iamPolicyDocsMap[pname]
+		if found {
+			availablePolicies = append(availablePolicies, p)
+		}
+	}
+	sys.store.runlock()
+
+	if len(availablePolicies) == 0 {
+		return false
+	}
+
+	combinedPolicy := availablePolicies[0]
+	for i := 1; i < len(availablePolicies); i++ {
 		combinedPolicy.Statements =
 			append(combinedPolicy.Statements,
-				policies[i].Statements...)
+				availablePolicies[i].Statements...)
 	}
+
 	return combinedPolicy.IsAllowed(args)
 }
 
 // IsAllowedSTS is meant for STS based temporary credentials,
 // which implements claims validation and verification other than
 // applying policies.
-func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args) bool {
+func (sys *IAMSys) IsAllowedSTS(args iampolicy.Args, parentUser string) bool {
 	// If it is an LDAP request, check that user and group
 	// policies allow the request.
 	if sys.usersSysType == LDAPUsersSysType {
-		return sys.IsAllowedLDAPSTS(args)
+		return sys.IsAllowedLDAPSTS(args, parentUser)
 	}
 
 	policies, ok := args.GetPolicies(iamPolicyClaimNameOpenID())
@@ -2050,16 +2078,16 @@ func (sys *IAMSys) IsAllowed(args iampolicy.Args) bool {
 	}
 
 	// If the credential is temporary, perform STS related checks.
-	ok, err := sys.IsTempUser(args.AccountName)
+	ok, parentUser, err := sys.IsTempUser(args.AccountName)
 	if err != nil {
 		return false
 	}
 	if ok {
-		return sys.IsAllowedSTS(args)
+		return sys.IsAllowedSTS(args, parentUser)
 	}
 
 	// If the credential is for a service account, perform related check
-	ok, parentUser, err := sys.IsServiceAccount(args.AccountName)
+	ok, parentUser, err = sys.IsServiceAccount(args.AccountName)
 	if err != nil {
 		return false
 	}
