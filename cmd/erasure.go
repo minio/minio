@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio/pkg/color"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/objcache"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -70,9 +69,6 @@ type erasureObjects struct {
 
 	// Byte pools used for temporary i/o buffers.
 	bp *bpool.BytePoolCap
-
-	// holds current list cache.
-	metaCache *objcache.Cache
 
 	mrfOpCh chan partialOperation
 }

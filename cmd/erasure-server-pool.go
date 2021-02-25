@@ -857,6 +857,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	ri := logger.GetReqInfo(ctx)
 	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
 		opts.discardResult = true
+		opts.Transient = true
 	}
 
 	merged, err := z.listPath(ctx, opts)
@@ -1212,6 +1213,31 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, fo
 
 	// Success.
 	return nil
+}
+
+// deleteAll will delete a bucket+prefix unconditionally across all disks.
+// Note that set distribution is ignored so it should only be used in cases where
+// data is not distributed across sets.
+// Errors are logged but individual disk failures are not returned.
+func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix string) {
+	for _, servers := range z.serverPools {
+		for _, set := range servers.sets {
+			set.deleteAll(ctx, bucket, prefix)
+		}
+	}
+}
+
+// renameAll will rename bucket+prefix unconditionally across all disks to
+// minioMetaTmpBucket + unique uuid,
+// Note that set distribution is ignored so it should only be used in cases where
+// data is not distributed across sets. Errors are logged but individual
+// disk failures are not returned.
+func (z *erasureServerPools) renameAll(ctx context.Context, bucket, prefix string) {
+	for _, servers := range z.serverPools {
+		for _, set := range servers.sets {
+			set.renameAll(ctx, bucket, prefix)
+		}
+	}
 }
 
 // This function is used to undo a successful DeleteBucket operation.

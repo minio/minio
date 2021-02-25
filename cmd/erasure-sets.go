@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/dchest/siphash"
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -38,7 +37,6 @@ import (
 	"github.com/minio/minio/pkg/console"
 	"github.com/minio/minio/pkg/dsync"
 	"github.com/minio/minio/pkg/madmin"
-	"github.com/minio/minio/pkg/objcache"
 	"github.com/minio/minio/pkg/sync/errgroup"
 )
 
@@ -368,11 +366,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	// setCount * setDriveCount with each memory upto blockSizeV1.
 	bp := bpool.NewBytePoolCap(n, blockSizeV1, blockSizeV1*2)
 
-	mcache, err := objcache.New(1*humanize.GiByte, objcache.DefaultExpiry)
-	if err != nil {
-		return nil, err
-	}
-
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
 	}
@@ -419,7 +412,6 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 			getEndpoints:       s.GetEndpoints(i),
 			nsMutex:            mutex,
 			bp:                 bp,
-			metaCache:          mcache,
 			mrfOpCh:            make(chan partialOperation, 10000),
 		}
 	}
