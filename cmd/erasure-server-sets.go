@@ -83,6 +83,7 @@ func newErasureServerSets(ctx context.Context, endpointServerSets EndpointServer
 		if err != nil {
 			return nil, err
 		}
+		z.serverSets[i].zoneIndex = i
 	}
 	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
@@ -688,12 +689,13 @@ func (z *erasureServerSets) listObjectsNonSlash(ctx context.Context, bucket, pre
 		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
+	var prevEntryName string
 	for {
 		if len(objInfos) == maxKeys {
 			break
 		}
 
-		result, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		result, isDir, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			eof = true
 			break
@@ -703,6 +705,11 @@ func (z *erasureServerSets) listObjectsNonSlash(ctx context.Context, bucket, pre
 			// Skip entries which are not found on upto expected tolerance
 			continue
 		}
+
+		if isDir && result.Name == prevEntryName {
+			continue
+		}
+		prevEntryName = result.Name
 
 		var objInfo ObjectInfo
 
@@ -933,7 +940,7 @@ func (z *erasureServerSets) listObjects(ctx context.Context, bucket, prefix, mar
 // again to list the next entry. It is callers responsibility
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, int, int, bool) {
+func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileInfo, zoneEntriesValid [][]bool) (FileInfo, bool, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
@@ -955,7 +962,7 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 	}
 
 	var lentry FileInfo
-	var found bool
+	var found, isDir bool
 	var zoneIndex = -1
 	var setIndex = -1
 	for i, entriesValid := range zoneEntriesValid {
@@ -990,7 +997,11 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 	// We haven't been able to find any least entry,
 	// this would mean that we don't have valid entry.
 	if !found {
-		return lentry, 0, zoneIndex, isTruncated
+		return lentry, false, 0, zoneIndex, isTruncated
+	}
+
+	if HasSuffix(lentry.Name, slashSeparator) {
+		isDir = true
 	}
 
 	if HasSuffix(lentry.Name, globalDirSuffix) {
@@ -1005,16 +1016,25 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 			}
 
 			zoneEntryName := zoneEntries[i][j].Name
+			zoneEntryObjDir := false
 			if HasSuffix(zoneEntryName, globalDirSuffix) {
 				zoneEntryName = strings.TrimSuffix(zoneEntryName, globalDirSuffix) + slashSeparator
+				zoneEntryObjDir = true
 			}
 
-			// Entries are duplicated across disks,
-			// we should simply skip such entries.
-			if HasSuffix(lentry.Name, slashSeparator) || lentry.ModTime.Equal(zoneEntries[i][j].ModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
-				if lentry.Name == zoneEntryName {
+			if lentry.Name == zoneEntryName {
+				if isDir && zoneEntryObjDir {
+					// Deduplicate directory & object-directory
 					lexicallySortedEntryCount++
 					continue
+				}
+
+				// Entries are duplicated across disks, we should simply skip such entries.
+				if zoneIndex == zoneEntryChs[i][j].ZoneIndex && setIndex == zoneEntryChs[i][j].SetIndex {
+					if isDir || lentry.ModTime.Equal(zoneEntries[i][j].ModTime) {
+						lexicallySortedEntryCount++
+						continue
+					}
 				}
 			}
 
@@ -1024,7 +1044,7 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 		}
 	}
 
-	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
+	return lentry, isDir, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
 // Calculate least entry across serverSets and across multiple FileInfoVersions
@@ -1034,7 +1054,7 @@ func lexicallySortedEntryZone(zoneEntryChs [][]FileInfoCh, zoneEntries [][]FileI
 // again to list the next entry. It is callers responsibility
 // if the caller wishes to list N entries to call lexicallySortedEntry
 // N times until this boolean is 'false'.
-func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, int, int, bool) {
+func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneEntries [][]FileInfoVersions, zoneEntriesValid [][]bool) (FileInfoVersions, bool, int, int, bool) {
 	for i, entryChs := range zoneEntryChs {
 		for j := range entryChs {
 			zoneEntries[i][j], zoneEntriesValid[i][j] = entryChs[j].Pop()
@@ -1056,7 +1076,7 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 	}
 
 	var lentry FileInfoVersions
-	var found bool
+	var found, isDir bool
 	var zoneIndex = -1
 	var setIndex = -1
 	for i, entriesValid := range zoneEntriesValid {
@@ -1082,7 +1102,7 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 
 			if str1 < str2 {
 				lentry = zoneEntries[i][j]
-				zoneIndex = i
+				zoneIndex = zoneEntryChs[i][j].ZoneIndex
 				setIndex = zoneEntryChs[i][j].SetIndex
 			}
 		}
@@ -1091,7 +1111,11 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 	// We haven't been able to find any least entry,
 	// this would mean that we don't have valid entry.
 	if !found {
-		return lentry, 0, zoneIndex, isTruncated
+		return lentry, false, 0, zoneIndex, isTruncated
+	}
+
+	if HasSuffix(lentry.Name, slashSeparator) {
+		isDir = true
 	}
 
 	if HasSuffix(lentry.Name, globalDirSuffix) {
@@ -1106,16 +1130,25 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 			}
 
 			zoneEntryName := zoneEntries[i][j].Name
+			zoneEntryObjDir := false
 			if HasSuffix(zoneEntryName, globalDirSuffix) {
 				zoneEntryName = strings.TrimSuffix(zoneEntryName, globalDirSuffix) + slashSeparator
+				zoneEntryObjDir = true
 			}
 
-			// Entries are duplicated across disks,
-			// we should simply skip such entries.
-			if HasSuffix(lentry.Name, slashSeparator) || lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) && setIndex == zoneEntryChs[i][j].SetIndex {
-				if lentry.Name == zoneEntryName {
+			if lentry.Name == zoneEntryName {
+				// Deduplicat diretory and objet directories in case of non recursive listing
+				if isDir && zoneEntryObjDir {
 					lexicallySortedEntryCount++
 					continue
+				}
+
+				// Entries are duplicated across disks, we should simply skip such entries.
+				if zoneIndex == zoneEntryChs[i][j].ZoneIndex && setIndex == zoneEntryChs[i][j].SetIndex {
+					if isDir || lentry.LatestModTime.Equal(zoneEntries[i][j].LatestModTime) {
+						lexicallySortedEntryCount++
+						continue
+					}
 				}
 			}
 
@@ -1125,7 +1158,7 @@ func lexicallySortedEntryZoneVersions(zoneEntryChs [][]FileInfoVersionsCh, zoneE
 		}
 	}
 
-	return lentry, lexicallySortedEntryCount, zoneIndex, isTruncated
+	return lentry, isDir, lexicallySortedEntryCount, zoneIndex, isTruncated
 }
 
 // mergeServerSetsEntriesVersionsCh - merges FileInfoVersions channel to entries upto maxKeys.
@@ -1138,8 +1171,9 @@ func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh,
 		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
+	var prevEntryName string
 	for {
-		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		fi, isDir, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
@@ -1149,6 +1183,11 @@ func mergeServerSetsEntriesVersionsCh(serverSetsEntryChs [][]FileInfoVersionsCh,
 			// Skip entries which are not found upto the expected tolerance
 			continue
 		}
+
+		if isDir && prevEntryName == fi.Name {
+			continue
+		}
+		prevEntryName = fi.Name
 
 		entries.FilesVersions = append(entries.FilesVersions, fi)
 		i++
@@ -1170,8 +1209,9 @@ func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, se
 		serverSetsEntriesValid = append(serverSetsEntriesValid, make([]bool, len(entryChs)))
 	}
 
+	var prevEntryName string
 	for {
-		fi, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		fi, isDir, quorumCount, zoneIndex, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			// We have reached EOF across all entryChs, break the loop.
 			break
@@ -1181,6 +1221,11 @@ func mergeServerSetsEntriesCh(serverSetsEntryChs [][]FileInfoCh, maxKeys int, se
 			// Skip entries which are not found upto configured tolerance.
 			continue
 		}
+
+		if isDir && prevEntryName == fi.Name {
+			continue
+		}
+		prevEntryName = fi.Name
 
 		entries.Files = append(entries.Files, fi)
 		i++
@@ -1792,17 +1837,25 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 		go func() {
 			defer close(results)
 
+			var prevEntryName string
 			for {
-				entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+				entry, isDir, quorumCount, zoneIdx, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 				if !ok {
 					// We have reached EOF across all entryChs, break the loop.
 					return
 				}
 
-				if quorumCount >= serverSetsListTolerancePerSet[zoneIdx] {
-					for _, version := range entry.Versions {
-						results <- version.ToObjectInfo(bucket, version.Name)
-					}
+				if quorumCount < serverSetsListTolerancePerSet[zoneIdx] {
+					continue
+				}
+
+				if isDir && prevEntryName == entry.Name {
+					continue
+				}
+				prevEntryName = entry.Name
+
+				for _, version := range entry.Versions {
+					results <- version.ToObjectInfo(bucket, version.Name)
 				}
 			}
 		}()
@@ -1825,16 +1878,24 @@ func (z *erasureServerSets) Walk(ctx context.Context, bucket, prefix string, res
 	go func() {
 		defer close(results)
 
+		var prevEntryName string
 		for {
-			entry, quorumCount, zoneIdx, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+			entry, isDir, quorumCount, zoneIdx, ok := lexicallySortedEntryZone(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 			if !ok {
 				// We have reached EOF across all entryChs, break the loop.
 				return
 			}
 
-			if quorumCount >= serverSetsListTolerancePerSet[zoneIdx] {
-				results <- entry.ToObjectInfo(bucket, entry.Name)
+			if quorumCount < serverSetsListTolerancePerSet[zoneIdx] {
+				continue
 			}
+
+			if isDir && entry.Name == prevEntryName {
+				continue
+			}
+			prevEntryName = entry.Name
+
+			results <- entry.ToObjectInfo(bucket, entry.Name)
 		}
 	}()
 
@@ -1869,7 +1930,7 @@ func (z *erasureServerSets) HealObjects(ctx context.Context, bucket, prefix stri
 	// actions they may want to take as if `prefix` is missing.
 	err := toObjectErr(errFileNotFound, bucket, prefix)
 	for {
-		entry, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
+		entry, _, quorumCount, zoneIndex, ok := lexicallySortedEntryZoneVersions(serverSetsEntryChs, serverSetsEntriesInfos, serverSetsEntriesValid)
 		if !ok {
 			break
 		}
