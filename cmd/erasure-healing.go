@@ -249,7 +249,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		DataBlocks:   len(storageDisks) - er.defaultParityCount,
 	}
 
-	if !opts.NoLock && newObjectLayerFn() != nil {
+	if !opts.NoLock {
 		lk := er.NewNSLock(bucket, object)
 		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
 			return result, err
