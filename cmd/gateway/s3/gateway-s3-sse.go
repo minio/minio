@@ -226,7 +226,7 @@ func (l *s3EncObjects) getGWMetadata(ctx context.Context, bucket, metaFileName s
 		return m, err1
 	}
 	var buffer bytes.Buffer
-	err = l.s3Objects.GetObject(ctx, bucket, metaFileName, 0, oi.Size, &buffer, oi.ETag, minio.ObjectOptions{})
+	err = l.s3Objects.getObject(ctx, bucket, metaFileName, 0, oi.Size, &buffer, oi.ETag, minio.ObjectOptions{})
 	if err != nil {
 		return m, err
 	}
@@ -272,7 +272,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 	dmeta, err := l.getGWMetadata(ctx, bucket, getDareMetaPath(key))
 	if err != nil {
 		// unencrypted content
-		return l.s3Objects.GetObject(ctx, bucket, key, startOffset, length, writer, etag, o)
+		return l.s3Objects.getObject(ctx, bucket, key, startOffset, length, writer, etag, o)
 	}
 	if startOffset < 0 {
 		logger.LogIf(ctx, minio.InvalidRange{})
@@ -303,7 +303,7 @@ func (l *s3EncObjects) getObject(ctx context.Context, bucket string, key string,
 	if _, _, err := dmeta.ObjectToPartOffset(ctx, endOffset); err != nil {
 		return minio.InvalidRange{OffsetBegin: startOffset, OffsetEnd: length, ResourceSize: dmeta.Stat.Size}
 	}
-	return l.s3Objects.GetObject(ctx, bucket, key, partOffset, endOffset, writer, dmeta.ETag, o)
+	return l.s3Objects.getObject(ctx, bucket, key, partOffset, endOffset, writer, dmeta.ETag, o)
 }
 
 // GetObjectNInfo - returns object info and locked object ReadCloser

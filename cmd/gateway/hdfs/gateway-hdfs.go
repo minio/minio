@@ -591,7 +591,7 @@ func (n *hdfsObjects) GetObjectNInfo(ctx context.Context, bucket, object string,
 
 	pr, pw := io.Pipe()
 	go func() {
-		nerr := n.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
+		nerr := n.getObject(ctx, bucket, object, startOffset, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(nerr)
 	}()
 
@@ -614,7 +614,7 @@ func (n *hdfsObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstB
 	})
 }
 
-func (n *hdfsObjects) GetObject(ctx context.Context, bucket, key string, startOffset, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
+func (n *hdfsObjects) getObject(ctx context.Context, bucket, key string, startOffset, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	if _, err := n.clnt.Stat(n.hdfsPathJoin(bucket)); err != nil {
 		return hdfsToObjectErr(ctx, err, bucket)
 	}
