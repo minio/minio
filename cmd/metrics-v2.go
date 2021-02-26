@@ -1023,7 +1023,7 @@ func getBucketUsageMetrics() MetricsGroup {
 		initialize: func(ctx context.Context, metrics *MetricsGroup) {
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
-			if objLayer == nil || globalIsGateway {
+			if objLayer == nil {
 				return
 			}
 
@@ -1031,7 +1031,7 @@ func getBucketUsageMetrics() MetricsGroup {
 				return
 			}
 
-			dataUsageInfo, err := loadDataUsageFromBackend(GlobalContext, objLayer)
+			dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 			if err != nil {
 				return
 			}
@@ -1040,8 +1040,8 @@ func getBucketUsageMetrics() MetricsGroup {
 			if dataUsageInfo.LastUpdate.IsZero() {
 				return
 			}
-			for bucket, usage := range dataUsageInfo.BucketsUsage {
 
+			for bucket, usage := range dataUsageInfo.BucketsUsage {
 				metrics.Metrics = append(metrics.Metrics, Metric{
 					Description:    getBucketUsageTotalBytesMD(),
 					Value:          float64(usage.Size),
@@ -1092,9 +1092,18 @@ func getLocalStorageMetrics() MetricsGroup {
 	return MetricsGroup{
 		Metrics: []Metric{},
 		initialize: func(ctx context.Context, metrics *MetricsGroup) {
-			disks := getLocalDisks(globalEndpoints)
-			for _, disk := range disks {
+			objLayer := newObjectLayerFn()
+			// Service not initialized yet
+			if objLayer == nil {
+				return
+			}
 
+			if globalIsGateway {
+				return
+			}
+
+			storageInfo, _ := objLayer.LocalStorageInfo(ctx)
+			for _, disk := range storageInfo.Disks {
 				metrics.Metrics = append(metrics.Metrics, Metric{
 					Description:    getNodeDiskUsedBytesMD(),
 					Value:          float64(disk.UsedSpace),
@@ -1120,15 +1129,18 @@ func getClusterStorageMetrics() MetricsGroup {
 	return MetricsGroup{
 		Metrics: []Metric{},
 		initialize: func(ctx context.Context, metrics *MetricsGroup) {
-
 			objLayer := newObjectLayerFn()
 			// Service not initialized yet
 			if objLayer == nil {
 				return
 			}
 
+			if globalIsGateway {
+				return
+			}
+
 			// Fetch disk space info, ignore errors
-			storageInfo, _ := objLayer.StorageInfo(GlobalContext)
+			storageInfo, _ := objLayer.StorageInfo(ctx)
 			onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
 			totalDisks := offlineDisks.Merge(onlineDisks)
 
@@ -1142,15 +1154,14 @@ func getClusterStorageMetrics() MetricsGroup {
 				Value:       float64(GetTotalCapacityFree(storageInfo.Disks)),
 			})
 
-			s, _ := objLayer.StorageInfo(GlobalContext)
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityUsageBytesMD(),
-				Value:       GetTotalUsableCapacity(storageInfo.Disks, s),
+				Value:       GetTotalUsableCapacity(storageInfo.Disks, storageInfo),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityUsageFreeBytesMD(),
-				Value:       GetTotalUsableCapacityFree(storageInfo.Disks, s),
+				Value:       GetTotalUsableCapacityFree(storageInfo.Disks, storageInfo),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{

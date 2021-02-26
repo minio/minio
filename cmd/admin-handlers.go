@@ -1551,13 +1551,13 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	if globalLDAPConfig.Enabled {
 		ldapConn, err := globalLDAPConfig.Connect()
 		if err != nil {
-			ldap.Status = "offline"
+			ldap.Status = string(madmin.ItemOffline)
 		} else if ldapConn == nil {
 			ldap.Status = "Not Configured"
 		} else {
 			// Close ldap connection to avoid leaks.
 			ldapConn.Close()
-			ldap.Status = "online"
+			ldap.Status = string(madmin.ItemOnline)
 		}
 	}
 
@@ -1573,7 +1573,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	assignPoolNumbers(servers)
 
 	var backend interface{}
-	mode := madmin.ObjectLayerInitializing
+	mode := madmin.ItemInitializing
 
 	buckets := madmin.Buckets{}
 	objects := madmin.Objects{}
@@ -1581,7 +1581,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 
 	objectAPI := newObjectLayerFn()
 	if objectAPI != nil {
-		mode = madmin.ObjectLayerOnline
+		mode = madmin.ItemOnline
 		// Load data usage
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
 		if err == nil {
@@ -1628,7 +1628,7 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	infoMsg := madmin.InfoMessage{
-		Mode:         mode,
+		Mode:         string(mode),
 		Domain:       domain,
 		Region:       globalServerRegion,
 		SQSARN:       globalNotificationSys.GetARNList(false),
@@ -1678,9 +1678,9 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()
 		if active {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: string(madmin.ItemOnline)}
 		} else {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Offline"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: string(madmin.ItemOffline)}
 		}
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
@@ -1692,9 +1692,9 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()
 		if active {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Online"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: string(madmin.ItemOnline)}
 		} else {
-			targetIDStatus[targetID.ID] = madmin.Status{Status: "Offline"}
+			targetIDStatus[targetID.ID] = madmin.Status{Status: string(madmin.ItemOffline)}
 		}
 		list := lambdaMap[targetID.Name]
 		list = append(list, targetIDStatus)
@@ -1727,9 +1727,9 @@ func fetchKMSStatus() madmin.KMS {
 	}
 
 	if err := checkConnection(kmsInfo.Endpoints[0], 15*time.Second); err != nil {
-		kmsStat.Status = "offline"
+		kmsStat.Status = string(madmin.ItemOffline)
 	} else {
-		kmsStat.Status = "online"
+		kmsStat.Status = string(madmin.ItemOnline)
 
 		kmsContext := crypto.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
 		// 1. Generate a new key using the KMS.
@@ -1737,7 +1737,7 @@ func fetchKMSStatus() madmin.KMS {
 		if err != nil {
 			kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
 		} else {
-			kmsStat.Encrypt = "Ok"
+			kmsStat.Encrypt = "success"
 		}
 
 		// 2. Verify that we can indeed decrypt the (encrypted) key
@@ -1748,7 +1748,7 @@ func fetchKMSStatus() madmin.KMS {
 		case subtle.ConstantTimeCompare(key[:], decryptedKey[:]) != 1:
 			kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
 		default:
-			kmsStat.Decrypt = "Ok"
+			kmsStat.Decrypt = "success"
 		}
 	}
 	return kmsStat
@@ -1764,11 +1764,11 @@ func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 			err := checkConnection(target.Endpoint(), 15*time.Second)
 			if err == nil {
 				mapLog := make(map[string]madmin.Status)
-				mapLog[tgt] = madmin.Status{Status: "Online"}
+				mapLog[tgt] = madmin.Status{Status: string(madmin.ItemOnline)}
 				loggerInfo = append(loggerInfo, mapLog)
 			} else {
 				mapLog := make(map[string]madmin.Status)
-				mapLog[tgt] = madmin.Status{Status: "offline"}
+				mapLog[tgt] = madmin.Status{Status: string(madmin.ItemOffline)}
 				loggerInfo = append(loggerInfo, mapLog)
 			}
 		}
@@ -1780,11 +1780,11 @@ func fetchLoggerInfo() ([]madmin.Logger, []madmin.Audit) {
 			err := checkConnection(target.Endpoint(), 15*time.Second)
 			if err == nil {
 				mapAudit := make(map[string]madmin.Status)
-				mapAudit[tgt] = madmin.Status{Status: "Online"}
+				mapAudit[tgt] = madmin.Status{Status: string(madmin.ItemOnline)}
 				auditloggerInfo = append(auditloggerInfo, mapAudit)
 			} else {
 				mapAudit := make(map[string]madmin.Status)
-				mapAudit[tgt] = madmin.Status{Status: "Offline"}
+				mapAudit[tgt] = madmin.Status{Status: string(madmin.ItemOffline)}
 				auditloggerInfo = append(auditloggerInfo, mapAudit)
 			}
 		}
