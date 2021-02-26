@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -138,39 +139,39 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 // Remove the old multipart uploads on the given disk.
 func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
 	now := time.Now()
-	shaDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, "", -1)
-	if err != nil {
-		return
-	}
-	for _, shaDir := range shaDirs {
-		uploadIDDirs, err := disk.ListDir(ctx, minioMetaMultipartBucket, shaDir, -1)
-		if err != nil {
-			continue
-		}
-		for _, uploadIDDir := range uploadIDDirs {
+	diskPath := disk.Endpoint().Path
+
+	readDirFn(pathJoin(diskPath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
+		return readDirFn(pathJoin(diskPath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
 			if err != nil {
-				continue
+				return nil
 			}
+			wait := er.deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(fi.ModTime) > expiry {
 				er.renameAll(ctx, minioMetaMultipartBucket, uploadIDPath)
 			}
+			wait()
+			return nil
+		})
+	})
+
+	readDirFn(pathJoin(diskPath, minioMetaTmpBucket), func(tmpDir string, typ os.FileMode) error {
+		if tmpDir == ".trash/" { // do not remove .trash/ here, it has its own routines
+			return nil
 		}
-	}
-	tmpDirs, err := disk.ListDir(ctx, minioMetaTmpBucket, "", -1)
-	if err != nil {
-		return
-	}
-	for _, tmpDir := range tmpDirs {
 		vi, err := disk.StatVol(ctx, pathJoin(minioMetaTmpBucket, tmpDir))
 		if err != nil {
-			continue
+			return nil
 		}
+		wait := er.deletedCleanupSleeper.Timer(ctx)
 		if now.Sub(vi.Created) > expiry {
 			er.deleteAll(ctx, minioMetaTmpBucket, tmpDir)
 		}
-	}
+		wait()
+		return nil
+	})
 }
 
 // ListMultipartUploads - lists all the pending multipart

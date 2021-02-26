@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -71,6 +72,8 @@ type erasureObjects struct {
 	bp *bpool.BytePoolCap
 
 	mrfOpCh chan partialOperation
+
+	deletedCleanupSleeper *dynamicSleeper
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -271,6 +274,28 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 	}
 
 	return newDisks, healing
+}
+
+// Clean-up previously deleted objects. from .minio.sys/tmp/.trash/
+func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
+	// run multiple cleanup's local to this server.
+	var wg sync.WaitGroup
+	for _, disk := range er.getLoadBalancedLocalDisks() {
+		if disk != nil {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				diskPath := disk.Endpoint().Path
+				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
+					wait := er.deletedCleanupSleeper.Timer(ctx)
+					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
+					wait()
+					return nil
+				})
+			}(disk)
+		}
+	}
+	wg.Wait()
 }
 
 // CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
