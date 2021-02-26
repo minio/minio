@@ -6,8 +6,6 @@ LABEL maintainer="MinIO Inc <dev@min.io>"
 
 COPY dockerscripts/docker-entrypoint.sh /usr/bin/
 COPY minio /usr/bin/
-COPY CREDITS /licenses/CREDITS
-COPY LICENSE /licenses/LICENSE
 
 ENV MINIO_UPDATE=off \
     MINIO_ACCESS_KEY_FILE=access_key \
@@ -17,10 +15,9 @@ ENV MINIO_UPDATE=off \
     MINIO_KMS_MASTER_KEY_FILE=kms_master_key \
     MINIO_SSE_MASTER_KEY_FILE=sse_master_key
 
-RUN  \
-    microdnf update --nodocs && \
-    microdnf install curl ca-certificates shadow-utils util-linux --nodocs && \
-    microdnf clean all && \
+RUN microdnf update --nodocs
+RUN microdnf install curl ca-certificates shadow-utils util-linux --nodocs
+RUN microdnf clean all && \
     chmod +x /usr/bin/minio  && \
     chmod +x /usr/bin/docker-entrypoint.sh
 

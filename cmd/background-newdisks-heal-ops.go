@@ -204,8 +204,8 @@ wait:
 							}
 						}
 
-						lbDisks := z.serverPools[i].sets[setIndex].getOnlineDisks()
-						if err := healErasureSet(ctx, setIndex, buckets, lbDisks); err != nil {
+						err := z.serverPools[i].sets[setIndex].healErasureSet(ctx, buckets)
+						if err != nil {
 							logger.LogIf(ctx, err)
 							continue
 						}

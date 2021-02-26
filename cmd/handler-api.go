@@ -136,20 +136,25 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		globalHTTPStats.addRequestsInQueue(1)
+
 		deadlineTimer := time.NewTimer(deadline)
 		defer deadlineTimer.Stop()
 
 		select {
 		case pool <- struct{}{}:
 			defer func() { <-pool }()
+			globalHTTPStats.addRequestsInQueue(-1)
 			f.ServeHTTP(w, r)
 		case <-deadlineTimer.C:
 			// Send a http timeout message
 			writeErrorResponse(r.Context(), w,
 				errorCodes.ToAPIErr(ErrOperationMaxedOut),
 				r.URL, guessIsBrowserReq(r))
+			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		case <-r.Context().Done():
+			globalHTTPStats.addRequestsInQueue(-1)
 			return
 		}
 	}

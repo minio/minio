@@ -360,7 +360,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context) (StorageInfo, []er
 	return storageInfo, errs
 }
 
-func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+func (z *erasureServerPools) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -379,7 +379,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 		return nil
 	}
 
-	// Crawl latest allBuckets first.
+	// Scanner latest allBuckets first.
 	sort.Slice(allBuckets, func(i, j int) bool {
 		return allBuckets[i].Created.After(allBuckets[j].Created)
 	})
@@ -402,7 +402,7 @@ func (z *erasureServerPools) CrawlAndGetDataUsage(ctx context.Context, bf *bloom
 					}
 				}()
 				// Start scanner. Blocks until done.
-				err := erObj.crawlAndGetDataUsage(ctx, allBuckets, bf, updates)
+				err := erObj.nsScanner(ctx, allBuckets, bf, updates)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					mu.Lock()
@@ -593,27 +593,6 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 		return gr, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
 	}
 	return gr, ObjectNotFound{Bucket: bucket, Object: object}
-}
-
-func (z *erasureServerPools) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	if err := checkGetObjArgs(ctx, bucket, object); err != nil {
-		return err
-	}
-
-	object = encodeDirObject(object)
-	for _, pool := range z.serverPools {
-		if err := pool.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts); err != nil {
-			if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-				continue
-			}
-			return err
-		}
-		return nil
-	}
-	if opts.VersionID != "" {
-		return VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
-	}
-	return ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {

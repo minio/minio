@@ -705,7 +705,7 @@ func (c *cacheObjects) uploadObject(ctx context.Context, oi ObjectInfo) {
 	if st == CommitComplete || st.String() == "" {
 		return
 	}
-	hashReader, err := hash.NewReader(cReader, oi.Size, "", "", oi.Size, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(cReader, oi.Size, "", "", oi.Size)
 	if err != nil {
 		return
 	}

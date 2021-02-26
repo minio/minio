@@ -25,13 +25,5 @@ func IsRootDisk(diskPath string, rootDisk string) (bool, error) {
 		// On windows this function is not implemented.
 		return false, nil
 	}
-	info, err := GetInfo(diskPath)
-	if err != nil {
-		return false, err
-	}
-	rootInfo, err := GetInfo(rootDisk)
-	if err != nil {
-		return false, err
-	}
-	return SameDisk(info, rootInfo), nil
+	return SameDisk(diskPath, rootDisk)
 }

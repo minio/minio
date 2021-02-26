@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"strconv"
@@ -175,56 +174,6 @@ func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) 
 	runPutObjectBenchmarkParallel(b, objLayer, objSize)
 }
 
-// Benchmark utility functions for ObjectLayer.GetObject().
-// Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
-func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
-	// obtains random bucket name.
-	bucket := getRandomBucketName()
-	// create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	textData := generateBytesData(objSize)
-
-	// generate etag for the generated data.
-	// etag of the data to written is required as input for PutObject.
-	// PutObject is the functions which writes the data onto the FS/Erasure backend.
-
-	// get text data generated for number of bytes equal to object size.
-	md5hex := getMD5Hash(textData)
-	sha256hex := ""
-
-	for i := 0; i < 10; i++ {
-		// insert the object.
-		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
-			mustGetPutObjReader(b, bytes.NewReader(textData), int64(len(textData)), md5hex, sha256hex), ObjectOptions{})
-		if err != nil {
-			b.Fatal(err)
-		}
-		if objInfo.ETag != md5hex {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.ETag, md5hex)
-		}
-	}
-
-	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
-	b.ReportAllocs()
-	// the actual benchmark for GetObject starts here. Reset the benchmark timer.
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		var buffer = new(bytes.Buffer)
-		err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer, "", ObjectOptions{})
-		if err != nil {
-			b.Error(err)
-		}
-	}
-	// Benchmark ends here. Stop timer.
-	b.StopTimer()
-
-}
-
 // randomly picks a character and returns its equivalent byte array.
 func getRandomByte() []byte {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -238,38 +187,6 @@ func getRandomByte() []byte {
 func generateBytesData(size int) []byte {
 	// repeat the random character chosen size
 	return bytes.Repeat(getRandomByte(), size)
-}
-
-// creates Erasure/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.
-func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
-	// create a temp Erasure/FS backend.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	objLayer, disks, err := prepareTestBackend(ctx, instanceType)
-	if err != nil {
-		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
-	}
-	// cleaning up the backend by removing all the directories and files created.
-	defer removeRoots(disks)
-
-	//  uses *testing.B and the object Layer to run the benchmark.
-	runGetObjectBenchmark(b, objLayer, objSize)
-}
-
-// creates Erasure/FS backend setup, obtains the object layer and runs parallel benchmark for ObjectLayer.GetObject() .
-func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) {
-	// create a temp Erasure/FS backend.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	objLayer, disks, err := prepareTestBackend(ctx, instanceType)
-	if err != nil {
-		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
-	}
-	// cleaning up the backend by removing all the directories and files created.
-	defer removeRoots(disks)
-
-	//  uses *testing.B and the object Layer to run the benchmark.
-	runGetObjectBenchmarkParallel(b, objLayer, objSize)
 }
 
 // Parallel benchmark utility functions for ObjectLayer.PutObject().
@@ -314,59 +231,4 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 
 	// Benchmark ends here. Stop timer.
 	b.StopTimer()
-}
-
-// Parallel benchmark utility functions for ObjectLayer.GetObject().
-// Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
-func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
-	// obtains random bucket name.
-	bucket := getRandomBucketName()
-	// create bucket.
-	err := obj.MakeBucketWithLocation(context.Background(), bucket, BucketOptions{})
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	// get text data generated for number of bytes equal to object size.
-	textData := generateBytesData(objSize)
-	// generate md5sum for the generated data.
-	// md5sum of the data to written is required as input for PutObject.
-	// PutObject is the functions which writes the data onto the FS/Erasure backend.
-
-	md5hex := getMD5Hash([]byte(textData))
-	sha256hex := ""
-
-	for i := 0; i < 10; i++ {
-		// insert the object.
-		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(context.Background(), bucket, "object"+strconv.Itoa(i),
-			mustGetPutObjReader(b, bytes.NewReader(textData), int64(len(textData)), md5hex, sha256hex), ObjectOptions{})
-		if err != nil {
-			b.Fatal(err)
-		}
-		if objInfo.ETag != md5hex {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.ETag, md5hex)
-		}
-	}
-
-	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
-	b.ReportAllocs()
-	// the actual benchmark for GetObject starts here. Reset the benchmark timer.
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		i := 0
-		for pb.Next() {
-			err = obj.GetObject(context.Background(), bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard, "", ObjectOptions{})
-			if err != nil {
-				b.Error(err)
-			}
-			i++
-			if i == 10 {
-				i = 0
-			}
-		}
-	})
-	// Benchmark ends here. Stop timer.
-	b.StopTimer()
-
 }

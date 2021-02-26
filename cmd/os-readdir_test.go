@@ -149,7 +149,8 @@ func setupTestReadDirSymlink(t *testing.T) (testResults []result) {
 		}
 		// Add to entries.
 		entries = append(entries, name1)
-		// Symlinks are ignored.
+		// Symlinks are preserved for regular files
+		entries = append(entries, name2)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "mydir"), 0777); err != nil {
 		t.Fatalf("Unable to create \"mydir\", %s", err)

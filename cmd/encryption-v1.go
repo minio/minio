@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/binary"
 	"encoding/hex"
@@ -33,7 +34,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
 )
 

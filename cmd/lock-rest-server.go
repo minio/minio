@@ -33,7 +33,7 @@ import (
 
 const (
 	// Lock maintenance interval.
-	lockMaintenanceInterval = 15 * time.Second
+	lockMaintenanceInterval = 1 * time.Minute
 
 	// Lock validity check interval.
 	lockValidityCheckInterval = 30 * time.Second
@@ -353,7 +353,7 @@ func startLockMaintenance(ctx context.Context) {
 		break
 	}
 
-	// Initialize a new ticker with 15secs between each ticks.
+	// Initialize a new ticker with 1 minute between each ticks.
 	lkTimer := time.NewTimer(lockMaintenanceInterval)
 	// Stop the timer upon returning.
 	defer lkTimer.Stop()
@@ -362,8 +362,7 @@ func startLockMaintenance(ctx context.Context) {
 
 	// Start with random sleep time, so as to avoid
 	// "synchronous checks" between servers
-	duration := time.Duration(r.Float64() * float64(lockMaintenanceInterval))
-	time.Sleep(duration)
+	time.Sleep(time.Duration(r.Float64() * float64(lockMaintenanceInterval)))
 
 	for {
 		// Verifies every minute for locks held more than 2 minutes.

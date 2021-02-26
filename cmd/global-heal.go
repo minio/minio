@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"context"
-	"sync"
+	"errors"
 	"time"
 
 	"github.com/minio/minio/cmd/logger"
@@ -32,7 +32,7 @@ const (
 )
 
 // NewBgHealSequence creates a background healing sequence
-// operation which crawls all objects and heal them.
+// operation which scans all objects and heal them.
 func newBgHealSequence() *healSequence {
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
 	ctx, cancelCtx := context.WithCancel(logger.SetReqInfo(GlobalContext, reqInfo))
@@ -120,18 +120,14 @@ func mustGetHealSequence(ctx context.Context) *healSequence {
 }
 
 // healErasureSet lists and heals all objects in a specific erasure set
-func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, disks []StorageAPI) error {
+func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []BucketInfo) error {
 	bgSeq := mustGetHealSequence(ctx)
-
 	buckets = append(buckets, BucketInfo{
 		Name: pathJoin(minioMetaBucket, minioConfigPrefix),
 	})
 
 	// Try to pro-actively heal backend-encrypted file.
-	if err := bgSeq.queueHealTask(healSource{
-		bucket: minioMetaBucket,
-		object: backendEncryptedFile,
-	}, madmin.HealItemMetadata); err != nil {
+	if _, err := er.HealObject(ctx, minioMetaBucket, backendEncryptedFile, "", madmin.HealOpts{}); err != nil {
 		if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 			logger.LogIf(ctx, err)
 		}
@@ -140,61 +136,60 @@ func healErasureSet(ctx context.Context, setIndex int, buckets []BucketInfo, dis
 	// Heal all buckets with all objects
 	for _, bucket := range buckets {
 		// Heal current bucket
-		if err := bgSeq.queueHealTask(healSource{
-			bucket: bucket.Name,
-		}, madmin.HealItemBucket); err != nil {
+		if _, err := er.HealBucket(ctx, bucket.Name, madmin.HealOpts{}); err != nil {
 			if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 				logger.LogIf(ctx, err)
 			}
 		}
 
 		if serverDebugLog {
-			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, setIndex+1)
+			console.Debugf(color.Green("healDisk:")+" healing bucket %s content on erasure set %d\n", bucket.Name, er.setNumber+1)
 		}
 
-		var entryChs []FileInfoVersionsCh
-		var mu sync.Mutex
-		var wg sync.WaitGroup
-		for _, disk := range disks {
-			disk := disk
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				entryCh, err := disk.WalkVersions(ctx, bucket.Name, "", "", true, ctx.Done())
-				if err != nil {
-					// Disk walk returned error, ignore it.
-					return
-				}
-				mu.Lock()
-				entryChs = append(entryChs, FileInfoVersionsCh{
-					Ch: entryCh,
-				})
-				mu.Unlock()
-			}()
+		disks, _ := er.getOnlineDisksWithHealing()
+		if len(disks) == 0 {
+			return errors.New("healErasureSet: No non-healing disks found")
 		}
-		wg.Wait()
-
-		entriesValid := make([]bool, len(entryChs))
-		entries := make([]FileInfoVersions, len(entryChs))
-
-		for {
-			entry, _, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
-			if !ok {
-				break
+		// Limit listing to 3 drives.
+		if len(disks) > 3 {
+			disks = disks[:3]
+		}
+		healEntry := func(entry metaCacheEntry) {
+			if entry.isDir() {
+				return
 			}
-
-			for _, version := range entry.Versions {
-				if err := bgSeq.queueHealTask(healSource{
-					bucket:    bucket.Name,
-					object:    version.Name,
-					versionID: version.VersionID,
-				}, madmin.HealItemObject); err != nil {
+			fivs, err := entry.fileInfoVersions(bucket.Name)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return
+			}
+			waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
+			for _, version := range fivs.Versions {
+				if _, err := er.HealObject(ctx, bucket.Name, version.Name, version.VersionID, madmin.HealOpts{ScanMode: madmin.HealNormalScan, Remove: healDeleteDangling}); err != nil {
 					if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 						logger.LogIf(ctx, err)
 					}
 				}
+				bgSeq.logHeal(madmin.HealItemObject)
 			}
 		}
+		err := listPathRaw(ctx, listPathRawOptions{
+			disks:          disks,
+			bucket:         bucket.Name,
+			recursive:      true,
+			forwardTo:      "", //TODO(klauspost): Set this to last known offset when resuming.
+			minDisks:       1,
+			reportNotFound: false,
+			agreed:         healEntry,
+			partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+				entry, _ := entries.firstFound()
+				if entry != nil && !entry.isDir() {
+					healEntry(*entry)
+				}
+			},
+			finished: nil,
+		})
+		logger.LogIf(ctx, err)
 	}
 
 	return nil

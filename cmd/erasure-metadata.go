@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -28,7 +29,6 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/replication"
 	"github.com/minio/minio/pkg/sync/errgroup"
-	"github.com/minio/sha256-simd"
 )
 
 const erasureAlgorithm = "rs-vandermonde"
@@ -102,7 +102,7 @@ func (fi FileInfo) IsValid() bool {
 func (fi FileInfo) ToObjectInfo(bucket, object string) ObjectInfo {
 	object = decodeDirObject(object)
 	versionID := fi.VersionID
-	if globalBucketVersioningSys.Enabled(bucket) && versionID == "" {
+	if (globalBucketVersioningSys.Enabled(bucket) || globalBucketVersioningSys.Suspended(bucket)) && versionID == "" {
 		versionID = nullVersionID
 	}
 

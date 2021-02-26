@@ -48,6 +48,7 @@ import (
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/etag"
 	"github.com/minio/minio/pkg/event"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/hash"
@@ -186,6 +187,10 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 		isSuffixLength := false
 		if offset < 0 {
 			isSuffixLength = true
+		}
+
+		if length > 0 {
+			length--
 		}
 
 		rs := &HTTPRangeSpec{
@@ -1021,7 +1026,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.metadataOnly = false
 	}
 
-	var reader io.Reader
+	var reader io.Reader = gr
 
 	// Set the actual size to the compressed/decrypted size if encrypted.
 	actualSize, err := srcInfo.GetActualSize()
@@ -1053,15 +1058,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// avoid copying them in target object.
 		crypto.RemoveInternalEntries(srcInfo.UserDefined)
 
-		s2c := newS2CompressReader(gr, actualSize)
+		s2c := newS2CompressReader(reader, actualSize)
 		defer s2c.Close()
-		reader = s2c
+		reader = etag.Wrap(s2c, reader)
 		length = -1
 	} else {
 		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize, globalCLIContext.StrictS3Compat)
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1158,11 +1163,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			if isTargetEncrypted {
-				reader, objEncKey, err = newEncryptReader(srcInfo.Reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
+				var encReader io.Reader
+				encReader, objEncKey, err = newEncryptReader(srcInfo.Reader, newKey, dstBucket, dstObject, encMetadata, sseS3)
 				if err != nil {
 					writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 					return
 				}
+				reader = etag.Wrap(encReader, srcInfo.Reader)
 			}
 
 			if isSourceEncrypted {
@@ -1172,7 +1179,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			}
 
 			// do not try to verify encrypted content
-			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
+			srcInfo.Reader, err = hash.NewReader(reader, targetSize, "", "", actualSize)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1453,13 +1460,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	var (
-		md5hex    = hex.EncodeToString(md5Bytes)
-		sha256hex = ""
-		reader    io.Reader
+		md5hex              = hex.EncodeToString(md5Bytes)
+		sha256hex           = ""
+		reader    io.Reader = r.Body
 		s3Err     APIErrorCode
 		putObject = objectAPI.PutObject
 	)
-	reader = r.Body
 
 	// Check if put is allowed
 	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, object, r, iampolicy.PutObjectAction); s3Err != ErrNone {
@@ -1505,13 +1511,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	actualSize := size
-
 	if objectAPI.IsCompressionSupported() && isCompressible(r.Header, object) && size > 0 {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
 		metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(size, 10)
 
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -1520,13 +1525,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		// Set compression metrics.
 		s2c := newS2CompressReader(actualReader, actualSize)
 		defer s2c.Close()
-		reader = s2c
+		reader = etag.Wrap(s2c, actualReader)
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
 	}
 
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -1597,7 +1602,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			}
 
 			// do not try to verify encrypted content
-			hashReader, err = hash.NewReader(reader, wantSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
+			hashReader, err = hash.NewReader(etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 				return
@@ -1995,8 +2000,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			return
 		}
 
-		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID,
-			gr, length, "", "", dstOpts.ServerSideEncryption)
+		partInfo, err := core.PutObjectPart(ctx, dstBucket, dstObject, uploadID, partID, gr, length, "", "", dstOpts.ServerSideEncryption)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2011,7 +2015,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	actualPartSize = length
-	var reader io.Reader
+	var reader io.Reader = etag.NewReader(gr, nil)
 
 	mi, err := objectAPI.GetMultipartInfo(ctx, dstBucket, dstObject, uploadID, dstOpts)
 	if err != nil {
@@ -2023,15 +2027,13 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 	// Compress only if the compression is enabled during initial multipart.
 	if isCompressed {
-		s2c := newS2CompressReader(gr, actualPartSize)
+		s2c := newS2CompressReader(reader, actualPartSize)
 		defer s2c.Close()
-		reader = s2c
+		reader = etag.Wrap(s2c, reader)
 		length = -1
-	} else {
-		reader = gr
 	}
 
-	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize, globalCLIContext.StrictS3Compat)
+	srcInfo.Reader, err = hash.NewReader(reader, length, "", "", actualPartSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -2073,11 +2075,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		copy(objectEncryptionKey[:], key)
 
 		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-		reader, err = sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:]})
+		encReader, err := sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:]})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		reader = etag.Wrap(encReader, reader)
 
 		wantSize := int64(-1)
 		if length >= 0 {
@@ -2085,7 +2088,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 			wantSize = info.EncryptedSize()
 		}
 
-		srcInfo.Reader, err = hash.NewReader(reader, wantSize, "", "", actualPartSize, globalCLIContext.StrictS3Compat)
+		srcInfo.Reader, err = hash.NewReader(reader, wantSize, "", "", actualPartSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2205,12 +2208,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	var (
-		md5hex    = hex.EncodeToString(md5Bytes)
-		sha256hex = ""
-		reader    io.Reader
+		md5hex              = hex.EncodeToString(md5Bytes)
+		sha256hex           = ""
+		reader    io.Reader = r.Body
 		s3Error   APIErrorCode
 	)
-	reader = r.Body
 	if s3Error = isPutActionAllowed(ctx, rAuthType, bucket, object, r, iampolicy.PutObjectAction); s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL, guessIsBrowserReq(r))
 		return
@@ -2267,7 +2269,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	_, isCompressed := mi.UserDefined[ReservedMetadataPrefix+"compression"]
 
 	if objectAPI.IsCompressionSupported() && isCompressed {
-		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+		actualReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
@@ -2276,13 +2278,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		// Set compression metrics.
 		s2c := newS2CompressReader(actualReader, actualSize)
 		defer s2c.Close()
-		reader = s2c
+		reader = etag.Wrap(s2c, actualReader)
 		size = -1   // Since compressed size is un-predictable.
 		md5hex = "" // Do not try to verify the content.
 		sha256hex = ""
 	}
 
-	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize, globalCLIContext.StrictS3Compat)
+	hashReader, err := hash.NewReader(reader, size, md5hex, sha256hex, actualSize)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 		return
@@ -2339,7 +2341,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			wantSize = info.EncryptedSize()
 		}
 		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(reader, wantSize, "", "", actualSize, globalCLIContext.StrictS3Compat)
+		hashReader, err = hash.NewReader(etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return

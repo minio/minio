@@ -19,6 +19,7 @@ package madmin
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -476,7 +477,8 @@ func (adm AdminClient) newRequest(ctx context.Context, method string, reqData re
 	if length := len(reqData.content); length > 0 {
 		req.ContentLength = int64(length)
 	}
-	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(reqData.content)))
+	sum := sha256.Sum256(reqData.content)
+	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum[:]))
 	req.Body = ioutil.NopCloser(bytes.NewReader(reqData.content))
 
 	req = signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, location)

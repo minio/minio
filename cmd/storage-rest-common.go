@@ -17,20 +17,20 @@
 package cmd
 
 const (
-	storageRESTVersion       = "v27" // Add force-delete-marker to DeleteVersion
+	storageRESTVersion       = "v28" // Renamed crawl -> scanner
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
 
 const (
-	storageRESTMethodHealth               = "/health"
-	storageRESTMethodDiskInfo             = "/diskinfo"
-	storageRESTMethodCrawlAndGetDataUsage = "/crawlandgetdatausage"
-	storageRESTMethodMakeVol              = "/makevol"
-	storageRESTMethodMakeVolBulk          = "/makevolbulk"
-	storageRESTMethodStatVol              = "/statvol"
-	storageRESTMethodDeleteVol            = "/deletevol"
-	storageRESTMethodListVols             = "/listvols"
+	storageRESTMethodHealth      = "/health"
+	storageRESTMethodDiskInfo    = "/diskinfo"
+	storageRESTMethodNSScanner   = "/nsscanner"
+	storageRESTMethodMakeVol     = "/makevol"
+	storageRESTMethodMakeVolBulk = "/makevolbulk"
+	storageRESTMethodStatVol     = "/statvol"
+	storageRESTMethodDeleteVol   = "/deletevol"
+	storageRESTMethodListVols    = "/listvols"
 
 	storageRESTMethodAppendFile     = "/appendfile"
 	storageRESTMethodCreateFile     = "/createfile"
@@ -72,6 +72,7 @@ const (
 	storageRESTCount          = "count"
 	storageRESTMarkerPath     = "marker"
 	storageRESTPrefixFilter   = "prefix"
+	storageRESTForwardFilter  = "forward"
 	storageRESTRecursive      = "recursive"
 	storageRESTReportNotFound = "report-notfound"
 	storageRESTBitrotAlgo     = "bitrot-algo"

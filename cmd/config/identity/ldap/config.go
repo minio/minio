@@ -301,7 +301,8 @@ func (l *Config) Bind(username, password string) (string, []string, error) {
 	var groups []string
 	if l.GroupSearchFilter != "" {
 		for _, groupSearchBase := range l.GroupSearchBaseDistNames {
-			filter := strings.Replace(l.GroupSearchFilter, "%s", ldap.EscapeFilter(bindDN), -1)
+			filter := strings.Replace(l.GroupSearchFilter, "%s", ldap.EscapeFilter(username), -1)
+			filter = strings.Replace(filter, "%d", ldap.EscapeFilter(bindDN), -1)
 			searchRequest := ldap.NewSearchRequest(
 				groupSearchBase,
 				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,

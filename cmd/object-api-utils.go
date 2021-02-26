@@ -58,8 +58,11 @@ const (
 	mpartMetaPrefix = "multipart"
 	// MinIO Multipart meta prefix.
 	minioMetaMultipartBucket = minioMetaBucket + SlashSeparator + mpartMetaPrefix
-	// MinIO Tmp meta prefix.
+	// MinIO tmp meta prefix.
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
+	// MinIO tmp meta prefix for deleted objects.
+	minioMetaTmpDeletedBucket = minioMetaTmpBucket + "/.trash"
+
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 	// On compressed files bigger than this;

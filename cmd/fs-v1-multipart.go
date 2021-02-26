@@ -31,7 +31,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/cmd/logger"
-	mioutil "github.com/minio/minio/pkg/ioutil"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/trie"
 )
 
@@ -114,7 +114,7 @@ func (fs *FSObjects) backgroundAppend(ctx context.Context, bucket, object, uploa
 		}
 
 		partPath := pathJoin(uploadIDDir, entry)
-		err = mioutil.AppendFile(file.filePath, partPath, globalFSOSync)
+		err = xioutil.AppendFile(file.filePath, partPath, globalFSOSync)
 		if err != nil {
 			reqInfo := logger.GetReqInfo(ctx).AppendTags("partPath", partPath)
 			reqInfo.AppendTags("filepath", file.filePath)
@@ -390,7 +390,7 @@ func (fs *FSObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploa
 		return minfo, toObjectErr(err, bucket, object)
 	}
 
-	fsMetaBytes, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
+	fsMetaBytes, err := xioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return minfo, toObjectErr(err, bucket, object)
@@ -700,7 +700,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 					GotETag:    part.ETag,
 				}
 			}
-			if err = mioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partFile), globalFSOSync); err != nil {
+			if err = xioutil.AppendFile(appendFilePath, pathJoin(uploadIDDir, partFile), globalFSOSync); err != nil {
 				logger.LogIf(ctx, err)
 				return oi, toObjectErr(err)
 			}
@@ -744,7 +744,7 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 	}()
 
 	// Read saved fs metadata for ongoing multipart.
-	fsMetaBuf, err := ioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
+	fsMetaBuf, err := xioutil.ReadFile(pathJoin(uploadIDDir, fs.metaJSONFile))
 	if err != nil {
 		logger.LogIf(ctx, err)
 		return oi, toObjectErr(err, bucket, object)

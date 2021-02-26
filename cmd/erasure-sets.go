@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -404,20 +403,27 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 		// Initialize erasure objects for a given set.
 		s.sets[i] = &erasureObjects{
-			setNumber:          i,
-			setDriveCount:      setDriveCount,
-			defaultParityCount: defaultParityCount,
-			getDisks:           s.GetDisks(i),
-			getLockers:         s.GetLockers(i),
-			getEndpoints:       s.GetEndpoints(i),
-			nsMutex:            mutex,
-			bp:                 bp,
-			mrfOpCh:            make(chan partialOperation, 10000),
+			setNumber:             i,
+			setDriveCount:         setDriveCount,
+			defaultParityCount:    defaultParityCount,
+			getDisks:              s.GetDisks(i),
+			getLockers:            s.GetLockers(i),
+			getEndpoints:          s.GetEndpoints(i),
+			deletedCleanupSleeper: newDynamicSleeper(10, 10*time.Second),
+			nsMutex:               mutex,
+			bp:                    bp,
+			mrfOpCh:               make(chan partialOperation, 10000),
 		}
 	}
 
+	// cleanup ".trash/" folder every 30 minutes with sufficient sleep cycles.
+	const deletedObjectsCleanupInterval = 30 * time.Minute
+
 	// start cleanup stale uploads go-routine.
 	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
+
+	// start cleanup of deleted objects.
+	go s.cleanupDeletedObjects(ctx, deletedObjectsCleanupInterval)
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
@@ -425,6 +431,25 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	go s.healMRFRoutine()
 
 	return s, nil
+}
+
+func (s *erasureSets) cleanupDeletedObjects(ctx context.Context, cleanupInterval time.Duration) {
+	timer := time.NewTimer(cleanupInterval)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			// Reset for the next interval
+			timer.Reset(cleanupInterval)
+
+			for _, set := range s.sets {
+				set.cleanupDeletedObjects(ctx)
+			}
+		}
+	}
 }
 
 func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
@@ -782,13 +807,6 @@ func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string,
 	set := s.getHashedSet(object)
 	auditObjectErasureSet(ctx, object, set, s.poolNumber)
 	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
-}
-
-// GetObject - reads an object from the hashedSet based on the object name.
-func (s *erasureSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	set := s.getHashedSet(object)
-	auditObjectErasureSet(ctx, object, set, s.poolNumber)
-	return set.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {
@@ -1367,11 +1385,11 @@ func (s *erasureSets) HealBucket(ctx context.Context, bucket string, opts madmin
 		SetCount:  s.setCount,
 	}
 
-	for _, s := range s.sets {
+	for _, set := range s.sets {
 		var healResult madmin.HealResultItem
-		healResult, err = s.HealBucket(ctx, bucket, opts)
+		healResult, err = set.HealBucket(ctx, bucket, opts)
 		if err != nil {
-			return result, err
+			return result, toObjectErr(err, bucket)
 		}
 		result.Before.Drives = append(result.Before.Drives, healResult.Before.Drives...)
 		result.After.Drives = append(result.After.Drives, healResult.After.Drives...)

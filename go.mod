@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.14
+go 1.15
 
 require (
 	cloud.google.com/go v0.39.0
@@ -49,9 +49,9 @@ require (
 	github.com/minio/cli v1.22.0
 	github.com/minio/highwayhash v1.0.1
 	github.com/minio/md5-simd v1.1.1 // indirect
-	github.com/minio/minio-go/v7 v7.0.9-0.20210210235136-83423dddb072
+	github.com/minio/minio-go/v7 v7.0.10
 	github.com/minio/selfupdate v0.3.1
-	github.com/minio/sha256-simd v0.1.1
+	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
 	github.com/minio/sio v0.2.1
 	github.com/mitchellh/go-homedir v1.1.0
@@ -75,6 +75,7 @@ require (
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil v3.20.11+incompatible
+	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v1.0.0
 	github.com/tidwall/gjson v1.6.7

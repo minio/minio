@@ -50,12 +50,31 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 			if err == io.EOF {
 				break
 			}
-			if osErrToFileErr(err) == errFileNotFound {
+			err = osErrToFileErr(err)
+			if err == errFileNotFound {
 				return nil
 			}
-			return osErrToFileErr(err)
+			return err
 		}
 		for _, fi := range fis {
+			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
+				fi, err = os.Stat(pathJoin(dirPath, fi.Name()))
+				if err != nil {
+					// It got deleted in the meantime, not found
+					// or returns too many symlinks ignore this
+					// file/directory.
+					if osIsNotExist(err) || isSysErrPathNotFound(err) ||
+						isSysErrTooManySymlinks(err) {
+						continue
+					}
+					return err
+				}
+
+				// Ignore symlinked directories.
+				if fi.IsDir() {
+					continue
+				}
+			}
 			if err = filter(fi.Name(), fi.Mode()); err == errDoneForNow {
 				// filtering requested to return by caller.
 				return nil
@@ -97,11 +116,26 @@ func readDirN(dirPath string, count int) (entries []string, err error) {
 			}
 		}
 		for _, fi := range fis {
-			// Not need to follow symlink.
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-				continue
+				fi, err = os.Stat(pathJoin(dirPath, fi.Name()))
+				if err != nil {
+					// It got deleted in the meantime, not found
+					// or returns too many symlinks ignore this
+					// file/directory.
+					if osIsNotExist(err) || isSysErrPathNotFound(err) ||
+						isSysErrTooManySymlinks(err) {
+						continue
+					}
+					return err
+				}
+
+				// Ignore symlinked directories.
+				if fi.IsDir() {
+					continue
+				}
 			}
-			if fi.Mode().IsDir() {
+
+			if fi.IsDir() {
 				// Append SlashSeparator instead of "\" so that sorting is achieved as expected.
 				entries = append(entries, fi.Name()+SlashSeparator)
 			} else if fi.Mode().IsRegular() {
