@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/color"
+	xioutil "github.com/minio/minio/pkg/ioutil"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
@@ -323,7 +324,7 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 	// Load bucket info.
 	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, func(item crawlItem) (sizeSummary, error) {
 		bucket, object := item.bucket, item.objectPath()
-		fsMetaBytes, err := ioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
+		fsMetaBytes, err := xioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !osIsNotExist(err) {
 			if intDataUpdateTracker.debug {
 				logger.Info(color.Green("crawlBucket:")+" object return unexpected error: %v/%v: %w", item.bucket, item.objectPath(), err)

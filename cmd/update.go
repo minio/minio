@@ -39,7 +39,6 @@ import (
 	"github.com/minio/minio/pkg/env"
 	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/selfupdate"
-	_ "github.com/minio/sha256-simd" // Needed for sha256 hash verifier.
 )
 
 const (

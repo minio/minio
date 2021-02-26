@@ -217,14 +217,11 @@ func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache
 	var newCache dataUsageCache
 	pr, pw = io.Pipe()
 	go func() {
-		pr.CloseWithError(newCache.deserialize(pr))
+		pw.CloseWithError(waitForHTTPStream(respBody, pw))
 	}()
-	err = waitForHTTPStream(respBody, pw)
-	pw.CloseWithError(err)
-	if err != nil {
-		return cache, err
-	}
-	return newCache, nil
+	err = newCache.deserialize(pr)
+	pr.CloseWithError(err)
+	return newCache, err
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {

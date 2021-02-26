@@ -267,12 +267,13 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 				return &b
 			},
 		},
-		globalSync: env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
-		ctx:        GlobalContext,
-		rootDisk:   rootDisk,
-		poolIndex:  -1,
-		setIndex:   -1,
-		diskIndex:  -1,
+		globalSync:           env.Get(config.EnvFSOSync, config.EnableOff) == config.EnableOn,
+		ctx:                  GlobalContext,
+		rootDisk:             rootDisk,
+		readODirectSupported: true,
+		poolIndex:            -1,
+		setIndex:             -1,
+		diskIndex:            -1,
 	}
 
 	// Create all necessary bucket folders if possible.
@@ -416,7 +417,7 @@ func (s *xlStorage) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCac
 			return sizeSummary{}, errSkipFile
 		}
 
-		buf, err := ioutil.ReadFile(item.Path)
+		buf, err := xioutil.ReadFile(item.Path)
 		if err != nil {
 			if intDataUpdateTracker.debug {
 				console.Debugf(color.Green("crawlBucket:")+" object path missing: %v: %w\n", item.Path, err)
@@ -573,7 +574,7 @@ func (s *xlStorage) GetDiskID() (string, error) {
 		return diskID, nil
 	}
 
-	b, err := ioutil.ReadFile(formatFile)
+	b, err := xioutil.ReadFile(formatFile)
 	if err != nil {
 		// If the disk is still not initialized.
 		if osIsNotExist(err) {
@@ -861,7 +862,7 @@ func (s *xlStorage) WalkVersions(ctx context.Context, volume, dirPath, marker st
 					},
 				}
 			} else {
-				xlMetaBuf, err := ioutil.ReadFile(pathJoin(volumeDir, walkResult.entry, xlStorageFormatFile))
+				xlMetaBuf, err := xioutil.ReadFile(pathJoin(volumeDir, walkResult.entry, xlStorageFormatFile))
 				if err != nil {
 					continue
 				}
@@ -1184,9 +1185,9 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirectIO bool) (buf []byte, err error) {
 	var f *os.File
 	if requireDirectIO {
-		f, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
+		f, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
 	} else {
-		f, err = os.Open(filePath)
+		f, err = os.OpenFile(filePath, readMode, 0)
 	}
 	if err != nil {
 		if osIsNotExist(err) {
@@ -1209,6 +1210,13 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 		} else if isSysErrTooManyFiles(err) {
 			return nil, errTooManyOpenFiles
 		} else if isSysErrInvalidArg(err) {
+			st, _ := os.Lstat(filePath)
+			if st != nil && st.IsDir() {
+				// Linux returns InvalidArg for directory O_DIRECT
+				// we need to keep this fallback code to return correct
+				// errors upwards.
+				return nil, errFileNotFound
+			}
 			return nil, errUnsupportedDisk
 		}
 		return nil, err
@@ -1362,42 +1370,23 @@ func (s *xlStorage) openFile(volume, path string, mode int) (f *os.File, err err
 		return nil, err
 	}
 
-	// Stat a volume entry.
-	_, err = os.Lstat(volumeDir)
-	if err != nil {
-		if osIsNotExist(err) {
-			return nil, errVolumeNotFound
-		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
-		}
-		return nil, err
-	}
-
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
 		return nil, err
 	}
 
-	// Verify if the file already exists and is not of regular type.
-	var st os.FileInfo
-	if st, err = os.Lstat(filePath); err == nil {
-		if !st.Mode().IsRegular() {
-			return nil, errIsNotRegular
-		}
-	} else {
-		// Create top level directories if they don't exist.
-		// with mode 0777 mkdir honors system umask.
-		if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
-			return nil, err
-		}
+	// Create top level directories if they don't exist.
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
+		return nil, err
 	}
 
-	w, err := os.OpenFile(filePath, mode, 0666)
+	w, err := os.OpenFile(filePath, mode|writeMode, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		switch {
-		case isSysErrNotDir(err):
-			return nil, errFileAccessDenied
+		case isSysErrIsDir(err):
+			return nil, errIsNotRegular
 		case osIsPermission(err):
 			return nil, errFileAccessDenied
 		case isSysErrIO(err):
@@ -1702,19 +1691,21 @@ func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b 
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	w, err := s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_WRONLY)
+	w, err := s.openFile(volume, path, os.O_CREATE|os.O_WRONLY)
 	if err != nil {
 		return err
 	}
-
 	defer w.Close()
+
 	n, err := w.Write(b)
 	if err != nil {
 		return err
 	}
+
 	if n != len(b) {
 		return io.ErrShortWrite
 	}
+
 	return nil
 }
 
@@ -1726,19 +1717,38 @@ func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, 
 		atomic.AddInt32(&s.activeIOCount, -1)
 	}()
 
-	var w *os.File
-	// Create file if not found. Not doing O_DIRECT here to avoid the code that does buffer aligned writes.
-	// AppendFile() is only used by healing code to heal objects written in old format.
-	w, err = s.openFile(volume, path, os.O_CREATE|os.O_SYNC|os.O_APPEND|os.O_WRONLY)
+	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
 	}
 
-	if _, err = w.Write(buf); err != nil {
+	// Stat a volume entry.
+	if _, err = os.Lstat(volumeDir); err != nil {
+		if osIsNotExist(err) {
+			return errVolumeNotFound
+		}
 		return err
 	}
 
-	return w.Close()
+	var w *os.File
+	// Create file if not found. Not doing O_DIRECT here to avoid the code that does buffer aligned writes.
+	// AppendFile() is only used by healing code to heal objects written in old format.
+	w, err = s.openFile(volume, path, os.O_CREATE|os.O_APPEND|os.O_WRONLY)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	n, err := w.Write(buf)
+	if err != nil {
+		return err
+	}
+
+	if n != len(buf) {
+		return io.ErrShortWrite
+	}
+
+	return nil
 }
 
 // CheckParts check if path has necessary parts available.
@@ -2034,7 +2044,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	srcBuf, err := ioutil.ReadFile(srcFilePath)
+	srcBuf, err := xioutil.ReadFile(srcFilePath)
 	if err != nil {
 		return osErrToFileErr(err)
 	}
@@ -2044,7 +2054,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	dstBuf, err := ioutil.ReadFile(dstFilePath)
+	dstBuf, err := xioutil.ReadFile(dstFilePath)
 	if err != nil {
 		if !osIsNotExist(err) {
 			return osErrToFileErr(err)
@@ -2055,7 +2065,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 			return err
 		}
 		if err == nil {
-			dstBuf, err = ioutil.ReadFile(dstFilePath)
+			dstBuf, err = xioutil.ReadFile(dstFilePath)
 			if err != nil && !osIsNotExist(err) {
 				return osErrToFileErr(err)
 			}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -47,7 +48,6 @@ import (
 	"github.com/minio/minio/pkg/bucket/policy/condition"
 	"github.com/minio/minio/pkg/env"
 	"github.com/minio/minio/pkg/madmin"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 const (
@@ -790,6 +790,10 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 	startOffset, length, err = rs.GetOffsetLength(objInfo.Size)
 	if err != nil {
 		return nil, err
+	}
+
+	if startOffset != 0 || length != objInfo.Size {
+		delete(objInfo.UserDefined, "Content-MD5")
 	}
 
 	pr, pw := io.Pipe()

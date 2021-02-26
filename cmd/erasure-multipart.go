@@ -283,7 +283,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 
 	dataBlocks := len(onlineDisks) - parityBlocks
-	fi := newFileInfo(object, dataBlocks, parityBlocks)
+	fi := newFileInfo(pathJoin(bucket, object), dataBlocks, parityBlocks)
 
 	// we now know the number of blocks this object needs for data and parity.
 	// establish the writeQuorum using this data

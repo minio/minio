@@ -18,9 +18,8 @@ package cmd
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
-
-	"github.com/minio/sha256-simd"
 )
 
 // getSHA256Hash returns SHA-256 hash in hex encoding of given data.

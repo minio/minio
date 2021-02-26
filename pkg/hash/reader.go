@@ -25,7 +25,6 @@ import (
 	"io"
 
 	"github.com/minio/minio/pkg/etag"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 // A Reader wraps an io.Reader and computes the MD5 checksum
@@ -115,7 +114,7 @@ func NewReader(src io.Reader, size int64, md5Hex, sha256Hex string, actualSize i
 		src = io.LimitReader(src, size)
 	}
 	if len(SHA256) != 0 {
-		hash = sha256.New()
+		hash = newSHA256()
 	}
 	return &Reader{
 		src:           etag.NewReader(src, etag.ETag(MD5)),

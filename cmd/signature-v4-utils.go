@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/hex"
 	"io"
 	"io/ioutil"
@@ -29,7 +30,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/sha256-simd"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
@@ -65,10 +65,9 @@ func getContentSha256Cksum(r *http.Request, stype serviceType) string {
 		if err != nil {
 			logger.CriticalIf(GlobalContext, err)
 		}
-		sum256 := sha256.New()
-		sum256.Write(payload)
+		sum256 := sha256.Sum256(payload)
 		r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-		return hex.EncodeToString(sum256.Sum(nil))
+		return hex.EncodeToString(sum256[:])
 	}
 
 	var (
