@@ -66,7 +66,7 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Bitrot,
-			Description: `perform bitrot scan on disks when checking objects during crawl`,
+			Description: `perform bitrot scan on disks when checking objects during scanner`,
 			Optional:    true,
 			Type:        "on|off",
 		},

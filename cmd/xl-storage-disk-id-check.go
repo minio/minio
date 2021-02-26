@@ -55,11 +55,11 @@ func (p *xlStorageDiskIDCheck) Healing() bool {
 	return p.storage.Healing()
 }
 
-func (p *xlStorageDiskIDCheck) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	if err := p.checkDiskStale(); err != nil {
 		return dataUsageCache{}, err
 	}
-	return p.storage.CrawlAndGetDataUsage(ctx, cache)
+	return p.storage.NSScanner(ctx, cache)
 }
 
 func (p *xlStorageDiskIDCheck) Close() error {

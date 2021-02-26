@@ -231,8 +231,8 @@ func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	return storageInfo, nil
 }
 
-// CrawlAndGetDataUsage returns data usage stats of the current FS deployment
-func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
+// NSScanner returns data usage stats of the current FS deployment
+func (fs *FSObjects) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	// Load bucket totals
 	var totalCache dataUsageCache
 	err := totalCache.load(ctx, fs, dataUsageCacheName)
@@ -268,7 +268,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		}
 		bCache.Info.BloomFilter = totalCache.Info.BloomFilter
 
-		cache, err := fs.crawlBucket(ctx, b.Name, bCache)
+		cache, err := fs.scanBucket(ctx, b.Name, bCache)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -279,13 +279,13 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 
 		if cache.root() == nil {
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("CrawlAndGetDataUsage:") + " No root added. Adding empty")
+				logger.Info(color.Green("NSScanner:") + " No root added. Adding empty")
 			}
 			cache.replace(cache.Info.Name, dataUsageRoot, dataUsageEntry{})
 		}
 		if cache.Info.LastUpdate.After(bCache.Info.LastUpdate) {
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving bucket %q cache with %d entries", b.Name, len(cache.Cache))
+				logger.Info(color.Green("NSScanner:")+" Saving bucket %q cache with %d entries", b.Name, len(cache.Cache))
 			}
 			logger.LogIf(ctx, cache.save(ctx, fs, path.Join(b.Name, dataUsageCacheName)))
 		}
@@ -295,7 +295,7 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 		entry := cl.flatten(*cl.root())
 		totalCache.replace(cl.Info.Name, dataUsageRoot, entry)
 		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("CrawlAndGetDataUsage:")+" Saving totals cache with %d entries", len(totalCache.Cache))
+			logger.Info(color.Green("NSScanner:")+" Saving totals cache with %d entries", len(totalCache.Cache))
 		}
 		totalCache.Info.LastUpdate = time.Now()
 		logger.LogIf(ctx, totalCache.save(ctx, fs, dataUsageCacheName))
@@ -307,27 +307,27 @@ func (fs *FSObjects) CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, 
 	return nil
 }
 
-// crawlBucket crawls a single bucket in FS mode.
+// scanBucket scans a single bucket in FS mode.
 // The updated cache for the bucket is returned.
 // A partially updated bucket may be returned.
-func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataUsageCache) (dataUsageCache, error) {
+func (fs *FSObjects) scanBucket(ctx context.Context, bucket string, cache dataUsageCache) (dataUsageCache, error) {
 	// Get bucket policy
 	// Check if the current bucket has a configured lifecycle policy
 	lc, err := globalLifecycleSys.Get(bucket)
 	if err == nil && lc.HasActiveRules("", true) {
 		if intDataUpdateTracker.debug {
-			logger.Info(color.Green("crawlBucket:") + " lifecycle: Active rules found")
+			logger.Info(color.Green("scanBucket:") + " lifecycle: Active rules found")
 		}
 		cache.Info.lifeCycle = lc
 	}
 
 	// Load bucket info.
-	cache, err = crawlDataFolder(ctx, fs.fsPath, cache, func(item crawlItem) (sizeSummary, error) {
+	cache, err = scanDataFolder(ctx, fs.fsPath, cache, func(item scannerItem) (sizeSummary, error) {
 		bucket, object := item.bucket, item.objectPath()
 		fsMetaBytes, err := xioutil.ReadFile(pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fs.metaJSONFile))
 		if err != nil && !osIsNotExist(err) {
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("crawlBucket:")+" object return unexpected error: %v/%v: %w", item.bucket, item.objectPath(), err)
+				logger.Info(color.Green("scanBucket:")+" object return unexpected error: %v/%v: %w", item.bucket, item.objectPath(), err)
 			}
 			return sizeSummary{}, errSkipFile
 		}
@@ -348,7 +348,7 @@ func (fs *FSObjects) crawlBucket(ctx context.Context, bucket string, cache dataU
 		fi, fiErr := os.Stat(item.Path)
 		if fiErr != nil {
 			if intDataUpdateTracker.debug {
-				logger.Info(color.Green("crawlBucket:")+" object path missing: %v: %w", item.Path, fiErr)
+				logger.Info(color.Green("scanBucket:")+" object path missing: %v: %w", item.Path, fiErr)
 			}
 			return sizeSummary{}, errSkipFile
 		}
