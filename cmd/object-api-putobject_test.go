@@ -340,8 +340,19 @@ func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disk
 
 	for _, disk := range disks {
 		tmpMetaDir := path.Join(disk, minioMetaTmpBucket)
-		if !isDirEmpty(tmpMetaDir) {
-			t.Fatalf("%s: expected: empty, got: non-empty", minioMetaTmpBucket)
+		files, err := ioutil.ReadDir(tmpMetaDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found bool
+		for _, fi := range files {
+			if fi.Name() == ".trash" {
+				continue
+			}
+			found = true
+		}
+		if found {
+			t.Fatalf("%s: expected: empty, got: non-empty %#v", minioMetaTmpBucket, files)
 		}
 	}
 }
@@ -418,8 +429,17 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 			t.Errorf("%s", err)
 		}
 
-		if len(files) != 0 {
-			t.Fatalf("%s: expected: empty, got: non-empty. content: %s", tmpMetaDir, files)
+		var found bool
+		for _, fi := range files {
+			if fi.Name() == ".trash" {
+				continue
+			}
+			found = true
+			break
+		}
+
+		if found {
+			t.Fatalf("%s: expected: empty, got: non-empty. content: %#v", tmpMetaDir, files)
 		}
 	}
 }
