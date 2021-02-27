@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -663,9 +664,11 @@ func sipHashMod(key string, cardinality int, id [16]byte) int {
 	if cardinality <= 0 {
 		return -1
 	}
-	sip := siphash.New(id[:])
-	sip.Write([]byte(key))
-	return int(sip.Sum64() % uint64(cardinality))
+	// use the faster version as per siphash docs
+	// https://github.com/dchest/siphash#usage
+	k0, k1 := binary.LittleEndian.Uint64(id[0:8]), binary.LittleEndian.Uint64(id[8:16])
+	sum64 := siphash.Hash(k0, k1, []byte(key))
+	return int(sum64 % uint64(cardinality))
 }
 
 func crcHashMod(key string, cardinality int) int {
