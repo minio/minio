@@ -19,13 +19,13 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"sort"
 
 	"github.com/minio/minio/cmd/logger"
-	sha256 "github.com/minio/sha256-simd"
 	"github.com/minio/sio"
 )
 

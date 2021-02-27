@@ -1,7 +1,6 @@
 .git
 .github
 docs
-CREDITS
 default.etcd
 browser
 *.gz

@@ -87,7 +87,7 @@ type ObjectLayer interface {
 
 	// Storage operations.
 	Shutdown(context.Context) error
-	CrawlAndGetDataUsage(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
+	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
 
 	BackendInfo() BackendInfo
 	StorageInfo(ctx context.Context) (StorageInfo, []error) // local queries only local disks
@@ -112,7 +112,6 @@ type ObjectLayer interface {
 	// IMPORTANTLY, when implementations return err != nil, this
 	// function MUST NOT return a non-nil ReadCloser.
 	GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, lockType LockType, opts ObjectOptions) (reader *GetObjectReader, err error)
-	GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error)
 	GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	PutObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
@@ -161,4 +160,24 @@ type ObjectLayer interface {
 	PutObjectTags(context.Context, string, string, string, ObjectOptions) (ObjectInfo, error)
 	GetObjectTags(context.Context, string, string, ObjectOptions) (*tags.Tags, error)
 	DeleteObjectTags(context.Context, string, string, ObjectOptions) (ObjectInfo, error)
+}
+
+// GetObject - TODO(aead): This function just acts as an adapter for GetObject tests and benchmarks
+// since the GetObject method of the ObjectLayer interface has been removed. Once, the
+// tests are adjusted to use GetObjectNInfo this function can be removed.
+func GetObject(ctx context.Context, api ObjectLayer, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) (err error) {
+	var header http.Header
+	if etag != "" {
+		header.Set("ETag", etag)
+	}
+	Range := &HTTPRangeSpec{Start: startOffset, End: startOffset + length}
+
+	reader, err := api.GetObjectNInfo(ctx, bucket, object, Range, header, readLock, opts)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	_, err = io.Copy(writer, reader)
+	return err
 }

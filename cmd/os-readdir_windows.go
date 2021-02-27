@@ -61,11 +61,15 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 				if isSysErrPathNotFound(e) {
 					return nil
 				}
-				return osErrToFileErr(&os.PathError{
+				err = osErrToFileErr(&os.PathError{
 					Op:   "FindNextFile",
 					Path: dirPath,
 					Err:  e,
 				})
+				if err == errFileNotFound {
+					return nil
+				}
+				return err
 			}
 		}
 		name := syscall.UTF16ToString(data.FileName[0:])

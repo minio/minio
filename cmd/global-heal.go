@@ -32,7 +32,7 @@ const (
 )
 
 // NewBgHealSequence creates a background healing sequence
-// operation which crawls all objects and heal them.
+// operation which scans all objects and heal them.
 func newBgHealSequence() *healSequence {
 	reqInfo := &logger.ReqInfo{API: "BackgroundHeal"}
 	ctx, cancelCtx := context.WithCancel(logger.SetReqInfo(GlobalContext, reqInfo))

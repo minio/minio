@@ -26,6 +26,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
@@ -38,7 +39,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/cmd/http"
-	sha256 "github.com/minio/sha256-simd"
 )
 
 // AWS Signature Version '4' constants.

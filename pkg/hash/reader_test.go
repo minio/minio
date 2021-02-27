@@ -27,7 +27,7 @@ import (
 
 // Tests functions like Size(), MD5*(), SHA256*()
 func TestHashReaderHelperMethods(t *testing.T) {
-	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4, false)
+	r, err := NewReader(bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,13 +109,13 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 		{
 			desc:       "Nested hash reader NewReader() should merge.",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
 			actualSize: 4,
 		},
 		{
 			desc:       "Incorrect sha256, nested",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
 			actualSize: 4,
 			sha256hex:  "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c",
@@ -126,28 +126,28 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 		{
 			desc:       "Correct sha256, nested",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
 			actualSize: 4,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 		},
 		{
 			desc:       "Correct sha256, nested, truncated",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", 4),
 			size:       4,
 			actualSize: -1,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 		},
 		{
 			desc:       "Correct sha256, nested, truncated, swapped",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", -1, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd-more-stuff-to-be ignored")), 4, "", "", -1),
 			size:       4,
 			actualSize: -1,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 		},
 		{
 			desc:       "Incorrect MD5, nested",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
 			actualSize: 4,
 			md5hex:     "0773da587b322af3a8718cb418a715ce",
@@ -165,7 +165,7 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 		{
 			desc:       "Correct MD5, nested",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
 			actualSize: 4,
 			md5hex:     "e2fc714c4727ee9395f324cd2e7f331f",
@@ -180,7 +180,7 @@ func TestHashReaderVerification(t *testing.T) {
 		},
 		{
 			desc:       "Correct MD5, nested, truncated",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd-morestuff")), -1, "", "", -1, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd-morestuff")), -1, "", "", -1),
 			size:       4,
 			actualSize: 4,
 			md5hex:     "e2fc714c4727ee9395f324cd2e7f331f",
@@ -188,7 +188,7 @@ func TestHashReaderVerification(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("case-%d", i+1), func(t *testing.T) {
-			r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize, false)
+			r, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
 			if err != nil {
 				t.Fatalf("Test %q: Initializing reader failed %s", testCase.desc, err)
 			}
@@ -202,8 +202,8 @@ func TestHashReaderVerification(t *testing.T) {
 	}
 }
 
-func mustReader(t *testing.T, src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64, strictCompat bool) *Reader {
-	r, err := NewReader(src, size, md5Hex, sha256Hex, actualSize, strictCompat)
+func mustReader(t *testing.T, src io.Reader, size int64, md5Hex, sha256Hex string, actualSize int64) *Reader {
+	r, err := NewReader(src, size, md5Hex, sha256Hex, actualSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,63 +219,57 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 		actualSize        int64
 		md5hex, sha256hex string
 		success           bool
-		expectedErr       error
-		strict            bool
 	}{
 		{
-			desc:        "Invalid md5sum NewReader() will fail.",
-			src:         bytes.NewReader([]byte("abcd")),
-			size:        4,
-			actualSize:  4,
-			md5hex:      "invalid-md5",
-			success:     false,
-			expectedErr: BadDigest{},
+			desc:       "Invalid md5sum NewReader() will fail.",
+			src:        bytes.NewReader([]byte("abcd")),
+			size:       4,
+			actualSize: 4,
+			md5hex:     "invalid-md5",
+			success:    false,
 		},
 		{
-			desc:        "Invalid sha256 NewReader() will fail.",
-			src:         bytes.NewReader([]byte("abcd")),
-			size:        4,
-			actualSize:  4,
-			sha256hex:   "invalid-sha256",
-			success:     false,
-			expectedErr: SHA256Mismatch{},
+			desc:       "Invalid sha256 NewReader() will fail.",
+			src:        bytes.NewReader([]byte("abcd")),
+			size:       4,
+			actualSize: 4,
+			sha256hex:  "invalid-sha256",
+			success:    false,
 		},
 		{
 			desc:       "Nested hash reader NewReader() should merge.",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "", 4),
 			size:       4,
 			actualSize: 4,
 			success:    true,
 		},
 		{
-			desc:        "Mismatching sha256",
-			src:         mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4, false),
-			size:        4,
-			actualSize:  4,
-			sha256hex:   "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c",
-			success:     false,
-			expectedErr: SHA256Mismatch{},
+			desc:       "Mismatching sha256",
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4),
+			size:       4,
+			actualSize: 4,
+			sha256hex:  "50d858e0985ecc7f60418aaf0cc5ab587f42c2570a884095a9e8ccacd0f6545c",
+			success:    false,
 		},
 		{
 			desc:       "Correct sha256",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", 4),
 			size:       4,
 			actualSize: 4,
 			sha256hex:  "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
 			success:    true,
 		},
 		{
-			desc:        "Mismatching MD5",
-			src:         mustReader(t, bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "", 4, false),
-			size:        4,
-			actualSize:  4,
-			md5hex:      "0773da587b322af3a8718cb418a715ce",
-			success:     false,
-			expectedErr: BadDigest{},
+			desc:       "Mismatching MD5",
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "", 4),
+			size:       4,
+			actualSize: 4,
+			md5hex:     "0773da587b322af3a8718cb418a715ce",
+			success:    false,
 		},
 		{
 			desc:       "Correct MD5",
-			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "", 4, false),
+			src:        mustReader(t, bytes.NewReader([]byte("abcd")), 4, "e2fc714c4727ee9395f324cd2e7f331f", "", 4),
 			size:       4,
 			actualSize: 4,
 			md5hex:     "e2fc714c4727ee9395f324cd2e7f331f",
@@ -289,28 +283,22 @@ func TestHashReaderInvalidArguments(t *testing.T) {
 			success:    true,
 		},
 		{
-			desc:        "Nested, size mismatch",
-			src:         mustReader(t, bytes.NewReader([]byte("abcd-morestuff")), 4, "", "", -1, false),
-			size:        2,
-			actualSize:  -1,
-			success:     false,
-			expectedErr: ErrSizeMismatch{Want: 4, Got: 2},
+			desc:       "Nested, size mismatch",
+			src:        mustReader(t, bytes.NewReader([]byte("abcd-morestuff")), 4, "", "", -1),
+			size:       2,
+			actualSize: -1,
+			success:    false,
 		},
 	}
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("case-%d", i+1), func(t *testing.T) {
-			_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize, testCase.strict)
+			_, err := NewReader(testCase.src, testCase.size, testCase.md5hex, testCase.sha256hex, testCase.actualSize)
 			if err != nil && testCase.success {
 				t.Errorf("Test %q: Expected success, but got error %s instead", testCase.desc, err)
 			}
 			if err == nil && !testCase.success {
 				t.Errorf("Test %q: Expected error, but got success", testCase.desc)
-			}
-			if !testCase.success {
-				if err != testCase.expectedErr {
-					t.Errorf("Test %q: Expected error %v, but got %v", testCase.desc, testCase.expectedErr, err)
-				}
 			}
 		})
 	}

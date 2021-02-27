@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -71,6 +72,8 @@ type erasureObjects struct {
 	bp *bpool.BytePoolCap
 
 	mrfOpCh chan partialOperation
+
+	deletedCleanupSleeper *dynamicSleeper
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.
@@ -273,9 +276,31 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 	return newDisks, healing
 }
 
-// CrawlAndGetDataUsage will start crawling buckets and send updated totals as they are traversed.
+// Clean-up previously deleted objects. from .minio.sys/tmp/.trash/
+func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
+	// run multiple cleanup's local to this server.
+	var wg sync.WaitGroup
+	for _, disk := range er.getLoadBalancedLocalDisks() {
+		if disk != nil {
+			wg.Add(1)
+			go func(disk StorageAPI) {
+				defer wg.Done()
+				diskPath := disk.Endpoint().Path
+				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
+					wait := er.deletedCleanupSleeper.Timer(ctx)
+					removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
+					wait()
+					return nil
+				})
+			}(disk)
+		}
+	}
+	wg.Wait()
+}
+
+// nsScanner will start scanning buckets and send updated totals as they are traversed.
 // Updates are sent on a regular basis and the caller *must* consume them.
-func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
+func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, bf *bloomFilter, updates chan<- dataUsageCache) error {
 	if len(buckets) == 0 {
 		return nil
 	}
@@ -283,7 +308,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 	// Collect disks we can use.
 	disks, healing := er.getOnlineDisksWithHealing()
 	if len(disks) == 0 {
-		logger.Info(color.Green("data-crawl:") + " all disks are offline or being healed, skipping crawl")
+		logger.Info(color.Green("data-scanner:") + " all disks are offline or being healed, skipping scanner")
 		return nil
 	}
 
@@ -417,7 +442,7 @@ func (er erasureObjects) crawlAndGetDataUsage(ctx context.Context, buckets []Buc
 				// Calc usage
 				before := cache.Info.LastUpdate
 				var err error
-				cache, err = disk.CrawlAndGetDataUsage(ctx, cache)
+				cache, err = disk.NSScanner(ctx, cache)
 				cache.Info.BloomFilter = nil
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {

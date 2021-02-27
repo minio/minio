@@ -139,7 +139,7 @@ The replication configuration follows [AWS S3 Spec](https://docs.aws.amazon.com/
 
 When object locking is used in conjunction with replication, both source and destination buckets needs to have [object locking](https://docs.min.io/docs/minio-bucket-object-lock-guide.html) enabled. Similarly objects encrypted on the server side, will be replicated if destination also supports encryption.
 
-Replication status can be seen in the metadata on the source and destination objects. On the source side, the `X-Amz-Replication-Status` changes from `PENDING` to `COMPLETED` or `FAILED` after replication attempt either succeeded or failed respectively. On the destination side, a `X-Amz-Replication-Status` status of `REPLICA` indicates that the object was replicated successfully. Any replication failures are automatically re-attempted during a periodic disk crawl cycle.
+Replication status can be seen in the metadata on the source and destination objects. On the source side, the `X-Amz-Replication-Status` changes from `PENDING` to `COMPLETED` or `FAILED` after replication attempt either succeeded or failed respectively. On the destination side, a `X-Amz-Replication-Status` status of `REPLICA` indicates that the object was replicated successfully. Any replication failures are automatically re-attempted during a periodic disk scanner cycle.
 
 To perform bi-directional replication, repeat the above process on the target site - this time setting the source bucket as the replication target. It is recommended that replication be run in a system with atleast two CPU's available to the process, so that replication can run in its own thread.
 

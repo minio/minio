@@ -17,20 +17,19 @@
 package target
 
 import (
+	"crypto/sha256"
 	"crypto/sha512"
-	"hash"
 
-	"github.com/minio/sha256-simd"
 	"github.com/xdg/scram"
 )
 
 // KafkaSHA256 is a function that returns a crypto/sha256 hasher and should be used
 // to create Client objects configured for SHA-256 hashing.
-var KafkaSHA256 scram.HashGeneratorFcn = func() hash.Hash { return sha256.New() }
+var KafkaSHA256 scram.HashGeneratorFcn = sha256.New
 
 // KafkaSHA512 is a function that returns a crypto/sha512 hasher and should be used
 // to create Client objects configured for SHA-512 hashing.
-var KafkaSHA512 scram.HashGeneratorFcn = func() hash.Hash { return sha512.New() }
+var KafkaSHA512 scram.HashGeneratorFcn = sha512.New
 
 // XDGSCRAMClient implements the client-side of an authentication
 // conversation with a server.  A new conversation must be created for
