@@ -85,6 +85,8 @@ MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (string)    Base LDAP DN to search f
 MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
 ```
 
+If you set an empty lookup bind password, the lookup bind will use the unauthenticated authentication mechanism, as described in [RFC 4513 Section 5.1.2](https://tools.ietf.org/html/rfc4513#section-5.1.2).
+
 #### Username-Format Mode ####
 
 In this mode, the server does not use a separate LDAP service account. Instead, the username and password provided in the STS API call are used to login to the LDAP server and also to lookup the user's groups. This mode preserves older behavior for compatibility, but users are encouraged to use the Lookup-Bind mode.
