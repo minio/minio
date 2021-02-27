@@ -521,7 +521,9 @@ func releaseAll(ds *Dsync, tolerance int, owner string, locks *[]string, isReadL
 //
 // It is a run-time error if dm is not locked on entry to Unlock.
 func (dm *DRWMutex) Unlock() {
+	dm.m.Lock()
 	dm.cancelRefresh()
+	dm.m.Unlock()
 
 	restClnts, owner := dm.clnt.GetLockers()
 	// create temp array on stack
@@ -561,7 +563,9 @@ func (dm *DRWMutex) Unlock() {
 //
 // It is a run-time error if dm is not locked on entry to RUnlock.
 func (dm *DRWMutex) RUnlock() {
+	dm.m.Lock()
 	dm.cancelRefresh()
+	dm.m.Unlock()
 
 	// create temp array on stack
 	restClnts, owner := dm.clnt.GetLockers()
