@@ -40,6 +40,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 var errDiskStale = errors.New("disk stale")
@@ -527,7 +528,12 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	defer rc.Close()
 
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-	io.Copy(w, rc)
+	if _, err = io.Copy(w, rc); err != nil {
+		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+			logger.LogIf(r.Context(), err)
+		}
+		return
+	}
 	w.(http.Flusher).Flush()
 }
 

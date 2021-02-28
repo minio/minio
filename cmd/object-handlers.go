@@ -54,6 +54,7 @@ import (
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 	"github.com/minio/minio/pkg/ioutil"
+	xnet "github.com/minio/minio/pkg/net"
 	"github.com/minio/minio/pkg/s3select"
 	"github.com/minio/sio"
 )
@@ -507,6 +508,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		if !httpWriter.HasWritten() && !statusCodeWritten {
 			// write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
 		}
 		return
 	}
@@ -516,6 +521,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
 			return
 		}
+		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
+		}
+		return
 	}
 
 	// Notify object accessed via a GET request.
