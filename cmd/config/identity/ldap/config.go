@@ -180,6 +180,9 @@ func getGroups(conn *ldap.Conn, sreq *ldap.SearchRequest) ([]string, error) {
 }
 
 func (l *Config) lookupBind(conn *ldap.Conn) error {
+	if l.LookupBindPassword == "" {
+		return conn.UnauthenticatedBind(l.LookupBindDN)
+	}
 	return conn.Bind(l.LookupBindDN, l.LookupBindPassword)
 }
 
@@ -422,7 +425,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 	// Lookup bind user configuration
 	lookupBindDN := env.Get(EnvLookupBindDN, kvs.Get(LookupBindDN))
 	lookupBindPassword := env.Get(EnvLookupBindPassword, kvs.Get(LookupBindPassword))
-	if lookupBindDN != "" && lookupBindPassword != "" {
+	if lookupBindDN != "" {
 		l.LookupBindDN = lookupBindDN
 		l.LookupBindPassword = lookupBindPassword
 		l.isUsingLookupBind = true
