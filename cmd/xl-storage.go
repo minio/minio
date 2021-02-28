@@ -1423,9 +1423,6 @@ func (o *odirectReader) Close() error {
 	} else {
 		o.s.poolLarge.Put(o.bufp)
 	}
-	defer func() {
-		atomic.AddInt32(&o.s.activeIOCount, -1)
-	}()
 	return o.f.Close()
 }
 
@@ -1449,10 +1446,10 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	var file *os.File
 	// O_DIRECT only supported if offset is zero
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported {
-		file, err = disk.OpenFileDirectIO(filePath, os.O_RDONLY, 0666)
+		file, err = disk.OpenFileDirectIO(filePath, readMode, 0666)
 	} else {
 		// Open the file for reading.
-		file, err = os.Open(filePath)
+		file, err = os.OpenFile(filePath, readMode, 0666)
 	}
 	if err != nil {
 		switch {
@@ -1479,27 +1476,33 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 
 	st, err := file.Stat()
 	if err != nil {
+		file.Close()
 		return nil, err
 	}
 
 	// Verify it is a regular file, otherwise subsequent Seek is
 	// undefined.
 	if !st.Mode().IsRegular() {
+		file.Close()
 		return nil, errIsNotRegular
 	}
 
 	atomic.AddInt32(&s.activeIOCount, 1)
 	if offset == 0 && globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported {
+		or := &odirectReader{file, nil, nil, true, false, s, nil}
 		if length <= smallFileThreshold {
-			return &odirectReader{file, nil, nil, true, true, s, nil}, nil
+			or = &odirectReader{file, nil, nil, true, true, s, nil}
 		}
-		return &odirectReader{file, nil, nil, true, false, s, nil}, nil
-	}
-
-	if offset > 0 {
-		if _, err = file.Seek(offset, io.SeekStart); err != nil {
-			return nil, err
-		}
+		r := struct {
+			io.Reader
+			io.Closer
+		}{Reader: io.LimitReader(or, length), Closer: closeWrapper(func() error {
+			defer func() {
+				atomic.AddInt32(&s.activeIOCount, -1)
+			}()
+			return or.Close()
+		})}
+		return r, nil
 	}
 
 	r := struct {
@@ -1511,6 +1514,13 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 		}()
 		return file.Close()
 	})}
+
+	if offset > 0 {
+		if _, err = file.Seek(offset, io.SeekStart); err != nil {
+			r.Close()
+			return nil, err
+		}
+	}
 
 	// Add readahead to big reads
 	if length >= readAheadSize {
