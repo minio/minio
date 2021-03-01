@@ -43,6 +43,7 @@ import (
 	"github.com/gorilla/mux"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
+	"github.com/minio/minio/cmd/rest"
 	"github.com/minio/minio/pkg/certs"
 	"github.com/minio/minio/pkg/handlers"
 	"github.com/minio/minio/pkg/madmin"
@@ -882,4 +883,11 @@ func decodeDirObject(object string) string {
 		return strings.TrimSuffix(object, globalDirSuffix) + slashSeparator
 	}
 	return object
+}
+
+// This is used by metrics to show the number of failed RPC calls
+// between internodes
+func loadAndResetRPCNetworkErrsCounter() uint64 {
+	defer rest.ResetNetworkErrsCounter()
+	return rest.GetNetworkErrsCounter()
 }
