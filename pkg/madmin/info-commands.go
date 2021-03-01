@@ -265,13 +265,14 @@ type ErasureBackend struct {
 
 // ServerProperties holds server information
 type ServerProperties struct {
-	State    string            `json:"state,omitempty"`
-	Endpoint string            `json:"endpoint,omitempty"`
-	Uptime   int64             `json:"uptime,omitempty"`
-	Version  string            `json:"version,omitempty"`
-	CommitID string            `json:"commitID,omitempty"`
-	Network  map[string]string `json:"network,omitempty"`
-	Disks    []Disk            `json:"drives,omitempty"`
+	State      string            `json:"state,omitempty"`
+	Endpoint   string            `json:"endpoint,omitempty"`
+	Uptime     int64             `json:"uptime,omitempty"`
+	Version    string            `json:"version,omitempty"`
+	CommitID   string            `json:"commitID,omitempty"`
+	Network    map[string]string `json:"network,omitempty"`
+	Disks      []Disk            `json:"drives,omitempty"`
+	PoolNumber int               `json:"poolNumber,omitempty"`
 }
 
 // Disk holds Disk information

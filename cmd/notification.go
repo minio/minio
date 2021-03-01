@@ -1239,6 +1239,21 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 		}(client, i)
 	}
 	wg.Wait()
+
+	for i := range reply {
+		for j := range globalEndpoints {
+			for _, endpoint := range globalEndpoints[j].Endpoints {
+				if reply[i].Endpoint == endpoint.Host {
+					reply[i].PoolNumber = j + 1
+				} else if host, err := xnet.ParseHost(reply[i].Endpoint); err == nil {
+					if host.Name == endpoint.Hostname() {
+						reply[i].PoolNumber = j + 1
+					}
+				}
+			}
+		}
+	}
+
 	return reply
 }
 
