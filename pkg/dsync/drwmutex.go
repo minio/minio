@@ -225,8 +225,8 @@ func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, sourc
 			case <-ctx.Done():
 				return
 			case <-time.NewTimer(drwMutexRefreshInterval).C:
-				refreshed := refresh(ctx, dm.clnt, id, source, quorum, dm.Names...)
-				if !refreshed && ctx.Err() == nil {
+				refreshed, err := refresh(ctx, dm.clnt, id, source, quorum, dm.Names...)
+				if err == nil && !refreshed {
 					if lockLossCallback != nil {
 						lockLossCallback()
 					}
@@ -242,7 +242,7 @@ type refreshResult struct {
 	succeeded bool
 }
 
-func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lockNames ...string) bool {
+func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lockNames ...string) (bool, error) {
 	restClnts, owner := ds.GetLockers()
 
 	// Create buffered channel of size equal to total number of nodes.
@@ -299,24 +299,21 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lock
 	for ; i < len(restClnts); i++ {
 		select {
 		case refresh := <-ch:
-			if !refresh.offline && !refresh.succeeded {
+			if refresh.offline {
+				continue
+			}
+			if refresh.succeeded {
+				refreshSucceeded++
+			} else {
 				refreshFailed++
 			}
-			if !refresh.offline && refresh.succeeded {
-				refreshSucceeded++
-			}
-
 			if refreshFailed > quorum {
 				// We know that we are not going to succeed with refresh
 				done = true
 			}
 		case <-ctx.Done():
-			// Capture timedout refresh as succeeded
-			refreshFailed++
-			if refreshFailed > quorum {
-				// We know it is unnecessary to wait for more refresh result, so exit
-				done = true
-			}
+			// Refreshing is canceled
+			return false, ctx.Err()
 		}
 
 		if done {
@@ -329,8 +326,6 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lock
 		refreshQuorum = refreshFailed < quorum
 	}
 
-	// TODO: should we send release lock when refresh fails ? most likely no
-
 	// We may have some unused results in ch, release them async.
 	go func() {
 		wg.Wait()
@@ -339,8 +334,7 @@ func refresh(ctx context.Context, ds *Dsync, id, source string, quorum int, lock
 		}
 	}()
 
-	return refreshQuorum
-
+	return refreshQuorum, nil
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
