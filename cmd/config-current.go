@@ -553,7 +553,7 @@ If you need help to migrate smoothly visit: https://min.io/pricing`
 					http.WithAuthToken(l.AuthToken),
 					http.WithUserAgent(loggerUserAgent),
 					http.WithLogKind(string(logger.All)),
-					http.WithTransport(NewGatewayHTTPTransport()),
+					http.WithTransport(NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)),
 				),
 			); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize audit HTTP target: %w", err))

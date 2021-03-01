@@ -30,9 +30,11 @@ type Console struct {
 
 // HTTP logger target
 type HTTP struct {
-	Enabled   bool   `json:"enabled"`
-	Endpoint  string `json:"endpoint"`
-	AuthToken string `json:"authToken"`
+	Enabled    bool   `json:"enabled"`
+	Endpoint   string `json:"endpoint"`
+	AuthToken  string `json:"authToken"`
+	ClientCert string `json:"clientCert"`
+	ClientKey  string `json:"clientKey"`
 }
 
 // Config console and http logger targets
@@ -44,16 +46,20 @@ type Config struct {
 
 // HTTP endpoint logger
 const (
-	Endpoint  = "endpoint"
-	AuthToken = "auth_token"
+	Endpoint   = "endpoint"
+	AuthToken  = "auth_token"
+	ClientCert = "client_cert"
+	ClientKey  = "client_key"
 
 	EnvLoggerWebhookEnable    = "MINIO_LOGGER_WEBHOOK_ENABLE"
 	EnvLoggerWebhookEndpoint  = "MINIO_LOGGER_WEBHOOK_ENDPOINT"
 	EnvLoggerWebhookAuthToken = "MINIO_LOGGER_WEBHOOK_AUTH_TOKEN"
 
-	EnvAuditWebhookEnable    = "MINIO_AUDIT_WEBHOOK_ENABLE"
-	EnvAuditWebhookEndpoint  = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
-	EnvAuditWebhookAuthToken = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
+	EnvAuditWebhookEnable     = "MINIO_AUDIT_WEBHOOK_ENABLE"
+	EnvAuditWebhookEndpoint   = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
+	EnvAuditWebhookAuthToken  = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
+	EnvAuditWebhookClientCert = "MINIO_AUDIT_WEBHOOK_CLIENT_CERT"
+	EnvAuditWebhookClientKey  = "MINIO_AUDIT_WEBHOOK_CLIENT_KEY"
 )
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
@@ -83,6 +89,14 @@ var (
 		},
 		config.KV{
 			Key:   AuthToken,
+			Value: "",
+		},
+		config.KV{
+			Key:   ClientCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   ClientKey,
 			Value: "",
 		},
 	}
@@ -251,10 +265,24 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if target != config.Default {
 			authTokenEnv = EnvAuditWebhookAuthToken + config.Default + target
 		}
+		clientCertEnv := EnvAuditWebhookClientCert
+		if target != config.Default {
+			clientCertEnv = EnvAuditWebhookClientCert + config.Default + target
+		}
+		clientKeyEnv := EnvAuditWebhookClientKey
+		if target != config.Default {
+			clientKeyEnv = EnvAuditWebhookClientKey + config.Default + target
+		}
+		err = config.EnsureCertAndKey(env.Get(clientCertEnv, ""), env.Get(clientKeyEnv, ""))
+		if err != nil {
+			return cfg, err
+		}
 		cfg.Audit[target] = HTTP{
-			Enabled:   true,
-			Endpoint:  env.Get(endpointEnv, ""),
-			AuthToken: env.Get(authTokenEnv, ""),
+			Enabled:    true,
+			Endpoint:   env.Get(endpointEnv, ""),
+			AuthToken:  env.Get(authTokenEnv, ""),
+			ClientCert: env.Get(clientCertEnv, ""),
+			ClientKey:  env.Get(clientKeyEnv, ""),
 		}
 	}
 
@@ -307,10 +335,16 @@ func LookupConfig(scfg config.Config) (Config, error) {
 		if !enabled {
 			continue
 		}
+		err = config.EnsureCertAndKey(kv.Get(ClientCert), kv.Get(ClientKey))
+		if err != nil {
+			return cfg, err
+		}
 		cfg.Audit[starget] = HTTP{
-			Enabled:   true,
-			Endpoint:  kv.Get(Endpoint),
-			AuthToken: kv.Get(AuthToken),
+			Enabled:    true,
+			Endpoint:   kv.Get(Endpoint),
+			AuthToken:  kv.Get(AuthToken),
+			ClientCert: kv.Get(ClientCert),
+			ClientKey:  kv.Get(ClientKey),
 		}
 	}
 
