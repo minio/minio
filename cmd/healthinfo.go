@@ -27,9 +27,9 @@ import (
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/madmin"
-	cpuhw "github.com/shirou/gopsutil/cpu"
-	memhw "github.com/shirou/gopsutil/mem"
-	"github.com/shirou/gopsutil/process"
+	cpuhw "github.com/shirou/gopsutil/v3/cpu"
+	memhw "github.com/shirou/gopsutil/v3/mem"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
 func getLocalCPUInfo(ctx context.Context, r *http.Request) madmin.ServerCPUInfo {
@@ -264,11 +264,8 @@ func getLocalProcInfo(ctx context.Context, r *http.Request) madmin.ServerProcInf
 		}
 		sysProc.Name = name
 
-		netIOCounters, err := proc.NetIOCountersWithContext(ctx, false)
-		if err != nil {
-			return errProcInfo("netio-counters", err)
-		}
-		sysProc.NetIOCounters = netIOCounters
+		// Refer for more information on NetIOCounters
+		// is useless https://github.com/shirou/gopsutil/issues/429
 
 		nice, err := proc.NiceWithContext(ctx)
 		if err != nil {
@@ -310,17 +307,11 @@ func getLocalProcInfo(ctx context.Context, r *http.Request) madmin.ServerProcInf
 			sysProc.Ppid = ppid
 		}
 
-		rlimit, err := proc.RlimitWithContext(ctx)
-		if err != nil {
-			return errProcInfo("rlimit", err)
-		}
-		sysProc.Rlimit = rlimit
-
 		status, err := proc.StatusWithContext(ctx)
 		if err != nil {
 			return errProcInfo("status", err)
 		}
-		sysProc.Status = status
+		sysProc.Status = status[0]
 
 		tgid, err := proc.Tgid()
 		if err != nil {
