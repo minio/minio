@@ -40,6 +40,7 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	xjwt "github.com/minio/minio/cmd/jwt"
 	"github.com/minio/minio/cmd/logger"
+	xnet "github.com/minio/minio/pkg/net"
 )
 
 var errDiskStale = errors.New("disk stale")
@@ -156,7 +157,7 @@ func (s *storageRESTServer) DiskInfoHandler(w http.ResponseWriter, r *http.Reque
 	logger.LogIf(r.Context(), msgp.Encode(w, &info))
 }
 
-func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r *http.Request) {
+func (s *storageRESTServer) NSScannerHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
 		return
 	}
@@ -172,7 +173,7 @@ func (s *storageRESTServer) CrawlAndGetDataUsageHandler(w http.ResponseWriter, r
 	}
 
 	resp := streamHTTPResponse(w)
-	usageInfo, err := s.storage.CrawlAndGetDataUsage(r.Context(), cache)
+	usageInfo, err := s.storage.NSScanner(r.Context(), cache)
 	if err != nil {
 		resp.CloseWithError(err)
 		return
@@ -527,7 +528,12 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	defer rc.Close()
 
 	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-	io.Copy(w, rc)
+	if _, err = io.Copy(w, rc); err != nil {
+		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+			logger.LogIf(r.Context(), err)
+		}
+		return
+	}
 	w.(http.Flusher).Flush()
 }
 
@@ -684,7 +690,7 @@ func (s *storageRESTServer) RenameFileHandler(w http.ResponseWriter, r *http.Req
 }
 
 // keepHTTPResponseAlive can be used to avoid timeouts with long storage
-// operations, such as bitrot verification or data usage crawling.
+// operations, such as bitrot verification or data usage scanning.
 // Every 10 seconds a space character is sent.
 // The returned function should always be called to release resources.
 // An optional error can be sent which will be picked as text only error,
@@ -808,7 +814,7 @@ func (h *httpStreamResponse) CloseWithError(err error) {
 }
 
 // streamHTTPResponse can be used to avoid timeouts with long storage
-// operations, such as bitrot verification or data usage crawling.
+// operations, such as bitrot verification or data usage scanning.
 // Every 10 seconds a space character is sent.
 // The returned function should always be called to release resources.
 // An optional error can be sent which will be picked as text only error,
@@ -1029,7 +1035,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(httpTraceHdrs(server.HealthHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDiskInfo).HandlerFunc(httpTraceHdrs(server.DiskInfoHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCrawlAndGetDataUsage).HandlerFunc(httpTraceHdrs(server.CrawlAndGetDataUsageHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodNSScanner).HandlerFunc(httpTraceHdrs(server.NSScannerHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(httpTraceHdrs(server.MakeVolHandler)).Queries(restQueries(storageRESTVolume)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(httpTraceHdrs(server.MakeVolBulkHandler)).Queries(restQueries(storageRESTVolumes)...)
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatVol).HandlerFunc(httpTraceHdrs(server.StatVolHandler)).Queries(restQueries(storageRESTVolume)...)

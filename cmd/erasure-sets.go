@@ -18,10 +18,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"math/rand"
 	"net/http"
 	"sort"
@@ -407,21 +407,28 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 
 		// Initialize erasure objects for a given set.
 		s.sets[i] = &erasureObjects{
-			setIndex:           i,
-			poolIndex:          poolIdx,
-			setDriveCount:      setDriveCount,
-			defaultParityCount: defaultParityCount,
-			getDisks:           s.GetDisks(i),
-			getLockers:         s.GetLockers(i),
-			getEndpoints:       s.GetEndpoints(i),
-			nsMutex:            mutex,
-			bp:                 bp,
-			mrfOpCh:            make(chan partialOperation, 10000),
+			setIndex:              i,
+			poolIndex:             poolIdx,
+			setDriveCount:         setDriveCount,
+			defaultParityCount:    defaultParityCount,
+			getDisks:              s.GetDisks(i),
+			getLockers:            s.GetLockers(i),
+			getEndpoints:          s.GetEndpoints(i),
+			deletedCleanupSleeper: newDynamicSleeper(10, 10*time.Second),
+			nsMutex:               mutex,
+			bp:                    bp,
+			mrfOpCh:               make(chan partialOperation, 10000),
 		}
 	}
 
+	// cleanup ".trash/" folder every 30 minutes with sufficient sleep cycles.
+	const deletedObjectsCleanupInterval = 30 * time.Minute
+
 	// start cleanup stale uploads go-routine.
 	go s.cleanupStaleUploads(ctx, GlobalStaleUploadsCleanupInterval, GlobalStaleUploadsExpiry)
+
+	// start cleanup of deleted objects.
+	go s.cleanupDeletedObjects(ctx, deletedObjectsCleanupInterval)
 
 	// Start the disk monitoring and connect routine.
 	go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
@@ -429,6 +436,25 @@ func newErasureSets(ctx context.Context, endpoints Endpoints, storageDisks []Sto
 	go s.healMRFRoutine()
 
 	return s, nil
+}
+
+func (s *erasureSets) cleanupDeletedObjects(ctx context.Context, cleanupInterval time.Duration) {
+	timer := time.NewTimer(cleanupInterval)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			// Reset for the next interval
+			timer.Reset(cleanupInterval)
+
+			for _, set := range s.sets {
+				set.cleanupDeletedObjects(ctx)
+			}
+		}
+	}
 }
 
 func (s *erasureSets) cleanupStaleUploads(ctx context.Context, cleanupInterval, expiry time.Duration) {
@@ -642,9 +668,11 @@ func sipHashMod(key string, cardinality int, id [16]byte) int {
 	if cardinality <= 0 {
 		return -1
 	}
-	sip := siphash.New(id[:])
-	sip.Write([]byte(key))
-	return int(sip.Sum64() % uint64(cardinality))
+	// use the faster version as per siphash docs
+	// https://github.com/dchest/siphash#usage
+	k0, k1 := binary.LittleEndian.Uint64(id[0:8]), binary.LittleEndian.Uint64(id[8:16])
+	sum64 := siphash.Hash(k0, k1, []byte(key))
+	return int(sum64 % uint64(cardinality))
 }
 
 func crcHashMod(key string, cardinality int) int {
@@ -786,13 +814,6 @@ func (s *erasureSets) GetObjectNInfo(ctx context.Context, bucket, object string,
 	set := s.getHashedSet(object)
 	auditObjectErasureSet(ctx, object, set)
 	return set.GetObjectNInfo(ctx, bucket, object, rs, h, lockType, opts)
-}
-
-// GetObject - reads an object from the hashedSet based on the object name.
-func (s *erasureSets) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts ObjectOptions) error {
-	set := s.getHashedSet(object)
-	auditObjectErasureSet(ctx, object, set)
-	return set.GetObject(ctx, bucket, object, startOffset, length, writer, etag, opts)
 }
 
 func (s *erasureSets) parentDirIsObject(ctx context.Context, bucket, parent string) bool {

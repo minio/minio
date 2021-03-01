@@ -403,7 +403,7 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := l.GetObject(ctx, bucket, object, off, length, pw, objInfo.ETag, opts)
+		err := l.getObject(ctx, bucket, object, off, length, pw, objInfo.ETag, opts)
 		pw.CloseWithError(err)
 	}()
 
@@ -419,7 +419,7 @@ func (l *s3Objects) GetObjectNInfo(ctx context.Context, bucket, object string, r
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *s3Objects) GetObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, o minio.ObjectOptions) error {
+func (l *s3Objects) getObject(ctx context.Context, bucket string, key string, startOffset int64, length int64, writer io.Writer, etag string, o minio.ObjectOptions) error {
 	if length < 0 && length != -1 {
 		return minio.ErrorRespToObjectError(minio.InvalidRange{}, bucket, key)
 	}

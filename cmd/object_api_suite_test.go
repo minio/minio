@@ -210,7 +210,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		err = obj.GetObject(context.Background(), "bucket", key, 0, int64(len(value)), &byteBuffer, "", opts)
+		err = GetObject(context.Background(), obj, "bucket", key, 0, int64(len(value)), &byteBuffer, "", opts)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
@@ -461,7 +461,7 @@ func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHan
 	}
 
 	var bytesBuffer bytes.Buffer
-	err = obj.GetObject(context.Background(), "bucket", "object", 0, length, &bytesBuffer, "", opts)
+	err = GetObject(context.Background(), obj, "bucket", "object", 0, length, &bytesBuffer, "", opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -614,7 +614,7 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.GetObject(context.Background(), "bucket", "object", 0, length, &bytesBuffer1, "", opts)
+	err = GetObject(context.Background(), obj, "bucket", "object", 0, length, &bytesBuffer1, "", opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -627,7 +627,7 @@ func testPutObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.GetObject(context.Background(), "bucket", "object", 0, length, &bytesBuffer2, "", opts)
+	err = GetObject(context.Background(), obj, "bucket", "object", 0, length, &bytesBuffer2, "", opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
@@ -658,7 +658,7 @@ func testPutObjectInSubdir(obj ObjectLayer, instanceType string, t TestErrHandle
 	}
 
 	var bytesBuffer bytes.Buffer
-	err = obj.GetObject(context.Background(), "bucket", "dir1/dir2/object", 0, length, &bytesBuffer, "", opts)
+	err = GetObject(context.Background(), obj, "bucket", "dir1/dir2/object", 0, length, &bytesBuffer, "", opts)
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}

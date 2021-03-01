@@ -9,7 +9,6 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/Azure/go-autorest/autorest/adal v0.9.1 // indirect
 	github.com/Shopify/sarama v1.27.2
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/alecthomas/participle v0.2.1
 	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v0.3.0
@@ -27,7 +26,6 @@ require (
 	github.com/fatih/color v1.10.0
 	github.com/fatih/structs v1.1.0
 	github.com/go-ldap/ldap/v3 v3.2.4
-	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gomodule/redigo v1.8.3
 	github.com/google/uuid v1.1.2
@@ -70,18 +68,16 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/procfs v0.2.0
-	github.com/quasilyte/go-ruleguard v0.2.1 // indirect
 	github.com/rjeczalik/notify v0.9.2
 	github.com/rs/cors v1.7.0
 	github.com/secure-io/sio-go v0.3.1
-	github.com/shirou/gopsutil v3.20.11+incompatible
+	github.com/shirou/gopsutil/v3 v3.21.1
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/streadway/amqp v1.0.0
 	github.com/tidwall/gjson v1.6.7
 	github.com/tidwall/sjson v1.0.4
 	github.com/tinylib/msgp v1.1.3
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31 // indirect
 	github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a
 	github.com/willf/bitset v1.1.11 // indirect
 	github.com/willf/bloom v2.0.3+incompatible

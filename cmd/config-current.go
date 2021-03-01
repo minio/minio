@@ -118,7 +118,7 @@ func initHelp() {
 		},
 		config.HelpKV{
 			Key:         config.ScannerSubSys,
-			Description: "manage scanner for usage calculation, lifecycle, healing and more",
+			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
 		},
 		config.HelpKV{
 			Key:             config.LoggerWebhookSubSys,

@@ -39,7 +39,7 @@ type StorageAPI interface {
 	Healing() *healingTracker // Returns nil if disk is not healing.
 
 	DiskInfo(ctx context.Context) (info DiskInfo, err error)
-	CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)
+	NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(ctx context.Context, volume string) (err error)

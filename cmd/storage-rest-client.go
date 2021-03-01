@@ -201,12 +201,12 @@ func (client *storageRESTClient) Healing() *healingTracker {
 	return val.(*healingTracker)
 }
 
-func (client *storageRESTClient) CrawlAndGetDataUsage(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache) (dataUsageCache, error) {
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(cache.serializeTo(pw))
 	}()
-	respBody, err := client.call(ctx, storageRESTMethodCrawlAndGetDataUsage, url.Values{}, pr, -1)
+	respBody, err := client.call(ctx, storageRESTMethodNSScanner, url.Values{}, pr, -1)
 	defer http.DrainBody(respBody)
 	if err != nil {
 		pr.Close()

@@ -798,7 +798,7 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 
 	pr, pw := io.Pipe()
 	go func() {
-		err := a.GetObject(ctx, bucket, object, startOffset, length, pw, objInfo.InnerETag, opts)
+		err := a.getObject(ctx, bucket, object, startOffset, length, pw, objInfo.InnerETag, opts)
 		pw.CloseWithError(err)
 	}()
 	// Setup cleanup function to cause the above go-routine to
@@ -813,7 +813,7 @@ func (a *azureObjects) GetObjectNInfo(ctx context.Context, bucket, object string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (a *azureObjects) GetObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
+func (a *azureObjects) getObject(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, etag string, opts minio.ObjectOptions) error {
 	// startOffset cannot be negative.
 	if startOffset < 0 {
 		return azureToObjectError(minio.InvalidRange{}, bucket, object)

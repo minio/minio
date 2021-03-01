@@ -322,8 +322,7 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return buf.Bytes(), err
 		}
 	case madmin.ProfilerBlock:
-		prof.recordBase("block", 0)
-		runtime.SetBlockProfileRate(1)
+		runtime.SetBlockProfileRate(100)
 		prof.stopFn = func() ([]byte, error) {
 			var buf bytes.Buffer
 			err := pprof.Lookup("block").WriteTo(&buf, 0)

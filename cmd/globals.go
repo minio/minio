@@ -87,8 +87,9 @@ const (
 
 	// GlobalStaleUploadsExpiry - Expiry duration after which the uploads in multipart, tmp directory are deemed stale.
 	GlobalStaleUploadsExpiry = time.Hour * 24 // 24 hrs.
+
 	// GlobalStaleUploadsCleanupInterval - Cleanup interval when the stale uploads cleanup is initiated.
-	GlobalStaleUploadsCleanupInterval = time.Hour * 24 // 24 hrs.
+	GlobalStaleUploadsCleanupInterval = time.Hour * 12 // 12 hrs.
 
 	// GlobalServiceExecutionInterval - Executes the Lifecycle events.
 	GlobalServiceExecutionInterval = time.Hour * 24 // 24 hrs.
@@ -96,7 +97,7 @@ const (
 	// Refresh interval to update in-memory iam config cache.
 	globalRefreshIAMInterval = 5 * time.Minute
 
-	// Limit of location constraint XML for unauthenticted PUT bucket operations.
+	// Limit of location constraint XML for unauthenticated PUT bucket operations.
 	maxLocationConstraintSize = 3 * humanize.MiByte
 
 	// Maximum size of default bucket encryption configuration allowed
