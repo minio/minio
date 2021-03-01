@@ -48,6 +48,12 @@ type LocationResponse struct {
 	Location string   `xml:",chardata"`
 }
 
+// PolicyStatus captures information returned by GetBucketPolicyStatusHandler
+type PolicyStatus struct {
+	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ PolicyStatus" json:"-"`
+	IsPublic string
+}
+
 // ListVersionsResponse - format for list bucket versions response.
 type ListVersionsResponse struct {
 	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListVersionsResult" json:"-"`

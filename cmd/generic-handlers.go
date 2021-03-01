@@ -369,13 +369,17 @@ var supportedDummyBucketAPIs = map[string][]string{
 
 // List of not implemented bucket queries
 var notImplementedBucketResourceNames = map[string]struct{}{
-	"cors":           {},
-	"metrics":        {},
-	"website":        {},
-	"logging":        {},
-	"inventory":      {},
-	"accelerate":     {},
-	"requestPayment": {},
+	"cors":                {},
+	"metrics":             {},
+	"website":             {},
+	"logging":             {},
+	"inventory":           {},
+	"accelerate":          {},
+	"requestPayment":      {},
+	"analytics":           {},
+	"intelligent-tiering": {},
+	"ownershipControls":   {},
+	"publicAccessBlock":   {},
 }
 
 // Checks requests for not implemented Bucket resources

@@ -185,6 +185,10 @@ func registerAPIRouter(router *mux.Router) {
 		bucket.Methods(http.MethodDelete).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("deleteobject", maxClients(httpTraceAll(api.DeleteObjectHandler))))
 
+		// PostRestoreObject
+		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
+			collectAPIStats("restoreobject", maxClients(httpTraceAll(api.PostRestoreObjectHandler)))).Queries("restore", "")
+
 		/// Bucket operations
 		// GetBucketLocation
 		bucket.Methods(http.MethodGet).HandlerFunc(
@@ -262,9 +266,9 @@ func registerAPIRouter(router *mux.Router) {
 		// ListObjectVersions
 		bucket.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectversions", maxClients(httpTraceAll(api.ListObjectVersionsHandler)))).Queries("versions", "")
-		// ListObjectsV1 (Legacy)
+		// GetBucketPolicyStatus
 		bucket.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("listobjectsv1", maxClients(httpTraceAll(api.ListObjectsV1Handler))))
+			collectAPIStats("getpolicystatus", maxClients(httpTraceAll(api.GetBucketPolicyStatusHandler)))).Queries("policyStatus", "")
 		// PutBucketLifecycle
 		bucket.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketlifecycle", maxClients(httpTraceAll(api.PutBucketLifecycleHandler)))).Queries("lifecycle", "")
@@ -320,9 +324,9 @@ func registerAPIRouter(router *mux.Router) {
 		// DeleteBucket
 		bucket.Methods(http.MethodDelete).HandlerFunc(
 			collectAPIStats("deletebucket", maxClients(httpTraceAll(api.DeleteBucketHandler))))
-		// PostRestoreObject
-		bucket.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
-			collectAPIStats("restoreobject", maxClients(httpTraceAll(api.PostRestoreObjectHandler)))).Queries("restore", "")
+		// ListObjectsV1 (Legacy)
+		bucket.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("listobjectsv1", maxClients(httpTraceAll(api.ListObjectsV1Handler))))
 	}
 
 	/// Root operation
