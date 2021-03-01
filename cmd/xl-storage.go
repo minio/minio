@@ -895,29 +895,31 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
-	if err != nil {
-		return err
-	}
-
 	// when data-dir is specified. Transition leverages existing DeleteObject
 	// api call to mark object as deleted. When object is pending transition,
 	// just update the metadata and avoid deleting data dir.
 	if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-		filePath := pathJoin(volumeDir, path, dataDir)
-		if err = checkPathLength(filePath); err != nil {
-			return err
-		}
+		if !xlMeta.data.remove(dataDir) {
+			filePath := pathJoin(volumeDir, path, dataDir)
+			if err = checkPathLength(filePath); err != nil {
+				return err
+			}
 
-		tmpuuid := mustGetUUID()
-		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
-			return err
+			tmpuuid := mustGetUUID()
+			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
+				return err
+			}
 		}
 	}
 
 	// transitioned objects maintains metadata on the source cluster. When transition
 	// status is set, update the metadata to disk.
 	if !lastVersion || fi.TransitionStatus != "" {
+		buf, err = xlMeta.AppendTo(nil)
+		if err != nil {
+			return err
+		}
+
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
@@ -947,26 +949,36 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi F
 	if !isXL2V1Format(buf) {
 		xlMeta, err = newXLMetaV2(fi)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
-		buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
+		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return err
+		}
+		if err := xlMeta.Load(buf); err != nil {
+			panic(err)
 		}
 	} else {
 		if err = xlMeta.Load(buf); err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
 		if err = xlMeta.AddVersion(fi); err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
-		buf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
+		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
+			logger.LogIf(ctx, err)
 			return err
 		}
+
 	}
 
 	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+
 }
 
 func (s *xlStorage) renameLegacyMetadata(volumeDir, path string) (err error) {
@@ -1067,16 +1079,20 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		return fi, errFileNotFound
 	}
 
-	fi, err = getFileInfo(buf, volume, path, versionID)
+	fi, err = getFileInfo(buf, volume, path, versionID, readData)
 	if err != nil {
 		return fi, err
 	}
 
 	if readData {
+		if len(fi.Data) > 0 || fi.Size == 0 {
+			return fi, nil
+		}
 		// Reading data for small objects when
 		// - object has not yet transitioned
 		// - object size lesser than 32KiB
 		// - object has maximum of 1 parts
+
 		if fi.TransitionStatus == "" && fi.DataDir != "" && fi.Size <= smallFileThreshold && len(fi.Parts) == 1 {
 			// Enable O_DIRECT optionally only if drive supports it.
 			requireDirectIO := globalStorageClass.GetDMA() == storageclass.DMAReadWrite && s.readODirectSupported
@@ -1939,8 +1955,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return osErrToFileErr(err)
 	}
 
-	fi, err := getFileInfo(srcBuf, dstVolume, dstPath, "")
+	fi, err := getFileInfo(srcBuf, dstVolume, dstPath, "", true)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return err
 	}
 
@@ -2093,29 +2110,36 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath, dataDir,
 		return err
 	}
 
-	dstBuf, err = xlMeta.MarshalMsg(append(xlHeader[:], xlVersionV1[:]...))
+	dstBuf, err = xlMeta.AppendTo(nil)
 	if err != nil {
+		logger.LogIf(ctx, err)
 		return errFileCorrupt
 	}
 
-	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
-		return err
-	}
-
-	// Commit data
+	// Commit data, if any
 	if srcDataPath != "" {
+		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+			return err
+		}
+
 		tmpuuid := mustGetUUID()
 		renameAll(oldDstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 		tmpuuid = mustGetUUID()
 		renameAll(dstDataPath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid))
 		if err = renameAll(srcDataPath, dstDataPath); err != nil {
+			logger.LogIf(ctx, err)
 			return osErrToFileErr(err)
 		}
-	}
 
-	// Commit meta-file
-	if err = renameAll(srcFilePath, dstFilePath); err != nil {
-		return osErrToFileErr(err)
+		// Commit meta-file
+		if err = renameAll(srcFilePath, dstFilePath); err != nil {
+			return osErrToFileErr(err)
+		}
+	} else {
+		// Write meta-file directly, no data
+		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
+			return err
+		}
 	}
 
 	// Remove parent dir of the source file if empty

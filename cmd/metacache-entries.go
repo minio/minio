@@ -128,7 +128,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (*FileInfo, error) {
 		}, nil
 	}
 	if e.cached == nil {
-		fi, err := getFileInfo(e.metadata, bucket, e.name, "")
+		fi, err := getFileInfo(e.metadata, bucket, e.name, "", false)
 		if err != nil {
 			return nil, err
 		}

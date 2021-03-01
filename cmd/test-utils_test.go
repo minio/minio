@@ -54,6 +54,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+
 	"github.com/gorilla/mux"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
@@ -99,7 +100,7 @@ func TestMain(m *testing.M) {
 		logger.Disable = true
 	}
 	// Uncomment the following line to see trace logs during unit tests.
-	// logger.AddTarget(console.New())
+	//logger.AddTarget(console.New())
 
 	// Set system resources to maximum.
 	setMaxResources()
@@ -233,13 +234,7 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 // Using this interface, functionalities to be used in tests can be
 // made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
 type TestErrHandler interface {
-	Log(args ...interface{})
-	Logf(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Failed() bool
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
+	testing.TB
 }
 
 const (

@@ -181,81 +181,83 @@ func TestListOnlineDisks(t *testing.T) {
 	z := obj.(*erasureServerPools)
 	erasureDisks := z.serverPools[0].sets[0].getDisks()
 	for i, test := range testCases {
-		_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
-		if err != nil {
-			t.Fatalf("Failed to putObject %v", err)
-		}
+		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
 
-		partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
-		fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
-		if err != nil {
-			t.Fatalf("Failed to getLatestFileInfo %v", err)
-		}
-
-		for j := range partsMetadata {
-			if errs[j] != nil {
-				t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[j])
-			}
-			partsMetadata[j].ModTime = test.modTimes[j]
-		}
-
-		tamperedIndex := -1
-		switch test._tamperBackend {
-		case deletePart:
-			for index, err := range test.errs {
-				if err != nil {
-					continue
-				}
-				// Remove a part from a disk
-				// which has a valid xl.meta,
-				// and check if that disk
-				// appears in outDatedDisks.
-				tamperedIndex = index
-				dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
-				if dErr != nil {
-					t.Fatalf("Test %d: Failed to delete %s - %v", i+1,
-						filepath.Join(object, "part.1"), dErr)
-				}
-				break
-			}
-		case corruptPart:
-			for index, err := range test.errs {
-				if err != nil {
-					continue
-				}
-				// Corrupt a part from a disk
-				// which has a valid xl.meta,
-				// and check if that disk
-				// appears in outDatedDisks.
-				tamperedIndex = index
-				filePath := pathJoin(erasureDisks[index].String(), bucket, object, fi.DataDir, "part.1")
-				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)
-				if err != nil {
-					t.Fatalf("Failed to open %s: %s\n", filePath, err)
-				}
-				f.Write([]byte("oops")) // Will cause bitrot error
-				f.Close()
-				break
+			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
+			if err != nil {
+				t.Fatalf("Failed to putObject %v", err)
 			}
 
-		}
-
-		onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
-		if !modTime.Equal(test.expectedTime) {
-			t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
-				i+1, test.expectedTime, modTime)
-		}
-
-		availableDisks, newErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
-		test.errs = newErrs
-
-		if test._tamperBackend != noTamper {
-			if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
-				t.Fatalf("Test %d: disk (%v) with part.1 missing is not a disk with available data",
-					i+1, erasureDisks[tamperedIndex])
+			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+			fi, err := getLatestFileInfo(ctx, partsMetadata, errs)
+			if err != nil {
+				t.Fatalf("Failed to getLatestFileInfo %v", err)
 			}
-		}
 
+			for j := range partsMetadata {
+				if errs[j] != nil {
+					t.Fatalf("Test %d: expected error to be nil: %s", i+1, errs[j])
+				}
+				partsMetadata[j].ModTime = test.modTimes[j]
+			}
+
+			tamperedIndex := -1
+			switch test._tamperBackend {
+			case deletePart:
+				for index, err := range test.errs {
+					if err != nil {
+						continue
+					}
+					// Remove a part from a disk
+					// which has a valid xl.meta,
+					// and check if that disk
+					// appears in outDatedDisks.
+					tamperedIndex = index
+					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), false)
+					if dErr != nil {
+						t.Fatalf("Test %d: Failed to delete %s - %v", i+1,
+							filepath.Join(object, "part.1"), dErr)
+					}
+					break
+				}
+			case corruptPart:
+				for index, err := range test.errs {
+					if err != nil {
+						continue
+					}
+					// Corrupt a part from a disk
+					// which has a valid xl.meta,
+					// and check if that disk
+					// appears in outDatedDisks.
+					tamperedIndex = index
+					filePath := pathJoin(erasureDisks[index].String(), bucket, object, fi.DataDir, "part.1")
+					f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)
+					if err != nil {
+						t.Fatalf("Failed to open %s: %s\n", filePath, err)
+					}
+					f.Write([]byte("oops")) // Will cause bitrot error
+					f.Close()
+					break
+				}
+
+			}
+
+			onlineDisks, modTime := listOnlineDisks(erasureDisks, partsMetadata, test.errs)
+			if !modTime.Equal(test.expectedTime) {
+				t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
+					i+1, test.expectedTime, modTime)
+			}
+
+			availableDisks, newErrs := disksWithAllParts(ctx, onlineDisks, partsMetadata, test.errs, bucket, object, madmin.HealDeepScan)
+			test.errs = newErrs
+
+			if test._tamperBackend != noTamper {
+				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
+					t.Fatalf("Test %d: disk (%v) with part.1 missing is not a disk with available data",
+						i+1, erasureDisks[tamperedIndex])
+				}
+			}
+		})
 	}
 }
 

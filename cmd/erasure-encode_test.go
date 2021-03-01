@@ -139,7 +139,7 @@ func TestErasureEncode(t *testing.T) {
 				case *wholeBitrotWriter:
 					w.disk = badDisk{nil}
 				case *streamingBitrotWriter:
-					w.iow.CloseWithError(errFaultyDisk)
+					w.closeWithErr(errFaultyDisk)
 				}
 			}
 			if test.offDisks > 0 {

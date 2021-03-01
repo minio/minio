@@ -56,6 +56,7 @@ type WalkDirOptions struct {
 
 // WalkDir will traverse a directory and return all entries found.
 // On success a sorted meta cache stream will be returned.
+// Metadata has data stripped, if any.
 func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
 	atomic.AddInt32(&s.activeIOCount, 1)
 	defer func() {
@@ -100,7 +101,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// behavior.
 			out <- metaCacheEntry{
 				name:     opts.BaseDir,
-				metadata: metadata,
+				metadata: xlMetaV2TrimData(metadata),
 			}
 		} else {
 			if st, err := os.Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile)); err == nil && st.Mode().IsRegular() {
@@ -156,6 +157,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					logger.LogIf(ctx, err)
 					continue
 				}
+				meta.metadata = xlMetaV2TrimData(meta.metadata)
 				meta.name = strings.TrimSuffix(entry, xlStorageFormatFile)
 				meta.name = strings.TrimSuffix(meta.name, SlashSeparator)
 				meta.name = pathJoin(current, meta.name)
