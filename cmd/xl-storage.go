@@ -1190,7 +1190,16 @@ func (s *xlStorage) readAllData(volumeDir string, filePath string, requireDirect
 	}
 
 	atomic.AddInt32(&s.activeIOCount, 1)
-	rd := &odirectReader{f, nil, nil, true, true, s, nil}
+	or := &odirectReader{f, nil, nil, true, true, s, nil}
+	rd := struct {
+		io.Reader
+		io.Closer
+	}{Reader: or, Closer: closeWrapper(func() error {
+		defer func() {
+			atomic.AddInt32(&s.activeIOCount, -1)
+		}()
+		return or.Close()
+	})}
 	defer rd.Close() // activeIOCount is decremented in Close()
 
 	buf, err = ioutil.ReadAll(rd)
