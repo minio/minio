@@ -346,6 +346,16 @@ func getBucketObjectDistributionMD() MetricDescription {
 		Type:      histogramMetric,
 	}
 }
+func getInternodeFailedRequests() MetricDescription {
+	return MetricDescription{
+		Namespace: interNodeMetricNamespace,
+		Subsystem: trafficSubsystem,
+		Name:      errorsTotal,
+		Help:      "Total number of failed internode calls.",
+		Type:      counterMetric,
+	}
+}
+
 func getInterNodeSentBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: interNodeMetricNamespace,
@@ -982,6 +992,10 @@ func getNetworkMetrics() MetricsGroup {
 	return MetricsGroup{
 		Metrics: []Metric{},
 		initialize: func(ctx context.Context, metrics *MetricsGroup) {
+			metrics.Metrics = append(metrics.Metrics, Metric{
+				Description: getInternodeFailedRequests(),
+				Value:       float64(loadAndResetRPCNetworkErrsCounter()),
+			})
 			connStats := globalConnStats.toServerConnStats()
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getInterNodeSentBytesMD(),
