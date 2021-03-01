@@ -1570,6 +1570,8 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	servers := globalNotificationSys.ServerInfo()
 	servers = append(servers, server)
 
+	assignPoolNumbers(servers)
+
 	var backend interface{}
 	mode := madmin.ObjectLayerInitializing
 
@@ -1649,6 +1651,22 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+func assignPoolNumbers(servers []madmin.ServerProperties) {
+	for i := range servers {
+		for idx, ge := range globalEndpoints {
+			for _, endpoint := range ge.Endpoints {
+				if servers[i].Endpoint == endpoint.Host {
+					servers[i].PoolNumber = idx + 1
+				} else if host, err := xnet.ParseHost(servers[i].Endpoint); err == nil {
+					if host.Name == endpoint.Hostname() {
+						servers[i].PoolNumber = idx + 1
+					}
+				}
+			}
+		}
+	}
 }
 
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
