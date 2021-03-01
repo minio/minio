@@ -16,7 +16,9 @@
 
 package logger
 
-import "github.com/minio/minio/cmd/config"
+import (
+	"github.com/minio/minio/cmd/config"
+)
 
 // Help template for logger http and audit
 var (
@@ -57,6 +59,18 @@ var (
 			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
+		},
+		config.HelpKV{
+			Key:         ClientCert,
+			Description: "mTLS certificate for Audit Webhook authentication",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         ClientKey,
+			Description: "mTLS certificate key for Audit Webhook authentication",
+			Optional:    true,
+			Type:        "string",
 		},
 	}
 )
