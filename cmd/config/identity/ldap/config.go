@@ -500,7 +500,7 @@ func Lookup(kvs config.KVS, rootCAs *x509.CertPool) (l Config, err error) {
 		return l, errors.New("Either Lookup Bind mode or Username Format mode is required.")
 	}
 
-	// If using lookup bind, test connection to LDAP server.
+	// Test connection to LDAP server.
 	if err := l.testConnection(); err != nil {
 		return l, fmt.Errorf("Connection test for LDAP server failed: %v", err)
 	}
