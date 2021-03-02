@@ -68,6 +68,9 @@ const (
 	// ListBucketAction - ListBucket Rest API action.
 	ListBucketAction = "s3:ListBucket"
 
+	// GetBucketPolicyStatusAction - Retrieves the policy status for a bucket.
+	GetBucketPolicyStatusAction = "s3:GetBucketPolicyStatus"
+
 	// ListBucketMultipartUploadsAction - ListMultipartUploads Rest API action.
 	ListBucketMultipartUploadsAction = "s3:ListBucketMultipartUploads"
 
@@ -222,6 +225,7 @@ var supportedActions = map[Action]struct{}{
 	HeadBucketAction:                       {},
 	ListAllMyBucketsAction:                 {},
 	ListBucketAction:                       {},
+	GetBucketPolicyStatusAction:            {},
 	ListBucketVersionsAction:               {},
 	ListBucketMultipartUploadsAction:       {},
 	ListenNotificationAction:               {},
@@ -314,6 +318,8 @@ var actionConditionKeyMap = map[Action]condition.KeySet{
 	DeleteObjectAction: condition.NewKeySet(condition.CommonKeys...),
 
 	GetBucketLocationAction: condition.NewKeySet(condition.CommonKeys...),
+
+	GetBucketPolicyStatusAction: condition.NewKeySet(condition.CommonKeys...),
 
 	GetObjectAction: condition.NewKeySet(
 		append([]condition.Key{
