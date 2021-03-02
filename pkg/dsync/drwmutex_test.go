@@ -91,9 +91,6 @@ func TestSimpleWriteLockTimedOut(t *testing.T) {
 	}
 }
 
-func TestCancelContextIfNotRefreshed(t *testing.T) {
-}
-
 func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 
 	drwm := NewDRWMutex(ds, "duallock")
