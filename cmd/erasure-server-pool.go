@@ -1450,69 +1450,80 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 type HealObjectFn func(bucket, object, versionID string) error
 
 func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObject HealObjectFn) error {
-	// If listing did not return any entries upon first attempt, we
-	// return `ObjectNotFound`, to indicate the caller for any
-	// actions they may want to take as if `prefix` is missing.
-	err := toObjectErr(errFileNotFound, bucket, prefix)
-	for _, erasureSet := range z.serverPools {
-		for _, set := range erasureSet.sets {
-			var entryChs []FileInfoVersionsCh
-			var mu sync.Mutex
+	errCh := make(chan error)
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		defer close(errCh)
+		defer cancel()
+
+		for _, erasureSet := range z.serverPools {
 			var wg sync.WaitGroup
-			for _, disk := range set.getOnlineDisks() {
-				disk := disk
+			for _, set := range erasureSet.sets {
+				set := set
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					entryCh, err := disk.WalkVersions(ctx, bucket, prefix, "", true, ctx.Done())
-					if err != nil {
-						// Disk walk returned error, ignore it.
+
+					disks, _ := set.getOnlineDisksWithHealing()
+					if len(disks) == 0 {
+						errCh <- errors.New("HealObjects: No non-healing disks found")
+						cancel()
 						return
 					}
-					mu.Lock()
-					entryChs = append(entryChs, FileInfoVersionsCh{
-						Ch: entryCh,
-					})
-					mu.Unlock()
+
+					healEntry := func(entry metaCacheEntry) {
+						if entry.isDir() {
+							return
+						}
+						fivs, err := entry.fileInfoVersions(bucket)
+						if err != nil {
+							errCh <- err
+							cancel()
+							return
+						}
+						waitForLowHTTPReq(globalHealConfig.IOCount, globalHealConfig.Sleep)
+						for _, version := range fivs.Versions {
+							if err := healObject(bucket, version.Name, version.VersionID); err != nil {
+								errCh <- err
+								cancel()
+								return
+							}
+						}
+					}
+
+					// How to resolve partial results.
+					resolver := metadataResolutionParams{
+						dirQuorum: 1,
+						objQuorum: 1,
+						bucket:    bucket,
+					}
+
+					if err := listPathRaw(ctx, listPathRawOptions{
+						disks:          disks,
+						bucket:         bucket,
+						path:           baseDirFromPrefix(prefix),
+						recursive:      true,
+						forwardTo:      "",
+						minDisks:       1,
+						reportNotFound: false,
+						agreed:         healEntry,
+						partial: func(entries metaCacheEntries, nAgreed int, errs []error) {
+							entry, ok := entries.resolve(&resolver)
+							if ok {
+								healEntry(*entry)
+							}
+						},
+						finished: nil,
+					}); err != nil {
+						cancel()
+						return
+					}
 				}()
 			}
 			wg.Wait()
-
-			entriesValid := make([]bool, len(entryChs))
-			entries := make([]FileInfoVersions, len(entryChs))
-
-			for {
-				entry, quorumCount, ok := lexicallySortedEntryVersions(entryChs, entries, entriesValid)
-				if !ok {
-					break
-				}
-
-				// Remove empty directories if found - they have no meaning.
-				// Can be left over from highly concurrent put/remove.
-				if quorumCount > set.setDriveCount/2 && entry.IsEmptyDir {
-					if !opts.DryRun && opts.Remove {
-						set.deleteEmptyDir(ctx, bucket, entry.Name)
-					}
-				}
-
-				// Indicate that first attempt was a success and subsequent loop
-				// knows that its not our first attempt at 'prefix'
-				err = nil
-
-				if quorumCount == set.setDriveCount && opts.ScanMode == madmin.HealNormalScan {
-					continue
-				}
-
-				for _, version := range entry.Versions {
-					if err := healObject(bucket, version.Name, version.VersionID); err != nil {
-						return toObjectErr(err, bucket, version.Name)
-					}
-				}
-			}
 		}
-	}
-
-	return err
+	}()
+	return <-errCh
 }
 
 func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {

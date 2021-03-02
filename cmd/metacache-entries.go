@@ -232,15 +232,16 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		}
 	}
 
-	// If directory, we need quorum.
-	if dirExists > 0 && dirExists < r.dirQuorum {
+	if selected == nil {
 		return nil, false
 	}
-	if objExists < r.objQuorum {
+
+	if selected.isDir() && dirExists < r.dirQuorum {
+		return nil, false
+	} else if !selected.isDir() && objExists < r.objQuorum {
 		return nil, false
 	}
-	// Take the latest selected.
-	return selected, selected != nil
+	return selected, true
 }
 
 // firstFound returns the first found and the number of set entries.
