@@ -24,9 +24,6 @@ jest.mock("jwt-decode")
 jwtDecode.mockImplementation(() => ({ sub: "minio" }))
 
 jest.mock("../../web", () => ({
-  GenerateAuth: jest.fn(() => {
-    return Promise.resolve({ accessKey: "gen1", secretKey: "gen2" })
-  }),
   SetAuth: jest.fn(
     ({ currentAccessKey, currentSecretKey, newAccessKey, newSecretKey }) => {
       if (

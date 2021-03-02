@@ -78,7 +78,7 @@ func extractBucketObject(args reflect.Value) (bucketName, objectName string) {
 }
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
-// for ex. ServerInfo, GenerateAuth
+// for ex. ServerInfo
 type WebGenericArgs struct{}
 
 // WebGenericRep - reply structure for calls for which reply is success/failure
@@ -981,32 +981,6 @@ func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginR
 	return nil
 }
 
-// GenerateAuthReply - reply for GenerateAuth
-type GenerateAuthReply struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
-	UIVersion string `json:"uiVersion"`
-}
-
-func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
-	ctx := newWebContext(r, args, "WebGenerateAuth")
-	_, owner, authErr := webRequestAuthenticate(r)
-	if authErr != nil {
-		return toJSONError(ctx, authErr)
-	}
-	if !owner {
-		return toJSONError(ctx, errAccessDenied)
-	}
-	cred, err := auth.GetNewCredentials()
-	if err != nil {
-		return toJSONError(ctx, err)
-	}
-	reply.AccessKey = cred.AccessKey
-	reply.SecretKey = cred.SecretKey
-	reply.UIVersion = browser.UIVersion
-	return nil
-}
-
 // SetAuthArgs - argument for SetAuth
 type SetAuthArgs struct {
 	CurrentAccessKey string `json:"currentAccessKey"`
@@ -1032,6 +1006,17 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 	if owner {
 		// Owner is not allowed to change credentials through browser.
+		return toJSONError(ctx, errChangeCredNotAllowed)
+	}
+
+	if !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     claims.AccessKey,
+		Action:          iampolicy.CreateUserAdminAction,
+		IsOwner:         false,
+		ConditionValues: getConditionValues(r, "", claims.AccessKey, claims.Map()),
+		Claims:          claims.Map(),
+		DenyOnly:        true,
+	}) {
 		return toJSONError(ctx, errChangeCredNotAllowed)
 	}
 

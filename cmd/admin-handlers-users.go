@@ -399,12 +399,24 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 			AccountName:     parentUser,
 			Action:          iampolicy.CreateUserAdminAction,
 			ConditionValues: getConditionValues(r, "", parentUser, claims),
-			IsOwner:         owner,
+			IsOwner:         false,
 			Claims:          claims,
 		}) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
+	}
+
+	if implicitPerm && !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     accessKey,
+		Action:          iampolicy.CreateUserAdminAction,
+		ConditionValues: getConditionValues(r, "", accessKey, claims),
+		IsOwner:         false,
+		Claims:          claims,
+		DenyOnly:        true, // check if changing password is explicitly denied.
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
 	}
 
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
