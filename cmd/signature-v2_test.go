@@ -265,7 +265,7 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		formValues.Set("Awsaccesskeyid", test.accessKey)
 		formValues.Set("Signature", test.signature)
 		formValues.Set("Policy", test.policy)
-		errCode := doesPolicySignatureV2Match(formValues)
+		_, errCode := doesPolicySignatureV2Match(formValues)
 		if errCode != test.errCode {
 			t.Fatalf("(%d) expected to get %s, instead got %s", i+1, niceError(test.errCode), niceError(errCode))
 		}

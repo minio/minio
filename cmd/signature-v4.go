@@ -37,6 +37,7 @@ import (
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	xhttp "github.com/minio/minio/cmd/http"
+	"github.com/minio/minio/pkg/auth"
 	sha256 "github.com/minio/sha256-simd"
 )
 
@@ -148,7 +149,7 @@ func getSignature(signingKey []byte, stringToSign string) string {
 }
 
 // Check to see if Policy is signed correctly.
-func doesPolicySignatureMatch(formValues http.Header) APIErrorCode {
+func doesPolicySignatureMatch(formValues http.Header) (auth.Credentials, APIErrorCode) {
 	// For SignV2 - Signature field will be valid
 	if _, ok := formValues["Signature"]; ok {
 		return doesPolicySignatureV2Match(formValues)
@@ -168,19 +169,19 @@ func compareSignatureV4(sig1, sig2 string) bool {
 // doesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns ErrNone if the signature matches.
-func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
+func doesPolicySignatureV4Match(formValues http.Header) (auth.Credentials, APIErrorCode) {
 	// Server region.
 	region := globalServerRegion
 
 	// Parse credential tag.
 	credHeader, s3Err := parseCredentialHeader("Credential="+formValues.Get(xhttp.AmzCredential), region, serviceS3)
 	if s3Err != ErrNone {
-		return s3Err
+		return auth.Credentials{}, s3Err
 	}
 
 	cred, _, s3Err := checkKeyValid(credHeader.accessKey)
 	if s3Err != ErrNone {
-		return s3Err
+		return cred, s3Err
 	}
 
 	// Get signing key.
@@ -191,11 +192,11 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 
 	// Verify signature.
 	if !compareSignatureV4(newSignature, formValues.Get(xhttp.AmzSignature)) {
-		return ErrSignatureDoesNotMatch
+		return cred, ErrSignatureDoesNotMatch
 	}
 
 	// Success.
-	return ErrNone
+	return cred, ErrNone
 }
 
 // doesPresignedSignatureMatch - Verify query headers with presigned signature

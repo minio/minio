@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
@@ -25,7 +26,6 @@ import (
 	"net/http"
 	"net/url"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -310,7 +310,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 		// err will be nil here as we already called this function
 		// earlier in this request.
-		claims, _ := getClaimsFromToken(r, getSessionToken(r))
+		claims, _ := getClaimsFromToken(getSessionToken(r))
 		n := 0
 		// Use the following trick to filter in place
 		// https://github.com/golang/go/wiki/SliceTricks#filter-in-place
@@ -676,13 +676,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL, guessIsBrowserReq(r))
 		return
 	}
+
 	resource, err := getResource(r.URL.Path, r.Host, globalDomainNames)
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL, guessIsBrowserReq(r))
 		return
 	}
-	// Make sure that the URL  does not contain object name.
-	if bucket != filepath.Clean(resource[1:]) {
+
+	// Make sure that the URL does not contain object name.
+	if bucket != path.Clean(resource[1:]) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL, guessIsBrowserReq(r))
 		return
 	}
@@ -725,7 +727,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	defer fileBody.Close()
 
 	formValues.Set("Bucket", bucket)
-
 	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {
 		// S3 feature to replace ${filename} found in Key form field
 		// by the filename attribute passed in multipart
@@ -745,10 +746,49 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	// Verify policy signature.
-	errCode := doesPolicySignatureMatch(formValues)
+	cred, errCode := doesPolicySignatureMatch(formValues)
 	if errCode != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(errCode), r.URL, guessIsBrowserReq(r))
 		return
+	}
+
+	// Once signature is validated, check if the user has
+	// explicit permissions for the user.
+	{
+		token := formValues.Get(xhttp.AmzSecurityToken)
+		if token != "" && cred.AccessKey == "" {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrNoAccessKey), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if cred.IsServiceAccount() && token == "" {
+			token = cred.SessionToken
+		}
+
+		if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidToken), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		// Extract claims if any.
+		claims, err := getClaimsFromToken(token)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+			return
+		}
+
+		if !globalIAMSys.IsAllowed(iampolicy.Args{
+			AccountName:     cred.AccessKey,
+			Action:          iampolicy.PutObjectAction,
+			ConditionValues: getConditionValues(r, "", cred.AccessKey, claims),
+			BucketName:      bucket,
+			ObjectName:      object,
+			IsOwner:         globalActiveCred.AccessKey == cred.AccessKey,
+			Claims:          claims,
+		}) {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL, guessIsBrowserReq(r))
+			return
+		}
 	}
 
 	policyBytes, err := base64.StdEncoding.DecodeString(formValues.Get("Policy"))
