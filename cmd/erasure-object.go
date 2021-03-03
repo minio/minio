@@ -685,7 +685,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
 	case size == -1:
 		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
-			buffer = make([]byte, data.ActualSize()+256)
+			buffer = make([]byte, data.ActualSize()+256, data.ActualSize()*2+512)
 		} else {
 			buffer = er.bp.Get()
 			defer er.bp.Put(buffer)
