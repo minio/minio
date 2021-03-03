@@ -56,8 +56,19 @@ type TierConfigMgr struct {
 	Tiers map[string]madmin.TierConfig `json:"tiers"`
 }
 
+// IsTierValid returns true if there exists a remote tier by name tierName,
+// otherwise returns false.
+func (config *TierConfigMgr) IsTierValid(tierName string) bool {
+	config.RLock()
+	defer config.RUnlock()
+	_, valid := config.isTierNameInUse(tierName)
+	return valid
+}
+
 // isTierNameInUse returns tier type and true if there exists a remote tier by
-// name tierName, otherwise returns madmin.Unsupported and false.
+// name tierName, otherwise returns madmin.Unsupported and false. N B this
+// function is meant for internal use, where the caller is expected to take
+// appropriate locks.
 func (config *TierConfigMgr) isTierNameInUse(tierName string) (madmin.TierType, bool) {
 	if t, ok := config.Tiers[tierName]; ok {
 		return t.Type, true

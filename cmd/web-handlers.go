@@ -46,7 +46,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -754,8 +753,13 @@ next:
 			if _, err := globalBucketMetadataSys.GetLifecycleConfig(args.BucketName); err == nil {
 				hasLifecycleConfig = true
 			}
+			os := newObjSweeper(args.BucketName, objectName)
+			opts = os.GetOpts()
 			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
 				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
+				if gerr == nil {
+					os.SetTransitionState(goi)
+				}
 				if _, replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{ObjectName: objectName, VersionID: goi.VersionID}, goi, gerr); replicateDel {
 					opts.DeleteMarkerReplicationStatus = string(replication.Pending)
 					opts.DeleteMarker = true
@@ -808,14 +812,12 @@ next:
 				}
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
-			if goi.TransitionStatus == lifecycle.TransitionComplete {
-				deleteTransitionedObject(ctx, newObjectLayerFn(), args.BucketName, objectName, lifecycle.ObjectOpts{
-					Name:         objectName,
-					UserTags:     goi.UserTags,
-					VersionID:    goi.VersionID,
-					DeleteMarker: goi.DeleteMarker,
-					IsLatest:     goi.IsLatest,
-				}, goi.transitionedObjName, goi.TransitionTier, false, false)
+
+			if hasLifecycleConfig {
+				if jentry, ok := os.ShouldRemoveRemoteObject(); ok {
+					err := globalTierJournal.AddEntry(jentry)
+					logger.LogIf(ctx, err)
+				}
 			}
 
 			logger.LogIf(ctx, err)
@@ -1321,6 +1323,19 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		opts.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
 	}
 
+	var hasLifecycleConfig bool
+	if _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket); err == nil {
+		hasLifecycleConfig = true
+	}
+	oc := newObjSweeper(bucket, object)
+	if hasLifecycleConfig {
+		// Get appropriate object info to identify the remote object to delete
+		goiOpts := oc.GetOpts()
+		if goi, gerr := getObjectInfo(ctx, bucket, object, goiOpts); gerr == nil {
+			oc.SetTransitionState(goi)
+		}
+	}
+
 	objInfo, err := putObject(GlobalContext, bucket, object, pReader, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
@@ -1338,7 +1353,12 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if mustReplicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync)
 	}
-
+	if hasLifecycleConfig {
+		if jentry, ok := oc.ShouldRemoveRemoteObject(); ok {
+			err := globalTierJournal.AddEntry(jentry)
+			logger.LogIf(ctx, err)
+		}
+	}
 	// Notify object created event.
 	sendEvent(eventArgs{
 		EventName:    event.ObjectCreatedPut,

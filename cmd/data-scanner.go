@@ -958,11 +958,12 @@ func applyTransitionAction(ctx context.Context, action lifecycle.Action, objLaye
 		// mark transition as pending
 		obj.UserDefined[ReservedMetadataPrefixLower+TransitionStatus] = lifecycle.TransitionPending
 		obj.metadataOnly = true // Perform only metadata updates.
+		// Ignore errMethodNotAllowed error. It indicates that the object version scanned is a delete marker.
 		if _, err := objLayer.CopyObject(ctx, obj.Bucket, obj.Name, obj.Bucket, obj.Name, obj, srcOpts, ObjectOptions{
 			VersionID: obj.VersionID,
 			Versioned: globalBucketVersioningSys.Enabled(obj.Bucket),
 			MTime:     obj.ModTime,
-		}); err != nil {
+		}); err != nil && err != toObjectErr(errMethodNotAllowed, obj.Bucket, obj.Name) {
 			logger.LogIf(ctx, err)
 			return false
 		}
@@ -987,14 +988,18 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		TransitionStatus: obj.TransitionStatus,
 	}
 
-	if err := deleteTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, obj.transitionedObjName, obj.TransitionTier, restoredObject, false); err != nil {
+	action := expireObj
+	if restoredObject {
+		action = expireRestoredObj
+	}
+	if err := expireTransitionedObject(ctx, objLayer, obj.Bucket, obj.Name, lcOpts, obj.transitionedObjName, obj.TransitionTier, action); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
 		logger.LogIf(ctx, err)
 		return false
 	}
-	// Notification already sent at *deleteTransitionedObject*, just return 'true' here.
+	// Notification already sent in *expireTransitionedObject*, just return 'true' here.
 	return true
 }
 

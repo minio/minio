@@ -221,6 +221,17 @@ type ObjectOpts struct {
 	RemoteTiersImmediately []string // strictly for debug only
 }
 
+// doesMatchDebugTiers returns true if tier matches one of the debugTiers, false
+// otherwise.
+func doesMatchDebugTiers(tier string, debugTiers []string) bool {
+	for _, t := range debugTiers {
+		if strings.ToUpper(tier) == strings.ToUpper(t) {
+			return true
+		}
+	}
+	return false
+}
+
 // ComputeAction returns the action to perform by evaluating all lifecycle rules
 // against the object name and its modification time.
 func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
@@ -260,9 +271,15 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 
 		if !rule.NoncurrentVersionTransition.IsDaysNull() {
 			if obj.VersionID != "" && !obj.IsLatest && !obj.SuccessorModTime.IsZero() && obj.TransitionStatus != TransitionComplete {
-				// Non current versions should be deleted if their age exceeds non current days configuration
+				// Non current versions should be transitioned if their age exceeds non current days configuration
 				// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
 				if time.Now().After(ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionTransition.NoncurrentDays))) {
+					return TransitionVersionAction
+				}
+
+				// this if condition is strictly for debug purposes to force immediate
+				// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
+				if doesMatchDebugTiers(rule.NoncurrentVersionTransition.StorageClass, obj.RemoteTiersImmediately) {
 					return TransitionVersionAction
 				}
 			}
@@ -294,13 +311,8 @@ func (lc Lifecycle) ComputeAction(obj ObjectOpts) Action {
 					}
 					// this if condition is strictly for debug purposes to force immediate
 					// transition to remote tier if _MINIO_DEBUG_REMOTE_TIERS_IMMEDIATELY is set
-					if action == NoneAction && (!rule.Transition.IsDateNull() || !rule.Transition.IsDaysNull()) {
-						for _, t := range obj.RemoteTiersImmediately {
-							if strings.ToUpper(t) == strings.ToUpper(rule.Transition.StorageClass) {
-								action = TransitionAction
-								break
-							}
-						}
+					if !rule.Transition.IsNull() && doesMatchDebugTiers(rule.Transition.StorageClass, obj.RemoteTiersImmediately) {
+						action = TransitionAction
 					}
 				}
 				if !obj.RestoreExpires.IsZero() && time.Now().After(obj.RestoreExpires) {

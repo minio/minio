@@ -200,44 +200,41 @@ func validateTransitionDestination(sc string) error {
 	return nil
 }
 
-// handle deletes of transitioned objects or object versions when one of the following is true:
-// 1. temporarily restored copies of objects (restored with the PostRestoreObject API) expired.
-// 2. life cycle expiry date is met on the object.
-// 3. Object is removed through DELETE api call
-func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, tgtObjName, transitionSC string, restoredObject, expiryEvent bool) error {
-	tgtClient, err := globalTierConfigMgr.getDriver(transitionSC)
-	if err != nil {
-		return err
-	}
+// expireAction represents different actions to be performed on expiry of a
+// restored/transitioned object
+type expireAction int
 
+const (
+	// expireObj indicates expiry of 'regular' transitioned objects.
+	expireObj expireAction = iota
+	// expireRestoredObj indicates expiry of restored objects.
+	expireRestoredObj
+)
+
+// expireTransitionedObject handles expiry of transitioned/restored objects
+// (versions) in one of the following situations:
+//
+// 1. when a restored (via PostRestoreObject API) object expires.
+// 2. when a transitioned object expires (based on an ILM rule).
+func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket, object string, lcOpts lifecycle.ObjectOpts, remoteObject, tier string, action expireAction) error {
 	var opts ObjectOptions
 	opts.Versioned = globalBucketVersioningSys.Enabled(bucket)
 	opts.VersionID = lcOpts.VersionID
-	if restoredObject {
-		// delete locally restored copy of object or object version
-		// from the source, while leaving metadata behind. The data on
-		// transitioned tier lies untouched and still accessible
-		opts.Transition.Status = lcOpts.TransitionStatus
-		_, err = objectAPI.DeleteObject(ctx, bucket, object, opts)
-		return err
-	}
+	switch action {
+	case expireObj:
+		// When an object is past expiry or when a transitioned object is being
+		// deleted, 'mark' the data in the remote tier for delete.
+		if err := globalTierJournal.AddEntry(jentry{ObjName: remoteObject, TierName: tier}); err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}
+		// Delete metadata on source, now that data in remote tier has been
+		// marked for deletion.
+		if _, err := objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
+			logger.LogIf(ctx, err)
+			return err
+		}
 
-	// When an object is past expiry, delete the data from transitioned tier and
-	// metadata from source
-	// When an objectglobalTierConfigMgr transitioned tier and
-	// metadata from source
-	if err := tgtClient.Remove(GlobalContext, tgtObjName); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	// Delete metadata on source, now that transition tier has been cleaned up.
-	if _, err = objectAPI.DeleteObject(ctx, bucket, object, opts); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-
-	if expiryEvent {
 		eventName := event.ObjectRemovedDelete
 		if lcOpts.DeleteMarker {
 			eventName = event.ObjectRemovedDeleteMarkerCreated
@@ -254,7 +251,16 @@ func deleteTransitionedObject(ctx context.Context, objectAPI ObjectLayer, bucket
 			Object:     objInfo,
 			Host:       "Internal: [ILM-EXPIRY]",
 		})
+
+	case expireRestoredObj:
+		// delete locally restored copy of object or object version
+		// from the source, while leaving metadata behind. The data on
+		// transitioned tier lies untouched and still accessible
+		opts.Transition.Status = lcOpts.TransitionStatus
+		_, err := objectAPI.DeleteObject(ctx, bucket, object, opts)
+		return err
 	}
+
 	return nil
 }
 

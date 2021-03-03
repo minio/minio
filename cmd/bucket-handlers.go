@@ -40,7 +40,6 @@ import (
 	"github.com/minio/minio/cmd/crypto"
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -450,7 +449,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	if _, err := globalBucketMetadataSys.GetLifecycleConfig(bucket); err == nil {
 		hasLifecycleConfig = true
 	}
+
 	dErrs := make([]DeleteError, len(deleteObjects.Objects))
+	oss := make([]*objSweeper, len(deleteObjects.Objects))
 	for index, object := range deleteObjects.Objects {
 		if apiErrCode := checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, object.ObjectName); apiErrCode != ErrNone {
 			if apiErrCode == ErrSignatureDoesNotMatch || apiErrCode == ErrInvalidAccessKeyID {
@@ -480,15 +481,24 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 		}
 
-		if replicateDeletes || hasLockEnabled || hasLifecycleConfig {
-			goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, ObjectOptions{
-				VersionID: object.VersionID,
-			})
+		oss[index] = newObjSweeper(bucket, object.ObjectName).ForDelete(multiDelete(object))
+		var opts ObjectOptions
+		if hasLifecycleConfig {
+			// Mutations of objects on versioning suspended buckets
+			// affect its null version. Through opts below we select
+			// the null version's remote object to delete if
+			// transitioned.
+			opts = oss[index].GetOpts()
 		}
+		if hasLifecycleConfig || replicateDeletes || hasLockEnabled {
+			goi, gerr = getObjectInfoFn(ctx, bucket, object.ObjectName, opts)
+		}
+
 		if hasLifecycleConfig && gerr == nil {
 			object.PurgeTransitioned = goi.TransitionStatus
 			object.TransitionedObjName = goi.transitionedObjName
 			object.TransitionTier = goi.TransitionTier
+			oss[index].SetTransitionState(goi)
 		}
 		if replicateDeletes {
 			delMarker, replicate, repsync := checkReplicateDelete(ctx, bucket, ObjectToDelete{
@@ -606,23 +616,21 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}
 		}
 
-		if hasLifecycleConfig && dobj.PurgeTransitioned == lifecycle.TransitionComplete { // clean up transitioned tier
-			delTier := false
-			switch {
-			case dobj.VersionID != "":
-				delTier = true
-			case !globalBucketVersioningSys.Enabled(bucket):
-				delTier = true
+	}
+
+	// Clean up transitioned objects from remote tier
+	if hasLifecycleConfig {
+		for _, os := range oss {
+			if os == nil { // skip objects that weren't deleted due to invalid versionID etc.
+				continue
 			}
-			if delTier {
-				deleteTransitionedObject(ctx, newObjectLayerFn(), bucket, dobj.ObjectName, lifecycle.ObjectOpts{
-					Name:         dobj.ObjectName,
-					VersionID:    dobj.VersionID,
-					DeleteMarker: dobj.DeleteMarker,
-				}, dobj.TransitionedObjName, dobj.TransitionTier, false, false)
+			if je, ok := os.ShouldRemoveRemoteObject(); ok {
+				err := globalTierJournal.AddEntry(je)
+				logger.LogIf(ctx, err)
 			}
 		}
 	}
+
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
 		eventName := event.ObjectRemovedDelete

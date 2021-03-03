@@ -323,7 +323,6 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 		// File is fully gone, fileInfo is empty.
 		return defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs, bucket, object, versionID, er.defaultParityCount), err
 	}
-
 	// If less than read quorum number of disks have all the parts
 	// of the data, we can't reconstruct the erasure-coded data.
 	if numAvailableDisks < result.DataBlocks {

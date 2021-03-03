@@ -532,6 +532,10 @@ func serverMain(ctx *cli.Context) {
 		if err != nil {
 			logger.FatalIf(err, "Unable to load remote tier config")
 		}
+		globalTierJournal, err = initTierDeletionJournal(GlobalContext.Done())
+		if err != nil {
+			logger.FatalIf(err, "Unable to initialize remote tier pending deletes journal")
+		}
 	}
 
 	if globalCacheConfig.Enabled {
