@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -139,18 +138,6 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 	// Ignore any encoding set in the XML body
 	d.CharsetReader = nopCharsetConverter
 	return d.Decode(v)
-}
-
-// checkValidMD5 - verify if valid md5, returns md5 in bytes.
-func checkValidMD5(h http.Header) ([]byte, error) {
-	md5B64, ok := h[xhttp.ContentMD5]
-	if ok {
-		if md5B64[0] == "" {
-			return nil, fmt.Errorf("Content-Md5 header set to empty value")
-		}
-		return base64.StdEncoding.Strict().DecodeString(md5B64[0])
-	}
-	return []byte{}, nil
 }
 
 // hasContentMD5 returns true if Content-MD5 header is set.

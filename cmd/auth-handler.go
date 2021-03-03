@@ -36,6 +36,7 @@ import (
 	"github.com/minio/minio/pkg/auth"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/etag"
 	"github.com/minio/minio/pkg/hash"
 	iampolicy "github.com/minio/minio/pkg/iam/policy"
 )
@@ -430,19 +431,14 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 		return errCode
 	}
 
-	var (
-		err                       error
-		contentMD5, contentSHA256 []byte
-	)
-
-	// Extract 'Content-Md5' if present.
-	contentMD5, err = checkValidMD5(r.Header)
+	clientETag, err := etag.FromContentMD5(r.Header)
 	if err != nil {
 		return ErrInvalidDigest
 	}
 
 	// Extract either 'X-Amz-Content-Sha256' header or 'X-Amz-Content-Sha256' query parameter (if V4 presigned)
 	// Do not verify 'X-Amz-Content-Sha256' if skipSHA256.
+	var contentSHA256 []byte
 	if skipSHA256 := skipContentSha256Cksum(r); !skipSHA256 && isRequestPresignedSignatureV4(r) {
 		if sha256Sum, ok := r.URL.Query()[xhttp.AmzContentSha256]; ok && len(sha256Sum) > 0 {
 			contentSHA256, err = hex.DecodeString(sha256Sum[0])
@@ -459,7 +455,7 @@ func isReqAuthenticated(ctx context.Context, r *http.Request, region string, sty
 
 	// Verify 'Content-Md5' and/or 'X-Amz-Content-Sha256' if present.
 	// The verification happens implicit during reading.
-	reader, err := hash.NewReader(r.Body, -1, hex.EncodeToString(contentMD5), hex.EncodeToString(contentSHA256), -1)
+	reader, err := hash.NewReader(r.Body, -1, clientETag.String(), hex.EncodeToString(contentSHA256), -1)
 	if err != nil {
 		return toAPIErrorCode(ctx, err)
 	}
