@@ -105,5 +105,5 @@ func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
 			}
 		}
 	}
-	return -1, -1, 1
+	return -1, -1, -1
 }
