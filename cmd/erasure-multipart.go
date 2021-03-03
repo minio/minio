@@ -449,7 +449,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Fetch buffer for I/O, returns from the pool if not allocates a new one and returns.
 	var buffer []byte
-	switch size := data.Size(); {
+	switch size := data.ActualSize(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
 	case size == -1 || size >= fi.Erasure.BlockSize:
