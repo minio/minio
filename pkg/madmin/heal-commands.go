@@ -322,28 +322,28 @@ type HealingDisk struct {
 	// Copied from cmd/background-newdisks-heal-ops.go
 	// When adding new field, update (*healingTracker).toHealingDisk
 
-	ID            string
-	PoolIndex     int
-	SetIndex      int
-	DiskIndex     int
-	Endpoint      string
-	Path          string
-	Started       time.Time
-	LastUpdate    time.Time
-	ObjectsHealed uint64
-	ObjectsFailed uint64
-	BytesDone     uint64
-	BytesFailed   uint64
+	ID            string    `json:"id"`
+	PoolIndex     int       `json:"pool_index"`
+	SetIndex      int       `json:"set_index"`
+	DiskIndex     int       `json:"disk_index"`
+	Endpoint      string    `json:"endpoint"`
+	Path          string    `json:"path"`
+	Started       time.Time `json:"started"`
+	LastUpdate    time.Time `json:"last_update"`
+	ObjectsHealed uint64    `json:"objects_healed"`
+	ObjectsFailed uint64    `json:"objects_failed"`
+	BytesDone     uint64    `json:"bytes_done"`
+	BytesFailed   uint64    `json:"bytes_failed"`
 
 	// Last object scanned.
-	Bucket string
-	Object string
+	Bucket string `json:"current_bucket"`
+	Object string `json:"current_object"`
 
 	// Filled on startup/restarts.
-	QueuedBuckets []string
+	QueuedBuckets []string `json:"queued_buckets"`
 
 	// Filled during heal.
-	HealedBuckets []string
+	HealedBuckets []string `json:"healed_buckets"`
 	// future add more tracking capabilities
 }
 

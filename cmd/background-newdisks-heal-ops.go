@@ -61,15 +61,15 @@ type healingTracker struct {
 	BytesFailed   uint64
 
 	// Last object scanned.
-	Bucket string
-	Object string
+	Bucket string `json:"-"`
+	Object string `json:"-"`
 
 	// Numbers when current bucket started healing,
 	// for resuming with correct numbers.
-	ResumeObjectsHealed uint64
-	ResumeObjectsFailed uint64
-	ResumeBytesDone     uint64
-	ResumeBytesFailed   uint64
+	ResumeObjectsHealed uint64 `json:"-"`
+	ResumeObjectsFailed uint64 `json:"-"`
+	ResumeBytesDone     uint64 `json:"-"`
+	ResumeBytesFailed   uint64 `json:"-"`
 
 	// Filled on startup/restarts.
 	QueuedBuckets []string
