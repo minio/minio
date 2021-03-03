@@ -72,6 +72,7 @@ const (
 type MetricName string
 
 const (
+	total         MetricName = "total"
 	errorsTotal   MetricName = "error_total"
 	healTotal     MetricName = "heal_total"
 	hitsTotal     MetricName = "hits_total"
@@ -85,7 +86,6 @@ const (
 	openTotal     MetricName = "open_total"
 	readTotal     MetricName = "read_total"
 	writeTotal    MetricName = "write_total"
-	total         MetricName = "total"
 
 	failedBytes   MetricName = "failed_bytes"
 	freeBytes     MetricName = "free_bytes"
@@ -254,7 +254,7 @@ func getNodeDiskFreeBytesMD() MetricDescription {
 		Type:      gaugeMetric,
 	}
 }
-func getClusterDiskOfflineTotalMD() MetricDescription {
+func getClusterDisksOfflineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
@@ -264,12 +264,22 @@ func getClusterDiskOfflineTotalMD() MetricDescription {
 	}
 }
 
-func getClusterDiskOnlineTotalMD() MetricDescription {
+func getClusterDisksOnlineTotalMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
 		Subsystem: diskSubsystem,
 		Name:      onlineTotal,
 		Help:      "Total disks online.",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterDisksTotalMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: diskSubsystem,
+		Name:      total,
+		Help:      "Total disks.",
 		Type:      gaugeMetric,
 	}
 }
@@ -1142,7 +1152,7 @@ func getClusterStorageMetrics() MetricsGroup {
 			// Fetch disk space info, ignore errors
 			storageInfo, _ := objLayer.StorageInfo(ctx)
 			onlineDisks, offlineDisks := getOnlineOfflineDisksStats(storageInfo.Disks)
-			totalDisks := offlineDisks.Merge(onlineDisks)
+			totalDisks := onlineDisks.Merge(offlineDisks)
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
 				Description: getClusterCapacityTotalBytesMD(),
@@ -1165,12 +1175,17 @@ func getClusterStorageMetrics() MetricsGroup {
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
-				Description: getClusterDiskOfflineTotalMD(),
+				Description: getClusterDisksOfflineTotalMD(),
 				Value:       float64(offlineDisks.Sum()),
 			})
 
 			metrics.Metrics = append(metrics.Metrics, Metric{
-				Description: getClusterDiskOnlineTotalMD(),
+				Description: getClusterDisksOnlineTotalMD(),
+				Value:       float64(onlineDisks.Sum()),
+			})
+
+			metrics.Metrics = append(metrics.Metrics, Metric{
+				Description: getClusterDisksTotalMD(),
 				Value:       float64(totalDisks.Sum()),
 			})
 		},
