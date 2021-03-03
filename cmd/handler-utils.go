@@ -234,12 +234,16 @@ func extractReqParams(r *http.Request) map[string]string {
 	cred := getReqAccessCred(r, region)
 
 	// Success.
-	return map[string]string{
+	m := map[string]string{
 		"region":          region,
 		"accessKey":       cred.AccessKey,
 		"sourceIPAddress": handlers.GetSourceIP(r),
 		// Add more fields here.
 	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
+		m[xhttp.MinIOSourceReplicationRequest] = ""
+	}
+	return m
 }
 
 // Extract response elements to be sent with event notifiation.

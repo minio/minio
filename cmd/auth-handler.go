@@ -185,12 +185,12 @@ func getSessionToken(r *http.Request) (token string) {
 // Fetch claims in the security token returned by the client, doesn't return
 // errors - upon errors the returned claims map will be empty.
 func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
-	claims, _ := getClaimsFromToken(r, getSessionToken(r))
+	claims, _ := getClaimsFromToken(getSessionToken(r))
 	return claims
 }
 
 // Fetch claims in the security token returned by the client.
-func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, error) {
+func getClaimsFromToken(token string) (map[string]interface{}, error) {
 	claims := xjwt.NewMapClaims()
 	if token == "" {
 		return claims.Map(), nil
@@ -237,7 +237,7 @@ func getClaimsFromToken(r *http.Request, token string) (map[string]interface{}, 
 		if err != nil {
 			// Base64 decoding fails, we should log to indicate
 			// something is malforming the request sent by client.
-			logger.LogIf(r.Context(), err, logger.Application)
+			logger.LogIf(GlobalContext, err, logger.Application)
 			return nil, errAuthentication
 		}
 		claims.MapClaims[iampolicy.SessionPolicyName] = string(spBytes)
@@ -258,7 +258,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	if subtle.ConstantTimeCompare([]byte(token), []byte(cred.SessionToken)) != 1 {
 		return nil, ErrInvalidToken
 	}
-	claims, err := getClaimsFromToken(r, token)
+	claims, err := getClaimsFromToken(token)
 	if err != nil {
 		return nil, toAPIErrorCode(r.Context(), err)
 	}
