@@ -471,10 +471,10 @@ func methodNotAllowedHandler(api string) func(w http.ResponseWriter, r *http.Req
 				HTTPStatusCode: http.StatusUpgradeRequired,
 			}, r.URL)
 		default:
-			desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
 			writeErrorResponse(r.Context(), w, APIError{
-				Code:           "XMinioUnknownAPIRequest",
-				Description:    desc,
+				Code: "BadRequest",
+				Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
+					r.Method, r.URL.Path),
 				HTTPStatusCode: http.StatusBadRequest,
 			}, r.URL, guessIsBrowserReq(r))
 		}
@@ -524,10 +524,10 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)
 	default:
-		desc := fmt.Sprintf("Unknown API request at %s", r.URL.Path)
 		writeErrorResponse(r.Context(), w, APIError{
-			Code:           "XMinioUnknownAPIRequest",
-			Description:    desc,
+			Code: "BadRequest",
+			Description: fmt.Sprintf("An error occurred when parsing the HTTP request %s at '%s'",
+				r.Method, r.URL.Path),
 			HTTPStatusCode: http.StatusBadRequest,
 		}, r.URL, guessIsBrowserReq(r))
 	}

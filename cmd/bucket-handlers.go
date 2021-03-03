@@ -1030,6 +1030,64 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 }
 
+// GetBucketPolicyStatusHandler -  Retrieves the policy status
+// for an MinIO bucket, indicating whether the bucket is public.
+func (api objectAPIHandlers) GetBucketPolicyStatusHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetBucketPolicyStatus")
+
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrServerNotInitialized))
+		return
+	}
+
+	if s3Error := checkRequestAuthType(ctx, r, policy.GetBucketPolicyStatusAction, bucket, ""); s3Error != ErrNone {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+		return
+	}
+
+	// Check if bucket exists.
+	if _, err := objectAPI.GetBucketInfo(ctx, bucket); err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL, guessIsBrowserReq(r))
+		return
+	}
+
+	// Check if anonymous (non-owner) has access to list objects.
+	readable := globalPolicySys.IsAllowed(policy.Args{
+		Action:          policy.ListBucketAction,
+		BucketName:      bucket,
+		ConditionValues: getConditionValues(r, "", "", nil),
+		IsOwner:         false,
+	})
+
+	// Check if anonymous (non-owner) has access to upload objects.
+	writable := globalPolicySys.IsAllowed(policy.Args{
+		Action:          policy.PutObjectAction,
+		BucketName:      bucket,
+		ConditionValues: getConditionValues(r, "", "", nil),
+		IsOwner:         false,
+	})
+
+	encodedSuccessResponse := encodeResponse(PolicyStatus{
+		IsPublic: func() string {
+			// Silly to have special 'boolean' values yes
+			// but complying with silly implementation
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketPolicyStatus.html
+			if readable && writable {
+				return "TRUE"
+			}
+			return "FALSE"
+		}(),
+	})
+
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
 // HeadBucketHandler - HEAD Bucket
 // ----------
 // This operation is useful to determine if a bucket exists.

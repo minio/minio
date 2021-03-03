@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"io/ioutil"
 
 	"github.com/minio/minio/pkg/env"
@@ -112,4 +113,13 @@ func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 		}
 	}
 	return cert, nil
+}
+
+// EnsureCertAndKey checks if both client certificate and key paths are provided
+func EnsureCertAndKey(ClientCert, ClientKey string) error {
+	if (ClientCert != "" && ClientKey == "") ||
+		(ClientCert == "" && ClientKey != "") {
+		return errors.New("cert and key must be specified as a pair")
+	}
+	return nil
 }

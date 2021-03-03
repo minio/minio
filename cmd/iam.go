@@ -220,8 +220,10 @@ type IAMSys struct {
 	iamGroupPolicyMap map[string]MappedPolicy
 
 	// Persistence layer for IAM subsystem
-	store         IAMStorageAPI
-	storeFallback bool
+	store IAMStorageAPI
+
+	// configLoaded will be closed and remain so after first load.
+	configLoaded chan struct{}
 }
 
 // IAMUserType represents a user type inside MinIO server
@@ -554,7 +556,11 @@ func (sys *IAMSys) Load(ctx context.Context, store IAMStorageAPI) error {
 	}
 
 	sys.buildUserGroupMemberships()
-	sys.storeFallback = false
+	select {
+	case <-sys.configLoaded:
+	default:
+		close(sys.configLoaded)
+	}
 	return nil
 }
 
@@ -732,15 +738,7 @@ func (sys *IAMSys) ListPolicies() (map[string]iampolicy.Policy, error) {
 		return nil, errServerNotInitialized
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-
-	if fallback {
-		if err := sys.store.loadAll(context.Background(), sys); err != nil {
-			return nil, err
-		}
-	}
+	<-sys.configLoaded
 
 	sys.store.rlock()
 	defer sys.store.runlock()
@@ -915,15 +913,7 @@ func (sys *IAMSys) ListUsers() (map[string]madmin.UserInfo, error) {
 		return nil, errIAMActionNotAllowed
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-
-	if fallback {
-		if err := sys.store.loadAll(context.Background(), sys); err != nil {
-			return nil, err
-		}
-	}
+	<-sys.configLoaded
 
 	sys.store.rlock()
 	defer sys.store.runlock()
@@ -995,10 +985,9 @@ func (sys *IAMSys) GetUserInfo(name string) (u madmin.UserInfo, err error) {
 		return u, errServerNotInitialized
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-	if fallback {
+	select {
+	case <-sys.configLoaded:
+	default:
 		sys.loadUserFromStore(name)
 	}
 
@@ -1178,15 +1167,7 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 		return nil, errServerNotInitialized
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-
-	if fallback {
-		if err := sys.store.loadAll(context.Background(), sys); err != nil {
-			return nil, err
-		}
-	}
+	<-sys.configLoaded
 
 	sys.store.rlock()
 	defer sys.store.runlock()
@@ -1355,11 +1336,12 @@ func (sys *IAMSys) GetUser(accessKey string) (cred auth.Credentials, ok bool) {
 		return cred, false
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-	if fallback {
+	fallback := false
+	select {
+	case <-sys.configLoaded:
+	default:
 		sys.loadUserFromStore(accessKey)
+		fallback = true
 	}
 
 	sys.store.rlock()
@@ -1619,15 +1601,7 @@ func (sys *IAMSys) ListGroups() (r []string, err error) {
 		return nil, errIAMActionNotAllowed
 	}
 
-	sys.store.rlock()
-	fallback := sys.storeFallback
-	sys.store.runlock()
-
-	if fallback {
-		if err := sys.store.loadAll(context.Background(), sys); err != nil {
-			return nil, err
-		}
-	}
+	<-sys.configLoaded
 
 	sys.store.rlock()
 	defer sys.store.runlock()
@@ -2182,6 +2156,6 @@ func NewIAMSys() *IAMSys {
 		iamGroupPolicyMap:       make(map[string]MappedPolicy),
 		iamGroupsMap:            make(map[string]GroupInfo),
 		iamUserGroupMemberships: make(map[string]set.StringSet),
-		storeFallback:           true,
+		configLoaded:            make(chan struct{}),
 	}
 }

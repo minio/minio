@@ -42,16 +42,16 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 			}
 			if endpoint.IsLocal {
 				// Only proceed for local endpoints
-				network[nodeName] = "online"
+				network[nodeName] = string(madmin.ItemOnline)
 				localEndpoints = append(localEndpoints, endpoint)
 				continue
 			}
 			_, present := network[nodeName]
 			if !present {
 				if err := isServerResolvable(endpoint, 2*time.Second); err == nil {
-					network[nodeName] = "online"
+					network[nodeName] = string(madmin.ItemOnline)
 				} else {
-					network[nodeName] = "offline"
+					network[nodeName] = string(madmin.ItemOffline)
 					// log once the error
 					logger.LogOnceIf(context.Background(), err, nodeName)
 				}
@@ -59,31 +59,21 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		}
 	}
 
-	return madmin.ServerProperties{
-		State:    "ok",
+	props := madmin.ServerProperties{
+		State:    string(madmin.ItemInitializing),
 		Endpoint: addr,
 		Uptime:   UTCNow().Unix() - globalBootTime.Unix(),
 		Version:  Version,
 		CommitID: CommitID,
 		Network:  network,
-		Disks:    getLocalDisks(endpointServerPools),
-	}
-}
-
-func getLocalDisks(endpointServerPools EndpointServerPools) []madmin.Disk {
-	var localEndpoints Endpoints
-	for _, ep := range endpointServerPools {
-		for _, endpoint := range ep.Endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-			localEndpoints = append(localEndpoints, endpoint)
-		}
 	}
 
-	// FIXME: Recreates disks...
-	localDisks, _ := initStorageDisksWithErrors(localEndpoints)
-	defer closeStorageDisks(localDisks)
-	storageInfo, _ := getStorageInfo(localDisks, localEndpoints.GetAllStrings())
-	return storageInfo.Disks
+	objLayer := newObjectLayerFn()
+	if objLayer != nil {
+		storageInfo, _ := objLayer.LocalStorageInfo(GlobalContext)
+		props.State = string(madmin.ItemOnline)
+		props.Disks = storageInfo.Disks
+	}
+
+	return props
 }

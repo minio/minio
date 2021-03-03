@@ -605,6 +605,37 @@ func (s *erasureSets) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	return storageInfo, errs
 }
 
+// StorageInfo - combines output of StorageInfo across all erasure coded object sets.
+func (s *erasureSets) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+	var storageInfo StorageInfo
+
+	storageInfos := make([]StorageInfo, len(s.sets))
+	storageInfoErrs := make([][]error, len(s.sets))
+
+	g := errgroup.WithNErrs(len(s.sets))
+	for index := range s.sets {
+		index := index
+		g.Go(func() error {
+			storageInfos[index], storageInfoErrs[index] = s.sets[index].LocalStorageInfo(ctx)
+			return nil
+		}, index)
+	}
+
+	// Wait for the go routines.
+	g.Wait()
+
+	for _, lstorageInfo := range storageInfos {
+		storageInfo.Disks = append(storageInfo.Disks, lstorageInfo.Disks...)
+	}
+
+	var errs []error
+	for i := range s.sets {
+		errs = append(errs, storageInfoErrs[i]...)
+	}
+
+	return storageInfo, errs
+}
+
 // Shutdown shutsdown all erasure coded sets in parallel
 // returns error upon first error.
 func (s *erasureSets) Shutdown(ctx context.Context) error {

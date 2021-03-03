@@ -67,6 +67,9 @@ const (
 	// ListBucketAction - ListBucket Rest API action.
 	ListBucketAction = "s3:ListBucket"
 
+	// GetBucketPolicyStatusAction - Retrieves the policy status for a bucket.
+	GetBucketPolicyStatusAction = "s3:GetBucketPolicyStatus"
+
 	// ListBucketVersionsAction - ListBucketVersions Rest API action.
 	ListBucketVersionsAction = "s3:ListBucketVersions"
 
@@ -197,6 +200,7 @@ var supportedActions = map[Action]struct{}{
 	HeadBucketAction:                       {},
 	ListAllMyBucketsAction:                 {},
 	ListBucketAction:                       {},
+	GetBucketPolicyStatusAction:            {},
 	ListBucketVersionsAction:               {},
 	ListBucketMultipartUploadsAction:       {},
 	ListenNotificationAction:               {},

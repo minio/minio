@@ -41,14 +41,17 @@ const (
 	// Add your own backend.
 )
 
-// ObjectLayerState - represents the status of the object layer
-type ObjectLayerState string
+// ItemState - represents the status of any item in offline,init,online state
+type ItemState string
 
 const (
-	// ObjectLayerInitializing indicates that the object layer is still in initialization phase
-	ObjectLayerInitializing = ObjectLayerState("initializing")
-	// ObjectLayerOnline indicates that the object layer is ready
-	ObjectLayerOnline = ObjectLayerState("online")
+
+	// ItemOffline indicates that the item is offline
+	ItemOffline = ItemState("offline")
+	// ItemInitializing indicates that the item is still in initialization phase
+	ItemInitializing = ItemState("initializing")
+	// ItemOnline indicates that the item is online
+	ItemOnline = ItemState("online")
 )
 
 // StorageInfo - represents total capacity of underlying storage.
@@ -183,7 +186,7 @@ func (adm *AdminClient) DataUsageInfo(ctx context.Context) (DataUsageInfo, error
 
 // InfoMessage container to hold server admin related information.
 type InfoMessage struct {
-	Mode         ObjectLayerState   `json:"mode,omitempty"`
+	Mode         string             `json:"mode,omitempty"`
 	Domain       []string           `json:"domain,omitempty"`
 	Region       string             `json:"region,omitempty"`
 	SQSARN       []string           `json:"sqsARN,omitempty"`
