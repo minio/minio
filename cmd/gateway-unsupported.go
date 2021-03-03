@@ -272,3 +272,13 @@ func (a GatewayUnsupported) Health(_ context.Context, _ HealthOptions) HealthRes
 func (a GatewayUnsupported) ReadHealth(_ context.Context) bool {
 	return true
 }
+
+// TransitionObject - transition object content to target tier.
+func (a GatewayUnsupported) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (a GatewayUnsupported) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	return NotImplemented{}
+}

@@ -614,7 +614,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, cl
 	}
 
 	// if object is encrypted, transition content without decrypting.
-	if opts.TransitionStatus == lifecycle.TransitionPending && (isEncrypted || isCompressed) {
+	if opts.Transition.Status == lifecycle.TransitionPending && (isEncrypted || isCompressed) {
 		isEncrypted = false
 		isCompressed = false
 	}

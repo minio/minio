@@ -44,13 +44,13 @@ type ObjectOptions struct {
 	MTime                time.Time // Is only set in POST/PUT operations
 	Expires              time.Time // Is only used in POST/PUT operations
 
-	DeleteMarker                  bool                                                  // Is only set in DELETE operations for delete marker replication
-	UserDefined                   map[string]string                                     // only set in case of POST/PUT operations
-	PartNumber                    int                                                   // only useful in case of GetObject/HeadObject
-	CheckPrecondFn                CheckPreconditionFn                                   // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
-	DeleteMarkerReplicationStatus string                                                // Is only set in DELETE operations
-	VersionPurgeStatus            VersionPurgeStatusType                                // Is only set in DELETE operations for delete marker version to be permanently deleted.
-	TransitionStatus              string                                                // status of the transition
+	DeleteMarker                  bool                   // Is only set in DELETE operations for delete marker replication
+	UserDefined                   map[string]string      // only set in case of POST/PUT operations
+	PartNumber                    int                    // only useful in case of GetObject/HeadObject
+	CheckPrecondFn                CheckPreconditionFn    // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
+	DeleteMarkerReplicationStatus string                 // Is only set in DELETE operations
+	VersionPurgeStatus            VersionPurgeStatusType // Is only set in DELETE operations for delete marker version to be permanently deleted.
+	Transition                    TransitionOptions
 	NoLock                        bool                                                  // indicates to lower layers if the caller is expecting to hold locks.
 	ProxyRequest                  bool                                                  // only set for GET/HEAD in active-active replication scenario
 	ProxyHeaderSet                bool                                                  // only set for GET/HEAD in active-active replication scenario
@@ -59,6 +59,16 @@ type ObjectOptions struct {
 	// Use the maximum parity (N/2), used when
 	// saving server configuration files
 	MaxParity bool
+}
+
+// TransitionOptions represents object options for transition ObjectLayer operation
+type TransitionOptions struct {
+	Status         string
+	Tier           string
+	ETag           string
+	RestoreRequest *RestoreObjectRequest
+	RestoreExpiry  time.Time
+	ExpireRestored bool
 }
 
 // BucketOptions represents bucket options for ObjectLayer bucket operations
@@ -122,6 +132,8 @@ type ObjectLayer interface {
 	CopyObject(ctx context.Context, srcBucket, srcObject, destBucket, destObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (objInfo ObjectInfo, err error)
 	DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error)
 	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
+	TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
+	RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)

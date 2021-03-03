@@ -33,6 +33,8 @@ import (
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/bucket/lifecycle"
 	"github.com/minio/minio/pkg/bucket/replication"
+	"github.com/minio/minio/pkg/event"
+	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/madmin"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/sync/errgroup"
@@ -477,13 +479,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 
 	}
 	objInfo = fi.ToObjectInfo(bucket, object)
-	if objInfo.TransitionStatus == lifecycle.TransitionComplete {
-		// overlay storage class for transitioned objects with transition tier SC Label
-		if sc := transitionSC(ctx, bucket); sc != "" {
-			objInfo.StorageClass = sc
-		}
-	}
-	if !fi.VersionPurgeStatus.Empty() && opts.VersionID != "" {
+	if !fi.VersionPurgeStatus.Empty() {
 		// Make sure to return object info to provide extra information.
 		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
@@ -1039,7 +1035,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
 				ObjectName:                    versions[objIndex].Name,
 				VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
-				PurgeTransitioned:             objects[objIndex].PurgeTransitioned,
 			}
 		} else {
 			dobjects[objIndex] = DeletedObject{
@@ -1047,7 +1042,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				VersionID:                     versions[objIndex].VersionID,
 				VersionPurgeStatus:            versions[objIndex].VersionPurgeStatus,
 				DeleteMarkerReplicationStatus: versions[objIndex].DeleteMarkerReplicationStatus,
-				PurgeTransitioned:             objects[objIndex].PurgeTransitioned,
 			}
 		}
 	}
@@ -1131,6 +1125,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
 	}
+
 	if markDelete {
 		if opts.Versioned || opts.VersionSuspended {
 			fi := FileInfo{
@@ -1140,6 +1135,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 				ModTime:                       modTime,
 				DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 				VersionPurgeStatus:            opts.VersionPurgeStatus,
+				TransitionStatus:              opts.Transition.Status,
+				ExpireRestored:                opts.Transition.ExpireRestored,
 			}
 			if opts.Versioned {
 				fi.VersionID = mustGetUUID()
@@ -1147,8 +1144,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 					fi.VersionID = opts.VersionID
 				}
 			}
-			fi.TransitionStatus = opts.TransitionStatus
-
 			// versioning suspended means we add `null`
 			// version as delete marker
 			// Add delete marker, since we don't have any version specified explicitly.
@@ -1169,7 +1164,8 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ModTime:                       modTime,
 		DeleteMarkerReplicationStatus: opts.DeleteMarkerReplicationStatus,
 		VersionPurgeStatus:            opts.VersionPurgeStatus,
-		TransitionStatus:              opts.TransitionStatus,
+		TransitionStatus:              opts.Transition.Status,
+		ExpireRestored:                opts.Transition.ExpireRestored,
 	}, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
@@ -1339,4 +1335,125 @@ func (er erasureObjects) GetObjectTags(ctx context.Context, bucket, object strin
 	}
 
 	return tags.ParseObjectTags(oi.UserTags)
+}
+
+// TransitionObject - transition object content to target tier.
+func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	tgtClient, err := globalTierConfigMgr.getDriver(opts.Transition.Tier)
+	if err != nil {
+		return err
+	}
+	// Acquire a write lock before deleting the object.
+	lk := er.NewNSLock(bucket, object)
+	ctx, err = lk.GetLock(ctx, globalDeleteOperationTimeout)
+	if err != nil {
+		return err
+	}
+	defer lk.Unlock()
+
+	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	if fi.Deleted {
+		if opts.VersionID == "" {
+			return toObjectErr(errFileNotFound, bucket, object)
+		}
+		// Make sure to return object info to provide extra information.
+		return toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+	// verify that the object queued for transition is identical to that on disk.
+	if !opts.MTime.Equal(fi.ModTime) || !strings.EqualFold(opts.Transition.ETag, extractETag(fi.Metadata)) {
+		return toObjectErr(errFileNotFound, bucket, object)
+	}
+	pr, pw := io.Pipe()
+	go func() {
+		err := er.getObjectWithFileInfo(ctx, bucket, object, 0, fi.Size, pw, fi, metaArr, onlineDisks)
+		pw.CloseWithError(err)
+	}()
+
+	// if object already transitioned, return
+	if fi.TransitionStatus == lifecycle.TransitionComplete {
+		pr.Close()
+		return nil
+	}
+
+	destObj, err := genTransitionObjName()
+	if err != nil {
+		pr.Close()
+		return err
+	}
+
+	if err = tgtClient.Put(ctx, destObj, pr, fi.Size); err != nil {
+		pr.Close()
+		logger.LogIf(ctx, fmt.Errorf("Unable to transition %s/%s(%s) to %s tier: %w", bucket, object, opts.VersionID, opts.Transition.Tier, err))
+		return err
+	}
+	pr.Close()
+	fi.TransitionStatus = lifecycle.TransitionComplete
+	fi.TransitionedObjName = destObj
+	fi.TransitionTier = opts.Transition.Tier
+	eventName := event.ObjectTransitionComplete
+
+	storageDisks := er.getDisks()
+	writeQuorum := len(storageDisks)/2 + 1
+	if err = er.deleteObjectVersion(ctx, bucket, object, writeQuorum, fi, false); err != nil {
+		eventName = event.ObjectTransitionFailed
+	}
+	for _, disk := range storageDisks {
+		if disk != nil && disk.IsOnline() {
+			continue
+		}
+		er.addPartial(bucket, object, opts.VersionID)
+		break
+	}
+	// Notify object deleted event.
+	sendEvent(eventArgs{
+		EventName:  eventName,
+		BucketName: bucket,
+		Object: ObjectInfo{
+			Name:      object,
+			VersionID: opts.VersionID,
+		},
+		Host: "Internal: [ILM-Transition]",
+	})
+	return err
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+// This is similar to PostObjectRestore from AWS GLACIER
+// storage class. When PostObjectRestore API is called, a temporary copy of the object
+// is restored locally to the bucket on source cluster until the restore expiry date.
+// The copy that was transitioned continues to reside in the transitioned tier.
+func (er erasureObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	// Acquire a write lock before restoring the object.
+	lk := er.NewNSLock(bucket, object)
+	ctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+	if err != nil {
+		return err
+	}
+	defer lk.Unlock()
+	oi, err := er.getObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		return err
+	}
+	var rs *HTTPRangeSpec
+	gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, http.Header{}, oi, ObjectOptions{
+		VersionID: oi.VersionID})
+	if err != nil {
+		return err
+	}
+	defer gr.Close()
+	hashReader, err := hash.NewReader(gr, oi.Size, "", "", oi.Size)
+	if err != nil {
+		return err
+	}
+	pReader := NewPutObjReader(hashReader)
+	ropts := putRestoreOpts(bucket, object, opts.Transition.RestoreRequest, oi)
+	ropts.UserDefined[xhttp.AmzRestore] = fmt.Sprintf("ongoing-request=%t, expiry-date=%s", false, opts.Transition.RestoreExpiry.Format(http.TimeFormat))
+	ropts.NoLock = true
+	if _, err := er.PutObject(ctx, bucket, object, pReader, ropts); err != nil {
+		return err
+	}
+	return nil
 }

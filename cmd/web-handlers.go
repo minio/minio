@@ -46,7 +46,6 @@ import (
 	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/bucket/lifecycle"
 	objectlock "github.com/minio/minio/pkg/bucket/object/lock"
 	"github.com/minio/minio/pkg/bucket/policy"
 	"github.com/minio/minio/pkg/bucket/replication"
@@ -765,8 +764,13 @@ next:
 			if _, err := globalBucketMetadataSys.GetLifecycleConfig(args.BucketName); err == nil {
 				hasLifecycleConfig = true
 			}
+			os := newObjSweeper(args.BucketName, objectName)
+			opts = os.GetOpts()
 			if hasReplicationRules(ctx, args.BucketName, []ObjectToDelete{{ObjectName: objectName}}) || hasLifecycleConfig {
 				goi, gerr = getObjectInfoFn(ctx, args.BucketName, objectName, opts)
+				if gerr == nil {
+					os.SetTransitionState(goi)
+				}
 				if replicateDel, replicateSync = checkReplicateDelete(ctx, args.BucketName, ObjectToDelete{
 					ObjectName: objectName,
 					VersionID:  goi.VersionID,
@@ -822,18 +826,9 @@ next:
 				}
 				scheduleReplicationDelete(ctx, dobj, objectAPI, replicateSync)
 			}
-			if goi.TransitionStatus == lifecycle.TransitionComplete {
-				deleteTransitionedObject(ctx, objectAPI, args.BucketName, objectName, lifecycle.ObjectOpts{
-					Name:             objectName,
-					UserTags:         goi.UserTags,
-					VersionID:        goi.VersionID,
-					DeleteMarker:     goi.DeleteMarker,
-					TransitionStatus: goi.TransitionStatus,
-					IsLatest:         goi.IsLatest,
-				}, false, true)
-			}
 
 			logger.LogIf(ctx, err)
+			logger.LogIf(ctx, os.Sweep())
 			continue
 		}
 
@@ -1321,6 +1316,13 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		opts.UserDefined[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = retentionDate.UTC().Format(iso8601TimeFormat)
 	}
 
+	os := newObjSweeper(bucket, object)
+	// Get appropriate object info to identify the remote object to delete
+	goiOpts := os.GetOpts()
+	if goi, gerr := getObjectInfo(ctx, bucket, object, goiOpts); gerr == nil {
+		os.SetTransitionState(goi)
+	}
+
 	objInfo, err := putObject(GlobalContext, bucket, object, pReader, opts)
 	if err != nil {
 		writeWebErrorResponse(w, err)
@@ -1338,6 +1340,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	if mustReplicate {
 		scheduleReplication(ctx, objInfo.Clone(), objectAPI, sync, replication.ObjectReplicationType)
 	}
+	logger.LogIf(ctx, os.Sweep())
 
 	reqParams := extractReqParams(r)
 	reqParams["accessKey"] = claims.GetAccessKey()
