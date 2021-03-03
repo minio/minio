@@ -442,6 +442,17 @@ func (m *metaCacheEntriesSorted) forwardTo(s string) {
 	m.o = m.o[idx:]
 }
 
+// forwardPast will truncate m so only entries that are after s is in the list.
+func (m *metaCacheEntriesSorted) forwardPast(s string) {
+	if s == "" {
+		return
+	}
+	idx := sort.Search(len(m.o), func(i int) bool {
+		return m.o[i].name > s
+	})
+	m.o = m.o[idx:]
+}
+
 // merge will merge other into m.
 // If the same entries exists in both and metadata matches only one is added,
 // otherwise the entry from m will be placed first.

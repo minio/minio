@@ -407,6 +407,18 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if implicitPerm && !globalIAMSys.IsAllowed(iampolicy.Args{
+		AccountName:     accessKey,
+		Action:          iampolicy.CreateUserAdminAction,
+		ConditionValues: getConditionValues(r, "", accessKey, claims),
+		IsOwner:         owner,
+		Claims:          claims,
+		DenyOnly:        true, // check if changing password is explicitly denied.
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
 	if r.ContentLength > maxEConfigJSONSize || r.ContentLength == -1 {
 		// More than maxConfigSize bytes were available
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigTooLarge), r.URL)

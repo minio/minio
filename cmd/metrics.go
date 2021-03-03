@@ -521,6 +521,10 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	if globalIsGateway {
+		return
+	}
+
 	server := getLocalServerProperty(globalEndpoints, &http.Request{
 		Host: GetLocalPeer(globalEndpoints),
 	})

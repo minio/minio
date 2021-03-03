@@ -38,7 +38,7 @@ minio server /mnt/data
 Assuming `mc` is already [configured](https://docs.min.io/docs/minio-client-quickstart-guide.html)
 ```
 mc admin config get myminio/ audit_webhook
-audit_webhook:name1 auth_token="" endpoint=""
+audit_webhook:name1 enable=off endpoint= auth_token= client_cert= client_key= 
 ```
 
 ```
@@ -53,6 +53,8 @@ MinIO also honors environment variable for HTTP target Audit logging as shown be
 export MINIO_AUDIT_WEBHOOK_ENABLE_target1="on"
 export MINIO_AUDIT_WEBHOOK_AUTH_TOKEN_target1="token"
 export MINIO_AUDIT_WEBHOOK_ENDPOINT_target1=http://localhost:8080/minio/logs
+export MINIO_AUDIT_WEBHOOK_CLIENT_CERT="/tmp/cert.pem"
+export MINIO_AUDIT_WEBHOOK_CLIENT_KEY=="/tmp/key.pem"
 minio server /mnt/data
 ```
 
