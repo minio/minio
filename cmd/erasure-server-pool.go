@@ -1840,3 +1840,33 @@ func (z *erasureServerPools) GetObjectTags(ctx context.Context, bucket, object s
 
 	return z.serverPools[idx].GetObjectTags(ctx, bucket, object, opts)
 }
+
+// TransitionObject - transition object content to target tier.
+func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
+	}
+	// We don't know the size here set 1GiB atleast.
+	idx, err := z.getPoolIdx(ctx, bucket, object, 1<<30)
+	if err != nil {
+		return err
+	}
+
+	return z.serverPools[idx].TransitionObject(ctx, bucket, object, opts)
+}
+
+// RestoreTransitionedObject - restore transitioned object content locally on this cluster.
+func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+	object = encodeDirObject(object)
+	if z.SinglePool() {
+		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
+	}
+	// We don't know the size here set 1GiB atleast.
+	idx, err := z.getPoolIdx(ctx, bucket, object, 1<<30)
+	if err != nil {
+		return err
+	}
+
+	return z.serverPools[idx].RestoreTransitionedObject(ctx, bucket, object, opts)
+}

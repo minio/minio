@@ -131,6 +131,13 @@ const (
 	// GetBucketTargetAction - allow getting bucket targets
 	GetBucketTargetAction = "admin:GetBucketTarget"
 
+	// Remote Tier admin Actions
+
+	// SetTierAction - allow adding/editing a remote tier
+	SetTierAction = "admin:SetTier"
+	// ListTierAction - allow listing remote tiers
+	ListTierAction = "admin:ListTier"
+
 	// AllAdminActions - provides all admin permissions
 	AllAdminActions = "admin:*"
 )
@@ -177,6 +184,8 @@ var supportedAdminActions = map[AdminAction]struct{}{
 	GetBucketQuotaAdminAction:       {},
 	SetBucketTargetAction:           {},
 	GetBucketTargetAction:           {},
+	SetTierAction:                   {},
+	ListTierAction:                  {},
 	AllAdminActions:                 {},
 }
 
@@ -229,4 +238,6 @@ var adminActionConditionKeyMap = map[Action]condition.KeySet{
 	GetBucketQuotaAdminAction:   condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	SetBucketTargetAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
 	GetBucketTargetAction:       condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	SetTierAction:               condition.NewKeySet(condition.AllSupportedAdminKeys...),
+	ListTierAction:              condition.NewKeySet(condition.AllSupportedAdminKeys...),
 }

@@ -845,37 +845,27 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	if err != nil {
 		return err
 	}
-
-	// transitioned objects maintains metadata on the source cluster. When transition
-	// status is set, update the metadata to disk.
-	if !lastVersion || fi.TransitionStatus != "" {
-		// when data-dir is specified. Transition leverages existing DeleteObject
-		// api call to mark object as deleted. When object is pending transition,
-		// just update the metadata and avoid deleting data dir.
-		if dataDir != "" && fi.TransitionStatus != lifecycle.TransitionPending {
-			versionID := fi.VersionID
-			if versionID == "" {
-				versionID = nullVersionID
-			}
-			xlMeta.data.remove(versionID)
-			// PR #11758 used DataDir, preserve it
-			// for users who might have used master
-			// branch
-			xlMeta.data.remove(dataDir)
-
-			filePath := pathJoin(volumeDir, path, dataDir)
-			if err = checkPathLength(filePath); err != nil {
-				return err
-			}
-
-			tmpuuid := mustGetUUID()
-			if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, tmpuuid)); err != nil {
-				if err != errFileNotFound {
-					return err
-				}
-			}
+	if dataDir != "" {
+		versionID := fi.VersionID
+		if versionID == "" {
+			versionID = nullVersionID
+		}
+		// PR #11758 used DataDir, preserve it
+		// for users who might have used master
+		// branch
+		xlMeta.data.remove(dataDir)
+		filePath := pathJoin(volumeDir, path, dataDir)
+		if err = checkPathLength(filePath); err != nil {
+			return err
 		}
 
+		if err = renameAll(filePath, pathutil.Join(s.diskPath, minioMetaTmpDeletedBucket, mustGetUUID())); err != nil {
+			if err != errFileNotFound {
+				return err
+			}
+		}
+	}
+	if !lastVersion {
 		buf, err = xlMeta.AppendTo(nil)
 		if err != nil {
 			return err

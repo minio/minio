@@ -114,7 +114,9 @@ type ObjectInfo struct {
 	DeleteMarker bool
 
 	// TransitionStatus indicates if transition is complete/pending
-	TransitionStatus string
+	TransitionStatus    string
+	transitionedObjName string // name of transitioned object on remote target
+	TransitionTier      string // name of MinIO defined storage class object transitioned to.
 
 	// RestoreExpires indicates date a restored object expires
 	RestoreExpires time.Time

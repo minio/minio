@@ -202,8 +202,29 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 			}
 		}
 		if objInfo.TransitionStatus == lifecycle.TransitionComplete {
-			w.Header()[xhttp.AmzStorageClass] = []string{objInfo.StorageClass}
+			// Check if object is being restored. For more information on x-amz-restore header see
+			// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
+			restoreHdr, ok := objInfo.UserDefined[xhttp.AmzRestore]
+			if !ok || !strings.HasPrefix(restoreHdr, "ongoing-request=false") || (!objInfo.RestoreExpires.IsZero() && time.Now().After(objInfo.RestoreExpires)) {
+				w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionTier}
+			}
 		}
+		ruleID, transitionTime := lc.PredictTransitionTime(lifecycle.ObjectOpts{
+			Name:             objInfo.Name,
+			UserTags:         objInfo.UserTags,
+			VersionID:        objInfo.VersionID,
+			ModTime:          objInfo.ModTime,
+			IsLatest:         objInfo.IsLatest,
+			DeleteMarker:     objInfo.DeleteMarker,
+			TransitionStatus: objInfo.TransitionStatus,
+		})
+		if !transitionTime.IsZero() {
+			// This header is a MinIO centric extension to show expected transition date in a similar spirit as x-amz-expiration
+			w.Header()[xhttp.MinIOTransition] = []string{
+				fmt.Sprintf(`transition-date="%s", rule-id="%s"`, transitionTime.Format(http.TimeFormat), ruleID),
+			}
+		}
+
 	}
 
 	return nil
