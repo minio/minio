@@ -232,6 +232,10 @@ func (n *hdfsObjects) Shutdown(ctx context.Context) error {
 	return n.clnt.Close()
 }
 
+func (n *hdfsObjects) LocalStorageInfo(ctx context.Context) (si minio.StorageInfo, errs []error) {
+	return n.StorageInfo(ctx)
+}
+
 func (n *hdfsObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, errs []error) {
 	fsInfo, err := n.clnt.StatFs()
 	if err != nil {

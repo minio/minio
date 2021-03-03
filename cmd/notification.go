@@ -1231,9 +1231,9 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 			info, err := client.ServerInfo()
 			if err != nil {
 				info.Endpoint = client.host.String()
-				info.State = "offline"
+				info.State = string(madmin.ItemOffline)
 			} else {
-				info.State = "ok"
+				info.State = string(madmin.ItemOnline)
 			}
 			reply[idx] = info
 		}(client, i)
@@ -1306,7 +1306,7 @@ func GetPeerOnlineCount() (nodesOnline, nodesOffline int) {
 	nodesOffline = 0
 	servers := globalNotificationSys.ServerInfo()
 	for _, s := range servers {
-		if s.State == "ok" {
+		if s.State == string(madmin.ItemOnline) {
 			nodesOnline++
 			continue
 		}
