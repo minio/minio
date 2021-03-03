@@ -399,7 +399,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 			AccountName:     parentUser,
 			Action:          iampolicy.CreateUserAdminAction,
 			ConditionValues: getConditionValues(r, "", parentUser, claims),
-			IsOwner:         false,
+			IsOwner:         owner,
 			Claims:          claims,
 		}) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
@@ -411,7 +411,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		AccountName:     accessKey,
 		Action:          iampolicy.CreateUserAdminAction,
 		ConditionValues: getConditionValues(r, "", accessKey, claims),
-		IsOwner:         false,
+		IsOwner:         owner,
 		Claims:          claims,
 		DenyOnly:        true, // check if changing password is explicitly denied.
 	}) {
