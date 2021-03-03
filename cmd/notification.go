@@ -33,6 +33,7 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/cmd/crypto"
+	xhttp "github.com/minio/minio/cmd/http"
 	"github.com/minio/minio/cmd/logger"
 	bandwidth "github.com/minio/minio/pkg/bandwidth"
 	bucketBandwidth "github.com/minio/minio/pkg/bucket/bandwidth"
@@ -1387,6 +1388,10 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 func sendEvent(args eventArgs) {
 	args.Object.Size, _ = args.Object.GetActualSize()
 
+	// avoid generating a notification for REPLICA creation event.
+	if _, ok := args.ReqParams[xhttp.MinIOSourceReplicationRequest]; ok {
+		return
+	}
 	// remove sensitive encryption entries in metadata.
 	crypto.RemoveSensitiveEntries(args.Object.UserDefined)
 	crypto.RemoveInternalEntries(args.Object.UserDefined)
