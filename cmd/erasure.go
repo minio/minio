@@ -229,6 +229,18 @@ func (er erasureObjects) StorageInfo(ctx context.Context) (StorageInfo, []error)
 	return getStorageInfo(disks, endpoints)
 }
 
+// LocalStorageInfo - returns underlying local storage statistics.
+func (er erasureObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+	disks := er.getLocalDisks()
+	endpoints := make([]string, len(disks))
+	for i, disk := range disks {
+		if disk != nil {
+			endpoints[i] = disk.String()
+		}
+	}
+	return getStorageInfo(disks, endpoints)
+}
+
 func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, healing bool) {
 	var wg sync.WaitGroup
 	disks := er.getDisks()

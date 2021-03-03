@@ -90,7 +90,8 @@ type ObjectLayer interface {
 	NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error
 
 	BackendInfo() BackendInfo
-	StorageInfo(ctx context.Context) (StorageInfo, []error) // local queries only local disks
+	StorageInfo(ctx context.Context) (StorageInfo, []error)
+	LocalStorageInfo(ctx context.Context) (StorageInfo, []error)
 
 	// Bucket operations.
 	MakeBucketWithLocation(ctx context.Context, bucket string, opts BucketOptions) error
