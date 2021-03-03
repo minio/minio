@@ -39,6 +39,13 @@ func (a GatewayUnsupported) BackendInfo() BackendInfo {
 	return BackendInfo{Type: BackendGateway}
 }
 
+// LocalStorageInfo returns the local disks information, mainly used
+// in prometheus - for gateway this just a no-op
+func (a GatewayUnsupported) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+	logger.CriticalIf(ctx, errors.New("not implemented"))
+	return StorageInfo{}, nil
+}
+
 // NSScanner - scanner is not implemented for gateway
 func (a GatewayUnsupported) NSScanner(ctx context.Context, bf *bloomFilter, updates chan<- DataUsageInfo) error {
 	logger.CriticalIf(ctx, errors.New("not implemented"))

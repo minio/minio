@@ -37,6 +37,7 @@ type Args struct {
 	IsOwner         bool                   `json:"owner"`
 	ObjectName      string                 `json:"object"`
 	Claims          map[string]interface{} `json:"claims"`
+	DenyOnly        bool                   `json:"denyOnly"` // only applies deny
 }
 
 // GetPoliciesFromClaims returns the list of policies to be applied for this
@@ -103,6 +104,15 @@ func (iamp Policy) IsAllowed(args Args) bool {
 				return false
 			}
 		}
+	}
+
+	// Applied any 'Deny' only policies, if we have
+	// reached here it means that there were no 'Deny'
+	// policies - this function mainly used for
+	// specific scenarios where we only want to validate
+	// 'Deny' only policies.
+	if args.DenyOnly {
+		return true
 	}
 
 	// For owner, its allowed by default.

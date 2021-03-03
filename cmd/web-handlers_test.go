@@ -631,43 +631,6 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	}
 }
 
-// Wrapper for calling Generate Auth Handler
-func TestWebHandlerGenerateAuth(t *testing.T) {
-	ExecObjectLayerTest(t, testGenerateAuthWebHandler)
-}
-
-// testGenerateAuthWebHandler - Test GenerateAuth web handler
-func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Register the API end points with Erasure/FS object layer.
-	apiRouter := initTestWebRPCEndPoint(obj)
-	credentials := globalActiveCred
-
-	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
-	if err != nil {
-		t.Fatal("Cannot authenticate")
-	}
-
-	generateAuthRequest := WebGenericArgs{}
-	generateAuthReply := &GenerateAuthReply{}
-	req, err := newTestWebRPCRequest("web.GenerateAuth", authorization, generateAuthRequest)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	err = getTestWebRPCResponse(rec, &generateAuthReply)
-	if err != nil {
-		t.Fatalf("Failed, %v", err)
-	}
-
-	if generateAuthReply.AccessKey == "" || generateAuthReply.SecretKey == "" {
-		t.Fatalf("Failed to generate auth keys")
-	}
-}
-
 func TestWebCreateURLToken(t *testing.T) {
 	ExecObjectLayerTest(t, testCreateURLToken)
 }
@@ -1134,9 +1097,8 @@ func TestWebCheckAuthorization(t *testing.T) {
 	webRPCs := []string{
 		"ServerInfo", "StorageInfo", "MakeBucket",
 		"ListBuckets", "ListObjects", "RemoveObject",
-		"GenerateAuth", "SetAuth",
-		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies",
-		"PresignedGet",
+		"SetAuth", "GetBucketPolicy", "SetBucketPolicy",
+		"ListAllBucketPolicies", "PresignedGet",
 	}
 	for _, rpcCall := range webRPCs {
 		reply := &WebGenericRep{}

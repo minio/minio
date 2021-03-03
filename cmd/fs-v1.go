@@ -206,6 +206,11 @@ func (fs *FSObjects) BackendInfo() BackendInfo {
 	return BackendInfo{Type: BackendFS}
 }
 
+// LocalStorageInfo - returns underlying storage statistics.
+func (fs *FSObjects) LocalStorageInfo(ctx context.Context) (StorageInfo, []error) {
+	return fs.StorageInfo(ctx)
+}
+
 // StorageInfo - returns underlying storage statistics.
 func (fs *FSObjects) StorageInfo(ctx context.Context) (StorageInfo, []error) {
 	atomic.AddInt64(&fs.activeIOCount, 1)

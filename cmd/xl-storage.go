@@ -295,7 +295,7 @@ func newXLStorage(ep Endpoint) (*xlStorage, error) {
 			return p, err
 		}
 		// error is unsupported disk, turn-off directIO for reads
-		logger.Info(fmt.Sprintf("Drive %s does not support O_DIRECT for reads, proceeding to use the drive without O_DIRECT", ep))
+		logger.LogOnceIf(GlobalContext, fmt.Errorf("Drive %s does not support O_DIRECT for reads, proceeding to use the drive without O_DIRECT", ep), ep.String())
 		p.readODirectSupported = false
 	}
 
