@@ -394,7 +394,6 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 
 		if walkResult.end {
 			eof = true
-			i++
 			break
 		}
 	}
@@ -402,7 +401,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 		return loi, err
 	}
 	// Copy found objects
-	objInfos := make([]ObjectInfo, 0, i)
+	objInfos := make([]ObjectInfo, 0, i+1)
 	for _, objInfo := range objInfoFound {
 		if objInfo == nil {
 			continue
