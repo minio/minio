@@ -19,7 +19,7 @@ package smart
 import "math/big"
 
 // Defined in <linux/nvme_ioctl.h>
-//nolint:structcheck
+//nolint:structcheck,deadcode
 type nvmePassthruCommand struct {
 	opcode      uint8
 	flags       uint8
@@ -59,6 +59,7 @@ type nvmeIdentPowerState struct {
 	Rsvd23          [9]byte
 }
 
+//nolint:deadcode
 type nvmeIdentController struct {
 	VendorID     uint16                  // PCI Vendor ID
 	Ssvid        uint16                  // PCI Subsystem Vendor ID
@@ -150,6 +151,7 @@ type nvmeIdentNamespace struct {
 	Vs      [3712]byte
 } // 4096 bytes
 
+//nolint:deadcode
 type nvmeSMARTLog struct {
 	CritWarning      uint8
 	Temperature      [2]uint8
@@ -174,6 +176,7 @@ type nvmeSMARTLog struct {
 } // 512 bytes
 
 // NVMeDevice represents drive data about NVMe drives
+//nolint:structcheck
 type NVMeDevice struct {
 	Name string
 	fd   int
