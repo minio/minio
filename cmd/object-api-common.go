@@ -368,6 +368,7 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 						}
 						continue
 					}
+					return toObjectErr(err, bucket, prefix)
 				}
 				return nil
 			}, i)
