@@ -63,8 +63,8 @@ type NetLocker interface {
 	// Force unlock a resource
 	ForceUnlock(ctx context.Context, args LockArgs) (bool, error)
 
-	// Expired returns if current lock args has expired.
-	Expired(ctx context.Context, args LockArgs) (bool, error)
+	// Refresh the given lock to prevent it from becoming stale
+	Refresh(ctx context.Context, args LockArgs) (bool, error)
 
 	// Returns underlying endpoint of this lock client instance.
 	String() string
