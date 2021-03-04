@@ -594,7 +594,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer) {
 	for {
 		// let one of the server acquire the lock, if not let them timeout.
 		// which shall be retried again by this loop.
-		if err := txnLk.GetLock(retryCtx, iamLockTimeout); err != nil {
+		if _, err := txnLk.GetLock(retryCtx, iamLockTimeout); err != nil {
 			logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. trying to acquire lock")
 			time.Sleep(time.Duration(r.Float64() * float64(5*time.Second)))
 			continue

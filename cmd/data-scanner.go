@@ -70,11 +70,12 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 // The function will block until the context is canceled.
 // There should only ever be one scanner running per cluster.
 func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
+	var err error
 	// Make sure only 1 scanner is running on the cluster.
 	locker := objAPI.NewNSLock(minioMetaBucket, "runDataScanner.lock")
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
-		err := locker.GetLock(ctx, dataScannerLeaderLockTimeout)
+		ctx, err = locker.GetLock(ctx, dataScannerLeaderLockTimeout)
 		if err != nil {
 			time.Sleep(time.Duration(r.Float64() * float64(dataScannerStartDelay)))
 			continue

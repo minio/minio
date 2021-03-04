@@ -20,11 +20,9 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -35,8 +33,8 @@ const (
 	// Lock maintenance interval.
 	lockMaintenanceInterval = 1 * time.Minute
 
-	// Lock validity check interval.
-	lockValidityCheckInterval = 30 * time.Second
+	// Lock validity duration
+	lockValidityDuration = 20 * time.Second
 )
 
 // To abstract a node over network.
@@ -94,6 +92,31 @@ func getLockArgs(r *http.Request) (args dsync.LockArgs, err error) {
 // HealthHandler returns success if request is authenticated.
 func (l *lockRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	l.IsValid(w, r)
+}
+
+// RefreshHandler - refresh the current lock
+func (l *lockRESTServer) RefreshHandler(w http.ResponseWriter, r *http.Request) {
+	if !l.IsValid(w, r) {
+		l.writeErrorResponse(w, errors.New("invalid request"))
+		return
+	}
+
+	args, err := getLockArgs(r)
+	if err != nil {
+		l.writeErrorResponse(w, err)
+		return
+	}
+
+	refreshed, err := l.ll.Refresh(r.Context(), args)
+	if err != nil {
+		l.writeErrorResponse(w, err)
+		return
+	}
+
+	if !refreshed {
+		l.writeErrorResponse(w, errLockNotFound)
+		return
+	}
 }
 
 // LockHandler - Acquires a lock.
@@ -204,148 +227,17 @@ func (l *lockRESTServer) ForceUnlockHandler(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// ExpiredHandler - query expired lock status.
-func (l *lockRESTServer) ExpiredHandler(w http.ResponseWriter, r *http.Request) {
-	if !l.IsValid(w, r) {
-		l.writeErrorResponse(w, errors.New("invalid request"))
-		return
-	}
-
-	args, err := getLockArgs(r)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-
-	expired, err := l.ll.Expired(r.Context(), args)
-	if err != nil {
-		l.writeErrorResponse(w, err)
-		return
-	}
-	if !expired {
-		l.writeErrorResponse(w, errLockNotExpired)
-		return
-	}
-}
-
-// getLongLivedLocks returns locks that are older than a certain time and
-// have not been 'checked' for validity too soon enough
-func getLongLivedLocks(interval time.Duration) []lockRequesterInfo {
-	lrips := []lockRequesterInfo{}
-	globalLockServer.mutex.Lock()
-	for _, lriArray := range globalLockServer.lockMap {
-		for idx := range lriArray {
-			// Check whether enough time has gone by since last check
-			if time.Since(lriArray[idx].TimeLastCheck) >= interval {
-				lrips = append(lrips, lriArray[idx])
-				lriArray[idx].TimeLastCheck = UTCNow()
-			}
-		}
-	}
-	globalLockServer.mutex.Unlock()
-	return lrips
-}
-
-// lockMaintenance loops over locks that have been active for some time and checks back
-// with the original server whether it is still alive or not
-//
-// Following logic inside ignores the errors generated for Dsync.Active operation.
-// - server at client down
-// - some network error (and server is up normally)
-//
-// We will ignore the error, and we will retry later to get a resolve on this lock
-func lockMaintenance(ctx context.Context, interval time.Duration) {
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		return
-	}
-
-	z, ok := objAPI.(*erasureServerPools)
-	if !ok {
-		return
-	}
-
-	type nlock struct {
-		locks  int
-		writer bool
-	}
-
-	updateNlocks := func(nlripsMap map[string]nlock, name string, writer bool) {
-		nlk, ok := nlripsMap[name]
-		if ok {
-			nlk.locks++
-			nlripsMap[name] = nlk
-		} else {
-			nlripsMap[name] = nlock{
-				locks:  1,
-				writer: writer,
-			}
-		}
-	}
-
-	// Validate if long lived locks are indeed clean.
-	// Get list of long lived locks to check for staleness.
-	lrips := getLongLivedLocks(interval)
-	lripsMap := make(map[string]nlock, len(lrips))
-	var mutex sync.Mutex // mutex for lripsMap updates
-	for _, lrip := range lrips {
-		// fetch the lockers participated in handing
-		// out locks for `nlrip.name`
-		var lockers []dsync.NetLocker
-		if lrip.Group {
-			lockers, _ = z.serverPools[0].getHashedSet("").getLockers()
-		} else {
-			_, objName := path2BucketObject(lrip.Name)
-			lockers, _ = z.serverPools[0].getHashedSet(objName).getLockers()
-		}
-		var wg sync.WaitGroup
-		wg.Add(len(lockers))
-		for _, c := range lockers {
-			go func(lrip lockRequesterInfo, c dsync.NetLocker) {
-				defer wg.Done()
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-				// Call back to all participating servers, verify
-				// if each of those servers think lock is still
-				// active, if not expire it.
-				expired, err := c.Expired(ctx, dsync.LockArgs{
-					Owner:     lrip.Owner,
-					UID:       lrip.UID,
-					Resources: []string{lrip.Name},
-				})
-				cancel()
-
-				if err != nil {
-					mutex.Lock()
-					updateNlocks(lripsMap, lrip.Name, lrip.Writer)
-					mutex.Unlock()
-					return
-				}
-
-				if !expired {
-					mutex.Lock()
-					updateNlocks(lripsMap, lrip.Name, lrip.Writer)
-					mutex.Unlock()
-				}
-			}(lrip, c)
-		}
-		wg.Wait()
-
-		// less than the quorum, we have locks expired.
-		if lripsMap[lrip.Name].locks < lrip.Quorum {
-			// Purge the stale entry if it exists.
-			globalLockServer.removeEntryIfExists(lrip)
-		}
-	}
-}
-
-// Start lock maintenance from all lock servers.
-func startLockMaintenance(ctx context.Context) {
+// lockMaintenance loops over all locks and discards locks
+// that have not been refreshed for some time.
+func lockMaintenance(ctx context.Context) {
 	// Wait until the object API is ready
 	// no need to start the lock maintenance
 	// if ObjectAPI is not initialized.
+
+	var objAPI ObjectLayer
+
 	for {
-		objAPI := newObjectLayerFn()
+		objAPI = newObjectLayerFn()
 		if objAPI == nil {
 			time.Sleep(time.Second)
 			continue
@@ -353,16 +245,14 @@ func startLockMaintenance(ctx context.Context) {
 		break
 	}
 
+	if _, ok := objAPI.(*erasureServerPools); !ok {
+		return
+	}
+
 	// Initialize a new ticker with 1 minute between each ticks.
 	lkTimer := time.NewTimer(lockMaintenanceInterval)
 	// Stop the timer upon returning.
 	defer lkTimer.Stop()
-
-	r := rand.New(rand.NewSource(UTCNow().UnixNano()))
-
-	// Start with random sleep time, so as to avoid
-	// "synchronous checks" between servers
-	time.Sleep(time.Duration(r.Float64() * float64(lockMaintenanceInterval)))
 
 	for {
 		// Verifies every minute for locks held more than 2 minutes.
@@ -371,9 +261,9 @@ func startLockMaintenance(ctx context.Context) {
 			return
 		case <-lkTimer.C:
 			// Reset the timer for next cycle.
-			lkTimer.Reset(time.Duration(r.Float64() * float64(lockMaintenanceInterval)))
+			lkTimer.Reset(lockMaintenanceInterval)
 
-			lockMaintenance(ctx, lockValidityCheckInterval)
+			globalLockServer.expireOldLocks(lockValidityDuration)
 		}
 	}
 }
@@ -386,14 +276,14 @@ func registerLockRESTHandlers(router *mux.Router) {
 
 	subrouter := router.PathPrefix(lockRESTPrefix).Subrouter()
 	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodHealth).HandlerFunc(httpTraceHdrs(lockServer.HealthHandler))
+	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRefresh).HandlerFunc(httpTraceHdrs(lockServer.RefreshHandler))
 	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodLock).HandlerFunc(httpTraceHdrs(lockServer.LockHandler))
 	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRLock).HandlerFunc(httpTraceHdrs(lockServer.RLockHandler))
 	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodUnlock).HandlerFunc(httpTraceHdrs(lockServer.UnlockHandler))
 	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodRUnlock).HandlerFunc(httpTraceHdrs(lockServer.RUnlockHandler))
-	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodExpired).HandlerFunc(httpTraceAll(lockServer.ExpiredHandler))
 	subrouter.Methods(http.MethodPost).Path(lockRESTVersionPrefix + lockRESTMethodForceUnlock).HandlerFunc(httpTraceAll(lockServer.ForceUnlockHandler))
 
 	globalLockServer = lockServer.ll
 
-	go startLockMaintenance(GlobalContext)
+	go lockMaintenance(GlobalContext)
 }

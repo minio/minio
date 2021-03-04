@@ -21,18 +21,18 @@ import (
 )
 
 const (
-	lockRESTVersion       = "v5" // Add Quorum query param
+	lockRESTVersion       = "v6" // Add Refresh API
 	lockRESTVersionPrefix = SlashSeparator + lockRESTVersion
 	lockRESTPrefix        = minioReservedBucketPath + "/lock"
 )
 
 const (
 	lockRESTMethodHealth      = "/health"
+	lockRESTMethodRefresh     = "/refresh"
 	lockRESTMethodLock        = "/lock"
 	lockRESTMethodRLock       = "/rlock"
 	lockRESTMethodUnlock      = "/unlock"
 	lockRESTMethodRUnlock     = "/runlock"
-	lockRESTMethodExpired     = "/expired"
 	lockRESTMethodForceUnlock = "/force-unlock"
 
 	// lockRESTOwner represents owner UUID
@@ -52,6 +52,6 @@ const (
 
 var (
 	errLockConflict       = errors.New("lock conflict")
-	errLockNotExpired     = errors.New("lock not expired")
 	errLockNotInitialized = errors.New("lock not initialized")
+	errLockNotFound       = errors.New("lock not found")
 )

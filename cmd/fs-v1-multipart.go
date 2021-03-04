@@ -709,7 +709,8 @@ func (fs *FSObjects) CompleteMultipartUpload(ctx context.Context, bucket string,
 
 	// Hold write lock on the object.
 	destLock := fs.NewNSLock(bucket, object)
-	if err = destLock.GetLock(ctx, globalOperationTimeout); err != nil {
+	ctx, err = destLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
 		return oi, err
 	}
 	defer destLock.Unlock()
