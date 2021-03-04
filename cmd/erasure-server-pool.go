@@ -106,11 +106,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("All serverPools should have same deployment ID expected %s, got %s", deploymentID, formats[i].ID)
 		}
 
-		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives)
+		z.serverPools[i], err = newErasureSets(ctx, ep.Endpoints, storageDisks[i], formats[i], commonParityDrives, i)
 		if err != nil {
 			return nil, err
 		}
-		z.serverPools[i].poolNumber = i
 	}
 	ctx, z.shutdown = context.WithCancel(ctx)
 	go intDataUpdateTracker.start(ctx, localDrives...)
@@ -311,8 +310,8 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (z *erasureServerPools) BackendInfo() (b BackendInfo) {
-	b.Type = BackendErasure
+func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
+	b.Type = madmin.Erasure
 
 	scParity := globalStorageClass.GetParityForSC(storageclass.STANDARD)
 	if scParity <= 0 {
@@ -1519,25 +1518,6 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	object = encodeDirObject(object)
 
-	var err error
-	lk := z.NewNSLock(bucket, object)
-	if bucket == minioMetaBucket {
-		// For .minio.sys bucket heals we should hold write locks.
-		ctx, err = lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return madmin.HealResultItem{}, err
-		}
-		defer lk.Unlock()
-	} else {
-		// Lock the object before healing. Use read lock since healing
-		// will only regenerate parts & xl.meta of outdated disks.
-		ctx, err = lk.GetRLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return madmin.HealResultItem{}, err
-		}
-		defer lk.RUnlock()
-	}
-
 	for _, pool := range z.serverPools {
 		result, err := pool.HealObject(ctx, bucket, object, versionID, opts)
 		result.Object = decodeDirObject(result.Object)
@@ -1568,18 +1548,18 @@ func (z *erasureServerPools) GetMetrics(ctx context.Context) (*BackendMetrics, e
 	return &BackendMetrics{}, NotImplemented{}
 }
 
-func (z *erasureServerPools) getPoolAndSet(id string) (int, int, error) {
+func (z *erasureServerPools) getPoolAndSet(id string) (poolIdx, setIdx, diskIdx int, err error) {
 	for poolIdx := range z.serverPools {
 		format := z.serverPools[poolIdx].format
 		for setIdx, set := range format.Erasure.Sets {
-			for _, diskID := range set {
+			for i, diskID := range set {
 				if diskID == id {
-					return poolIdx, setIdx, nil
+					return poolIdx, setIdx, i, nil
 				}
 			}
 		}
 	}
-	return 0, 0, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
+	return -1, -1, -1, fmt.Errorf("DiskID(%s) %w", id, errDiskNotFound)
 }
 
 // HealthOptions takes input options to return sepcific information
@@ -1609,7 +1589,7 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 
 	for _, localDiskIDs := range diskIDs {
 		for _, id := range localDiskIDs {
-			poolIdx, setIdx, err := z.getPoolAndSet(id)
+			poolIdx, setIdx, _, err := z.getPoolAndSet(id)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				continue
@@ -1648,7 +1628,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for _, localDiskIDs := range diskIDs {
 		for _, id := range localDiskIDs {
-			poolIdx, setIdx, err := z.getPoolAndSet(id)
+			poolIdx, setIdx, _, err := z.getPoolAndSet(id)
 			if err != nil {
 				logger.LogIf(ctx, err)
 				continue
@@ -1671,7 +1651,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		// we need to tell healthy status as 'false' so that this server
 		// is not taken down for maintenance
 		var err error
-		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx)
+		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx, nil)
 		if err != nil {
 			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
 			return HealthResult{

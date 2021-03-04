@@ -244,7 +244,7 @@ func (n *hdfsObjects) StorageInfo(ctx context.Context) (si minio.StorageInfo, er
 	si.Disks = []madmin.Disk{{
 		UsedSpace: fsInfo.Used,
 	}}
-	si.Backend.Type = minio.BackendGateway
+	si.Backend.Type = madmin.Gateway
 	si.Backend.GatewayOnline = true
 	return si, nil
 }

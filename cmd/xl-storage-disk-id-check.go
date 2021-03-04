@@ -51,7 +51,7 @@ func (p *xlStorageDiskIDCheck) Hostname() string {
 	return p.storage.Hostname()
 }
 
-func (p *xlStorageDiskIDCheck) Healing() bool {
+func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 	return p.storage.Healing()
 }
 
@@ -66,6 +66,14 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 		return dataUsageCache{}, err
 	}
 	return p.storage.NSScanner(ctx, cache)
+}
+
+func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
+	return p.storage.GetDiskLoc()
+}
+
+func (p *xlStorageDiskIDCheck) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
+	p.storage.SetDiskLoc(poolIdx, setIdx, diskIdx)
 }
 
 func (p *xlStorageDiskIDCheck) Close() error {
