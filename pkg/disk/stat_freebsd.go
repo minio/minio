@@ -1,7 +1,7 @@
-// +build darwin dragonfly
+// +build freebsd
 
 /*
- * MinIO Cloud Storage, (C) 2015-2021 MinIO, Inc.
+ * MinIO Cloud Storage, (C) 2021 MinIO, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,12 @@ func GetInfo(path string) (info Info, err error) {
 	if err != nil {
 		return Info{}, err
 	}
-	reservedBlocks := s.Bfree - s.Bavail
+	reservedBlocks := s.Bfree - uint64(s.Bavail)
 	info = Info{
 		Total:  uint64(s.Bsize) * (s.Blocks - reservedBlocks),
-		Free:   uint64(s.Bsize) * s.Bavail,
+		Free:   uint64(s.Bsize) * uint64(s.Bavail),
 		Files:  s.Files,
-		Ffree:  s.Ffree,
+		Ffree:  uint64(s.Ffree),
 		FSType: getFSType(s.Fstypename[:]),
 	}
 	if info.Free > info.Total {
