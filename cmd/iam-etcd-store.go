@@ -58,16 +58,6 @@ func extractPrefixAndSuffix(s string, prefix string, suffix string) string {
 	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
 }
 
-func etcdKvsToSetPolicyDB(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
-	items := set.NewStringSet()
-	for _, kv := range kvs {
-		key := string(kv.Key)
-		item := extractPrefixAndSuffix(key, prefix, ".json")
-		items.Add(item)
-	}
-	return items
-}
-
 // IAMEtcdStore implements IAMStorageAPI
 type IAMEtcdStore struct {
 	sync.RWMutex
