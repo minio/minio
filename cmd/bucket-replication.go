@@ -268,6 +268,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectVersionInfo, objectA
 			ReplicationDeleteMarker: dobj.DeleteMarkerVersionID != "",
 			ReplicationMTime:        dobj.DeleteMarkerMTime.Time,
 			ReplicationStatus:       miniogo.ReplicationStatusReplica,
+			ReplicationRequest:      true, // always set this to distinguish between `mc mirror` replication and serverside
 		},
 	})
 
@@ -412,10 +413,11 @@ func putReplicationOpts(ctx context.Context, dest replication.Destination, objIn
 		ContentEncoding: objInfo.ContentEncoding,
 		StorageClass:    sc,
 		Internal: miniogo.AdvancedPutOptions{
-			SourceVersionID:   objInfo.VersionID,
-			ReplicationStatus: miniogo.ReplicationStatusReplica,
-			SourceMTime:       objInfo.ModTime,
-			SourceETag:        objInfo.ETag,
+			SourceVersionID:    objInfo.VersionID,
+			ReplicationStatus:  miniogo.ReplicationStatusReplica,
+			SourceMTime:        objInfo.ModTime,
+			SourceETag:         objInfo.ETag,
+			ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
 		},
 	}
 	if objInfo.UserTags != "" {
@@ -653,7 +655,11 @@ func replicateObject(ctx context.Context, objInfo ObjectInfo, objectAPI ObjectLa
 			Bucket:    dest.Bucket,
 			Object:    object,
 			VersionID: objInfo.VersionID}
-		dstOpts := miniogo.PutObjectOptions{Internal: miniogo.AdvancedPutOptions{SourceVersionID: objInfo.VersionID}}
+		dstOpts := miniogo.PutObjectOptions{
+			Internal: miniogo.AdvancedPutOptions{
+				SourceVersionID:    objInfo.VersionID,
+				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
+			}}
 		if _, err = c.CopyObject(ctx, dest.Bucket, object, dest.Bucket, object, getCopyObjMetadata(objInfo, dest), srcOpts, dstOpts); err != nil {
 			replicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("Unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, err))

@@ -105,6 +105,8 @@ package etag
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -175,6 +177,50 @@ var _ Tagger = ETag{} // compiler check
 // By providing this method ETag implements
 // the Tagger interface.
 func (e ETag) ETag() ETag { return e }
+
+// FromContentMD5 decodes and returns the Content-MD5
+// as ETag, if set. If no Content-MD5 header is set
+// it returns an empty ETag and no error.
+func FromContentMD5(h http.Header) (ETag, error) {
+	v, ok := h["Content-Md5"]
+	if !ok {
+		return nil, nil
+	}
+	if v[0] == "" {
+		return nil, errors.New("etag: content-md5 is set but contains no value")
+	}
+	b, err := base64.StdEncoding.Strict().DecodeString(v[0])
+	if err != nil {
+		return nil, err
+	}
+	if len(b) != md5.Size {
+		return nil, errors.New("etag: invalid content-md5")
+	}
+	return ETag(b), nil
+}
+
+// Multipart computes an S3 multipart ETag given a list of
+// S3 singlepart ETags. It returns nil if the list of
+// ETags is empty.
+//
+// Any encrypted or multipart ETag will be ignored and not
+// used to compute the returned ETag.
+func Multipart(etags ...ETag) ETag {
+	if len(etags) == 0 {
+		return nil
+	}
+
+	var n int64
+	h := md5.New()
+	for _, etag := range etags {
+		if !etag.IsMultipart() && !etag.IsEncrypted() {
+			h.Write(etag)
+			n++
+		}
+	}
+	etag := append(h.Sum(nil), '-')
+	return strconv.AppendInt(etag, n, 10)
+}
 
 // Set adds the ETag to the HTTP headers. It overwrites any
 // existing ETag entry.

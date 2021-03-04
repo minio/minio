@@ -19,7 +19,6 @@ package cmd
 import (
 	"bufio"
 	"context"
-	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -1414,8 +1413,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Get Content-Md5 sent by client and verify if valid
-	md5Bytes, err := checkValidMD5(r.Header)
+	clientETag, err := etag.FromContentMD5(r.Header)
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDigest), r.URL, guessIsBrowserReq(r))
 		return
@@ -1469,7 +1467,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	var (
-		md5hex              = hex.EncodeToString(md5Bytes)
+		md5hex              = clientETag.String()
 		sha256hex           = ""
 		reader    io.Reader = r.Body
 		s3Err     APIErrorCode
@@ -2165,8 +2163,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// get Content-Md5 sent by client and verify if valid
-	md5Bytes, err := checkValidMD5(r.Header)
+	clientETag, err := etag.FromContentMD5(r.Header)
 	if err != nil {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidDigest), r.URL, guessIsBrowserReq(r))
 		return
@@ -2217,7 +2214,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	var (
-		md5hex              = hex.EncodeToString(md5Bytes)
+		md5hex              = clientETag.String()
 		sha256hex           = ""
 		reader    io.Reader = r.Body
 		s3Error   APIErrorCode
