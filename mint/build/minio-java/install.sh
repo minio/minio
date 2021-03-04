@@ -15,7 +15,6 @@
 #  limitations under the License.
 #
 
-set -x
 SPOTBUGS_VERSION="4.2.2" ## needed since 8.0.2 release
 JUNIT_VERSION="4.12" ## JUNIT version
 MINIO_JAVA_VERSION=$(curl --retry 10 -s "https://repo1.maven.org/maven2/io/minio/minio/maven-metadata.xml" | sed -n "/<latest>/{s/<.[^>]*>//g;p;q}" | sed "s/  *//g")
@@ -25,7 +24,6 @@ if [ -z "$MINIO_JAVA_VERSION" ]; then
 fi
 
 test_run_dir="$MINT_RUN_CORE_DIR/minio-java"
-mkdir -p ${test_run_dir}
 git clone --quiet https://github.com/minio/minio-java.git "$test_run_dir/minio-java.git"
 (cd "$test_run_dir/minio-java.git"; git checkout --quiet "tags/${MINIO_JAVA_VERSION}")
 $WGET --output-document="$test_run_dir/minio-${MINIO_JAVA_VERSION}-all.jar" "https://repo1.maven.org/maven2/io/minio/minio/${MINIO_JAVA_VERSION}/minio-${MINIO_JAVA_VERSION}-all.jar"
