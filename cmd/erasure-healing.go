@@ -251,7 +251,7 @@ func (er erasureObjects) healObject(ctx context.Context, bucket string, object s
 
 	if !opts.NoLock {
 		lk := er.NewNSLock(bucket, object)
-		if err := lk.GetLock(ctx, globalOperationTimeout); err != nil {
+		if ctx, err = lk.GetLock(ctx, globalOperationTimeout); err != nil {
 			return result, err
 		}
 		defer lk.Unlock()

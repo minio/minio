@@ -1323,8 +1323,10 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 	deadlinedCtx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 
+	var err error
 	nsLock := objectAPI.NewNSLock(minioMetaBucket, "health-check-in-progress")
-	if err := nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline)); err != nil { // returns a locked lock
+	ctx, err = nsLock.GetLock(ctx, newDynamicTimeout(deadline, deadline))
+	if err != nil { // returns a locked lock
 		errResp(err)
 		return
 	}

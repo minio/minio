@@ -75,20 +75,18 @@ const (
 
 // AWS S3 Signature V2 calculation rule is give here:
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
-
-func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
-	cred := globalActiveCred
+func doesPolicySignatureV2Match(formValues http.Header) (auth.Credentials, APIErrorCode) {
 	accessKey := formValues.Get(xhttp.AmzAccessKeyID)
 	cred, _, s3Err := checkKeyValid(accessKey)
 	if s3Err != ErrNone {
-		return s3Err
+		return cred, s3Err
 	}
 	policy := formValues.Get("Policy")
 	signature := formValues.Get(xhttp.AmzSignatureV2)
 	if !compareSignatureV2(signature, calculateSignatureV2(policy, cred.SecretKey)) {
-		return ErrSignatureDoesNotMatch
+		return cred, ErrSignatureDoesNotMatch
 	}
-	return ErrNone
+	return cred, ErrNone
 }
 
 // Escape encodedQuery string into unescaped list of query params, returns error

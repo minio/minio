@@ -17,6 +17,7 @@ package etag
 import (
 	"io"
 	"io/ioutil"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -136,4 +137,86 @@ func TestReader(t *testing.T) {
 			t.Fatalf("Test %d: ETag mismatch: got %q - want %q", i, ETag, test.ETag)
 		}
 	}
+}
+
+var multipartTests = []struct { // Test cases have been generated using AWS S3
+	ETags     []ETag
+	Multipart ETag
+}{
+	{
+		ETags:     []ETag{},
+		Multipart: ETag{},
+	},
+	{
+		ETags:     []ETag{must("b10a8db164e0754105b7a99be72e3fe5")},
+		Multipart: must("7b976cc68452e003eec7cb0eb631a19a-1"),
+	},
+	{
+		ETags:     []ETag{must("5f363e0e58a95f06cbe9bbc662c5dfb6"), must("5f363e0e58a95f06cbe9bbc662c5dfb6")},
+		Multipart: must("a7d414b9133d6483d9a1c4e04e856e3b-2"),
+	},
+	{
+		ETags:     []ETag{must("5f363e0e58a95f06cbe9bbc662c5dfb6"), must("a096eb5968d607c2975fb2c4af9ab225"), must("b10a8db164e0754105b7a99be72e3fe5")},
+		Multipart: must("9a0d1febd9265f59f368ceb652770bc2-3"),
+	},
+	{ // Check that multipart ETags are ignored
+		ETags:     []ETag{must("5f363e0e58a95f06cbe9bbc662c5dfb6"), must("5f363e0e58a95f06cbe9bbc662c5dfb6"), must("ceb8853ddc5086cc4ab9e149f8f09c88-1")},
+		Multipart: must("a7d414b9133d6483d9a1c4e04e856e3b-2"),
+	},
+	{ // Check that encrypted ETags are ignored
+		ETags: []ETag{
+			must("90402c78d2dccddee1e9e86222ce2c6361675f3529d26000ae2e900ff216b3cb59e130e092d8a2981e776f4d0bd60941"),
+			must("5f363e0e58a95f06cbe9bbc662c5dfb6"), must("5f363e0e58a95f06cbe9bbc662c5dfb6"),
+		},
+		Multipart: must("a7d414b9133d6483d9a1c4e04e856e3b-2"),
+	},
+}
+
+func TestMultipart(t *testing.T) {
+	for i, test := range multipartTests {
+		if multipart := Multipart(test.ETags...); !Equal(multipart, test.Multipart) {
+			t.Fatalf("Test %d: got %q - want %q", i, multipart, test.Multipart)
+		}
+	}
+}
+
+var fromContentMD5Tests = []struct {
+	Header     http.Header
+	ETag       ETag
+	ShouldFail bool
+}{
+	{Header: http.Header{}, ETag: nil}, // 0
+	{Header: http.Header{"Content-Md5": []string{"1B2M2Y8AsgTpgAmY7PhCfg=="}}, ETag: must("d41d8cd98f00b204e9800998ecf8427e")},                             // 1
+	{Header: http.Header{"Content-Md5": []string{"sQqNsWTgdUEFt6mb5y4/5Q=="}}, ETag: must("b10a8db164e0754105b7a99be72e3fe5")},                             // 2
+	{Header: http.Header{"Content-MD5": []string{"1B2M2Y8AsgTpgAmY7PhCfg=="}}, ETag: nil},                                                                  // 3 (Content-MD5 vs Content-Md5)
+	{Header: http.Header{"Content-Md5": []string{"sQqNsWTgdUEFt6mb5y4/5Q==", "1B2M2Y8AsgTpgAmY7PhCfg=="}}, ETag: must("b10a8db164e0754105b7a99be72e3fe5")}, // 4
+
+	{Header: http.Header{"Content-Md5": []string{""}}, ShouldFail: true},                                 // 5 (empty value)
+	{Header: http.Header{"Content-Md5": []string{"", "sQqNsWTgdUEFt6mb5y4/5Q=="}}, ShouldFail: true},     // 6 (empty value)
+	{Header: http.Header{"Content-Md5": []string{"d41d8cd98f00b204e9800998ecf8427e"}}, ShouldFail: true}, // 7 (content-md5 is invalid b64 / of invalid length)
+}
+
+func TestFromContentMD5(t *testing.T) {
+	for i, test := range fromContentMD5Tests {
+		ETag, err := FromContentMD5(test.Header)
+		if err != nil && !test.ShouldFail {
+			t.Fatalf("Test %d: failed to convert Content-MD5 to ETag: %v", i, err)
+		}
+		if err == nil && test.ShouldFail {
+			t.Fatalf("Test %d: should have failed but succeeded", i)
+		}
+		if err == nil {
+			if !Equal(ETag, test.ETag) {
+				t.Fatalf("Test %d: got %q - want %q", i, ETag, test.ETag)
+			}
+		}
+	}
+}
+
+func must(s string) ETag {
+	t, err := Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }

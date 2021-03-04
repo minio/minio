@@ -30,6 +30,15 @@ type lockServer struct {
 	// Map of locks, with negative value indicating (exclusive) write lock
 	// and positive values indicating number of read locks
 	lockMap map[string]int64
+
+	// Refresh returns lock not found if set to true
+	lockNotFound bool
+}
+
+func (l *lockServer) setRefreshReply(refreshed bool) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.lockNotFound = !refreshed
 }
 
 func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
@@ -88,6 +97,13 @@ func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	} else {
 		delete(l.lockMap, args.Resources[0]) // Remove the (last) read lock
 	}
+	return nil
+}
+
+func (l *lockServer) Refresh(args *LockArgs, reply *bool) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	*reply = !l.lockNotFound
 	return nil
 }
 
