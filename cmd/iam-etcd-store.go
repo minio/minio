@@ -42,7 +42,7 @@ var defaultContextTimeout = 30 * time.Second
 func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 	users := set.NewStringSet()
 	for _, kv := range kvs {
-		user := extractPrefixAndSuffix(string(kv.Key), prefix, path.Base(string(kv.Key))) 
+		user := extractPrefixAndSuffix(string(kv.Key), prefix, path.Base(string(kv.Key)))
 		users.Add(user)
 	}
 	return users
@@ -54,7 +54,7 @@ func etcdKvsToSet(prefix string, kvs []*mvccpb.KeyValue) set.StringSet {
 //  prefix := "config/iam/users/"
 //  suffix := "config.json"
 //  result is foo
-func extractPrefixAndSuffix(s string, prefix string, suffix string ) string {
+func extractPrefixAndSuffix(s string, prefix string, suffix string) string {
 	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(string(s), prefix), suffix))
 }
 
@@ -287,11 +287,10 @@ func (ies *IAMEtcdStore) getPolicyDoc(ctx context.Context, kvs *mvccpb.KeyValue,
 	return nil
 }
 
-
 func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampolicy.Policy) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
-	//we retrieve all keys and values to avoid too many calls to etcd in case of 
+	//we retrieve all keys and values to avoid too many calls to etcd in case of
 	//a large number of policies
 	r, err := ies.client.Get(ctx, iamConfigPoliciesPrefix, etcd.WithPrefix())
 	if err != nil {
@@ -307,7 +306,6 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]iampol
 	return nil
 }
 
-
 func (ies *IAMEtcdStore) getUser(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]auth.Credentials, basePrefix string) error {
 	var u UserIdentity
 	err := getIAMConfig(&u, userkv.Value)
@@ -318,10 +316,10 @@ func (ies *IAMEtcdStore) getUser(ctx context.Context, userkv *mvccpb.KeyValue, u
 		return err
 	}
 	user := extractPrefixAndSuffix(string(userkv.Key), basePrefix, path.Base(string(userkv.Key)))
-	return ies.setupUser(ctx , user, userType, u, m)
+	return ies.setupUser(ctx, user, userType, u, m)
 }
 
-func (ies *IAMEtcdStore) setupUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity , m map[string]auth.Credentials) error {
+func (ies *IAMEtcdStore) setupUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]auth.Credentials) error {
 	if u.Credentials.IsExpired() {
 		// Delete expired identity.
 		deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
@@ -356,7 +354,6 @@ func (ies *IAMEtcdStore) setupUser(ctx context.Context, user string, userType IA
 	return nil
 }
 
-
 func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]auth.Credentials) error {
 	var u UserIdentity
 	err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
@@ -366,7 +363,7 @@ func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAM
 		}
 		return err
 	}
-  return ies.setupUser(ctx , user, userType, u, m)
+	return ies.setupUser(ctx, user, userType, u, m)
 }
 
 func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]auth.Credentials) error {
@@ -383,7 +380,7 @@ func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m 
 	cctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 
-	//we retrieve all keys and values to avoid too many calls to etcd in case of 
+	//we retrieve all keys and values to avoid too many calls to etcd in case of
 	//a large number of users
 	r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
 	if err != nil {
@@ -392,7 +389,7 @@ func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m 
 
 	//parse all users values to create the proper data model
 	for _, userKv := range r.Kvs {
-		if err = ies.getUser(ctx, userKv, userType, m ,basePrefix); err != nil && err != errNoSuchUser {
+		if err = ies.getUser(ctx, userKv, userType, m, basePrefix); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}
@@ -477,7 +474,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 			basePrefix = iamConfigPolicyDBUsersPrefix
 		}
 	}
-	//we retrieve all keys and values to avoid too many calls to etcd in case of 
+	//we retrieve all keys and values to avoid too many calls to etcd in case of
 	//a large number of policy mappings
 	r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
 	if err != nil {
